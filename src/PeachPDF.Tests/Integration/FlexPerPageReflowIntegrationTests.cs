@@ -148,6 +148,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Probe_DefiniteHeightWrap()
+        {
+            var items = string.Concat(Enumerable.Range(0, 9).Select(n => $"<div class=\"i\" id=\"g{n}\" style=\"height:100pt;flex:1 0 170pt\">g{n}</div>"));
+            var c = await BuildAsync(Head + $$"""
+                #f { background: #cde; flex-wrap: wrap; height: 700pt; align-content: space-between; } .i { break-inside: auto; }
+                </style></head><body><div id="f">{{items}}</div><p id="after">after</p></body></html>
+                """);
+            output.WriteLine(Dump(c, "f", "g0", "g3", "g4", "g5", "g6", "g8"));
+        }
+
+        [Fact]
         public async Task Probe_WrapRowUnstartedLines()
         {
             var items = string.Concat(Enumerable.Range(0, 9).Select(n => $"<div class=\"i\" id=\"g{n}\" style=\"height:150pt;flex:1 0 170pt\">g{n}</div>"));

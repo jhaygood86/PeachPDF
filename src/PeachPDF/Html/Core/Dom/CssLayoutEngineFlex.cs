@@ -483,6 +483,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            await StateSpannedLineFrames(g, lines, mainSize);
+
             // Phase 10b: inline-flex shrinks to content in the main axis (like inline-block).
             // For a main-axis-physical-X container with auto width, update ActualRight to the actual
             // content extent. A main-axis-physical-Y container needs no equivalent branch here: its
@@ -1853,25 +1855,10 @@ namespace PeachPDF.Html.Core.Dom
             if (Math.Abs(measure - lineMeasures[resume.ResumeLineIndex]) <= 0.01) return null;
 
             var boxes = resume.Lines[resume.ResumeLineIndex];
+            var unfinished = resume.UnfinishedItems.ToDictionary(u => u.Item, u => u.Token);
 
-            var items = new List<FlexItem>(boxes.Count);
-            foreach (var box in boxes)
-                items.Add(await RederiveItem(g, box, measure));
-
-            var line = new FlexLine(items) { MainSize = measure };
-            DistributeFlex(line, measure);
-            ComputeMainOffsets(line, measure, indefiniteMainSize: false);
-
-            var unfinished = resume.UnfinishedItems.ToDictionary(u => u.Item, u => u.Token, ReferenceEqualityComparer.Instance);
-
-            foreach (var item in items)
+            foreach (var (box, x, width) in await RefitFrames(g, boxes, measure))
             {
-                var box = item.Box;
-                var x = _effectiveMainStartIsAtMax
-                    ? _flexBox.ClientLeft + measure - item.MainOffset - item.FinalMainSize
-                    : _flexBox.ClientLeft + item.MainOffset;
-                var width = item.FinalMainSize;
-
                 MoveFrame(container, box, slot, x, box.Location.Y, x + width);
 
                 if (unfinished.TryGetValue(box, out var token))
@@ -1884,6 +1871,87 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return measure;
+        }
+
+        /// <summary>
+        /// Where each item of a line would sit, along the main axis, if the line were sized against
+        /// <paramref name="measure"/>: its border box's left edge and width, derived from CSS alone.
+        /// </summary>
+        private async ValueTask<List<(CssBox Box, double X, double Width)>> RefitFrames(
+            Canvas g, IReadOnlyList<CssBox> boxes, double measure)
+        {
+            var items = new List<FlexItem>(boxes.Count);
+            foreach (var box in boxes)
+                items.Add(await RederiveItem(g, box, measure));
+
+            var line = new FlexLine(items) { MainSize = measure };
+            DistributeFlex(line, measure);
+            ComputeMainOffsets(line, measure, indefiniteMainSize: false);
+
+            return items
+                .Select(item => (
+                    item.Box,
+                    X: _effectiveMainStartIsAtMax
+                        ? _flexBox.ClientLeft + measure - item.MainOffset - item.FinalMainSize
+                        : _flexBox.ClientLeft + item.MainOffset,
+                    Width: item.FinalMainSize))
+                .ToList();
+        }
+
+        /// <summary>
+        /// States the frame every item of a line has in each fragmentainer the line spans, when the
+        /// fragmentainers do not all share one measure.
+        /// </summary>
+        /// <remarks>
+        /// An item whose content has line boxes to break at is resumed by a pass of its own on every page
+        /// it continues onto, and is re-fitted there (<see cref="RefitStartedLine"/>). An item that has none
+        /// - a box of a fixed height, an image, an empty block - is drawn once from one position and merely
+        /// cut by each fragmentainer's edge, so no pass ever visits it on the later pages; its frame there
+        /// is stated from what the line would be, sized against that page's measure. Every spanned page is
+        /// stated when any of them differs, because a page that happens to share the start measure would
+        /// otherwise be read from live geometry that a re-fit on another page may have moved.
+        /// </remarks>
+        private async ValueTask StateSpannedLineFrames(Canvas g, List<FlexLine> lines, double mainSize)
+        {
+            if (_flexBox.HtmlContainer is not { UseVariableInlineMeasure: true, HasRealPageGrid: true, IsFragmenting: true } container
+                || _flexBox.DerivedStyle.ActualDisplay != Keywords.Flex
+                || !_mainAxisIsPhysicalX)
+            {
+                return;
+            }
+
+            foreach (var line in lines)
+            {
+                if (line.Items.Count == 0) continue;
+
+                var boxes = line.Items.Select(item => item.Box).ToList();
+                var startSlot = container.SlotStartingAt(boxes.Min(box => box.Location.Y));
+                var endSlot = container.SlotEndingAt(boxes.Max(box => box.ActualBottom));
+                if (endSlot <= startSlot) continue;
+
+                var measures = new List<double>(endSlot - startSlot);
+                for (var slot = startSlot + 1; slot <= endSlot; slot++)
+                    measures.Add(await MeasureAt(g, container.PageTopOf(slot)));
+
+                var lineMeasure = line.MainSize ?? mainSize;
+                if (measures.All(measure => Math.Abs(measure - lineMeasure) <= 0.01)) continue;
+
+                for (var slot = startSlot + 1; slot <= endSlot; slot++)
+                {
+                    var measure = measures[slot - startSlot - 1];
+
+                    if (Math.Abs(measure - lineMeasure) <= 0.01)
+                    {
+                        foreach (var box in boxes)
+                            container.RecordInlineFrame(box, slot, box.Bounds.X, box.Bounds.Width);
+
+                        continue;
+                    }
+
+                    foreach (var (box, x, width) in await RefitFrames(g, boxes, measure))
+                        container.RecordInlineFrame(box, slot, x, width);
+                }
+            }
         }
 
         /// <summary>
@@ -1907,7 +1975,10 @@ namespace PeachPDF.Html.Core.Dom
                     container.RecordInlineFrame(box, earlier, old.X, old.Width);
             }
 
-            container.ClearInlineFrames(box, slot);
+            // The frame in this slot is now the live one; whatever was stated for it is superseded. Frames
+            // stated for later slots stay - they were derived from the same CSS and hold for pages no pass
+            // will visit.
+            container.ClearInlineFrame(box, slot);
 
             box.Location = new PaintPoint(x, y);
             box.ActualRight = right;

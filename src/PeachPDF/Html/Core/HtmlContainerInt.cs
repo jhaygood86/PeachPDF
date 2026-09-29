@@ -3195,6 +3195,10 @@ namespace PeachPDF.Html.Core
         internal void RecordInlineFrame(CssBox box, int slot, double x, double width) =>
             _emitter?.RecordInlineFrame(box, slot, x, width);
 
+        /// <summary>Discards the frame stated for <paramref name="box"/> in exactly <paramref name="slot"/>.</summary>
+        internal void ClearInlineFrame(CssBox box, int slot) =>
+            _emitter?.ClearInlineFrame(box, slot);
+
         /// <summary>
         /// Discards every frame stated for <paramref name="box"/> or anything under it - see
         /// <see cref="FragmentEmitter.ClearInlineFramesUnder"/>.

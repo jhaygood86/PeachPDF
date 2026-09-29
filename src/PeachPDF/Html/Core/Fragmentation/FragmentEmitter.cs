@@ -1492,6 +1492,16 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (removedAny) box.DiscardEmittedNothing();
         }
 
+        /// <summary>Discards the frame stated for <paramref name="box"/> in exactly <paramref name="slot"/>.</summary>
+        internal void ClearInlineFrame(CssBox box, int slot)
+        {
+            if (!_inlineFrames.TryGetValue(box, out var bySlot) || !bySlot.Remove(slot)) return;
+
+            if (bySlot.Count == 0) _inlineFrames.Remove(box);
+
+            box.DiscardEmittedNothing();
+        }
+
         /// <summary>
         /// Discards every frame stated for <paramref name="box"/> or anything under it - what a container
         /// being laid out afresh decides again for its whole subtree.
