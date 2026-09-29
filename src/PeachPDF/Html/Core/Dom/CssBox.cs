@@ -3968,6 +3968,17 @@ namespace PeachPDF.Html.Core.Dom
         internal bool ItemContentSizeEverPinned { get; set; }
 
         /// <summary>
+        /// What <see cref="Width"/>/<see cref="Height"/> held before
+        /// <see cref="Fragmentation.ItemContentCommit.CommitLayout"/> first pinned them, saved so a later
+        /// layout generation can measure this item against what the author wrote rather than against the
+        /// previous generation's result - see <see cref="Fragmentation.ItemContentCommit.UnpinIfPinned"/>.
+        /// </summary>
+        internal string? WidthBeforeItemPin { get; set; }
+
+        /// <inheritdoc cref="WidthBeforeItemPin"/>
+        internal string? HeightBeforeItemPin { get; set; }
+
+        /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
         /// measuring its words, applying <c>string-set</c>, resolving its used page name, and taking any
         /// forced break that falls before it.
