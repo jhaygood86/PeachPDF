@@ -209,7 +209,7 @@ namespace PeachPDF.Tests.Integration
             Assert.All(laterItems, frame => Assert.Equal(LaterPageMeasure / 2, frame.Width, Tolerance));
 
             for (var i = 0; i < laterItems.Count; i += 2)
-                Assert.Equal(laterItems[i].Width + laterItems[i + 1].Width, LaterPageMeasure, Tolerance);
+                Assert.Equal(LaterPageMeasure, laterItems[i].Width + laterItems[i + 1].Width, Tolerance);
         }
 
         [Fact]
