@@ -693,8 +693,31 @@ namespace PeachPDF.Adapters
                 Utils.Convert(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
                 conic.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 conic.AnglesRadians.ToArray()),
+            TileBrush tile => ToXTilingBrush(tile),
+            HatchBrush hatch => hatch.ToTileBrush(this) is { } hatchTile
+                ? ToXTilingBrush(hatchTile)
+                : throw new NotSupportedException("A hatch needs a canvas that can make tiles."),
             _ => throw new NotSupportedException($"Unknown brush type {brush.GetType()}"),
         };
+
+        /// <summary>A repeating tile as a PDF tiling pattern: a tile made by <see cref="CreateTile"/> stays vector content, any other image is embedded once.</summary>
+        private XTilingBrush ToXTilingBrush(TileBrush tile)
+        {
+            if (tile.Tile is not ImageAdapter { Image: { } image })
+                throw new NotSupportedException("A tile brush on a PDF canvas needs a tile made by this canvas or decoded by its render context.");
+
+            // Cell size and the translation are in layout units; the linear part of a transform is unit-free. See ToXBrush's gradients.
+            var m = tile.Transform;
+            var matrix = new XMatrix(m.M11, m.M12, m.M21, m.M22, m.M31 / PixelsPerPoint, m.M32 / PixelsPerPoint);
+            bool? interpolate = tile.Sampling switch
+            {
+                ImageSampling.Nearest or ImageSampling.Pixelated => false,
+                ImageSampling.Bilinear or ImageSampling.Bicubic => true,
+                _ => null,
+            };
+
+            return new XTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
+        }
 
         /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent
         /// cases, the same optimization <c>PdfSharpAdapter.CreateSolidBrush</c> used to apply.</summary>

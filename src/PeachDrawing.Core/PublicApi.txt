@@ -374,6 +374,21 @@ PeachDrawing.Core.GraphicsPath+Corner : enum Int32
   BottomRight = 3
   TopLeft = 0
   TopRight = 1
+PeachDrawing.Core.HatchBrush : sealed class
+  ctor(HatchStyle style, PaintColor foreground, PaintColor background, Double spacing = 8, Double lineWidth = 0)
+  method TileBrush ToTileBrush(Canvas canvas)
+  property Double LineWidth { get; }
+  property Double Spacing { get; }
+  property HatchStyle Style { get; }
+  property PaintColor Background { get; }
+  property PaintColor Foreground { get; }
+PeachDrawing.Core.HatchStyle : enum Int32
+  BackwardDiagonal = 3
+  Cross = 4
+  DiagonalCross = 5
+  ForwardDiagonal = 2
+  Horizontal = 0
+  Vertical = 1
 PeachDrawing.Core.ISvgGlyphPainter : interface
   method abstract Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
 PeachDrawing.Core.Image : abstract class
@@ -745,6 +760,14 @@ PeachDrawing.Core.TextMeasurement : static class
   field const Double BoldEmphasis
   field const Double ItalicSkewAngleSinus
   method static Size Measure(String text, Typeface typeface, Double size, SyntheticStyle synthesis, ShapeSettings features)
+PeachDrawing.Core.TileBrush : sealed class
+  ctor(Image tile, Double cellWidth, Double cellHeight)
+  ctor(Image tile, Double cellWidth, Double cellHeight, Matrix3x2 transform, ImageSampling sampling = Automatic)
+  property Double CellHeight { get; }
+  property Double CellWidth { get; }
+  property Image Tile { get; }
+  property ImageSampling Sampling { get; }
+  property Matrix3x2 Transform { get; }
 PeachDrawing.Core.TypefaceFont : sealed class
   ctor(Typeface typeface, Double size, SyntheticStyle syntheticStyle = None, Double? obliqueSkewSinus = null)
   method virtual Boolean HasGlyph(Rune rune)

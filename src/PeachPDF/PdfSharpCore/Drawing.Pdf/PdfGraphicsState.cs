@@ -302,7 +302,42 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 if (renderingMode != 0)
                     throw new InvalidOperationException("Rendering modes other than 0 can only be used with solid color brushes.");
 
-                if (brush is XBaseGradientBrush gradientBrush)
+                if (brush is XTilingBrush tilingBrush)
+                {
+                    Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
+
+                    // Pattern space maps to the page's default coordinate system, not to the current user space, so the brush's own
+                    // matrix is followed by everything that separates the current user space from it.
+                    XMatrix matrix = _renderer.DefaultViewMatrix;
+                    matrix.Prepend(EffectiveCtm);
+                    matrix.Prepend(tilingBrush.Matrix);
+
+                    PdfTilingPattern pattern = new PdfTilingPattern(_renderer.Owner);
+                    pattern.SetupFromBrush(tilingBrush, matrix);
+                    string name = _renderer.Resources.AddPattern(pattern);
+
+                    // The ambient fill alpha left by the last solid fill would otherwise carry over onto the pattern; see the gradient branch.
+                    if (!isForPen)
+                    {
+                        XColor resetColor = _realizedFillColor;
+                        resetColor.A = 1;
+                        RealizeFillColor(resetColor, false, colorMode);
+                    }
+
+                    if (isForPen)
+                    {
+                        _renderer.AppendFormatString("/Pattern CS\n", name);
+                        _renderer.AppendFormatString("{0} SCN\n", name);
+                    }
+                    else
+                    {
+                        _renderer.AppendFormatString("/Pattern cs\n", name);
+                        _renderer.AppendFormatString("{0} scn\n", name);
+                    }
+
+                    _realizedFillColor = XColor.Empty;
+                }
+                else if (brush is XBaseGradientBrush gradientBrush)
                 {
                     Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
                     XMatrix matrix = _renderer.DefaultViewMatrix;

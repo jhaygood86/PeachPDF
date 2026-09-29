@@ -408,6 +408,10 @@ public sealed partial class RasterCanvas : Canvas
 
     private PaintSource? CreatePaint(Brush? brush)
     {
+        // A hatch is a tile drawn on demand.
+        if (brush is HatchBrush hatch)
+            brush = hatch.ToTileBrush(this);
+
         if (UserToDevice.Invert() is not { } deviceToUser)
             return null;
 
@@ -638,7 +642,7 @@ public sealed partial class RasterCanvas : Canvas
         DrawBitmap(bitmap, naturalWidth, naturalHeight, destRect, srcRect, image.Interpolate, opacity, mode, sampling);
     }
 
-    private static bool TryGetBitmap(Image image, out Bitmap bitmap, out double naturalWidth, out double naturalHeight)
+    internal static bool TryGetBitmap(Image image, out Bitmap bitmap, out double naturalWidth, out double naturalHeight)
     {
         // RasterImage already keeps its pixels as a Bitmap (its own tile surface's own backing buffer) -
         // reuse that instance directly rather than round-tripping it through PixelBuffer, so a tile drawn

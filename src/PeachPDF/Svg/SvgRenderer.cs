@@ -2711,38 +2711,14 @@ namespace PeachPDF.Svg
 
             t.Graphics.Dispose();
 
-            var bounds = OwnerBounds(element, boundsOverride) ?? new Rect(x, y, width, height);
+            // The tile repeats from (x, y), with the pattern's own transform applied on top: a brush whose space starts at the cell's top-left
+            // and whose transform carries both. Painting the shape with it fills exactly the part of the grid under the shape.
+            var brushToUser = Matrix3x2.CreateTranslation((float)x, (float)y);
+            if (pattern.PatternTransform is { } patternTransform)
+                brushToUser = brushToUser.Then(patternTransform);
 
-            // One tile of margin on every side absorbs any shift introduced by patternTransform below,
-            // which the col/row computation itself (deliberately kept simple) doesn't account for -
-            // any surplus tiles are clipped away, so this only costs a few harmless extra draw calls.
-            var startCol = Math.Floor((bounds.X - x) / width) - 1;
-            var endCol = Math.Ceiling((bounds.X + bounds.Width - x) / width) + 1;
-            var startRow = Math.Floor((bounds.Y - y) / height) - 1;
-            var endRow = Math.Ceiling((bounds.Y + bounds.Height - y) / height) + 1;
-
-            const int maxTiles = 10_000;
-            if ((endCol - startCol) * (endRow - startRow) is <= 0 or > maxTiles)
-                return;
-
-            g.PushClip(path);
-
-            var pushedPatternTransform = pattern.PatternTransform is not null;
-            if (pushedPatternTransform)
-                g.PushTransform(pattern.PatternTransform!.Value);
-
-            for (var row = startRow; row < endRow; row++)
-            {
-                for (var col = startCol; col < endCol; col++)
-                {
-                    g.DrawImage(t.Image, new Rect(x + col * width, y + row * height, width, height));
-                }
-            }
-
-            if (pushedPatternTransform)
-                g.PopTransform();
-
-            g.PopClip();
+            using var brush = new TileBrush(t.Image, width, height, brushToUser);
+            g.DrawPath(brush, path);
         }
 
         /// <summary>Resolves a pattern's tile rect, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>.</summary>

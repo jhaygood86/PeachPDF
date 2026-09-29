@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    /// <summary>The keywords of <c>image-rendering</c> (CSS Images 3 ง5.3).</summary>
+    /// <summary>The keywords of <c>image-rendering</c> (CSS Images 3 ยง5.3).</summary>
     internal enum ImageRenderingMode : byte
     {
         Auto,

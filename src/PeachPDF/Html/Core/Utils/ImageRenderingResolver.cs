@@ -7,7 +7,7 @@ namespace PeachPDF.Html.Core.Utils
     internal static class ImageRenderingResolver
     {
         /// <summary>
-        /// The sampling for an element's <c>image-rendering</c> (CSS Images 3 ง5.3). <c>auto</c> leaves the choice to the caller, whose
+        /// The sampling for an element's <c>image-rendering</c> (CSS Images 3 ยง5.3). <c>auto</c> leaves the choice to the caller, whose
         /// <paramref name="whenAuto"/> says what the content wants by default (for instance crisp for tiles that must butt together
         /// without a seam).
         /// </summary>
