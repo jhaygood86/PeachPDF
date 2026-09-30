@@ -84,6 +84,8 @@ them, 28,952 words, printed through Chrome.
   beside a float that follows a table ([#1533](https://github.com/jhaygood86/PeachPDF/issues/1533)). A Debug build's
   paint trace shows that in each the words are painted but partly cut by the page clip (lines straddling the foot, or
   two words at the right edge of the page), which text extraction does not read.
+  The first two lose the same words on the build before #1520; the third does not, it is one of the residuals of the
+  float continuation ([#1523](https://github.com/jhaygood86/PeachPDF/issues/1523)).
 - Timings, fastest of three, on a 217-page ordinary document and a 237-page one with cards, floats and
   `flow-root` boxes: 83.3s to 86.8s and 141.1s to 140.0s. A document with one absolute badge in a
   `position: relative` parent per paragraph, 2,600 paragraphs, takes 129s on `main` (273 pages, 56 too many) and
