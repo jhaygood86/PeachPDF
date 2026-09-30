@@ -6627,12 +6627,12 @@ namespace PeachPDF.Html.Core.Dom
                         // the fragmentainer being filled: the break falls before the child, and the parent,
                         // left with nothing on this page but that leading edge, moves whole. Asked of the live
                         // fragmentainer, not of the band baseTop ends in - that band is already the next one,
-                        // so the margin never "crosses" it, and the child used to be placed a margin below the
-                        // parent's content top while this pass still filled the previous page. Its first line
-                        // then resumed at the next band's top, above the child's own box.
+                        // so the child used to be placed at the parent's content top there (plus its own top
+                        // margin, which then "crossed" nothing) while this pass still filled the previous page.
+                        // Its first line then resumed at the next band's top, above the child's own box. The
+                        // child's own margin is beside the point: it only made the mismatch larger.
                         if (prevSibling is null
                             && child.HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { } filling }
-                            && top > baseTop
                             && HtmlContainerInt.FallsPast(baseTop, filling.Band))
                         {
                             child.RequestBreakBefore(filling.BandBottom);
