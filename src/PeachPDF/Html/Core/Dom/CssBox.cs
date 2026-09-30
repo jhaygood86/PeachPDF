@@ -7197,8 +7197,13 @@ namespace PeachPDF.Html.Core.Dom
             // the box, in one of two ways: by moving the minimum number of lines the spec asks for, or,
             // where that cannot be arranged, by pushing the whole box to the next fragmentainer. A
             // paragraph taller than one page is not pushed: it would just recreate the violation there.
+            //
+            // Not for an absolutely positioned box: its position comes from its offsets, so the push and the
+            // rewind, which lay it out again from another page's top, put it back where it was. Its last line was
+            // then left across the page foot with no fragment on the next page, and was drawn on no page. Its
+            // widows are relaxed instead, as they are when they cannot be satisfied (§4.3).
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
-                && !_earlyBreakTaken && !PositionAssignedByEngine
+                && !_earlyBreakTaken && !PositionAssignedByEngine && Position.Value is not PositionMode.Absolute
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
                 && (orphans > 1 || widows > 1))
             {

@@ -67,19 +67,19 @@ them, 28,952 words, printed through Chrome.
 |---|---|---|---|---|---|
 | `main` | 4,737 | 85 | | 7,853 | 444 |
 | first version (one piece) | 1,542 | 180 | 57 of 313 | 13,550 | 130 |
-| this change | 702 | 181 | 7 of 312 | 17,375 | 61 |
+| this change | 698 | 181 | 5 of 312 | 17,376 | 60 |
 
 - 225 documents lose fewer words and 10 lose more.
 - The same sweep with one part removed from the one-piece version: without the re-opening, 30,850 words lost;
   without the `GetPreviousSibling` change, 4,024. The re-opening is essential and the predicate is where most of
   the gain comes from.
 - On 250 generated mixed-feature documents (floats, columns, flex, grid, scroll containers) words lost go from
-  34,514 to 34,067 and duplicated from 7,920 to 8,217; the 14 that `main` draws completely are still complete.
+  34,514 to 34,065 and duplicated from 7,920 to 8,217; the 14 that `main` draws completely are still complete.
   The 250 ordinary documents are unchanged.
-- Six of the 7 documents that lose words have floats, columns or flex in them, the engines with gaps of their
-  own; the seventh loses one word inside an absolute box. In the one reduced (a float beside text after a
-  flex container), replacing the absolute box with a plain 6pt spacer makes `main` lose the same words: the
-  content after the box now starts where it should, which exposes the float's loss.
+- The 5 documents that lose words each have floats, columns or flex in them, the engines with gaps of their
+  own. One reduces to two floats that leave no room between them, which loses the same words on `main` with no
+  absolute box at all ([#1531](https://github.com/jhaygood86/PeachPDF/issues/1531)): the content after the box now
+  starts where it should, which puts the floats at a height where that happens.
 - Timings, fastest of three, on a 217-page ordinary document and a 237-page one with cards, floats and
   `flow-root` boxes: 83.3s to 86.8s and 141.1s to 140.0s. A document with one absolute badge in a
   `position: relative` parent per paragraph, 2,600 paragraphs, takes 129s on `main` (273 pages, 56 too many) and
@@ -95,6 +95,18 @@ the container's top (the change above) the slice loses lines at the page edges. 
 wrapper with an absolute first child lost 6 words that `main` draws. Dropping the exception fixed that and
 took the absolute-box documents from 21 documents that lose words to 7 (1,037 words lost to 702). The new
 `ScrollContainerWithAbsoluteFirstChildIntegrationTests` fails with the exception back.
+
+## A box whose last line crosses the page foot
+
+A lone absolute box of three or four lines whose last line crossed the foot lost that line (`top: 130pt` with three
+lines, `top: 117pt` with four). A paragraph's widows correction either moves lines or pushes the whole box to the
+next page's top by laying it out again, and an absolute box's position comes from its offsets, so the push put it
+straight back: the last line stayed across the foot with no fragment on the next page, and the PDF clipped it.
+`main` drew the line only because its emitter claimed a straddling line for both pages, and lost it at
+`top: 126pt`. The correction no longer runs for an absolutely positioned box, so its lines break where they fall and
+its widows are relaxed, as they are when they cannot be satisfied. Three lines split 2 and 1 and five or more as
+Chrome does; four split 3 and 1 where Chrome splits 2 and 2. A two-box fuzz reduction showed it
+(`AbsoluteBoxWhoseLastLinesCrossThePageFoot_BreaksBetweenItsLines`, four of five cases fail without the change).
 
 ## Behaviour changes that look like regressions but are not
 

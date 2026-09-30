@@ -47,6 +47,25 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal([12, 13, 13, 2], placed.GroupBy(w => w.Page).OrderBy(g => g.Key).Select(g => g.Count()));
         }
 
+        // A box whose last line or lines cross the page foot breaks between its lines. Its position comes from its
+        // offsets, so the widows correction that lays a block out again from the next page's top cannot apply to
+        // it: it put the box back where it was, with its last line across the foot and no fragment on the next
+        // page, and the line was drawn on no page. Its widows are relaxed instead, so a 4-line box splits 3 and 1.
+        [Theory]
+        [InlineData(3, 130)]
+        [InlineData(3, 134)]
+        [InlineData(4, 117)]
+        [InlineData(4, 120)]
+        [InlineData(5, 117)]
+        public async Task AbsoluteBoxWhoseLastLinesCrossThePageFoot_BreaksBetweenItsLines(int lineCount, int top)
+        {
+            var placed = await WordFragments(
+                $"<p>P1</p><div style='position:absolute;top:{top}pt;left:0;width:59pt'>{Lines("W", lineCount)}</div>");
+
+            AssertEachDrawnOnceInsideABand(placed, lineCount);
+            Assert.Equal(2, placed.Select(w => w.Page).Distinct().Count());
+        }
+
         // An absolutely positioned box placed on an emitted page re-opens every page its content reaches, not
         // only the pages its border box covers: overflowing text past a short box's height was lost.
         [Fact]
