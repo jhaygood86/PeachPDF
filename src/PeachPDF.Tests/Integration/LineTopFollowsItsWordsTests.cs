@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -228,7 +228,7 @@ namespace PeachPDF.Tests.Integration
                 var recording = new RecordingGraphics(new PeachPDF.Adapters.PdfSharpAdapter());
                 FragmentPaintHarness.PaintPage(container, recording, page);
 
-                var clips = new Stack<RRect?>();
+                var clips = new Stack<Rect?>();
                 foreach (var op in recording.Log)
                 {
                     switch (op.Kind)
@@ -266,7 +266,7 @@ namespace PeachPDF.Tests.Integration
                 var recording = new RecordingGraphics(new PeachPDF.Adapters.PdfSharpAdapter());
                 FragmentPaintHarness.PaintPage(container, recording, page);
 
-                var clips = new Stack<RRect?>();
+                var clips = new Stack<Rect?>();
                 foreach (var op in recording.Log)
                 {
                     switch (op.Kind)

@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 
 namespace PeachPDF.Svg
 {
@@ -14,15 +13,15 @@ namespace PeachPDF.Svg
         public abstract SvgPaint PaintOf(bool stroke);
 
         /// <summary>Paints <see cref="PaintOf"/> - a gradient or pattern - over <paramref name="region"/> (user space) into <paramref name="g"/>.</summary>
-        public abstract void PaintPaint(RGraphics g, bool stroke, RRect region);
+        public abstract void PaintPaint(Canvas g, bool stroke, Rect region);
 
         /// <summary>
         /// Paints an <c>feImage</c>'s content into <paramref name="g"/>: the image fitted into <paramref name="subregion"/>, or the referenced
         /// element in the filtered element's user space translated by (<paramref name="offsetX"/>, <paramref name="offsetY"/>).
         /// </summary>
-        public abstract void PaintImage(RGraphics g, FeImage image, RRect subregion, double offsetX, double offsetY);
+        public abstract void PaintImage(Canvas g, FeImage image, Rect subregion, double offsetX, double offsetY);
 
         /// <summary>Paints what lies behind the filtered element inside <paramref name="region"/> into <paramref name="g"/>; false when there is nothing to paint (the input is then transparent).</summary>
-        public abstract bool PaintBackdrop(RGraphics g, RRect region);
+        public abstract bool PaintBackdrop(Canvas g, Rect region);
     }
 }

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -470,6 +470,6 @@ namespace PeachPDF.Tests.Integration
         /// which is where an inline box's real geometry lives. Asserting a single one also states that
         /// the box did not wrap, which every fixture here depends on.
         /// </summary>
-        private static RRect PaintedRectOf(CssBox box) => Assert.Single(box.Rectangles).Value;
+        private static Rect PaintedRectOf(CssBox box) => Assert.Single(box.Rectangles).Value;
     }
 }

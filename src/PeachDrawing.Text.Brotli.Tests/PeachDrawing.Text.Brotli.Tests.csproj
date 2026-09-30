@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Verifies PeachDrawing.Text.Brotli's ported decoder byte-for-byte against the BCL's own
+    System.IO.Compression.BrotliStream over every .br resource this repository actually ships
+    (PeachDrawing.Text.Data's embedded Unicode/hyphenation/dictionary tables, read by reflection
+    over its assembly rather than through its internal API - resource names/streams need no
+    accessibility grant), plus a real WOFF2 font loaded through the public PeachDrawing.Text API
+    with the managed decoder registered, and hostile/fuzz input that must fail cleanly rather than
+    hang or throw something unbounded.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\Inter-Medium.woff2" Link="Inter-Medium.woff2">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!--
+      A small-window (lgwin=10, 1 KiB) Brotli stream of 180,000 decompressed bytes, made by
+      `python3 -c "import brotli; open('SmallWindow.br','wb').write(brotli.compress(('The quick brown fox jumps over
+      the lazy dog. ' * 4000).encode(), quality=9, lgwin=10))"` - forces the managed decoder's ring buffer to wrap
+      around repeatedly (BrotliInputStreamTests.SmallWindowStreamWrapsTheRingBufferManyTimes), which no other test
+      fixture's window/content-size combination happens to exercise.
+    -->
+    <None Include="Fixtures\SmallWindow.br" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.analyzers" Version="1.27.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.Text.Brotli\PeachDrawing.Text.Brotli.csproj" />
+    <ProjectReference Include="..\PeachDrawing.Text.Data\PeachDrawing.Text.Data.csproj" />
+    <ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

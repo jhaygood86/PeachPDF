@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
@@ -11,21 +10,21 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// The border/background/checkbox-radio-glyph chrome shared between the flag-on static page
     /// painter (<see cref="FormFieldFragmentPainter"/>) and a field's own generated widget
     /// appearance stream (<c>Html/Core/Handlers/FormFieldAppearanceBuilder</c>) - both need to draw
-    /// the identical CSS-styled look, just onto different <see cref="RGraphics"/> targets (the real
+    /// the identical CSS-styled look, just onto different <see cref="Canvas"/> targets (the real
     /// page vs. a field's own local <c>XForm</c>), so the drawing logic itself lives here once
     /// rather than drifting between two independently maintained copies.
     /// </summary>
     internal static class FormFieldChrome
     {
         /// <summary>The border/background shared by every field kind - reuses the same CSS box-model painting every other box gets.</summary>
-        internal static void PaintBorderAndBackground(RGraphics g, CssBox box, RRect rect)
+        internal static void PaintBorderAndBackground(Canvas g, CssBox box, Rect rect)
         {
             FragmentPainter.PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect));
             BordersDrawHandler.DrawBoxBorders(g, box, rect, hasLeftEdge: true, hasRightEdge: true);
         }
 
         /// <summary>The check mark glyph, in the box's resolved text color - only drawn when checked.</summary>
-        internal static void PaintCheckboxGlyph(RGraphics g, CssBox box, RRect rect, bool isChecked)
+        internal static void PaintCheckboxGlyph(Canvas g, CssBox box, Rect rect, bool isChecked)
         {
             if (!isChecked) return;
 
@@ -43,7 +42,7 @@ namespace PeachPDF.Html.Core.Paint.Content
         /// border-top stands in as the representative side - matching how <c>border-radius</c>
         /// elsewhere in CSS already treats a fully-rounded box as a single curve, not four).
         /// </summary>
-        internal static void PaintRadioBackground(RGraphics g, CssBox box, RRect rect)
+        internal static void PaintRadioBackground(Canvas g, CssBox box, Rect rect)
         {
             var rx = rect.Width / 2;
             var ry = rect.Height / 2;
@@ -65,12 +64,12 @@ namespace PeachPDF.Html.Core.Paint.Content
         }
 
         /// <summary>The filled inner dot, in the box's resolved text color - only drawn when checked.</summary>
-        internal static void PaintRadioGlyph(RGraphics g, CssBox box, RRect rect, bool isChecked)
+        internal static void PaintRadioGlyph(Canvas g, CssBox box, Rect rect, bool isChecked)
         {
             if (!isChecked) return;
 
             var inset = System.Math.Min(rect.Width, rect.Height) * 0.28;
-            var dotRect = new RRect(rect.X + inset, rect.Y + inset, rect.Width - inset * 2, rect.Height - inset * 2);
+            var dotRect = new Rect(rect.X + inset, rect.Y + inset, rect.Width - inset * 2, rect.Height - inset * 2);
             var dx = dotRect.Width / 2;
             var dy = dotRect.Height / 2;
             using var dotPath = RenderUtils.GetRoundRect(g, dotRect, dx, dy, dx, dy, dx, dy, dx, dy);

@@ -75,7 +75,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         public async Task MinWidthWinsOverMaxWidthOnConflict()
         {
             // CSS 2.1 §10.4: min-width wins over max-width on conflict, mirroring the existing async
-            // GetBoxWidth(RGraphics, CssBox, double?) overload's own ordering (max applied before min).
+            // GetBoxWidth(Canvas, CssBox, double?) overload's own ordering (max applied before min).
             var (root, _) = await LayoutAsync(Wrap(
                 "<div id='box' style='width:100pt;max-width:50pt;min-width:150pt'>x</div>"));
             var box = FindById(root, "box")!;

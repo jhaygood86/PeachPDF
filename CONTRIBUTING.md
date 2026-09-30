@@ -63,7 +63,7 @@ If your changed lines fall short of 90%, add tests to close the gap rather than 
 - **Rasterize with two renderers, not one**, when verifying transparency/soft-mask/blend-mode output. MuPDF is unusually lenient about transparency-group conformance and can render content "correctly" that a stricter, more representative engine (PDFium — Chrome/Edge's engine) refuses. Agreement between both is real evidence; a single MuPDF render that looks right is not.
 - When implementing a new SVG or CSS **paint** feature, a parser-level "did it parse into the right enum/value" test is not sufficient on its own — add an integration test that would fail if the feature were a complete no-op at render time.
 - **Layout engine changes** (`CssLayoutEngine`/`CssLayoutEngineFlex`/`CssLayoutEngineTable`/`CssLayoutEngineColumns`, `CssBox.PerformLayoutImp`) need unit tests that assert the relevant `CssBox`'s properties after layout (`Location`, `ActualRight`/`ActualBottom`, etc.), not just that layout completes without throwing. Assert on every box the change affects, including children when the change affects child placement. See the harness pattern in `FlexboxIntegrationTests.cs`/`MulticolLayoutIntegrationTests.cs`: build a `HtmlContainerInt` + `PdfSharpAdapter`, call `PerformLayout` directly, then walk the box tree by id/class and assert positions/sizes.
-- **Painting changes** need unit tests that confirm the actual sequence of calls made to the `RGraphics` adapter layer, not just that painting completes or that some token shows up in the final PDF. Use a test-only `RGraphics` mock (see `SpyGraphics` in `TransformIntegrationTests.cs`, `RecordingGraphics` in `CssLayoutEngineTablePageBreakTests.cs`) that records each invocation, then assert on the recording. When order across different call types matters, record into a single ordered log.
+- **Painting changes** need unit tests that confirm the actual sequence of calls made to the `Canvas` adapter layer (`PeachDrawing.Core.Canvas`), not just that painting completes or that some token shows up in the final PDF. Use a test-only `Canvas` mock (see `SpyGraphics` in `TransformIntegrationTests.cs`, `RecordingGraphics` in `CssLayoutEngineTablePageBreakTests.cs`) that records each invocation, then assert on the recording. When order across different call types matters, record into a single ordered log.
 - Avoid writing tests against `FontFactory` (in `src/PeachDrawing.Text`) (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk.
 
 ## Documentation
@@ -82,7 +82,7 @@ If a change gives PeachPDF a new visible rendering capability, add or update a s
 ## Architecture conventions
 
 - Don't write two independent parsers for the same CSS value grammar across layers. If both the CSS-OM/parsing layer and a later render/resolution layer need to understand a value's grammar, extract it into one shared internal class both call (e.g. `CalcParser`, `BackgroundPositionGrammar`/`BackgroundSizeGrammar`). Only the final numeric resolution that genuinely depends on runtime-only information should differ between layers.
-- The `Html/Adapters` layer (`RGraphics`/`RAdapter`/`RPen`/etc.) is the abstraction boundary between layout/paint logic and the concrete PDF backend (`PdfSharpCore`). New rendering primitives get added here first, then implemented in `GraphicsAdapter`/`XGraphics`/`XGraphicsPdfRenderer`. If you add a new abstract `RGraphics` member, update the test-only mocks (`SpyGraphics`, `RecordingGraphics`) too.
+- `PeachDrawing.Core` (`Canvas`/`RenderContext`/`Pen`/etc., see [docs/peachdrawing-core.md](docs/peachdrawing-core.md)) is the abstraction boundary between layout/paint logic and the concrete PDF backend (`src/PeachPDF/Adapters/`, over `PdfSharpCore`). New rendering primitives get added there first, then implemented in `GraphicsAdapter`/`XGraphics`/`XGraphicsPdfRenderer`. If you add a new abstract `Canvas` member, update the test-only mocks (`SpyGraphics`, `RecordingGraphics`) too.
 - Before building new PDF-writing infrastructure (patterns, soft masks, shadings), check whether `PdfSharpCore` already has an unused primitive for it — `XForm`/`PdfFormXObject`, `PdfTilingPattern`, `PdfSoftMask` have all been found pre-existing-but-uncalled at various points.
 
 ## Pull requests
@@ -152,7 +152,7 @@ utility, audit ALL callers for double application, missed application, and state
 layout pass. Look for statics, caches, epsilons, retry counts, magic numbers and heuristic allow-lists. An
 allow-list of placements must also be checked against what is INSIDE the thing it allows. Check that the
 change respects the architecture rules in CLAUDE.md (paint consumes only the fragment tree and never reads
-CssBox geometry; paint is synchronous; new rendering primitives go through the RGraphics adapter layer; do not
+CssBox geometry; paint is synchronous; new rendering primitives go through the Canvas adapter layer; do not
 write two parsers for one CSS grammar; the property registry is generated from css-properties.json).
 
 ## 2. Reproduce the claim
@@ -197,7 +197,7 @@ through `SaveShowcaseAsync`, and its caption must be true against Chrome and the
 ## 7. Tests and mutation testing
 - Run the full net8.0 suite; run every new/changed test class individually.
 - Run the new tests against the BASELINE code and confirm they fail there. A test that passes on both is vacuous.
-- Tests must assert box/line geometry after layout, or an ordered RGraphics call log (see CLAUDE.md Testing
+- Tests must assert box/line geometry after layout, or an ordered Canvas call log (see CLAUDE.md Testing
   conventions), never only PDF content-stream substrings. Paint features need a test that fails if the feature
   is a no-op.
 - Judge every edit to pre-existing tests on the merits: intent-preserving, or weakened to fit new behaviour?

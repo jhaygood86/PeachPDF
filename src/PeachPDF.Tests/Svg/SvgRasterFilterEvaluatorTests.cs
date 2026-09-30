@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
+using PeachDrawing.Core;
+using PeachDrawing;
 using PeachPDF.Svg;
 using System.Xml.Linq;
 
@@ -9,7 +8,7 @@ namespace PeachPDF.Tests.Svg
 {
     /// <summary>
     /// The pixel evaluation of an SVG filter with a primitive PDF cannot express: filters are built from real markup and
-    /// rendered into a <see cref="RasterGraphics"/> host, whose pixels are then read back.
+    /// rendered into a <see cref="RasterCanvas"/> host, whose pixels are then read back.
     /// </summary>
     public class SvgRasterFilterEvaluatorTests
     {
@@ -23,25 +22,25 @@ namespace PeachPDF.Tests.Svg
         }
 
         /// <summary>Renders <paramref name="paint"/> through the filter into a 100 x 100 host at <paramref name="pixelsPerUnit"/> pixels per unit.</summary>
-        private static RasterGraphics Render(string filterMarkup, Action<RGraphics> paint, double pixelsPerUnit = 1, SvgElement? element = null)
+        private static RasterCanvas Render(string filterMarkup, Action<Canvas> paint, double pixelsPerUnit = 1, SvgElement? element = null)
         {
             var document = Build(filterMarkup);
             var filter = document.Filters["f"];
             var size = (int)(100 * pixelsPerUnit);
-            var host = new RasterGraphics(Adapter, new RasterSurface(size, size, 0, 0, pixelsPerUnit, pixelsPerUnit), 1);
+            var host = new RasterCanvas(Adapter, new RasterSurface(size, size, 0, 0, pixelsPerUnit, pixelsPerUnit), 1);
 
-            SvgFilterEvaluator.Render(host, filter, element ?? document.Children[0], new RRect(0, 0, 100, 100), paint);
+            SvgFilterEvaluator.Render(host, filter, element ?? document.Children[0], new Rect(0, 0, 100, 100), paint);
             return host;
         }
 
-        private static void Rect(RGraphics g, RColor color, double x = 20, double y = 20, double w = 40, double h = 40) =>
+        private static void Rect(Canvas g, PaintColor color, double x = 20, double y = 20, double w = 40, double h = 40) =>
             g.DrawRectangle(g.GetSolidBrush(color), x, y, w, h);
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
-        private static readonly RColor Red = RColor.FromArgb(255, 255, 0, 0);
-        private static readonly RColor Blue = RColor.FromArgb(255, 0, 0, 255);
-        private static readonly RColor White = RColor.FromArgb(255, 255, 255, 255);
+        private static readonly PaintColor Red = PaintColor.FromArgb(255, 255, 0, 0);
+        private static readonly PaintColor Blue = PaintColor.FromArgb(255, 0, 0, 255);
+        private static readonly PaintColor White = PaintColor.FromArgb(255, 255, 255, 255);
 
         [Fact]
         public void Blur_SpreadsTheElementOutsideItsEdges()
@@ -118,10 +117,10 @@ namespace PeachPDF.Tests.Svg
         {
             const string linear = """<filter id="f" color-interpolation-filters="linearRGB"><feGaussianBlur stdDeviation="5"/></filter>""";
             const string srgb = """<filter id="f" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="5"/></filter>""";
-            void Paint(RGraphics g)
+            void Paint(Canvas g)
             {
                 Rect(g, Red, 20, 20, 20, 40);
-                Rect(g, RColor.FromArgb(255, 0, 255, 0), 40, 20, 20, 40);
+                Rect(g, PaintColor.FromArgb(255, 0, 255, 0), 40, 20, 20, 40);
             }
 
             var l = Pixel(Render(linear, Paint), 40, 40);
@@ -188,7 +187,7 @@ namespace PeachPDF.Tests.Svg
                   <feFlood flood-color="#ffffff" result="w"/>
                   <feComposite in="SourceGraphic" in2="w" operator="arithmetic" k1="0" k2="0.5" k3="0.5" k4="0"/>
                 </filter>
-                """, g => Rect(g, RColor.FromArgb(255, 0, 0, 0)));
+                """, g => Rect(g, PaintColor.FromArgb(255, 0, 0, 0)));
 
             // (black + white) / 2 inside the rectangle.
             Assert.InRange((int)Pixel(host, 40, 40)[0], 126, 129);
@@ -308,7 +307,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("""<feFuncR type="linear" slope="10000000"/>""")]
         public void OutOfRangeTransferFunctions_ClampInsteadOfDependingOnTheCast(string function)
         {
-            var host = Render($"""<filter id="f" color-interpolation-filters="sRGB"><feComponentTransfer>{function}</feComponentTransfer></filter>""", g => Rect(g, RColor.FromArgb(255, 0, 100, 0)));
+            var host = Render($"""<filter id="f" color-interpolation-filters="sRGB"><feComponentTransfer>{function}</feComponentTransfer></filter>""", g => Rect(g, PaintColor.FromArgb(255, 0, 100, 0)));
 
             // Pow(0, -1) is infinity and 1e7 * 0 is 0: both must land on a byte the same way everywhere (0 or 255), never a wrapped value.
             var red = Pixel(host, 40, 40)[0];
@@ -320,10 +319,10 @@ namespace PeachPDF.Tests.Svg
         {
             // Text has no static geometry, so an objectBoundingBox region falls back to the viewport instead of collapsing.
             var document = Build("""<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>""");
-            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
             var text = new SvgTextElement();
 
-            SvgFilterEvaluator.Render(host, document.Filters["f"], text, new RRect(0, 0, 100, 100), g => Rect(g, Red, 40, 40, 10, 10));
+            SvgFilterEvaluator.Render(host, document.Filters["f"], text, new Rect(0, 0, 100, 100), g => Rect(g, Red, 40, 40, 10, 10));
 
             Assert.True(Pixel(host, 45, 45)[3] > 200);
         }
@@ -333,9 +332,9 @@ namespace PeachPDF.Tests.Svg
         {
             var document = Build("""<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>""");
             // A tile-like host that hands out no raster surface: nothing is painted and nothing throws.
-            var host = new RasterGraphics(Adapter, new RasterSurface(10, 10, 500, 500, 1, 1), 1);
+            var host = new RasterCanvas(Adapter, new RasterSurface(10, 10, 500, 500, 1, 1), 1);
 
-            SvgFilterEvaluator.Render(host, document.Filters["f"], document.Children[0], new RRect(0, 0, 100, 100), g => Rect(g, Red));
+            SvgFilterEvaluator.Render(host, document.Filters["f"], document.Children[0], new Rect(0, 0, 100, 100), g => Rect(g, Red));
 
             Assert.All(host.Surface.Pixels.ToArray(), b => Assert.Equal(0, b));
         }

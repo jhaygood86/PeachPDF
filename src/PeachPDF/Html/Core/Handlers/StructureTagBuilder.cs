@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -154,7 +154,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// leaves in this engine (see StructureTagMapper for why real elements' own text is always
         /// carried by an anonymous child box, never the element's own box).
         /// </summary>
-        public IDisposable OpenContentElement(RGraphics g, CssBox box, string structureType, string? altText = null)
+        public IDisposable OpenContentElement(Canvas g, CssBox box, string structureType, string? altText = null)
         {
             var element = GetOrCreateElement(_elementsByBox, box, structureType);
 
@@ -168,7 +168,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (g.IsOffscreenTile)
                 // Struct element still created above (keeps the tree shape well-formed), but no
-                // MCID/BDC for tile-painted content in v1 - see RGraphics.IsOffscreenTile.
+                // MCID/BDC for tile-painted content in v1 - see Canvas.IsOffscreenTile.
                 return NullScope.Instance;
 
             var mcid = _nextMcidOnCurrentPage++;
@@ -224,7 +224,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Opens an artifact marked-content sequence around the caller's own paint calls - no
         /// struct element, not part of the logical structure tree (e.g. a decorative &lt;hr&gt;).
         /// </summary>
-        public IDisposable OpenArtifact(RGraphics g)
+        public IDisposable OpenArtifact(Canvas g)
         {
             if (g.IsOffscreenTile)
                 return NullScope.Instance;
@@ -370,7 +370,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        sealed class EndMarkedContentScope(RGraphics g, StructureTagBuilder builder) : IDisposable
+        sealed class EndMarkedContentScope(Canvas g, StructureTagBuilder builder) : IDisposable
         {
             public void Dispose()
             {

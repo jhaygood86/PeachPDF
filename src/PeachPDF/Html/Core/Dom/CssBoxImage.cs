@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
@@ -58,7 +57,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// A pending declarative <c>Image(Func&lt;PdfSize,byte[]&gt;)</c> callback - resolved into a real
-        /// <see cref="RImage"/> the first time <see cref="MeasureWordsSize"/> runs, once this box's own
+        /// <see cref="Image"/> the first time <see cref="MeasureWordsSize"/> runs, once this box's own
         /// definite size is known (see <see cref="TryResolveDefiniteSize"/>), then cleared so the callback
         /// never runs a second time. See <c>ContainerBuilder.Image(Func&lt;PdfSize,byte[]&gt;)</c>.
         /// </summary>
@@ -82,7 +81,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Get the image of this image box.
         /// </summary>
-        public RImage? Image => _imageWord.Image;
+        public Image? Image => _imageWord.Image;
 
         public string ImageSource => GetAttribute("src");
 
@@ -101,7 +100,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Assigns words its width and height
         /// </summary>
         /// <param name="g">the device to use</param>
-        internal override async ValueTask MeasureWordsSize(RGraphics g)
+        internal override async ValueTask MeasureWordsSize(Canvas g)
         {
             if (!_wordsSizeMeasured)
             {
@@ -187,7 +186,7 @@ namespace PeachPDF.Html.Core.Dom
         /// non-null (mirrors <see cref="OnLoadImageComplete"/>'s own shape - a src ever resolves to one
         /// or the other, never both).
         /// </summary>
-        internal void SetDecodedContent(RImage? image, SvgDocument? svgDocument)
+        internal void SetDecodedContent(Image? image, SvgDocument? svgDocument)
         {
             _imageWord.Image = image;
             _svgDocument = svgDocument;
@@ -220,7 +219,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Resolves a pending dynamic-content callback into real decoded content, once this box's own
         /// definite size is known. <see cref="MeasureWordsSize"/> is the earliest point that's true: for a
-        /// replaced element (one word, always), <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> derives this
+        /// replaced element (one word, always), <see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/> derives this
         /// box's own <c>ActualWidth</c> from that one word's already-measured size whenever the box has
         /// words - so by the time layout would otherwise resolve this box's width/height, it's already too
         /// late (circular). The declarative layer defaults a dynamic content box to <c>width:100%;
@@ -324,7 +323,7 @@ namespace PeachPDF.Html.Core.Dom
         /// see <see cref="CssBoxSvg.GetLinkSource"/> for why this doesn't reuse the painter's own
         /// (fragmentainer-local) rect computation. Null for an ordinary raster image.
         /// </summary>
-        internal (SvgDocument Document, RRect Rect)? GetLinkSource()
+        internal (SvgDocument Document, Rect Rect)? GetLinkSource()
         {
             if (_svgDocument is null)
                 return null;

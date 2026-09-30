@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System.Collections.Generic;
 
 namespace PeachPDF.Svg
@@ -27,11 +27,11 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// The <c>clip-rule</c> read from the <c>&lt;clipPath&gt;</c> element itself (defaulting to
-        /// <see cref="RFillMode.Nonzero"/>) - applied to the whole combined clip region, since all
-        /// of a clipPath's children are appended into a single <c>RGraphicsPath</c> rather than
+        /// <see cref="FillMode.Nonzero"/>) - applied to the whole combined clip region, since all
+        /// of a clipPath's children are appended into a single <c>GraphicsPath</c> rather than
         /// tracked individually. Per-child <c>clip-rule</c> overrides are not supported.
         /// </summary>
-        public RFillMode ClipRule { get; init; } = RFillMode.Nonzero;
+        public FillMode ClipRule { get; init; } = FillMode.Nonzero;
 
         /// <summary>
         /// <c>clipPathUnits</c> ([SVG 1.1 §14.3.5](https://www.w3.org/TR/SVG11/masking.html#ClipPathElement)).

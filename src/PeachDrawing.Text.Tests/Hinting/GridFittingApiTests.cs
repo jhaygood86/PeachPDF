@@ -261,6 +261,76 @@ namespace PeachDrawing.Text.Tests.Hinting
             var glyph = GlyphOf(Sans.Value, 'a');
             Assert.Throws<ArgumentOutOfRangeException>(() => Sans.Value.TryGetOutline(glyph, Request(ppem), out _));
             Assert.Throws<ArgumentOutOfRangeException>(() => Sans.Value.TryGetGridFittedAdvance(glyph, Request(ppem), out _));
+
+            // the same is true of a request whose axes are given independently and only one of them is bad
+            var mixed = new OutlineRequest { PixelsPerEmX = ppem, PixelsPerEmY = 12, GridFitting = GridFitting.Standard };
+            Assert.Throws<ArgumentOutOfRangeException>(() => Sans.Value.TryGetOutline(glyph, mixed, out _));
+            mixed = new OutlineRequest { PixelsPerEmX = 12, PixelsPerEmY = ppem, GridFitting = GridFitting.Standard };
+            Assert.Throws<ArgumentOutOfRangeException>(() => Sans.Value.TryGetOutline(glyph, mixed, out _));
+        }
+
+        [Fact]
+        public void PixelsPerEmSetsBothAxesToTheSameValue()
+        {
+            var request = Request(12.5);
+            Assert.Equal(12.5, request.PixelsPerEmX);
+            Assert.Equal(12.5, request.PixelsPerEmY);
+            Assert.Equal(12.5, request.PixelsPerEm);
+        }
+
+        /// <summary>
+        /// The regression guard for non-square pixels: a request whose two axes happen to be equal, made either through the
+        /// <see cref="OutlineRequest.PixelsPerEm"/> convenience or by setting <see cref="OutlineRequest.PixelsPerEmX"/> and
+        /// <see cref="OutlineRequest.PixelsPerEmY"/> to the same value explicitly, gives exactly the same outline: equal axes always
+        /// take the square-pixel path, whichever way the request said so.
+        /// </summary>
+        [Fact]
+        public void EqualAxesGiveTheSameOutlineHoweverTheRequestSpelledThem()
+        {
+            var glyph = GlyphOf(Sans.Value, 'g');
+            Assert.True(Sans.Value.TryGetOutline(glyph, Request(17), out var viaConvenience));
+
+            var explicitRequest = new OutlineRequest { PixelsPerEmX = 17, PixelsPerEmY = 17, GridFitting = GridFitting.Standard };
+            Assert.True(Sans.Value.TryGetOutline(glyph, explicitRequest, out var viaExplicitAxes));
+
+            Assert.Equal(PointsOf(viaConvenience), PointsOf(viaExplicitAxes));
+            Assert.Equal(viaConvenience.GridFittedAdvance, viaExplicitAxes.GridFittedAdvance);
+            Assert.Equal(17, viaExplicitAxes.PixelsPerEmX);
+            Assert.Equal(17, viaExplicitAxes.PixelsPerEmY);
+        }
+
+        /// <summary>
+        /// A non-square request (the two axes differ) fits the outline to a stretched grid: neither axis alone gives what the
+        /// combination gives, and swapping the two axes does not give the same result back (it is a genuinely different size, not one
+        /// the cache could confuse with its mirror).
+        /// </summary>
+        [Fact]
+        public void NonSquarePixelsFitTheOutlineToAStretchedGrid()
+        {
+            var glyph = GlyphOf(Sans.Value, 'H');
+            var stretched = new OutlineRequest { PixelsPerEmX = 12, PixelsPerEmY = 20, GridFitting = GridFitting.Standard };
+            var swapped = new OutlineRequest { PixelsPerEmX = 20, PixelsPerEmY = 12, GridFitting = GridFitting.Standard };
+
+            Assert.True(Sans.Value.TryGetOutline(glyph, stretched, out var wide));
+            Assert.True(Sans.Value.TryGetOutline(glyph, swapped, out var tall));
+            Assert.True(Sans.Value.TryGetOutline(glyph, Request(12), out var narrowSquare));
+            Assert.True(Sans.Value.TryGetOutline(glyph, Request(20), out var wideSquare));
+
+            Assert.True(wide.IsGridFitted);
+            Assert.Equal(12, wide.PixelsPerEmX);
+            Assert.Equal(20, wide.PixelsPerEmY);
+
+            // neither of the two axes alone, and the two axes are not interchangeable
+            Assert.NotEqual(PointsOf(narrowSquare), PointsOf(wide));
+            Assert.NotEqual(PointsOf(wideSquare), PointsOf(wide));
+            Assert.NotEqual(PointsOf(tall), PointsOf(wide));
+
+            // the horizontal extent tracks the 12-ppem fitting and the vertical extent the 20-ppem one, not the other way round
+            double wideMaxX = PointsOf(wide).Max(p => p.X);
+            double narrowMaxX = PointsOf(narrowSquare).Max(p => p.X);
+            double tallMaxX = PointsOf(tall).Max(p => p.X);
+            Assert.InRange(wideMaxX, narrowMaxX - 1.0, narrowMaxX + 1.0);
+            Assert.True(Math.Abs(wideMaxX - tallMaxX) > 1.0, "the horizontal extent should differ once the horizontal ppem does");
         }
 
         [Fact]

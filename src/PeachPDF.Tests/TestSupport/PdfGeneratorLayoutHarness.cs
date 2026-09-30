@@ -52,9 +52,14 @@ namespace PeachPDF.Tests.TestSupport
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
-            string html, PdfGenerateConfig config)
+            string html, PdfGenerateConfig config, Func<PdfSharpAdapter, Task>? configureAdapter = null)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = config.PixelsPerInch / 72d };
+
+            if (configureAdapter is not null)
+            {
+                await configureAdapter(adapter);
+            }
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)

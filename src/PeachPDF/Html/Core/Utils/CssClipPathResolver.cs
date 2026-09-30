@@ -1,18 +1,19 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Layer B of the <c>clip-path</c> pipeline: resolves a <c>clip-path</c> value (already validated and
     /// preserved verbatim by <see cref="ClipPathValueConverter"/> at parse time) into an absolute-coordinate
-    /// <see cref="RGraphicsPath"/> that the paint hook can push as a clip region. The grammar itself is parsed
+    /// <see cref="GraphicsPath"/> that the paint hook can push as a clip region. The grammar itself is parsed
     /// by the shared <see cref="BasicShapeGrammar"/>; only the final numeric resolution against the element's
     /// reference box - selected by an optional <c>&lt;geometry-box&gt;</c> keyword, defaulting to the
     /// border-box - lives here.
@@ -29,7 +30,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <paramref name="value"/> is a renderable clip source; <c>false</c> (and a null path) for
         /// <c>none</c>/invalid/an unresolvable <c>url()</c>, in which case the caller skips clipping.
         /// </returns>
-        public static bool TryBuildClipPath(RGraphics g, string value, RRect borderBox, CssBox box, out RGraphicsPath? path, out bool useEvenOdd)
+        public static bool TryBuildClipPath(Canvas g, string value, Rect borderBox, CssBox box, out GraphicsPath? path, out bool useEvenOdd)
         {
             path = null;
             useEvenOdd = false;
@@ -59,7 +60,7 @@ namespace PeachPDF.Html.Core.Utils
                 path = BuildUrl(g, shape, borderBox, box, ppp, out useEvenOdd);
                 if (path is null) return false;
 
-                path.FillMode = useEvenOdd ? RFillMode.EvenOdd : RFillMode.Nonzero;
+                path.FillMode = useEvenOdd ? FillMode.EvenOdd : FillMode.Nonzero;
                 return true;
             }
 
@@ -95,7 +96,7 @@ namespace PeachPDF.Html.Core.Utils
                     return false;
             }
 
-            path.FillMode = useEvenOdd ? RFillMode.EvenOdd : RFillMode.Nonzero;
+            path.FillMode = useEvenOdd ? FillMode.EvenOdd : FillMode.Nonzero;
             return true;
         }
 
@@ -105,19 +106,19 @@ namespace PeachPDF.Html.Core.Utils
         /// alias the border-box - not a simplification, but CSS Masking 1 §7's own specified fallback for
         /// an element with no associated SVG bounding box, which every <see cref="CssBox"/> is.
         /// </summary>
-        private static RRect ReferenceBoxFor(BasicShapeGrammar.GeometryBoxKind kind, RRect borderBox, CssBox box) => kind switch
+        private static Rect ReferenceBoxFor(BasicShapeGrammar.GeometryBoxKind kind, Rect borderBox, CssBox box) => kind switch
         {
-            BasicShapeGrammar.GeometryBoxKind.ContentBox => new RRect(
+            BasicShapeGrammar.GeometryBoxKind.ContentBox => new Rect(
                 borderBox.X + box.ActualBorderLeftWidth + box.ActualPaddingLeft,
                 borderBox.Y + box.ActualBorderTopWidth + box.ActualPaddingTop,
                 Math.Max(0, borderBox.Width - box.ActualBorderLeftWidth - box.ActualBorderRightWidth - box.ActualPaddingLeft - box.ActualPaddingRight),
                 Math.Max(0, borderBox.Height - box.ActualBorderTopWidth - box.ActualBorderBottomWidth - box.ActualPaddingTop - box.ActualPaddingBottom)),
-            BasicShapeGrammar.GeometryBoxKind.PaddingBox => new RRect(
+            BasicShapeGrammar.GeometryBoxKind.PaddingBox => new Rect(
                 borderBox.X + box.ActualBorderLeftWidth,
                 borderBox.Y + box.ActualBorderTopWidth,
                 Math.Max(0, borderBox.Width - box.ActualBorderLeftWidth - box.ActualBorderRightWidth),
                 Math.Max(0, borderBox.Height - box.ActualBorderTopWidth - box.ActualBorderBottomWidth)),
-            BasicShapeGrammar.GeometryBoxKind.MarginBox => new RRect(
+            BasicShapeGrammar.GeometryBoxKind.MarginBox => new Rect(
                 borderBox.X - box.ActualMarginLeft,
                 borderBox.Y - box.ActualMarginTop,
                 borderBox.Width + box.ActualMarginLeft + box.ActualMarginRight,
@@ -135,8 +136,8 @@ namespace PeachPDF.Html.Core.Utils
         /// outward, so it stays a plain rectangle - a narrow, documented simplification for a rare
         /// authoring pattern (a bare geometry-box with no shape at all).
         /// </summary>
-        private static void BuildNone(RGraphics g, RGraphicsPath path, BasicShapeGrammar.GeometryBoxKind geometryBox,
-            RRect borderBox, RRect referenceBox, CssBox box, double ppp)
+        private static void BuildNone(Canvas g, GraphicsPath path, BasicShapeGrammar.GeometryBoxKind geometryBox,
+            Rect borderBox, Rect referenceBox, CssBox box, double ppp)
         {
             var radii = geometryBox switch
             {
@@ -165,16 +166,12 @@ namespace PeachPDF.Html.Core.Utils
         /// this resolver's own ppp-division discipline (see <see cref="TryBuildClipPath"/>'s remarks) -
         /// shared by <see cref="BuildNone"/> (no rounding) and <see cref="BuildInset"/> (no <c>round</c>
         /// clause).</summary>
-        private static void DrawRect(RGraphicsPath path, RRect rect, double ppp)
+        private static void DrawRect(GraphicsPath path, Rect rect, double ppp)
         {
-            path.Start(rect.Left / ppp, rect.Top / ppp);
-            path.LineTo(rect.Right / ppp, rect.Top / ppp);
-            path.LineTo(rect.Right / ppp, rect.Bottom / ppp);
-            path.LineTo(rect.Left / ppp, rect.Bottom / ppp);
-            path.CloseFigure();
+            path.AddRoundedRectangle(new Rect(rect.Left / ppp, rect.Top / ppp, rect.Width / ppp, rect.Height / ppp), 0);
         }
 
-        private static void BuildPolygon(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
+        private static void BuildPolygon(GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, CssBox box, double ppp)
         {
             var points = shape.PolygonPoints;
 
@@ -192,7 +189,7 @@ namespace PeachPDF.Html.Core.Utils
             path.CloseFigure();
         }
 
-        private static void BuildInset(RGraphics g, RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
+        private static void BuildInset(Canvas g, GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, CssBox box, double ppp)
         {
             var edges = shape.InsetEdges;
             var top = CssValueParser.ParseLength(edges[0], referenceBox.Height, box);
@@ -206,7 +203,7 @@ namespace PeachPDF.Html.Core.Utils
             (left, right) = ReduceOverconstrained(left, right, referenceBox.Width);
             (top, bottom) = ReduceOverconstrained(top, bottom, referenceBox.Height);
 
-            var insetRect = new RRect(
+            var insetRect = new Rect(
                 referenceBox.X + left,
                 referenceBox.Y + top,
                 Math.Max(0, referenceBox.Width - left - right),
@@ -251,7 +248,7 @@ namespace PeachPDF.Html.Core.Utils
             return (a * factor, b * factor);
         }
 
-        private static void BuildCircle(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
+        private static void BuildCircle(GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, CssBox box, double ppp)
         {
             var cx = referenceBox.X + CssValueParser.ParseLength(shape.CenterX, referenceBox.Width, box);
             var cy = referenceBox.Y + CssValueParser.ParseLength(shape.CenterY, referenceBox.Height, box);
@@ -261,7 +258,7 @@ namespace PeachPDF.Html.Core.Utils
             AppendEllipse(path, cx / ppp, cy / ppp, r / ppp, r / ppp);
         }
 
-        private static void BuildEllipse(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
+        private static void BuildEllipse(GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, CssBox box, double ppp)
         {
             var cx = referenceBox.X + CssValueParser.ParseLength(shape.CenterX, referenceBox.Width, box);
             var cy = referenceBox.Y + CssValueParser.ParseLength(shape.CenterY, referenceBox.Height, box);
@@ -280,7 +277,7 @@ namespace PeachPDF.Html.Core.Utils
         /// box's top-left corner - unlike every other basic shape, there is no percentage/axis scaling
         /// against <paramref name="referenceBox"/>'s width/height, just a translation.
         /// </summary>
-        private static void BuildPath(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, double ppp)
+        private static void BuildPath(GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, double ppp)
         {
             const double px = Length.PointsPerPx;
 
@@ -324,7 +321,7 @@ namespace PeachPDF.Html.Core.Utils
         /// reference box in that role. Returns null (skip clipping) for an unresolvable id, the same
         /// "invalid → no clip" contract as every other unrenderable value.
         /// </summary>
-        private static RGraphicsPath? BuildUrl(RGraphics g, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp, out bool useEvenOdd)
+        private static GraphicsPath? BuildUrl(Canvas g, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, CssBox box, double ppp, out bool useEvenOdd)
         {
             useEvenOdd = false;
 
@@ -334,13 +331,13 @@ namespace PeachPDF.Html.Core.Utils
             const double px = Length.PointsPerPx;
 
             var unitsMatrix = clipDefinition.ClipPathUnitsUserSpaceOnUse
-                ? new RMatrix(px / ppp, 0, 0, px / ppp, referenceBox.X / ppp, referenceBox.Y / ppp)
-                : new RMatrix(referenceBox.Width / ppp, 0, 0, referenceBox.Height / ppp, referenceBox.X / ppp, referenceBox.Y / ppp);
+                ? new Matrix3x2((float)(px / ppp), 0, 0, (float)(px / ppp), (float)(referenceBox.X / ppp), (float)(referenceBox.Y / ppp))
+                : new Matrix3x2((float)(referenceBox.Width / ppp), 0, 0, (float)(referenceBox.Height / ppp), (float)(referenceBox.X / ppp), (float)(referenceBox.Y / ppp));
 
             var path = SvgRenderer.BuildClipPath(g, clipDefinition, unitsMatrix);
             if (path is null) return null;
 
-            useEvenOdd = clipDefinition.ClipRule == RFillMode.EvenOdd;
+            useEvenOdd = clipDefinition.ClipRule == FillMode.EvenOdd;
             return path;
         }
 
@@ -349,7 +346,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <c>sqrt(w² + h²)/sqrt(2)</c> (CSS Shapes Level 1); <c>closest-side</c>/<c>farthest-side</c>
         /// use the min/max distance from the center to the four edges.
         /// </summary>
-        private static double ResolveCircleRadius(BasicShapeGrammar.ShapeRadius radius, double cx, double cy, RRect referenceBox, CssBox box)
+        private static double ResolveCircleRadius(BasicShapeGrammar.ShapeRadius radius, double cx, double cy, Rect referenceBox, CssBox box)
         {
             var left = cx - referenceBox.X;
             var right = referenceBox.Right - cx;
@@ -384,9 +381,8 @@ namespace PeachPDF.Html.Core.Utils
             };
         }
 
-        /// <summary>Builds a full ellipse (or circle when rx == ry) as four quarter-arc segments, the same
-        /// technique <c>SvgRenderer.AppendEllipseGeometry</c> uses.</summary>
-        private static void AppendEllipse(RGraphicsPath path, double cx, double cy, double rx, double ry)
+        /// <summary>Builds a full ellipse (or circle when rx == ry), skipping a degenerate one.</summary>
+        private static void AppendEllipse(GraphicsPath path, double cx, double cy, double rx, double ry)
         {
             rx = Math.Abs(rx);
             ry = Math.Abs(ry);
@@ -394,12 +390,7 @@ namespace PeachPDF.Html.Core.Utils
             if (rx <= 0 || ry <= 0)
                 return;
 
-            path.AddMove(cx + rx, cy);
-            path.AddArc(cx, cy + ry, rx, ry, 0, false, true);
-            path.AddArc(cx - rx, cy, rx, ry, 0, false, true);
-            path.AddArc(cx, cy - ry, rx, ry, 0, false, true);
-            path.AddArc(cx + rx, cy, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddEllipse(cx, cy, rx, ry);
         }
 
         private static double Min4(double a, double b, double c, double d) => Math.Min(Math.Min(a, b), Math.Min(c, d));

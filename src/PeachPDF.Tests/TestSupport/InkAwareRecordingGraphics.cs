@@ -1,7 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
@@ -9,7 +8,7 @@ using System.Collections.Generic;
 namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
-    /// A <see cref="TestRecordingGraphics"/> that answers <see cref="RGraphics.GetInkCrossings"/> with
+    /// A <see cref="TestRecordingGraphics"/> that answers <see cref="Canvas.GetInkCrossings"/> with
     /// <b>real</b> glyph ink, measured by a real <see cref="GraphicsAdapter"/> over the same fonts layout
     /// used, while still recording every draw call the way the plain recorder does — and recording every
     /// ink query, so a test can assert which band the painter actually asked about.
@@ -45,8 +44,8 @@ namespace PeachPDF.Tests.TestSupport
             _real = new GraphicsAdapter(adapter, _measure, pixelsPerPoint);
         }
 
-        /// <summary>One <see cref="RGraphics.GetInkCrossings"/> call the painter made.</summary>
-        internal sealed record InkQuery(string Text, RPoint BaselineOrigin, double BandTop, double BandBottom)
+        /// <summary>One <see cref="Canvas.GetInkCrossings"/> call the painter made.</summary>
+        internal sealed record InkQuery(string Text, PaintPoint BaselineOrigin, double BandTop, double BandBottom)
         {
             internal double BandCenter => (BandTop + BandBottom) / 2;
         }
@@ -61,10 +60,10 @@ namespace PeachPDF.Tests.TestSupport
         /// When set, answers every query instead of the real font, so a test can put ink exactly where it
         /// needs it. Returning null models a font whose outlines cannot be decoded.
         /// </summary>
-        internal Func<InkQuery, IReadOnlyList<RInkSpan>?>? ScriptedInk { get; set; }
+        internal Func<InkQuery, IReadOnlyList<InkSpan>?>? ScriptedInk { get; set; }
 
-        public override IReadOnlyList<RInkSpan>? GetInkCrossings(
-            string str, RFont font, RPoint baselineOrigin, double bandTop, double bandBottom,
+        public override IReadOnlyList<InkSpan>? GetInkCrossings(
+            string str, Font font, PaintPoint baselineOrigin, double bandTop, double bandBottom,
             double letterSpacing = 0, ShapeSettings? features = null)
         {
             var query = new InkQuery(str, baselineOrigin, bandTop, bandBottom);

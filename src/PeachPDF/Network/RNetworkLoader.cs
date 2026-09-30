@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using PeachDrawing.Core;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Network
 {

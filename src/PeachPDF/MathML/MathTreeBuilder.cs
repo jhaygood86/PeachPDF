@@ -18,14 +18,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {
     internal static class MathTreeBuilder
     {
         /// <summary>Builds a <see cref="MathDocument"/> from the root <c>&lt;math&gt;</c> source node.</summary>
-        public static MathDocument Build(IMathSourceNode mathRoot, RAdapter adapter)
+        public static MathDocument Build(IMathSourceNode mathRoot, RenderContext adapter)
         {
             var display = mathRoot.GetAttribute("display") == "block" ? "block" : "inline";
 
@@ -54,7 +54,7 @@ namespace PeachPDF.MathML
         /// <summary>Applies <c>displaystyle</c>/<c>scriptlevel</c>/<c>mathsize</c> overrides carried by
         /// <paramref name="node"/> itself - used both for <c>&lt;math&gt;</c>'s own attributes and for
         /// <c>&lt;mstyle&gt;</c>'s (MathML 3 §3.3.4). <c>mathcolor</c> is deliberately not folded into
-        /// the threaded context here - see <see cref="MathNode.Color"/>'s own doc comment for why it's
+        /// the threaded context here - see <see cref="MathNode.PaintColor"/>'s own doc comment for why it's
         /// resolved per-node instead.</summary>
         static MathBuildContext ApplyStyleAttributes(IMathSourceNode node, MathBuildContext context)
         {
@@ -65,9 +65,9 @@ namespace PeachPDF.MathML
         }
 
         /// <summary>This node's own effective color: its <c>mathcolor</c> attribute if present,
-        /// otherwise its already-CSS-cascaded <see cref="IMathSourceNode.Color"/>.</summary>
-        static Html.Adapters.Entities.RColor ResolveColor(IMathSourceNode node, MathBuildContext context) =>
-            MathAttributeParser.TryParseColor(node.GetAttribute("mathcolor"), context.Adapter) ?? node.Color;
+        /// otherwise its already-CSS-cascaded <see cref="IMathSourceNode.PaintColor"/>.</summary>
+        static PaintColor ResolveColor(IMathSourceNode node, MathBuildContext context) =>
+            MathAttributeParser.TryParseColor(node.GetAttribute("mathcolor"), context.Adapter) ?? node.PaintColor;
 
         /// <summary>Builds one child list as a single node (no wrapping) when it has exactly one entry,
         /// or an inferred <see cref="MathRowNode"/> otherwise (MathML Core's implicit-mrow rule for a
@@ -81,7 +81,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = children.Count > 0 ? ResolveColor(children[0], context) : Html.Adapters.Entities.RColor.Empty,
+                PaintColor = children.Count > 0 ? ResolveColor(children[0], context) : PaintColor.Empty,
                 FontSizePt = context.FontSizePt,
                 Children = children.Select(c => BuildNode(c, context)).ToArray(),
             };
@@ -126,7 +126,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Children = node.Children.Select(c => BuildNode(c, context)).ToArray(),
         };
@@ -142,7 +142,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Kind = kind,
                 Text = text,
@@ -172,7 +172,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Kind = MathTokenKind.Operator,
             Text = node.GetTextContent(),
@@ -211,7 +211,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Numerator = numeratorSource is not null ? BuildNode(numeratorSource, childContext) : EmptyRow(childContext),
                 Denominator = denominatorSource is not null ? BuildNode(denominatorSource, childContext) : EmptyRow(childContext),
@@ -231,7 +231,7 @@ namespace PeachPDF.MathML
                 {
                     DisplayStyle = context.DisplayStyle,
                     ScriptLevel = context.ScriptLevel,
-                    Color = ResolveColor(node, context),
+                    PaintColor = ResolveColor(node, context),
                     FontSizePt = context.FontSizePt,
                     Radicand = BuildRowOrSingle(children, context),
                     Index = null,
@@ -248,7 +248,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Radicand = radicandSource is not null ? BuildNode(radicandSource, context) : EmptyRow(context),
                 Index = indexSource is not null ? BuildNode(indexSource, indexContext) : null,
@@ -271,7 +271,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Base = baseSource is not null ? BuildNode(baseSource, context) : EmptyRow(context),
                 Sub = subSource is not null ? BuildNode(subSource, scriptContext) : null,
@@ -309,7 +309,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Base = baseSource is not null ? BuildNode(baseSource, context) : EmptyRow(context),
                 Under = underSource is not null ? BuildNode(underSource, underContext) : null,
@@ -353,7 +353,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Base = baseSource is not null ? BuildNode(baseSource, context) : EmptyRow(context),
                 PostScripts = postPairs,
@@ -376,7 +376,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = ResolveColor(node, context),
+                PaintColor = ResolveColor(node, context),
                 FontSizePt = context.FontSizePt,
                 Rows = rows,
                 ColumnAlign = columnAlign,
@@ -401,7 +401,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = cellContext.DisplayStyle,
                 ScriptLevel = cellContext.ScriptLevel,
-                Color = cellSources.Length > 0 ? ResolveColor(cellSources[0], cellContext) : Html.Adapters.Entities.RColor.Empty,
+                PaintColor = cellSources.Length > 0 ? ResolveColor(cellSources[0], cellContext) : PaintColor.Empty,
                 FontSizePt = cellContext.FontSizePt,
                 Cells = cells,
                 Label = label,
@@ -420,7 +420,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = cellContext.DisplayStyle,
                 ScriptLevel = cellContext.ScriptLevel,
-                Color = ResolveColor(cellSource, cellContext),
+                PaintColor = ResolveColor(cellSource, cellContext),
                 FontSizePt = cellContext.FontSizePt,
                 Content = BuildRowOrSingle(contentChildren, cellContext),
                 ColumnAlign = isMtd ? cellSource.GetAttribute("columnalign") : null,
@@ -432,7 +432,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Width = MathAttributeParser.TryParseLength(node.GetAttribute("width")) ?? MathLength.Zero,
             Height = MathAttributeParser.TryParseLength(node.GetAttribute("height")) ?? MathLength.Zero,
@@ -443,7 +443,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Content = BuildRowOrSingle(node.Children.ToArray(), context),
         };
@@ -452,7 +452,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Content = BuildRowOrSingle(node.Children.ToArray(), context),
             Width = node.GetAttribute("width"),
@@ -466,7 +466,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Content = BuildRowOrSingle(node.Children.ToArray(), context),
             Notation = node.GetAttribute("notation") ?? "longdiv",
@@ -476,7 +476,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = ResolveColor(node, context),
+            PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
             Content = BuildRowOrSingle(node.Children.ToArray(), context),
         };
@@ -517,7 +517,7 @@ namespace PeachPDF.MathML
             {
                 DisplayStyle = context.DisplayStyle,
                 ScriptLevel = context.ScriptLevel,
-                Color = color,
+                PaintColor = color,
                 FontSizePt = context.FontSizePt,
                 Children = items,
             };
@@ -528,11 +528,11 @@ namespace PeachPDF.MathML
         /// <c>&lt;mfenced&gt;</c> itself, since a synthesized token has no source node of its own to
         /// read a cascaded color from.</summary>
         static MathTokenNode MakeFenceToken(
-            string text, MathBuildContext context, Html.Adapters.Entities.RColor color, bool fence, string form, bool separator = false) => new()
+            string text, MathBuildContext context, PaintColor color, bool fence, string form, bool separator = false) => new()
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = color,
+            PaintColor = color,
             FontSizePt = context.FontSizePt,
             Kind = MathTokenKind.Operator,
             Text = text,
@@ -564,7 +564,7 @@ namespace PeachPDF.MathML
         {
             DisplayStyle = context.DisplayStyle,
             ScriptLevel = context.ScriptLevel,
-            Color = Html.Adapters.Entities.RColor.Empty,
+            PaintColor = PaintColor.Empty,
             FontSizePt = context.FontSizePt,
             Children = [],
         };

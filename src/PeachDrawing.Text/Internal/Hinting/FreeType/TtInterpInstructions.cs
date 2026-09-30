@@ -135,8 +135,9 @@ internal sealed partial class TtExecContext
         {
             // FreeType writes `exc->cvt[I]' directly here, without the copy-on-write check of the other writers, so a glyph
             // program's WCVTF leaks into the size for the next glyph. The copy is made here as well: the size's cvt is
-            // shared between threads and must not change.
-            WriteCvt(i, FtCalc.MulFix(Stack[a + 1], Metrics.Scale));
+            // shared between threads and must not change. This is also why it is WriteCvtRaw and not WriteCvt: FreeType's
+            // Ins_WCVTF never goes through func_write_cvt, so a stretched size does not divide this write by the ratio either.
+            WriteCvtRaw(i, FtCalc.MulFix(Stack[a + 1], Metrics.Scale));
         }
     }
 
@@ -998,11 +999,15 @@ internal sealed partial class TtExecContext
                 {
                     d = DualProjectPoints(Zp0.OrgX, Zp0.OrgY, l, Zp1.OrgX, Zp1.OrgY, k);
                 }
-                else
+                else if (Metrics.XScale == Metrics.YScale)
                 {
-                    // x_scale == y_scale: pixels are square (non-square pixels are not ported)
+                    // this should be faster
                     d = DualProjectPoints(Zp0.OrusX, Zp0.OrusY, l, Zp1.OrusX, Zp1.OrusY, k);
                     d = FtCalc.MulFix(d, Metrics.XScale);
+                }
+                else
+                {
+                    d = DualProjectScaledPoints(Zp0.OrusX, Zp0.OrusY, l, Zp1.OrusX, Zp1.OrusY, k);
                 }
             }
         }
@@ -1699,11 +1704,15 @@ internal sealed partial class TtExecContext
         {
             orgDist = DualProjectPoints(Zp1.OrgX, Zp1.OrgY, point, Zp0.OrgX, Zp0.OrgY, GS.Rp0);
         }
-        else
+        else if (Metrics.XScale == Metrics.YScale)
         {
-            // x_scale == y_scale: pixels are square (non-square pixels are not ported)
+            // this should be faster
             orgDist = DualProjectPoints(Zp1.OrusX, Zp1.OrusY, point, Zp0.OrusX, Zp0.OrusY, GS.Rp0);
             orgDist = FtCalc.MulFix(orgDist, Metrics.XScale);
+        }
+        else
+        {
+            orgDist = DualProjectScaledPoints(Zp1.OrusX, Zp1.OrusY, point, Zp0.OrusX, Zp0.OrusY, GS.Rp0);
         }
 
         // single width cut-in test
@@ -2064,8 +2073,10 @@ internal sealed partial class TtExecContext
         {
             if (twilight)
                 oldRange = DualProjectPoints(Zp1.OrgX, Zp1.OrgY, GS.Rp2, orusBaseX, orusBaseY, baseIndex);
-            else
+            else if (Metrics.XScale == Metrics.YScale)
                 oldRange = DualProjectPoints(Zp1.OrusX, Zp1.OrusY, GS.Rp2, orusBaseX, orusBaseY, baseIndex);
+            else
+                oldRange = DualProjectScaledPoints(Zp1.OrusX, Zp1.OrusY, GS.Rp2, orusBaseX, orusBaseY, baseIndex);
 
             curRange = ProjectPoints(Zp1.CurX, Zp1.CurY, GS.Rp2, Zp0.CurX, Zp0.CurY, baseIndex);
         }
@@ -2095,8 +2106,10 @@ internal sealed partial class TtExecContext
             int orgDist;
             if (twilight)
                 orgDist = DualProjectPoints(Zp2.OrgX, Zp2.OrgY, (int)point, orusBaseX, orusBaseY, baseIndex);
-            else
+            else if (Metrics.XScale == Metrics.YScale)
                 orgDist = DualProjectPoints(Zp2.OrusX, Zp2.OrusY, (int)point, orusBaseX, orusBaseY, baseIndex);
+            else
+                orgDist = DualProjectScaledPoints(Zp2.OrusX, Zp2.OrusY, (int)point, orusBaseX, orusBaseY, baseIndex);
 
             int curDist = ProjectPoints(Zp2.CurX, Zp2.CurY, (int)point, Zp0.CurX, Zp0.CurY, baseIndex);
 

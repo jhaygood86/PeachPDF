@@ -6,7 +6,7 @@ namespace PeachPDF
     public readonly struct PdfBoxShadow
     {
         /// <summary>The shadow's color.</summary>
-        public PdfColor Color { get; }
+        public PdfColor PaintColor { get; }
 
         /// <summary>The horizontal offset (positive moves the shadow right).</summary>
         public PdfLength OffsetX { get; }
@@ -26,7 +26,7 @@ namespace PeachPDF
         /// <summary>Creates a box-shadow layer.</summary>
         public PdfBoxShadow(PdfColor color, PdfLength offsetX, PdfLength offsetY, PdfLength blur = default, PdfLength spread = default, bool inset = false)
         {
-            Color = color;
+            PaintColor = color;
             OffsetX = offsetX;
             OffsetY = offsetY;
             Blur = blur;
@@ -36,6 +36,6 @@ namespace PeachPDF
 
         /// <summary>Formats this shadow as one canonical <c>box-shadow</c> layer's CSS text.</summary>
         internal string ToCssText() => string.Create(CultureInfo.InvariantCulture,
-            $"{(Inset ? "inset " : "")}{OffsetX.ToCssText()} {OffsetY.ToCssText()} {Blur.ToCssText()} {Spread.ToCssText()} {Color.ToCssText()}");
+            $"{(Inset ? "inset " : "")}{OffsetX.ToCssText()} {OffsetY.ToCssText()} {Blur.ToCssText()} {Spread.ToCssText()} {PaintColor.ToCssText()}");
     }
 }

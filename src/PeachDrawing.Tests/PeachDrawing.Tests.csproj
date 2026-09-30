@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the raster backend: pixel kernels, blend modes, the polygon rasterizer, stroking, warp
+    math, filter primitives - pure algorithm tests exercised through the public API and, where a test-double
+    is needed, through internals this project is granted (InternalsVisibleTo). Nothing here may reference
+    PeachPDF; a test that needs a real PDF render, or PeachPDF's own SVG-filter-primitive glue
+    (PeachPDF.Svg.SvgFilterOps/Lighting), stays in PeachPDF.Tests instead.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.analyzers" Version="1.27.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing\PeachDrawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared with PeachPDF.Tests/PeachDrawing.Text.Tests - see PeachDrawing.Text.Tests.csproj's own precedent. -->
+    <Compile Include="..\PeachPDF.Tests\TestSupport\AllocationProbe.cs" Link="TestSupport\AllocationProbe.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\BundledFonts.cs" Link="TestSupport\BundledFonts.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The bundled fonts the drawing tests read, linked into the output root where BundledFonts looks. -->
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV0.ttf" Link="ColorTestV0.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

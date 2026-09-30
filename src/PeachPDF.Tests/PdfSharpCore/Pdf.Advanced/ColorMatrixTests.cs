@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System.Numerics;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf.Advanced

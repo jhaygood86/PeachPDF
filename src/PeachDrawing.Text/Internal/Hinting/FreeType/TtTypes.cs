@@ -339,4 +339,13 @@ internal struct TtSizeMetrics
     public int YScale;
     public int XPpem;
     public int YPpem;
+
+    /// <summary>
+    /// The non-square-pixel ratios of <c>TT_Size_Metrics</c> (<c>x_ratio</c>, <c>y_ratio</c>): 1.0 (<c>0x10000</c>) for the axis
+    /// <see cref="Ppem"/> was taken from (the larger of <see cref="XPpem"/>/<see cref="YPpem"/>), and the other axis's ppem divided by
+    /// it. Both are 1.0 when the pixels are square. <c>Current_Ratio</c> (<see cref="TtExecContext"/>'s current-ratio cache) combines
+    /// them with the projection vector.
+    /// </summary>
+    public int XRatio;
+    public int YRatio;
 }

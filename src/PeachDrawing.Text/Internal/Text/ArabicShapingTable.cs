@@ -3,8 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
 using System.Text;
 
 namespace PeachDrawing.Text.Internal.Text
@@ -60,29 +58,11 @@ namespace PeachDrawing.Text.Internal.Text
 
         private static Run[] LoadRuns()
         {
-            var assembly = typeof(ArabicShapingTable).Assembly;
-            var resourceName = assembly.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith("DerivedJoiningType.txt.br", StringComparison.OrdinalIgnoreCase));
-
-            if (resourceName is null)
+            using var decompressed = TextDataResources.OpenBrotli("DerivedJoiningType.txt.br");
+            if (decompressed is null)
                 return [];
 
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream is null)
-                return [];
-
-            Stream decompressed;
-            try
-            {
-                decompressed = new BrotliStream(stream, CompressionMode.Decompress);
-            }
-            catch (PlatformNotSupportedException)
-            {
-                return [];
-            }
-
-            using var brotli = decompressed;
-            using var reader = new StreamReader(brotli, Encoding.UTF8);
+            using var reader = new StreamReader(decompressed, Encoding.UTF8);
 
             var runs = new List<Run>(1000);
             string? line;

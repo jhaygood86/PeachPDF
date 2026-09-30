@@ -1,6 +1,6 @@
 using PeachPDF;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -327,6 +327,29 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Footnote_InsideInlineSvg_StaysOrdinaryContent()
+        {
+            // Inline <svg>/<math> descendants are foreign content read directly by SvgTreeBuilder/
+            // MathTreeBuilder, not restructured like ordinary HTML boxes (issue #1507, same convention as
+            // every other tree-restructuring pass in DomParser.cs) - a float: footnote declared there is
+            // left exactly in place rather than detached to the page's footnote area, so it never reaches
+            // FootnoteCalls and the source box is never removed from its parent.
+            //
+            // Checked via `prepare` (post-cascade, pre-layout) rather than the laid-out root: CssBoxSvg's
+            // own EnsureLayout clears its Boxes once layout runs (SvgTreeBuilder reads them once, the same
+            // way CssBoxMath does - see MathLayoutIntegrationTests.CascadeMathMl), so a post-layout FindById
+            // would find nothing there regardless of whether this fix worked.
+            var html = Wrap(
+                "<svg xmlns='http://www.w3.org/2000/svg'><text id='t' style='float:footnote'>Note body</text></svg>");
+
+            CssBox? sourceBox = null;
+            var (_, container) = await LayoutAsync(html, prepare: root => sourceBox = FindById(root, "t"));
+
+            Assert.Empty(container.FootnoteCalls);
+            Assert.NotNull(sourceBox);
+        }
+
+        [Fact]
         public async Task Footnote_Nested_IsInert()
         {
             var html = Wrap(@"
@@ -460,7 +483,7 @@ namespace PeachPDF.Tests.Integration
             // sentinel, see MarginBoxRenderer.PaintBorder's remarks) is carried through as-is; it's
             // PdfGenerator.ResolveFootnoteDividerColor, not this method, that turns it into black -
             // moot here anyway, since a zero-thickness divider never paints regardless of its color.
-            Assert.Equal(RColor.Black, PdfGenerator.ResolveFootnoteDividerColor(rule.DividerColor, new PdfSharpAdapter()));
+            Assert.Equal(PaintColor.Black, PdfGenerator.ResolveFootnoteDividerColor(rule.DividerColor, new PdfSharpAdapter()));
         }
 
         [Fact]
@@ -749,18 +772,18 @@ namespace PeachPDF.Tests.Integration
 
             var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, adapter);
 
-            Assert.Equal(RColor.FromArgb(r, g, b), resolved);
+            Assert.Equal(PaintColor.FromArgb(r, g, b), resolved);
         }
 
         [Fact]
         public void PaintFootnoteArea_DrawsTheDividerAtItsResolvedRectBeforeTheBodies()
         {
-            // The RGraphics-level overload, driven directly with a recording mock - per this repo's own
+            // The Canvas-level overload, driven directly with a recording mock - per this repo's own
             // testing conventions, a page-count/stream-length check (as the full-pipeline tests above
             // use) cannot tell a real divider draw call apart from a silently no-op one.
             var container = new HtmlContainerInt(new PdfSharpAdapter());
             var g = new RecordingGraphics(new PdfSharpAdapter());
-            var dividerRect = new RRect(10, 20, 300, 3);
+            var dividerRect = new Rect(10, 20, 300, 3);
             var footnoteArea = new FootnoteAreaFragment(dividerRect, [], "rgb(0, 128, 0)");
 
             PdfGenerator.PaintFootnoteArea(g, new PdfSharpAdapter(), container, footnoteArea);
@@ -779,7 +802,7 @@ namespace PeachPDF.Tests.Integration
             // resolved thickness happens to be zero) must not draw a phantom zero-height rectangle.
             var container = new HtmlContainerInt(new PdfSharpAdapter());
             var g = new RecordingGraphics(new PdfSharpAdapter());
-            var footnoteArea = new FootnoteAreaFragment(new RRect(10, 20, 300, 0), [], null);
+            var footnoteArea = new FootnoteAreaFragment(new Rect(10, 20, 300, 0), [], null);
 
             PdfGenerator.PaintFootnoteArea(g, new PdfSharpAdapter(), container, footnoteArea);
 

@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Svg;
 
 namespace PeachPDF.Tests.Svg
@@ -101,7 +101,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("bogus", false)]
         public void ParseFillRule_ReturnsExpectedMode(string? value, bool expectEvenOdd)
         {
-            var expected = expectEvenOdd ? RFillMode.EvenOdd : RFillMode.Nonzero;
+            var expected = expectEvenOdd ? FillMode.EvenOdd : FillMode.Nonzero;
             Assert.Equal(expected, SvgValueParsers.ParseFillRule(value));
         }
 
@@ -124,14 +124,14 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParsePaint_None_ReturnsNonePaint()
         {
-            var paint = SvgValueParsers.ParsePaint("none", Adapter, RColor.Black);
+            var paint = SvgValueParsers.ParsePaint("none", Adapter, PaintColor.Black);
             Assert.Equal(SvgPaintKind.None, paint.Kind);
         }
 
         [Fact]
         public void ParsePaint_UrlReference_ReturnsGradientRefWithId()
         {
-            var paint = SvgValueParsers.ParsePaint("url(#SVGID_1_)", Adapter, RColor.Black);
+            var paint = SvgValueParsers.ParsePaint("url(#SVGID_1_)", Adapter, PaintColor.Black);
             Assert.Equal(SvgPaintKind.GradientRef, paint.Kind);
             Assert.Equal("SVGID_1_", paint.ReferenceId);
         }
@@ -139,23 +139,23 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParsePaint_HexColor_ReturnsSolidColor()
         {
-            var paint = SvgValueParsers.ParsePaint("#431300", Adapter, RColor.Black);
+            var paint = SvgValueParsers.ParsePaint("#431300", Adapter, PaintColor.Black);
             Assert.Equal(SvgPaintKind.Solid, paint.Kind);
-            Assert.Equal(RColor.FromArgb(0x43, 0x13, 0x00), paint.Color);
+            Assert.Equal(PaintColor.FromArgb(0x43, 0x13, 0x00), paint.PaintColor);
         }
 
         [Fact]
         public void ParseStopColor_PlainAttribute_ReturnsColor()
         {
             var color = SvgValueParsers.ParseStopColor("#A07335", null, null, Adapter);
-            Assert.Equal(RColor.FromArgb(0xA0, 0x73, 0x35), color);
+            Assert.Equal(PaintColor.FromArgb(0xA0, 0x73, 0x35), color);
         }
 
         [Fact]
         public void ParseStopColor_StyleAttributeOverridesPlainAttribute()
         {
             var color = SvgValueParsers.ParseStopColor("#000000", null, "stop-color:#FFFFFF", Adapter);
-            Assert.Equal(RColor.White, color);
+            Assert.Equal(PaintColor.White, color);
         }
 
         [Fact]
@@ -172,7 +172,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("square", false, true)]
         public void ParseLineCap_ReturnsExpectedValue(string? value, bool expectRound, bool expectSquare)
         {
-            var expected = expectRound ? RLineCap.Round : expectSquare ? RLineCap.Square : RLineCap.Butt;
+            var expected = expectRound ? LineCap.Round : expectSquare ? LineCap.Square : LineCap.Butt;
             Assert.Equal(expected, SvgValueParsers.ParseLineCap(value));
         }
 
@@ -183,7 +183,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("bevel", false, true)]
         public void ParseLineJoin_ReturnsExpectedValue(string? value, bool expectRound, bool expectBevel)
         {
-            var expected = expectRound ? RLineJoin.Round : expectBevel ? RLineJoin.Bevel : RLineJoin.Miter;
+            var expected = expectRound ? LineJoin.Round : expectBevel ? LineJoin.Bevel : LineJoin.Miter;
             Assert.Equal(expected, SvgValueParsers.ParseLineJoin(value));
         }
 
@@ -269,9 +269,9 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParsePaint_CurrentColor_ResolvesToContextColor()
         {
-            var paint = SvgValueParsers.ParsePaint("currentColor", Adapter, RColor.FromArgb(0x11, 0x22, 0x33));
+            var paint = SvgValueParsers.ParsePaint("currentColor", Adapter, PaintColor.FromArgb(0x11, 0x22, 0x33));
             Assert.Equal(SvgPaintKind.Solid, paint.Kind);
-            Assert.Equal(RColor.FromArgb(0x11, 0x22, 0x33), paint.Color);
+            Assert.Equal(PaintColor.FromArgb(0x11, 0x22, 0x33), paint.PaintColor);
         }
 
         [Theory]

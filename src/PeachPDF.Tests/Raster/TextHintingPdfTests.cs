@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 

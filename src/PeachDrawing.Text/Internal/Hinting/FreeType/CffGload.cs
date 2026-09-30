@@ -125,13 +125,23 @@ internal sealed class CffSize
 {
     public CffFace Face { get; }
 
-    /// <summary>The size in 26.6 pixels per em.</summary>
-    public int Ppem26Dot6 { get; }
+    /// <summary>The horizontal size in 26.6 pixels per em.</summary>
+    public int XPpem26Dot6 { get; }
 
-    /// <summary>26.6 pixels per unit, in 16.16 (<c>metrics.x_scale</c>, which equals <c>y_scale</c>).</summary>
-    public int Scale { get; }
+    /// <summary>The vertical size in 26.6 pixels per em; equal to <see cref="XPpem26Dot6"/> for square pixels.</summary>
+    public int YPpem26Dot6 { get; }
 
-    /// <summary>The size in whole pixels per em (<c>metrics.y_ppem</c>).</summary>
+    /// <summary>26.6 pixels per unit, in 16.16 (<c>metrics.x_scale</c>).</summary>
+    public int XScale { get; }
+
+    /// <summary>26.6 pixels per unit, in 16.16 (<c>metrics.y_scale</c>); equal to <see cref="XScale"/> for square pixels.</summary>
+    public int YScale { get; }
+
+    /// <summary>
+    /// The size in whole pixels per em (<c>metrics.y_ppem</c>). Adobe's CFF engine reads only this axis for hinting decisions (blue
+    /// zones, stem widths, stem darkening: <c>cf2_getPpemY</c> in <c>psfont.c</c>), so a non-square size hints exactly as the same
+    /// <see cref="YPpem26Dot6"/> would alone; only the outline's geometry (<see cref="XScale"/> against <see cref="YScale"/>) differs.
+    /// </summary>
     public int Ppem { get; }
 
     /// <summary>Whether the engine's stem darkening is on (off in FreeType by default; <see cref="Outlines.OutlineRequest.StemDarkening"/> turns it on).</summary>
@@ -140,24 +150,34 @@ internal sealed class CffSize
     /// <summary>The size a request makes (<c>FT_Request_Metrics</c> for a nominal size).</summary>
     /// <exception cref="HintingException">The size is not one a font is scaled to.</exception>
     public CffSize(CffFace face, int ppem26Dot6, bool stemDarkening = false)
+        : this(face, ppem26Dot6, ppem26Dot6, stemDarkening)
+    {
+    }
+
+    /// <summary>The size a request makes (<c>FT_Request_Metrics</c>), square or not.</summary>
+    /// <exception cref="HintingException">The size is not one a font is scaled to.</exception>
+    public CffSize(CffFace face, int xPpem26Dot6, int yPpem26Dot6, bool stemDarkening = false)
     {
         Face = face;
-        Ppem26Dot6 = ppem26Dot6;
+        XPpem26Dot6 = xPpem26Dot6;
+        YPpem26Dot6 = yPpem26Dot6;
         StemDarkening = stemDarkening;
 
-        if (ppem26Dot6 <= 0)
+        if (xPpem26Dot6 <= 0 || yPpem26Dot6 <= 0)
             throw new HintingException("The size is not positive.");
 
-        long ppem = ((long)ppem26Dot6 + 32) >> 6;
-        if (ppem > 0xFFFF)
+        long xPpem = ((long)xPpem26Dot6 + 32) >> 6;
+        long yPpem = ((long)yPpem26Dot6 + 32) >> 6;
+        if (xPpem > 0xFFFF || yPpem > 0xFFFF)
             throw new HintingException("The size is too large.");
 
         // FreeType loads a glyph at a size whose ppem is zero without scaling and hinting
-        if (ppem == 0)
+        if (xPpem == 0 || yPpem == 0)
             throw new HintingException("The size rounds to zero pixels per em.");
 
-        Scale = FtCalc.DivFix(ppem26Dot6, face.UnitsPerEm);
-        Ppem = (int)ppem;
+        XScale = FtCalc.DivFix(xPpem26Dot6, face.UnitsPerEm);
+        YScale = FtCalc.DivFix(yPpem26Dot6, face.UnitsPerEm);
+        Ppem = (int)yPpem;
     }
 }
 
@@ -236,9 +256,9 @@ internal static class CffGlyphLoader
         if ((uint)glyphIndex >= (uint)cff.NumGlyphs)
             throw new HintingException("The glyph index is invalid.");
 
-        // hinted, and scaled
-        int xScale = size.Scale;
-        int yScale = size.Scale;
+        // hinted, and scaled (cff_size_request: x_scale and y_scale, independent of each other)
+        int xScale = size.XScale;
+        int yScale = size.YScale;
 
         CffFontDict fontDict = cff.TopFont.FontDict;
         int matrixXx, matrixXy, matrixYx, matrixYy;

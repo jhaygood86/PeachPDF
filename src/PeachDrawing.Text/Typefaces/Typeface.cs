@@ -120,7 +120,8 @@ namespace PeachDrawing.Text
             }
 
             var descriptor = Face.Descriptor;
-            double ppem = request.PixelsPerEm;
+            double ppemX = request.PixelsPerEmX;
+            double ppemY = request.PixelsPerEmY;
 
             if (TryGridFit(glyph, request, out var fitted))
             {
@@ -134,7 +135,7 @@ namespace PeachDrawing.Text
                 return false;
             }
 
-            outline = design.WithScale(ppem / Metrics.UnitsPerEm, ppem);
+            outline = design.WithScale(ppemX / Metrics.UnitsPerEm, ppemY / Metrics.UnitsPerEm, ppemX, ppemY);
             return true;
         }
 
@@ -166,8 +167,9 @@ namespace PeachDrawing.Text
             result = Internal.Hinting.HintedGlyphResult.Failed;
 
             // The hinting programs work on the size in 1/64 pixel; a size that rounds to nothing, or is beyond what the tables can say, is not hinted.
-            double ppem26Dot6 = Math.Round(request.PixelsPerEm * 64);
-            if (!(ppem26Dot6 >= 1 && ppem26Dot6 <= 65535 * 64))
+            double xPpem26Dot6 = Math.Round(request.PixelsPerEmX * 64);
+            double yPpem26Dot6 = Math.Round(request.PixelsPerEmY * 64);
+            if (!(xPpem26Dot6 >= 1 && xPpem26Dot6 <= 65535 * 64 && yPpem26Dot6 >= 1 && yPpem26Dot6 <= 65535 * 64))
             {
                 return false;
             }
@@ -178,7 +180,7 @@ namespace PeachDrawing.Text
                 return false;
             }
 
-            result = engine.Get(glyph, (int)ppem26Dot6, request.GridFitting, request.StemDarkening);
+            result = engine.Get(glyph, (int)xPpem26Dot6, (int)yPpem26Dot6, request.GridFitting, request.StemDarkening);
             return result.Succeeded && result.IsHinted;
         }
 
@@ -189,9 +191,22 @@ namespace PeachDrawing.Text
                 throw new ArgumentOutOfRangeException(nameof(request), request.GridFitting, "The grid fitting is not a defined value.");
             }
 
-            if (request.GridFitting != GridFitting.None && !(request.PixelsPerEm > 0 && double.IsFinite(request.PixelsPerEm)))
+            if (request.GridFitting == GridFitting.None)
             {
-                throw new ArgumentOutOfRangeException(nameof(request), request.PixelsPerEm, "The size of a grid-fitted outline must be a positive number of pixels per em.");
+                return;
+            }
+
+            bool xValid = request.PixelsPerEmX > 0 && double.IsFinite(request.PixelsPerEmX);
+            bool yValid = request.PixelsPerEmY > 0 && double.IsFinite(request.PixelsPerEmY);
+
+            if (!xValid)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), request.PixelsPerEmX, "The horizontal size of a grid-fitted outline must be a positive number of pixels per em.");
+            }
+
+            if (!yValid)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), request.PixelsPerEmY, "The vertical size of a grid-fitted outline must be a positive number of pixels per em.");
             }
         }
 

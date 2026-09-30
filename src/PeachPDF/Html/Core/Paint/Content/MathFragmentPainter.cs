@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.MathML;
 
@@ -13,7 +12,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     {
         protected override CssRect ContentWord(CssBox box) => ((CssBoxMath)box).MathWord;
 
-        protected override void DrawContent(RGraphics g, CssBox box, RRect rect)
+        protected override void DrawContent(Canvas g, CssBox box, Rect rect)
         {
             var mathBox = ((CssBoxMath)box).Layout;
             if (mathBox is not null)

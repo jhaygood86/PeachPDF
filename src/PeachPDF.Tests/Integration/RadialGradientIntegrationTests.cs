@@ -465,5 +465,91 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(matrix[4], 0, 60);
             Assert.InRange(matrix[5], 0, 60);
         }
+
+        [Fact]
+        public async Task SvgRadialGradient_RotatedByGradientTransform_CarriesTheRotationInItsPatternMatrix()
+        {
+            // A 90 degree rotation of a 40 x 20 ellipse: an axis-aligned approximation could only ever
+            // write a diagonal pattern matrix, so the off-diagonal terms are what prove the rotation landed.
+            const string Html = """
+                <!DOCTYPE html><html><body style="margin: 0">
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <radialGradient id="rg" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="20"
+                                    gradientTransform="translate(50 50) rotate(90) scale(2 1) translate(-50 -50)">
+                      <stop offset="0" stop-color="#e0f7fa"/><stop offset="1" stop-color="#006064"/>
+                    </radialGradient>
+                  </defs>
+                  <rect x="0" y="0" width="100" height="100" fill="url(#rg)"/>
+                </svg></body></html>
+                """;
+
+            var matrix = Assert.Single(ShadingPatternMatrices(await GetPdfText(Html)));
+
+            Assert.Equal(0, matrix[0], 3);
+            Assert.Equal(0, matrix[3], 3);
+            Assert.Equal(15 * 2, Math.Abs(matrix[1]), 3); // 40 user units * 0.75 (100px viewBox -> 75pt)
+            Assert.Equal(15, Math.Abs(matrix[2]), 3);
+        }
+
+        private static string RotatedGradientHtml(string gradientAttrs, string stops, string units = "gradientUnits=\"userSpaceOnUse\"") => $"""
+            <!DOCTYPE html><html><body style="margin: 0">
+            <svg viewBox="0 0 100 100" width="100" height="100">
+              <defs>
+                <radialGradient id="rg" {units} {gradientAttrs}
+                                gradientTransform="rotate(45 50 50)">{stops}</radialGradient>
+              </defs>
+              <rect x="0" y="0" width="100" height="60" fill="url(#rg)"/>
+            </svg></body></html>
+            """;
+
+        private const string OpaqueStops = """<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/>""";
+
+        [Fact]
+        public async Task SvgRadialGradient_RotatedWithFocalPointOutsideTheCircle_ClampsTheFocalPointInsideIt()
+        {
+            var pdfText = await GetPdfText(RotatedGradientHtml("cx=\"50\" cy=\"50\" r=\"20\" fx=\"95\" fy=\"50\"", OpaqueStops));
+
+            var coords = Regex.Match(pdfText, @"/Coords \[([-\d.]+) ([-\d.]+) 0 0 0 1\]");
+            Assert.True(coords.Success);
+            var fx = double.Parse(coords.Groups[1].Value, CultureInfo.InvariantCulture);
+            var fy = double.Parse(coords.Groups[2].Value, CultureInfo.InvariantCulture);
+            Assert.InRange(Math.Sqrt(fx * fx + fy * fy), 0.99, 1.0);
+        }
+
+        [Fact]
+        public async Task SvgRadialGradient_RotatedWithTranslucentStop_MasksThroughTheSameRotatedMatrix()
+        {
+            var stops = """<stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="1" stop-color="#000000"/>""";
+            var pdfText = await GetPdfText(RotatedGradientHtml("cx=\"50\" cy=\"50\" r=\"20\"", stops));
+
+            // The soft-mask form's /Matrix is the six-number unit-circle matrix, rotation included.
+            var masks = pdfText.Split("endobj")
+                .Where(o => o.Contains("/Subtype /Form") && o.Contains("/BBox [-100000"))
+                .Select(o => Regex.Match(o, @"/Matrix \[([^\]]*)\]"))
+                .Where(m => m.Success)
+                .Select(m => m.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray())
+                .ToArray();
+
+            var mask = Assert.Single(masks);
+            Assert.Equal(6, mask.Length);
+            Assert.NotEqual(0, mask[1], 3);
+            Assert.NotEqual(0, mask[2], 3);
+            Assert.Matches(@"/Coords \[[-\d.]+ [-\d.]+ 0 0 0 1\]", pdfText);
+        }
+
+        [Fact]
+        public async Task SvgRadialGradient_RotatedInObjectBoundingBoxUnits_ConjugatesTheTransformByTheBox()
+        {
+            var pdfText = await GetPdfText(RotatedGradientHtml("cx=\"0.5\" cy=\"0.5\" r=\"0.5\"", OpaqueStops, units: ""));
+
+            var matrix = Assert.Single(ShadingPatternMatrices(pdfText));
+
+            // Rotation carries off-diagonal terms, and on a 100 x 60 box the two axes differ in scale.
+            Assert.NotEqual(0, matrix[1], 3);
+            Assert.NotEqual(0, matrix[2], 3);
+            Assert.NotEqual(Math.Abs(matrix[1]), Math.Abs(matrix[2]), 3);
+        }
     }
 }

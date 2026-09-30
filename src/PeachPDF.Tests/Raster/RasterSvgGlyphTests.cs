@@ -1,33 +1,33 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
+using System.Numerics;
 using System.Text.RegularExpressions;
 
 namespace PeachPDF.Tests.Raster
 {
     /// <summary>
-    /// A font's SVG glyph (OpenType SVG) drawn through <see cref="RasterGraphics"/>: the glyph's own document, in its own colours, rather than the
+    /// A font's SVG glyph (OpenType SVG) drawn through <see cref="RasterCanvas"/>: the glyph's own document, in its own colours, rather than the
     /// plain outline in the text colour it used to be there. Every assertion here would fail for the outline: it is one colour, the text's.
     /// </summary>
     public class RasterSvgGlyphTests
     {
         private const string Family = "RasterSvgTestFace";
 
-        private static async Task<(RasterGraphics Graphics, RFont Font, PdfSharpAdapter Adapter)> NewFixture(int width = 160, int height = 120)
+        private static async Task<(RasterCanvas Graphics, Font Font, PdfSharpAdapter Adapter)> NewFixture(int width = 160, int height = 120)
         {
             var adapter = new PdfSharpAdapter();
             await BundledFonts.RegisterFont(adapter, BundledFonts.SvgTest, Family);
-            var graphics = new RasterGraphics(adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
-            return (graphics, adapter.GetFont(Family, 60, RFontStyle.Regular)!, adapter);
+            var graphics = new RasterCanvas(adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            return (graphics, adapter.GetFont(Family, 60, PaintFontStyle.Regular)!, adapter);
         }
 
-        private static void Draw(RasterGraphics g, RFont font, string text, RColor colour, RFontPalette? palette = null) =>
-            g.DrawString(text, font, colour, new RPoint(10, 10), g.MeasureString(text, font), 0, palette);
+        private static void Draw(RasterCanvas g, Font font, string text, PaintColor colour, FontPalette? palette = null) =>
+            g.DrawString(text, font, colour, new PaintPoint(10, 10), g.MeasureString(text, font), 0, palette);
 
-        private static List<(int X, int Y, byte R, byte G, byte B, byte A)> Pixels(RasterGraphics g)
+        private static List<(int X, int Y, byte R, byte G, byte B, byte A)> Pixels(RasterCanvas g)
         {
             var pixels = new List<(int X, int Y, byte R, byte G, byte B, byte A)>();
             for (var y = 0; y < g.Surface.Height; y++)
@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Raster
         {
             var (g, font, _) = await NewFixture();
 
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0));
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             var opaque = Pixels(g).Where(p => p.A == 255).ToList();
             var red = opaque.Where(p => p is { R: 255, G: 0, B: 0 }).ToList();
@@ -82,7 +82,7 @@ namespace PeachPDF.Tests.Raster
             var (g, font, _) = await NewFixture();
             var real = ((FontAdapter)font).Font;
 
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0));
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             // The square runs from the baseline up 0.8 em; it sits from 0.1 em to 0.9 em of the advance.
             var baseline = 10 + real.GetHeight() * real.CellAscent / real.CellSpace;
@@ -98,7 +98,7 @@ namespace PeachPDF.Tests.Raster
         {
             var (g, font, _) = await NewFixture();
 
-            Draw(g, font, "B", RColor.FromArgb(255, 0, 128, 0));
+            Draw(g, font, "B", PaintColor.FromArgb(255, 0, 128, 0));
 
             var opaque = Pixels(g).Where(p => p.A == 255).ToList();
             Assert.True(opaque.Count > 500);
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Raster
         {
             var (g, font, _) = await NewFixture();
 
-            Draw(g, font, "F", RColor.FromArgb(255, 128, 0, 128));
+            Draw(g, font, "F", PaintColor.FromArgb(255, 128, 0, 128));
 
             var opaque = Pixels(g).Where(p => p.A == 255).ToList();
             var orange = opaque.Where(p => p is { R: 255, G: 136, B: 0 }).ToList();
@@ -135,7 +135,7 @@ namespace PeachPDF.Tests.Raster
 
             // origin at x = 120: the red block lies 1.2 to 1.6 ems left of it and the green one 2.2 to 2.8 ems right of it (60 px per em), both
             // outside the least canvas (one em left, two right), and the blue disc is in the middle
-            g.DrawString("G", font, RColor.FromArgb(255, 0, 0, 0), new RPoint(120, 10), g.MeasureString("G", font), 0, null);
+            g.DrawString("G", font, PaintColor.FromArgb(255, 0, 0, 0), new PaintPoint(120, 10), g.MeasureString("G", font), 0, null);
 
             var opaque = Pixels(g).Where(p => p.A == 255).ToList();
             var red = opaque.Where(p => p is { R: 204, G: 0, B: 0 }).ToList();
@@ -153,9 +153,9 @@ namespace PeachPDF.Tests.Raster
         public async Task AnotherPalette_ChangesTheColours()
         {
             var (g, font, _) = await NewFixture();
-            var palette = new RFontPalette(1, []);
+            var palette = new FontPalette(1, []);
 
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0), palette);
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0), palette);
 
             // palette 1 is green then yellow (0, 0.6, 0) and (0.9, 0.9, 0)
             Assert.Contains(Pixels(g), p => p is { R: 0, G: 153, B: 0, A: 255 });
@@ -166,9 +166,9 @@ namespace PeachPDF.Tests.Raster
         public async Task APaletteOverride_ReplacesTheEntry()
         {
             var (g, font, _) = await NewFixture();
-            var palette = new RFontPalette(0, [new KeyValuePair<int, RColor>(0, RColor.FromArgb(255, 124, 58, 237))]);
+            var palette = new FontPalette(0, [new KeyValuePair<int, PaintColor>(0, PaintColor.FromArgb(255, 124, 58, 237))]);
 
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0), palette);
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0), palette);
 
             Assert.Contains(Pixels(g), p => p is { R: 124, G: 58, B: 237, A: 255 });
             Assert.Contains(Pixels(g), p => p is { R: 0, G: 0, B: 255, A: 255 });
@@ -180,7 +180,7 @@ namespace PeachPDF.Tests.Raster
             var (g, font, _) = await NewFixture();
 
             // E's document inflates past the size limit, so the glyph is its plain square in the text colour.
-            Draw(g, font, "E", RColor.FromArgb(255, 200, 0, 0));
+            Draw(g, font, "E", PaintColor.FromArgb(255, 200, 0, 0));
 
             var opaque = Pixels(g).Where(p => p.A == 255).ToList();
             Assert.True(opaque.Count > 500);
@@ -192,8 +192,8 @@ namespace PeachPDF.Tests.Raster
         {
             var (g, font, _) = await NewFixture();
 
-            g.PushClip(new RRect(0, 0, 40, 120));
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0));
+            g.PushClip(new Rect(0, 0, 40, 120));
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
             g.PopClip();
 
             var pixels = Pixels(g).ToList();
@@ -206,8 +206,8 @@ namespace PeachPDF.Tests.Raster
         {
             var (g, font, _) = await NewFixture(320, 240);
 
-            g.PushTransform(new RMatrix(2, 0, 0, 2, 0, 0));
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0));
+            g.PushTransform(new Matrix3x2(2, 0, 0, 2, 0, 0));
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
             g.PopTransform();
 
             var red = Pixels(g).Where(p => p is { R: 255, G: 0, B: 0, A: 255 }).ToList();
@@ -218,11 +218,11 @@ namespace PeachPDF.Tests.Raster
         public async Task ARepeatedGlyphInAnotherRegion_IsDrawnTheSame()
         {
             var (g, font, adapter) = await NewFixture();
-            Draw(g, font, "A", RColor.FromArgb(255, 0, 0, 0));
+            Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             // a second surface on the same adapter reuses the glyph's document, and draws the same pixels
-            var second = new RasterGraphics(adapter, new RasterSurface(160, 120, 0, 0, 1, 1), 1);
-            Draw(second, font, "A", RColor.FromArgb(255, 0, 0, 0));
+            var second = new RasterCanvas(adapter, new RasterSurface(160, 120, 0, 0, 1, 1), 1);
+            Draw(second, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             Assert.Equal(Pixels(g), Pixels(second));
         }

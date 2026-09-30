@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using System.Text;
 
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Adapters
         private static readonly string Family = DefaultFontResolver.DefaultFont;
 
         private static FontAdapter Font(PdfSharpAdapter adapter, double size) =>
-            (FontAdapter)adapter.GetFont(Family, size, RFontStyle.Regular)!;
+            (FontAdapter)adapter.GetFont(Family, size, PaintFontStyle.Regular)!;
 
         [Fact]
         public void TheSameSizeAtADifferentScaleIsADifferentFont()
@@ -60,10 +60,10 @@ namespace PeachPDF.Tests.Adapters
             // "monospace" is a mapped generic family: GetCachedFont's mapped-family branch stores the font
             // under the mapped name as well, and that path has its own cache write.
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var atOne = (FontAdapter)adapter.GetFont("monospace", 12, RFontStyle.Regular)!;
+            var atOne = (FontAdapter)adapter.GetFont("monospace", 12, PaintFontStyle.Regular)!;
 
             adapter.PixelsPerPoint = 1.5;
-            var atOneAndAHalf = (FontAdapter)adapter.GetFont("monospace", 12, RFontStyle.Regular)!;
+            var atOneAndAHalf = (FontAdapter)adapter.GetFont("monospace", 12, PaintFontStyle.Regular)!;
 
             Assert.Equal(12, atOne.Font.Size, 6);
             Assert.Equal(8, atOneAndAHalf.Font.Size, 6);
@@ -73,10 +73,10 @@ namespace PeachPDF.Tests.Adapters
         public void APerCodepointFontIsKeyedByScaleToo()
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var atOne = adapter.GetFontForCodepoint(Family, 10, RFontStyle.Regular, new Rune('A')) as FontAdapter;
+            var atOne = adapter.GetFontForCodepoint(Family, 10, PaintFontStyle.Regular, new Rune('A')) as FontAdapter;
 
             adapter.PixelsPerPoint = 1.25;
-            var atOneAndAQuarter = adapter.GetFontForCodepoint(Family, 10, RFontStyle.Regular, new Rune('A')) as FontAdapter;
+            var atOneAndAQuarter = adapter.GetFontForCodepoint(Family, 10, PaintFontStyle.Regular, new Rune('A')) as FontAdapter;
 
             Assert.NotNull(atOne);
             Assert.NotNull(atOneAndAQuarter);
@@ -88,10 +88,10 @@ namespace PeachPDF.Tests.Adapters
         public void ASystemFallbackFontIsKeyedByScaleToo()
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var atOne = adapter.GetSystemFallbackFontForCodepoint(10, RFontStyle.Regular, new Rune('A')) as FontAdapter;
+            var atOne = adapter.GetSystemFallbackFontForCodepoint(10, PaintFontStyle.Regular, new Rune('A')) as FontAdapter;
 
             adapter.PixelsPerPoint = 1.25;
-            var atOneAndAQuarter = adapter.GetSystemFallbackFontForCodepoint(10, RFontStyle.Regular, new Rune('A')) as FontAdapter;
+            var atOneAndAQuarter = adapter.GetSystemFallbackFontForCodepoint(10, PaintFontStyle.Regular, new Rune('A')) as FontAdapter;
 
             // A host with no installed family covering 'A' answers null at both scales, which says nothing about
             // the key - only a real answer at each scale can be compared. Whether a font is found must not

@@ -1,7 +1,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
@@ -28,8 +28,8 @@ namespace PeachPDF.Tests.Integration
     /// "border-top" edge ends up at the HIGH end of the box's own PDF-space Y range).
     /// <para>
     /// The per-side bevel tests at the end take the other route, painting
-    /// <see cref="MarginBoxRenderer.PaintBorder"/> through a recording <c>RGraphics</c> instead: they
-    /// assert which <em>face</em> each edge takes, and an exact <c>RColor</c> says that where an
+    /// <see cref="MarginBoxRenderer.PaintBorder"/> through a recording <c>Canvas</c> instead: they
+    /// assert which <em>face</em> each edge takes, and an exact <c>PaintColor</c> says that where an
     /// <c>rg</c> operator rounded to three decimals only says it approximately.
     /// </para>
     /// </summary>
@@ -193,7 +193,7 @@ namespace PeachPDF.Tests.Integration
         // ── Per-side bevel faces (issue #1237) ───────────────────────────────────────────────────
         //
         // Painted through TestRecordingGraphics rather than the content stream: these assert which
-        // FACE each edge takes, and an exact RColor says that where a rounded 3-decimal "rg" operator
+        // FACE each edge takes, and an exact PaintColor says that where a rounded 3-decimal "rg" operator
         // only says it approximately.
 
         /// <summary>A 100×50 border box with a 10pt border on every side, painted directly.</summary>
@@ -205,7 +205,7 @@ namespace PeachPDF.Tests.Integration
 
             var g = new TestRecordingGraphics();
             MarginBoxRenderer.PaintBorder(
-                g, new RRect(0, 0, 100, 50), style, emPt: 16, remPt: 16, pixelsPerPoint: 1.0,
+                g, new Rect(0, 0, 100, 50), style, emPt: 16, remPt: 16, pixelsPerPoint: 1.0,
                 adapter: new PdfSharpAdapter());
 
             // FilledShapes rather than DrawPolygonCall: a fill is a fill whichever primitive made it,
@@ -218,22 +218,22 @@ namespace PeachPDF.Tests.Integration
         /// band it did find - an exact-rect dictionary lookup would throw KeyNotFound and say nothing
         /// about what moved.
         /// </summary>
-        private static RColor FaceAt(
+        private static PaintColor FaceAt(
             IReadOnlyList<TestRecordingGraphics.FilledShape> bands,
             double left, double top, double right, double bottom)
         {
-            var want = RRect.FromLTRB(left, top, right, bottom);
+            var want = Rect.FromLTRB(left, top, right, bottom);
             var matches = bands.Where(b => Matches(b.Bounds, want)).ToList();
 
             Assert.True(matches.Count == 1,
                 $"expected exactly one band at {want}, found {matches.Count} among: " +
                 string.Join(", ", bands.Select(b => b.Bounds)));
 
-            return matches[0].Color;
+            return matches[0].PaintColor;
         }
 
         /// <summary>Whether two rects name the same band, to within paint-coordinate noise.</summary>
-        private static bool Matches(RRect actual, RRect expected) =>
+        private static bool Matches(Rect actual, Rect expected) =>
             Math.Abs(actual.Left - expected.Left) < 0.001 && Math.Abs(actual.Top - expected.Top) < 0.001 &&
             Math.Abs(actual.Right - expected.Right) < 0.001 && Math.Abs(actual.Bottom - expected.Bottom) < 0.001;
 
@@ -245,7 +245,7 @@ namespace PeachPDF.Tests.Integration
             // does. Before #1237 all four darkened - the frame came out flat, with no bevel at all.
             var bands = PaintMarginBoxBorder("border: 10pt inset rgb(128,128,128)");
 
-            var color = RColor.FromArgb(128, 128, 128);
+            var color = PaintColor.FromArgb(128, 128, 128);
             var dark = BorderBevelColors.Shade(color, darken: true);
             var light = BorderBevelColors.Shade(color, darken: false);
             Assert.NotEqual(dark, light);
@@ -264,7 +264,7 @@ namespace PeachPDF.Tests.Integration
             // The other half of the same rule: outset must not be "inset for every side" either.
             var bands = PaintMarginBoxBorder("border: 10pt outset rgb(128,128,128)");
 
-            var color = RColor.FromArgb(128, 128, 128);
+            var color = PaintColor.FromArgb(128, 128, 128);
             var dark = BorderBevelColors.Shade(color, darken: true);
             var light = BorderBevelColors.Shade(color, darken: false);
 
@@ -288,7 +288,7 @@ namespace PeachPDF.Tests.Integration
             // other and still look right.
             var bands = PaintMarginBoxBorder("border: 10pt groove rgb(128,128,128)");
 
-            var color = RColor.FromArgb(128, 128, 128);
+            var color = PaintColor.FromArgb(128, 128, 128);
             var dark = BorderBevelColors.Shade(color, darken: true);
             var light = BorderBevelColors.Shade(color, darken: false);
 

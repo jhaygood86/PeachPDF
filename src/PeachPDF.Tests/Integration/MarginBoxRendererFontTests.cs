@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System.Linq;
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
         }
@@ -43,7 +43,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
         }
@@ -55,7 +55,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
             Assert.Equal(DefaultFontResolver.FontSize, font.Size, 3);
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
         }

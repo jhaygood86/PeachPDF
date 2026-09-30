@@ -206,7 +206,18 @@ generator.AddFontFamilyMapping("serif", "Liberation Serif");
 
 The default font on a browser host is Liberation Sans; register a family under that name and it is used directly. Register something else and PeachPDF adopts the first family you register as the default, so text still renders. Note that font-family mapping is consulted only when the requested family isn't registered, and it is single-hop — every mapping has to name a real registered family.
 
-**Use WOFF or TrueType, not WOFF2.** WOFF2 is Brotli-compressed and a browser/WebAssembly host has no Brotli decoder — `System.IO.Compression.Brotli` throws there. WOFF 1.0 uses deflate and works, at roughly 55% of the TrueType size. The same limitation makes `hyphens: auto` unavailable in the browser: PeachPDF's hyphenation patterns are Brotli-compressed, so text lays out unhyphenated rather than failing.
+**WOFF2 and `hyphens: auto` need a registered Brotli decoder.** `System.IO.Compression.BrotliStream` throws `PlatformNotSupportedException` in a browser, and WOFF2's font tables and PeachPDF's hyphenation patterns are both Brotli-compressed — without a decoder, a WOFF2 font fails to load and `hyphens: auto` lays out text unhyphenated rather than failing the render. Register [`PeachDrawing.Text.Brotli`](peachdrawing-text.md#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam), a pure-managed decoder built for exactly this seam, once at startup:
+
+```csharp
+using PeachDrawing.Text.Brotli;
+
+if (OperatingSystem.IsBrowser())
+{
+    ManagedBrotliDecompressor.Register();
+}
+```
+
+WOFF 1.0 or plain TrueType/OpenType fonts need no decoder at all, so they remain the simpler choice when you don't otherwise need WOFF2's smaller download.
 
 **Pin the culture.** A Blazor WebAssembly app adopts the browser's locale, and CSS is invariant by definition — a visitor whose browser is set to a comma-decimal locale would otherwise have lengths misparsed. Set `<InvariantGlobalization>true</InvariantGlobalization>` in the project file, which also drops the ICU data from the download.
 
@@ -347,7 +358,7 @@ Every mapping above — including a custom one set via `AddFontFamilyMapping` �
 
 Requesting a `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exact registered face for doesn't just fall back to Regular:
 
-- **Numeric weight** (`font-weight: 1`–`1000`) is matched to the *nearest* registered face for the family per CSS Fonts Level 4 §5.2 (the same algorithm real browsers use), not just an exact match or a coarse bold/not-bold split. `bolder`/`lighter` step relative to the parent element's own resolved weight, following the CSS2.1 §15.6 worked table.
+- **Numeric weight** (`font-weight: 1`–`1000`) is matched to the *nearest* registered face for the family per CSS Fonts Level 4 §5.2 (the same algorithm real browsers use), not just an exact match or a coarse bold/not-bold split. `bolder`/`lighter` step relative to the parent element's own resolved weight (fractions included), following the CSS Fonts Level 4 §2.2.1 worked table — see the `font-weight` row of the [HTML/CSS support matrix](html-css-support.md#color--typography) for its exact bands.
 - **`font-stretch`** (the 9 keywords, or a percentage such as `87.5%`) is matched the same way when a family has multiple registered faces at different stretch values.
 - When no real face is close enough to the request, PeachPDF **synthesizes** a faux-bold (fill+stroke render mode) or faux-italic/oblique (glyph shear) rather than rendering with zero visual distinction. `oblique <angle>` (e.g. `oblique 10deg`) drives the exact synthesized shear amount when declared; otherwise a fixed default angle is used.
 - An `@font-face` rule's own declared `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific registered resource participates in this matching, independent of what the font file's own internal tables say — this is what makes multi-variant web-font families (separate `@font-face` rules per weight) resolve correctly.
@@ -841,6 +852,25 @@ var config = new PdfGenerateConfig
 - `TextStemDarkening` (`false` by default) additionally makes the stems of a font with CFF outlines a little heavier, which offsets the way anti-aliasing thins the thinnest stems of small text. It has an effect only together with a `TextHinting` other than `None`, changes nothing for a TrueType font, and never touches the PDF's own vector text. Stems of more than about two and a third pixels (large text) are not changed.
 
 A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.
+
+### Turning off smoothing: `RasterAntiAliasing`
+
+Every bitmap PeachPDF renders itself — a `filter:`-triggered region, a region flattened under [`TransparencyPolicy.Flatten`](#flattening-transparency-for-pdfa-1-and-pdfx), and any glyph fill drawn while `TextHinting` routes it through the raster path — is anti-aliased by default: an edge that only partly covers a pixel gets a proportional (fractional) alpha instead of being rounded to fully in or fully out. `RasterAntiAliasing` turns that off:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    RasterizationDpi = 96,
+    RasterAntiAliasing = false,   // true (the default) smooths edges; false gives hard 0/255 pixels
+};
+```
+
+- It is a single, graphics-wide switch: shape fills and strokes, images, and text all go through the same setting — there is no separate text-only toggle.
+- It has no effect on the PDF's own vector text and path content stream, which is not a bitmap at all. A PDF viewer (or a rasterizer such as PDFium or MuPDF) anti-aliases that content on its own when displaying it, independent of this setting.
+- A document with no rasterized regions and no raster-hinted text is byte-for-byte the same regardless of this value.
+
+On the command line the setting is `--no-raster-antialiasing`; see [the CLI reference](cli.md).
 
 ## Flattening transparency for PDF/A-1 and PDF/X
 

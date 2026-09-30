@@ -247,7 +247,7 @@
       "keywordComparison": "ordinal-ignore-case",
       "svg": {
         "propertyPath": "FillRule",
-        "csharpDataType": "RFillMode",
+        "csharpDataType": "FillMode",
         "inheritedFrom": "FillRule",
         "invalidBehavior": "inherit",
         "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out _)",
@@ -294,7 +294,7 @@
       "keywordComparison": "ordinal-ignore-case",
       "svg": {
         "propertyPath": "StrokeLineCap",
-        "csharpDataType": "RLineCap",
+        "csharpDataType": "LineCap",
         "inheritedFrom": "StrokeLineCap",
         "invalidBehavior": "inherit",
         "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out _)",
@@ -315,7 +315,7 @@
       "keywordComparison": "ordinal-ignore-case",
       "svg": {
         "propertyPath": "StrokeLineJoin",
-        "csharpDataType": "RLineJoin",
+        "csharpDataType": "LineJoin",
         "inheritedFrom": "StrokeLineJoin",
         "invalidBehavior": "inherit",
         "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out _)",
@@ -781,7 +781,7 @@
     },
     {
       "name": "mix-blend-mode",
-      "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.RBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to RBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachPDF.CSS, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; BlendMode is mapped to RBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
+      "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.PaintBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to PaintBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachPDF.CSS, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; PeachPDF.CSS.BlendMode is mapped to PaintBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": {
@@ -1748,6 +1748,24 @@
       }
     },
     {
+      "name": "image-rendering",
+      "comment": "CSS Images 3 5.3. Inherited. Chooses how a raster image is resampled when it is drawn at a size other than its own: auto and smooth filter, high-quality filters with a sharper curve, crisp-edges and pixelated keep hard pixel edges.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ImageRenderingMode",
+        "keywordMap": "Map.ImageRenderingModes",
+        "fallback": "ImageRenderingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "ImageRendering",
+        "csharpDataType": "CssProperty<ImageRenderingMode>",
+        "area": "BackgroundArea",
+        "getterExpression": "{box}.ImageRendering.ToString()"
+      }
+    },
+    {
       "name": "object-position",
       "comment": "Unlike background-position, object-position is a single <position> (no comma list, no FromList()), so cssDataType 'cssom-grammar' calls the already-public Converters.PointConverter.Convert directly - the same converter ObjectPositionProperty's own real grammar uses - instead of the full cssom round trip.",
       "inherited": false,
@@ -2694,7 +2712,7 @@
     },
     {
       "name": "text-decoration-thickness",
-      "comment": "CSS Text Decoration 4 §3.3. CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>-backed, mirroring vertical-align's shape - valueType \"length\" already covers percentages (CssValueParser.IsValidLength/ValueExtensions.ToDistance), and CSS Text Decoration 4 defines the percentage basis as the element's own font-size. 'auto' (the initial value) preserves this engine's pre-existing fixed decoration-line thickness exactly (FragmentPainter.PaintDecoration used a hardcoded pen width before this property existed) rather than deriving a UA thickness from the font; 'from-font' is the only way to opt into the font's own real underlineThickness metric (RFont.UnderlineThickness).",
+      "comment": "CSS Text Decoration 4 §3.3. CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>-backed, mirroring vertical-align's shape - valueType \"length\" already covers percentages (CssValueParser.IsValidLength/ValueExtensions.ToDistance), and CSS Text Decoration 4 defines the percentage basis as the element's own font-size. 'auto' (the initial value) preserves this engine's pre-existing fixed decoration-line thickness exactly (FragmentPainter.PaintDecoration used a hardcoded pen width before this property existed) rather than deriving a UA thickness from the font; 'from-font' is the only way to opt into the font's own real underlineThickness metric (Font.UnderlineThickness).",
       "inherited": false,
       "initialValue": "auto",
       "cssDataType": {
@@ -2756,7 +2774,7 @@
     },
     {
       "name": "text-underline-position",
-      "comment": "css-text-decor-4 §2.5 (https://www.w3.org/TR/css-text-decor-4/#text-underline-position-property). NOT css-text-decor-3: that level's own grammar is only 'auto | [ under || [ left | right ] ]' - 'from-font' does not exist there at all, so the full compound grammar this property implements ('auto | [ from-font | under ] || [ left | right ]') is entirely a level-4 addition (verified against the live published text of both levels). Multi-field write (issue #1146), mirroring position's own precedent: the || combinator has no plain cssDataType shape (a single enum-keyword can't carry two independently-combining keyword groups), so customValidator/customSetter delegate to the shared TextUnderlinePositionGrammar.TryParse (also used by the CSS-OM TextUnderlinePositionProperty converter) so the two never independently re-derive the grammar. The from-font/under half is stored in this enum (TextUnderlinePosition); the left/right half - meaningful only under a vertical writing-mode, where it can make an overline/underline switch sides per §2.5's note - is stored on the hand-written CssBox.TextUnderlineSide companion field (see ComputedStyleAreas.cs's TextArea partial), not in this enum. cssDataType is kept as the old auto/from-font/under-only enum-keyword shape purely so the generator can still synthesize this field's own default expression from the 'auto' initialValue; customValidator/customSetter override it for real dispatch, same as position. 'auto' must resolve at or under the alphabetic baseline (this engine's existing FragmentPainter.ResolveAutomaticUnderlineClearance basis); 'from-font' reads the font's own underlinePosition metric (RFont.UnderlinePosition) and uses it as-is, even when it is exactly 0 (at the baseline) - 0 is a plausible authored metric, not a clear 'no data' signal, so it is not special-cased into falling back to auto's basis; 'under' sits below the line's descent so as not to cross descenders. Inherited, so - like text-decoration-skip-ink - this lives in TextArea rather than TextDecorationArea (CssBox.InheritStyle's area-copy split only whole-adopts TextArea from the parent).",
+      "comment": "css-text-decor-4 §2.5 (https://www.w3.org/TR/css-text-decor-4/#text-underline-position-property). NOT css-text-decor-3: that level's own grammar is only 'auto | [ under || [ left | right ] ]' - 'from-font' does not exist there at all, so the full compound grammar this property implements ('auto | [ from-font | under ] || [ left | right ]') is entirely a level-4 addition (verified against the live published text of both levels). Multi-field write (issue #1146), mirroring position's own precedent: the || combinator has no plain cssDataType shape (a single enum-keyword can't carry two independently-combining keyword groups), so customValidator/customSetter delegate to the shared TextUnderlinePositionGrammar.TryParse (also used by the CSS-OM TextUnderlinePositionProperty converter) so the two never independently re-derive the grammar. The from-font/under half is stored in this enum (TextUnderlinePosition); the left/right half - meaningful only under a vertical writing-mode, where it can make an overline/underline switch sides per §2.5's note - is stored on the hand-written CssBox.TextUnderlineSide companion field (see ComputedStyleAreas.cs's TextArea partial), not in this enum. cssDataType is kept as the old auto/from-font/under-only enum-keyword shape purely so the generator can still synthesize this field's own default expression from the 'auto' initialValue; customValidator/customSetter override it for real dispatch, same as position. 'auto' must resolve at or under the alphabetic baseline (this engine's existing FragmentPainter.ResolveAutomaticUnderlineClearance basis); 'from-font' reads the font's own underlinePosition metric (Font.UnderlinePosition) and uses it as-is, even when it is exactly 0 (at the baseline) - 0 is a plausible authored metric, not a clear 'no data' signal, so it is not special-cased into falling back to auto's basis; 'under' sits below the line's descent so as not to cross descenders. Inherited, so - like text-decoration-skip-ink - this lives in TextArea rather than TextDecorationArea (CssBox.InheritStyle's area-copy split only whole-adopts TextArea from the parent).",
       "inherited": true,
       "initialValue": "auto",
       "cssDataType": {

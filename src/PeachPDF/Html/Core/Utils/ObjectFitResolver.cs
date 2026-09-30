@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using System;
 
@@ -22,8 +22,8 @@ namespace PeachPDF.Html.Core.Utils
         /// <paramref name="contentBox"/> (so the caller should clip to it, e.g. for <c>cover</c>). The
         /// intrinsic size is in the same units as <paramref name="contentBox"/> (PDF points).
         /// </summary>
-        public static (RRect Destination, bool NeedsClip) Compute(
-            RRect contentBox,
+        public static (Rect Destination, bool NeedsClip) Compute(
+            Rect contentBox,
             double naturalWidth, double naturalHeight,
             ObjectFitMode objectFit, string objectPosition,
             CssBox box)
@@ -57,7 +57,7 @@ namespace PeachPDF.Html.Core.Utils
             var (offsetX, offsetY) = BackgroundLayerResolver.ResolvePosition(
                 objectPosition, containerWidth, containerHeight, objectWidth, objectHeight, box);
 
-            var destination = new RRect(contentBox.X + offsetX, contentBox.Y + offsetY, objectWidth, objectHeight);
+            var destination = new Rect(contentBox.X + offsetX, contentBox.Y + offsetY, objectWidth, objectHeight);
             var needsClip = objectWidth > containerWidth + Epsilon || objectHeight > containerHeight + Epsilon;
             return (destination, needsClip);
         }

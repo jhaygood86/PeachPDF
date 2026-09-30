@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Paint;
@@ -293,7 +293,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             return null;
         }
 
-        private static BoxFragment WithReplacedRect(BoxFragment fragment, CssBox target, RRect newRect) =>
+        private static BoxFragment WithReplacedRect(BoxFragment fragment, CssBox target, Rect newRect) =>
             ReferenceEquals(fragment.Box, target)
                 ? fragment with { Rect = newRect }
                 : fragment with

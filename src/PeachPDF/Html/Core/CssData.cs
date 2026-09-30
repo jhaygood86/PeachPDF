@@ -11,12 +11,13 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -503,14 +504,14 @@ namespace PeachPDF.Html.Core
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RAdapter adapter, string stylesheet, bool combineWithDefault = true)
+        public static async Task<CssData> Parse(RenderContext adapter, string stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(adapter, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
         /// <summary>
-        /// Genuinely zero-copy counterpart of <see cref="Parse(RAdapter, string, bool)"/> - see
+        /// Genuinely zero-copy counterpart of <see cref="Parse(RenderContext, string, bool)"/> - see
         /// <see cref="CssParser.ParseStyleSheet(ReadOnlyMemory{char}, bool)"/>'s own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
         /// </summary>
@@ -518,7 +519,7 @@ namespace PeachPDF.Html.Core
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RAdapter adapter, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
+        public static async Task<CssData> Parse(RenderContext adapter, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(adapter, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
@@ -1119,18 +1120,37 @@ namespace PeachPDF.Html.Core
             return id is not null && id.Equals(idSelector.Id, node.NameComparison);
         }
 
+        // The HTML Standard's "Case-sensitivity of selectors" (§4.16.2) limits ASCII case-insensitive
+        // attribute-*value* matching to this fixed list of legacy attributes, on HTML elements in HTML
+        // documents only - every other attribute (data-*, href, title, id-like attributes, ...) is
+        // case-sensitive by default. See issue #1384.
+        private static readonly FrozenSet<string> HtmlCaseInsensitiveAttributeValues = new[]
+        {
+            "accept", "accept-charset", "align", "alink", "axis", "bgcolor", "charset", "checked",
+            "clear", "codetype", "color", "compact", "declare", "defer", "dir", "direction",
+            "disabled", "enctype", "face", "frame", "hreflang", "http-equiv", "lang", "language",
+            "link", "media", "method", "multiple", "nohref", "noresize", "noshade", "nowrap",
+            "readonly", "rel", "rev", "rules", "scope", "scrolling", "selected", "shape", "target",
+            "text", "type", "valign", "valuetype", "vlink"
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
         // Attribute selectors read the value once via node.GetAttribute (case-sensitivity of the
-        // attribute-name lookup is the node's own: case-insensitive for HTML/CssBox, case-sensitive for
-        // SVG), then compare the value with AttributeValueComparison: an explicit `i`/`s` modifier
-        // (Selectors 4 §6.3) wins, otherwise the node's own NameComparison (OrdinalIgnoreCase for HTML,
-        // which is what "ASCII case-insensitively" means - Ordinal for SVG).
+        // attribute-*name* lookup is the node's own - case-insensitive for a plain HTML CssBox,
+        // case-sensitive for SVG/MathML foreign content, see CssBox.IsWithinForeignContent and
+        // SvgCssBoxDomNode.GetAttribute), then compare the *value* with AttributeValueComparison: an
+        // explicit `i`/`s` modifier (Selectors 4 §6.3) wins; otherwise, for a node whose NameComparison is
+        // OrdinalIgnoreCase (an HTML element - foreign content always reports Ordinal), the default
+        // follows the fixed legacy-attribute list above - Ordinal (case-sensitive) for everything else.
         private static StringComparison AttributeValueComparison(IAttrSelector s, ICssDomNode node)
         {
             return s.CaseSensitivity switch
             {
                 AttrCaseSensitivity.Insensitive => StringComparison.OrdinalIgnoreCase,
                 AttrCaseSensitivity.Sensitive => StringComparison.Ordinal,
-                _ => node.NameComparison
+                _ => node.NameComparison == StringComparison.OrdinalIgnoreCase
+                        && HtmlCaseInsensitiveAttributeValues.Contains(s.Attribute)
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal
             };
         }
 

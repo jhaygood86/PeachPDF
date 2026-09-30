@@ -23,7 +23,7 @@ namespace PeachPDF;
 /// </para>
 /// <para>
 /// It UNDER-reports, and that is the safe direction but must not be mistaken for completeness.
-/// The clip this is measured against is <c>RGraphics</c>'s tracked rect stack, and two clips never
+/// The clip this is measured against is <c>Canvas</c>'s tracked rect stack, and two clips never
 /// reach it: a <c>border-radius</c> or <c>clip-path</c> clip (the path-clip push deliberately
 /// leaves the tracked bound over-wide, and the exclude-push is a no-op), and the page-level
 /// <c>XGraphics.IntersectClip</c> the PDF generator applies outside the stack. So "nothing

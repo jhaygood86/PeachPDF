@@ -34,7 +34,7 @@
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -386,7 +386,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// Activates a separable/HSL PDF blend mode (a <c>/BM</c> ExtGState) for subsequent painting.
         /// Scope it with a surrounding q/Q; the Q restores the blend mode to Normal. Used by the
         /// COLRv1 PaintComposite interpreter and by <c>outline-color: invert</c>
-        /// (<see cref="Html.Core.Handlers.OutlineDrawHandler"/>, via <c>RGraphics.PushBlendMode</c>).
+        /// (<see cref="Html.Core.Handlers.OutlineDrawHandler"/>, via <c>Canvas.PushBlendMode</c>).
         /// </summary>
         internal void SetBlendMode(string pdfBlendModeName)
         {
@@ -498,7 +498,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (isColorFont)
             {
-                // Color fonts (COLR/CPAL): paint each glyph's color layers as vector fills rather than
+                // PaintColor fonts (COLR/CPAL): paint each glyph's color layers as vector fills rather than
                 // showing the font's monochrome outlines. Each vector glyph carries its exact source as
                 // /ActualText plus a rendering-mode-3 CID text show at the same position: /ActualText
                 // preserves ambiguous sequences exactly, while the invisible text supplies selection
@@ -781,29 +781,29 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawImage ----------------------------------------------------------------------------
 
-        //public void DrawImage(Image image, Point point);
+        //public void DrawImage(Image image, PaintPoint point);
         //public void DrawImage(Image image, PointF point);
-        //public void DrawImage(Image image, Point[] destPoints);
+        //public void DrawImage(Image image, PaintPoint[] destPoints);
         //public void DrawImage(Image image, PointF[] destPoints);
         //public void DrawImage(Image image, Rectangle rect);
         //public void DrawImage(Image image, RectangleF rect);
         //public void DrawImage(Image image, int x, int y);
         //public void DrawImage(Image image, float x, float y);
-        //public void DrawImage(Image image, Point[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit);
+        //public void DrawImage(Image image, PaintPoint[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit);
         //public void DrawImage(Image image, Rectangle destRect, Rectangle srcRect, GraphicsUnit srcUnit);
         //public void DrawImage(Image image, RectangleF destRect, RectangleF srcRect, GraphicsUnit srcUnit);
         //public void DrawImage(Image image, PointF[] destPoints, RectangleF srcRect, GraphicsUnit srcUnit);
         //public void DrawImage(Image image, int x, int y, Rectangle srcRect, GraphicsUnit srcUnit);
         //public void DrawImage(Image image, float x, float y, RectangleF srcRect, GraphicsUnit srcUnit);
-        //public void DrawImage(Image image, Point[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr);
+        //public void DrawImage(Image image, PaintPoint[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr);
         //public void DrawImage(Image image, PointF[] destPoints, RectangleF srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr);
         //public void DrawImage(Image image, int x, int y, int width, int height);
         //public void DrawImage(Image image, float x, float y, float width, float height);
-        //public void DrawImage(Image image, Point[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr, DrawImageAbort callback);
+        //public void DrawImage(Image image, PaintPoint[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr, DrawImageAbort callback);
         //public void DrawImage(Image image, PointF[] destPoints, RectangleF srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr, DrawImageAbort callback);
         //public void DrawImage(Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit);
         //public void DrawImage(Image image, Rectangle destRect, float srcX, float srcY, float srcWidth, float srcHeight, GraphicsUnit srcUnit);
-        //public void DrawImage(Image image, Point[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr, DrawImageAbort callback, int callbackData);
+        //public void DrawImage(Image image, PaintPoint[] destPoints, Rectangle srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr, DrawImageAbort callback, int callbackData);
         //public void DrawImage(Image image, PointF[] destPoints, RectangleF srcRect, GraphicsUnit srcUnit, ImageAttributes imageAttr, DrawImageAbort callback, int callbackData);
         //public void DrawImage(Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttr);
         //public void DrawImage(Image image, Rectangle destRect, float srcX, float srcY, float srcWidth, float srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttrs);
@@ -2282,7 +2282,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
         /// attached as an <c>/Alpha</c>-subtype soft mask, deriving mask values from the mask tile's
         /// computed alpha rather than a luminosity conversion of its color - see
-        /// <see cref="Html.Adapters.RGraphics.DrawImageAlphaMasked"/> for the motivating SVG
+        /// <see cref="Canvas.DrawImageAlphaMasked"/> for the motivating SVG
         /// <c>SourceAlpha</c>/<c>feComposite</c> use case.
         /// </summary>
         /// <remarks>
@@ -2351,13 +2351,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// <summary>
         /// Paints <paramref name="bottom"/> normally at <paramref name="destRect"/>, then
         /// <paramref name="top"/> on top of it at the same rect composited with <paramref name="pdfBlendModeName"/> -
-        /// see <see cref="Html.Adapters.RGraphics.DrawImageBlendedOver"/> for the motivating SVG
+        /// see <see cref="Canvas.DrawImageBlendedOver"/> for the motivating SVG
         /// <c>feBlend</c> use case. <paramref name="pdfBlendModeName"/> crosses from
-        /// <c>RBlendMode</c> as a plain string (via <c>RBlendMode.ToString()</c> at the
+        /// <c>PaintBlendMode</c> as a plain string (via <c>PaintBlendMode.ToString()</c> at the
         /// <c>GraphicsAdapter</c> call site) rather than as a typed enum, matching the same crossing
         /// point <see cref="SetBlendMode"/> already uses - <c>PdfSharpCore</c> sits below
         /// <c>Html.Adapters</c> in this codebase's layering, so it cannot reference
-        /// <c>Html.Adapters.Entities.RBlendMode</c> directly (see <see cref="SetBlendMode"/>).
+        /// <c>PaintBlendMode</c> directly (see <see cref="SetBlendMode"/>).
         /// </summary>
         internal void DrawImageBlendedOver(XForm top, XForm bottom, XRect destRect, string pdfBlendModeName)
         {

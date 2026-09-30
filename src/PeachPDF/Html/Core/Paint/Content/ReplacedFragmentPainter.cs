@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -20,7 +19,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </remarks>
     internal abstract class ReplacedFragmentPainter : IFragmentContentPainter
     {
-        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, Canvas g, BoxFragment fragment)
         {
             var box = fragment.Box;
 
@@ -55,7 +54,7 @@ namespace PeachPDF.Html.Core.Paint.Content
         /// rectangle (the box's principal rectangle if the word did not land on this page), deflated by
         /// the box's border and padding and snapped to whole units.
         /// </summary>
-        private RRect ContentRect(CssBox box, BoxFragment fragment, RRect fallback)
+        private Rect ContentRect(CssBox box, BoxFragment fragment, Rect fallback)
         {
             var word = ContentWord(box);
 
@@ -80,13 +79,13 @@ namespace PeachPDF.Html.Core.Paint.Content
         protected abstract CssRect? ContentWord(CssBox box);
 
         /// <summary>Draws the replacement content into its resolved content box.</summary>
-        protected abstract void DrawContent(RGraphics g, CssBox box, RRect rect);
+        protected abstract void DrawContent(Canvas g, CssBox box, Rect rect);
 
         /// <summary>
-        /// <see cref="DrawContent(RGraphics, CssBox, RRect)"/> with the painter and fragment it is drawn for, for content that needs the page
+        /// <see cref="DrawContent(Canvas, CssBox, Rect)"/> with the painter and fragment it is drawn for, for content that needs the page
         /// around it (an inline SVG's <c>BackgroundImage</c>); the default draws without it.
         /// </summary>
-        protected virtual void DrawContent(FragmentPainter painter, RGraphics g, BoxFragment fragment, CssBox box, RRect rect) =>
+        protected virtual void DrawContent(FragmentPainter painter, Canvas g, BoxFragment fragment, CssBox box, Rect rect) =>
             DrawContent(g, box, rect);
     }
 }

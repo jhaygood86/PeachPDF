@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -46,8 +45,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// pattern evenly all the way round instead of restarting it at each corner.
         /// </remarks>
         private static void PaintPatternedRegion(
-            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
-            LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
+            Canvas g, IReadOnlyList<RectilinearRegion.Contour> contours,
+            LineStyle style, PaintColor color, double width, BorderRadii? radii, double offset)
         {
             if (radii is not { IsRounded: true } && color.A < byte.MaxValue)
             {
@@ -67,7 +66,7 @@ namespace PeachPDF.Html.Core.Handlers
                 }
 
                 if (left >= right || top >= bottom) return;
-                PatternedStrokeOpacity.Paint(g, RRect.FromLTRB(left, top, right, bottom), color,
+                PatternedStrokeOpacity.Paint(g, Rect.FromLTRB(left, top, right, bottom), color,
                     (target, opaque) =>
                         PaintPatternedRegionCore(target, contours, style, opaque, width, radii, offset));
                 return;
@@ -77,8 +76,8 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void PaintPatternedRegionCore(
-            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
-            LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
+            Canvas g, IReadOnlyList<RectilinearRegion.Contour> contours,
+            LineStyle style, PaintColor color, double width, BorderRadii? radii, double offset)
         {
             var dotted = style == LineStyle.Dotted;
             var halfWidth = width / 2;
@@ -100,13 +99,13 @@ namespace PeachPDF.Html.Core.Handlers
         /// Strokes the whole closed contour with one pattern fitted to its total length.
         /// </summary>
         private static void StrokeClosedPattern(
-            RGraphics g, List<PathSegment> center, bool dotted, RColor color, double width)
+            Canvas g, List<PathSegment> center, bool dotted, PaintColor color, double width)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
 
             var pen = g.GetPen(color);
             pen.Width = width / pixelsPerPoint;
-            pen.LineJoin = RLineJoin.Miter;
+            pen.LineJoin = LineJoin.Miter;
 
             if (StyledStrokeFitting.FitClosed(dotted, width, MeasureSegments(center)) is not { } pattern)
             {
@@ -115,18 +114,18 @@ namespace PeachPDF.Html.Core.Handlers
                 // contour is always long enough for a dash and its gap. Kept because pens are pooled
                 // and handed back configured by a previous caller - a fitting that ever does fail has
                 // to reset the pen rather than inherit someone else's pattern.
-                pen.LineCap = RLineCap.Butt;
-                pen.DashStyle = RDashStyle.Solid;
+                pen.LineCap = LineCap.Butt;
+                pen.DashStyle = DashStyle.Solid;
             }
             else if (dotted)
             {
                 // A zero-length dash under a round cap is a dot centred on the path.
-                pen.LineCap = RLineCap.Round;
+                pen.LineCap = LineCap.Round;
                 pen.SetDashPattern([0, pattern.Period / pixelsPerPoint], 0);
             }
             else
             {
-                pen.LineCap = RLineCap.Butt;
+                pen.LineCap = LineCap.Butt;
                 pen.SetDashPattern(
                     [pattern.DashLength / pixelsPerPoint, pattern.GapLength / pixelsPerPoint], 0);
             }
@@ -140,7 +139,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Strokes each straight edge of the contour with its own fitted pattern.
         /// </summary>
         private static void StrokeStraightPattern(
-            RGraphics g, List<PathSegment> center, bool dotted, RColor color,
+            Canvas g, List<PathSegment> center, bool dotted, PaintColor color,
             double width, double halfWidth)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
@@ -165,7 +164,7 @@ namespace PeachPDF.Html.Core.Handlers
 
                 var pen = g.GetPen(color);
                 pen.Width = width / pixelsPerPoint;
-                pen.LineJoin = RLineJoin.Miter;
+                pen.LineJoin = LineJoin.Miter;
 
                 if (StyledStrokeFitting.Apply(pen, dotted, width, from, to, pixelsPerPoint) is { } fitted)
                 {
@@ -174,8 +173,8 @@ namespace PeachPDF.Html.Core.Handlers
                 }
                 else
                 {
-                    pen.LineCap = RLineCap.Butt;
-                    pen.DashStyle = RDashStyle.Solid;
+                    pen.LineCap = LineCap.Butt;
+                    pen.DashStyle = DashStyle.Solid;
                 }
 
                 if (horizontal)
@@ -196,8 +195,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// bevelled border.
         /// </remarks>
         private static void PaintBevelledRegion(
-            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
-            LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
+            Canvas g, IReadOnlyList<RectilinearRegion.Contour> contours,
+            LineStyle style, PaintColor color, double width, BorderRadii? radii, double offset)
         {
             if (style is LineStyle.Inset or LineStyle.Outset)
             {
@@ -234,7 +233,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// </para>
         /// </remarks>
         private static void PaintBevelLayer(
-            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours, RColor color,
+            Canvas g, IReadOnlyList<RectilinearRegion.Contour> contours, PaintColor color,
             double fromInset, double toInset, double width, BorderRadii? radii, double offset,
             bool inset)
         {
@@ -265,8 +264,8 @@ namespace PeachPDF.Html.Core.Handlers
 
                 var lit = g.GetGraphicsPath();
                 var shaded = g.GetGraphicsPath();
-                lit.FillMode = RFillMode.Nonzero;
-                shaded.FillMode = RFillMode.Nonzero;
+                lit.FillMode = FillMode.Nonzero;
+                shaded.FillMode = FillMode.Nonzero;
 
                 try
                 {
@@ -340,7 +339,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private static void FillThroughClip(RGraphics g, RGraphicsPath band, RGraphicsPath clip, RColor color)
+        private static void FillThroughClip(Canvas g, GraphicsPath band, GraphicsPath clip, PaintColor color)
         {
             g.PushClip(clip);
             g.DrawPath(g.GetSolidBrush(color), band);
@@ -383,7 +382,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// reaches along the edge and across it.
         /// </summary>
         private readonly record struct BevelEdge(
-            RPoint Start, RPoint End, int Dx, int Dy,
+            PaintPoint Start, PaintPoint End, int Dx, int Dy,
             bool IsLit, double S0, double S1,
             double StartReach, double EndReach,
             double StartHMin, double StartHMax, double EndHMin, double EndHMax,
@@ -397,7 +396,7 @@ namespace PeachPDF.Html.Core.Handlers
             internal double Ny => -Dx;
 
             internal static BevelEdge Create(
-                RPoint start, RPoint end, int dx, int dy, double halfWidth, bool isLit,
+                PaintPoint start, PaintPoint end, int dx, int dy, double halfWidth, bool isLit,
                 Corner startCorner, Corner endCorner, bool agreeStart, bool agreeEnd,
                 double startLeaving, double startArriving, double endArriving, double endLeaving)
             {
@@ -460,7 +459,7 @@ namespace PeachPDF.Html.Core.Handlers
             /// reach, which the short steps of a staircase routinely are.
             /// </para>
             /// </remarks>
-            internal void Emit(RGraphics g, RGraphicsPath clip, List<LayoutRect>? cuts)
+            internal void Emit(Canvas g, GraphicsPath clip, List<LayoutRect>? cuts)
             {
                 // The straight middle, mitre tip to mitre tip to hold the corner squares the caps
                 // below are cut back from. Never cut: it is this edge's own straight band.
@@ -486,7 +485,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
 
             private void EmitRect(
-                RGraphics g, RGraphicsPath clip,
+                Canvas g, GraphicsPath clip,
                 double sMin, double sMax, double hMin, double hMax, List<LayoutRect>? cuts)
             {
                 if (sMin >= sMax || hMin >= hMax) return;
@@ -509,12 +508,12 @@ namespace PeachPDF.Html.Core.Handlers
             }
 
             private void EmitPolygon(
-                RGraphics g, RGraphicsPath clip, List<(double S, double H)> polygon)
+                Canvas g, GraphicsPath clip, List<(double S, double H)> polygon)
             {
                 if (polygon.Count < 3) return;
 
                 var scale = 1 / g.PixelsPerPoint;
-                var last = new RPoint(double.NaN, double.NaN);
+                var last = new PaintPoint(double.NaN, double.NaN);
                 var started = false;
                 var vertices = 0;
 
@@ -532,7 +531,7 @@ namespace PeachPDF.Html.Core.Handlers
                     if (started) clip.LineTo(x, y);
                     else clip.AddMove(x, y);
 
-                    last = new RPoint(x, y);
+                    last = new PaintPoint(x, y);
                     started = true;
                     vertices++;
                 }

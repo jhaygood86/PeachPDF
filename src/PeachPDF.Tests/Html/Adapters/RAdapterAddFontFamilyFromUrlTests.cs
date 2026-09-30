@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Html.Adapters
 {
     /// <summary>
-    /// Direct unit tests for <see cref="PeachPDF.Html.Adapters.RAdapter.AddFontFamilyFromUrl"/>'s
+    /// Direct unit tests for <see cref="PeachDrawing.Core.RenderContext.AddFontFamilyFromUrl"/>'s
     /// error-handling paths - a malformed URL, and a relative URL with no base to resolve against.
     /// Both must fail gracefully (font simply doesn't load) rather than throwing and crashing the whole
     /// render, per the type's own documented contract.

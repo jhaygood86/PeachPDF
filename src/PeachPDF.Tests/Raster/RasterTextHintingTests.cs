@@ -1,8 +1,8 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
+using PeachDrawing.Core;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
+using System.Numerics;
 
 namespace PeachPDF.Tests.Raster
 {
@@ -14,27 +14,27 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterHintingSans";
 
-        private static RColor Black => RColor.FromArgb(255, 0, 0, 0);
+        private static PaintColor Black => PaintColor.FromArgb(255, 0, 0, 0);
 
-        private static async Task<(RasterGraphics Graphics, RFont Font)> Fixture(TextHinting hinting, double fontSize = 12, int width = 120, int height = 40)
+        private static async Task<(RasterCanvas Graphics, Font Font)> Fixture(TextHinting hinting, double fontSize = 12, int width = 120, int height = 40)
         {
             var adapter = new PdfSharpAdapter { TextHinting = hinting };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            var graphics = new RasterGraphics(adapter, surface, 1);
-            return (graphics, adapter.GetFont(Family, fontSize, RFontStyle.Regular)!);
+            var graphics = new RasterCanvas(adapter, surface, 1);
+            return (graphics, adapter.GetFont(Family, fontSize, PaintFontStyle.Regular)!);
         }
 
-        private static void Draw(RasterGraphics graphics, RFont font, string text = "Hxg", double y = 10)
+        private static void Draw(RasterCanvas graphics, Font font, string text = "Hxg", double y = 10)
         {
             var size = graphics.MeasureString(text, font);
-            graphics.DrawString(text, font, Black, new RPoint(10, y), size);
+            graphics.DrawString(text, font, Black, new PaintPoint(10, y), size);
         }
 
-        private static byte Alpha(RasterGraphics graphics, int x, int y) => graphics.Surface.Row(y)[x * 4 + 3];
+        private static byte Alpha(RasterCanvas graphics, int x, int y) => graphics.Surface.Row(y)[x * 4 + 3];
 
-        private static byte[] Pixels(RasterGraphics graphics)
+        private static byte[] Pixels(RasterCanvas graphics)
         {
             var bytes = new List<byte>();
             for (int y = 0; y < graphics.Surface.Height; y++)
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Raster
             return bytes.ToArray();
         }
 
-        private static async Task<byte[]> Render(TextHinting hinting, double fontSize = 12, string text = "Hxg", RMatrix? transform = null)
+        private static async Task<byte[]> Render(TextHinting hinting, double fontSize = 12, string text = "Hxg", Matrix3x2? transform = null)
         {
             var (graphics, font) = await Fixture(hinting, fontSize);
             if (transform is { } matrix)
@@ -58,10 +58,10 @@ namespace PeachPDF.Tests.Raster
             var (plain, plainFont) = await Fixture(TextHinting.None);
             var adapter = new PdfSharpAdapter();
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
-            var untouched = new RasterGraphics(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+            var untouched = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
 
             Draw(plain, plainFont);
-            Draw(untouched, adapter.GetFont(Family, 12, RFontStyle.Regular)!);
+            Draw(untouched, adapter.GetFont(Family, 12, PaintFontStyle.Regular)!);
 
             Assert.Equal(Pixels(untouched), Pixels(plain));
         }
@@ -90,7 +90,7 @@ namespace PeachPDF.Tests.Raster
             Draw(unhinted, plainFont, "HHH", y: 4.6);
 
             // the largest difference between an edge row and its inner neighbour, over the pixels of the stems
-            (int Top, int Bottom) EdgeSoftness(RasterGraphics g)
+            (int Top, int Bottom) EdgeSoftness(RasterCanvas g)
             {
                 var rows = Enumerable.Range(0, g.Surface.Height).Where(y => Enumerable.Range(0, g.Surface.Width).Any(x => Alpha(g, x, y) > 0)).ToList();
                 int Softness(int edge, int inner) => Enumerable.Range(0, g.Surface.Width)
@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Raster
             async Task<byte[]> One(TextHinting hinting, double x)
             {
                 var (graphics, font) = await Fixture(hinting, fontSize: 12);
-                graphics.DrawString("H", font, Black, new RPoint(x, 10), graphics.MeasureString("H", font));
+                graphics.DrawString("H", font, Black, new PaintPoint(x, 10), graphics.MeasureString("H", font));
                 return Pixels(graphics);
             }
 
@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Raster
         public async Task RotatedTextIsNotHinted()
         {
             var angle = 0.3;
-            var rotate = new RMatrix(Math.Cos(angle), Math.Sin(angle), -Math.Sin(angle), Math.Cos(angle), 20, 5);
+            var rotate = new Matrix3x2((float)Math.Cos(angle), (float)Math.Sin(angle), (float)-Math.Sin(angle), (float)Math.Cos(angle), 20, 5);
 
             var none = await Render(TextHinting.None, transform: rotate);
             var hinted = await Render(TextHinting.Standard, transform: rotate);
@@ -147,18 +147,34 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
-        public async Task TextScaledDifferentlyInTheTwoDirectionsIsNotHinted()
+        public async Task TextScaledDifferentlyInTheTwoDirectionsIsHintedToAStretchedGrid()
         {
-            var stretch = new RMatrix(2, 0, 0, 1, 0, 0);
+            // 12 px scaled 2x horizontally and 1x vertically reaches the pixels as 24 horizontal and 12 vertical ppem: a non-square
+            // pixel is exactly the real-world trigger for the font's non-square-pixel hinting paths, so this is no longer refused.
+            var stretch = new Matrix3x2(2, 0, 0, 1, 0, 0);
 
-            Assert.Equal(await Render(TextHinting.None, transform: stretch), await Render(TextHinting.Standard, transform: stretch));
+            var none = await Render(TextHinting.None, transform: stretch);
+            var hinted = await Render(TextHinting.Standard, transform: stretch);
+
+            Assert.NotEqual(none, hinted);
+            Assert.True(hinted.Where((b, i) => i % 4 == 3 && b > 0).Count() > 60, "the hinted text has ink");
+        }
+
+        [Fact]
+        public async Task RotationOrSkewStillRefusesHintingEvenWithAnisotropicSupport()
+        {
+            // a rotation mixes M12/M21 in, which the guard still refuses whatever the two axes' own scales are: fitting a rotated or
+            // skewed grid is not what a font's hinting instructions do, square pixels or not.
+            var skew = new Matrix3x2(2, 0.3f, 0, 1, 0, 0);
+
+            Assert.Equal(await Render(TextHinting.None, transform: skew), await Render(TextHinting.Standard, transform: skew));
         }
 
         [Fact]
         public async Task TextUnderAUniformScaleIsHintedAtTheScaledSize()
         {
             // 12 px scaled by 2 is 24 ppem on the surface: the hinting follows what reaches the pixels
-            var twice = new RMatrix(2, 0, 0, 2, 0, 0);
+            var twice = new Matrix3x2(2, 0, 0, 2, 0, 0);
             var scaled = await Render(TextHinting.Standard, fontSize: 12, transform: twice);
             var direct = await Render(TextHinting.Standard, fontSize: 24);
 
@@ -171,9 +187,9 @@ namespace PeachPDF.Tests.Raster
         {
             var adapter = new PdfSharpAdapter { TextHinting = hinting, TextStemDarkening = stemDarkening };
             await BundledFonts.RegisterFont(adapter, fontPath, "RasterDarkeningFont");
-            var graphics = new RasterGraphics(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
-            var font = adapter.GetFont("RasterDarkeningFont", fontSize, RFontStyle.Regular)!;
-            graphics.DrawString("Hlxn", font, Black, new RPoint(10, 10), graphics.MeasureString("Hlxn", font));
+            var graphics = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+            var font = adapter.GetFont("RasterDarkeningFont", fontSize, PaintFontStyle.Regular)!;
+            graphics.DrawString("Hlxn", font, Black, new PaintPoint(10, 10), graphics.MeasureString("Hlxn", font));
             return Pixels(graphics);
         }
 
@@ -206,9 +222,9 @@ namespace PeachPDF.Tests.Raster
             {
                 var adapter = new PdfSharpAdapter { TextHinting = hinting };
                 await BundledFonts.RegisterFont(adapter, BundledFonts.Gasp, "RasterGaspFont");
-                var graphics = new RasterGraphics(adapter, new RasterSurface(120, 60, 0, 0, 1, 1), 1);
-                var font = adapter.GetFont("RasterGaspFont", size, RFontStyle.Regular)!;
-                graphics.DrawString("AB", font, Black, new RPoint(10, 40), graphics.MeasureString("AB", font));
+                var graphics = new RasterCanvas(adapter, new RasterSurface(120, 60, 0, 0, 1, 1), 1);
+                var font = adapter.GetFont("RasterGaspFont", size, PaintFontStyle.Regular)!;
+                graphics.DrawString("AB", font, Black, new PaintPoint(10, 40), graphics.MeasureString("AB", font));
                 return Pixels(graphics);
             }
 
@@ -227,22 +243,22 @@ namespace PeachPDF.Tests.Raster
             var adapter = new PdfSharpAdapter { TextHinting = TextHinting.Standard };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
 
-            RasterGraphics Draw(RFontStyle style)
+            RasterCanvas Draw(PaintFontStyle style)
             {
-                var g = new RasterGraphics(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+                var g = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
                 var f = adapter.GetFont(Family, 24, style)!;
-                g.DrawString("IIII", f, Black, new RPoint(10, 5), g.MeasureString("IIII", f));
+                g.DrawString("IIII", f, Black, new PaintPoint(10, 5), g.MeasureString("IIII", f));
                 return g;
             }
 
-            double Lean(RasterGraphics g)
+            double Lean(RasterCanvas g)
             {
                 var rows = Enumerable.Range(0, g.Surface.Height).Where(y => Enumerable.Range(0, g.Surface.Width).Any(x => g.Surface.Row(y)[x * 4 + 3] > 128)).ToList();
                 double Centre(int y) => Enumerable.Range(0, g.Surface.Width).Where(x => g.Surface.Row(y)[x * 4 + 3] > 128).Average();
                 return Centre(rows[2]) - Centre(rows[^3]);
             }
 
-            double italicLean = Lean(Draw(RFontStyle.Italic)), uprightLean = Lean(Draw(RFontStyle.Regular));
+            double italicLean = Lean(Draw(PaintFontStyle.Italic)), uprightLean = Lean(Draw(PaintFontStyle.Regular));
             Assert.True(italicLean > uprightLean + 1.5, $"upright {uprightLean:F1}, italic {italicLean:F1}");
         }
     }

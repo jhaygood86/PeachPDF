@@ -51,7 +51,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine();
             sb.AppendLine("using PeachPDF.Adapters;");
             sb.AppendLine("using PeachPDF.CSS;");
-            sb.AppendLine("using PeachPDF.Html.Adapters.Entities;");
+            sb.AppendLine("using PeachDrawing.Core;");
             sb.AppendLine("using PeachPDF.Html.Core.Entities;");
             sb.AppendLine("using PeachPDF.Html.Core.Parse;");
             sb.AppendLine("using PeachPDF.Html.Core.Utils;");

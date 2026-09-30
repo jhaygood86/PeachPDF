@@ -149,7 +149,7 @@ body {{ font-family: 'TestMultiWeight', serif; font-size: 14pt; }}
 
         // -------------------------------------------------------------------------
         // Regression: @font-face's src: local(...) must resolve against a genuinely-installed system
-        // font end-to-end (DomParser.CascadeApplyStyleFonts -> RAdapter.AddLocalFontFamily), not just
+        // font end-to-end (DomParser.CascadeApplyStyleFonts -> RenderContext.AddLocalFontFamily), not just
         // parse - no-ops (rather than skipping, matching this test project's Windows-only convention -
         // see GenericFontFamilyIntegrationTests) on any non-Windows host, since it needs a known,
         // real installed font's own internal name to reference via local().

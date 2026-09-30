@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// <c>text-decoration-style: wavy</c> strokes a wavy <see cref="PeachPDF.Html.Adapters.RGraphicsPath"/>
+    /// <c>text-decoration-style: wavy</c> strokes a wavy <see cref="PeachDrawing.Core.GraphicsPath"/>
     /// instead of drawing a straight <c>DrawLine</c> - it used to resolve to a solid pen and paint a
     /// straight line, the same output <c>solid</c> produces, which is an unambiguous spec deviation
     /// (css-text-decor-3 §2.2 defines <c>wavy</c> in its own words: "Draw a wavy line"). See
@@ -132,7 +132,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// <c>RAdapter.GetPen(RColor)</c> returns a cached, mutable pen keyed only by color.
+        /// <c>RenderContext.GetPen(PaintColor)</c> returns a cached, mutable pen keyed only by color.
         /// <c>WavyDecorationRenderer.StrokeWavyLine</c> calls it too, for the same color, and sets its
         /// own (divided) <c>Width</c> on it - the very same pen object <c>PaintDecoration</c> is still
         /// holding a reference to for the rest of its per-keyword loop. Before <c>thickness</c> was

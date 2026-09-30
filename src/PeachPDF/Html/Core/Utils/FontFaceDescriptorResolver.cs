@@ -1,6 +1,6 @@
 using PeachDrawing.Text;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using System;
 using System.Globalization;
 

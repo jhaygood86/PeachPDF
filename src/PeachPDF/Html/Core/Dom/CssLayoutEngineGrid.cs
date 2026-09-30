@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
@@ -59,7 +58,7 @@ namespace PeachPDF.Html.Core.Dom
     /// baseline alignment are out of scope — see docs/html-css-support.md.
     ///
     /// The engine mirrors <see cref="CssLayoutEngineFlex"/>: it resolves the container's content width via
-    /// <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/>, lays each item out at a provisional origin, then translates
+    /// <see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/>, lays each item out at a provisional origin, then translates
     /// it into its final cell with <see cref="CssBox.OffsetLeft(double)"/>/<see cref="CssBox.OffsetTop(double)"/>.
     /// </summary>
     internal sealed class CssLayoutEngineGrid
@@ -78,7 +77,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which of that row's items did not finish their own content on an earlier fragmentainer pass,
         /// or null to lay the container out from the start.
         /// </param>
-        public static async ValueTask PerformLayout(RGraphics g, CssBox gridBox, BreakToken? resume = null)
+        public static async ValueTask PerformLayout(Canvas g, CssBox gridBox, BreakToken? resume = null)
         {
             try
             {
@@ -99,7 +98,7 @@ namespace PeachPDF.Html.Core.Dom
             public double Position { get; set; }
         }
 
-        private async ValueTask Layout(RGraphics g, BreakToken? resume)
+        private async ValueTask Layout(Canvas g, BreakToken? resume)
         {
             // A resumed pass re-enters only the row its commit pass stopped in, and only that row's
             // unfinished items - every earlier phase (placement, track sizing, row relocation) already
@@ -525,13 +524,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// </remarks>
         private async ValueTask CommitItemContent(
-            RGraphics g,
+            Canvas g,
             IReadOnlyList<IReadOnlyList<CssBox>> rowGroups,
             int startRowIndex,
             IReadOnlyList<UnfinishedGridItem>? seedUnfinished,
             IReadOnlyList<CssBox>? seedFinished,
             IReadOnlyDictionary<CssBox, GridSubgridContext> subgridContexts,
-            RPoint placementOrigin)
+            PaintPoint placementOrigin)
         {
             var container = _gridBox.HtmlContainer;
 
@@ -611,9 +610,9 @@ namespace PeachPDF.Html.Core.Dom
         /// those must stay exactly where they are, and only the origin new content flows from should move
         /// (mirroring <c>ResumeInTheNextFragmentainer</c>'s own choice for the same reason).
         /// </remarks>
-        private async ValueTask ResumeCommitPass(RGraphics g, GridBreakToken resume)
+        private async ValueTask ResumeCommitPass(Canvas g, GridBreakToken resume)
         {
-            var delta = new RPoint(
+            var delta = new PaintPoint(
                 _gridBox.Location.X - resume.PlacementOrigin.X,
                 _gridBox.Location.Y - resume.PlacementOrigin.Y);
 
@@ -1116,7 +1115,7 @@ namespace PeachPDF.Html.Core.Dom
         /// already cover across the intrinsic tracks it spans (CSS Grid §11.5, simplified), so a spanned
         /// intrinsic column no longer collapses to zero.</summary>
         private async ValueTask<(double[] MinContent, double[] MaxContent)> MeasureColumnIntrinsics(
-            RGraphics g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount,
+            Canvas g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount,
             double contentWidth, double gap)
         {
             var min = new double[colCount];
@@ -1155,7 +1154,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
         /// own margin/border/padding). An explicit width supplies both.</summary>
-        private static async ValueTask<(double Min, double Max)> MeasureItemContribution(RGraphics g, CssBox box)
+        private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box)
         {
             double minContent, maxContent;
             if (CssValueParser.IsValidLength(box.Width))
@@ -1274,7 +1273,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Measures an item's natural border-box height at a given content width, without leaving it
         /// placed (the caller translates it later). Mirrors the flex ResizeItem "poke Width → layout →
         /// restore" idiom.</summary>
-        private async ValueTask<double> MeasureItemHeight(RGraphics g, CssBox box, double columnWidth)
+        private async ValueTask<double> MeasureItemHeight(Canvas g, CssBox box, double columnWidth)
         {
             // box.Width must end up holding whatever CssBox.ActualBoxSizeIncludedWidth's own box-sizing
             // contract expects it to: content-space for content-box (subtract the item's own padding/
@@ -1284,7 +1283,7 @@ namespace PeachPDF.Html.Core.Dom
             var savedWidth = box.Width;
             box.Width = FormatLayoutUnits(cssWidth, box);
 
-            box.Location = new RPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
+            box.Location = new PaintPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
             box.ActualBottom = box.Location.Y;
             box.RectanglesReset();
             await PerformLayoutBlockified(g, box);
@@ -1297,7 +1296,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="justify"/> (inline axis) and <paramref name="align"/> (block axis) — <c>stretch</c>
         /// fills the cell (when the dimension is auto); <c>start</c>/<c>end</c>/<c>center</c> position the
         /// intrinsically-sized item within the cell.</summary>
-        private async ValueTask PlaceItemInCell(RGraphics g, CssBox box, double cellX, double cellY,
+        private async ValueTask PlaceItemInCell(Canvas g, CssBox box, double cellX, double cellY,
             double cellWidth, double cellHeight, string justify, string align)
         {
             var autoWidth = box.Width == Keywords.Auto;
@@ -1343,7 +1342,7 @@ namespace PeachPDF.Html.Core.Dom
                 box.AlgorithmicDefiniteHeight = Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom);
             }
 
-            box.Location = new RPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
+            box.Location = new PaintPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
             box.ActualBottom = box.Location.Y;
             box.RectanglesReset();
             await PerformLayoutBlockified(g, box);
@@ -1575,7 +1574,7 @@ namespace PeachPDF.Html.Core.Dom
         /// parent's spanned auto rows one-for-one — this is what makes every subgrid's rows share a common,
         /// content-fitting size. A column-only subgrid is measured as an ordinary item (with adopted columns).
         /// </summary>
-        private async ValueTask MeasureSubgridItem(RGraphics g, Placement p, Track[] columns, Track[] rows,
+        private async ValueTask MeasureSubgridItem(Canvas g, Placement p, Track[] columns, Track[] rows,
             double columnGap, double rowGap)
         {
             var box = p.Box;
@@ -1748,7 +1747,7 @@ namespace PeachPDF.Html.Core.Dom
             (value / ((box.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0))
                 .ToString("F4", CultureInfo.InvariantCulture) + "pt";
 
-        private static async ValueTask PerformLayoutBlockified(RGraphics g, CssBox box)
+        private static async ValueTask PerformLayoutBlockified(Canvas g, CssBox box)
         {
             CssProperty<DisplayMode>? savedDisplay = null;
             if (box.IsInline)

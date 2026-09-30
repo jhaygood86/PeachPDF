@@ -1,6 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Svg
     /// this PR's own "SVG requests the same GSUB/GPOS features HTML text does" claim didn't originally
     /// account for - see <c>docs/html-css-support.md</c>'s "Text shaping" section). Mirrors
     /// <c>CssBox.Language</c>'s HTML-side "own value, else nearest ancestor's" resolution. Asserts the
-    /// resolved language actually reaches <see cref="RGraphics.DrawString"/> via
+    /// resolved language actually reaches <see cref="Canvas.DrawString"/> via
     /// <see cref="ShapeSettings"/>, not just that it parses.
     /// </summary>
     public class SvgTextLanguageTests
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 
@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.Svg
 
             var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
 
             var draw = Assert.Single(g.DrawStringCalls);
             Assert.Equal("es", draw.Features!.Value.Language);
@@ -135,7 +135,7 @@ namespace PeachPDF.Tests.Svg
 
             var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
 
             var draw = Assert.Single(g.DrawStringCalls);
             Assert.Equal("ja", draw.Features!.Value.Language);

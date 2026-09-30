@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -69,7 +68,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// cell mid content — and touches nothing else.
         /// </para>
         /// </remarks>
-        internal static async ValueTask CommitLayout(RGraphics g, CssBox box, BreakToken? resume)
+        internal static async ValueTask CommitLayout(Canvas g, CssBox box, BreakToken? resume)
         {
             if (resume is null)
             {
@@ -77,6 +76,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // box-sizing contract expects: content-space for content-box (subtract its own
                 // padding/border back out of the outer size), or the outer size directly for
                 // border-box (ActualBoxSizeIncludedWidth/Height is already 0 there, so this is a no-op).
+                // Only the first pin sees what the author wrote; every later one would be saving a
+                // previous pin.
+                if (!box.ItemContentSizeEverPinned)
+                {
+                    box.WidthBeforeItemPin = box.Width;
+                    box.HeightBeforeItemPin = box.Height;
+                }
+
                 box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - box.ActualBoxSizeIncludedWidth), box);
                 box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight), box);
                 box.ItemContentSizeEverPinned = true;
@@ -116,13 +123,33 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// Puts back the <c>Width</c>/<c>Height</c> the author wrote on an item an earlier layout
+        /// generation (or an earlier measurement of an enclosing engine) pinned through
+        /// <see cref="CommitLayout"/>, so this generation measures it from CSS rather than from its own
+        /// previous answer.
+        /// </summary>
+        /// <remarks>
+        /// The pin is deliberately never reverted within a generation (see <see cref="CommitLayout"/>), and
+        /// nothing reverted it between generations either - so a generation that measures the same item
+        /// against a different measure (an item on a page of a different width) read the earlier size back
+        /// as if it were authored, and could never resize. A box that was never pinned is left untouched.
+        /// </remarks>
+        internal static void UnpinIfPinned(CssBox box)
+        {
+            if (!box.ItemContentSizeEverPinned) return;
+
+            box.Width = box.WidthBeforeItemPin ?? Keywords.Auto;
+            box.Height = box.HeightBeforeItemPin ?? Keywords.Auto;
+        }
+
+        /// <summary>
         /// The commit pass's own version of an engine's measurement-only blockify helper: the same
         /// blockify dance (CSS Display 3 §2.3's flex/grid-item requirement), but without detaching
         /// the fragmentainer or suppressing word-level breaking — this is the one item layout that
         /// runs at the item's real, final position, so breaking questions asked during it are
         /// meaningful.
         /// </summary>
-        private static async ValueTask LayoutBlockifiedAtFinalPosition(RGraphics g, CssBox box)
+        private static async ValueTask LayoutBlockifiedAtFinalPosition(Canvas g, CssBox box)
         {
             CssProperty<DisplayMode>? savedDisplay = null;
             if (box.IsInline)
@@ -159,12 +186,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// fragmentainer (a multicolumn column boundary, most concretely) since the token naming them was
         /// published — see each engine's own <c>ResumeCommitPass</c>.
         /// </remarks>
-        internal static void RepositionForResume(IEnumerable<CssBox> boxes, RPoint delta)
+        internal static void RepositionForResume(IEnumerable<CssBox> boxes, PaintPoint delta)
         {
             if (delta.X == 0 && delta.Y == 0) return;
 
             foreach (var box in boxes)
-                box.Location = new RPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
+                box.Location = new PaintPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
         }
     }
 }

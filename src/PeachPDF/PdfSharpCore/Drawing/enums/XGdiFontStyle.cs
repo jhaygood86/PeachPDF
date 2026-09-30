@@ -35,11 +35,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Backward compatibility.
     /// </summary>
     [Flags]
-    internal enum XGdiFontStyle  // Same values as System.Drawing.FontStyle.
+    internal enum XGdiFontStyle  // Same values as System.Drawing.PaintFontStyle.
     {
         // Must be identical to both:
-        // System.Drawing.FontStyle and
-        // PeachPDF.PdfSharpCore.Drawing.FontStyle
+        // System.Drawing.PaintFontStyle and
+        // PeachPDF.PdfSharpCore.Drawing.PaintFontStyle
 
         /// <summary>
         /// Normal text.

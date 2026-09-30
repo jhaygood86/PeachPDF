@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
@@ -87,13 +87,24 @@ namespace PeachPDF.Svg
 
                     case PathSegmentKind.ArcTo:
                     {
-                        // Approximated using the chord direction rather than the true elliptical arc
-                        // tangent - a documented v1 simplification; markers on elliptical arcs are a
-                        // rare combination in practice, and the chord is a reasonable approximation
-                        // except for very large sweep angles.
-                        var angle = AngleOf(seg.X - curX, seg.Y - curY);
-                        SetOutgoing(vertices.Count - 1, angle);
-                        vertices.Add((seg.X, seg.Y, angle, null));
+                        // Orientation follows the true elliptical-arc derivative at each end (SVG 1.1 §11.6.2);
+                        // only a degenerate arc (which is rendered as a straight line) uses the chord.
+                        double outAngle, inAngle;
+                        if (PeachDrawing.Core.EllipticalArc.TryGetCenterParameterization(
+                                curX, curY, seg.X, seg.Y, seg.RadiusX, seg.RadiusY,
+                                seg.RotationAngle * Math.PI / 180.0, seg.IsLargeArc, seg.SweepClockwise, out var arc))
+                        {
+                            var direction = arc.EndAngle >= arc.StartAngle ? 1.0 : -1.0;
+                            outAngle = ArcTangentAngle(arc, arc.StartAngle, direction);
+                            inAngle = ArcTangentAngle(arc, arc.EndAngle, direction);
+                        }
+                        else
+                        {
+                            outAngle = inAngle = AngleOf(seg.X - curX, seg.Y - curY);
+                        }
+
+                        SetOutgoing(vertices.Count - 1, outAngle);
+                        vertices.Add((seg.X, seg.Y, inAngle, null));
                         curX = seg.X; curY = seg.Y;
                         break;
                     }
@@ -119,6 +130,16 @@ namespace PeachPDF.Svg
             return ToMarkerVertices(vertices);
         }
 
+        /// <summary>The direction of travel at ellipse parameter <paramref name="t"/>, following the sweep direction.</summary>
+        private static double ArcTangentAngle(PeachDrawing.Core.EllipticalArcCenter arc, double t, double direction)
+        {
+            var cosPhi = Math.Cos(arc.RotationRadians);
+            var sinPhi = Math.Sin(arc.RotationRadians);
+            var ex = -arc.RadiusX * Math.Sin(t);
+            var ey = arc.RadiusY * Math.Cos(t);
+            return AngleOf(direction * (ex * cosPhi - ey * sinPhi), direction * (ex * sinPhi + ey * cosPhi));
+        }
+
         public static List<MarkerVertex> ComputeForLine(double x1, double y1, double x2, double y2)
         {
             var angle = AngleOf(x2 - x1, y2 - y1);
@@ -126,7 +147,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Shared by <c>&lt;polyline&gt;</c> (<paramref name="closed"/>=false) and <c>&lt;polygon&gt;</c> (true, wrapping the last segment back to the first point).</summary>
-        public static List<MarkerVertex> ComputeForPoints(RPoint[] points, bool closed)
+        public static List<MarkerVertex> ComputeForPoints(PaintPoint[] points, bool closed)
         {
             if (points.Length == 0)
                 return [];

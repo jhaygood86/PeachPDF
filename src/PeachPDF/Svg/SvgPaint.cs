@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 
 namespace PeachPDF.Svg
 {
@@ -45,7 +45,7 @@ namespace PeachPDF.Svg
     internal readonly struct SvgPaint
     {
         public SvgPaintKind Kind { get; private init; }
-        public RColor Color { get; private init; }
+        public PaintColor PaintColor { get; private init; }
         public string? ReferenceId { get; private init; }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace PeachPDF.Svg
 
         public static readonly SvgPaint None = new() { Kind = SvgPaintKind.None };
 
-        public static SvgPaint Solid(RColor color) => new() { Kind = SvgPaintKind.Solid, Color = color };
+        public static SvgPaint Solid(PaintColor color) => new() { Kind = SvgPaintKind.Solid, PaintColor = color };
 
         public static SvgPaint GradientRef(string id) => new() { Kind = SvgPaintKind.GradientRef, ReferenceId = id };
 

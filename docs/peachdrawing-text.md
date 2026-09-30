@@ -1,8 +1,9 @@
 # PeachDrawing.Text
 
 `PeachDrawing.Text` is the font and text engine PeachPDF renders HTML with, published as its own NuGet package so other
-.NET applications can use it without PeachPDF. It has no package dependencies, is trimmable and Native AOT compatible,
-and is versioned in lockstep with PeachPDF: the same version number for every release, and PeachPDF depends on it.
+.NET applications can use it without PeachPDF. It has no third-party dependencies (only its own sibling data package,
+`PeachDrawing.Text.Data`, described [below](#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam)), is trimmable and
+Native AOT compatible, and is versioned in lockstep with PeachPDF: the same version number for every release, and PeachPDF depends on it.
 
 ```bash
 dotnet add package PeachDrawing.Text
@@ -20,8 +21,8 @@ dotnet add package PeachDrawing.Text
   discovery on Windows, macOS, Linux (through fontconfig) and Android; CSS Fonts 4 face matching by weight, width and
   style; `unicode-range` and glyph-coverage fallback.
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
-  Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
-  variation sequences.
+  Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, Khmer's own separate coeng/subjoined-consonant
+  shaping, default-ignorable handling, and `cmap` format 14 variation sequences.
 - **Outlines and colour:** glyph outlines for `glyf`, CFF and CFF2, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
 - **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType and CFF2 outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
@@ -62,8 +63,11 @@ if (brand.TryMatch(new TypefaceQuery(Weight: 600, IsItalic: true), out TypefaceM
 weight, taking the nearest face when none is exact, so a request for condensed italic text gets the condensed face of a
 family whose condensed face is upright and whose italic face is of normal width, and the lean is faked. Among faces that
 declare an oblique range, the query's `ObliqueAngle` chooses the one that holds the angle or else the nearest; a face
-declared italic beats an oblique range for an italic request with no angle, and the other way round when an angle is
-given. The weight is a number, not a whole number: `350.5` is a weight, and a face whose range holds it is preferred to
+declared italic beats an oblique range for an italic request with no angle. For an explicit `oblique <angle>` of 0
+degrees or more, the oblique ranges leaning the same way as the angle are tried first, then a declared italic face, and
+only then the ranges leaning the other way. A request for `oblique 0deg` is upright's equivalent on this scale, and a
+genuinely upright face is preferred to any oblique range - one that merely includes 0 as much as one that excludes it.
+The weight is a number, not a whole number: `350.5` is a weight, and a face whose range holds it is preferred to
 one that only holds 350. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
 `cmap` maps otherwise. `Synthesis` says what the caller has to fake because the face falls short: bold when 600 or more
 was asked for and the face is lighter, italic when italic was asked for and the face is upright.
@@ -218,6 +222,15 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
   em (nearly all do) is fitted at the nearest whole size, as in FreeType: asking for 11.4 gives an outline fitted at 11, which
   `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting. A font with CFF outlines is fitted
   at the size asked for.
+- **The horizontal and vertical size can differ.** `PixelsPerEm` is a convenience that sets `OutlineRequest.PixelsPerEmX` and
+  `PixelsPerEmY` to the same value; a device whose pixels are not square (a non-uniform scale, or a different horizontal and vertical
+  resolution) sets them independently, and the font is fitted for that stretched grid instead of a square one: a TrueType font's
+  instructions read the horizontal and vertical scale on their own terms wherever they measure a distance that is not purely horizontal
+  or vertical (FreeType's non-square-pixel paths), and a font with CFF outlines scales its two axes independently while still choosing
+  its blue zones and stem widths from the vertical axis alone, exactly as Adobe's engine does. `GlyphOutline.PixelsPerEmX` and
+  `PixelsPerEmY` report the two axes the outline was fitted at (`PixelsPerEm` gives the horizontal one). PeachPDF's own raster backend
+  computes both axes from the device transform it is drawing into, so a page rendered at a non-square DPI, or under a CSS transform
+  that scales the two axes differently, reaches this on its own.
 - **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
 - **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
   vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It
@@ -274,7 +287,7 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
   both modes; the flags for ClearType (`GASP_SYMMETRIC_GRIDFIT`, `GASP_SYMMETRIC_SMOOTHING`) are not, since nothing here draws with it.
   At a location of a variable font the `MVAR` table moves the largest size of the first ten ranges (its `gsp0` to `gsp9` values), so which
   sizes are fitted can change with the weight or the width. `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph
-  either). Pixels are square: one size serves both directions.
+  either). When the two axes differ, the size compared against the table is the larger of the two, in pixels per em.
 
 The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
 is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
@@ -498,6 +511,20 @@ foreach (LineBox line in layout.Lines)
 
 Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 
+### Drawing a layout
+
+`PeachDrawing.Text` stops at positions; painting is the caller's. With a `PeachDrawing.Core` canvas (the `RasterCanvas` from the `PeachDrawing` package, or any other `Canvas`), one call paints a laid-out paragraph:
+
+```csharp
+var layout = new ParagraphBuilder(new RunStyle(typeface, 16))
+    .AddText("Hello, ").PushRun(new RunStyle(bold, 16)).AddText("world").PopRun()
+    .Build().Layout(availableWidth: 300);
+
+canvas.DrawParagraph(layout, new PaintPoint(10, 10), PaintColor.FromArgb(255, 0, 0, 0));
+```
+
+Glyphs are drawn where the shaper put them (nothing is reshaped), from the face each run was shaped in, so fallback faces, kerning, ligatures, bitmap glyphs and COLR/CPAL colour glyphs come out exactly as laid out. The overload taking a `Func<PlacedRun, ParagraphPaint>` chooses a colour and `TextDecorations` (underline, overline, line-through, drawn from the face's own metrics) per run, and an optional callback receives each inline box's bounds. `canvas.DrawGlyphRun` paints a single `GlyphRun` from `Shaper.Shape`. Layout units are the canvas's user units.
+
 ## The `PeachDrawing.Text.Unicode` namespace
 
 Each entry point is a static class named for the algorithm or property it implements, and takes plain strings, runes
@@ -534,18 +561,22 @@ question mark, end before a suffix and after a prefix of East Asian width (`％`
 keep with their digits. `Anywhere` allows a break after every grapheme cluster, whatever the
 character rules say, and keeps only hard line breaks.
 
-Thai and Khmer write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves those
-characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
+Thai, Lao, Khmer and Burmese write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves
+those characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
 break-iterator dictionaries, and by default `LineBreaker` allows a break between the words it finds, as browsers do. It chooses the
 words by looking a few words ahead for the choice that covers the text best, preferring the longer word when two choices cover it
 alike; a stretch that no word matches stays whole, cut off from the words around it; and it never breaks inside a syllable (no
-break before a dependent vowel, tone mark or other sign, after a leading vowel, or inside a Khmer subscript). The script decides, not
-`Language`, and `WordBreak`, `Strictness` and overflow wrapping apply on top of it. A word list is read the first time text of its
-script is analysed (about 0.3 MB of embedded data in all, stored with DEFLATE so that it also loads in WebAssembly, where there is no
-Brotli decoder), and is kept for the life of the process. A compound that the list has as one word stays whole even where a browser
-splits it. Set `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of
-these scripts, which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context
-scripts (Lao, Burmese, Tai Tham, Cham and the rest) have no word list yet and always get it.
+break before a dependent vowel, tone mark or other sign, after a leading vowel, inside a Khmer or Burmese subscript/stacked consonant,
+or before a Burmese asat that closes the syllable before it). The script decides, not `Language`, and `WordBreak`, `Strictness` and
+overflow wrapping apply on top of it. A word list is read the first time text of its script is analysed (about 0.44 MB of embedded
+data in all, in the `PeachDrawing.Text.Data` package this one depends on, Brotli-compressed like the rest of its Unicode data), and is
+kept for the life of the process. A compound that the list has as one word stays whole even where a browser splits it. Set
+`LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of these scripts,
+which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context scripts (Tai
+Tham, Cham and the rest) have no word list and always get it. A host with no Brotli decoder of its own (WebAssembly, at the time of
+writing) gets no word list either, and every script falls back the same way, unless it registers one with
+`PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` - see [The Unicode/hyphenation/dictionary data, and its Brotli
+decoder seam](#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam) below.
 
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
@@ -605,11 +636,40 @@ Both answer `null` for a script or language the built-in table does not cover.
 - `Emoji.Resolve` and `Emoji.ResolveAt` decide whether a character that has both a text and an emoji appearance is
   drawn as one or the other, from an `EmojiMode` (CSS `font-variant-emoji`) and any variation selector that follows.
 
+### The Unicode/hyphenation/dictionary data, and its Brotli decoder seam
+
+The tables above (Bidi, Script, vertical orientation, Arabic joining, the Indic Use tables), the hyphenation patterns and the
+Thai/Lao/Khmer/Burmese word lists ship Brotli-compressed, in a separate package, `PeachDrawing.Text.Data`, that `PeachDrawing.Text`
+depends on (see [Fonts](#fonts-fontset-families-and-matching) above for what "no third-party dependencies" means alongside this). A
+host whose Brotli decoder does not work - WebAssembly in a browser, at the time of writing, where `System.IO.Compression.BrotliStream`
+throws `PlatformNotSupportedException` - gets an empty table or an unhyphenated line instead of a failed render, exactly as before this
+data moved packages. `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` lets a host register a managed Brotli
+decoder of its own instead, to recover that data there; call it once, before using any feature backed by this data, since each table
+is read once and cached for the life of the process.
+
+`PeachDrawing.Text.Brotli` is a ready-made decoder for that seam: a pure-managed port of
+[google/brotli](https://github.com/google/brotli)'s own C# decoder, with no dependency beyond `PeachDrawing.Text` itself, kept as a
+separate opt-in project rather than folded into `PeachDrawing.Text` so a host that never needs it never pays for it. Call
+`PeachDrawing.Text.Brotli.ManagedBrotliDecompressor.Register()` once at startup:
+
+```csharp
+using PeachDrawing.Text.Brotli;
+
+if (OperatingSystem.IsBrowser())
+{
+    ManagedBrotliDecompressor.Register();
+}
+```
+
+`PeachPDF.Demo.BlazorWasm`'s `Program.cs` does exactly this, which is how its own WOFF2 fonts, `hyphens: auto` and Thai/Lao/Khmer/
+Burmese dictionary line breaking all work in the browser.
+
 ## Licences
 
-The package is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font readers
-derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, the TrueType instruction interpreter and
+The engine (`PeachDrawing.Text`) is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font
+readers derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, and the TrueType instruction interpreter and
 Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
 whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
-the package has to credit the FreeType Team in its documentation), and the data tables come from the
-Unicode Character Database, the `hyph-utf8` pattern collection and ICU's Thai and Khmer word lists. See [License](license.md) for the whole list.
+the package has to credit the FreeType Team in its documentation). The data tables - the Unicode Character Database, the `hyph-utf8`
+pattern collection and ICU's Thai, Lao, Khmer and Burmese word lists - live in `PeachDrawing.Text.Data` and carry their notices in
+that package's own `THIRD-PARTY-LICENSES.md`. See [License](license.md) for the whole list.

@@ -227,6 +227,22 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task AFractionalWeightInADivergentBand_StepsByTheCssFonts4Table()
+        {
+            // 520.5 falls in CSS Fonts 4 §2.2.1's [350,550) "bolder" band (=> 700) and its [100,550)
+            // "lighter" band (=> 100) - a fractional weight reaches these bands as easily as a whole one,
+            // and CSS2.1's table (900 for bolder, 400 for lighter here) would give a different answer.
+            var html = Document("",
+                "<div style=\"font-weight: 520.5\"><p id=\"up\" style=\"font-weight: bolder\">AB</p></div>"
+                + "<div style=\"font-weight: 520.5\"><p id=\"down\" style=\"font-weight: lighter\">AB</p></div>");
+
+            var root = await BuildBoxTree(html);
+
+            Assert.Equal(700, FindById(root, "up").ActualNumericWeight);
+            Assert.Equal(100, FindById(root, "down").ActualNumericWeight);
+        }
+
+        [Fact]
         public async Task AFractionalWeight_SetsTheWeightAxisOfAVariableFontToIt()
         {
             var css = FontFace("VF", BundledFonts.VariableTest, "") + " p { font-family: VF; }";

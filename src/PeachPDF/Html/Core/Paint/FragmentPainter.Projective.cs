@@ -1,8 +1,7 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Raster;
+using PeachDrawing;
 using System;
 using System.Numerics;
 
@@ -38,7 +37,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <paramref name="Affine"/> when the map turned out to be affine after the parent's perspective was applied (a plane parallel to the
         /// view plane, brought nearer or further, is just scaled), which a PDF <c>cm</c> can then carry.
         /// </summary>
-        private readonly record struct ProjectiveWarp(Homography Map, bool Hidden, RMatrix? Affine = null);
+        private readonly record struct ProjectiveWarp(Homography Map, bool Hidden, Matrix3x2? Affine = null);
 
         /// <summary>The most a bitmap is enlarged for a receding plane that comes closer than its flat size.</summary>
         private const double MaxProjectiveMagnification = 4.0;
@@ -91,7 +90,7 @@ namespace PeachPDF.Html.Core.Paint
                 if (!(centre.W > 1e-9))
                     return new ProjectiveWarp(map, Hidden: true);
 
-                var affine = new RMatrix(map.M11 / map.M33, map.M21 / map.M33, map.M12 / map.M33, map.M22 / map.M33, map.M13 / map.M33, map.M23 / map.M33);
+                var affine = new Matrix3x2((float)(map.M11 / map.M33), (float)(map.M21 / map.M33), (float)(map.M12 / map.M33), (float)(map.M22 / map.M33), (float)(map.M13 / map.M33), (float)(map.M23 / map.M33));
                 return affine.IsIdentity ? null : new ProjectiveWarp(map, Hidden: false, affine);
             }
 
@@ -116,7 +115,7 @@ namespace PeachPDF.Html.Core.Paint
             return det3 != 0 && det2 / det3 < 0;
         }
 
-        private bool PaintProjective(RGraphics g, BoxFragment fragment, ProjectiveWarp warp)
+        private bool PaintProjective(Canvas g, BoxFragment fragment, ProjectiveWarp warp)
         {
             var box = fragment.Box;
             if (warp.Hidden)
@@ -129,7 +128,7 @@ namespace PeachPDF.Html.Core.Paint
             if (!warp.Map.TryProjectRectangleBounds(source.Left, source.Top, source.Right, source.Bottom, out var minX, out var minY, out var maxX, out var maxY))
                 return true; // wholly behind the viewer
 
-            var destination = Intersect(new RRect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
+            var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
             if (destination.Width <= 0 || destination.Height <= 0)
                 return true;
 
@@ -178,7 +177,7 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>How much larger than its flat size the warp draws <paramref name="source"/> at its most magnified corner or its centre, at least 1.</summary>
-        private static double Magnification(Homography map, RRect source)
+        private static double Magnification(Homography map, Rect source)
         {
             double Scale(double x, double y)
             {
@@ -198,20 +197,20 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>The affine map that agrees with <paramref name="map"/> at the centre of <paramref name="box"/> in value and in slope.</summary>
-        private static RMatrix Linearise(Homography map, RRect box)
+        private static Matrix3x2 Linearise(Homography map, Rect box)
         {
             var cx = box.X + box.Width / 2;
             var cy = box.Y + box.Height / 2;
             var step = Math.Max(1.0, Math.Min(box.Width, box.Height) / 4);
 
             if (map.Apply(cx, cy) is not { } centre || map.Apply(cx + step, cy) is not { } right || map.Apply(cx, cy + step) is not { } below)
-                return RMatrix.Identity;
+                return Matrix3x2.Identity;
 
             var m11 = (right.X - centre.X) / step;
             var m12 = (right.Y - centre.Y) / step;
             var m21 = (below.X - centre.X) / step;
             var m22 = (below.Y - centre.Y) / step;
-            return new RMatrix(m11, m12, m21, m22, centre.X - (cx * m11 + cy * m21), centre.Y - (cx * m12 + cy * m22));
+            return new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, (float)(centre.X - (cx * m11 + cy * m21)), (float)(centre.Y - (cx * m12 + cy * m22)));
         }
     }
 }

@@ -1,6 +1,7 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 
@@ -17,17 +18,17 @@ namespace PeachPDF.Tests.Raster
         private const string Green = "#00aa00";
         private const string Yellow = "#ffff00";
 
-        private static async Task<RasterGraphics> Paint(string body, int width = 220, int height = 180)
+        private static async Task<RasterCanvas> Paint(string body, int width = 220, int height = 180)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), margin: 0);
-            var page = new RasterGraphics(new PdfSharpAdapter(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            var page = new RasterCanvas(new PdfSharpAdapter(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, page);
             return page;
         }
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
-        private static int Coverage(RasterGraphics g, int x)
+        private static int Coverage(RasterCanvas g, int x)
         {
             var n = 0;
             for (var y = 0; y < g.Surface.Height; y++)

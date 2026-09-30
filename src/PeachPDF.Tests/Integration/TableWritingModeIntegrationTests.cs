@@ -723,7 +723,7 @@ namespace PeachPDF.Tests.Integration
             // <thead>/<tfoot> proxies are placed along the table's own row axis (physical X for a
             // vertical table) - the pre-fix code hardcoded startX to _tableBox.ClientLeft (the column
             // axis's own start for a vertical table, not the row axis's) and never axis-swapped the
-            // proxy's own RPoint construction, so a vertical table's header/footer proxies came out at
+            // proxy's own PaintPoint construction, so a vertical table's header/footer proxies came out at
             // physically wrong positions.
             var html = LayoutHarness.Wrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">

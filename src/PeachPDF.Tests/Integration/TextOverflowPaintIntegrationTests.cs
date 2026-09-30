@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
     /// away, so every test here supplies <see cref="RecordingGraphics.MeasureStringOverride"/> with a
     /// deterministic, length-proportional width via <see cref="NewRecording"/> instead of relying on the
     /// shared default. Vertical-upright text's per-character extent comes from real font metrics
-    /// (<c>RFont.GetVerticalAdvance</c>/<c>Height</c>), not <c>g.MeasureString</c> at all, and each kept
+    /// (<c>Font.GetVerticalAdvance</c>/<c>Height</c>), not <c>g.MeasureString</c> at all, and each kept
     /// character paints as its own <c>DrawString</c> call (<c>PaintUprightVerticalRun</c>), so exact
     /// kept-character-count assertions are meaningful there regardless of the override.
     /// </summary>
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>A recording mock whose MeasureString is a deterministic, non-zero, length-proportional stand-in for real glyph shaping - needed so text-overflow's own visibility guard (a zero-extent rect reads as clipped away) doesn't suppress every draw under the shared mock's real default of a flat (0, 12).</summary>
         private static RecordingGraphics NewRecording() => new(new PdfSharpAdapter())
         {
-            MeasureStringOverride = (str, _, _) => new RSize((str?.Length ?? 0) * 6.0, 12)
+            MeasureStringOverride = (str, _, _) => new Size((str?.Length ?? 0) * 6.0, 12)
         };
 
         [Fact]

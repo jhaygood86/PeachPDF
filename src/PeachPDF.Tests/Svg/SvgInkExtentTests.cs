@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Xml.Linq;
 
@@ -12,13 +12,13 @@ namespace PeachPDF.Tests.Svg
 
         private const string Svg = "xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"";
 
-        private static RRect? Extent(string body)
+        private static Rect? Extent(string body)
         {
             var root = XDocument.Parse($"<svg {Svg} viewBox=\"0 0 100 100\">{body}</svg>").Root!;
             return SvgInkExtent.Of(SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter));
         }
 
-        private static void AssertBox(RRect? actual, double x, double y, double width, double height)
+        private static void AssertBox(Rect? actual, double x, double y, double width, double height)
         {
             var box = Assert.NotNull(actual);
             Assert.Equal(x, box.X, 4);

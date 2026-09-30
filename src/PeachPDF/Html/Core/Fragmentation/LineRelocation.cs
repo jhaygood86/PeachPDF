@@ -169,8 +169,9 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Whether anything in a line may not be cut by a fragmentainer boundary: an item asking not to be
-        /// broken, or one <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> says no user
-        /// agent may break.
+        /// broken, or monolithic content (a replaced element, which
+        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> says no user agent may break, or a
+        /// scroll container kept whole under <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>).
         /// </summary>
         /// <remarks>
         /// An item that neither asks nor forbids is left where it is, and the boundary cuts it — the same
@@ -197,7 +198,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// the side a forced break at the break point before it demands, or null where none falls there —
         /// see <see cref="ForcedBreakAbove"/>
         /// </param>
-        /// <param name="mayNotBeCut">something in it asks not to be broken, or §2 says no user agent may</param>
+        /// <param name="mayNotBeCut">something in it asks not to be broken, or is monolithic content that is kept whole</param>
         internal static double DeltaFor(
             HtmlContainerInt container, CssBox owner, double top, double bottom,
             PageSide? forcedBreak, bool mayNotBeCut)

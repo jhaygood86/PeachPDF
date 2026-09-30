@@ -1,6 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +7,7 @@ using System.Linq;
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {
     /// <summary>
-    /// <see cref="RGraphicsPath.ClipToRect"/> (issue #1194) - the axis-aligned-rectangle path clip
+    /// <see cref="GraphicsPath.ClipToRect"/> (issue #1194) - the axis-aligned-rectangle path clip
     /// <c>FragmentPainter.Decorations.cs</c>'s <c>CollectUprightWord</c> needs to reproduce, in a
     /// <c>background-clip: text</c> clip-path union, the same per-cell clip
     /// <c>PaintUprightVerticalRun</c> already applies via <c>PushClip</c>/<c>PopClip</c> at paint time
@@ -29,14 +28,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             return path;
         }
 
-        private static List<RPoint> PointsOf(RGraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints
-            .Select(p => new RPoint(p.X, p.Y)).ToList();
+        private static List<PaintPoint> PointsOf(GraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints
+            .Select(p => new PaintPoint(p.X, p.Y)).ToList();
 
         [Fact]
         public void EntirelyInsideRect_IsUnchanged()
         {
             var square = Rectangle(10, 10, 5, 5);
-            var clipped = square.ClipToRect(new RRect(0, 0, 100, 100));
+            var clipped = square.ClipToRect(new Rect(0, 0, 100, 100));
 
             var points = PointsOf(clipped);
             Assert.NotEmpty(points);
@@ -51,7 +50,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         public void EntirelyOutsideRect_ProducesEmptyPath()
         {
             var square = Rectangle(200, 200, 10, 10);
-            var clipped = square.ClipToRect(new RRect(0, 0, 100, 100));
+            var clipped = square.ClipToRect(new Rect(0, 0, 100, 100));
 
             Assert.Empty(PointsOf(clipped));
         }
@@ -61,7 +60,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         {
             // A square centered on the clip rect's own right edge - half survives.
             var square = Rectangle(80, 40, 40, 20);
-            var clipped = square.ClipToRect(new RRect(0, 0, 100, 100));
+            var clipped = square.ClipToRect(new Rect(0, 0, 100, 100));
 
             var points = PointsOf(clipped);
             Assert.NotEmpty(points);
@@ -75,7 +74,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         public void ClipRectFullyInsideSubject_ProducesTheClipRectItself()
         {
             var big = Rectangle(0, 0, 100, 100);
-            var clipped = big.ClipToRect(new RRect(20, 20, 10, 10));
+            var clipped = big.ClipToRect(new Rect(20, 20, 10, 10));
 
             var points = PointsOf(clipped);
             Assert.NotEmpty(points);
@@ -108,7 +107,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             path.AddBezierTo(cx + r * k, cy - r, cx + r, cy - r * k, cx + r, cy);
             path.CloseFigure();
 
-            var clipped = path.ClipToRect(new RRect(0, 0, 50, 100));
+            var clipped = path.ClipToRect(new Rect(0, 0, 50, 100));
 
             var points = PointsOf(clipped);
             Assert.NotEmpty(points);
@@ -137,7 +136,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             path.LineTo(500, 510);
             path.CloseFigure();
 
-            var clipped = path.ClipToRect(new RRect(0, 0, 100, 100));
+            var clipped = path.ClipToRect(new Rect(0, 0, 100, 100));
 
             var points = PointsOf(clipped);
             Assert.NotEmpty(points);
@@ -152,7 +151,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         public void EmptyPath_ProducesEmptyPath()
         {
             var path = new GraphicsPathAdapter();
-            var clipped = path.ClipToRect(new RRect(0, 0, 100, 100));
+            var clipped = path.ClipToRect(new Rect(0, 0, 100, 100));
 
             Assert.Empty(PointsOf(clipped));
         }
@@ -161,7 +160,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         public void ZeroWidthRect_ProducesNoUsableGeometry()
         {
             var square = Rectangle(0, 0, 10, 10);
-            var clipped = square.ClipToRect(new RRect(5, 0, 0, 10));
+            var clipped = square.ClipToRect(new Rect(5, 0, 0, 10));
 
             // A zero-width clip window degenerates every clipped contour below the 3-point minimum a
             // fillable polygon needs - this must not throw, and must not fabricate area from nothing.
@@ -172,7 +171,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         public void MalformedPath_BezierWithNoPrecedingPoint_DoesNotThrow()
         {
             // A Bezier-type point with nothing before it to start the curve from - shouldn't be
-            // reachable through the public RGraphicsPath API (every real caller's AddBezierTo follows a
+            // reachable through the public GraphicsPath API (every real caller's AddBezierTo follows a
             // Start/AddMove/LineTo), but CoreGraphicsPath.EnumerateFlattenedContours defends against it
             // anyway, since a clip-shape utility should degrade to "less clipped" on corrupted input
             // rather than throw mid-paint.
@@ -193,13 +192,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             // (e.g. a further LineTo) would silently draw a spurious segment from the origin instead of
             // continuing from where the clipped shape actually ends.
             var square = Rectangle(10, 10, 5, 5); // corners (10,10)-(15,10)-(15,15)-(10,15)
-            var clipped = (GraphicsPathAdapter)square.ClipToRect(new RRect(0, 0, 100, 100)); // fully inside - unchanged
+            var clipped = (GraphicsPathAdapter)square.ClipToRect(new Rect(0, 0, 100, 100)); // fully inside - unchanged
 
             clipped.LineTo(50, 50);
 
             var points = PointsOf(clipped);
-            Assert.Equal(new RPoint(50, 50), points[^1]);
-            Assert.Equal(new RPoint(10, 15), points[^2]);
+            Assert.Equal(new PaintPoint(50, 50), points[^1]);
+            Assert.Equal(new PaintPoint(10, 15), points[^2]);
         }
 
         [Fact]

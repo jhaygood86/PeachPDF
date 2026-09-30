@@ -587,7 +587,7 @@ h1 { color: blue }");
 
                 //var property = (CssBorderPartColorProperty)decl;
                 //var color = property.Color;
-                //Assert.Equal(new Color(82, 168, 236, 0.8f), color);
+                //Assert.Equal(new PaintColor(82, 168, 236, 0.8f), color);
             }
         }
 

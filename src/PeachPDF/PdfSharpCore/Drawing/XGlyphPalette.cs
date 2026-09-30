@@ -3,9 +3,9 @@ using System.Collections.Generic;
 namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>
-    /// The PDF-backend counterpart of <c>RFontPalette</c>: a resolved CSS <c>font-palette</c> selection —
+    /// The PDF-backend counterpart of <c>FontPalette</c>: a resolved CSS <c>font-palette</c> selection —
     /// a CPAL palette index plus per-entry color overrides — handed to the color-glyph painter. Built by
-    /// <c>GraphicsAdapter.DrawString</c> from the adapter-layer <c>RFontPalette</c>.
+    /// <c>GraphicsAdapter.DrawString</c> from the adapter-layer <c>FontPalette</c>.
     /// </summary>
     internal sealed class XGlyphPalette
     {

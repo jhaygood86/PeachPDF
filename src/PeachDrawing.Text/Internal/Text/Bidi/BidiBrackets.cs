@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
 using System.Text;
 
 namespace PeachDrawing.Text.Internal.Text.Bidi
@@ -48,30 +46,13 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
 
         private static Dictionary<int, Entry> Load()
         {
-            var assembly = typeof(BidiBrackets).Assembly;
-            var resourceName = assembly.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith("BidiBrackets.txt.br", StringComparison.OrdinalIgnoreCase));
-
             var result = new Dictionary<int, Entry>(160);
-            if (resourceName is null)
+
+            using var decompressed = PeachDrawing.Text.Internal.Text.TextDataResources.OpenBrotli("BidiBrackets.txt.br");
+            if (decompressed is null)
                 return result;
 
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream is null)
-                return result;
-
-            Stream decompressed;
-            try
-            {
-                decompressed = new BrotliStream(stream, CompressionMode.Decompress);
-            }
-            catch (PlatformNotSupportedException)
-            {
-                return result;
-            }
-
-            using var brotli = decompressed;
-            using var reader = new StreamReader(brotli, Encoding.UTF8);
+            using var reader = new StreamReader(decompressed, Encoding.UTF8);
 
             string? line;
             while ((line = reader.ReadLine()) != null)

@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, color.A);
         }
 
-        // ─── CSS Color 4 space-separated rgb()/rgba() with slash-alpha ────────────
+        // ─── CSS PaintColor 4 space-separated rgb()/rgba() with slash-alpha ────────────
 
         [Fact]
         public void Rgb_SpaceSeparated_SlashPercentAlpha_FullyOpaque()

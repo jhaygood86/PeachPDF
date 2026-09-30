@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class HrBorderStylePaintIntegrationTests
     {
-        private static readonly RColor Gray = RColor.FromArgb(128, 128, 128);
+        private static readonly PaintColor Gray = PaintColor.FromArgb(128, 128, 128);
 
         [Theory]
         [InlineData("inset")]
@@ -60,15 +60,15 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, g);
 
-            var colors = g.FilledShapes.Select(shape => shape.Color).ToList();
+            var colors = g.FilledShapes.Select(shape => shape.PaintColor).ToList();
             Assert.Equal(
                 [BorderBevelColors.Shade(Gray, darken: true), BorderBevelColors.Shade(Gray, darken: false)],
                 colors);
 
             // Chrome's own #2c2c2c / #d4d4d4 for a declared #808080 - see BorderBevelColors, whose
             // transforms were measured against it rather than recalled.
-            Assert.Equal(RColor.FromArgb(44, 44, 44), colors[0]);
-            Assert.Equal(RColor.FromArgb(212, 212, 212), colors[1]);
+            Assert.Equal(PaintColor.FromArgb(44, 44, 44), colors[0]);
+            Assert.Equal(PaintColor.FromArgb(212, 212, 212), colors[1]);
         }
 
         [Fact]
@@ -88,8 +88,8 @@ namespace PeachPDF.Tests.Integration
 
             // Chrome 153's own bytes for an unstyled rule: the darkened face over the lit one.
             Assert.Equal(
-                [RColor.FromArgb(154, 154, 154), RColor.FromArgb(238, 238, 238)],
-                g.FilledShapes.Select(shape => shape.Color).ToList());
+                [PaintColor.FromArgb(154, 154, 154), PaintColor.FromArgb(238, 238, 238)],
+                g.FilledShapes.Select(shape => shape.PaintColor).ToList());
         }
 
         [Fact]
@@ -100,9 +100,9 @@ namespace PeachPDF.Tests.Integration
             // in the paint test above. #eee is no longer declared anywhere - it is the base
             // DerivedStyle.ResolveBorderSideColor resolves a beveled currentColor border to (issue
             // #1226) - but it is still the value whose two faces those greys are.
-            var declared = RColor.FromArgb(238, 238, 238);
+            var declared = PaintColor.FromArgb(238, 238, 238);
 
-            Assert.Equal(RColor.FromArgb(154, 154, 154), BorderBevelColors.Shade(declared, darken: true));
+            Assert.Equal(PaintColor.FromArgb(154, 154, 154), BorderBevelColors.Shade(declared, darken: true));
             Assert.Equal(declared, BorderBevelColors.Shade(declared, darken: false));
         }
 
@@ -173,8 +173,8 @@ namespace PeachPDF.Tests.Integration
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, hr, graphics);
             Assert.Equal(
-                [RColor.FromArgb(r, g, b)],
-                graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
+                [PaintColor.FromArgb(r, g, b)],
+                graphics.FilledShapes.Select(shape => shape.PaintColor).Distinct().ToList());
         }
 
         [Theory]
@@ -218,7 +218,7 @@ namespace PeachPDF.Tests.Integration
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, graphics);
 
-            Assert.Equal([RColor.FromArgb(r, g, b)], PaintedColors(graphics));
+            Assert.Equal([PaintColor.FromArgb(r, g, b)], PaintedColors(graphics));
         }
 
         [Fact]
@@ -235,7 +235,7 @@ namespace PeachPDF.Tests.Integration
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, graphics);
 
-            Assert.Equal([Gray], graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
+            Assert.Equal([Gray], graphics.FilledShapes.Select(shape => shape.PaintColor).Distinct().ToList());
         }
 
         [Fact]
@@ -304,18 +304,18 @@ namespace PeachPDF.Tests.Integration
                 .. g.Log.Select(entry => entry switch
                 {
                     TestRecordingGraphics.DrawPathCall path =>
-                        $"path {path.Color} stroked={path.Stroked} "
+                        $"path {path.PaintColor} stroked={path.Stroked} "
                         + string.Join(" ", path.Points.Select(p => Offset(p, origin))),
                     TestRecordingGraphics.DrawPolygonCall polygon =>
-                        $"polygon {polygon.Color} "
+                        $"polygon {polygon.PaintColor} "
                         + string.Join(" ", polygon.Points.Select(p => Offset(p, origin))),
                     TestRecordingGraphics.DrawLineCall line =>
-                        $"line {line.Color} w={line.Width:F3} dash={line.DashStyle}"
+                        $"line {line.PaintColor} w={line.Width:F3} dash={line.DashStyle}"
                         + $"[{string.Join(",", (line.DashPattern ?? []).Select(d => d.ToString("F3")))}] "
-                        + $"{Offset(new RPoint(line.X1, line.Y1), origin)} "
-                        + $"{Offset(new RPoint(line.X2, line.Y2), origin)}",
+                        + $"{Offset(new PaintPoint(line.X1, line.Y1), origin)} "
+                        + $"{Offset(new PaintPoint(line.X2, line.Y2), origin)}",
                     TestRecordingGraphics.DrawRectCall rect =>
-                        $"rect {rect.Color} {Offset(new RPoint(rect.X, rect.Y), origin)} "
+                        $"rect {rect.PaintColor} {Offset(new PaintPoint(rect.X, rect.Y), origin)} "
                         + $"{rect.Width:F3}x{rect.Height:F3}",
                     _ => entry.GetType().Name,
                 })
@@ -326,14 +326,14 @@ namespace PeachPDF.Tests.Integration
         /// Every distinct colour the rule actually put on the page, whichever primitive carried it -
         /// a solid or bevelled border fills, a dotted/dashed one strokes.
         /// </summary>
-        private static List<RColor> PaintedColors(TestRecordingGraphics g) =>
+        private static List<PaintColor> PaintedColors(TestRecordingGraphics g) =>
         [
-            .. g.FilledShapes.Select(shape => shape.Color)
-                .Concat(g.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(line => line.Color))
+            .. g.FilledShapes.Select(shape => shape.PaintColor)
+                .Concat(g.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(line => line.PaintColor))
                 .Distinct()
         ];
 
-        private static string Offset(RPoint point, RPoint origin) =>
+        private static string Offset(PaintPoint point, PaintPoint origin) =>
             $"({point.X - origin.X:F3},{point.Y - origin.Y:F3})";
     }
 }

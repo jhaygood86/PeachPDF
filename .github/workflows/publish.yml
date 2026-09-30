@@ -81,12 +81,18 @@ jobs:
 
     - name: Build
       run: |
+        dotnet build src/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release
         dotnet build src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release
+        dotnet build src/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release
+        dotnet build src/PeachDrawing/PeachDrawing.csproj --configuration Release
         dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
     - name: Pack
       run: |
+        dotnet pack src/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/PeachDrawing/PeachDrawing.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
@@ -96,14 +102,33 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Push to NuGet.org
-      # PeachDrawing.Text first: PeachPDF depends on it at this same version, so it has to be on the feed
-      # before anyone can restore PeachPDF.
+      # In dependency order: PeachDrawing.Text.Data first (PeachDrawing.Text depends on it), then
+      # PeachDrawing.Text (PeachDrawing.Core depends on it at this same version), then
+      # PeachDrawing.Core (PeachDrawing depends on it), then PeachDrawing (PeachPDF depends on
+      # it too, alongside PeachDrawing.Core directly), then PeachPDF - each has to be on the feed
+      # before anyone can restore the one that depends on it. --skip-duplicate makes this safe to re-run.
+      # The exact version-pinned filenames (rather than a "PeachDrawing.Text.*"/"PeachDrawing.*" glob)
+      # avoid PeachDrawing.Text.Data's own package incidentally matching the PeachDrawing.Text push, and
+      # PeachDrawing.Core incidentally matching the PeachDrawing push, since each pair shares a
+      # name prefix.
       run: |
-        dotnet nuget push "./packages/PeachDrawing.Text.*.nupkg" \
+        dotnet nuget push "./packages/PeachDrawing.Text.Data.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
-        dotnet nuget push "./packages/PeachPDF.*.nupkg" \
+        dotnet nuget push "./packages/PeachDrawing.Text.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachDrawing.Core.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachDrawing.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachPDF.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate

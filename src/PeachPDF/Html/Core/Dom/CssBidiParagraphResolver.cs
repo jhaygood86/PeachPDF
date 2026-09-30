@@ -134,7 +134,7 @@ namespace PeachPDF.Html.Core.Dom
                     : BaseDirection.Ltr;
 
             var result = Bidi.Analyze(paragraphText, direction, overrides);
-            var (charScripts, joiningForms, useCategories) = ResolveScriptsAndJoining(paragraphText);
+            var (charScripts, joiningForms, useCategories, khmerCategories) = ResolveScriptsAndJoining(paragraphText);
 
             foreach (var (box, start, length) in ranges)
             {
@@ -156,6 +156,13 @@ namespace PeachPDF.Html.Core.Dom
                     Array.Copy(useCategories, start, categories, 0, length);
                     box.UseCategories = categories;
                 }
+
+                if (khmerCategories is not null)
+                {
+                    var categories = new KhmerCategory[length];
+                    Array.Copy(khmerCategories, start, categories, 0, length);
+                    box.KhmerCategories = categories;
+                }
             }
         }
 
@@ -165,6 +172,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ResolveScriptsAndJoining"/> ever classifies/allocates USE categories for.
         /// </summary>
         private static readonly HashSet<string> UseShapedScripts = ["Devanagari", "Bengali", "Gujarati", "Tamil"];
+
+        /// <summary>
+        /// The Unicode <c>Script</c> property value HarfBuzz's own (pre-Universal-Shaping-Engine)
+        /// Khmer shaper covers - the only case <see cref="ResolveScriptsAndJoining"/> ever classifies/
+        /// allocates <see cref="KhmerCategory"/> values for. Kept separate from
+        /// <see cref="UseShapedScripts"/> since Khmer is a genuinely different shaping model, not a
+        /// fifth Universal-Shaping-Engine script - see <see cref="KhmerCategory"/>'s own remarks.
+        /// </summary>
+        private static readonly HashSet<string> KhmerShapedScripts = ["Khmer"];
 
         /// <summary>
         /// Resolves <paramref name="paragraphText"/>'s per-character Unicode <c>Script</c> (already
@@ -194,7 +210,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="UseCategory.O"/> placeholder instead, exactly like a non-joining script's
         /// codepoint already does in <see cref="ArabicJoiningForm"/>'s own None value.
         /// </summary>
-        private static (string[] Scripts, ArabicJoiningForm[] Forms, UseCategory[]? UseCategories) ResolveScriptsAndJoining(string paragraphText)
+        private static (string[] Scripts, ArabicJoiningForm[] Forms, UseCategory[]? UseCategories, KhmerCategory[]? KhmerCategories) ResolveScriptsAndJoining(string paragraphText)
         {
             var length = paragraphText.Length;
             var codepoints = new List<int>(length);
@@ -222,17 +238,25 @@ namespace PeachPDF.Html.Core.Dom
             // (and only allocates at all) when the paragraph actually contains text in one of
             // UseShapedScripts.
             UseCategory[]? useCategories = null;
+            KhmerCategory[]? khmerCategories = null;
             for (var c = 0; c < resolvedScripts.Count; c++)
             {
-                if (!UseShapedScripts.Contains(resolvedScripts[c]))
-                    continue;
-                useCategories ??= new UseCategory[codepoints.Count];
-                useCategories[c] = UniversalShaping.Classify(codepoints[c]);
+                if (UseShapedScripts.Contains(resolvedScripts[c]))
+                {
+                    useCategories ??= new UseCategory[codepoints.Count];
+                    useCategories[c] = UniversalShaping.Classify(codepoints[c]);
+                }
+                else if (KhmerShapedScripts.Contains(resolvedScripts[c]))
+                {
+                    khmerCategories ??= new KhmerCategory[codepoints.Count];
+                    khmerCategories[c] = KhmerShaping.Classify(codepoints[c]);
+                }
             }
 
             var charScripts = new string[length];
             var charJoiningForms = new ArabicJoiningForm[length];
             var charUseCategories = useCategories is not null ? new UseCategory[length] : null;
+            var charKhmerCategories = khmerCategories is not null ? new KhmerCategory[length] : null;
             for (var c = 0; c < length; c++)
             {
                 var codepointIndex = codepointIndexOfChar[c];
@@ -240,9 +264,11 @@ namespace PeachPDF.Html.Core.Dom
                 charJoiningForms[c] = joiningForms[codepointIndex];
                 if (charUseCategories is not null)
                     charUseCategories[c] = useCategories![codepointIndex];
+                if (charKhmerCategories is not null)
+                    charKhmerCategories[c] = khmerCategories![codepointIndex];
             }
 
-            return (charScripts, charJoiningForms, charUseCategories);
+            return (charScripts, charJoiningForms, charUseCategories, charKhmerCategories);
         }
 
         private static void Flatten(

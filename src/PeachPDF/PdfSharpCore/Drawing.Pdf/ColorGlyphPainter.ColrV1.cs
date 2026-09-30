@@ -1,16 +1,16 @@
 #region PeachPDF - A .NET library for rendering HTML to PDF
 //
-// COLR version 1 paint-graph interpreter for ColorGlyphPainter. Walks the
-// ColorPaint tree recursively, mapping onto the PDF backend's existing vector
-// primitives: glyph-outline clips, solid fills, axial/radial/sweep gradient
-// shadings, affine transforms, and (via Stage 6) blend-mode compositing.
-//
-// Everything is painted in world space through a Affine2x3 that composes the
-// glyph placement with the paint graph's own transforms; a "leaf" paint (solid
-// or gradient) fills the currently-clipped glyph region.
+// The PDF half of color-glyph painting. Walking a glyph's COLR v0 layers / v1 paint graph (palette
+// resolution, gradient stops and extend modes, transform composition, clip bounds, blend modes) is
+// backend-neutral and lives in PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter, shared with every other
+// backend; this file is only the target that maps what that walk describes onto the PDF backend's
+// vector primitives: glyph-outline clips, solid fills, axial/radial/sweep gradient shadings and
+// blend-mode graphics states - plus the measure pass, which accumulates ink bounds instead of drawing.
 //
 #endregion
 
+using PeachDrawing.Core;
+using PeachDrawing.Core.ColorGlyphs;
 using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
@@ -20,314 +20,210 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 {
     internal sealed partial class ColorGlyphPainter
     {
-        private const int MaxPaintDepth = 64;
+        private PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter? _shared;
 
-        private void PaintV1(ColorPaint? paint, Affine2x3 t, bool hasClip, XRect clip, int depth)
+        /// <summary>The backend-neutral walker for this painter's typeface, palette and text color.</summary>
+        private PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter Shared => _shared ??= new PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter(
+            _typeface, _scale * _typeface.Metrics.UnitsPerEm, ToPaintColor(_foreground), _pageDownwards, _paletteIndex, ToPaintOverrides(_overrides));
+
+        private static PaintColor ToPaintColor(XColor color) =>
+            PaintColor.FromArgb((int)Math.Round(color.A * 255), color.R, color.G, color.B);
+
+        private static XColor ToXColor(PaintColor color) => XColor.FromArgb(color.A, color.R, color.G, color.B);
+
+        private static Dictionary<int, PaintColor>? ToPaintOverrides(IReadOnlyDictionary<int, XColor>? overrides)
         {
-            if (paint is null || depth > MaxPaintDepth)
-                return;
+            if (overrides is not { Count: > 0 })
+                return null;
 
-            switch (paint)
+            var converted = new Dictionary<int, PaintColor>(overrides.Count);
+            foreach (var (entry, color) in overrides)
+                converted[entry] = ToPaintColor(color);
+            return converted;
+        }
+
+        private void PaintGlyph(int glyphId, double originX, double originYOffset = 0) =>
+            Shared.Paint((ushort)glyphId, Placement(originX, originYOffset), new PdfTarget(this));
+
+        /// <summary>Draws the shared walker's output into this painter's XGraphics, or - during the measure pass - only accumulates its bounds.</summary>
+        private sealed class PdfTarget(ColorGlyphPainter owner) : IColorGlyphTarget
+        {
+            // One entry per PushOutlineClip: the graphics state to restore (null in the measure pass, which pushes nothing).
+            private readonly Stack<XGraphicsState?> _clips = new();
+            private readonly Stack<XGraphicsState?> _blends = new();
+
+            public void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
             {
-                case PaintColrLayers layers:
-                    for (int i = 0; i < layers.NumLayers; i++)
-                        PaintV1(_typeface.GetColorLayerPaint(layers.FirstLayerIndex + i), t, hasClip, clip, depth + 1);
-                    break;
-
-                case PaintGlyph glyph:
+                if (owner._measuring)
                 {
-                    if (!_typeface.TryGetOutline((ushort)glyph.GlyphId, out GlyphOutline outline) || outline.IsEmpty)
-                        break;
+                    owner.IncludeInMeasuredBounds(WorldBounds(outline, transform));
+                    return;
+                }
 
-                    XRect glyphBounds = WorldBounds(outline, t);
-                    XRect newClip = hasClip ? Intersect(clip, glyphBounds) : glyphBounds;
+                owner._gfx.DrawPath(new XSolidBrush(ToXColor(color)), BuildPath(outline, transform));
+            }
 
-                    // Measuring only needs the clip rectangles the leaves below will fill - building
-                    // and pushing the real clip path would draw nothing and cost the path anyway.
-                    if (_measuring)
+            public void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+            {
+                // Measuring only needs the fill rectangles the leaves below produce - building and pushing the real clip
+                // path would draw nothing and cost the path anyway.
+                if (owner._measuring)
+                {
+                    _clips.Push(null);
+                    return;
+                }
+
+                XGraphicsPath clipPath = BuildPath(outline, transform);
+                _clips.Push(owner._gfx.Save());
+                owner._gfx.IntersectClip(clipPath);
+            }
+
+            public void PopClip()
+            {
+                if (_clips.Pop() is { } state)
+                    owner._gfx.Restore(state);
+            }
+
+            public void FillRegion(Rect region, ColorGlyphPaint paint)
+            {
+                var rect = new XRect(region.X, region.Y, region.Width, region.Height);
+
+                // Every v1 leaf fill is bounded by its enclosing glyph clip, so accumulating these rectangles bounds all
+                // of the glyph's ink - see IncludeInMeasuredBounds.
+                if (owner._measuring)
+                {
+                    owner.IncludeInMeasuredBounds(rect);
+                    return;
+                }
+
+                var path = new XGraphicsPath { FillMode = XFillMode.Winding };
+                path.AddRectangle(rect);
+                owner._gfx.DrawPath(ToBrush(paint), path);
+            }
+
+            public void PushBlendMode(PaintBlendMode mode)
+            {
+                if (owner._measuring)
+                {
+                    _blends.Push(null);
+                    return;
+                }
+
+                _blends.Push(owner._gfx.Save());
+                owner._renderer.SetBlendMode(mode.ToString());
+            }
+
+            public void PopBlendMode()
+            {
+                if (_blends.Pop() is { } state)
+                    owner._gfx.Restore(state);
+            }
+
+            private static XBrush ToBrush(ColorGlyphPaint paint)
+            {
+                switch (paint)
+                {
+                    case SolidColorGlyphPaint solid:
+                        return new XSolidBrush(ToXColor(solid.Color));
+
+                    case LinearColorGlyphPaint linear:
+                        return new XLinearGradientBrush(new XPoint(linear.Start.X, linear.Start.Y), new XPoint(linear.End.X, linear.End.Y),
+                            ToXColors(linear.Colors), [.. linear.Positions]);
+
+                    case RadialColorGlyphPaint radial:
+                        return new XRadialGradientBrush(new XPoint(radial.Center.X, radial.Center.Y), radial.Radius, radial.Radius,
+                            ToXColors(radial.Colors), [.. radial.Positions], new XPoint(radial.Focal.X, radial.Focal.Y));
+
+                    case SweepColorGlyphPaint sweep:
+                        return new XConicGradientBrush(new XPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,
+                            ToXColors(sweep.Colors), [.. sweep.AnglesRadians]);
+
+                    default:
+                        throw new NotSupportedException("Unknown color glyph paint " + paint.GetType().Name);
+                }
+            }
+
+            private static XColor[] ToXColors(IReadOnlyList<PaintColor> colors)
+            {
+                var converted = new XColor[colors.Count];
+                for (int i = 0; i < converted.Length; i++)
+                    converted[i] = ToXColor(colors[i]);
+                return converted;
+            }
+
+            private static XGraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)
+            {
+                int pointCount = outline.Contours.Count;
+                for (var ci = 0; ci < outline.Contours.Count; ci++)
+                {
+                    OutlineContour contour = outline.Contours[ci];
+                    for (var si = 0; si < contour.Segments.Count; si++)
+                        pointCount += contour.Segments[si].IsCubic ? 3 : 1;
+                }
+
+                var path = new XGraphicsPath(pointCount) { FillMode = XFillMode.Winding };
+
+                for (var ci = 0; ci < outline.Contours.Count; ci++)
+                {
+                    OutlineContour contour = outline.Contours[ci];
+                    XPoint current = Map(transform, contour.Start.X, contour.Start.Y);
+                    for (var si = 0; si < contour.Segments.Count; si++)
                     {
-                        PaintV1(glyph.Paint, t, true, newClip, depth + 1);
-                        break;
+                        OutlineSegment segment = contour.Segments[si];
+                        XPoint end = Map(transform, segment.End.X, segment.End.Y);
+                        if (segment.IsCubic)
+                        {
+                            XPoint c1 = Map(transform, segment.Control1.X, segment.Control1.Y);
+                            XPoint c2 = Map(transform, segment.Control2.X, segment.Control2.Y);
+                            path.AddBezier(current.X, current.Y, c1.X, c1.Y, c2.X, c2.Y, end.X, end.Y);
+                        }
+                        else
+                        {
+                            path.AddLine(current.X, current.Y, end.X, end.Y);
+                        }
+
+                        current = end;
                     }
 
-                    XGraphicsPath clipPath = BuildPath(outline, t);
-                    XGraphicsState state = _gfx.Save();
-                    _gfx.IntersectClip(clipPath);
-                    PaintV1(glyph.Paint, t, true, newClip, depth + 1);
-                    _gfx.Restore(state);
-                    break;
+                    path.CloseFigure();
                 }
 
-                case PaintColrGlyph colrGlyph:
-                    PaintV1(_typeface.GetColorPaint((ushort)colrGlyph.GlyphId), t, hasClip, clip, depth + 1);
-                    break;
-
-                case PaintTransform transform:
-                    PaintV1(transform.Paint, Affine2x3.Multiply(t, transform.Affine), hasClip, clip, depth + 1);
-                    break;
-
-                case PaintSolid solid:
-                    FillClip(hasClip, clip, new XSolidBrush(ResolveColor(solid.PaletteIndex, solid.Alpha)));
-                    break;
-
-                case PaintLinearGradient linear:
-                    FillClip(hasClip, clip, BuildLinearBrush(linear, t));
-                    break;
-
-                case PaintRadialGradient radial:
-                    FillClip(hasClip, clip, BuildRadialBrush(radial, t));
-                    break;
-
-                case PaintSweepGradient sweep:
-                    FillClip(hasClip, clip, BuildSweepBrush(sweep, t));
-                    break;
-
-                case PaintComposite composite:
-                    PaintComposite(composite, t, hasClip, clip, depth);
-                    break;
-            }
-        }
-
-        // Compositing: paint the backdrop, then the source on top. A separable/HSL blend mode is
-        // applied to the source via a PDF /BM ExtGState; Porter-Duff-only modes that PDF cannot
-        // express degrade to source-over (an accepted gap).
-        private void PaintComposite(PaintComposite composite, Affine2x3 t, bool hasClip, XRect clip, int depth)
-        {
-            PaintV1(composite.Backdrop, t, hasClip, clip, depth + 1);
-
-            string? blendMode = BlendModeName(composite.Mode);
-            if (blendMode is null || _measuring)
-            {
-                PaintV1(composite.Source, t, hasClip, clip, depth + 1); // source-over
-                return;
+                return path;
             }
 
-            XGraphicsState state = _gfx.Save();
-            _renderer.SetBlendMode(blendMode);
-            PaintV1(composite.Source, t, hasClip, clip, depth + 1);
-            _gfx.Restore(state);
-        }
+            private static XPoint Map(Affine2x3 t, double x, double y) => new(t.XX * x + t.XY * y + t.DX, t.YX * x + t.YY * y + t.DY);
 
-        /// <summary>
-        /// Maps a COLR CompositeMode to a PDF blend-mode name, or null for source-over (the common
-        /// SRC_OVER, and the fallback for Porter-Duff modes PDF cannot express natively).
-        /// </summary>
-        private static string? BlendModeName(int compositeMode) => compositeMode switch
-        {
-            13 => "Screen",
-            14 => "Overlay",
-            15 => "Darken",
-            16 => "Lighten",
-            17 => "ColorDodge",
-            18 => "ColorBurn",
-            19 => "HardLight",
-            20 => "SoftLight",
-            21 => "Difference",
-            22 => "Exclusion",
-            23 => "Multiply",
-            24 => "Hue",
-            25 => "Saturation",
-            26 => "Color",
-            27 => "Luminosity",
-            _ => null, // SRC_OVER and the non-expressible Porter-Duff modes -> source-over
-        };
-
-        /// <summary>Fills the active clip region with a brush (a rectangle over the clip bounds, clipped).</summary>
-        private void FillClip(bool hasClip, XRect clip, XBrush? brush)
-        {
-            if (!hasClip || brush is null || clip.Width <= 0 || clip.Height <= 0)
-                return; // a leaf paint with no enclosing glyph clip is degenerate; draw nothing.
-
-            // Every v1 leaf fill is bounded by its enclosing glyph clip, so accumulating these
-            // rectangles bounds all of the glyph's ink - see IncludeInMeasuredBounds.
-            if (_measuring)
+            private static XRect WorldBounds(GlyphOutline outline, Affine2x3 t)
             {
-                IncludeInMeasuredBounds(clip);
-                return;
-            }
+                double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
-            var rect = new XGraphicsPath { FillMode = XFillMode.Winding };
-            rect.AddRectangle(clip);
-            _gfx.DrawPath(brush, rect);
-        }
-
-        // ---- Gradient brushes (built in world space) -------------------------------------------
-
-        private XLinearGradientBrush? BuildLinearBrush(PaintLinearGradient g, Affine2x3 t)
-        {
-            if (!TryBuildStops(g.Line, out XColor[] colors, out double[] positions))
-                return null;
-
-            // p2 rotates the gradient; the common (perpendicular) case reduces to the p0->p1 axis.
-            XPoint p0 = Map(t, g.X0, g.Y0);
-            XPoint p1 = Map(t, g.X1, g.Y1);
-
-            // repeat/reflect: PDF axial shadings only pad, so tile (or mirror) the stops over a few
-            // periods and extend the gradient axis to cover them.
-            if (g.Line.Extend is ColorExtend.Repeat or ColorExtend.Reflect)
-                ExpandLinearExtend(ref p0, ref p1, ref colors, ref positions, g.Line.Extend);
-
-            return new XLinearGradientBrush(p0, p1, colors, positions);
-        }
-
-        private XRadialGradientBrush? BuildRadialBrush(PaintRadialGradient g, Affine2x3 t)
-        {
-            if (!TryBuildStops(g.Line, out XColor[] colors, out double[] positions))
-                return null;
-
-            double radiusScale = Math.Sqrt(Math.Abs(t.XX * t.YY - t.XY * t.YX));
-            XPoint outer = Map(t, g.X1, g.Y1);
-            XPoint focal = Map(t, g.X0, g.Y0);
-            double r = g.R1 * radiusScale;
-            // Radial repeat/reflect extend is not modeled (pad only) - an accepted gap.
-            return new XRadialGradientBrush(outer, r, r, colors, positions, focal);
-        }
-
-        private XConicGradientBrush? BuildSweepBrush(PaintSweepGradient g, Affine2x3 t)
-        {
-            if (!TryBuildStops(g.Line, out XColor[] colors, out double[] _))
-                return null;
-
-            double radiusScale = Math.Sqrt(Math.Abs(t.XX * t.YY - t.XY * t.YX));
-            XPoint center = Map(t, g.CenterX, g.CenterY);
-            // Give the fan a radius large enough to cover the glyph.
-            double radius = System.Math.Max(_scale * _typeface.Metrics.UnitsPerEm, radiusScale * _typeface.Metrics.UnitsPerEm);
-
-            // Map each stop's parametric offset to a sweep angle, converting the COLR convention
-            // (counter-clockwise from the +x axis) to the conic-brush convention (0 = up, clockwise),
-            // accounting for the y-down page flip.
-            var stops = SortedStops(g.Line);
-            var angles = new double[stops.Count];
-            for (int i = 0; i < stops.Count; i++)
-            {
-                double colrAngle = g.StartAngle + stops[i].Offset * (g.EndAngle - g.StartAngle);
-                angles[i] = ToConicAngle(colrAngle);
-            }
-            return new XConicGradientBrush(center, radius, colors, angles);
-        }
-
-        private double ToConicAngle(double colrRadians)
-        {
-            // COLR: ccw from +x. Conic brush: cw from +y (up). On a y-down page the visual sense of
-            // "ccw" flips, so cw_from_up = 90deg - colrAngle.
-            double deg = 90.0 - colrRadians * 180.0 / Math.PI;
-            double rad = deg * Math.PI / 180.0;
-            return _pageDownwards ? rad : -rad;
-        }
-
-        private bool TryBuildStops(ColorLine line, out XColor[] colors, out double[] positions)
-        {
-            List<ColorStop> stops = SortedStops(line);
-            if (stops.Count == 0)
-            {
-                colors = [];
-                positions = [];
-                return false;
-            }
-            if (stops.Count == 1)
-                stops.Add(stops[0] with { Offset = stops[0].Offset + 1e-4 });
-
-            colors = new XColor[stops.Count];
-            positions = new double[stops.Count];
-            for (int i = 0; i < stops.Count; i++)
-            {
-                colors[i] = ResolveColor(stops[i].PaletteIndex, stops[i].Alpha);
-                positions[i] = stops[i].Offset;
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Tiles (repeat) or mirrors (reflect) the gradient stops over a few periods either side of
-        /// the base [0,1] range and extends the gradient axis to cover them, since PDF axial shadings
-        /// can only pad. Colors/positions are rewritten in place; p0/p1 move outward.
-        /// </summary>
-        private static void ExpandLinearExtend(ref XPoint p0, ref XPoint p1, ref XColor[] colors, ref double[] positions, ColorExtend extend)
-        {
-            const int periods = 2; // each side
-            int total = 2 * periods + 1;
-
-            var samples = new List<(double T, XColor Color)>();
-            for (int p = -periods; p <= periods; p++)
-            {
-                bool mirror = extend == ColorExtend.Reflect && ((p % 2 + 2) % 2 == 1);
-                for (int j = 0; j < positions.Length; j++)
+                void Include(double x, double y)
                 {
-                    double local = mirror ? 1.0 - positions[j] : positions[j];
-                    samples.Add((p + local, colors[j]));
+                    XPoint p = Map(t, x, y);
+                    if (p.X < minX) minX = p.X;
+                    if (p.Y < minY) minY = p.Y;
+                    if (p.X > maxX) maxX = p.X;
+                    if (p.Y > maxY) maxY = p.Y;
                 }
-            }
-            samples.Sort((a, b) => a.T.CompareTo(b.T));
 
-            // Extend the axis so the new [0,1] parameter spans original t in [-periods, periods+1].
-            XPoint dir = new(p1.X - p0.X, p1.Y - p0.Y);
-            XPoint newP0 = new(p0.X - periods * dir.X, p0.Y - periods * dir.Y);
-            p1 = new XPoint(p1.X + periods * dir.X, p1.Y + periods * dir.Y);
-            p0 = newP0;
-
-            var newColors = new XColor[samples.Count];
-            var newPositions = new double[samples.Count];
-            double last = -1;
-            for (int i = 0; i < samples.Count; i++)
-            {
-                double pos = (samples[i].T + periods) / total;
-                if (pos <= last)
-                    pos = last + 1e-6; // keep strictly increasing for the stitching function
-                last = pos;
-                newColors[i] = samples[i].Color;
-                newPositions[i] = pos;
-            }
-            colors = newColors;
-            positions = newPositions;
-        }
-
-        private static List<ColorStop> SortedStops(ColorLine line)
-        {
-            var stops = new List<ColorStop>(line.Stops);
-            stops.Sort((a, b) => a.Offset.CompareTo(b.Offset));
-            return stops;
-        }
-
-        // ---- Geometry helpers ------------------------------------------------------------------
-
-        private static XRect WorldBounds(GlyphOutline outline, Affine2x3 t)
-        {
-            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-
-            void Include(double x, double y)
-            {
-                XPoint p = Map(t, x, y);
-                if (p.X < minX) minX = p.X;
-                if (p.Y < minY) minY = p.Y;
-                if (p.X > maxX) maxX = p.X;
-                if (p.Y > maxY) maxY = p.Y;
-            }
-
-            for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
-            {
-                OutlineContour contour = outline.Contours[ci1];
-                Include(contour.Start.X, contour.Start.Y);
-                for (var si2 = 0; si2 < contour.Segments.Count; si2++)
+                for (var ci = 0; ci < outline.Contours.Count; ci++)
                 {
-                    OutlineSegment s = contour.Segments[si2];
-                    Include(s.End.X, s.End.Y);
-                    if (s.IsCubic)
+                    OutlineContour contour = outline.Contours[ci];
+                    Include(contour.Start.X, contour.Start.Y);
+                    for (var si = 0; si < contour.Segments.Count; si++)
                     {
-                        Include(s.Control1.X, s.Control1.Y);
-                        Include(s.Control2.X, s.Control2.Y);
+                        OutlineSegment s = contour.Segments[si];
+                        Include(s.End.X, s.End.Y);
+                        if (s.IsCubic)
+                        {
+                            Include(s.Control1.X, s.Control1.Y);
+                            Include(s.Control2.X, s.Control2.Y);
+                        }
                     }
                 }
+
+                return maxX < minX || maxY < minY ? new XRect(0, 0, 0, 0) : new XRect(minX, minY, maxX - minX, maxY - minY);
             }
-
-            if (maxX < minX || maxY < minY)
-                return new XRect(0, 0, 0, 0);
-            return new XRect(minX, minY, maxX - minX, maxY - minY);
-        }
-
-        private static XRect Intersect(XRect a, XRect b)
-        {
-            a.Intersect(b);
-            return a;
         }
     }
 }

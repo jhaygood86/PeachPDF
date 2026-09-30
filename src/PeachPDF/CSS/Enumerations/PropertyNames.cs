@@ -344,6 +344,7 @@
         public static readonly string BasePalette = "base-palette";
         public static readonly string OverrideColors = "override-colors";
         public static readonly string ObjectFit = "object-fit";
+        public static readonly string ImageRendering = "image-rendering";
         public static readonly string ObjectPosition = "object-position";
         public static readonly string Size = "size";
 

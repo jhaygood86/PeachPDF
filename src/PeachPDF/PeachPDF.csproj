@@ -54,6 +54,8 @@
 		<PackageReference Include="PeachImage" Version="0.4.6" />
 	</ItemGroup>
 	<ItemGroup>
+		<ProjectReference Include="..\PeachDrawing\PeachDrawing.csproj" />
+		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
 	</ItemGroup>
 	<ItemGroup>
