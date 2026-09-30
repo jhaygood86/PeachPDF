@@ -7,8 +7,9 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// An absolutely positioned box across page boundaries: drawn on the page its offsets place it on even
-    /// when that page is already emitted, laid out in one piece so its own break cannot end the pass, and
-    /// never displacing the in-flow content after it (CSS 2.1 §9.3.1).
+    /// when that page is already emitted, broken between its lines as its own run of fragmentainer passes so
+    /// that its break cannot end the pass of the block around it, and never displacing the in-flow content
+    /// after it (CSS 2.1 §9.3.1).
     /// </summary>
     /// <remarks>
     /// The fixtures use a 300pt-wide, 200pt page with 20pt margins, so page <c>k</c>'s band is
@@ -19,8 +20,8 @@ namespace PeachPDF.Tests.Integration
         private const double PageHeight = 200;
         private const double Margin = 20;
 
-        // The absolutely positioned box itself is laid out unbroken: every one of its lines is placed, on
-        // the page its slice falls in, rather than the lines after its first page boundary being lost.
+        // The absolutely positioned box itself breaks between its lines, as a browser prints it: every one of its
+        // lines is placed once, inside a page band, and a page that runs out of room continues on the next.
         [Fact]
         public async Task TallAbsoluteBox_PlacesEveryOneOfItsOwnLines()
         {
@@ -31,6 +32,19 @@ namespace PeachPDF.Tests.Integration
                 string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>Q{i}</p>")), "W", pageWidth: 300);
 
             Assert.Equal(Enumerable.Range(1, 37).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
+        }
+
+        // A box taller than the page, on a document with almost nothing else, adds the pages it needs and breaks
+        // between lines: no line is cut by a page edge and the lines fall 12, 13, 13 and 2 to a page, which is
+        // what a browser prints for the same document (13 lines fit a 160pt band; the box starts 5pt down page 1).
+        [Fact]
+        public async Task TallAbsoluteBox_AddsPagesAndBreaksBetweenItsLines()
+        {
+            var placed = await WordFragments(
+                $"<p>Flow</p><div style='position:absolute;top:5pt;right:0;width:100pt'>{Lines("W", 40)}</div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 40);
+            Assert.Equal([12, 13, 13, 2], placed.GroupBy(w => w.Page).OrderBy(g => g.Key).Select(g => g.Count()));
         }
 
         // An absolutely positioned box placed on an emitted page re-opens every page its content reaches, not
@@ -44,8 +58,9 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Enumerable.Range(1, 25).Select(i => $"W{i}"), placed.Select(w => w.Text).Distinct().Order(WordNumber.Instance));
         }
 
-        // An absolutely positioned box that is or holds a multi-column container keeps the breaking path too.
-        // Laid out unbroken, its columns lost the fragmentainer and W18–W20 with it.
+        // An absolutely positioned box that is or holds a multi-column container runs its columns inside its own
+        // passes like any other box: every word is drawn once, inside a page band, and none is lost to the column
+        // break (the last lines of 20 paragraphs in two columns were once).
         [Theory]
         [InlineData("<p>X1</p><div style='position:absolute;top:120pt;width:200pt;columns:2'>{0}</div>")]
         [InlineData("<p>X1</p><div style='position:absolute;top:120pt;width:200pt'><div style='columns:2'>{0}</div></div>")]
@@ -58,13 +73,9 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 20);
         }
 
-        // Such a box keeps the breaking path, so a break inside it ends the pass, and the next pass resumes
-        // inside it on page 2. The content after it, placed at its parent's top on page 1, landed on the page
-        // that pass had already emitted and was lost; re-opening that page drew a short block but sliced a long
-        // one across the margin and lost a following multi-column block's first page. As on main, the
-        // parent's absolutely positioned first child is treated as preceding the content after it, which is
-        // laid out below it and paginated normally, including when that first child is a plain absolute box
-        // and the multi-column one follows it.
+        // The content after such a box, which it does not displace (CSS 2.1 §9.3.1), starts at its parent's top and
+        // is paginated normally: the box's break does not end the pass that places it, so nothing after the box is
+        // put back on a page that pass has left, whether the box is the block's first child or comes later.
         [Theory]
         [InlineData("<p>B1</p><div>{0}<p>W9</p></div>", 9)]
         [InlineData("<p>B1</p><div>{0}<p>W9</p><p>W10</p><p>W11</p><p>W12</p><p>W13</p><p>W14</p><p>W15</p><p>W16</p><p>W17</p><p>W18</p></div>", 18)]
@@ -81,15 +92,13 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, count);
         }
 
-        // A plain absolute box as the first child, then the multi-column one: main returned the plain first
-        // child as the previous sibling, and the content after both was laid out below it. Checking only
-        // whether the first child held columns lost that content and the paragraph after the block again.
+        // A plain absolute box as the first child, then the multi-column one: neither displaces the content after
+        // them, and none of it is lost.
         [Fact]
         public async Task ContentAfterAPlainThenAMultiColumnAbsoluteBox_IsDrawnInsideAPageBand()
         {
-            // Through the PdfGenerator pipeline with an @page rule, as the review measured it. The content goes
-            // below the plain first child, so X1 reaches page 2 for it to be drawn there, as on main. The @page
-            // rule sets the 300×200pt page the band constants describe; the config's size is only its default.
+            // Through the PdfGenerator pipeline with an @page rule. The @page rule sets the 300×200pt page the band
+            // constants describe; the config's size is only its default.
             var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><head><style>@page{size:300pt 200pt;margin:20pt} " +
                 "body{margin:0;font:10pt/12pt Arial} p{margin:0}</style></head><body>" +
@@ -144,8 +153,8 @@ namespace PeachPDF.Tests.Integration
 
         // In-flow content after a tall absolutely positioned box, first in its block or after other content.
         // The box's break used to end the pass, and the paragraphs after it, which it does not displace (CSS
-        // 2.1 §9.3.1), were placed back on the page the break left and drawn on no page. Laid out unbroken,
-        // the box is sliced across the pages and every paragraph is drawn once, inside a page band.
+        // 2.1 §9.3.1), were placed back on the page the break left and drawn on no page. The box now breaks in
+        // passes of its own, and every paragraph is drawn once, inside a page band.
         [Theory]
         [InlineData("")]
         [InlineData("<p>P0</p>")]

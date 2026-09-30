@@ -126,35 +126,20 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Null(DomUtils.GetPreviousSibling(b));
         }
 
-        // With an absolute multi-column box before it, the box keeps main's placement: an absolutely positioned
-        // first child is returned, whether it is the multi-column box or a plain one. A hidden first child is
-        // not, as on main.
+        // Every absolutely positioned box is out of flow, whether or not it holds columns, is floated or comes
+        // after another one: none of them places the box after it, however many precede it.
         [Theory]
-        [InlineData("<div id='a' style='position:absolute;columns:2'>X</div>", "a")]
-        [InlineData("<div id='a' style='position:absolute'>P</div><div style='position:absolute;columns:2'>X</div>", "a")]
-        [InlineData("<div id='h' style='position:absolute;display:none'>H</div><div id='m' style='position:absolute;columns:2'>X</div>", null)]
-        [InlineData("<div style='position:absolute'>P</div>", null)]
-        // main's end check left out a page-floated first child, and a floated one only when floats were not
-        // asked for (the default asks for them); so does this.
-        [InlineData("<div id='f' style='position:absolute;float:left'>F</div><div style='position:absolute;columns:2'>X</div>", "f")]
-        [InlineData("<div id='f' style='position:absolute;float:top'>F</div><div style='position:absolute;columns:2'>X</div>", null)]
-        public async Task GetPreviousSibling_AfterAnAbsoluteMultiColumnBox_KeepsMainsFirstChild(string before, string? expected)
+        [InlineData("<div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute'>P</div><div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute;display:none'>H</div><div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute;float:left'>F</div><div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute;float:top'>F</div><div style='position:absolute;columns:2'>X</div>")]
+        public async Task GetPreviousSibling_AfterOnlyAbsoluteBoxes_ReturnsNull(string before)
         {
             var root = await Render($"<div>{before}<p id='b'>B</p></div>");
             var b = DomUtils.GetBoxById(root, "b")!;
 
-            Assert.Equal(expected, DomUtils.GetPreviousSibling(b)?.HtmlTag!.TryGetAttribute("id"));
-        }
-
-        // Asked without floats, as layout's in-flow placement asks, main's end check left out a floated absolute
-        // first child, so the box after it was placed at its parent's top. So does this.
-        [Fact]
-        public async Task GetPreviousSibling_WithoutFloats_AfterAnAbsoluteMultiColumnBox_LeavesOutAFloatedFirstChild()
-        {
-            var root = await Render(
-                "<div><div id='f' style='position:absolute;float:left'>F</div><div style='position:absolute;columns:2'>X</div><p id='b'>B</p></div>");
-            var b = DomUtils.GetBoxById(root, "b")!;
-
+            Assert.Null(DomUtils.GetPreviousSibling(b));
             Assert.Null(DomUtils.GetPreviousSibling(b, includeFloats: false));
         }
 

@@ -8,7 +8,7 @@ An absolutely positioned box is placed apart from that order: by its offsets, wi
 it starting where it would without it (CSS 2.1 §9.3.1). A float is placed apart from it too, beside the
 content that follows it.
 
-If a break is taken *inside* such a box:
+If a break is taken *inside* such a box in the enclosing pass:
 - the pass ends there;
 - the next pass resumes inside the box on the following page;
 - meanwhile the in-flow content after it in tree order is placed back beside or above it, on the page the
@@ -16,30 +16,32 @@ If a break is taken *inside* such a box:
 - that page is already emitted, so the content is drawn on no page.
 
 Measured symptom, on a 300×200pt page with 12pt lines: all ten paragraphs after a 30-line absolutely
-positioned box were lost (#1349's review). A block-level float has the same shape: a block beside a 30-line
-float drew only its last four lines (#1339, still open at the time of writing).
+positioned box were lost (#1349's review). A block beside a 30-line float drew only its last four lines
+(#1339).
 
-So such a box is laid out unbroken, with the fragmentainer detached and word page breaks suppressed:
-- an absolutely positioned block child, by `CssBox.LayoutBlockChildUnbroken` from the block frame;
-- a float among inline content, by `CssLayoutEngine.LayoutContentUnbroken` from the inline flow.
+So such a box runs as **its own fragmentainer passes**, not as part of its parent's. `CssBox.LayoutBlockChild`
+gives a block-level float and an absolutely positioned block child an independent fragmentainer for each
+page the box reaches, resumed by the box's own break token, so its break never ends the pass of the block
+around it. The box breaks between its lines and adds the pages it needs, as a browser prints it.
 
-A block-level float placed by the block frame still takes the breaking path, and still has #1339's loss.
+- A float starts in the slot being filled.
+- An absolutely positioned box starts in the slot its offsets put its top in
+  (`CssBox.AbsoluteTopBeforePlacement`), which is usually an earlier one than the pass reaching it in tree
+  order, and one the emitter has already frozen. `HtmlContainerInt.InvalidateEmittedFragmentainersReceiving`
+  re-opens the pages the box reaches, content included, once its position and height are final. Without it
+  the box is drawn on no page.
+- `position: fixed` is not affected: the emitter places a fixed box on every page itself.
 
-It then shows one slice per page.
+A float among inline content is still laid out unbroken, by `CssLayoutEngine.LayoutContentUnbroken`, and a
+box inside a multi-column container (a fragmentainer with its own band) keeps the breaking path, as it always
+did.
 
-A new path that lays an absolutely positioned box, a float, or anything else out of tree-order position must
-do the same, or keep a scroll container around it monolithic.
+**The trap this replaced.** An earlier version of this fix laid an absolutely positioned box out in one
+piece, with the fragmentainer detached and word breaks suppressed, and let each page show the slice of it
+that fell there. It kept the in-flow content, but a line straddling a page edge was cut, nothing inside was
+relocated by §4.3, and words past the last page were lost. On 592 generated documents with absolutely
+positioned boxes and no positioned ancestor it left 57 of the 313 documents that `main` rendered completely
+losing words, against 21 with passes of its own, and lost 1,542 words in all against 1,036.
 
-**The standing exception.** A box that is or holds a multi-column container keeps the breaking path, because
-its columns engine needs the attached fragmentainer (`CssBox.IsOrHoldsAMultiColumnContainer`). A review found
-an absolutely positioned `columns: 2` box missed, and it lost its last lines. Such a box's break still ends
-the pass, and the content after it cannot simply be put at its §9.3.1 position, because that page is already
-emitted:
-- re-opening the page draws a short block, but no pass paginates content laid out behind it;
-- so a long following block was sliced across the page margin;
-- and a following multi-column block lost its first page.
-
-`DomUtils.GetPreviousSibling` therefore keeps `main`'s placement for this one case, and the content after
-such a box goes below it. See #1377 and
-[the accepted gap](../accepted-gaps/content-after-an-absolute-multi-column-box-is-placed-below-it.md), which
-records the three attempts that failed.
+A new path that lays an absolutely positioned box, a float, or anything else out of its tree-order position
+must do the same, or keep a scroll container around it monolithic.

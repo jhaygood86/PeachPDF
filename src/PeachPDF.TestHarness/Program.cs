@@ -2596,7 +2596,7 @@ await SaveShowcaseAsync("cards_at_the_page_foot", "Paged Media", "Cards At The P
 // ─── Absolutely positioned boxes across page breaks ─────────────────────────
 // An absolute box is drawn on the page its offsets place it on, even when layout has already moved past
 // that page, and it never displaces the in-flow content after it (CSS 2.1 §9.3.1). A tall one is laid out
-// in one piece and each page shows its slice, so its own break can no longer lose the paragraphs after it.
+// as passes of its own that break between its lines and add the pages it needs, so its break can no longer lose the paragraphs after it.
 var absoluteParagraphs = string.Concat(Enumerable.Range(1, 14).Select(i =>
     $"<p>Paragraph {i}. The text after an absolutely positioned box starts where it would without it, and "
     + "flows on across the page boundary like any other text, with nothing lost at the break.</p>"));
@@ -2642,7 +2642,7 @@ var absoluteBoxesAcrossPagesHtml = $$"""
     <body>
     <h1>Absolute boxes across pages</h1>
     <p>The blue sidebar below is absolutely positioned inside a relative section, and taller than a page.
-    It is laid out in one piece, and each page shows the part of it that falls there. The paragraphs after
+    It breaks between its lines and continues on the pages after the first. The paragraphs after
     it are not moved by it, and none of them is lost at the page boundary.</p>
     <div class="section">
     <p>Section introduction.</p>
@@ -2659,7 +2659,7 @@ var absoluteBoxesAcrossPagesHtml = $$"""
     """;
 
 await SaveShowcaseAsync("absolute_boxes_across_pages", "Paged Media", "Absolute Boxes Across Pages",
-    "An absolutely positioned sidebar taller than a page laid out in one piece and shown a slice per page while the paragraphs after it flow on undisturbed, and a DRAFT stamp declared at the end of the document drawn at the top of the first page.",
+    "An absolutely positioned sidebar taller than a page breaking between its lines across pages while the paragraphs after it flow on undisturbed, and a DRAFT stamp declared at the end of the document drawn at the top of the first page.",
     absoluteBoxesAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
