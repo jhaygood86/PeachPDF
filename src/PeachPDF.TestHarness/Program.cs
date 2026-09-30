@@ -2525,6 +2525,38 @@ await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll
     "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
     scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Cards that start just above the page foot ─────────────────────────────
+
+// A card is an auto-height overflow: hidden or auto panel whose first child, usually a title, has a top margin.
+// When the card starts within that margin of the page foot its first page holds nothing, and the whole card was
+// once drawn on no page at all: the emitter concluded from the empty first page that nothing more was left to
+// draw. Each section starts a new page and puts the card a few points above the foot: an overflow: hidden card with
+// a 30pt title margin, and an overflow: auto card with a 20pt one.
+static string CardLines(int count) =>
+    string.Concat(Enumerable.Range(1, count).Select(i => $"<p>Card line {i}</p>"));
+
+var cardsAtFootHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 200pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/12pt sans-serif }" +
+    "section { break-before: page }" +
+    "section:first-of-type { break-before: auto }" +
+    "p { margin: 0 0 4pt }" +
+    ".card { background: #eaf3ea; border-left: 3pt solid #4a8f4a; padding-left: 6pt }" +
+    ".card h2 { font-size: 11pt }" +
+    ".note { font-size: 8pt; color: #666 }" +
+    "</style></head><body>" +
+    "<section><div class='note' style='height:146pt'>An overflow: hidden card whose title has a 30pt top margin, starting 14pt above the foot.</div>" +
+    "<div class='card' style='overflow:hidden'><h2 style='margin:30pt 0 4pt'>Card title</h2>" + CardLines(20) + "</div><p>After the card.</p></section>" +
+    "<section><div class='note' style='height:152pt'>An overflow: auto card whose title has a 20pt top margin, starting 8pt above the foot.</div>" +
+    "<div class='card' style='overflow:auto'><h2 style='margin:20pt 0 4pt'>Card title</h2>" + CardLines(20) + "</div><p>After the card.</p></section>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("cards_at_the_page_foot", "Paged Media", "Cards At The Page Foot",
+    "An auto-height overflow: hidden or auto card whose title has a top margin, starting just above the page foot, " +
+    "is drawn whole on the following pages instead of vanishing.",
+    cardsAtFootHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)

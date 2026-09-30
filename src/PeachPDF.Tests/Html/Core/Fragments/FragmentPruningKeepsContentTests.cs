@@ -63,7 +63,36 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 "<div style='padding:5pt;display:flow-root'><div style='display:flex'><div style='flex:1'><div style='padding:12pt;border:1pt solid #888'>w50557_524 w50557_525 w50557_526<div>w50557_535 w50557_536 w50557_537 w50557_538 w50557_539 w50557_540</div><p>w50557_541 w50557_542 w50557_543 w50557_544</p></div></div>w50557_626 w50557_627</div></div>");
         }
 
+        // A plain inline box has no geometry of its own to judge by (see SettledBottomOf), and a box inside
+        // columns and a capped scroll container is judged against slots the pass has not reached. This is the
+        // smallest document found in which removing that judgement lost words. It is a fuzz reduction and still
+        // loses 11 of its 136 words to other causes, so it asserts the 68 words that this pruning alone dropped.
+        [Fact]
+        public async Task FloatBesideColumnsOfCappedBoxes_KeepsTheWordsPruningDropped()
+        {
+            static string Words(int from, int to) => string.Join(' ', Enumerable.Range(from, to - from + 1).Select(i => $"w723_{i}"));
+
+            var dropped = ("132 133 134 136 137 138 139 140 141 142 143 144 146 147 148 149 150 151 152 153 154 155 157 158 159 160 161 162 163 164 " +
+                           "165 166 168 169 172 173 174 175 176 177 178 180 181 182 183 184 185 186 187 188 189 191 192 193 194 195 196 197 198 199 " +
+                           "200 201 202 203 204 205 206 207").Split(' ').Select(i => $"w723_{i}");
+
+            await AssertWordsArePlaced(170,
+                "<style>p{margin:0 0 4pt} td{vertical-align:top}</style>" +
+                "<div style='float:right;width:94pt;margin:3pt'><div><div style='overflow:scroll'><div style='display:grid;grid-template-columns:1fr 1fr'>" +
+                $"<div><div style='height:29pt'>w723_33</div></div><div><p>{Words(34, 44)}</p></div><div><p>{Words(45, 53)}</p></div></div></div></div></div>" +
+                "<div style='columns:3;column-gap:8pt'><div style='overflow:auto;height:51pt;max-height:260pt;padding:5pt'><div>" +
+                $"<div style='break-inside:avoid'><p>{Words(93, 131)}</p><p>{Words(132, 143)}</p></div>" +
+                $"<div style='overflow:hidden;padding:5pt'><table><tr><td><p>{Words(144, 169)}</p></td><td>{Words(170, 171)}</td></tr></table>" +
+                $"<p>{Words(172, 176)}</p><p>{Words(177, 206)}</p></div></div><div style='height:37pt'>w723_207</div></div></div>",
+                dropped);
+        }
+
         private static async Task AssertEveryWordIsPlaced(double pageHeight, string body)
+        {
+            await AssertWordsArePlaced(pageHeight, body, Regex.Matches(body, @"w\d+_\d+").Select(m => m.Value).Distinct());
+        }
+
+        private static async Task AssertWordsArePlaced(double pageHeight, string body, IEnumerable<string> expected)
         {
             var html = "<!DOCTYPE html><html><head></head>" +
                        $"<body style='margin:0;font-family:\"{Font}\";font-size:10pt;line-height:12pt'>{body}</body></html>";
@@ -76,7 +105,7 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 .Select(w => w.Word.Text)
                 .ToHashSet();
 
-            Assert.All(Regex.Matches(body, @"w\d+_\d+").Select(m => m.Value).Distinct(), word => Assert.Contains(word, placed));
+            Assert.All(expected, word => Assert.Contains(word, placed));
         }
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
