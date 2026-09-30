@@ -1973,6 +1973,42 @@ await SaveShowcaseAsync("tall_floats_across_pages", "Layout", "Floats Taller Tha
     "the float starts below its last line, and a tall float inside a break-inside: avoid box keeps its content.",
     tallFloatHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Panels whose top edge crosses the page foot ───────────────────────────
+
+// A block whose top border or padding reaches past the foot of a page moves whole to the next page, with its
+// first child inside it. Before this, the child was placed on the next page but its first line was drawn at that
+// page's top, above the child's own box: a heading's highlight was lost, a border bar was drawn into the page
+// margin, and text sat above the paragraph it belonged to. Each section starts a new page, and the panel starts a
+// few points above that page's foot: a bordered panel with a highlighted heading, a padded panel whose first
+// child has no margin of its own, and a padded wrapper inside a padded panel.
+const string panelFootIntro = "font-size:8pt;color:#666";
+
+var panelAtFootHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 220pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/14pt sans-serif }" +
+    "section { break-before: page }" +
+    "section:first-of-type { break-before: auto }" +
+    "p { margin: 0 0 4pt }" +
+    ".hl { background: #ffe9a8 }" +
+    ".panel-border { border-top: 5pt solid #7a8794 }" +
+    ".panel-border h2 { margin: 20pt 0 4pt; font-size: 12pt }" +
+    ".panel-padded { padding-top: 20pt; background: #eef4fb }" +
+    ".panel-nested { padding-top: 5pt; background: #eef4fb }" +
+    "</style></head><body>" +
+    "<section><div style='height:176pt;" + panelFootIntro + "'>A panel with a top border and a highlighted heading, starting 4pt above the foot.</div>" +
+    "<div class='panel-border'><h2 class='hl'>Heading inside the panel</h2><p>The panel moved to this page whole, so its border bar, the heading's highlight and the heading's text all sit together.</p></div></section>" +
+    "<section><div style='height:162pt;" + panelFootIntro + "'>A panel with 20pt of top padding and a first child that has no margin, starting 18pt above the foot.</div>" +
+    "<div class='panel-padded'><p class='hl'>The first paragraph starts inside its own highlight, not above it.</p><p>The second paragraph follows.</p></div></section>" +
+    "<section><div style='height:170pt;" + panelFootIntro + "'>A padded wrapper inside a padded panel, starting 10pt above the foot.</div>" +
+    "<div class='panel-nested'><div style='padding-top:3pt'><p class='hl'>Text in the inner wrapper, inside its highlight.</p></div></div></section>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("panels_at_the_page_foot", "Paged Media", "Panels At The Page Foot",
+    "A panel whose top border or padding crosses the page foot moves whole to the next page, and its first child's " +
+    "text starts inside the child's own box instead of above it.",
+    panelAtFootHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Paged Media showcase — margin-box image alignment ─────────────────
 
 // A margin box's image content follows the box's alignment exactly as text does (CSS Paged
