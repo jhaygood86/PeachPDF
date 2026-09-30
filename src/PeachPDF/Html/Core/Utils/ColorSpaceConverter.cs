@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using System;
 
@@ -15,8 +15,8 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class ColorSpaceConverter
     {
-        public static RColor Interpolate(
-            RColor c1, RColor c2, double t,
+        public static PaintColor Interpolate(
+            PaintColor c1, PaintColor c2, double t,
             GradientColorSpace cs,
             HueInterpolationMethod hue)
         {
@@ -38,7 +38,7 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             var (r, g, b) = ColorSpaceMath.FromSpace(v, space);
-            return RColor.FromArgb(a,
+            return PaintColor.FromArgb(a,
                 (int)Math.Round(r * 255),
                 (int)Math.Round(g * 255),
                 (int)Math.Round(b * 255));

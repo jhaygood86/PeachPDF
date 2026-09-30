@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.Internal.Hinting;
 using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
@@ -55,15 +56,110 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// Describes <paramref name="fontface"/>: a font face's metrics, glyph mapping and shaping entry points, in
         /// design units (nothing here depends on a font size).
         /// </summary>
-        public OpenTypeDescriptor(string fontDescriptorKey, string name, OpenTypeFontface fontface)
+        public OpenTypeDescriptor(string fontDescriptorKey, string name, OpenTypeFontface fontface, Variations.VariationCoordinates? variation = null)
             : base(fontDescriptorKey)
         {
             FontFace = fontface;
             FontName = name;
+            Variation = variation is { IsDefault: false } ? variation : null;
             Initialize();
         }
 
         internal OpenTypeFontface FontFace;
+
+        /// <summary>
+        /// Grid-fits this face's glyphs: what it takes to run the font's TrueType instructions or apply its CFF hints at a size, with the tables read once
+        /// and what each size's programs leave behind cached. One per descriptor, so one per typeface.
+        /// </summary>
+        internal HintingEngine Hinting =>
+            _hinting ?? System.Threading.Interlocked.CompareExchange(ref _hinting,
+                new HintingEngine(FontFace, FontFace.name?.Name, Variation, GlyphIndexToWidth), null) ?? _hinting!;
+
+        private HintingEngine? _hinting;
+
+        /// <summary>Where in the design space of a variable font this descriptor reads, or <see langword="null"/> at the defaults (and for every font that is not variable).</summary>
+        internal Variations.VariationCoordinates? Variation { get; }
+
+        /// <summary>
+        /// A positioning value at this descriptor's location: the value's own numbers plus the deltas of its <c>VariationIndex</c> device
+        /// tables, rounded half up. The value itself when this is not an instance of a variable font.
+        /// </summary>
+        internal GposValueRecord Vary(GposValueRecord value)
+        {
+            if (value.Variation is not { } variation || Variation is null || FontFace.gdef?.Table?.VariationStore is not { } store)
+                return value;
+
+            return new GposValueRecord(
+                Clamp(value.XPlacement, variation.XPlacement, store),
+                Clamp(value.YPlacement, variation.YPlacement, store),
+                Clamp(value.XAdvance, variation.XAdvance, store),
+                Clamp(value.YAdvance, variation.YAdvance, store));
+        }
+
+        /// <summary>An anchor at this descriptor's location, as <see cref="Vary(GposValueRecord)"/> does for a value.</summary>
+        internal GposAnchor Vary(GposAnchor anchor)
+        {
+            if ((anchor.XDelta is null && anchor.YDelta is null) || Variation is null || FontFace.gdef?.Table?.VariationStore is not { } store)
+                return anchor;
+
+            return new GposAnchor(Clamp(anchor.X, anchor.XDelta, store), Clamp(anchor.Y, anchor.YDelta, store));
+        }
+
+        private short Clamp(short value, DeltaRef? delta, Variations.ItemVariationStore store)
+        {
+            if (delta is not { } d)
+                return value;
+
+            int varied = value + Variations.FontVariations.Round(store.GetDelta(d.Outer, d.Inner, Variation!.Normalized));
+            return (short)System.Math.Clamp(varied, short.MinValue, short.MaxValue);
+        }
+
+        private sealed record FontBoxValue(int XMin, int YMin, int XMax, int YMax);
+
+        // Published whole (an immutable object through a volatile write), so a thread never sees half of a box. Two threads that ask at once may
+        // both work it out; they get the same answer.
+        private FontBoxValue? _fontBox;
+
+        /// <summary>
+        /// The box that holds every glyph: <c>head</c>'s, or at a location of a variable font the box of the glyphs as they are drawn there
+        /// (<see cref="Variations.InstanceFontBox"/>), which is worked out the first time it is asked for since it reads every glyph.
+        /// </summary>
+        private FontBoxValue FontBox
+        {
+            get
+            {
+                if (System.Threading.Volatile.Read(ref _fontBox) is { } known)
+                    return known;
+
+                var head = FontFace.head;
+                var box = new FontBoxValue(head.xMin, head.yMin, head.xMax, head.yMax);
+                if (Variation is not null && Variations.InstanceFontBox.TryCompute(FontFace, Variation, out var computed))
+                    box = new FontBoxValue(computed.XMin, computed.YMin, computed.XMax, computed.YMax);
+
+                System.Threading.Volatile.Write(ref _fontBox, box);
+                return box;
+            }
+        }
+        /// <inheritdoc/>
+        public override int XMin => FontBox.XMin;
+
+        /// <inheritdoc/>
+        public override int YMin => FontBox.YMin;
+
+        /// <inheritdoc/>
+        public override int XMax => FontBox.XMax;
+
+        /// <inheritdoc/>
+        public override int YMax => FontBox.YMax;
+
+        /// <summary>How much the font-wide metric with the MVAR value tag <paramref name="tag"/> differs from the default at this descriptor's location.</summary>
+        private int Adjust(string tag, int value)
+        {
+            if (Variation is null || FontFace.Variations?.Mvar is not { } mvar)
+                return value;
+
+            return value + Variations.FontVariations.Round(mvar.GetDelta(tag, Variation.Normalized));
+        }
 
         void Initialize()
         {
@@ -73,15 +169,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             //fontName = image.n
             ItalicAngle = FontFace.post.italicAngle;
 
-            XMin = FontFace.head.xMin;
-            YMin = FontFace.head.yMin;
-            XMax = FontFace.head.xMax;
-            YMax = FontFace.head.yMax;
-
-            UnderlinePosition = FontFace.post.underlinePosition;
-            UnderlineThickness = FontFace.post.underlineThickness;
-            StrikeoutPosition = FontFace.os2.yStrikeoutPosition;
-            StrikeoutSize = FontFace.os2.yStrikeoutSize;
+            UnderlinePosition = Adjust("undo", FontFace.post.underlinePosition);
+            UnderlineThickness = Adjust("unds", FontFace.post.underlineThickness);
+            StrikeoutPosition = Adjust("stro", FontFace.os2.yStrikeoutPosition);
+            StrikeoutSize = Adjust("strs", FontFace.os2.yStrikeoutSize);
 
             // No documetation found how to get the set vertical stems width from the
             // TrueType tables.
@@ -107,9 +198,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             {
                 // Comment from WPF: The font specifies that the sTypoAscender, sTypoDescender, and sTypoLineGap fields are valid and
                 // should be used instead of winAscent and winDescent.
-                int typoAscender = FontFace.os2.sTypoAscender;
-                int typoDescender = FontFace.os2.sTypoDescender;
-                int typoLineGap = FontFace.os2.sTypoLineGap;
+                int typoAscender = Adjust("hasc", FontFace.os2.sTypoAscender);
+                int typoDescender = Adjust("hdsc", FontFace.os2.sTypoDescender);
+                int typoLineGap = Adjust("hlgp", FontFace.os2.sTypoLineGap);
 
                 // Comment from WPF: We include the line gap in the ascent so that white space is distributed above the line. (Note that
                 // the typo line gap is a different concept than "external leading".)
@@ -129,13 +220,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             else
             {
                 // Comment from WPF: get the ascender field
-                int ascender = FontFace.hhea.ascender;
+                int ascender = Adjust("hasc", FontFace.hhea.ascender);
                 // Comment from WPF: get the descender field; this is measured in the same direction as ascender and is therefore
                 // normally negative whereas we want a positive value; however some fonts get the sign wrong
                 // so instead of just negating we take the absolute value.
-                int descender = Math.Abs(FontFace.hhea.descender);
+                int descender = Math.Abs(Adjust("hdsc", FontFace.hhea.descender));
                 // Comment from WPF: get the lineGap field and make sure it's >= 0
-                int lineGap = Math.Max((short)0, FontFace.hhea.lineGap);
+                int lineGap = Math.Max(0, Adjust("hlgp", FontFace.hhea.lineGap));
 
                 // `line-height: normal`: browsers resolve this from the raw hhea triple - never the OS/2
                 // win-metrics substitution the block below applies to Ascender/Descender/LineSpacing (that
@@ -152,8 +243,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     // these fields wrong or get them right only for Latin text; therefore we use the more reliable
                     // platform-specific Windows values. We take the absolute value of the win32descent in case some
                     // fonts get the sign wrong.
-                    int winAscent = FontFace.os2.usWinAscent;
-                    int winDescent = Math.Abs(FontFace.os2.usWinDescent);
+                    int winAscent = Adjust("hcla", FontFace.os2.usWinAscent);
+                    int winDescent = Math.Abs(Adjust("hcld", FontFace.os2.usWinDescent));
 
                     Ascender = winAscent;
                     Descender = winDescent;
@@ -183,13 +274,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             // sCapHeight and sxHeight are only valid if Version >= 2
             if (FontFace.os2.version >= 2 && FontFace.os2.sCapHeight != 0)
-                CapHeight = FontFace.os2.sCapHeight;
+                CapHeight = Adjust("cpht", FontFace.os2.sCapHeight);
             else
                 CapHeight = Ascender;
 
             if (FontFace.os2.version >= 2 && FontFace.os2.sxHeight != 0)
             {
-                XHeight = FontFace.os2.sxHeight;
+                XHeight = Adjust("xhgt", FontFace.os2.sxHeight);
                 HasAuthenticXHeight = true;
             }
             else
@@ -483,8 +574,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             if (FontFace.os2 is not { } os2 || UnitsPerEm <= 0) return null;
 
-            var ySize = superscript ? os2.ySuperscriptYSize : os2.ySubscriptYSize;
-            var yOffset = superscript ? os2.ySuperscriptYOffset : os2.ySubscriptYOffset;
+            var ySize = superscript ? Adjust("spys", os2.ySuperscriptYSize) : Adjust("sbys", os2.ySubscriptYSize);
+            var yOffset = superscript ? Adjust("spyo", os2.ySuperscriptYOffset) : Adjust("sbyo", os2.ySubscriptYOffset);
 
             if (ySize <= 0 || yOffset == 0) return null;
 
@@ -547,6 +638,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return FontFace.bitmap?.TryGet(glyphId, ppem, out glyph) ?? false;
         }
 
+        /// <summary>The <c>GSUB</c> table at this descriptor's location: the table itself, or a view of it whose features follow the <c>FeatureVariations</c> that apply there.</summary>
+        internal GsubTable? SubstitutionTable => Variation is null ? FontFace.gsub?.Table : FontFace.gsub?.Table?.AtLocation(Variation);
+
+        /// <summary>The <c>GPOS</c> table at this descriptor's location, as <see cref="SubstitutionTable"/> is for <c>GSUB</c>.</summary>
+        internal GposTable? PositioningTable => Variation is null ? FontFace.gpos?.Table : FontFace.gpos?.Table?.AtLocation(Variation);
+
+        /// <summary>True when this font carries SVG documents that draw glyphs (the <c>SVG </c> table).</summary>
+        public bool HasSvgGlyphs => FontFace.svg != null;
+
+        /// <summary>The SVG document that draws a glyph, and the range of glyphs it covers, or false when the glyph has none.</summary>
+        public bool TryGetSvgGlyph(int glyphId, out string document, out int firstGlyph, out int lastGlyph)
+        {
+            document = string.Empty;
+            firstGlyph = lastGlyph = 0;
+            return FontFace.svg?.TryGet(glyphId, out document, out firstGlyph, out lastGlyph) ?? false;
+        }
+
         /// <summary>The font's COLR table, or null if it has none.</summary>
         public ColrTable ColorTable => FontFace.colr;
 
@@ -565,16 +673,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// has them, else a CFF font's own Type 2 charstring (see <see cref="Type2CharstringInterpreter"/>)
         /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> - an ordinary or
         /// CID-keyed CFF font alike, resolving each glyph's local Subrs via
-        /// <see cref="CffTable.LocalSubrsFor"/>. False for a font with neither (one this reader could
+        /// <see cref="CffTable.LocalSubrsFor"/> - else the charstring of a variable font's
+        /// <see cref="Cff2Table"/> at this descriptor's location. False for a font with none of them (one this reader could
         /// not parse at all, or a CID-keyed CFF font missing/malformed <c>FDArray</c>/<c>FDSelect</c>).
         /// </summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
         {
-            if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline))
+            if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline, Variation))
                 return true;
 
-            if (FontFace.glyf is null && FontFace.cff is { IsSupported: true })
-                return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff, glyphIndex, out outline);
+            if (FontFace.glyf is null)
+            {
+                if (FontFace.cff is { IsSupported: true })
+                    return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff, glyphIndex, out outline);
+
+                if (FontFace.cff2 is { IsSupported: true })
+                    return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff2, glyphIndex, Variation, out outline);
+            }
 
             return false;
         }
@@ -584,12 +699,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // The format-4 cmap only maps the Basic Multilingual Plane. A codepoint above U+FFFF (astral,
             // e.g. emoji) is resolved through the font's format-12 subtable when it has one; a font
             // without format-12 has no astral mapping, so it resolves to the missing glyph.
-            if (value > 0xFFFF)
+            //
+            // A font whose only subtable is format 12 has no format-4 one; its format-12 groups cover the
+            // BMP as well, so they answer for every codepoint.
+            CMap4? cmap4 = FontFace.cmap.cmap4;
+            if (value > 0xFFFF || cmap4 is null)
                 return FontFace.cmap.cmap12?.MapCodeToGlyph(value) ?? 0;
 
             try
             {
-                CMap4 cmap4 = FontFace.cmap.cmap4;
                 int segCount = cmap4.segCountX2 / 2;
                 int seg;
                 for (seg = 0; seg < segCount; seg++)
@@ -678,6 +796,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         public int GlyphIndexToWidth(int glyphIndex)
         {
+            int originalGlyphIndex = glyphIndex;
             try
             {
                 int numberOfHMetrics = FontFace.hhea.numberOfHMetrics;
@@ -687,7 +806,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     glyphIndex = numberOfHMetrics - 1;
 
                 int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
-                return width;
+                return Variation is null ? width : width + Variations.FontVariations.Round(FontFace.Variations?.GetAdvanceDelta(FontFace, originalGlyphIndex, Variation) ?? 0);
             }
             catch (Exception)
             {
@@ -723,10 +842,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             // glyphIndex >= numMetrics means every remaining glyph shares the last metric's advance
             // height - the same "monospaced tail" convention GlyphIndexToWidth's hmtx lookup uses.
+            int originalGlyphIndex = glyphIndex;
             if (glyphIndex >= numMetrics)
                 glyphIndex = numMetrics - 1;
 
-            return vmtx.Metrics[glyphIndex].advanceHeight;
+            int height = vmtx.Metrics[glyphIndex].advanceHeight;
+
+            // At a location of a variable font the advance follows VVAR, or the phantom points of gvar without it (VVAR is asked with the
+            // original glyph index, as HVAR is).
+            return Variation is null
+                ? height
+                : height + Variations.FontVariations.Round(FontFace.Variations?.GetVerticalAdvanceDelta(FontFace, originalGlyphIndex, Variation) ?? 0);
         }
 
         /// <summary>
@@ -755,15 +881,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             int originX = GlyphIndexToWidth(glyphIndex) / 2;
 
             if (HasVerticalOrigin)
-                return (originX, FontFace.vorg.VertOriginYFor(glyphIndex));
+            {
+                int origin = FontFace.vorg.VertOriginYFor(glyphIndex);
+
+                // VORG varies through the vertical origin mapping of VVAR, when the font has one.
+                if (Variation is not null && FontFace.Variations?.Vvar is { } vvar)
+                    origin += Variations.FontVariations.Round(vvar.GetOriginDelta(glyphIndex, Variation.Normalized));
+
+                return (originX, origin);
+            }
 
             VerticalHeaderTable vhea = FontFace.vhea;
             if (vhea != null && vhea.ascent != 0)
-                return (originX, vhea.ascent);
+                return (originX, Adjust("vasc", vhea.ascent));
 
             OS2Table os2 = FontFace.os2;
             if (os2 != null && os2.sTypoAscender != 0)
-                return (originX, os2.sTypoAscender);
+                return (originX, Adjust("hasc", os2.sTypoAscender));
 
             return (originX, FontFace.head.unitsPerEm);
         }

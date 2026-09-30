@@ -13,7 +13,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -69,6 +69,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html);
+            HtmlParser.EnsureHtmlAndBody(root);
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
 
@@ -78,7 +79,7 @@ namespace PeachPDF.Html.Core.Parse
             // <html> element, so it must be located by tag name.
             var htmlBox = DomUtils.GetBoxByTagName(root, "html");
             var lang = htmlBox?.HtmlTag?.TryGetAttribute("lang", "");
-            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? null : lang;
+            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? htmlContainer.DefaultLanguage : lang;
 
             var metadata = ExtractMetadata(root);
 
@@ -233,7 +234,7 @@ namespace PeachPDF.Html.Core.Parse
         /// normally.
         /// </para>
         /// </summary>
-        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RAdapter adapter, List<CssBox> displayContentsShells)
+        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RenderContext adapter, List<CssBox> displayContentsShells)
         {
             var valueParser = new CssValueParser(adapter);
             ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media, displayContentsShells);
@@ -423,7 +424,7 @@ namespace PeachPDF.Html.Core.Parse
         /// tree walk can find any more and the caller has to hand on to the container that will own the
         /// document (<see cref="HtmlContainerInt.DisplayContentsShells"/>).
         /// </returns>
-        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RAdapter adapter, CssData cssData)
+        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext adapter, CssData cssData)
         {
             var root = HtmlParser.ParseDocument(html);
             var cssValueParser = new CssValueParser(adapter);
@@ -472,7 +473,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
         /// attached to a declarative document (<see cref="Layout.IDocumentBuilder.Stylesheet"/>).
         /// </summary>
-        internal static async Task CascadeApplyStyleFonts(CssData cssData, RAdapter adapter)
+        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext adapter)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -488,9 +489,7 @@ namespace PeachPDF.Html.Core.Parse
                     // authoritative for how THIS specific resource participates in matching, independent
                     // of what the file's own internal tables say - resolve them once per rule and apply
                     // to every src candidate it declares.
-                    var weightOverride = FontFaceDescriptorResolver.ResolveWeight(fontRule.Weight);
-                    var isItalicOverride = FontFaceDescriptorResolver.ResolveIsItalic(fontRule.Style);
-                    var stretchOverride = FontFaceDescriptorResolver.ResolveStretch(fontRule.Stretch);
+                    var descriptors = FontFaceDescriptorResolver.Resolve(fontRule.Weight, fontRule.Style, fontRule.Stretch);
 
                     // The unicode-range descriptor restricts which codepoints this face is used for; null
                     // (absent/unparseable) means "use it for whatever the font's cmap covers".
@@ -505,12 +504,12 @@ namespace PeachPDF.Html.Core.Parse
 
                         if (fontFaceDefinition.Local is not null)
                         {
-                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
                         }
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
                         }
 
                         if (isLoaded) break;
@@ -635,7 +634,7 @@ namespace PeachPDF.Html.Core.Parse
             // HundredPercentPt for `%` - actually change between the two calls, becoming correct.
             //
             // PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
-            // caller-configured page size (an XSize, true points) from PageSize (an RSize,
+            // caller-configured page size (an XSize, true points) from PageSize (an Size,
             // PixelsPerPoint-scaled internal pixel space, per HtmlContainerInt.PageSize's own doc
             // comment) - nothing between PdfGenerator.SetContent assigning it and this point mutates it,
             // so this is the same comparison PdfGenerator.AddPdfPages used to make one layer up, just
@@ -1180,6 +1179,7 @@ namespace PeachPDF.Html.Core.Parse
             // display — would stay inline+in-flow even with `position: absolute`, so it never becomes
             // out-of-flow and its left/top/width/height never apply (the Charts.css area/line `td::before`
             // fill relies on exactly this blockification).
+            LegacyBox.Resolve(box);
             BlockifyPositionedBox(box);
 
             // 11. Normalize a flex/grid item's own computed style (css-flexbox-1 §4 / css-grid-2 §6):
@@ -1599,9 +1599,31 @@ namespace PeachPDF.Html.Core.Parse
         /// recognize <see cref="Floating.Footnote"/> - and never blockified, per
         /// <see cref="DerivedStyle.ActualDisplay"/>'s own exclusion).
         /// </para>
+        /// <para>
+        /// <b>Never descends into an inline <c>&lt;svg&gt;</c>/<c>&lt;math&gt;</c> subtree</b> (<see cref="CssBoxSvg"/>/
+        /// <see cref="CssBoxMath"/>), same as every other tree-restructuring pass in this file: a
+        /// <c>float: footnote</c> declared on foreign content inside a <c>&lt;foreignObject&gt;</c> is left
+        /// exactly where it is, rendered as ordinary in-place content rather than detached to the page's
+        /// footnote area - detaching it would relocate content the SVG/MathML source declared into
+        /// ordinary page flow, with no single correct answer for whether it should keep matching selectors
+        /// as foreign content or as HTML from then on. See issue #1507.
+        /// </para>
         /// </remarks>
         private static void DetachFootnoteBodies(CssBox box, HtmlContainerInt htmlContainer, CssValueParser valueParser, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
         {
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them - the same guard every other
+            // pass in this file has (see CssBoxSvg / issue #159). This one specifically also sidesteps a
+            // harder question a detach-and-relocate would otherwise raise: css-gcpm-3's footnote area is
+            // ordinary page content, not part of the SVG/MathML scene the source was declared in, so
+            // there's no single correct answer for whether the relocated body should keep matching as
+            // foreign content or as HTML - simplest and most consistent with every sibling pass here is to
+            // leave a float: footnote declared inside foreign content alone, same as IsFootnoteSource
+            // already excludes other contexts (table header/footer, absolutely positioned) where floating
+            // it out doesn't cleanly apply. See issue #1507.
+            if (box is CssBoxSvg or CssBoxMath) return;
+
             foreach (var child in box.Boxes.ToArray())
             {
                 if (IsFootnoteSource(child))
@@ -2078,10 +2100,13 @@ namespace PeachPDF.Html.Core.Parse
                         => revertLayerTarget is not null && revertLayerTarget.TryGetValue(prop.Name, out var rvl)
                             ? rvl
                             : CssDefaults.GetInitialValue(prop.Name),
-                    _ => prop.Value
+                    _ => VendorValueAliases.Normalize(prop.Name, prop.Value)
                 };
 
                 if (value is null) continue;
+
+                // The 2009 flexbox container properties translate onto the standard flex properties (see LegacyBox).
+                if (LegacyBox.TryApply(valueParser, box, prop.Name, value)) continue;
 
                 if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
                 {
@@ -3431,6 +3456,7 @@ namespace PeachPDF.Html.Core.Parse
             box.CharScripts = box.CharScripts?[count..];
             box.JoiningForms = box.JoiningForms?[count..];
             box.UseCategories = box.UseCategories?[count..];
+            box.KhmerCategories = box.KhmerCategories?[count..];
             box.Text = text[count..];
             box.ParseToWords();
 

@@ -38,6 +38,18 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         public int Stretch { get; init; }
 
+        /// <summary>The weights the font's <c>wght</c> axis covers, or null for a font that has no such axis (or is not variable).</summary>
+        public AxisRange? WeightRange { get; init; }
+
+        /// <summary>The widths, as percentages of the normal width, the font's <c>wdth</c> axis covers, or null for a font that has no such axis.</summary>
+        public AxisRange? WidthRange { get; init; }
+
+        /// <summary>
+        /// The oblique angles, in degrees leaning to the right, the font's <c>slnt</c> axis covers, or null for a font that has no such
+        /// axis. The axis counts degrees counter-clockwise from vertical, so a lean to the right is negative there.
+        /// </summary>
+        public AxisRange? ObliqueRange { get; init; }
+
         public static TtfFontDescription LoadDescription(string path)
         {
             using var stream = File.OpenRead(path);
@@ -102,6 +114,8 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             long nameTableOffset = -1;
             long os2TableOffset = -1;
+            long fvarTableOffset = -1;
+            long fvarTableLength = 0;
             for (int i = 0; i < numTables; i++)
             {
                 stream.ReadExactly(buf4);
@@ -109,12 +123,18 @@ namespace PeachDrawing.Text.Internal.Fonts
                 stream.ReadExactly(buf4); // checkSum
                 stream.ReadExactly(buf4);
                 uint tableOffset = ReadUInt32BE(buf4);
-                stream.ReadExactly(buf4); // length
+                stream.ReadExactly(buf4);
+                uint tableLength = ReadUInt32BE(buf4);
 
                 if (tag == "name")
                     nameTableOffset = tableOffset;
                 else if (tag == "OS/2")
                     os2TableOffset = tableOffset;
+                else if (tag == "fvar")
+                {
+                    fvarTableOffset = tableOffset;
+                    fvarTableLength = tableLength;
+                }
             }
 
             if (nameTableOffset < 0)
@@ -162,14 +182,82 @@ namespace PeachDrawing.Text.Internal.Fonts
             if (weight == 0)
                 weight = style is FaceStyle.Bold or FaceStyle.BoldItalic ? 700 : DefaultWeight;
 
+            var (weightRange, widthRange, obliqueRange) = ReadAxisRanges(stream, fvarTableOffset, fvarTableLength);
+
             return new TtfFontDescription
             {
                 FontFamilyInvariantCulture = familyName ?? fullName ?? string.Empty,
                 FontNameInvariantCulture   = fullName   ?? familyName ?? string.Empty,
                 Style                      = style,
                 Weight                     = weight,
-                Stretch                    = stretch
+                Stretch                    = stretch,
+                WeightRange                = weightRange,
+                WidthRange                 = widthRange,
+                ObliqueRange               = obliqueRange
             };
+        }
+
+        /// <summary>
+        /// The ranges the <c>wght</c>, <c>wdth</c> and <c>slnt</c> axes of a variable font cover, read from its <c>fvar</c> table, so a
+        /// font that is discovered rather than added can be matched for every weight, width and slant it can draw. Nothing for a font with
+        /// no <c>fvar</c> table, and nothing for one whose table is malformed: the font stays usable at its default, as it was before.
+        /// </summary>
+        private static (AxisRange? Weight, AxisRange? Width, AxisRange? Oblique) ReadAxisRanges(Stream stream, long fvarTableOffset, long fvarTableLength)
+        {
+            const int HeaderSize = 16;
+            const int AxisRecordSize = 20;
+            const int MostAxes = 64;
+
+            if (fvarTableOffset < 0 || fvarTableLength < HeaderSize)
+                return default;
+
+            try
+            {
+                Span<byte> header = stackalloc byte[HeaderSize];
+                stream.Seek(fvarTableOffset, SeekOrigin.Begin);
+                stream.ReadExactly(header);
+
+                int axesOffset = ReadUInt16BE(header[4..]);
+                int axisCount = ReadUInt16BE(header[8..]);
+                int axisSize = ReadUInt16BE(header[10..]);
+                if (axisCount is 0 or > MostAxes || axisSize < AxisRecordSize
+                    || axesOffset + (long)axisCount * axisSize > fvarTableLength)
+                {
+                    return default;
+                }
+
+                AxisRange? weight = null;
+                AxisRange? width = null;
+                AxisRange? oblique = null;
+                Span<byte> record = stackalloc byte[AxisRecordSize];
+                for (int i = 0; i < axisCount; i++)
+                {
+                    stream.Seek(fvarTableOffset + axesOffset + (long)i * axisSize, SeekOrigin.Begin);
+                    stream.ReadExactly(record);
+
+                    // Minimum and maximum are 16.16 fixed-point numbers after the tag and before the default value.
+                    var minimum = (int)ReadUInt32BE(record[4..]) / 65536.0;
+                    var maximum = (int)ReadUInt32BE(record[12..]) / 65536.0;
+                    switch (Encoding.ASCII.GetString(record[..4]))
+                    {
+                        case AxisTags.Weight:
+                            weight = new AxisRange(minimum, maximum);
+                            break;
+                        case AxisTags.Width:
+                            width = new AxisRange(minimum, maximum);
+                            break;
+                        case AxisTags.Slant:
+                            oblique = new AxisRange(-maximum, -minimum);
+                            break;
+                    }
+                }
+
+                return (weight, width, oblique);
+            }
+            catch (Exception e) when (e is IOException or ArgumentException)
+            {
+                return default;
+            }
         }
 
         /// <summary>

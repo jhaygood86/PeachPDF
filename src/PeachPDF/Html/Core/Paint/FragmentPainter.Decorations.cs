@@ -1,7 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -28,7 +27,7 @@ namespace PeachPDF.Html.Core.Paint
         /// the exact same background-image/-position/-size/-repeat/-origin/-clip resolution the box's
         /// own normal paint path uses so canvas-fill behavior matches per-box behavior exactly.
         /// </summary>
-        internal static void PaintCanvasBackground(RGraphics g, CssBox box, RRect rect) =>
+        internal static void PaintCanvasBackground(Canvas g, CssBox box, Rect rect) =>
             PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect));
 
         /// <summary>
@@ -57,21 +56,21 @@ namespace PeachPDF.Html.Core.Paint
         /// background, a replaced element's chrome, a form field's chrome) - <c>text</c> degrades to
         /// <c>border-box</c> there, same as an unsupported font/writing-mode does below.
         /// </param>
-        internal static void PaintBackground(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null)
+        internal static void PaintBackground(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null)
         {
             var rect = geometry.DecorationRect;
 
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
-            RRect BoxModelRect(string value) => value switch
+            Rect BoxModelRect(string value) => value switch
             {
                 Keywords.BorderBox => rect,
-                Keywords.ContentBox => new RRect(
+                Keywords.ContentBox => new Rect(
                     rect.X + box.ActualBorderLeftWidth + box.ActualPaddingLeft,
                     rect.Y + box.ActualBorderTopWidth  + box.ActualPaddingTop,
                     rect.Width  - box.ActualBorderLeftWidth - box.ActualBorderRightWidth  - box.ActualPaddingLeft - box.ActualPaddingRight,
                     rect.Height - box.ActualBorderTopWidth  - box.ActualBorderBottomWidth - box.ActualPaddingTop  - box.ActualPaddingBottom),
-                _ => new RRect(
+                _ => new Rect(
                     rect.X + box.ActualBorderLeftWidth,
                     rect.Y + box.ActualBorderTopWidth,
                     rect.Width  - box.ActualBorderLeftWidth - box.ActualBorderRightWidth,
@@ -81,7 +80,7 @@ namespace PeachPDF.Html.Core.Paint
             // The clip rectangle's own curve - border-box uses the box's declared radius as-is, while
             // padding-box/content-box reduce it by the border width (and, for content-box, the padding
             // too) per CSS Backgrounds and Borders Level 3 §5.5 before clipping the smaller rectangle.
-            BorderRadii ClipRadii(string clipValue, RRect clipRect) => clipValue switch
+            BorderRadii ClipRadii(string clipValue, Rect clipRect) => clipValue switch
             {
                 Keywords.BorderBox => box.ComputeRadii(clipRect),
                 Keywords.ContentBox => box.ComputeInnerRadii(rect, clipRect,
@@ -110,9 +109,9 @@ namespace PeachPDF.Html.Core.Paint
             // every layer that resolves to `text` (the solid-color layer and/or any number of
             // background-image layers), rather than once per layer like a rounded-rect clip is. Disposed
             // once below, after every layer that might have used it has painted.
-            RGraphicsPath? textClipPath = null;
+            GraphicsPath? textClipPath = null;
             var textClipPathBuilt = false;
-            RGraphicsPath? TextClipPath()
+            GraphicsPath? TextClipPath()
             {
                 if (!textClipPathBuilt)
                 {
@@ -129,7 +128,7 @@ namespace PeachPDF.Html.Core.Paint
             // it falls back to exactly `border-box`'s own treatment, rounded corners included, matching
             // this engine's pre-#1117 behavior for an unrecognized `background-clip` value instead of
             // silently losing the rounding too.
-            (RRect ClipRect, RGraphicsPath? ClipShape, bool Shared) ResolveClip(string clipValue)
+            (Rect ClipRect, GraphicsPath? ClipShape, bool Shared) ResolveClip(string clipValue)
             {
                 if (clipValue == Keywords.Text)
                 {
@@ -148,7 +147,7 @@ namespace PeachPDF.Html.Core.Paint
             }
 
             var actualBackgroundColor = firstLineStyle?.ActualBackgroundColor ?? box.ActualBackgroundColor;
-            RBrush? solidBrush = RenderUtils.IsColorVisible(actualBackgroundColor)
+            Brush? solidBrush = RenderUtils.IsColorVisible(actualBackgroundColor)
                 ? g.GetSolidBrush(actualBackgroundColor)
                 : null;
 
@@ -180,7 +179,7 @@ namespace PeachPDF.Html.Core.Paint
                 var clipValue  = BackgroundLayerResolver.LayerAt(clipLayers, layerIndex);
                 var (clipRect, clipShape, shapeShared) = ResolveClip(clipValue);
 
-                void DrawBrush(RBrush brush) => PaintClippedBrush(g, box, brush, clipRect, clipShape);
+                void DrawBrush(Brush brush) => PaintClippedBrush(g, box, brush, clipRect, clipShape);
 
                 CssImagePainter.Paint(g, box.BackgroundImages![layerIndex], layerIndex, originRect, clipRect,
                     clipShape, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
@@ -199,19 +198,21 @@ namespace PeachPDF.Html.Core.Paint
         /// (plain rectangular case), and disposes the brush afterward. Shared by every per-layer
         /// background-image/gradient draw and the final solid-color fill.
         /// </summary>
-        private static void PaintClippedBrush(RGraphics g, CssBox box, RBrush brush, RRect clipRect, RGraphicsPath? roundedClipPath)
+        private static void PaintClippedBrush(Canvas g, CssBox box, Brush brush, Rect clipRect, GraphicsPath? roundedClipPath)
         {
             // TODO:a handle it correctly (tables background)
-            object? prevMode = null;
-            if (box.HtmlContainer is { AvoidGeometryAntialias: false } && roundedClipPath != null)
-                prevMode = g.SetAntiAliasSmoothingMode();
+            var smooth = box.HtmlContainer is { AvoidGeometryAntialias: false } && roundedClipPath != null;
+            if (smooth)
+                g.PushAntiAlias(true);
 
             if (roundedClipPath != null)
                 g.DrawPath(brush, roundedClipPath);
             else
                 g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
 
-            g.ReturnPreviousSmoothingMode(prevMode);
+            if (smooth)
+                g.PopAntiAlias();
+
             brush.Dispose();
         }
 
@@ -223,7 +224,7 @@ namespace PeachPDF.Html.Core.Paint
         /// small-caps run is measured/outlined against the same font and baseline shift it is actually
         /// painted with, not the box's own <c>ActualFont</c>.
         /// </summary>
-        private readonly record struct WordFontContext(CssBox StyleSource, RFont Font, double BaselineAdjust, ShapeSettings Features);
+        private readonly record struct WordFontContext(CssBox StyleSource, Font Font, double BaselineAdjust, ShapeSettings Features);
 
         /// <summary>See <see cref="WordFontContext"/>.</summary>
         /// <param name="word">the word to resolve</param>
@@ -249,7 +250,7 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         /// <returns>
         /// An empty (non-null) path when the subtree has no clippable words at all - correctly clips
-        /// the layer to nothing. Null when any reached <i>word</i> - <see cref="RGraphics.GetTextOutline"/>'s
+        /// the layer to nothing. Null when any reached <i>word</i> - <see cref="Canvas.GetTextOutline"/>'s
         /// own granularity - produced no usable glyph outline at all (every glyph in it failed: a
         /// CID-keyed CFF or otherwise outline-less font) or the word's own box is set to
         /// <c>writing-mode: sideways-rl</c>/<c>sideways-lr</c> - <c>PaintBackground</c>'s local
@@ -274,12 +275,12 @@ namespace PeachPDF.Html.Core.Paint
         /// - a different, out-of-scope writing-mode value entirely (<see cref="IsHorizontalWritingMode"/>'s
         /// own remarks) - stays on the unsupported/fallback path exactly as before this issue.
         /// </remarks>
-        private static RGraphicsPath? BuildTextClipPath(RGraphics g, BoxFragment fragment)
+        private static GraphicsPath? BuildTextClipPath(Canvas g, BoxFragment fragment)
         {
-            RGraphicsPath? union = null;
+            GraphicsPath? union = null;
             var anyUnsupportedRun = false;
 
-            void AddOutline(RGraphicsPath outline)
+            void AddOutline(GraphicsPath outline)
             {
                 if (union is null)
                 {
@@ -289,7 +290,7 @@ namespace PeachPDF.Html.Core.Paint
                     // counter (the hole in "e"/"o"/"a"/...) to fill correctly regardless of its
                     // contours' winding direction, rather than an even-odd default that happens to
                     // agree only for the simplest single-nested-contour case.
-                    union.FillMode = RFillMode.Nonzero;
+                    union.FillMode = FillMode.Nonzero;
                 }
                 union.AddPath(outline);
                 outline.Dispose();
@@ -308,13 +309,13 @@ namespace PeachPDF.Html.Core.Paint
                     var styleSource = word.FirstLineStyle ?? f.Box;
                     var font = CssBox.ResolveWordFont(word, styleSource);
                     var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
-                    var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
+                    var wordPoint = new PaintPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                     var features = styleSource.ResolveWordShapingFeatures(word);
 
                     // GetTextOutline places the baseline directly, unlike DrawString/wordPoint above
                     // (top-left of the word's own box) - shift down by the font's own ascent, the same
                     // correction SvgRenderer.PaintTextGlyphs already makes for the identical mismatch.
-                    var baselineOrigin = new RPoint(wordPoint.X, wordPoint.Y + font.Ascent);
+                    var baselineOrigin = new PaintPoint(wordPoint.X, wordPoint.Y + font.Ascent);
                     var outline = g.GetTextOutline(text, font, baselineOrigin, styleSource.ActualLetterSpacing, features);
                     if (outline is null)
                     {
@@ -331,22 +332,22 @@ namespace PeachPDF.Html.Core.Paint
             // character's own EnumerateUprightGlyphPlacements cell rather than the word's as a whole (no
             // single natural horizontal layout exists to reuse for it, unlike a rotated run below).
             //
-            // A font with real vhea/vmtx or VORG metrics (RFont.HasVerticalMetrics/HasVerticalOrigin,
+            // A font with real vhea/vmtx or VORG metrics (Font.HasVerticalMetrics/HasVerticalOrigin,
             // issue #1194) needs one more step before a character's outline is unioned in:
             // PaintUprightVerticalRun clips each such character's *paint* to its own reserved cell
             // (rect.X, placement.CellTop, rect.Width, placement.Advance) precisely because a real vmtx
             // advance is routinely narrower than the font's line height (see that method's own remarks),
             // so what is actually painted is smaller than GetTextOutline's raw per-character result.
-            // RGraphicsPath.ClipToRect reproduces that same per-cell clip at the path level - the raw
+            // GraphicsPath.ClipToRect reproduces that same per-cell clip at the path level - the raw
             // outline is intersected with the identical cell before it is added to the union, so the two
             // can never disagree about which pixels are actually inked.
-            void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, ShapeSettings features)
+            void CollectUprightWord(BoxFragment f, CssRect word, Rect rect, string text, CssBox styleSource, Font font, double baselineAdjust, ShapeSettings features)
             {
                 var needsCellClip = font.HasVerticalMetrics || font.HasVerticalOrigin;
 
                 foreach (var placement in EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, features))
                 {
-                    var baselineOrigin = new RPoint(placement.X, placement.Y + font.Ascent);
+                    var baselineOrigin = new PaintPoint(placement.X, placement.Y + font.Ascent);
                     var outline = g.GetTextOutline(placement.CharText, font, baselineOrigin, styleSource.ActualLetterSpacing, features);
                     if (outline is null)
                     {
@@ -356,7 +357,7 @@ namespace PeachPDF.Html.Core.Paint
 
                     if (needsCellClip)
                     {
-                        var cell = new RRect(rect.X, placement.CellTop, rect.Width, placement.Advance);
+                        var cell = new Rect(rect.X, placement.CellTop, rect.Width, placement.Advance);
                         var clipped = outline.ClipToRect(cell);
                         outline.Dispose();
                         outline = clipped;
@@ -370,9 +371,9 @@ namespace PeachPDF.Html.Core.Paint
             // DrawWordGlyphs's own sideways branch) - so its outline is built once, in that same natural
             // (pre-rotation) frame, then carried into the word's actual physical footprint by the exact
             // rotation matrix paint uses, rather than rebuilt per character.
-            void CollectRotatedWord(RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, ShapeSettings features)
+            void CollectRotatedWord(Rect rect, string text, CssBox styleSource, Font font, double baselineAdjust, ShapeSettings features)
             {
-                var naturalBaselineOrigin = new RPoint(0, baselineAdjust + font.Ascent);
+                var naturalBaselineOrigin = new PaintPoint(0, baselineAdjust + font.Ascent);
                 var outline = g.GetTextOutline(text, font, naturalBaselineOrigin, styleSource.ActualLetterSpacing, features);
                 if (outline is null)
                 {
@@ -470,7 +471,7 @@ namespace PeachPDF.Html.Core.Paint
         /// shadow legitimately falls outside the box it belongs to, so clipping it there would erase it.
         /// </para>
         /// </summary>
-        private static void PaintBoxShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, bool inset)
+        private static void PaintBoxShadows(Canvas g, CssBox box, in BoxDecorationGeometry geometry, bool inset)
         {
             List<BoxShadowGrammar.ShadowLayer> layers;
             using (var pooledTokens = CssValueParser.GetCssTokensPooled(box.BoxShadow))
@@ -526,7 +527,7 @@ namespace PeachPDF.Html.Core.Paint
         /// later <c>drop-shadow()</c> would see the *previous* filter step's output, not the original box -
         /// is out of scope for this same reason.
         /// </summary>
-        private void PaintFilterDropShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry)
+        private void PaintFilterDropShadows(Canvas g, CssBox box, in BoxDecorationGeometry geometry)
         {
             var functions = box.ActualFilterFunctions;
             if (functions.Count == 0 || _dropShadowsInRaster.Contains(box)) return;
@@ -553,11 +554,11 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         /// <remarks>
         /// The room to spill is measured from the shadow layers themselves rather than taken from the
-        /// current clip: <c>RGraphics.GetClip</c> reports the last rectangle pushed, which for an
+        /// current clip: <c>Canvas.GetClip</c> reports the last rectangle pushed, which for an
         /// unclipped surface is unbounded, and inflating that produces meaningless coordinates.
         /// </remarks>
         private static bool PushBreakEdgeClip(
-            RGraphics g, CssBox box, in BoxDecorationGeometry geometry, IReadOnlyList<BoxShadowGrammar.ShadowLayer> layers)
+            Canvas g, CssBox box, in BoxDecorationGeometry geometry, IReadOnlyList<BoxShadowGrammar.ShadowLayer> layers)
         {
             if (geometry is { HasLeftEdge: true, HasRightEdge: true, HasTopEdge: true, HasBottomEdge: true })
                 return false;
@@ -576,7 +577,7 @@ namespace PeachPDF.Html.Core.Paint
 
             var shape = geometry.DecorationRect;
 
-            g.PushClip(RRect.FromLTRB(
+            g.PushClip(Rect.FromLTRB(
                 geometry.HasLeftEdge ? shape.Left - bleed : geometry.ClipRect.Left,
                 geometry.HasTopEdge ? shape.Top - bleed : geometry.ClipRect.Top,
                 geometry.HasRightEdge ? shape.Right + bleed : geometry.ClipRect.Right,
@@ -585,18 +586,18 @@ namespace PeachPDF.Html.Core.Paint
             return true;
         }
 
-        /// <summary>Resolves a shadow layer's authored color string to an <see cref="RColor"/>; a null/omitted
+        /// <summary>Resolves a shadow layer's authored color string to an <see cref="PaintColor"/>; a null/omitted
         /// or <c>currentColor</c> value uses the element's own text color (CSS Backgrounds 3 §5).</summary>
-        private static RColor ResolveShadowColor(CssBox box, string? color) =>
+        private static PaintColor ResolveShadowColor(CssBox box, string? color) =>
             string.IsNullOrEmpty(color) || color.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
                 ? box.ActualColor
                 : box.HtmlContainer!.CssParser.ParseColor(color);
 
-        private static void PaintOutsetShadow(RGraphics g, CssBox box, RRect borderBox, double dx, double dy, double blur, double spread, RColor color)
+        private static void PaintOutsetShadow(Canvas g, CssBox box, Rect borderBox, double dx, double dy, double blur, double spread, PaintColor color)
         {
             // The shadow shape is the border box, translated by the offset and expanded by spread on all
             // sides (a negative spread shrinks it).
-            var shadowRect = new RRect(
+            var shadowRect = new Rect(
                 borderBox.X + dx - spread,
                 borderBox.Y + dy - spread,
                 borderBox.Width + 2 * spread,
@@ -638,7 +639,7 @@ namespace PeachPDF.Html.Core.Paint
             for (var k = 0; k < steps; k++)
             {
                 var d = blur - 2 * blur * k / (steps - 1); // +blur (outer) .. -blur (inner)
-                var rect = new RRect(shadowRect.X - d, shadowRect.Y - d, shadowRect.Width + 2 * d, shadowRect.Height + 2 * d);
+                var rect = new Rect(shadowRect.X - d, shadowRect.Y - d, shadowRect.Width + 2 * d, shadowRect.Height + 2 * d);
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
 
                 var brush = g.GetSolidBrush(layerColors[k]);
@@ -649,9 +650,9 @@ namespace PeachPDF.Html.Core.Paint
             }
         }
 
-        private static void PaintInsetShadow(RGraphics g, CssBox box, RRect borderBox, double dx, double dy, double blur, double spread, RColor color)
+        private static void PaintInsetShadow(Canvas g, CssBox box, Rect borderBox, double dx, double dy, double blur, double spread, PaintColor color)
         {
-            var paddingBox = new RRect(
+            var paddingBox = new Rect(
                 borderBox.X + box.ActualBorderLeftWidth,
                 borderBox.Y + box.ActualBorderTopWidth,
                 borderBox.Width - box.ActualBorderLeftWidth - box.ActualBorderRightWidth,
@@ -661,7 +662,7 @@ namespace PeachPDF.Html.Core.Paint
 
             // The lit "hole" = the padding box, translated by the offset and shrunk by spread. The shadow is
             // the inverse (the region between the padding box and this inner shape), clipped to the padding box.
-            var inner = new RRect(
+            var inner = new Rect(
                 paddingBox.X + dx + spread,
                 paddingBox.Y + dy + spread,
                 Math.Max(0, paddingBox.Width - 2 * spread),
@@ -671,7 +672,7 @@ namespace PeachPDF.Html.Core.Paint
             // width (CSS Backgrounds 3 §5.5) - not the border edge's own radii.
             var paddingRadii = PaddingEdgeRadii(box, borderBox, paddingBox);
 
-            RGraphicsPath? clipPath = null;
+            GraphicsPath? clipPath = null;
             if (paddingRadii.IsRounded)
             {
                 clipPath = BuildLayerRoundRect(g, paddingBox, paddingRadii, 0);
@@ -705,7 +706,7 @@ namespace PeachPDF.Html.Core.Paint
                 for (var k = 0; k < layerColors.Length; k++)
                 {
                     var d = -blur + 2 * blur * k / (steps - 1);
-                    var hole = new RRect(inner.X - d, inner.Y - d, inner.Width + 2 * d, inner.Height + 2 * d);
+                    var hole = new Rect(inner.X - d, inner.Y - d, inner.Width + 2 * d, inner.Height + 2 * d);
                     var brush = g.GetSolidBrush(layerColors[k]);
                     var ring = BuildRingPath(g, paddingBox, hole);
                     g.DrawPath(brush, ring);
@@ -720,12 +721,12 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>The shadow shape's per-corner radii: the box's <c>border-radius</c> grown by
         /// <paramref name="spread"/> where non-zero, with sharp corners staying sharp.</summary>
-        private static BorderRadii ShadowCornerRadii(CssBox box, RRect borderBox, double spread) =>
+        private static BorderRadii ShadowCornerRadii(CssBox box, Rect borderBox, double spread) =>
             AdjustRadii(box.ComputeRadii(borderBox), spread);
 
         /// <summary>The box's padding-edge radii: its <c>border-radius</c> reduced by the border width on each
         /// adjacent side, floored at zero (CSS Backgrounds 3 §5.5) - the shape an inset shadow lives inside.</summary>
-        private static BorderRadii PaddingEdgeRadii(CssBox box, RRect borderBox, RRect paddingBox) =>
+        private static BorderRadii PaddingEdgeRadii(CssBox box, Rect borderBox, Rect paddingBox) =>
             box.ComputeInnerRadii(borderBox, paddingBox,
                 box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
                 box.ActualBorderRightWidth, box.ActualBorderBottomWidth);
@@ -757,12 +758,12 @@ namespace PeachPDF.Html.Core.Paint
         /// when it is fully opaque (a constant per-layer alpha would collapse an opaque color to a hard edge).
         /// Empty (paints nothing) for a fully-transparent shadow color.
         /// </summary>
-        private static RColor[] ComputeBlurLayerColors(RColor color, int steps)
+        private static PaintColor[] ComputeBlurLayerColors(PaintColor color, int steps)
         {
             var amax = color.A / 255.0;
             if (amax <= 0) return [];
 
-            var colors = new RColor[steps];
+            var colors = new PaintColor[steps];
             var prevTarget = 0.0;
 
             for (var k = 0; k < steps; k++)
@@ -772,7 +773,7 @@ namespace PeachPDF.Html.Core.Paint
                 prevTarget = target;
 
                 var alpha = Math.Clamp((int)Math.Round(a * 255), 1, 255);
-                colors[k] = RColor.FromArgb(alpha, color.R, color.G, color.B);
+                colors[k] = PaintColor.FromArgb(alpha, color.R, color.G, color.B);
             }
 
             return colors;
@@ -784,7 +785,7 @@ namespace PeachPDF.Html.Core.Paint
         /// radius plus <paramref name="d"/>, clamped non-negative - so outer layers of even a square box round
         /// off over the blur radius, matching how a real blurred shadow's corners soften.
         /// </summary>
-        private static RGraphicsPath BuildLayerRoundRect(RGraphics g, RRect rect, BorderRadii baseRadii, double d)
+        private static GraphicsPath BuildLayerRoundRect(Canvas g, Rect rect, BorderRadii baseRadii, double d)
         {
             double R(double b) => Math.Max(0, b + d);
             return RenderUtils.GetRoundRect(g, rect,
@@ -794,7 +795,7 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>Fills the region of <paramref name="outer"/> that lies outside <paramref name="hole"/>
         /// with a solid color, as four axis-aligned rectangles (the hole is clamped to the outer bounds).</summary>
-        private static void FillRingRects(RGraphics g, RRect outer, RRect hole, RColor color)
+        private static void FillRingRects(Canvas g, Rect outer, Rect hole, PaintColor color)
         {
             var hl = Math.Max(outer.Left, hole.Left);
             var ht = Math.Max(outer.Top, hole.Top);
@@ -811,7 +812,7 @@ namespace PeachPDF.Html.Core.Paint
             brush.Dispose();
         }
 
-        private static void FillRect(RGraphics g, RBrush brush, double x, double y, double width, double height)
+        private static void FillRect(Canvas g, Brush brush, double x, double y, double width, double height)
         {
             if (width > 0 && height > 0)
                 g.DrawRectangle(brush, x, y, width, height);
@@ -820,10 +821,10 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>Builds an even-odd fill path of <paramref name="outer"/> with a rectangular
         /// <paramref name="hole"/> punched out - a filled ring. Used for inset-shadow falloff layers, since the
         /// PDF backend has no clip-subtract primitive. <paramref name="outer"/>/<paramref name="hole"/> are in
-        /// raw layout-space coordinates, like every other box-geometry <see cref="RGraphicsPath"/> builder -
-        /// divided by <see cref="RGraphics.PixelsPerPoint"/> here since the path itself has no ambient
+        /// raw layout-space coordinates, like every other box-geometry <see cref="GraphicsPath"/> builder -
+        /// divided by <see cref="Canvas.PixelsPerPoint"/> here since the path itself has no ambient
         /// transform to divide it back down (issue #812; see <c>RenderUtils.GetRoundRect</c>'s remarks).</summary>
-        private static RGraphicsPath BuildRingPath(RGraphics g, RRect outer, RRect hole)
+        private static GraphicsPath BuildRingPath(Canvas g, Rect outer, Rect hole)
         {
             var ppp = g.PixelsPerPoint;
             var path = g.GetGraphicsPath();
@@ -840,7 +841,7 @@ namespace PeachPDF.Html.Core.Paint
             path.LineTo(hole.Left / ppp, hole.Bottom / ppp);
             path.CloseFigure();
 
-            path.FillMode = RFillMode.EvenOdd;
+            path.FillMode = FillMode.EvenOdd;
             return path;
         }
 
@@ -874,7 +875,7 @@ namespace PeachPDF.Html.Core.Paint
         /// atomic inline reads as part of the space it occupies on the line.
         /// </para>
         /// </remarks>
-        private static void PaintPropagatedDecoration(RGraphics g, CssBox box, BoxFragment fragment, RRect clip)
+        private static void PaintPropagatedDecoration(Canvas g, CssBox box, BoxFragment fragment, Rect clip)
         {
             if (!DecorationsWorthCollecting(box)) return;
 
@@ -938,7 +939,7 @@ namespace PeachPDF.Html.Core.Paint
         /// keyword, exactly as before either rule existed.
         /// </param>
         /// <param name="lineBox">the line box <paramref name="rectangle"/> belongs to; null for a whole-box rectangle</param>
-        private static void PaintDecoration(RGraphics g, CssBox box, RRect rectangle, bool hasLeftEdge, bool hasRightEdge,
+        private static void PaintDecoration(Canvas g, CssBox box, Rect rectangle, bool hasLeftEdge, bool hasRightEdge,
             CssBox? firstLineStyle = null, bool ownDecorationArea = true,
             DecorationContent? content = null, CssLineBox? lineBox = null)
         {
@@ -1004,7 +1005,7 @@ namespace PeachPDF.Html.Core.Paint
             }
 
             // Captured once, rather than read back from pen.Width for the rest of this method: pen is a
-            // cached instance keyed only by color (RAdapter.GetPen), and WavyDecorationRenderer.
+            // cached instance keyed only by color (RenderContext.GetPen), and WavyDecorationRenderer.
             // StrokeWavyLine below calls g.GetPen(color) itself for the SAME color - the very same cached
             // pen - and sets its own Width for that draw. Re-reading pen.Width afterward for a later
             // keyword or segment would see that leftover value instead of this decoration's own
@@ -1234,7 +1235,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <c>solid</c>/<c>dotted</c>/<c>dashed</c> are one stroke each, differing only in the pen's dash
         /// pattern, which <see cref="TextDecorationStyleMapper.ToDashStyle(TextDecorationStyleMode)"/> has already set. <c>double</c>
         /// and <c>wavy</c> are not a single pen stroke at all: the former is two strokes, the latter a
-        /// stroked <see cref="Html.Adapters.RGraphicsPath"/> built by
+        /// stroked <see cref="GraphicsPath"/> built by
         /// <see cref="WavyDecorationRenderer.StrokeWavyLine"/> - see that class's remarks for the wave's
         /// geometry and why its phase is anchored to this segment's own start rather than the whole line's.
         /// </para>
@@ -1286,7 +1287,7 @@ namespace PeachPDF.Html.Core.Paint
         /// pin an underline there instead, or move an overline off it to avoid colliding with a pinned
         /// underline (<c>PaintDecoration</c>'s own <c>overlineSwitchesSides</c>) - see its remarks.
         /// </param>
-        private static void StrokeDecorationSegment(RGraphics g, RPen pen, double thickness, RColor color, TextDecorationStyleMode style, string line,
+        private static void StrokeDecorationSegment(Canvas g, Pen pen, double thickness, PaintColor color, TextDecorationStyleMode style, string line,
             double x1, double x2, double cross, bool isVertical, int underSign, bool atBlockStart)
         {
             void Draw(double at)
@@ -1309,7 +1310,7 @@ namespace PeachPDF.Html.Core.Paint
                     // pinned underline already occupying the edge it left).
                     var growSign = atBlockStart ? -underSign : underSign;
 
-                    // pen is a shared, per-color-cached RPen (RAdapter.GetPen) - the try/finally
+                    // pen is a shared, per-color-cached Pen (RenderContext.GetPen) - the try/finally
                     // guarantees the temporary narrower width is undone even if a Draw call throws, so a
                     // paint-time failure here can never leave a later, unrelated stroke of the same
                     // color (including a subsequent wavy segment, which fetches this same cached pen for
@@ -1415,7 +1416,7 @@ namespace PeachPDF.Html.Core.Paint
         /// skipping - which is what browsers do, and so what an author who never writes the property
         /// expects to see. <c>none</c> is the opt-out. <c>all</c> asks for the same skipping this does;
         /// the spec's stronger "must" is honoured wherever the ink is decodable at all (see
-        /// <see cref="RGraphics.GetInkCrossings"/> for the font shapes where it is not).
+        /// <see cref="Canvas.GetInkCrossings"/> for the font shapes where it is not).
         /// </para>
         /// </remarks>
         internal static bool SkipsInk(CssBox styleSource) =>
@@ -1425,7 +1426,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Resolves the center of an automatically positioned underline relative to the alphabetic
         /// baseline it hangs from. The underline's top edge stays below that baseline by at least one CSS
         /// pixel, with the gap growing to half the stroke thickness (rounded up to a CSS pixel), matching
-        /// browser behavior for a thick line. Since <see cref="RGraphics.DrawLine"/> centers its stroke on
+        /// browser behavior for a thick line. Since <see cref="Canvas.DrawLine"/> centers its stroke on
         /// the supplied coordinate, half the thickness is added once more to obtain that center.
         /// </summary>
         private static double ResolveAutomaticUnderlineClearance(double thickness, double pixelsPerPoint)
@@ -1482,7 +1483,7 @@ namespace PeachPDF.Html.Core.Paint
         /// itself on physical X under a true vertical writing mode, physical X with <paramref name="cross"/>
         /// on physical Y otherwise. Under a true vertical mode only a <b>rotated</b> word - one ordinary
         /// horizontal glyph run reoriented as a whole by <see cref="SidewaysRotation"/>, exactly as
-        /// <see cref="DrawWordGlyphs"/> paints it - reduces to something <see cref="RGraphics.GetInkCrossings"/>
+        /// <see cref="DrawWordGlyphs"/> paints it - reduces to something <see cref="Canvas.GetInkCrossings"/>
         /// can measure at all: it is measured in that same pre-rotation ("natural") frame, against a band
         /// built by mapping <paramref name="cross"/> through the word's own <see cref="SidewaysRotation"/>
         /// inverse, and the resulting natural-frame crossings are mapped back to physical Y the same way
@@ -1493,7 +1494,7 @@ namespace PeachPDF.Html.Core.Paint
         /// .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
         /// </para>
         /// </remarks>
-        private static void AddInkExclusions(RGraphics g, CssBox styleSource, IReadOnlyList<DecorationWord> words,
+        private static void AddInkExclusions(Canvas g, CssBox styleSource, IReadOnlyList<DecorationWord> words,
             double cross, double thickness, bool isVertical, List<DecorationInterval> into)
         {
             var half = thickness / 2;
@@ -1533,7 +1534,7 @@ namespace PeachPDF.Html.Core.Paint
                     // The same natural (pre-rotation) origin DrawWordGlyphs's sideways branch hands
                     // DrawString - see AddInkExclusions' own remarks and BuildTextClipPath's
                     // CollectRotatedWord for the identical derivation used to build this word's outline.
-                    var naturalOrigin = new RPoint(0, baselineAdjust);
+                    var naturalOrigin = new PaintPoint(0, baselineAdjust);
 
                     // SidewaysRotation maps natural (x, y) to physical (rect.Right - y, rect.Y + x) - so
                     // the natural Y that corresponds to this decoration's physical cross position is
@@ -1558,9 +1559,9 @@ namespace PeachPDF.Html.Core.Paint
 
                 // The word's own draw origin, not its baseline: DrawWordGlyphs hands DrawString exactly
                 // this point, and GetInkCrossings places the baseline from the font's own metrics the way
-                // the text-drawing path does. Deriving a baseline here instead would use RFont.Ascent,
+                // the text-drawing path does. Deriving a baseline here instead would use Font.Ascent,
                 // which is rounded to a whole unit - half the height of a default-thickness band.
-                var origin = new RPoint(placed.Rect.X, placed.Rect.Y + baselineAdjust);
+                var origin = new PaintPoint(placed.Rect.X, placed.Rect.Y + baselineAdjust);
 
                 var horizontalCrossings = g.GetInkCrossings(text, font, origin,
                     cross - half, cross + half, wordStyle.ActualLetterSpacing, features);
@@ -1634,7 +1635,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Draws the vertical rule lines between columns of a multi-column container, one segment per
         /// gap per page-row (see <see cref="CssBox.ColumnRuleSegments"/>).
         /// </summary>
-        private static void PaintColumnRules(RGraphics g, CssBox box, double originY, RRect clip)
+        private static void PaintColumnRules(Canvas g, CssBox box, double originY, Rect clip)
         {
             // `none` and `hidden` draw nothing. DerivedStyle.ActualColumnRuleWidth already zeroes both,
             // and the call site's `> 0` check would therefore keep us out - but the dash-style switch
@@ -1648,9 +1649,9 @@ namespace PeachPDF.Html.Core.Paint
             pen.Width = box.ActualColumnRuleWidth;
             pen.DashStyle = box.ColumnRuleStyle.Value switch
             {
-                LineStyle.Dashed => RDashStyle.Dash,
-                LineStyle.Dotted => RDashStyle.Dot,
-                _ => RDashStyle.Solid,
+                LineStyle.Dashed => DashStyle.Dash,
+                LineStyle.Dotted => DashStyle.Dot,
+                _ => DashStyle.Solid,
             };
 
             // Column rules are recorded by the columns engine in document space, so they need the same
@@ -1661,7 +1662,7 @@ namespace PeachPDF.Html.Core.Paint
                 var visualTop = top - originY;
                 var visualBottom = bottom - originY;
 
-                if (!IsRectVisible(new RRect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
+                if (!IsRectVisible(new Rect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
 
                 g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
             }
@@ -1672,26 +1673,26 @@ namespace PeachPDF.Html.Core.Paint
         /// <see cref="CssBox.CollapsedBorderSegments"/> and the call site's own remarks for why this runs
         /// where it does.
         /// </summary>
-        private static void PaintCollapsedTableBorders(RGraphics g, CssBox box, double originY, RRect clip)
+        private static void PaintCollapsedTableBorders(Canvas g, CssBox box, double originY, Rect clip)
         {
             // Segments are recorded in document space, same as ColumnRuleSegments - see PaintColumnRules.
             foreach (var segment in box.CollapsedBorderSegments!)
             {
-                var visualRect = new RRect(segment.Rect.X, segment.Rect.Y - originY, segment.Rect.Width, segment.Rect.Height);
+                var visualRect = new Rect(segment.Rect.X, segment.Rect.Y - originY, segment.Rect.Width, segment.Rect.Height);
 
                 if (!IsRectVisible(visualRect, clip)) continue;
 
                 // side: null - a grid line is shared by the boxes on both sides of it and so is not any
                 // one box's edge; that is what gives a bevelled segment both of its faces.
                 BordersDrawHandler.DrawCollapsedSegment(
-                    g, segment.IsHorizontal, visualRect, segment.Style, segment.Color, segment.Width, side: null);
+                    g, segment.IsHorizontal, visualRect, segment.Style, segment.PaintColor, segment.Width, side: null);
             }
         }
 
         /// <summary>
         /// Draws a box's resolved <c>content: url(...)</c> image, once per decoration rectangle.
         /// </summary>
-        private static void PaintContentImage(RGraphics g, CssBox box, BoxFragment fragment)
+        private static void PaintContentImage(Canvas g, CssBox box, BoxFragment fragment)
         {
             if (box.ContentImage == null) return;
 

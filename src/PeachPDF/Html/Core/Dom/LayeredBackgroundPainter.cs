@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
@@ -71,14 +70,14 @@ namespace PeachPDF.Html.Core.Dom
         /// painted.
         /// </param>
         internal static async Task PaintAsync(
-            RGraphics g,
+            Canvas g,
             StyleDeclaration? style,
-            RAdapter adapter,
+            RenderContext adapter,
             HtmlContainerInt htmlContainer,
             CssBox lengthBasisBox,
             double? gradientEmSizePt,
-            Func<string, RRect> resolvePositioningRect,
-            RRect viewportRect,
+            Func<string, Rect> resolvePositioningRect,
+            Rect viewportRect,
             Dictionary<string, IReadOnlyList<CssImage>?> imageCache)
         {
             if (style is null) return;

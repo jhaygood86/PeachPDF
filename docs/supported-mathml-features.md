@@ -19,6 +19,15 @@ below for what happens without one.
 
 ---
 
+## CSS Selector Matching
+
+MathML is XML, so selectors match MathML element types, attribute names/values, classes, and IDs
+**case-sensitively** ([Selectors 4 §6](https://www.w3.org/TR/selectors-4/#casesens)) — e.g. `MI {}` does
+not match `<mi>`. This is the same rule [SVG](supported-svg-features.md#css-integration) follows, and it
+holds even for an attribute name that would otherwise be on the HTML Standard's fixed
+[case-insensitive legacy-attribute list](html-css-support.md#attribute-selectors) (`type`, `dir`, `align`,
+...) — that exception is scoped to elements in the HTML namespace only, so it never applies inside `<math>`.
+
 ## Root Element
 
 | Element | MDN Reference | Notes |

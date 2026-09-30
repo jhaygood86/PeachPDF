@@ -1,0 +1,91 @@
+namespace PeachDrawing.Text.Outlines
+{
+    /// <summary>
+    /// How much a glyph outline is fitted to the pixel grid: whether the font's own hinting instructions are run, and in which
+    /// dialect.
+    /// </summary>
+    /// <remarks>
+    /// Hinting moves the points of an outline at one size so that stems, heights and curves land on whole pixels, which makes
+    /// small text drawn into a pixel raster sharper. It means nothing for vector output, where text has no size until it is
+    /// drawn. Only the vertical direction is fitted in <see cref="Standard"/> mode, so glyphs keep the horizontal positions
+    /// and widths the font's design gives them; that is the mode to use for anti-aliased text. A font with TrueType outlines is
+    /// fitted by its instructions; a font with CFF outlines (PostScript outlines in an OpenType font) by the stem hints and blue
+    /// zones of its charstrings, which only fit vertically, so both modes give the same outline for it. A font whose <c>gasp</c> table does not
+    /// ask for grid-fitting at a size is not fitted at that size.
+    /// </remarks>
+    public enum GridFitting
+    {
+        /// <summary>No hinting: the outline is the design of the font, scaled and nothing else.</summary>
+        None = 0,
+
+        /// <summary>
+        /// The font's TrueType instructions are run in FreeType's default interpreter, which honours the vertical direction
+        /// only ("minimal subpixel hinting"), with the compatibility adjustments modern fonts rely on. A font with CFF outlines is fitted
+        /// by its own hints. Fonts without hints of a supported kind are not hinted.
+        /// </summary>
+        Standard = 1,
+
+        /// <summary>
+        /// The font's TrueType instructions are run in the original interpreter, which fits both directions, as for black and
+        /// white text without anti-aliasing. Advances come from the font's <c>hdmx</c> table where it has one for the size. A font with CFF
+        /// outlines has one way of fitting, so it is fitted as it is for <see cref="Standard"/>.
+        /// </summary>
+        Monochrome = 2,
+    }
+
+    /// <summary>What a caller wants of an outline: at which size, and how much to fit it to the pixel grid.</summary>
+    /// <remarks>
+    /// The default value asks for what <see cref="Typeface.TryGetOutline(ushort, out GlyphOutline)"/> gives: the design of the
+    /// font, in design units, and, whatever is asked, no stem darkening.
+    /// </remarks>
+    public readonly struct OutlineRequest
+    {
+        /// <summary>
+        /// The horizontal size the outline will be drawn at, in pixels per em, for an outline that is grid-fitted. It may be
+        /// fractional; the font's hinting works on the size in 1/64 pixel, except that a TrueType font that asks for whole pixels per
+        /// em is fitted at the nearest whole size (see <see cref="GlyphOutline.PixelsPerEm"/>). Ignored, and the outline stays in
+        /// design units, for <see cref="GridFitting.None"/>. Setting <see cref="PixelsPerEm"/> instead sets this and
+        /// <see cref="PixelsPerEmY"/> together.
+        /// </summary>
+        public double PixelsPerEmX { get; init; }
+
+        /// <summary>
+        /// The vertical size the outline will be drawn at, in pixels per em; see <see cref="PixelsPerEmX"/>, which this follows in
+        /// every other respect. A device whose pixels are not square (a non-uniform scale or resolution) gives this a different value
+        /// from <see cref="PixelsPerEmX"/>, which is what fits a font's hinting instructions for a stretched grid instead of a square
+        /// one (FreeType's own <c>x_ppem</c>/<c>y_ppem</c>).
+        /// </summary>
+        public double PixelsPerEmY { get; init; }
+
+        /// <summary>
+        /// A convenience for the common case of a square pixel: setting it sets both <see cref="PixelsPerEmX"/> and
+        /// <see cref="PixelsPerEmY"/> to the same value; reading it gives <see cref="PixelsPerEmX"/>. Every caller that only ever set
+        /// this property keeps asking for, and getting, exactly what it always did.
+        /// </summary>
+        public double PixelsPerEm
+        {
+            get => PixelsPerEmX;
+            init
+            {
+                PixelsPerEmX = value;
+                PixelsPerEmY = value;
+            }
+        }
+
+        /// <summary>How much to fit the outline to the pixel grid.</summary>
+        public GridFitting GridFitting { get; init; }
+
+        /// <summary>
+        /// Whether the stems of a glyph of a font with CFF outlines are made a little heavier when the outline is fitted. Off unless asked for.
+        /// </summary>
+        /// <remarks>
+        /// A raster that anti-aliases tends to render the thin stems of small text lighter than the designer meant; this is Adobe's CFF
+        /// engine's compensation for that (FreeType calls it stem darkening and leaves it off by default, as this does). How much a stem is
+        /// thickened depends on how thick it is on the pixel grid: the thinnest stems gain the most, and a stem more than about two and
+        /// a third pixels wide, which is what a stem is at a large size, gains nothing. It applies only
+        /// to a font with CFF outlines that is grid-fitted, so it is ignored for a TrueType font and for <see cref="GridFitting.None"/>,
+        /// and it does not change the advance.
+        /// </remarks>
+        public bool StemDarkening { get; init; }
+    }
+}

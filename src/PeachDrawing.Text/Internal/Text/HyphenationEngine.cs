@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace PeachDrawing.Text.Internal.Text
@@ -170,10 +169,9 @@ namespace PeachDrawing.Text.Internal.Text
 
         private static HashSet<string> ComputeAvailableTags()
         {
-            var assembly = typeof(HyphenationEngine).Assembly;
             var tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var resourceName in assembly.GetManifestResourceNames())
+            foreach (var resourceName in Data.TextData.Assembly.GetManifestResourceNames())
             {
                 var match = PatternResourceRegex.Match(resourceName);
                 if (match.Success)
@@ -202,18 +200,11 @@ namespace PeachDrawing.Text.Internal.Text
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            var assembly = typeof(HyphenationEngine).Assembly;
-            var resourceName = assembly.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith("language-tags.txt", StringComparison.OrdinalIgnoreCase));
-
-            if (resourceName is null)
+            using var decompressed = TextDataResources.OpenBrotli("language-tags.txt.br");
+            if (decompressed is null)
                 return result;
 
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream is null)
-                return result;
-
-            using var reader = new StreamReader(stream);
+            using var reader = new StreamReader(decompressed);
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
@@ -257,15 +248,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// </param>
         internal static LanguagePatternSet? LoadPatternSet(string tag, Func<Stream, Stream> openDecompressed)
         {
-            var assembly = typeof(HyphenationEngine).Assembly;
-            var suffix = $"hyph-{tag}.txt.br";
-            var resourceName = assembly.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
-
-            if (resourceName is null)
-                return null;
-
-            using var stream = assembly.GetManifestResourceStream(resourceName);
+            using var stream = Data.TextData.OpenRaw($"hyph-{tag}.txt.br");
             if (stream is null)
                 return null;
 

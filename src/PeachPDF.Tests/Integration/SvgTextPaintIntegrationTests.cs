@@ -1,5 +1,4 @@
 using PeachPDF;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -7,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Integration
     {
         private static async Task<string> RenderSvgText(string fontPath, string textAttrs, string defs = "", string text = "Hi")
         {
-            var family = TtfFontDescription.LoadDescription(fontPath).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(fontPath);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(fontPath))
                 await generator.AddFontFromStream(stream);
@@ -125,7 +125,7 @@ namespace PeachPDF.Tests.Integration
         {
             // A stroked <textPath> on a CFF font: each glyph now has a real decoded outline (issue
             // #1117), so the stroke is honored per glyph instead of falling back to a solid text show.
-            var family = TtfFontDescription.LoadDescription(BundledFonts.Otf).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Otf);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.Otf))
                 await generator.AddFontFromStream(stream);

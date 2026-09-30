@@ -1,9 +1,7 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System.Collections.Generic;
 using System.Text;
 
@@ -39,10 +37,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             public List<EmojiPresentation> SystemFallbackRequests { get; } = [];
 
-            protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, Rune codepoint) =>
+            protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, Rune codepoint, string? variations) =>
                 Families.GetValueOrDefault(family);
 
-            protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, Rune codepoint, EmojiPresentation presentation)
+            protected override Font? CreateSystemFallbackFontForCodepointInt(double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, Rune codepoint, EmojiPresentation presentation, string? variations)
             {
                 SystemFallbackRequests.Add(presentation);
                 return SystemFallback.GetValueOrDefault(presentation);
@@ -54,7 +52,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
         private static string? Resolve(ScriptedAdapter adapter, string stack, EmojiPresentation presentation)
         {
-            var font = FontFamilyResolver.Resolve(adapter, stack, 12, RFontStyle.Regular, Heart, presentation: presentation);
+            var font = FontFamilyResolver.Resolve(adapter, stack, 12, PaintFontStyle.Regular, Heart, presentation: presentation);
             return (font as ScriptedFont)?.Name;
         }
 
@@ -133,7 +131,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void AFontThatCannotJudgePresentation_AcceptsEveryRequest()
         {
-            // RFont's default answer: a font with no colour/variation-sequence data never loses a match.
+            // Font's default answer: a font with no colour/variation-sequence data never loses a match.
             var font = new TestFont(12);
 
             Assert.True(font.MatchesEmojiPresentation(Heart, EmojiPresentation.Emoji));
@@ -146,7 +144,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var adapter = Adapter(new ScriptedFont("text", isColour: false, coversHeart: false));
 
-            Assert.Null(FontFamilyResolver.Resolve(adapter, "text", 12, RFontStyle.Regular, Heart, presentation: EmojiPresentation.Text));
+            Assert.Null(FontFamilyResolver.Resolve(adapter, "text", 12, PaintFontStyle.Regular, Heart, presentation: EmojiPresentation.Text));
         }
 
         [Fact]

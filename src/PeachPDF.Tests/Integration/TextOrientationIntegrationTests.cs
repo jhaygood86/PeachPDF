@@ -1,18 +1,15 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -174,7 +171,7 @@ namespace PeachPDF.Tests.Integration
             // A Latin-only bundled font (no vhea/vmtx table at all) forced upright via
             // text-orientation:upright must keep the pre-#770 flat font.Height step unchanged - the
             // real-metrics path in NaturalWordSize/PaintUprightVerticalRun is gated on
-            // RFont.HasVerticalMetrics precisely so the overwhelming majority of fonts (which have no
+            // Font.HasVerticalMetrics precisely so the overwhelming majority of fonts (which have no
             // vertical metrics) see zero behavior change.
             var latinFontBase64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Ttf));
             var html = $@"<!DOCTYPE html><html><head><style>
@@ -212,7 +209,7 @@ body {{ font-family: 'LatinOnly'; margin: 0 }}
 
             var firstRune = System.Text.Rune.GetRuneAt(Upright, 0);
             var expectedStep = font.GetVerticalAdvance(firstRune) + wordsBox.ActualLetterSpacing;
-            var actualStep = recorder.DrawStringCalls[1].Point.Y - recorder.DrawStringCalls[0].Point.Y;
+            var actualStep = recorder.DrawStringCalls[1].PaintPoint.Y - recorder.DrawStringCalls[0].PaintPoint.Y;
 
             Assert.Equal(expectedStep, actualStep, precision: 6);
         }
@@ -221,7 +218,7 @@ body {{ font-family: 'LatinOnly'; margin: 0 }}
         public async Task Upright_ClipsEachCharacterToItsOwnCell_WhenFontHasVerticalMetrics()
         {
             // A real vmtx advance is routinely narrower than the font's own line height (see
-            // PaintUprightVerticalRun's remarks), so RGraphics.DrawString would still paint each
+            // PaintUprightVerticalRun's remarks), so Canvas.DrawString would still paint each
             // character across its full line-height span unless confined to its own reserved cell -
             // verifies the push/pop clip actually brackets the draw call (order, not just count, per
             // this repo's own painting-test convention), and that the no-real-metrics fallback path
@@ -289,7 +286,7 @@ body {{ font-family: 'VorgTest'; margin: 0 }}
             // word at, before FragmentPainter (and its VORG shift) ever runs - the same "+= (originY -
             // Ascent)" derivation PaintUprightVerticalRun's own remarks work through.
             var unshiftedY = wordsBox.Words[0].Top;
-            var actualY = recorder.DrawStringCalls[0].Point.Y;
+            var actualY = recorder.DrawStringCalls[0].PaintPoint.Y;
             Assert.Equal(unshiftedY + expectedShift, actualY, precision: 6);
         }
 
@@ -327,8 +324,8 @@ body {{ font-family: 'PlainCjk'; margin: 0 }}
             Assert.Equal(plainRecorder.DrawStringCalls.Count, withVorgRecorder.DrawStringCalls.Count);
             for (var i = 0; i < plainRecorder.DrawStringCalls.Count; i++)
             {
-                Assert.Equal(plainRecorder.DrawStringCalls[i].Point.Y, withVorgRecorder.DrawStringCalls[i].Point.Y, precision: 6);
-                Assert.Equal(plainRecorder.DrawStringCalls[i].Point.X, withVorgRecorder.DrawStringCalls[i].Point.X, precision: 6);
+                Assert.Equal(plainRecorder.DrawStringCalls[i].PaintPoint.Y, withVorgRecorder.DrawStringCalls[i].PaintPoint.Y, precision: 6);
+                Assert.Equal(plainRecorder.DrawStringCalls[i].PaintPoint.X, withVorgRecorder.DrawStringCalls[i].PaintPoint.X, precision: 6);
             }
         }
 
@@ -369,13 +366,13 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
             Assert.NotEqual(0, expectedShift, precision: 3);
 
             var unshiftedY = wordsBox.Words[0].Top;
-            Assert.Equal(unshiftedY + expectedShift, draw.Point.Y, precision: 6);
+            Assert.Equal(unshiftedY + expectedShift, draw.PaintPoint.Y, precision: 6);
         }
 
         /// <summary>Splices a synthetic <c>VORG</c> onto <paramref name="basePath"/>'s own bytes (see
         /// <see cref="SyntheticFontTables"/>), adding real <c>vhea</c>/<c>vmtx</c> too when
         /// <paramref name="baseFontNeedsVheaVmtx"/> is true - <see cref="BundledFonts.Otf"/> has neither
-        /// and needs both to make <see cref="RFont.HasVerticalMetrics"/> true (so the clip-per-cell path
+        /// and needs both to make <see cref="Font.HasVerticalMetrics"/> true (so the clip-per-cell path
         /// is exercised alongside the origin shift), while <see cref="BundledFonts.Cjk"/> already has
         /// real ones (that's what makes #770's own tests work) and would collide with a second, synthetic
         /// pair. <paramref name="vertOriginY"/> is this suite's only varying input.</summary>
@@ -385,16 +382,16 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
 
             if (baseFontNeedsVheaVmtx)
             {
-                var numGlyphs = FontFileData.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
-                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
-                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
+                var numGlyphs = (ushort)SyntheticFontTables.GlyphCount(fontBytes);
+                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, "vhea", SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
+                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, "vmtx", SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
             }
 
-            fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(vertOriginY));
+            fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, "VORG", SyntheticFontTables.BuildVorg(vertOriginY));
             return fontBytes;
         }
 
-        // ── Painting: actual RGraphics call sequence ────────────────────────────
+        // ── Painting: actual Canvas call sequence ────────────────────────────
 
         [Fact]
         public async Task Mixed_PaintsUprightRunPerCharacter_RotatedRunAsOneTransformedCall()
@@ -420,7 +417,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
             Assert.Equal(1, recorder.PopTransformCount);
 
             // The two upright characters stack top-to-bottom (increasing Y), not side-by-side.
-            Assert.True(recorder.DrawStringCalls[1].Point.Y > recorder.DrawStringCalls[0].Point.Y);
+            Assert.True(recorder.DrawStringCalls[1].PaintPoint.Y > recorder.DrawStringCalls[0].PaintPoint.Y);
         }
 
         [Fact]
@@ -538,9 +535,9 @@ body {{ font-family: 'CJK'; margin: 0 }}
             return wordsChild!;
         }
 
-        private sealed class RecordingGraphics : RGraphics
+        private sealed class RecordingGraphics : Canvas
         {
-            public List<(string Text, RFont Font, RPoint Point)> DrawStringCalls { get; } = [];
+            public List<(string Text, Font Font, PaintPoint PaintPoint)> DrawStringCalls { get; } = [];
             public int PushTransformCount { get; private set; }
             public int PopTransformCount { get; private set; }
 
@@ -552,37 +549,37 @@ body {{ font-family: 'CJK'; margin: 0 }}
             public sealed record PushClipMarker;
             public sealed record PopClipMarker;
 
-            public RecordingGraphics(RAdapter adapter)
-                : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics(RenderContext adapter)
+                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null)
+            public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null)
             {
                 var call = (str, font, point);
                 DrawStringCalls.Add(call);
                 Log.Add(call);
             }
 
-            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }
 
-            public override void PushTransform(RMatrix matrix) => PushTransformCount++;
+            public override void PushTransform(Matrix3x2 matrix) => PushTransformCount++;
             public override void PopTransform() => PopTransformCount++;
-            public override void PushBlendMode(RBlendMode mode) { }
+            public override void PushBlendMode(PaintBlendMode mode) { }
             public override void PopBlendMode() { }
-            public override void PushClip(RRect rect) { _clipStack.Push(rect); Log.Add(new PushClipMarker()); }
-            public override void PushClip(RGraphicsPath path) { _clipStack.Push(_clipStack.Peek()); Log.Add(new PushClipMarker()); }
+            public override void PushClip(Rect rect) { _clipStack.Push(rect); Log.Add(new PushClipMarker()); }
+            public override void PushClip(GraphicsPath path) { _clipStack.Push(_clipStack.Peek()); Log.Add(new PushClipMarker()); }
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); Log.Add(new PopClipMarker()); }
-            public override void PushClipExclude(RRect rect) { }
+            public override void PushClipExclude(Rect rect) { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-            public override RGraphicsPath GetGraphicsPath() => null!;
+            public override GraphicsPath GetGraphicsPath() => null!;
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
-            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
-            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
-            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
-            public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) { }
-            public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) { }
-            public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) { }
+            public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
+            public override (Canvas Graphics, Image Image)? CreateTile(double width, double height) => null;
+            public override void DrawImageMasked(Image image, Image maskImage, Rect destRect) { }
+            public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) { }
+            public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix) { }
+            public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false) { }
+            public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode) { }
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }
             public override void BeginArtifact() { }
@@ -593,21 +590,21 @@ body {{ font-family: 'CJK'; margin: 0 }}
             // position/advance each character, so a constant-zero stub (fine for tests that only care
             // about call count/text/font) would silently collapse every stacked character onto the same
             // Y, making the "characters stack top-to-bottom" assertion vacuous.
-            public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new((str?.Length ?? 0) * 10, 12);
-            public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
-            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            public override Size MeasureString(string str, Font font, ShapeSettings? features = null) => new((str?.Length ?? 0) * 10, 12);
+            public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null) => str?.Length ?? 0;
+            public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;
                 charFitWidth = 0;
             }
-            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
-            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
-            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
-            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
-            public override void DrawImage(RImage image, RRect destRect) { }
-            public override void DrawPath(RPen pen, RGraphicsPath path) { }
-            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
-            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) { }
+            public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(Brush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(Image image, Rect destRect, Rect srcRect) { }
+            public override void DrawImage(Image image, Rect destRect) { }
+            public override void DrawPath(Pen pen, GraphicsPath path) { }
+            public override void DrawPath(Brush brush, GraphicsPath path) { }
+            public override void DrawPolygon(Brush brush, PaintPoint[] points) { }
             public override void Dispose() { }
         }
     }

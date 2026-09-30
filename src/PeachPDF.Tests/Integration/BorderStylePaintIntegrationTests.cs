@@ -1,6 +1,6 @@
 ﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
@@ -63,7 +63,7 @@ namespace PeachPDF.Tests.Integration
 
             // CSS 2.1 §8.5.3: the two lines and the space between them sum to border-width, so each is
             // an exact third - 4pt of 12pt, with a 4pt gap.
-            Assert.All(bands, b => Assert.Equal(RColor.FromArgb(51, 51, 51), b.Color));
+            Assert.All(bands, b => Assert.Equal(PaintColor.FromArgb(51, 51, 51), b.PaintColor));
             Assert.Equal(4, bands[0].Height, 2);
             Assert.Equal(4, bands[1].Height, 2);
             Assert.Equal(4, bands[1].Top - bands[0].Bottom, 2);
@@ -84,8 +84,8 @@ namespace PeachPDF.Tests.Integration
 
             // groove paints its outer half as `inset` and its inner half as `outset`; on a TOP edge
             // inset is the darkened face. The two halves are equal.
-            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true), bands[0].Color);
-            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false), bands[1].Color);
+            Assert.Equal(BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: true), bands[0].PaintColor);
+            Assert.Equal(BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: false), bands[1].PaintColor);
             Assert.Equal(bands[0].Height, bands[1].Height, 2);
         }
 
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
-            var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
+            var dark = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: true);
+            var light = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: false);
             Assert.NotEqual(dark, light);
 
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
@@ -120,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             var outerBottomRight = outerIsInset ? light : dark;
             Assert.Equal(
                 [outerTopLeft, outerBottomRight, outerBottomRight, outerTopLeft],
-                pairs.Select(pair => pair.Color));
+                pairs.Select(pair => pair.PaintColor));
         }
 
         [Fact]
@@ -141,7 +141,7 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
             Assert.Equal(2, bands.Count);
 
-            Assert.All(bands, b => Assert.Equal(RColor.FromArgb(51, 51, 51), b.Color));
+            Assert.All(bands, b => Assert.Equal(PaintColor.FromArgb(51, 51, 51), b.PaintColor));
             Assert.Equal(4, bands[0].Width, 2);
             Assert.Equal(4, bands[1].Width, 2);
             Assert.Equal(4, bands[1].Left - bands[0].Right, 2);
@@ -164,8 +164,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, bands.Count);
 
             // A LEFT edge shades like a top edge: inset (groove's outer half) is the darkened face.
-            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true), bands[0].Color);
-            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false), bands[1].Color);
+            Assert.Equal(BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: true), bands[0].PaintColor);
+            Assert.Equal(BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: false), bands[1].PaintColor);
         }
 
         [Theory]
@@ -187,17 +187,17 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, pairs.Count);
             Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
-            var baseColor = RColor.FromArgb(74, 144, 217);
+            var baseColor = PaintColor.FromArgb(74, 144, 217);
             var dark = BorderBevelColors.Shade(baseColor, darken: true);
             var light = BorderBevelColors.Shade(baseColor, darken: false);
 
             // Sampled from Chrome for this exact color - the lit face is genuinely lightened, not left
             // at the declared color, which is what makes the bevel read as 3D.
-            Assert.Equal(RColor.FromArgb(45, 88, 133), dark);
-            Assert.Equal(RColor.FromArgb(87, 169, 255), light);
+            Assert.Equal(PaintColor.FromArgb(45, 88, 133), dark);
+            Assert.Equal(PaintColor.FromArgb(87, 169, 255), light);
 
-            Assert.Equal(inset ? dark : light, pairs[0].Color); // one connected top + left path
-            Assert.Equal(inset ? light : dark, pairs[1].Color); // one connected bottom + right path
+            Assert.Equal(inset ? dark : light, pairs[0].PaintColor); // one connected top + left path
+            Assert.Equal(inset ? light : dark, pairs[1].PaintColor); // one connected bottom + right path
         }
 
         [Theory]
@@ -221,10 +221,10 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
             Assert.Equal(2, pairs.Count);
 
-            var declared = RColor.FromArgb(240, 240, 240);
-            var dark = RColor.FromArgb(156, 156, 156);
-            Assert.Equal(inset ? dark : declared, pairs[0].Color); // top + left
-            Assert.Equal(inset ? declared : dark, pairs[1].Color); // bottom + right
+            var declared = PaintColor.FromArgb(240, 240, 240);
+            var dark = PaintColor.FromArgb(156, 156, 156);
+            Assert.Equal(inset ? dark : declared, pairs[0].PaintColor); // top + left
+            Assert.Equal(inset ? declared : dark, pairs[1].PaintColor); // bottom + right
         }
 
         [Fact]
@@ -233,20 +233,20 @@ namespace PeachPDF.Tests.Integration
             // Darkening black produces black, so a plain `border: inset black` - which is what a
             // UA-default fieldset/table border amounts to - would paint an invisible edge. Both values
             // below are sampled from Chrome's own rendering of `border: 10px inset #000`.
-            var black = RColor.FromArgb(0, 0, 0);
-            Assert.Equal(RColor.FromArgb(84, 84, 84), BorderBevelColors.Shade(black, darken: true));
-            Assert.Equal(RColor.FromArgb(168, 168, 168), BorderBevelColors.Shade(black, darken: false));
+            var black = PaintColor.FromArgb(0, 0, 0);
+            Assert.Equal(PaintColor.FromArgb(84, 84, 84), BorderBevelColors.Shade(black, darken: true));
+            Assert.Equal(PaintColor.FromArgb(168, 168, 168), BorderBevelColors.Shade(black, darken: false));
 
             // The fallback is a luminance test, not an "is it black" test: a dark-but-not-black color
             // above the threshold keeps darkening (gray 33 in Chrome), while one at or below it lightens
             // (gray 32, whose luminance is the threshold itself).
-            Assert.Equal(RColor.FromArgb(0, 0, 0), BorderBevelColors.Shade(RColor.FromArgb(33, 33, 33), darken: true));
-            Assert.Equal(RColor.FromArgb(116, 116, 116), BorderBevelColors.Shade(RColor.FromArgb(32, 32, 32), darken: true));
+            Assert.Equal(PaintColor.FromArgb(0, 0, 0), BorderBevelColors.Shade(PaintColor.FromArgb(33, 33, 33), darken: true));
+            Assert.Equal(PaintColor.FromArgb(116, 116, 116), BorderBevelColors.Shade(PaintColor.FromArgb(32, 32, 32), darken: true));
 
             // A chromatic color can sit above the luminance threshold while still having very little
             // contrast against its own darkened form - Chrome darkens it to black anyway. This is the
             // case a WCAG-contrast-ratio approximation of the threshold gets wrong.
-            Assert.Equal(RColor.FromArgb(0, 0, 0), BorderBevelColors.Shade(RColor.FromArgb(0, 30, 76), darken: true));
+            Assert.Equal(PaintColor.FromArgb(0, 0, 0), BorderBevelColors.Shade(PaintColor.FromArgb(0, 30, 76), darken: true));
         }
 
         [Fact]
@@ -255,19 +255,19 @@ namespace PeachPDF.Tests.Integration
             // Lightening a near-white color only clips it to white, which erases the lit/declared
             // distinction the bevel is made of, so Chrome leaves the lit face at the declared color.
             // Sampled from Chrome's rendering of `border: 12px outset #f0f0f0`.
-            var nearWhite = RColor.FromArgb(240, 240, 240);
+            var nearWhite = PaintColor.FromArgb(240, 240, 240);
             Assert.Equal(nearWhite, BorderBevelColors.Shade(nearWhite, darken: false));
-            Assert.Equal(RColor.FromArgb(156, 156, 156), BorderBevelColors.Shade(nearWhite, darken: true));
+            Assert.Equal(PaintColor.FromArgb(156, 156, 156), BorderBevelColors.Shade(nearWhite, darken: true));
 
             // The threshold is the luminance of gray 235 and the comparison is strict, so 235 is the
             // last gray that still lightens and 236 the first that does not.
-            Assert.Equal(RColor.FromArgb(255, 255, 255), BorderBevelColors.Shade(RColor.FromArgb(235, 235, 235), darken: false));
-            Assert.Equal(RColor.FromArgb(236, 236, 236), BorderBevelColors.Shade(RColor.FromArgb(236, 236, 236), darken: false));
+            Assert.Equal(PaintColor.FromArgb(255, 255, 255), BorderBevelColors.Shade(PaintColor.FromArgb(235, 235, 235), darken: false));
+            Assert.Equal(PaintColor.FromArgb(236, 236, 236), BorderBevelColors.Shade(PaintColor.FromArgb(236, 236, 236), darken: false));
 
             // White itself is the degenerate case the rule exists for.
-            var white = RColor.FromArgb(255, 255, 255);
+            var white = PaintColor.FromArgb(255, 255, 255);
             Assert.Equal(white, BorderBevelColors.Shade(white, darken: false));
-            Assert.Equal(RColor.FromArgb(171, 171, 171), BorderBevelColors.Shade(white, darken: true));
+            Assert.Equal(PaintColor.FromArgb(171, 171, 171), BorderBevelColors.Shade(white, darken: true));
         }
 
         [Fact]
@@ -294,10 +294,10 @@ namespace PeachPDF.Tests.Integration
             var left = withCentroids.OrderBy(t => t.Centroid.X).First();
             var right = withCentroids.OrderByDescending(t => t.Centroid.X).First();
 
-            Assert.Equal(RColor.FromArgb(1, 0, 0), top.Poly.Color);
-            Assert.Equal(RColor.FromArgb(0, 1, 0), right.Poly.Color);
-            Assert.Equal(RColor.FromArgb(0, 0, 1), bottom.Poly.Color);
-            Assert.Equal(RColor.FromArgb(9, 9, 9), left.Poly.Color);
+            Assert.Equal(PaintColor.FromArgb(1, 0, 0), top.Poly.PaintColor);
+            Assert.Equal(PaintColor.FromArgb(0, 1, 0), right.Poly.PaintColor);
+            Assert.Equal(PaintColor.FromArgb(0, 0, 1), bottom.Poly.PaintColor);
+            Assert.Equal(PaintColor.FromArgb(9, 9, 9), left.Poly.PaintColor);
         }
 
         [Fact]
@@ -322,9 +322,9 @@ namespace PeachPDF.Tests.Integration
 
             // Exactly the class of bug a substring test would miss: visually-identical-but-swapped
             // stripe colors. groove's outer band must equal ridge's inner band, and vice versa.
-            Assert.Equal(grooveBands[0].Color, ridgeBands[1].Color);
-            Assert.Equal(grooveBands[1].Color, ridgeBands[0].Color);
-            Assert.NotEqual(grooveBands[0].Color, grooveBands[1].Color);
+            Assert.Equal(grooveBands[0].PaintColor, ridgeBands[1].PaintColor);
+            Assert.Equal(grooveBands[1].PaintColor, ridgeBands[0].PaintColor);
+            Assert.NotEqual(grooveBands[0].PaintColor, grooveBands[1].PaintColor);
         }
 
         // ─── dotted/dashed pattern fitting ───────────────────────────────────────
@@ -349,7 +349,7 @@ namespace PeachPDF.Tests.Integration
 
             // A dot is a zero-length dash under a round cap - without the cap it paints nothing at all,
             // and with a butt cap it would paint squares (which is what it used to do).
-            Assert.Equal(RLineCap.Round, top.LineCap);
+            Assert.Equal(LineCap.Round, top.LineCap);
             Assert.NotNull(top.DashPattern);
             Assert.Equal(2, top.DashPattern!.Count);
             Assert.Equal(0, top.DashPattern[0]);
@@ -375,7 +375,7 @@ namespace PeachPDF.Tests.Integration
             var top = g.Log.OfType<TestRecordingGraphics.DrawLineCall>()
                 .First(l => Math.Abs(l.Y1 - l.Y2) < 0.01);
 
-            Assert.Equal(RLineCap.Butt, top.LineCap);
+            Assert.Equal(LineCap.Butt, top.LineCap);
             Assert.NotNull(top.DashPattern);
             Assert.Equal(32, top.DashPattern![0], 2);
             Assert.Equal((160 - 4 * 32) / 3d, top.DashPattern[1], 2);
@@ -403,7 +403,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(4, lines.Count);
             Assert.All(lines, line =>
             {
-                Assert.Equal(byte.MaxValue, line.Color.A);
+                Assert.Equal(byte.MaxValue, line.PaintColor.A);
                 Assert.NotNull(line.DashPattern);
             });
         }
@@ -438,18 +438,18 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Null(g.CompositedOpacity);
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            Assert.Equal(128, line.Color.A);
+            Assert.Equal(128, line.PaintColor.A);
         }
 
         [Fact]
         public void PatternedStrokeOpacity_PreservesNativeCmykInTheOpaqueTile()
         {
             var g = new TestLayerRecordingGraphics();
-            var source = RColor.FromCmyk(128, .1f, .2f, .3f, .4f);
-            RColor painted = RColor.Empty;
+            var source = PaintColor.FromCmyk(128, .1f, .2f, .3f, .4f);
+            PaintColor painted = PaintColor.Empty;
 
             PatternedStrokeOpacity.Paint(
-                g, new RRect(20, 30, 40, 50), source, (_, color) => painted = color);
+                g, new Rect(20, 30, 40, 50), source, (_, color) => painted = color);
 
             Assert.True(painted.IsCmyk);
             Assert.Equal(byte.MaxValue, painted.A);
@@ -458,22 +458,22 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(source.Y, painted.Y);
             Assert.Equal(source.K, painted.K);
             Assert.Equal(128 / 255d, g.CompositedOpacity!.Value, 3);
-            Assert.Equal(new RRect(19, 29, 42, 52), g.CompositedBounds);
+            Assert.Equal(new Rect(19, 29, 42, 52), g.CompositedBounds);
             var translation = Assert.Single(
                 g.TileGraphics!.Log.OfType<TestRecordingGraphics.PushTransformCall>()).Matrix;
-            Assert.Equal(-19, translation.OffsetX);
-            Assert.Equal(-29, translation.OffsetY);
+            Assert.Equal(-19, translation.M31);
+            Assert.Equal(-29, translation.M32);
         }
 
         [Fact]
         public void PatternedStrokeOpacity_WhenTileUnavailable_PaintsDirectly()
         {
             var g = new TestRecordingGraphics();
-            var source = RColor.FromArgb(128, 74, 144, 217);
-            RColor painted = RColor.Empty;
+            var source = PaintColor.FromArgb(128, 74, 144, 217);
+            PaintColor painted = PaintColor.Empty;
 
             PatternedStrokeOpacity.Paint(
-                g, new RRect(20, 30, 40, 50), source, (_, color) => painted = color);
+                g, new Rect(20, 30, 40, 50), source, (_, color) => painted = color);
 
             Assert.Equal(source, painted);
         }
@@ -538,8 +538,8 @@ namespace PeachPDF.Tests.Integration
             Assert.IsType<TestRecordingGraphics.PopClipCall>(g.Log[lineIndex + 1]);
 
             var leftClip = Assert.Single(g.ClipPaths);
-            var outerBottom = new RPoint(borderRect.Left, borderRect.Bottom);
-            var innerBottom = new RPoint(
+            var outerBottom = new PaintPoint(borderRect.Left, borderRect.Bottom);
+            var innerBottom = new PaintPoint(
                 borderRect.Left + div.ActualBorderLeftWidth,
                 borderRect.Bottom - div.ActualBorderBottomWidth);
             Assert.Contains(leftClip.Points, point =>
@@ -585,7 +585,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
 
             var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => !p.Stroked);
-            Assert.Equal(RColor.FromArgb(51, 51, 51), ring.Color);
+            Assert.Equal(PaintColor.FromArgb(51, 51, 51), ring.PaintColor);
 
             // Two rectangular subpaths - the border box and the padding box - filled even-odd.
             Assert.Equal(8, ring.Points.Count);
@@ -669,7 +669,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var stroked = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => p.Stroked);
-            Assert.Equal(RColor.FromArgb(51, 51, 51), stroked.Color);
+            Assert.Equal(PaintColor.FromArgb(51, 51, 51), stroked.PaintColor);
         }
 
         [Theory]
@@ -707,7 +707,7 @@ namespace PeachPDF.Tests.Integration
             // Four strokes that butt end-to-end leave the same antialiasing seam four abutting fills do.
             var stroked = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => p.Stroked).ToList();
             Assert.Single(stroked);
-            Assert.Equal(RColor.FromArgb(51, 51, 51), stroked[0].Color);
+            Assert.Equal(PaintColor.FromArgb(51, 51, 51), stroked[0].PaintColor);
         }
 
         [Fact]
@@ -726,8 +726,8 @@ namespace PeachPDF.Tests.Integration
             var fills = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
             Assert.Equal(2, fills.Count);
             Assert.Equal(
-                [RColor.FromArgb(51, 51, 51), RColor.FromArgb(9, 9, 9)],
-                fills.Select(fill => fill.Color));
+                [PaintColor.FromArgb(51, 51, 51), PaintColor.FromArgb(9, 9, 9)],
+                fills.Select(fill => fill.PaintColor));
             Assert.All(fills.SelectMany(fill => fill.Points), point =>
             {
                 Assert.InRange(point.X, borderRect.Left - 0.01, borderRect.Right + 0.01);
@@ -826,9 +826,9 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(bands, path => path.Stroked);
             Assert.All(bands, path => Assert.True(path.Points.Count > 8));
 
-            var color = RColor.FromArgb(51, 51, 51);
-            Assert.Equal(BorderBevelColors.Shade(color, darken: true), bands[0].Color);
-            Assert.Equal(BorderBevelColors.Shade(color, darken: false), bands[1].Color);
+            var color = PaintColor.FromArgb(51, 51, 51);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: true), bands[0].PaintColor);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: false), bands[1].PaintColor);
         }
 
         [Theory]
@@ -851,14 +851,14 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(4, bands.Count);
             Assert.All(bands, band => Assert.True(band.Points.Count > 8));
 
-            var color = RColor.FromArgb(51, 51, 51);
+            var color = PaintColor.FromArgb(51, 51, 51);
             var dark = BorderBevelColors.Shade(color, darken: true);
             var light = BorderBevelColors.Shade(color, darken: false);
             var outerTopLeft = outerIsInset ? dark : light;
             var outerBottomRight = outerIsInset ? light : dark;
 
             Assert.Equal([outerTopLeft, outerBottomRight, outerBottomRight, outerTopLeft],
-                bands.Select(b => b.Color));
+                bands.Select(b => b.PaintColor));
 
             // The first two paths form the outer half and reach the border box. The inner two begin
             // halfway through the 12pt border, so neither can reach its corresponding outer edge.
@@ -892,16 +892,16 @@ namespace PeachPDF.Tests.Integration
             // CSS Backgrounds 3 leaves the exact continuous width-ratio mapping UA-defined. Chrome's
             // historical mapping gives the left side 10/(18+10) of the top-left quadrant.
             var split = Math.PI + Math.PI / 2 * 10 / (18 + 10d);
-            var expectedTransition = new RPoint(
+            var expectedTransition = new PaintPoint(
                 borderRect.Left + radii.TLX + radii.TLX * Math.Cos(split),
                 borderRect.Top + radii.TLY + radii.TLY * Math.Sin(split));
             Assert.Equal(expectedTransition.X, bands[0].Points[0].X, 2);
             Assert.Equal(expectedTransition.Y, bands[0].Points[0].Y, 2);
 
-            var top = RColor.FromArgb(217, 74, 74);
-            var left = RColor.FromArgb(217, 199, 74);
-            var bottom = RColor.FromArgb(74, 144, 217);
-            var right = RColor.FromArgb(74, 217, 138);
+            var top = PaintColor.FromArgb(217, 74, 74);
+            var left = PaintColor.FromArgb(217, 199, 74);
+            var bottom = PaintColor.FromArgb(74, 144, 217);
+            var right = PaintColor.FromArgb(74, 217, 138);
             Assert.Equal(
                 [
                     BorderBevelColors.Shade(top, darken: true),
@@ -913,7 +913,7 @@ namespace PeachPDF.Tests.Integration
                     BorderBevelColors.Shade(bottom, darken: true),
                     BorderBevelColors.Shade(right, darken: true)
                 ],
-                bands.Select(band => band.Color));
+                bands.Select(band => band.PaintColor));
         }
 
         [Fact]
@@ -934,9 +934,9 @@ namespace PeachPDF.Tests.Integration
 
             // The chosen styles make every outer face dark and every inner face light. All four
             // disjoint sides of each shade must therefore be filled in one operation, avoiding seams.
-            var color = RColor.FromArgb(51, 51, 51);
-            Assert.Equal(BorderBevelColors.Shade(color, darken: true), bands[0].Color);
-            Assert.Equal(BorderBevelColors.Shade(color, darken: false), bands[1].Color);
+            var color = PaintColor.FromArgb(51, 51, 51);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: true), bands[0].PaintColor);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: false), bands[1].PaintColor);
             Assert.All(bands, path => Assert.True(path.Points.Count > 32));
         }
 
@@ -955,14 +955,14 @@ namespace PeachPDF.Tests.Integration
             var fills = paths.Where(path => !path.Stroked).ToList();
             var dashed = Assert.Single(paths, path => path.Stroked);
 
-            var color = RColor.FromArgb(74, 144, 217);
+            var color = PaintColor.FromArgb(74, 144, 217);
             Assert.Equal(
                 [
                     BorderBevelColors.Shade(color, darken: true),
                     color,
                     BorderBevelColors.Shade(color, darken: false)
                 ],
-                fills.Select(fill => fill.Color));
+                fills.Select(fill => fill.PaintColor));
 
             Assert.True(dashed.Points.Count > 4);
             var clip = Assert.Single(g.ClipPaths);
@@ -988,7 +988,7 @@ namespace PeachPDF.Tests.Integration
             var dotted = Assert.Single(
                 g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
                 path => path.Stroked);
-            Assert.Equal(RLineCap.Round, dotted.LineCap);
+            Assert.Equal(LineCap.Round, dotted.LineCap);
             Assert.Equal(10.5, dotted.StrokeWidth, 3);
             Assert.NotNull(dotted.DashPattern);
             Assert.Equal(0, dotted.DashPattern![0]);
@@ -1066,7 +1066,7 @@ namespace PeachPDF.Tests.Integration
                 g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
                 path => path.Stroked);
             Assert.NotNull(stroke.DashPattern);
-            Assert.Equal(RLineCap.Butt, stroke.LineCap);
+            Assert.Equal(LineCap.Butt, stroke.LineCap);
             Assert.Equal(2 * stroke.StrokeWidth, stroke.DashPattern![0], 6);
             Assert.Equal(0, stroke.DashOffset);
             Assert.Equal(stroke.Points[0], stroke.Points[^1]);
@@ -1087,10 +1087,10 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), path => path.Stroked);
             var fills = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
 
-            var color = RColor.FromArgb(51, 51, 51);
-            Assert.Equal(2, fills.Count(fill => fill.Color == color));
-            Assert.Contains(fills, fill => fill.Color == BorderBevelColors.Shade(color, darken: true));
-            Assert.Contains(fills, fill => fill.Color == BorderBevelColors.Shade(color, darken: false));
+            var color = PaintColor.FromArgb(51, 51, 51);
+            Assert.Equal(2, fills.Count(fill => fill.PaintColor == color));
+            Assert.Contains(fills, fill => fill.PaintColor == BorderBevelColors.Shade(color, darken: true));
+            Assert.Contains(fills, fill => fill.PaintColor == BorderBevelColors.Shade(color, darken: false));
         }
 
         [Fact]
@@ -1291,7 +1291,7 @@ namespace PeachPDF.Tests.Integration
             // line. They have a gap between them, so unlike four abutting edges they cannot seam.
             var stroked = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => p.Stroked).ToList();
             Assert.Equal(2, stroked.Count);
-            Assert.All(stroked, p => Assert.Equal(RColor.FromArgb(51, 51, 51), p.Color));
+            Assert.All(stroked, p => Assert.Equal(PaintColor.FromArgb(51, 51, 51), p.PaintColor));
 
             // CSS 2.1 §8.5.3's equal thirds: each line is 4pt of the 12pt border, so the outer line is
             // centred 2pt in and the inner one 10pt in - their paths are 8pt apart on every side.
@@ -1329,7 +1329,7 @@ namespace PeachPDF.Tests.Integration
             var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
             // Two sides painted (left, right), each as a mitered quad - top/bottom (none) draw nothing.
             Assert.Equal(2, polys.Count);
-            Assert.All(polys, p => Assert.Equal(RColor.FromArgb(51, 51, 51), p.Color));
+            Assert.All(polys, p => Assert.Equal(PaintColor.FromArgb(51, 51, 51), p.PaintColor));
 
             // A vertical (left/right) side quad spans more in Y than X; a horizontal one would be the
             // reverse.
@@ -1506,8 +1506,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);
 
-            var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
-            var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
+            var dark = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: true);
+            var light = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: false);
             var leading = leadingIsDark ? dark : light;
             var trailing = leadingIsDark ? light : dark;
 
@@ -1519,15 +1519,15 @@ namespace PeachPDF.Tests.Integration
             // at a column line's position, in that line's own two faces.
             var horizontal = FacesByPosition(HorizontalBands(g), b => b.Top);
             Assert.Equal(4, horizontal.Count);
-            Assert.Equal([leading, trailing, leading, trailing], horizontal.Select(f => f.First().Color));
+            Assert.Equal([leading, trailing, leading, trailing], horizontal.Select(f => f.First().PaintColor));
 
             // Which way the line RUNS plays no part - a column line shades exactly as a row line does.
             var vertical = FacesByPosition(VerticalBands(g), b => b.Left);
             Assert.Equal(4, vertical.Count);
-            Assert.Equal([leading, trailing, leading, trailing], vertical.Select(f => f.First().Color));
+            Assert.Equal([leading, trailing, leading, trailing], vertical.Select(f => f.First().PaintColor));
 
             // A split never splits a face's colour, whatever draws the pieces at one position.
-            Assert.All(horizontal.Concat(vertical), f => Assert.Single(f.Select(b => b.Color).Distinct()));
+            Assert.All(horizontal.Concat(vertical), f => Assert.Single(f.Select(b => b.PaintColor).Distinct()));
 
             // Each face is half the line, so neither can be widened into the other unnoticed.
             Assert.All(horizontal.Concat(vertical).SelectMany(f => f), b => Assert.Equal(6, b.Thickness, 2));
@@ -1549,8 +1549,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);
 
-            var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
-            var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
+            var dark = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: true);
+            var light = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: false);
 
             // Three lines per axis: the two outer ones and the shared interior one between them, six
             // faces in all. Grouped by the band's own position across the line rather than counted as
@@ -1566,11 +1566,11 @@ namespace PeachPDF.Tests.Integration
                 var faces = FacesByPosition(bands, position);
 
                 Assert.Equal(6, faces.Count);
-                Assert.Equal([light, dark, light, dark, light, dark], faces.Select(f => f.First().Color));
+                Assert.Equal([light, dark, light, dark, light, dark], faces.Select(f => f.First().PaintColor));
                 Assert.All(faces, f => Assert.All(f, b => Assert.Equal(6, b.Thickness, 2)));
 
                 // A split never splits a band's colour - every piece of one face is that one face.
-                Assert.All(faces, f => Assert.Single(f.Select(b => b.Color).Distinct()));
+                Assert.All(faces, f => Assert.Single(f.Select(b => b.PaintColor).Distinct()));
 
                 // The interior pair is ONE line's two halves, not two abutting lines. Contiguity alone
                 // would hold either way, so it is the pair's total extent that says which: 12pt across -
@@ -1599,7 +1599,7 @@ namespace PeachPDF.Tests.Integration
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.NotEmpty(lines);
-            Assert.All(lines, l => Assert.Equal(dotted ? RLineCap.Round : RLineCap.Butt, l.LineCap));
+            Assert.All(lines, l => Assert.Equal(dotted ? LineCap.Round : LineCap.Butt, l.LineCap));
             Assert.All(lines, l =>
             {
                 Assert.NotNull(l.DashPattern);
@@ -1622,14 +1622,14 @@ namespace PeachPDF.Tests.Integration
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.NotEmpty(lines);
-            Assert.Contains(lines, l => l.DashPattern is null && l.DashStyle == RDashStyle.Solid);
+            Assert.Contains(lines, l => l.DashPattern is null && l.DashStyle == DashStyle.Solid);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         /// <summary>A filled band's colour and axis-aligned bounds - every border style except
         /// dotted/dashed now paints bands (mitred quads) rather than stroked lines.</summary>
-        private readonly record struct BandInfo(RColor Color, double Left, double Top, double Width, double Height)
+        private readonly record struct BandInfo(PaintColor PaintColor, double Left, double Top, double Width, double Height)
         {
             public double Right => Left + Width;
             public double Bottom => Top + Height;
@@ -1643,7 +1643,7 @@ namespace PeachPDF.Tests.Integration
         {
             var left = p.Points.Min(pt => pt.X);
             var top = p.Points.Min(pt => pt.Y);
-            return new BandInfo(p.Color, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
+            return new BandInfo(p.PaintColor, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
         }
 
         /// <summary>

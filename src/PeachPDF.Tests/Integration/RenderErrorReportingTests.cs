@@ -1,13 +1,11 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,7 +38,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException(Marker);
         }
 
@@ -48,8 +46,8 @@ namespace PeachPDF.Tests.Integration
         {
             internal const string Marker = "paint blew up";
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size,
-                double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) =>
+            public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size,
+                double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) =>
                 throw new InvalidOperationException(Marker);
         }
 

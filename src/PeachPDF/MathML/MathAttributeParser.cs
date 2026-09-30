@@ -12,8 +12,7 @@
 #endregion
 
 using System.Globalization;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {
@@ -178,12 +177,12 @@ namespace PeachPDF.MathML
         }
 
         /// <summary>Parses <c>mathcolor</c>/<c>mathbackground</c> as ordinary CSS <c>&lt;color&gt;</c>
-        /// syntax (MathML Core §2.2 explicitly reuses the CSS Color grammar) - reuses the real CSS color
+        /// syntax (MathML Core §2.2 explicitly reuses the CSS PaintColor grammar) - reuses the real CSS color
         /// parser rather than a second, independently-derived one. Returns null if absent/invalid
         /// (background specifically also treats the CSS keyword <c>"transparent"</c> as "no color",
         /// consistent with how it's actually used - MathML 3's own <c>"none"</c> keyword also means this).
         /// </summary>
-        public static RColor? TryParseColor(string? value, RAdapter adapter)
+        public static PaintColor? TryParseColor(string? value, RenderContext adapter)
         {
             if (string.IsNullOrWhiteSpace(value) || value.Trim() is "none" or "transparent")
                 return null;

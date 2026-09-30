@@ -5,7 +5,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Unicode;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
@@ -1338,7 +1338,7 @@ namespace PeachPDF.Tests.Integration
             var suffixColumn = el.LineBoxes.First(l => l.Words.Contains(suffix));
             Assert.NotSame(prefixColumn, suffixColumn);
 
-            var candidates = HyphenationEngine.FindHyphenationPoints("antidisestablishmentarianism", "en");
+            var candidates = Hyphenator.FindBreakPoints("antidisestablishmentarianism", "en");
             Assert.Contains(prefix.Text!.TrimEnd('-').Length, candidates);
         }
 

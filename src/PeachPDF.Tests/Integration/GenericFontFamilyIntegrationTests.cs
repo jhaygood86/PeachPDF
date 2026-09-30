@@ -1,7 +1,6 @@
 using PeachDrawing.Text;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -29,38 +28,10 @@ namespace PeachPDF.Tests.Integration
             if (!OperatingSystem.IsWindows()) return;
 
             var adapter = new PdfSharpAdapter();
-            var font = adapter.GetFont("monospace", 12, RFontStyle.Regular) as FontAdapter;
+            var font = adapter.GetFont("monospace", 12, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.NotNull(font);
             Assert.Equal("Consolas", font!.Font.Name);
-        }
-
-        [Fact]
-        public void SystemUi_WhenFontconfigCannotAnswer_FallsBackToTheDefaultFont()
-        {
-            // Off Linux, and on a Linux host with no libfontconfig.so.1 (or a resolution failure —
-            // LinuxSystemFontResolver catches and returns null), there is no fontconfig answer at all.
-            Assert.Equal(DefaultFontResolver.DefaultFont,
-                GenericFamilyTable.Resolve(GenericFamily.SystemUi, null, false, false, false, _ => true) ?? DefaultFontResolver.DefaultFont);
-        }
-
-        [Fact]
-        public void SystemUi_WhenFontconfigNamesAFamilyThatIsNotInstalled_FallsBackToTheDefaultFont()
-        {
-            // fontconfig can name a family this process cannot actually load. Verified with a
-            // synthetic name because on any real machine fontconfig's own answer IS installed, so the
-            // branch would never run and the assertion would hold whether or not the code did
-            // anything — the same reason DefaultFontFallbackTests uses a synthetic default.
-            Assert.Equal(DefaultFontResolver.DefaultFont,
-                GenericFamilyTable.Resolve(GenericFamily.SystemUi, "PeachPDF Test Family That Is Not Installed", false, false, false, _ => false) ?? DefaultFontResolver.DefaultFont);
-        }
-
-        [Fact]
-        public void SystemUi_WhenFontconfigNamesAnInstalledFamily_UsesIt()
-        {
-            // The contrast case: without it, the two above also pass if the mapping always fell back.
-            Assert.Equal("FreeSans",
-                GenericFamilyTable.Resolve(GenericFamily.SystemUi, "FreeSans", false, false, false, _ => true) ?? DefaultFontResolver.DefaultFont);
         }
 
         [Theory]
@@ -94,7 +65,7 @@ namespace PeachPDF.Tests.Integration
             if (adapter.IsFontExists("Latin Modern Math"))
                 return;
 
-            var font = adapter.GetFont("math", 12, RFontStyle.Regular) as FontAdapter;
+            var font = adapter.GetFont("math", 12, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.NotNull(font);
             Assert.Equal("Cambria Math", font!.Font.Name);

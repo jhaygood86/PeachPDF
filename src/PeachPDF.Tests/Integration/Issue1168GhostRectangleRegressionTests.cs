@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -182,7 +182,7 @@ namespace PeachPDF.Tests.Integration
 
             var orphanLine = new CssLineBox(box);
             box.LineBoxes.Remove(orphanLine);
-            box.Rectangles[orphanLine] = new RRect(0, 0, 10, 10);
+            box.Rectangles[orphanLine] = new Rect(0, 0, 10, 10);
 
             var ghosts = FindGhostRectangles(root);
 

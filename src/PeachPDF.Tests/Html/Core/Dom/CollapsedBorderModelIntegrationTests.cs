@@ -118,11 +118,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var resolved = table.CollapsedBorders!.Horizontal(1, 0);
 
             // Cell (blue) beats row (red) - both 3pt solid, cell has higher origin priority.
-            Assert.Equal(RColorBlue(), resolved.Color);
+            Assert.Equal(RColorBlue(), resolved.PaintColor);
         }
 
-        private static PeachPDF.Html.Adapters.Entities.RColor RColorBlue() =>
-            PeachPDF.Html.Adapters.Entities.RColor.FromArgb(0, 0, 255);
+        private static PeachDrawing.Core.PaintColor RColorBlue() =>
+            PeachDrawing.Core.PaintColor.FromArgb(0, 0, 255);
 
         [Fact]
         public async Task RowBorder_WinsWhenNoCellDeclaresOne()

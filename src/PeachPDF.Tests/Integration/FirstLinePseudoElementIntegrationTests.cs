@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -39,8 +39,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(onFirstLine);
             Assert.NotEmpty(onLaterLines);
-            Assert.All(onFirstLine, c => Assert.Equal(RColor.FromArgb(255, 0, 0), c.Color));
-            Assert.All(onLaterLines, c => Assert.NotEqual(RColor.FromArgb(255, 0, 0), c.Color));
+            Assert.All(onFirstLine, c => Assert.Equal(PaintColor.FromArgb(255, 0, 0), c.PaintColor));
+            Assert.All(onLaterLines, c => Assert.NotEqual(PaintColor.FromArgb(255, 0, 0), c.PaintColor));
         }
 
         [Fact]
@@ -223,7 +223,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, p, g);
             Assert.NotEmpty(g.DrawStringCalls);
-            Assert.All(g.DrawStringCalls, c => Assert.Equal(RColor.FromArgb(0, 0, 255), c.Color));
+            Assert.All(g.DrawStringCalls, c => Assert.Equal(PaintColor.FromArgb(0, 0, 255), c.PaintColor));
         }
 
         [Fact]
@@ -241,7 +241,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, p, g);
 
             Assert.NotEmpty(g.DrawStringCalls);
-            Assert.All(g.DrawStringCalls, c => Assert.Equal(RColor.FromArgb(0, 128, 0), c.Color));
+            Assert.All(g.DrawStringCalls, c => Assert.Equal(PaintColor.FromArgb(0, 128, 0), c.PaintColor));
 
             var deepWords = AllDescendants(deep).Prepend(deep).SelectMany(x => x.Words).ToList();
             Assert.NotEmpty(deepWords);
@@ -279,7 +279,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, p, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            Assert.Contains(rects, r => r.Color == RColor.FromArgb(0, 255, 0));
+            Assert.Contains(rects, r => r.PaintColor == PaintColor.FromArgb(0, 255, 0));
         }
 
         [Fact]

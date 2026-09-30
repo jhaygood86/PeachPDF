@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -169,7 +169,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(SheetW, SheetH),
+                PageSize = new Size(SheetW, SheetH),
                 MarginTop = 40,
                 MarginLeft = 30,
             };
@@ -207,7 +207,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(SheetW, SheetH),
+                PageSize = new Size(SheetW, SheetH),
                 MarginTop = 40,
             };
 
@@ -293,7 +293,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(SheetW * ppp, SheetH * ppp)
+                PageSize = new Size(SheetW * ppp, SheetH * ppp)
             };
             await container.SetHtml(html, null);
             return container;
@@ -309,15 +309,15 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(SheetW * ppp, SheetH * ppp)
+                PageSize = new Size(SheetW * ppp, SheetH * ppp)
             };
             await container.SetHtml(html, null);
 
-            container.PageSize = new RSize(
+            container.PageSize = new Size(
                 SheetW * ppp - container.MarginLeft - container.MarginRight,
                 SheetH * ppp - container.MarginTop - container.MarginBottom);
-            container.Location = new RPoint(container.MarginLeft, container.MarginTop);
-            container.MaxSize = new RSize(container.PageSize.Width, 0);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             var measure = XGraphics.CreateMeasureContext(
                 new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);

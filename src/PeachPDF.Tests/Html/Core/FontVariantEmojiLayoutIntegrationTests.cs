@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -15,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// End-to-end coverage of CSS Fonts 4 <c>font-variant-emoji</c> and the U+FE0E/U+FE0F selectors through
-    /// real layout with two genuinely different fonts covering U+2764 HEAVY BLACK HEART: Noto Color Emoji (a
+    /// real layout with two genuinely different fonts covering U+2764 HEAVY BLACK HEART: Noto PaintColor Emoji (a
     /// COLR/CPAL colour font) and Source Sans 3 (an outline font). Both cover the character, so the only thing
     /// that can pick the right one is the requested presentation - a no-op implementation resolves every case
     /// to whichever family comes first in the stack and fails these assertions.
@@ -32,7 +31,7 @@ namespace PeachPDF.Tests.Html.Core
             public string ColourName => FontName("ColourFam");
             public string TextName => FontName("TextFam");
 
-            private string FontName(string family) => ((FontAdapter)Adapter.GetFont(family, 12, RFontStyle.Regular)!).Font.Name;
+            private string FontName(string family) => ((FontAdapter)Adapter.GetFont(family, 12, PaintFontStyle.Regular)!).Font.Name;
 
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
 
@@ -235,7 +234,7 @@ namespace PeachPDF.Tests.Html.Core
         public async Task Unicode_DrawsAnEmojiDefaultCharacterAsEmoji_EvenWhenTheOutlineFontComesFirst()
         {
             // U+1F44D THUMBS UP SIGN has Emoji_Presentation=Yes and is a participant (it has a variation
-            // sequence); Noto Color Emoji and Source Sans 3 do not both cover it, so use the mono Noto Emoji.
+            // sequence); Noto PaintColor Emoji and Source Sans 3 do not both cover it, so use the mono Noto Emoji.
             var adapter = new PdfSharpAdapter();
             await BundledFonts.RegisterFont(adapter, BundledFonts.ColorEmoji, "ColourFam");
             await BundledFonts.RegisterFont(adapter, BundledFonts.Emoji, "OutlineEmojiFam");
@@ -251,7 +250,7 @@ namespace PeachPDF.Tests.Html.Core
             await container.PerformLayout(graphics);
 
             var layout = new Layout(adapter, container.Root!);
-            var expected = ((FontAdapter)adapter.GetFont("ColourFam", 12, RFontStyle.Regular)!).Font.Name;
+            var expected = ((FontAdapter)adapter.GetFont("ColourFam", 12, PaintFontStyle.Regular)!).Font.Name;
 
             Assert.Equal([expected], layout.WordFonts("p"));
         }

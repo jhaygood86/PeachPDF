@@ -12,14 +12,16 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using System.Text;
 
 namespace PeachPDF.Adapters
@@ -27,7 +29,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for WinForms Graphics for core.
     /// </summary>
-    internal sealed class GraphicsAdapter : RGraphics
+    internal sealed class GraphicsAdapter : Canvas, ITransparencyProbeSource
     {
         /// <summary>
         /// The wrapped WinForms graphics object
@@ -47,16 +49,16 @@ namespace PeachPDF.Adapters
         /// decodes every glyph's outline, and a decorated paragraph repeats the same words on line after
         /// line.
         /// </summary>
-        private readonly Dictionary<InkCrossingKey, List<RInkSpan>?> _inkCrossings = [];
+        private readonly Dictionary<InkCrossingKey, List<InkSpan>?> _inkCrossings = [];
 
         public override double PixelsPerPoint { get; }
 
-        internal override object? FormCacheOwner => _g.Owner;
+        public override object? TileCacheOwner => _g.Owner;
 
         /// <summary>
         /// _releaseGraphics is set true exactly for tile-backed instances (see the constructor
         /// comment and CreateTile below), making it the same signal as "paints into an offscreen
-        /// tile" - see RGraphics.IsOffscreenTile.
+        /// tile" - see Canvas.IsOffscreenTile.
         /// </summary>
         public override bool IsOffscreenTile => _releaseGraphics;
 
@@ -81,8 +83,8 @@ namespace PeachPDF.Adapters
         /// <param name="g">the win forms graphics object to use</param>
         /// <param name="pixelsPerPoint">The number of pixels in each point</param>
         /// <param name="releaseGraphics">optional: if to release the graphics object on dispose (default - false)</param>
-        public GraphicsAdapter(RAdapter adapter, XGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
-            : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue))
+        public GraphicsAdapter(RenderContext adapter, XGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
+            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             ArgumentNullException.ThrowIfNull(g);
 
@@ -90,7 +92,14 @@ namespace PeachPDF.Adapters
             _releaseGraphics = releaseGraphics;
 
             PixelsPerPoint = pixelsPerPoint;
+            _previousSvgGlyphPainter = _g.SvgGlyphPainter;
+            _g.SvgGlyphPainter = new SvgGlyphPainter(this, adapter);
         }
+
+        private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
+
+        /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
+        internal RenderContext Adapter => _adapter;
 
         public override void PopClip()
         {
@@ -98,14 +107,14 @@ namespace PeachPDF.Adapters
             _g.Restore();
         }
 
-        public override void PushClip(RRect rect)
+        public override void PushClip(Rect rect)
         {
             _clipStack.Push(rect);
             _g.Save();
             _g.IntersectClip(Utils.Convert(rect, PixelsPerPoint));
         }
 
-        public override void PushClip(RGraphicsPath path)
+        public override void PushClip(GraphicsPath path)
         {
             // No simple bounding rectangle for an arbitrary path, so keep the tracked clip bound
             // conservative (unchanged) - it's only used for culling, and an over-wide bound never
@@ -115,17 +124,22 @@ namespace PeachPDF.Adapters
             _g.IntersectClip(((GraphicsPathAdapter)path).GraphicsPath);
         }
 
-        public override void PushClipExclude(RRect rect)
+        public override void PushClipExclude(Rect rect)
         { }
 
         // The accumulated pushed transforms, so a raster region can pick a pixel pitch that is right after the transforms are
         // applied (from the linear part) and an SVG backdrop repaint can map between coordinate spaces (the whole matrix).
-        private readonly Stack<RMatrix> _transformStack = [];
-        private RMatrix _accumulated = RMatrix.Identity;
+        private readonly Stack<Matrix3x2> _transformStack = [];
+        private Matrix3x2 _accumulated = Matrix3x2.Identity;
 
-        internal override RMatrix CurrentTransform => _accumulated;
+        public override Matrix3x2 CurrentTransform => _accumulated;
 
-        internal override (double X, double Y) TransformScale
+        /// <summary>Seeds <see cref="CurrentTransform"/> for a freshly created tile - see <see cref="Canvas.CreateTile"/>'s
+        /// doc remarks for why. Bookkeeping only: the tile's own native PDF graphics state (<see cref="_g"/>) still starts at
+        /// its own identity, so this has no effect on what actually gets drawn into it.</summary>
+        internal void SeedTransform(Matrix3x2 requester) => _accumulated = requester;
+
+        public override (double X, double Y) TransformScale
         {
             get
             {
@@ -135,7 +149,7 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override void PushTransform(RMatrix matrix)
+        public override void PushTransform(Matrix3x2 matrix)
         {
             _transformStack.Push(_accumulated);
             _accumulated = matrix.Then(_accumulated);
@@ -143,7 +157,7 @@ namespace PeachPDF.Adapters
             _g.Save();
             _g.MultiplyTransform(new XMatrix(
                 matrix.M11, matrix.M12, matrix.M21, matrix.M22,
-                matrix.OffsetX / PixelsPerPoint, matrix.OffsetY / PixelsPerPoint));
+                matrix.M31 / PixelsPerPoint, matrix.M32 / PixelsPerPoint));
         }
 
         public override void PopTransform()
@@ -154,7 +168,7 @@ namespace PeachPDF.Adapters
             _g.Restore();
         }
 
-        public override void PushBlendMode(RBlendMode mode)
+        public override void PushBlendMode(PaintBlendMode mode)
         {
             _g.Save();
             _g.SetBlendMode(mode.ToString());
@@ -180,36 +194,38 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null)
+        public override Size MeasureString(string str, Font font, ShapeSettings? features = null)
         {
             var realFont = ((FontAdapter)font).Font;
             var size = _g.MeasureString(str, realFont, _stringFormat, features ?? ShapeSettings.Default);
             return Utils.Convert(size, PixelsPerPoint);
         }
 
-        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null)
+        public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null)
         {
-            return Shaper.Shape(((FontAdapter)font).Font.Typeface, str, features ?? ShapeSettings.Default).Glyphs.Count;
+            // Real production fonts always resolve a typeface (FontAdapter.Typeface never returns null);
+            // only a test double's font stub can, and this PDF-writing path never sees one of those.
+            return Shaper.Shape(font.Typeface!, str, features ?? ShapeSettings.Default).Glyphs.Count;
         }
 
-        public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+        public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth)
         {
             // there is no need for it - used for text selection
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) =>
+        public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
 
-        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?, string?)"/>'s
+        /// <summary>See <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - threaded straight through to
         /// <see cref="XGraphics.DrawString(string, XFont, XBrush, double, double, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>,
         /// the one real PDF-writing path that acts on it.</summary>
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, ShapeSettings? features, string? logicalText)
+        public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
             // Invisible text paints nothing, so its colour is irrelevant - and an opaque one keeps it clear of the alpha and
             // colour-space guards a real colour would pass through.
-            var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(InvisibleText ? RColor.Black : color)).Brush;
+            var xBrush = ToXBrush(_adapter.GetSolidBrush(InvisibleText ? PaintColor.Black : color));
             _g.InvisibleText = InvisibleText;
             var xPoint = Utils.Convert(point, PixelsPerPoint);
 
@@ -229,17 +245,17 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
+        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
         {
             if (InvisibleText)
                 return;
 
-            var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
+            var xBrush = ToXBrush(_adapter.GetSolidBrush(color));
             var positioned = new (int GlyphIndex, double X, double Y)[glyphs.Count];
             for (var i = 0; i < glyphs.Count; i++)
             {
                 var glyph = glyphs[i];
-                var point = Utils.Convert(new RPoint(glyph.X, glyph.Y), PixelsPerPoint);
+                var point = Utils.Convert(new PaintPoint(glyph.X, glyph.Y), PixelsPerPoint);
                 positioned[i] = (glyph.GlyphIndex, point.X, point.Y);
             }
 
@@ -247,10 +263,10 @@ namespace PeachPDF.Adapters
         }
 
         /// <summary>
-        /// Converts a resolved <see cref="RFontPalette"/> (adapter layer, <see cref="RColor"/> overrides) into the
+        /// Converts a resolved <see cref="FontPalette"/> (adapter layer, <see cref="PaintColor"/> overrides) into the
         /// backend <see cref="XGlyphPalette"/> (<see cref="XColor"/> overrides). Null passes straight through.
         /// </summary>
-        private static XGlyphPalette? ToGlyphPalette(RFontPalette? palette)
+        private static XGlyphPalette? ToGlyphPalette(FontPalette? palette)
         {
             if (palette is null)
                 return null;
@@ -262,12 +278,12 @@ namespace PeachPDF.Adapters
             return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
-            TextOutlineBuilder.Build(GetGraphicsPath(), ((FontAdapter)font).Font, PixelsPerPoint, str, baselineOrigin, letterSpacing,
+        public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
+            TextOutlineBuilder.Build(GetGraphicsPath(), font, PixelsPerPoint, str, baselineOrigin, letterSpacing,
                 features ?? ShapeSettings.Default);
 
-        public override IReadOnlyList<RInkSpan>? GetInkCrossings(
-            string str, RFont font, RPoint origin, double bandTop, double bandBottom,
+        public override IReadOnlyList<InkSpan>? GetInkCrossings(
+            string str, Font font, PaintPoint origin, double bandTop, double bandBottom,
             double letterSpacing = 0, ShapeSettings? features = null)
         {
             var realFont = ((FontAdapter)font).Font;
@@ -277,7 +293,7 @@ namespace PeachPDF.Adapters
 
             // The baseline this run is actually painted at. Deliberately recomputed here from the font's
             // own metrics, exactly as XGraphicsPdfRenderer.DrawString does, rather than taken as
-            // `origin.Y + RFont.Ascent`: that property rounds to a whole unit (FontAdapter.Ascent), and
+            // `origin.Y + Font.Ascent`: that property rounds to a whole unit (FontAdapter.Ascent), and
             // an underline's band is one unit tall at the default thickness, so borrowing the rounded
             // value would shift the band by up to half its own height and flip whether a glyph that just
             // grazes the line is skipped.
@@ -299,110 +315,28 @@ namespace PeachPDF.Adapters
             if (relative is null) return null;
             if (relative.Count == 0) return [];
 
-            var spans = new RInkSpan[relative.Count];
+            var spans = new InkSpan[relative.Count];
             for (var i = 0; i < relative.Count; i++)
             {
-                spans[i] = new RInkSpan(relative[i].Start + origin.X, relative[i].End + origin.X);
+                spans[i] = new InkSpan(relative[i].Start + origin.X, relative[i].End + origin.X);
             }
 
             return spans;
         }
 
         /// <summary>
-        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own
-        /// origin and baseline - the form <see cref="_inkCrossings"/> caches. Null means no glyph in the
-        /// run had a decodable outline at all.
+        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own origin and baseline - the form
+        /// <see cref="_inkCrossings"/> caches. Null means no glyph in the run had a decodable outline at all.
         /// </summary>
-        private static List<RInkSpan>? MeasureInkCrossings(
+        private static List<InkSpan>? MeasureInkCrossings(
             Typeface typeface, XFont realFont, string str, in InkCrossingKey key,
             double pixelsPerPoint)
         {
-            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks. The
-            // em-square is y-up and user space is y-down, so the band's top edge is the HIGH design y.
+            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks.
             var scale = realFont.Size * pixelsPerPoint / typeface.Metrics.UnitsPerEm;
-            if (scale <= 0) return null;
-
-            List<RInkSpan> spans = [];
-            var sawOutline = false;
-            double penX = 0;
-
-            foreach (var glyph in Shaper.Shape(typeface, str, key.Features).Glyphs)
-            {
-                var glyphId = glyph.GlyphIndex;
-
-                if (typeface.TryGetOutline((ushort)glyphId, out var outline))
-                {
-                    sawOutline = true;
-
-                    // GPOS positioning shifts where this glyph paints without changing its outline -
-                    // exactly as GetTextOutline applies it, so ink is measured where it is drawn. A mark
-                    // attached with a negative XOffset therefore lands left of the base it follows, which
-                    // is why the whole list is sorted and merged below rather than assumed ordered.
-                    var glyphX = penX + glyph.XOffset * scale;
-                    var glyphY = -glyph.YOffset * scale;
-
-                    var crossings = outline.Crossings(
-                        (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale);
-
-                    // One span per glyph, hulling everything the glyph puts in the band, rather than one
-                    // span per ink run. CSS Text Decoration 4 §2.10.5 leaves the skip shape to the UA and
-                    // names this exact choice - "whether to show the line within enclosed areas of a
-                    // glyph" - noting that hiding it "gives a cleaner look to the type" and that following
-                    // each contour can leave "typographically-awkward wisps of underline". Per-run spans
-                    // produced precisely those wisps: a stub of underline stranded inside the bowl of a
-                    // 'g' or the counter of an 'o'. Both Chrome and Firefox hull per glyph - measured on
-                    // 'o', 'g', 'n', 'v', 'H' and U+2026, whose three separate dots become a single gap in
-                    // both - so this is also what a document author will have proofed against.
-                    //
-                    // Crossings is sorted and disjoint, so its first start and last end are the extremes.
-                    if (crossings.Count > 0)
-                    {
-                        spans.Add(new RInkSpan(
-                            glyphX + crossings[0].Start * scale,
-                            glyphX + crossings[^1].End * scale));
-                    }
-                }
-
-                penX += (typeface.GetAdvance((ushort)glyphId) + glyph.XAdvanceDelta) * scale + key.LetterSpacing;
-            }
-
-            // No glyph in the run had a decodable outline at all - a CFF/bitmap font, or a run of
-            // nothing but spaces. Null rather than an empty list, so the caller can tell "no ink
-            // information" from "this run genuinely crosses nothing"; see RGraphics.GetInkCrossings.
-            if (!sawOutline) return null;
-
-            return MergeSpans(spans);
-        }
-
-        /// <summary>
-        /// <paramref name="spans"/> sorted left to right and unioned, so the result honours
-        /// <see cref="RGraphics.GetInkCrossings"/>'s documented contract regardless of the order the
-        /// glyph walk produced them in.
-        /// </summary>
-        private static List<RInkSpan> MergeSpans(List<RInkSpan> spans)
-        {
-            if (spans.Count <= 1) return spans;
-
-            spans.Sort(static (a, b) => a.Start.CompareTo(b.Start));
-
-            List<RInkSpan> merged = [spans[0]];
-
-            for (var i = 1; i < spans.Count; i++)
-            {
-                var last = merged[^1];
-                var next = spans[i];
-
-                if (next.Start <= last.End)
-                {
-                    merged[^1] = new RInkSpan(last.Start, Math.Max(last.End, next.End));
-                }
-                else
-                {
-                    merged.Add(next);
-                }
-            }
-
-            return merged;
+            return InkCrossings.Measure(typeface, str, scale, key.BandTop, key.BandBottom, key.LetterSpacing, key.Features) is { } spans
+                ? [.. spans]
+                : null;
         }
 
         /// <summary>
@@ -413,12 +347,12 @@ namespace PeachPDF.Adapters
             XFont Font, string Text, double BandTop, double BandBottom, double LetterSpacing,
             ShapeSettings Features);
 
-        public override RGraphicsPath GetGraphicsPath()
+        public override GraphicsPath GetGraphicsPath()
         {
             return new GraphicsPathAdapter();
         }
 
-        public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height)
+        public override (Canvas Graphics, Image Image)? CreateTile(double width, double height)
         {
             // XForm/XGraphics.FromForm() is real, working PdfSharpCore infrastructure for drawing into
             // a separate PDF Form XObject's own content stream (rather than the page's) - the same
@@ -432,7 +366,7 @@ namespace PeachPDF.Adapters
 
             // width/height arrive in this adapter's own "inflated" layout-unit space (the caller always
             // sizes a tile from a layout rect - a box's own clip, a background layer's resolved size, an
-            // SVG filter region - the same space every other RGraphics call operates in), but an XForm's
+            // SVG filter region - the same space every other Canvas call operates in), but an XForm's
             // /BBox is a real PDF construct measured in actual page points with no conversion of its own.
             // Divide by PixelsPerPoint here so the form's declared size already matches what the content
             // painted into it will occupy once ITS OWN drawing calls apply this same division (every
@@ -450,38 +384,46 @@ namespace PeachPDF.Adapters
             // that had gone wrong.
             var form = new XForm(document, new XSize(width / PixelsPerPoint, height / PixelsPerPoint));
             var formGraphics = XGraphics.FromForm(form);
-            // releaseGraphics: true - disposing the returned tile RGraphics must dispose the
+            // releaseGraphics: true - disposing the returned tile Canvas must dispose the
             // underlying XGraphics, which is what actually calls XForm.Finish() and closes out the
             // Form XObject's content stream (see XGraphics.Dispose()). Without this, the tile's
             // drawing commands would never get flushed into the PDF at all.
             var tileGraphics = new GraphicsAdapter(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
+            // See CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only, see SeedTransform)
+            // lets a reader inside the tile (a gradient/pattern reaching it through context-fill/context-stroke,
+            // chiefly) relate the tile's coordinate space back to whatever space content outside it is measured
+            // in - the tile's own drawing commands are unaffected, since the form's native PDF graphics state
+            // (formGraphics, just created above) starts at its own identity regardless.
+            tileGraphics.SeedTransform(_accumulated);
             return (tileGraphics, new ImageAdapter(form));
         }
 
-        internal override RasterSurfaceScope? BeginRasterSurface(RRect layoutBounds, double? dpiOverride = null)
-        {
-            var scope = RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale);
-            scope?.Graphics.SeedTransform(_accumulated);
-            return scope;
-        }
+        protected override bool SupportsLayerEffects => true;
 
-        internal override bool FlattensTransparency =>
+        protected override void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects) =>
+            RasterLayerEffects.Apply(surface, effects);
+
+        public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) =>
+            RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale, _accumulated);
+
+        public override bool FlattensTransparency =>
             _g.Owner is { } owner && owner.Options.FlattenTransparency &&
             (owner.Options.PdfAConformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A ||
              owner.Options.PdfXConformance is PdfXConformance.X1a or PdfXConformance.X3);
 
         private TransparencyProbe? _probe;
 
-        internal override TransparencyProbe? CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
+        public TransparencyProbe CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
 
-        internal override void DrawRaster(RasterSurface surface)
+        public override void DrawRaster(RasterSurface surface)
         {
+
             // A bitmap with soft edges needs an image soft mask (/SMask), a transparency construct PDF/A-1 and
             // PDF/X-1a/X-3 forbid. Rejected up front, with a message naming the CSS feature rather than the
             // image, like every other transparency-requiring paint path.
             // A surface with no soft edge at all (a flattened region, or a backdrop over opaque paper) embeds without an alpha plane
             // and needs none of that.
-            var opaque = RasterEmbedder.IsOpaque(surface);
+            var opaque = RasterEmbedding.IsOpaque(surface);
             if (!opaque && _g.Owner is { } document)
             {
                 PdfATransparencyGuard.RequireAllowed(document,
@@ -494,34 +436,34 @@ namespace PeachPDF.Adapters
             // The image is placed at the surface's own snapped layout rectangle, converted to points once here
             // (the same division every other draw call makes), so its physical size is exact.
             var richBlack = _g.Owner?.Options.ColorOptions?.BlackGeneration == ColorBlackGeneration.UseRichBlack;
-            _g.DrawImage(RasterEmbedder.ToXImage(surface, asCmyk, richBlack), Utils.Convert(surface.LayoutRect, PixelsPerPoint));
+            _g.DrawImage(RasterEmbedding.ToXImage(surface, asCmyk, richBlack), Utils.Convert(surface.LayoutRect, PixelsPerPoint));
         }
 
-        public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect)
+        public override void DrawImageMasked(Image image, Image maskImage, Rect destRect)
         {
             if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
                 _g.DrawImageMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint));
         }
 
-        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal)
+        public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal)
         {
             if (((ImageAdapter)image).Image is XForm imageForm)
                 _g.DrawImageWithOpacity(imageForm, Utils.Convert(destRect, PixelsPerPoint), opacity, blendMode.ToString());
         }
 
-        public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix)
+        public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
         {
             if (((ImageAdapter)image).Image is XForm imageForm)
                 _g.DrawImageWithColorMatrix(imageForm, Utils.Convert(destRect, PixelsPerPoint), matrix);
         }
 
-        public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false)
+        public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false)
         {
             if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
                 _g.DrawImageAlphaMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint), invert);
         }
 
-        public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode)
+        public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
         {
             if (((ImageAdapter)top).Image is XForm topForm && ((ImageAdapter)bottom).Image is XForm bottomForm)
                 _g.DrawImageBlendedOver(topForm, bottomForm, Utils.Convert(destRect, PixelsPerPoint), blendMode.ToString());
@@ -557,6 +499,10 @@ namespace PeachPDF.Adapters
             _probe?.Dispose();
             _probe = null;
 
+            // Graphics wrapped one after another over one XGraphics: what draws SVG glyphs goes back to the adapter that had it.
+            if (_g.SvgGlyphPainter is SvgGlyphPainter own && ReferenceEquals(own.Host, this))
+                _g.SvgGlyphPainter = _previousSvgGlyphPainter;
+
             if (_releaseGraphics)
                 _g.Dispose();
         }
@@ -564,19 +510,22 @@ namespace PeachPDF.Adapters
 
         #region Delegate graphics methods
 
-        public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2)
+        public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {
-            _g.DrawLine(((PenAdapter)pen).Pen, x1 / PixelsPerPoint, y1 / PixelsPerPoint, x2 / PixelsPerPoint, y2 / PixelsPerPoint);
+            _g.DrawLine(ToXPen(pen), x1 / PixelsPerPoint, y1 / PixelsPerPoint, x2 / PixelsPerPoint, y2 / PixelsPerPoint);
         }
 
-        public override void DrawRectangle(RPen pen, double x, double y, double width, double height)
+        public override void DrawRectangle(Pen pen, double x, double y, double width, double height)
         {
-            _g.DrawRectangle(((PenAdapter)pen).Pen, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
+            _g.DrawRectangle(ToXPen(pen), x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
         }
 
-        public override void DrawRectangle(RBrush brush, double x, double y, double width, double height)
+        public override void DrawRectangle(Brush brush, double x, double y, double width, double height)
         {
-            var xBrush = ((BrushAdapter)brush).Brush;
+            if (TryPaintTurnedTiles(brush, new Rect(x, y, width, height), () => PushClip(new Rect(x, y, width, height))))
+                return;
+
+            var xBrush = ToXBrush(brush);
             if (xBrush is XBaseGradientBrush)
             {
                 // Wrap in q/Q so the SMask applied for transparent gradients does not
@@ -595,7 +544,7 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override void DrawImage(RImage image, RRect destRect, RRect srcRect)
+        public override void DrawImage(Image image, Rect destRect, Rect srcRect)
         {
             var naturalWidth = image.Width;
             var naturalHeight = image.Height;
@@ -634,7 +583,7 @@ namespace PeachPDF.Adapters
         /// still emits exactly the operators it did before cropping existed, and the cropped draw's own
         /// placement emits the same shape.
         /// </summary>
-        private void DrawWhole(RImage image, RRect rect)
+        private void DrawWhole(Image image, Rect rect)
         {
             var xImage = ((ImageAdapter)image).Image;
             _g.DrawImage(xImage, Utils.Convert(rect, PixelsPerPoint),
@@ -646,7 +595,7 @@ namespace PeachPDF.Adapters
         /// draw does, <c>BackgroundImageDrawHandler</c> passing <c>(0, 0, image.Width, image.Height)</c>),
         /// so the draw needs neither a clip nor an off-destination placement.
         /// </summary>
-        private static bool IsWholeImage(RRect srcRect, double naturalWidth, double naturalHeight)
+        private static bool IsWholeImage(Rect srcRect, double naturalWidth, double naturalHeight)
         {
             const double epsilon = 0.001;
             return srcRect.X <= epsilon && srcRect.Y <= epsilon &&
@@ -655,31 +604,31 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// The rectangle the whole image must be drawn into so that its <paramref name="srcRect"/> portion -
-        /// in the image's own natural units, as <see cref="RImage.Width"/>/<see cref="RImage.Height"/>
+        /// in the image's own natural units, as <see cref="Image.Width"/>/<see cref="Image.Height"/>
         /// report them (pixels for a raster, points for an <see cref="XForm"/> tile) - covers
         /// <paramref name="destRect"/> exactly. Clipping to <paramref name="destRect"/> then leaves only
         /// that portion visible. Exposed (not private) so the arithmetic can be asserted directly.
         /// </summary>
-        internal static RRect ComputeCroppedPlacement(RRect destRect, RRect srcRect, double naturalWidth, double naturalHeight)
+        internal static Rect ComputeCroppedPlacement(Rect destRect, Rect srcRect, double naturalWidth, double naturalHeight)
         {
             var scaleX = destRect.Width / srcRect.Width;
             var scaleY = destRect.Height / srcRect.Height;
 
-            return new RRect(
+            return new Rect(
                 destRect.X - srcRect.X * scaleX,
                 destRect.Y - srcRect.Y * scaleY,
                 naturalWidth * scaleX,
                 naturalHeight * scaleY);
         }
 
-        public override void DrawImage(RImage image, RRect destRect)
+        public override void DrawImage(Image image, Rect destRect)
         {
             _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect, PixelsPerPoint));
         }
 
-        public override void DrawPath(RPen pen, RGraphicsPath path)
+        public override void DrawPath(Pen pen, GraphicsPath path)
         {
-            var xPen = ((PenAdapter)pen).Pen;
+            var xPen = ToXPen(pen);
             if (xPen.Brush is XBaseGradientBrush)
             {
                 // Wrap in q/Q so the SMask applied for a transparent gradient stroke does not
@@ -696,9 +645,12 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override void DrawPath(RBrush brush, RGraphicsPath path)
+        public override void DrawPath(Brush brush, GraphicsPath path)
         {
-            var xBrush = ((BrushAdapter)brush).Brush;
+            if (brush is TileBrush or HatchBrush && TryPaintTurnedTiles(brush, new PathMeasure(path).Bounds, () => PushClip(path)))
+                return;
+
+            var xBrush = ToXBrush(brush);
             if (xBrush is XBaseGradientBrush)
             {
                 var state = _g.Save();
@@ -711,12 +663,231 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override void DrawPolygon(RBrush brush, RPoint[] points)
+        public override void DrawPolygon(Brush brush, PaintPoint[] points)
         {
             if (points is { Length: > 0 })
             {
-                _g.DrawPolygon((XBrush)((BrushAdapter)brush).Brush, Utils.Convert(points, PixelsPerPoint), XFillMode.Winding);
+                if (brush is TileBrush or HatchBrush)
+                {
+                    double minX = points.Min(p => p.X), minY = points.Min(p => p.Y);
+                    var bounds = new Rect(minX, minY, points.Max(p => p.X) - minX, points.Max(p => p.Y) - minY);
+                    if (TryPaintTurnedTiles(brush, bounds, () =>
+                        {
+                            using var outline = GetGraphicsPath();
+                            outline.AddPolygon(points);
+                            PushClip(outline);
+                        }))
+                        return;
+                }
+
+                _g.DrawPolygon(ToXBrush(brush), Utils.Convert(points, PixelsPerPoint), XFillMode.Winding);
             }
+        }
+
+        #endregion
+
+        #region Brush/pen translation
+
+        /// <summary>
+        /// Builds this backend's own <see cref="XBrush"/> from a self-describing <see cref="Brush"/> -
+        /// the PDF-specific half of the split <see cref="RenderContext"/>'s brush factories used to do
+        /// themselves before brushes became plain, backend-agnostic data (see <see cref="Brush"/>'s own
+        /// remarks). Not cached: a brush is typically drawn once or a handful of times, and a real PDF
+        /// shading brush is cheap to construct.
+        /// </summary>
+        private XBrush ToXBrush(Brush brush) => brush switch
+        {
+            SolidBrush solid => ToXSolidBrush(solid.PaintColor),
+            LinearGradientBrush linear => new XLinearGradientBrush(
+                Utils.Convert(linear.Start, PixelsPerPoint), Utils.Convert(linear.End, PixelsPerPoint),
+                linear.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
+                linear.Stops.Select(s => s.Position).ToArray())
+            { IsRepeating = linear.Spread == GradientSpread.Repeat },
+            RadialGradientBrush radial => new XRadialGradientBrush(
+                Utils.Convert(radial.Center, PixelsPerPoint), radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint,
+                radial.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
+                radial.Stops.Select(s => s.Position).ToArray(),
+                Utils.Convert(radial.Focus, PixelsPerPoint),
+                radial.Transform is { } rt ? new XMatrix(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
+            { IsRepeating = radial.Spread == GradientSpread.Repeat },
+            ConicGradientBrush conic => new XConicGradientBrush(
+                Utils.Convert(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
+                conic.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
+                conic.AnglesRadians.ToArray()),
+            TileBrush tile => ToXTilingBrush(tile),
+            HatchBrush hatch => hatch.ToTileBrush(this) is { } hatchTile
+                ? ToXTilingBrush(hatchTile)
+                : throw new NotSupportedException("A hatch needs a canvas that can make tiles."),
+            _ => throw new NotSupportedException($"Unknown brush type {brush.GetType()}"),
+        };
+
+        /// <summary>The most cells of a turned grid that are drawn one by one; a shape needing more is painted with the tiling pattern instead.</summary>
+        private const int MaxTurnedTiles = 10_000;
+
+        /// <summary>
+        /// Paints a tile brush whose grid the current transform turns or skews as individual cells under a clip, and reports whether it did.
+        /// A viewer renders a rotated tiling pattern by drawing each cell with anti-aliased edges, which shows as hairline seams between
+        /// cells; cells drawn as separate images do not. An upright grid (the usual case) is left to the tiling pattern, which is written
+        /// once however many cells it covers.
+        /// </summary>
+        private bool TryPaintTurnedTiles(Brush brush, Rect shapeBounds, Action pushShapeClip)
+        {
+            if (brush is HatchBrush hatch)
+            {
+                if (hatch.ToTileBrush(this) is not { } hatchTile)
+                    return false;
+
+                brush = hatchTile;
+            }
+
+            if (brush is not TileBrush tile || shapeBounds.Width <= 0 || shapeBounds.Height <= 0)
+                return false;
+
+            // Where a cell's edges end up on the page: the brush's own transform, then everything already pushed onto this canvas.
+            var onPage = tile.Transform.Then(_accumulated);
+            var scale = Math.Abs(onPage.M11) + Math.Abs(onPage.M22) + 1e-12;
+            if (Math.Abs(onPage.M12) <= 1e-6 * scale && Math.Abs(onPage.M21) <= 1e-6 * scale)
+                return false;
+
+            if (!Matrix3x2.Invert(tile.Transform, out var toBrush))
+                return false;
+
+            // The shape's bounds, in brush space, decide which cells can be seen.
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            foreach (var corner in new[]
+            {
+                new Vector2((float)shapeBounds.Left, (float)shapeBounds.Top), new Vector2((float)shapeBounds.Right, (float)shapeBounds.Top),
+                new Vector2((float)shapeBounds.Right, (float)shapeBounds.Bottom), new Vector2((float)shapeBounds.Left, (float)shapeBounds.Bottom),
+            })
+            {
+                var p = Vector2.Transform(corner, toBrush);
+                minX = Math.Min(minX, p.X);
+                maxX = Math.Max(maxX, p.X);
+                minY = Math.Min(minY, p.Y);
+                maxY = Math.Max(maxY, p.Y);
+            }
+
+            var firstColumn = Math.Floor(minX / tile.CellWidth);
+            var lastColumn = Math.Ceiling(maxX / tile.CellWidth);
+            var firstRow = Math.Floor(minY / tile.CellHeight);
+            var lastRow = Math.Ceiling(maxY / tile.CellHeight);
+            if ((lastColumn - firstColumn) * (lastRow - firstRow) is <= 0 or > MaxTurnedTiles)
+                return false;
+
+            pushShapeClip();
+            PushTransform(tile.Transform);
+            for (var row = firstRow; row < lastRow; row++)
+            {
+                for (var column = firstColumn; column < lastColumn; column++)
+                    DrawImage(tile.Tile, new Rect(column * tile.CellWidth, row * tile.CellHeight, tile.CellWidth, tile.CellHeight), tile.Sampling);
+            }
+
+            PopTransform();
+            PopClip();
+            return true;
+        }
+
+        /// <summary>A repeating tile as a PDF tiling pattern: a tile made by <see cref="CreateTile"/> stays vector content, any other image is embedded once.</summary>
+        private XTilingBrush ToXTilingBrush(TileBrush tile)
+        {
+            if (tile.Tile is not ImageAdapter { Image: { } image })
+                throw new NotSupportedException("A tile brush on a PDF canvas needs a tile made by this canvas or decoded by its render context.");
+
+            // Cell size and the translation are in layout units; the linear part of a transform is unit-free. See ToXBrush's gradients.
+            var m = tile.Transform;
+            var matrix = new XMatrix(m.M11, m.M12, m.M21, m.M22, m.M31 / PixelsPerPoint, m.M32 / PixelsPerPoint);
+            bool? interpolate = tile.Sampling switch
+            {
+                ImageSampling.Nearest or ImageSampling.Pixelated => false,
+                ImageSampling.Bilinear or ImageSampling.Bicubic => true,
+                _ => null,
+            };
+
+            return new XTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
+        }
+
+        /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent
+        /// cases, the same optimization <c>PdfSharpAdapter.CreateSolidBrush</c> used to apply.</summary>
+        private static XBrush ToXSolidBrush(PaintColor color)
+        {
+            if (color == PaintColor.White)
+                return XBrushes.White;
+            if (color == PaintColor.Black)
+                return XBrushes.Black;
+            if (color.A < 1)
+                return XBrushes.Transparent;
+            return new XSolidBrush(Utils.Convert(color));
+        }
+
+        /// <summary>
+        /// Builds this backend's own <see cref="XPen"/> from a self-describing <see cref="Pen"/> - the
+        /// PDF-specific half of what <c>PenAdapter</c> used to do directly.
+        /// </summary>
+        /// <remarks>
+        /// A solid-colour pen goes through <see cref="XPen"/>'s <c>XColor</c> constructor rather than its
+        /// <c>XBrush</c> one, and must: <c>PdfGraphicsState.RealizePen</c> (the PDF writer's own
+        /// stroke-alpha/colour realization) reads <c>pen.PaintColor</c> - the <c>_color</c> field the
+        /// <c>XColor</c> constructor sets - not anything derived from <c>pen.Brush</c>, so a solid pen
+        /// built via the brush constructor would keep <c>_color</c>'s default (opaque) value and silently
+        /// lose the colour's real alpha (e.g. from an SVG <c>stroke-opacity</c>). Only a gradient-painted
+        /// pen (<see cref="RenderContext.GetPen(Brush)"/>, e.g. SVG <c>stroke="url(#gradient)"</c>) needs the
+        /// brush constructor - mirroring the split PdfSharpAdapter's own <c>CreatePen(PaintColor)</c>/
+        /// <c>CreatePen(Brush)</c> used to make explicitly, before both collapsed into this one method.
+        /// </remarks>
+        private XPen ToXPen(Pen pen)
+        {
+            var xPen = pen.Paint is SolidBrush solid
+                ? new XPen(Utils.Convert(solid.PaintColor), pen.Width)
+                : new XPen(ToXBrush(pen.Paint), pen.Width);
+
+            xPen.MiterLimit = pen.MiterLimit;
+            xPen.LineCap = pen.LineCap switch
+            {
+                LineCap.Round => XLineCap.Round,
+                LineCap.Square => XLineCap.Square,
+                _ => XLineCap.Flat,
+            };
+            xPen.LineJoin = pen.LineJoin switch
+            {
+                LineJoin.Round => XLineJoin.Round,
+                LineJoin.Bevel => XLineJoin.Bevel,
+                _ => XLineJoin.Miter,
+            };
+
+            switch (pen.DashStyle)
+            {
+                case DashStyle.Solid:
+                    xPen.DashStyle = XDashStyle.Solid;
+                    break;
+                case DashStyle.Dash:
+                    xPen.DashStyle = XDashStyle.Dash;
+                    if (pen.Width < 2)
+                        xPen.DashPattern = [4, 4]; // better looking
+                    break;
+                case DashStyle.Dot:
+                    xPen.DashStyle = XDashStyle.Dot;
+                    break;
+                case DashStyle.DashDot:
+                    xPen.DashStyle = XDashStyle.DashDot;
+                    break;
+                case DashStyle.DashDotDot:
+                    xPen.DashStyle = XDashStyle.DashDotDot;
+                    break;
+                case DashStyle.Custom when pen.Width > 0:
+                    // XPen's custom dash array is expressed as multiples of pen width (a GDI+ convention -
+                    // see PdfGraphicsState.RealizePen, which multiplies each entry by pen._width when
+                    // writing the PDF "d" operator), whereas SVG's stroke-dasharray/stroke-dashoffset are
+                    // absolute user-space lengths - normalize by dividing through by the pen's width.
+                    xPen.DashStyle = XDashStyle.Custom;
+                    xPen.DashPattern = pen.DashPattern.Select(v => v / pen.Width).ToArray();
+                    xPen.DashOffset = pen.DashOffset / pen.Width;
+                    break;
+                default:
+                    xPen.DashStyle = XDashStyle.Solid;
+                    break;
+            }
+
+            return xPen;
         }
 
         #endregion

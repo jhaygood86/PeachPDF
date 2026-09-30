@@ -213,7 +213,7 @@ namespace PeachPDF.Tests.Integration
         // A path clip is popped like a rectangle one, so it holds a place on the stack but tests nothing.
         private static IEnumerable<string> VisiblyDrawnStrings(IEnumerable<PaintOp> log)
         {
-            var clips = new Stack<PeachPDF.Html.Adapters.Entities.RRect?>();
+            var clips = new Stack<PeachDrawing.Core.Rect?>();
             foreach (var op in log)
             {
                 switch (op.Kind)

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
@@ -1059,7 +1060,7 @@ namespace PeachPDF.Tests.Integration
             // silently misaligned the two - the mask would evaluate as fully transparent everywhere,
             // even though every other check here (/SMask, /Luminosity, /Subtype /Form present) still
             // passed, since those only check token presence, not where the tokens actually land.
-            // RGraphics.DrawImageMasked fixes this by emitting the mask's "gs" and the content's "Do"
+            // Canvas.DrawImageMasked fixes this by emitting the mask's "gs" and the content's "Do"
             // on the SAME "q ... cm ... gs ... Do Q" line, sharing one placement transform - assert
             // that structure directly so a future regression to the old "ambient gs, unrelated Do"
             // shape fails loudly here instead of only being visible as a blank render.
@@ -2194,6 +2195,21 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_MisCasedAttributeNameSelector_DoesNotMatch()
+        {
+            // The attribute-NAME half of case-sensitivity (as opposed to InlineSvg_MixedCaseSelector_
+            // MatchesWhenCaseAgrees / InlineSvg_GeneralCascadeAttributeValue_..., which vary the value):
+            // "DATA-HL" must NOT match a data-hl attribute through SVG's presentation-attribute pass
+            // (SvgCssBoxDomNode.GetAttribute) - the fill (blue) stands.
+            var html = InlineSvgDoc(
+                "rect[DATA-HL=\"1\"] { fill: #00ff00; }",
+                """<rect data-hl="1" fill="#0000ff" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
+        }
+
+        [Fact]
         public async Task Html_MisCasedSelector_StillMatches_CaseInsensitive()
         {
             // Regression guard: HTML matching stays ASCII case-insensitive (CssBox.NameComparison
@@ -2201,6 +2217,40 @@ namespace PeachPDF.Tests.Integration
             var html = "<!DOCTYPE html><html><head><style>body{margin:0}DIV{background-color:#00ff00}</style></head>" +
                        "<body><div style=\"width:50px;height:50px\">x</div></body></html>";
             Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_GeneralCascadeAttributeValue_StaysCaseSensitiveForHtmlLegacyAttributeNames()
+        {
+            // `dir` is on the HTML Standard's fixed legacy-attribute list (issue #1384) that makes
+            // attribute *values* ASCII case-insensitive by default - but only for elements in the HTML
+            // namespace. Custom-property assignment runs through the general cascade
+            // (DomParser.CascadeApplyStyles / plain CssBox.NameComparison), not the SVG-specific
+            // presentation-attribute pass that InlineSvg_MixedCaseSelector_MatchesWhenCaseAgrees above
+            // exercises, so this must stay case-sensitive for an inline <svg> descendant regardless of
+            // the legacy list: "RTL" must not match dir="rtl".
+            var html = InlineSvgDoc(
+                ":root { --c: #0000ff; } rect[dir=RTL] { --c: #00ff00; } rect { fill: var(--c); }",
+                """<rect dir="rtl" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GeneralCascadeAttributeName_StaysCaseSensitive()
+        {
+            // The attribute-NAME half of InlineSvg_GeneralCascadeAttributeValue_...: through the general
+            // cascade's plain CssBox.GetAttribute (as opposed to SVG's presentation-attribute pass, see
+            // InlineSvg_MisCasedAttributeNameSelector_DoesNotMatch above), "DIR" must not find dir="rtl"
+            // either - attribute-name lookup itself must stay case-sensitive for foreign content, not
+            // just the value comparison that follows it.
+            var html = InlineSvgDoc(
+                ":root { --c: #0000ff; } rect[DIR=rtl] { --c: #00ff00; } rect { fill: var(--c); }",
+                """<rect dir="rtl" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
         }
 
         // var() custom properties resolve for inline (via the HTML cascade) and standalone (via the
@@ -2395,5 +2445,73 @@ namespace PeachPDF.Tests.Integration
         }
 
         #endregion
+
+        [Fact]
+        public async Task InlineSvg_UseOpacity_UseOfUseOfContainer_RendersIsolatedTransparencyGroup()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <g id="pair">
+                      <rect x="0" y="0" width="50" height="50" fill="#ff0000"/>
+                      <rect x="20" y="20" width="50" height="50" fill="#0000ff"/>
+                    </g>
+                    <use id="alias" xlink:href="#pair"/>
+                  </defs>
+                  <use xlink:href="#alias" x="10" y="10" opacity="0.5"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            Assert.Single(Regex.Matches(pdfText, @"/ca 0\.5\b"));
+        }
+
+        private sealed class ClosureSpyGraphics : PeachPDF.Tests.TestSupport.TestRecordingGraphics
+        {
+            private sealed class BarePath : PeachDrawing.Core.GraphicsPath
+            {
+                public override PeachDrawing.Core.FillMode FillMode { get; set; }
+                public override PeachDrawing.Core.GraphicsPath ClipToRect(PeachDrawing.Core.Rect rect) => throw new System.NotSupportedException();
+                public override void Dispose() { }
+            }
+
+            public override PeachDrawing.Core.GraphicsPath GetGraphicsPath() => new BarePath();
+
+            public List<bool> FillClosed { get; } = [];
+            public List<bool> StrokeClosed { get; } = [];
+
+            public override void DrawPath(PeachDrawing.Core.Brush brush, PeachDrawing.Core.GraphicsPath path)
+            {
+                FillClosed.Add(path.Flatten(0.1)[0].Closed);
+            }
+
+            public override void DrawPath(PeachDrawing.Core.Pen pen, PeachDrawing.Core.GraphicsPath path)
+            {
+                StrokeClosed.Add(path.Flatten(0.1)[0].Closed);
+            }
+        }
+
+        [Fact]
+        public void InlineSvg_FilledPolyline_FillsAClosedShapeButStrokesTheOpenOne()
+        {
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                  <polyline points="10,10 90,10 50,90" fill="#ff0000" stroke="#0000ff" stroke-width="4"/>
+                </svg>
+                """;
+            var document = PeachPDF.Svg.SvgTreeBuilder.Build(
+                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), adapter);
+            var g = new ClosureSpyGraphics();
+
+            PeachPDF.Svg.SvgRenderer.RenderInto(g, document, new PeachDrawing.Core.Rect(0, 0, 100, 100));
+
+            Assert.Equal([true], g.FillClosed);
+            Assert.Equal([false], g.StrokeClosed);
+        }
     }
 }

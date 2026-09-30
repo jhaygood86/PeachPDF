@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration
     // dictionary title page to overflow onto a second physical PDF page instead of
     // fitting on one:
     //  1. GetEmHeight() resolved `1em` against a font's line-spacing metric
-    //     (RFont.Height) instead of its computed font-size (RFont.Size), inflating
+    //     (Font.Height) instead of its computed font-size (Font.Size), inflating
     //     every em-based margin/padding/line-height.
     //  2. Length.ToPixels() resolved absolute units (pt/in/cm/mm/pc) against a
     //     hardcoded 96dpi CSS-px convention, while the rest of the engine (page size

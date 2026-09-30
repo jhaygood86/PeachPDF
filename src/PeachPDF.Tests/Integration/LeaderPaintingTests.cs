@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Painting tests for <c>leader()</c> (css-content-3 §6), asserting the actual sequence of calls
-    /// made to the <c>RGraphics</c> adapter layer via <see cref="TestRecordingGraphics"/> - per this
+    /// made to the <c>Canvas</c> adapter layer via <see cref="TestRecordingGraphics"/> - per this
     /// repo's painting-test convention (CLAUDE.md), not a content-stream substring check. Drives the
     /// real paint pipeline off a real layout (<see cref="FragmentPaintHarness"/>), same as
     /// <c>TransformIntegrationTests</c>.

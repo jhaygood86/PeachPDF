@@ -1,7 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Unicode;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -92,7 +92,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task HyphenateLimitChars_BeforeMinimumLargerThanEveryCandidate_SuppressesHyphenationEntirely()
         {
-            var candidates = HyphenationEngine.FindHyphenationPoints(LongWord, "en");
+            var candidates = Hyphenator.FindBreakPoints(LongWord, "en");
             Assert.NotEmpty(candidates);
             var beforeMinimum = candidates.Max() + 1; // larger than any real candidate's own "before" length
 
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task HyphenateLimitChars_AfterMinimumLargerThanEveryCandidate_SuppressesHyphenationEntirely()
         {
-            var candidates = HyphenationEngine.FindHyphenationPoints(LongWord, "en");
+            var candidates = Hyphenator.FindBreakPoints(LongWord, "en");
             Assert.NotEmpty(candidates);
             // The largest possible "after" length any candidate can offer is the word's own length minus
             // its smallest candidate offset.

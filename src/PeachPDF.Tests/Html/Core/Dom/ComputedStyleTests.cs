@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var box = new CssBox(null, null);
 
-            // "black" is already ComputedStyle.Default's Color - setting it again must not produce a
+            // "black" is already ComputedStyle.Default's PaintColor - setting it again must not produce a
             // new instance (SetPropertyValue's whole reason for existing).
             box.Color = "black";
 

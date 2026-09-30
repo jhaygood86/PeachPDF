@@ -1,20 +1,19 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System.Linq;
+using System.Numerics;
 using System.Threading.Tasks;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
     // Painting-change coverage per CLAUDE.md: asserts the actual sequence of calls made to the
-    // RGraphics adapter layer (not just that painting completes, and not string-parsing serialized
+    // Canvas adapter layer (not just that painting completes, and not string-parsing serialized
     // PDF bytes) - a single ordered log records BeginMarkedContent/EndMarkedContent/BeginArtifact
     // interleaved with DrawString, so tests can assert BDC/EMC lands immediately around the draw
     // calls it's supposed to wrap, in the right nesting order.
@@ -207,67 +206,67 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// Minimal RGraphics mock recording a single ordered log of the calls this test suite cares
+        /// Minimal Canvas mock recording a single ordered log of the calls this test suite cares
         /// about (DrawString/BeginMarkedContent/EndMarkedContent/BeginArtifact) - a single shared log
         /// rather than separate per-call-type lists, since cross-call-type ordering is exactly what's
         /// under test here (per this repo's CLAUDE.md painting-test conventions).
         /// </summary>
-        sealed class RecordingGraphics : RGraphics
+        sealed class RecordingGraphics : Canvas
         {
             public System.Collections.Generic.List<(string, string?)> Log { get; } = [];
 
-            public RecordingGraphics(RAdapter adapter)
-                : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics(RenderContext adapter)
+                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void BeginMarkedContent(string structureType, int mcid) => Log.Add(("BeginMarkedContent", structureType));
             public override void EndMarkedContent() => Log.Add(("EndMarkedContent", null));
             public override void BeginArtifact() => Log.Add(("BeginArtifact", null));
             public override void BeginVariableText() => Log.Add(("BeginVariableText", null));
             public override void EndVariableText() => Log.Add(("EndVariableText", null));
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) => Log.Add(("DrawString", str));
-            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
+            public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) => Log.Add(("DrawString", str));
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }
 
-            public override void PushTransform(RMatrix matrix) { }
+            public override void PushTransform(Matrix3x2 matrix) { }
             public override void PopTransform() { }
-            public override void PushBlendMode(RBlendMode mode) { }
+            public override void PushBlendMode(PaintBlendMode mode) { }
             public override void PopBlendMode() { }
-            public override void PushClip(RRect rect) => _clipStack.Push(rect);
-            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+            public override void PushClip(Rect rect) => _clipStack.Push(rect);
+            public override void PushClip(GraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
-            public override void PushClipExclude(RRect rect) { }
+            public override void PushClipExclude(Rect rect) { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-            public override RGraphicsPath GetGraphicsPath() => new NoOpGraphicsPath();
+            public override GraphicsPath GetGraphicsPath() => new NoOpGraphicsPath();
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
-            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
-            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
-            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
-            public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) { }
-            public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) { }
-            public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) { }
-            public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new(10, 12);
-            public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
-            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
+            public override (Canvas Graphics, Image Image)? CreateTile(double width, double height) => null;
+            public override void DrawImageMasked(Image image, Image maskImage, Rect destRect) { }
+            public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) { }
+            public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix) { }
+            public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false) { }
+            public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode) { }
+            public override Size MeasureString(string str, Font font, ShapeSettings? features = null) => new(10, 12);
+            public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null) => str?.Length ?? 0;
+            public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;
                 charFitWidth = maxWidth;
             }
-            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
-            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
-            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
-            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
-            public override void DrawImage(RImage image, RRect destRect) { }
-            public override void DrawPath(RPen pen, RGraphicsPath path) => Log.Add(("StrokePath", null));
-            public override void DrawPath(RBrush brush, RGraphicsPath path) => Log.Add(("FillPath", null));
-            public override void DrawPolygon(RBrush brush, RPoint[] points) => Log.Add(("FillPolygon", null));
+            public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) { }
+            public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(Brush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(Image image, Rect destRect, Rect srcRect) { }
+            public override void DrawImage(Image image, Rect destRect) { }
+            public override void DrawPath(Pen pen, GraphicsPath path) => Log.Add(("StrokePath", null));
+            public override void DrawPath(Brush brush, GraphicsPath path) => Log.Add(("FillPath", null));
+            public override void DrawPolygon(Brush brush, PaintPoint[] points) => Log.Add(("FillPolygon", null));
             public override void Dispose() { }
         }
 
-        // A real (non-null) RGraphicsPath is needed once list-item marker painting is exercised
+        // A real (non-null) GraphicsPath is needed once list-item marker painting is exercised
         // (RenderUtils.GetRoundRect, used for disc/square markers, calls g.GetGraphicsPath()
         // unconditionally) - mirrors CssLayoutEngineTablePageBreakTests.RecordingGraphicsPath.
-        sealed class NoOpGraphicsPath : RGraphicsPath
+        sealed class NoOpGraphicsPath : GraphicsPath
         {
             public override void Start(double x, double y) { }
             public override void LineTo(double x, double y) { }
@@ -276,10 +275,10 @@ namespace PeachPDF.Tests.Integration
             public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
             public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
             public override void CloseFigure() { }
-            public override void Transform(RMatrix matrix) { }
-            public override void AddPath(RGraphicsPath path) { }
-            public override RFillMode FillMode { get; set; }
-            public override RGraphicsPath ClipToRect(RRect rect) => this;
+            public override void Transform(Matrix3x2 matrix) { }
+            public override void AddPath(GraphicsPath path) { }
+            public override FillMode FillMode { get; set; }
+            public override GraphicsPath ClipToRect(Rect rect) => this;
             public override void Dispose() { }
         }
     }

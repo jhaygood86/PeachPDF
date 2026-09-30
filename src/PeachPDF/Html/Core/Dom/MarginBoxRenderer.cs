@@ -3,8 +3,7 @@ using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
@@ -44,7 +43,7 @@ namespace PeachPDF.Html.Core.Dom
             int totalPages,
             double pageY,
             IReadOnlyList<NamedString> namedStrings,
-            RAdapter adapter,
+            RenderContext adapter,
             StyleDeclaration? pageStyle,
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache,
@@ -398,7 +397,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal static async Task<CssImage?> ResolveContentImage(
             string contentValue,
-            RAdapter adapter,
+            RenderContext adapter,
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache)
         {
@@ -452,7 +451,7 @@ namespace PeachPDF.Html.Core.Dom
         internal static async Task PaintBackgroundAndBorder(
             XGraphics g, XRect outerRect, XSize pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
-            RAdapter adapter, HtmlContainerInt htmlContainer,
+            RenderContext adapter, HtmlContainerInt htmlContainer,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
             // Root is only ever null before the document's initial layout, which has already run by the
@@ -484,16 +483,16 @@ namespace PeachPDF.Html.Core.Dom
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
 
-            RRect ToPixelRect(XRect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
+            Rect ToPixelRect(XRect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
 
             var borderBoxPx = ToPixelRect(borderBoxRect);
             var paddingBoxPx = ToPixelRect(paddingBoxRect);
             var contentBoxPx = ToPixelRect(contentBoxRect);
             // background-attachment: fixed's positioning area is the page box, the same paginated-media
             // convention the canvas (html/body) background already uses - not this one box's own rect.
-            var pageBoxPx = new RRect(0, 0, pageSize.Width * pixelsPerPoint, pageSize.Height * pixelsPerPoint);
+            var pageBoxPx = new Rect(0, 0, pageSize.Width * pixelsPerPoint, pageSize.Height * pixelsPerPoint);
 
-            RRect ResolvePositioningRect(string value) => value switch
+            Rect ResolvePositioningRect(string value) => value switch
             {
                 Keywords.ContentBox => contentBoxPx,
                 Keywords.BorderBox => borderBoxPx,
@@ -524,15 +523,15 @@ namespace PeachPDF.Html.Core.Dom
         /// distinct paint layer from a page-<em>margin</em>-box's border (this method still paints those
         /// too, via <see cref="PaintBackgroundAndBorder"/>) but identical box-model math (issue #1147).
         /// </summary>
-        internal static void PaintBorder(RGraphics g, RRect borderBoxRect, StyleDeclaration style,
-            double emPt, double remPt, double pixelsPerPoint, RAdapter adapter)
+        internal static void PaintBorder(Canvas g, Rect borderBoxRect, StyleDeclaration style,
+            double emPt, double remPt, double pixelsPerPoint, RenderContext adapter)
         {
             // borderBoxRect is already known positive-size here - the sole caller, PaintBackgroundAndBorder,
             // returns before this call otherwise. emPt is the same em-basis BorderExtent already used to
             // charge this box's own space - a border-*-width of "0.1em" must paint at the identical width
             // it was charged, or content would sit under (or float above) the stroke it made room for.
             var colorParser = new CssValueParser(adapter);
-            var textColor = string.IsNullOrEmpty(style.Color) ? RColor.Black : colorParser.GetActualColor(style.Color);
+            var textColor = string.IsNullOrEmpty(style.Color) ? PaintColor.Black : colorParser.GetActualColor(style.Color);
 
             // An edge with no explicit colour resolves currentColor exactly as
             // DerivedStyle.ResolveBorderSideColor does for an ordinary box: against the text colour
@@ -549,7 +548,7 @@ namespace PeachPDF.Html.Core.Dom
             // declaration on a <div>, whose cascade path leaves the longhand at `currentcolor`, came
             // out the two greys, and how a flat `border-bottom: 6pt solid` under `color: red` came out
             // black rather than red.
-            RColor ResolveBorderColor(string? colorValue, LineStyle lineStyle) =>
+            PaintColor ResolveBorderColor(string? colorValue, LineStyle lineStyle) =>
                 string.IsNullOrWhiteSpace(colorValue) ||
                 colorValue.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
                 colorValue.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase)
@@ -559,7 +558,7 @@ namespace PeachPDF.Html.Core.Dom
             // Each edge names the side it is, unlike a table grid line: this box's border really does
             // have four sides, so a bevelled one shades per side the way an ordinary box's does (issue
             // #1237 - an inset border used to darken all four edges here, producing no bevel at all).
-            void PaintEdge(Border side, RRect edgeRect, double widthPx, string? styleValue, string? colorValue)
+            void PaintEdge(Border side, Rect edgeRect, double widthPx, string? styleValue, string? colorValue)
             {
                 if (!Map.LineStyles.TryGetValue(styleValue ?? string.Empty, out var lineStyle))
                     lineStyle = LineStyle.None;
@@ -577,13 +576,13 @@ namespace PeachPDF.Html.Core.Dom
             var leftWidthPx = ResolveBorderWidthPt(style.BorderLeftWidth, style.BorderLeftStyle, emPt, remPt) * pixelsPerPoint;
             var rightWidthPx = ResolveBorderWidthPt(style.BorderRightWidth, style.BorderRightStyle, emPt, remPt) * pixelsPerPoint;
 
-            PaintEdge(Border.Top, new RRect(borderBoxRect.Left, borderBoxRect.Top, borderBoxRect.Width, topWidthPx),
+            PaintEdge(Border.Top, new Rect(borderBoxRect.Left, borderBoxRect.Top, borderBoxRect.Width, topWidthPx),
                 topWidthPx, style.BorderTopStyle, style.BorderTopColor);
-            PaintEdge(Border.Bottom, new RRect(borderBoxRect.Left, borderBoxRect.Bottom - bottomWidthPx, borderBoxRect.Width, bottomWidthPx),
+            PaintEdge(Border.Bottom, new Rect(borderBoxRect.Left, borderBoxRect.Bottom - bottomWidthPx, borderBoxRect.Width, bottomWidthPx),
                 bottomWidthPx, style.BorderBottomStyle, style.BorderBottomColor);
-            PaintEdge(Border.Left, new RRect(borderBoxRect.Left, borderBoxRect.Top, leftWidthPx, borderBoxRect.Height),
+            PaintEdge(Border.Left, new Rect(borderBoxRect.Left, borderBoxRect.Top, leftWidthPx, borderBoxRect.Height),
                 leftWidthPx, style.BorderLeftStyle, style.BorderLeftColor);
-            PaintEdge(Border.Right, new RRect(borderBoxRect.Right - rightWidthPx, borderBoxRect.Top, rightWidthPx, borderBoxRect.Height),
+            PaintEdge(Border.Right, new Rect(borderBoxRect.Right - rightWidthPx, borderBoxRect.Top, rightWidthPx, borderBoxRect.Height),
                 rightWidthPx, style.BorderRightStyle, style.BorderRightColor);
         }
 
@@ -611,7 +610,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which <paramref name="htmlContainer"/>'s root box's own <see cref="CssBox.GetRemHeight"/>
         /// already correctly is.
         /// </summary>
-        private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RAdapter adapter,
+        private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RenderContext adapter,
             HtmlContainerInt htmlContainer, double? emSizePt)
         {
             // Root is only ever null before the document's initial layout, which has already run by
@@ -622,7 +621,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
-            var paintRect = new RRect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
+            var paintRect = new Rect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
 
             CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0,
                 originRect: paintRect, clipRect: paintRect, roundedClipPath: null,
@@ -988,7 +987,7 @@ namespace PeachPDF.Html.Core.Dom
             DomParser.ParseLengthToPdfPoints(sizeStr)
             ?? FontSizeResolver.Resolve(sizeStr, DefaultFontResolver.FontSize, DefaultFontResolver.FontSize);
 
-        internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RAdapter adapter)
+        internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RenderContext adapter)
         {
             var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? DefaultFontResolver.DefaultFont;
             var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);
@@ -996,18 +995,18 @@ namespace PeachPDF.Html.Core.Dom
 
             var sizePt = ResolveFontSizePt(style, pageStyle);
 
-            var fontStyle = RFontStyle.Regular;
+            var fontStyle = PaintFontStyle.Regular;
             // Margin boxes have no real inheritance chain (see FontSizeResolver's own doc comment), so
             // bolder/lighter step relative to the CSS initial weight (400) rather than a real parent's.
             if (weightStr is not null && FontWeightResolver.Resolve(weightStr, 400) >= 700)
-                fontStyle |= RFontStyle.Bold;
+                fontStyle |= PaintFontStyle.Bold;
             if (styleStr is not null &&
                 (styleStr.Equals("italic", StringComparison.OrdinalIgnoreCase) ||
                  styleStr.StartsWith("oblique", StringComparison.OrdinalIgnoreCase)))
-                fontStyle |= RFontStyle.Italic;
+                fontStyle |= PaintFontStyle.Italic;
 
             // MarginBoxRenderer paints in raw, unshrunk PDF-point space (margin-box rects are computed
-            // directly from orgPageSize/margins), but RAdapter.GetFont -> PdfSharpAdapter.CreateFontInt
+            // directly from orgPageSize/margins), but RenderContext.GetFont -> PdfSharpAdapter.CreateFontInt
             // divides its `size` argument by PixelsPerPoint (matching in-flow content, whose entire
             // coordinate system - including font size - is uniformly in "pixel" space and shrunk together
             // by that same later division). Since margin-box rect positions never go through that
@@ -1144,7 +1143,7 @@ namespace PeachPDF.Html.Core.Dom
         /// position) when the returned visual string is a single run's whole-string reversal+mirror
         /// (<c>Bidi.Mirror</c>'s own contract), so a caller can recover it for
         /// ToUnicode text-extraction fidelity (see
-        /// <see cref="Html.Adapters.RGraphics.DrawString(string, Html.Adapters.RFont, Html.Adapters.Entities.RColor, Html.Adapters.Entities.RPoint, Html.Adapters.Entities.RSize, double, Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Shaping.ShapeSettings?, string?)"/>).
+        /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, PeachDrawing.Text.Shaping.ShapeSettings?, string?)"/>).
         /// Null whenever that contract doesn't hold: no reordering happened at all (the visual string
         /// already equals <paramref name="text"/>, so there is nothing to recover), or the content mixed
         /// multiple bidi runs of different direction - a per-run reorder-and-concatenate, not a single

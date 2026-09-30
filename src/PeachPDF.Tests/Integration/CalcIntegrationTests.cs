@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.True(el!.IsTransformed);
-            Assert.Equal(60, el.ActualTransformMatrix.OffsetX, 3);
+            Assert.Equal(60, el.ActualTransformMatrix.M31, 3);
         }
 
         [Fact]

@@ -1,10 +1,41 @@
 PeachDrawing.Text.AddOptions : sealed class
   ctor()
   property IReadOnlyList<RuneInterval> UnicodeRanges { get; init; }
+  property Nullable<AxisRange> ObliqueRange { get; init; }
+  property Nullable<AxisRange> WeightRange { get; init; }
+  property Nullable<AxisRange> WidthRange { get; init; }
   property Nullable<Boolean> IsItalic { get; init; }
   property Nullable<Int32> Weight { get; init; }
   property Nullable<Int32> Width { get; init; }
   property String FamilyName { get; init; }
+PeachDrawing.Text.AxisRange : struct
+  ctor(Double first, Double second)
+  ctor(Double value)
+  method Boolean Contains(Double value)
+  method Boolean Equals(AxisRange other)
+  method Boolean Equals(Object obj)
+  method Double Clamp(Double value)
+  method Int32 GetHashCode()
+  method String ToString()
+  property Double Maximum { get; }
+  property Double Minimum { get; }
+PeachDrawing.Text.AxisSetting : struct
+  ctor(String Tag, Double Value)
+  method Boolean Equals(AxisSetting other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out String Tag, out Double Value)
+  property Double Value { get; init; }
+  property String Tag { get; init; }
+PeachDrawing.Text.AxisTags : static class
+  field const String Italic
+  field const String OpticalSize
+  field const String Slant
+  field const String Weight
+  field const String Width
+PeachDrawing.Text.Compression.BrotliDecompression : static class
+  method static Void SetDecompressor(Func<Stream, Stream> decompressor)
 PeachDrawing.Text.Export.ExportedFont : sealed class
   property Boolean HasCffOutlines { get; }
   property Boolean IsSubset { get; }
@@ -17,6 +48,7 @@ PeachDrawing.Text.FontSet : sealed class
   method Boolean TryFindCoveringFamily(Rune rune, EmojiPresentation presentation, out TypefaceFamily family)
   method Boolean TryFindFamily(String name, out TypefaceFamily family)
   method Boolean TryGetFontData(String fontName, out ReadOnlyMemory<Byte> data)
+  method Func<Rune, Typeface> CreateFallback(in TypefaceQuery query)
   method String ResolveGeneric(GenericFamily generic, Func<String, Boolean> isAvailable = null)
   method TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
   method TypefaceFamily AddFile(String path, AddOptions options = null)
@@ -31,6 +63,241 @@ PeachDrawing.Text.GenericFamily : enum Int32
   SansSerif = 1
   Serif = 0
   SystemUi = 5
+PeachDrawing.Text.Layout.ContentWidths : struct
+  ctor(Double MinContent, Double MaxContent)
+  method Boolean Equals(ContentWidths other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double MinContent, out Double MaxContent)
+  property Double MaxContent { get; init; }
+  property Double MinContent { get; init; }
+PeachDrawing.Text.Layout.FlowCursor : struct
+  method Boolean Equals(FlowCursor other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  property Boolean IsEnd { get; }
+  property Int32 Offset { get; }
+PeachDrawing.Text.Layout.HyphenateLimitChars : struct
+  ctor(Nullable<Int32> WordLength = null, Nullable<Int32> BeforeBreak = null, Nullable<Int32> AfterBreak = null)
+  method Boolean Equals(HyphenateLimitChars other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Nullable<Int32> WordLength, out Nullable<Int32> BeforeBreak, out Nullable<Int32> AfterBreak)
+  property Nullable<Int32> AfterBreak { get; init; }
+  property Nullable<Int32> BeforeBreak { get; init; }
+  property Nullable<Int32> WordLength { get; init; }
+PeachDrawing.Text.Layout.HyphenateLimitLast : enum Int32
+  Always = 1
+  None = 0
+PeachDrawing.Text.Layout.Hyphens : enum Int32
+  Auto = 2
+  Manual = 0
+  None = 1
+PeachDrawing.Text.Layout.InlineBox : struct
+  ctor(Double Width, Double Height, Nullable<Double> Baseline = null, VerticalAlign VerticalAlign = Baseline, Double BaselineShift = 0, Object Tag = null)
+  method Boolean Equals(InlineBox other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Width, out Double Height, out Nullable<Double> Baseline, out VerticalAlign VerticalAlign, out Double BaselineShift, out Object Tag)
+  property Double BaselineShift { get; init; }
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property Nullable<Double> Baseline { get; init; }
+  property Object Tag { get; init; }
+  property VerticalAlign VerticalAlign { get; init; }
+PeachDrawing.Text.Layout.LineBox : sealed class
+  property Boolean IsTruncated { get; }
+  property Double Ascent { get; }
+  property Double Baseline { get; }
+  property Double Descent { get; }
+  property Double Height { get; }
+  property Double Left { get; }
+  property Double Top { get; }
+  property Double Width { get; }
+  property IReadOnlyList<PlacedRun> Runs { get; }
+  property Int32 ContentEnd { get; }
+  property LineEnd End { get; }
+  property RectangleF Bounds { get; }
+  property TextRange Range { get; }
+PeachDrawing.Text.Layout.LineEnd : enum Int32
+  Emergency = 2
+  Forced = 1
+  Hyphenated = 4
+  Last = 3
+  Soft = 0
+PeachDrawing.Text.Layout.LineFlow : sealed class
+  method Boolean TryNext(in FlowCursor cursor, in LineSpace space, out LineBox line, out FlowCursor next)
+  method Double GetIndent(in FlowCursor cursor)
+  property FlowCursor Start { get; }
+  property Paragraph Paragraph { get; }
+PeachDrawing.Text.Layout.LineSpace : struct
+  ctor(Double Left, Double Right, Double Indent = 0, Double Top = 0)
+  method Boolean Equals(LineSpace other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Left, out Double Right, out Double Indent, out Double Top)
+  property Double Indent { get; init; }
+  property Double Left { get; init; }
+  property Double Right { get; init; }
+  property Double Top { get; init; }
+PeachDrawing.Text.Layout.OverflowWrap : enum Int32
+  Anywhere = 2
+  BreakWord = 1
+  Normal = 0
+PeachDrawing.Text.Layout.Paragraph : sealed class
+  method ContentWidths MeasureContent()
+  method LineFlow CreateFlow()
+  method ParagraphLayout Layout(Double availableWidth)
+  property Boolean IsRightToLeft { get; }
+  property ParagraphStyle Style { get; }
+  property String Text { get; }
+PeachDrawing.Text.Layout.ParagraphBuilder : sealed class
+  ctor(RunStyle baseStyle)
+  method Paragraph Build()
+  method ParagraphBuilder AddInlineBox(InlineBox box)
+  method ParagraphBuilder AddText(String text)
+  method ParagraphBuilder PopRun()
+  method ParagraphBuilder PushRun(RunStyle style)
+  method ParagraphBuilder SetStyle(ParagraphStyle style)
+PeachDrawing.Text.Layout.ParagraphLayout : sealed class
+  method IReadOnlyList<RectangleF> SelectionBoxes(TextRange range)
+  method RectangleF CaretRect(TextPosition position)
+  method TextPosition PositionAt(PointF point)
+  method TextRange GraphemeRangeAt(Int32 index)
+  method TextRange WordRangeAt(Int32 index)
+  property Boolean IsTruncated { get; }
+  property Double ContentWidth { get; }
+  property Double Height { get; }
+  property Double Width { get; }
+  property IReadOnlyList<LineBox> Lines { get; }
+  property Paragraph Paragraph { get; }
+PeachDrawing.Text.Layout.ParagraphStyle : struct
+  ctor()
+  method Boolean Equals(Object obj)
+  method Boolean Equals(ParagraphStyle other)
+  method Int32 GetHashCode()
+  method String ToString()
+  property BaseDirection Direction { get; init; }
+  property Boolean NoWrap { get; init; }
+  property Double HyphenateLimitZone { get; init; }
+  property HyphenateLimitChars HyphenateLimitChars { get; init; }
+  property HyphenateLimitLast HyphenateLimitLast { get; init; }
+  property Hyphens Hyphens { get; init; }
+  property LineBreakOptions LineBreak { get; init; }
+  property Nullable<Double> LineHeight { get; init; }
+  property Nullable<Int32> HyphenateLimitLines { get; init; }
+  property Nullable<Int32> MaxLines { get; init; }
+  property Nullable<TextAlign> AlignLast { get; init; }
+  property OverflowWrap OverflowWrap { get; init; }
+  property String Ellipsis { get; init; }
+  property String HyphenateCharacter { get; init; }
+  property TabSize TabSize { get; init; }
+  property TextAlign Align { get; init; }
+  property TextIndent TextIndent { get; init; }
+  property TextJustify TextJustify { get; init; }
+  property TextOverflow TextOverflow { get; init; }
+PeachDrawing.Text.Layout.PlacedRun : sealed class
+  method Double GetCaretX(Int32 index)
+  method Double GetGlyphAdvance(Int32 glyphIndex)
+  property Boolean IsGenerated { get; }
+  property Boolean IsRightToLeft { get; }
+  property Byte Level { get; }
+  property Double Baseline { get; }
+  property Double Width { get; }
+  property Double X { get; }
+  property GlyphRun Glyphs { get; }
+  property Nullable<InlineBox> InlineBox { get; }
+  property RectangleF InlineBoxBounds { get; }
+  property RunStyle Style { get; }
+  property TextRange Range { get; }
+PeachDrawing.Text.Layout.RunStyle : struct
+  ctor(Typeface Typeface, Double Size, Nullable<ShapeSettings> Shape = null, Func<Rune, Typeface> Fallback = null, Double LetterSpacing = 0, Double WordSpacing = 0)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(RunStyle other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Typeface Typeface, out Double Size, out Nullable<ShapeSettings> Shape, out Func<Rune, Typeface> Fallback, out Double LetterSpacing, out Double WordSpacing)
+  property Double LetterSpacing { get; init; }
+  property Double Size { get; init; }
+  property Double WordSpacing { get; init; }
+  property Func<Rune, Typeface> Fallback { get; init; }
+  property Nullable<ShapeSettings> Shape { get; init; }
+  property Typeface Typeface { get; init; }
+PeachDrawing.Text.Layout.TabSize : struct
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TabSize other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method static TabSize FromLength(Double length)
+  method static TabSize FromSpaces(Double count)
+  property Boolean IsLength { get; }
+  property Double Value { get; }
+PeachDrawing.Text.Layout.TextAffinity : enum Int32
+  Downstream = 1
+  Upstream = 0
+PeachDrawing.Text.Layout.TextAlign : enum Int32
+  Center = 4
+  End = 1
+  Justify = 5
+  Left = 2
+  Right = 3
+  Start = 0
+PeachDrawing.Text.Layout.TextIndent : struct
+  ctor(Double Length, Boolean Hanging = False, Boolean EachLine = False)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TextIndent other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Length, out Boolean Hanging, out Boolean EachLine)
+  property Boolean EachLine { get; init; }
+  property Boolean Hanging { get; init; }
+  property Double Length { get; init; }
+PeachDrawing.Text.Layout.TextJustify : enum Int32
+  Auto = 0
+  InterCharacter = 3
+  InterWord = 2
+  None = 1
+PeachDrawing.Text.Layout.TextOverflow : enum Int32
+  Clip = 0
+  Ellipsis = 1
+PeachDrawing.Text.Layout.TextPosition : struct
+  ctor(Int32 Index, TextAffinity Affinity = Downstream)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TextPosition other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Index, out TextAffinity Affinity)
+  property Int32 Index { get; init; }
+  property TextAffinity Affinity { get; init; }
+PeachDrawing.Text.Layout.TextRange : struct
+  ctor(Int32 Start, Int32 End)
+  method Boolean Contains(Int32 index)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TextRange other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Start, out Int32 End)
+  property Boolean IsEmpty { get; }
+  property Int32 End { get; init; }
+  property Int32 Length { get; }
+  property Int32 Start { get; init; }
+PeachDrawing.Text.Layout.TextRuler : static class
+  method static Double WidthOf(Typeface typeface, Double size, String text, Nullable<ShapeSettings> settings = null)
+PeachDrawing.Text.Layout.VerticalAlign : enum Int32
+  Baseline = 0
+  Bottom = 5
+  Middle = 1
+  TextBottom = 3
+  TextTop = 2
+  Top = 4
+PeachDrawing.Text.NamedVariation : sealed class
+  property IReadOnlyList<AxisSetting> Settings { get; }
+  property String Name { get; }
 PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
   property Double AccentBaseHeight { get; }
   property Double AxisHeight { get; }
@@ -89,6 +356,7 @@ PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
   property Double UpperLimitBaselineRiseMin { get; }
   property Double UpperLimitGapMin { get; }
 PeachDrawing.Text.OpenType.MathGlyphAssembly : sealed class
+  ctor(Double italicsCorrection, IReadOnlyList<MathGlyphPart> parts)
   property Double ItalicsCorrection { get; }
   property IReadOnlyList<MathGlyphPart> Parts { get; }
 PeachDrawing.Text.OpenType.MathGlyphConstruction : sealed class
@@ -142,6 +410,17 @@ PeachDrawing.Text.Outlines.Affine2x3 : struct
   property Double XY { get; init; }
   property Double YX { get; init; }
   property Double YY { get; init; }
+PeachDrawing.Text.Outlines.ColorClipBox : struct
+  ctor(Double XMin, Double YMin, Double XMax, Double YMax)
+  method Boolean Equals(ColorClipBox other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double XMin, out Double YMin, out Double XMax, out Double YMax)
+  property Double XMax { get; init; }
+  property Double XMin { get; init; }
+  property Double YMax { get; init; }
+  property Double YMin { get; init; }
 PeachDrawing.Text.Outlines.ColorExtend : enum Int32
   Pad = 0
   Reflect = 2
@@ -191,7 +470,16 @@ PeachDrawing.Text.Outlines.EmbeddedBitmap : struct
 PeachDrawing.Text.Outlines.GlyphOutline : sealed class
   method IReadOnlyList<ValueTuple<Double, Double>> Crossings(Double bandLow, Double bandHigh)
   property Boolean IsEmpty { get; }
+  property Boolean IsGridFitted { get; }
+  property Double PixelsPerEm { get; }
+  property Double PixelsPerEmX { get; }
+  property Double PixelsPerEmY { get; }
   property IReadOnlyList<OutlineContour> Contours { get; }
+  property Nullable<Double> GridFittedAdvance { get; }
+PeachDrawing.Text.Outlines.GridFitting : enum Int32
+  Monochrome = 2
+  None = 0
+  Standard = 1
 PeachDrawing.Text.Outlines.OutlineContour : sealed class
   property IReadOnlyList<OutlineSegment> Segments { get; }
   property OutlinePoint Start { get; }
@@ -204,6 +492,12 @@ PeachDrawing.Text.Outlines.OutlinePoint : struct
   method Void Deconstruct(out Double X, out Double Y)
   property Double X { get; init; }
   property Double Y { get; init; }
+PeachDrawing.Text.Outlines.OutlineRequest : struct
+  property Boolean StemDarkening { get; init; }
+  property Double PixelsPerEm { get; init; }
+  property Double PixelsPerEmX { get; init; }
+  property Double PixelsPerEmY { get; init; }
+  property GridFitting GridFitting { get; init; }
 PeachDrawing.Text.Outlines.OutlineSegment : struct
   method static OutlineSegment Cubic(OutlinePoint control1, OutlinePoint control2, OutlinePoint end)
   method static OutlineSegment Line(OutlinePoint end)
@@ -251,6 +545,20 @@ PeachDrawing.Text.Outlines.PaintSweepGradient : sealed class
 PeachDrawing.Text.Outlines.PaintTransform : sealed class
   property Affine2x3 Affine { get; }
   property ColorPaint Paint { get; }
+PeachDrawing.Text.Outlines.SvgGlyph : sealed class
+  ctor(String Document, String ElementId, Int32 FirstGlyph, Int32 LastGlyph, Int32 UnitsPerEm)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(SvgGlyph other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method SvgGlyph <Clone>$()
+  method Void Deconstruct(out String Document, out String ElementId, out Int32 FirstGlyph, out Int32 LastGlyph, out Int32 UnitsPerEm)
+  property Boolean CoversOneGlyph { get; }
+  property Int32 FirstGlyph { get; init; }
+  property Int32 LastGlyph { get; init; }
+  property Int32 UnitsPerEm { get; init; }
+  property String Document { get; init; }
+  property String ElementId { get; init; }
 PeachDrawing.Text.RuneInterval : struct
   ctor(Rune Start, Rune End)
   method Boolean Contains(Rune rune)
@@ -342,13 +650,13 @@ PeachDrawing.Text.Shaping.PlacedGlyph : struct
   property Nullable<Int32> AttachedToIndex { get; init; }
 PeachDrawing.Text.Shaping.ShapeSettings : struct
   ctor()
-  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal)
+  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal, IReadOnlyList<KhmerCategory> KhmerCategories = null)
   field static ShapeSettings Default
   method Boolean Equals(Object obj)
   method Boolean Equals(ShapeSettings other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode)
+  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode, out IReadOnlyList<KhmerCategory> KhmerCategories)
   property Boolean Kerning { get; init; }
   property Boolean ReverseForDisplay { get; init; }
   property CapsMode Caps { get; init; }
@@ -356,6 +664,7 @@ PeachDrawing.Text.Shaping.ShapeSettings : struct
   property EmojiMode EmojiMode { get; init; }
   property IReadOnlyList<ArabicJoiningForm> JoiningForms { get; init; }
   property IReadOnlyList<FeatureSetting> ExplicitFeatures { get; init; }
+  property IReadOnlyList<KhmerCategory> KhmerCategories { get; init; }
   property IReadOnlyList<UseCategory> UseCategories { get; init; }
   property LigatureSet Ligatures { get; init; }
   property NumeralSet Numeric { get; init; }
@@ -382,9 +691,13 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean MatchesEmojiPresentation(Rune rune, EmojiPresentation presentation)
   method Boolean SupportsFeatures(IReadOnlySet<String> tags)
   method Boolean TryGetBitmap(UInt16 glyph, Double ppem, out EmbeddedBitmap bitmap)
+  method Boolean TryGetColorClipBox(UInt16 glyph, out ColorClipBox box)
   method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
+  method Boolean TryGetGridFittedAdvance(UInt16 glyph, in OutlineRequest request, out Double advance)
+  method Boolean TryGetOutline(UInt16 glyph, in OutlineRequest request, out GlyphOutline outline)
   method Boolean TryGetOutline(UInt16 glyph, out GlyphOutline outline)
   method Boolean TryGetScriptPosition(ScriptPlacement placement, out ScriptPosition position)
+  method Boolean TryGetSvgGlyph(UInt16 glyph, out SvgGlyph svg)
   method Boolean TryMapRune(Rune rune, out UInt16 glyph)
   method ColorPaint GetColorLayerPaint(Int32 index)
   method ColorPaint GetColorPaint(UInt16 glyph)
@@ -393,20 +706,27 @@ PeachDrawing.Text.Typeface : sealed class
   method Int32 GetVerticalAdvance(UInt16 glyph)
   method Point GetVerticalOrigin(UInt16 glyph)
   method String ToString()
+  method Typeface WithAxes(IEnumerable<AxisSetting> settings)
   property Boolean HasBitmapGlyphs { get; }
   property Boolean HasColorGlyphs { get; }
   property Boolean HasMathData { get; }
+  property Boolean HasSvgGlyphs { get; }
   property Boolean HasVerticalMetrics { get; }
   property Boolean HasVerticalOrigin { get; }
   property Boolean IsBold { get; }
   property Boolean IsItalic { get; }
+  property Boolean IsVariable { get; }
   property ColorPalette ColorPalette { get; }
+  property IReadOnlyList<AxisSetting> AxisSettings { get; }
+  property IReadOnlyList<NamedVariation> NamedVariations { get; }
+  property IReadOnlyList<VariationAxis> Axes { get; }
   property MathTable MathData { get; }
+  property String ContentHash { get; }
   property String FamilyName { get; }
   property String FullName { get; }
   property String StyleName { get; }
+  property String VariationKey { get; }
   property TypefaceMetrics Metrics { get; }
-  property UInt64 ContentHash { get; }
 PeachDrawing.Text.TypefaceFamily : sealed class
   method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
   property String Name { get; }
@@ -450,7 +770,7 @@ PeachDrawing.Text.TypefaceMetrics : sealed class
   property Single ItalicAngle { get; }
 PeachDrawing.Text.TypefaceQuery : struct
   ctor()
-  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null)
+  ctor(Double Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null, IReadOnlyList<AxisSetting> Axes = null, Nullable<Double> WidthPercent = null, Nullable<Double> ObliqueAngle = null)
   field const Int32 BoldWeight
   field const Int32 NormalWeight
   field const Int32 NormalWidth
@@ -458,10 +778,14 @@ PeachDrawing.Text.TypefaceQuery : struct
   method Boolean Equals(TypefaceQuery other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover)
+  method Void Deconstruct(out Double Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes, out Nullable<Double> WidthPercent, out Nullable<Double> ObliqueAngle)
+  method static TypefaceQuery From(Double weight, Double widthPercent, Boolean isItalic, Nullable<Rune> mustCover, IReadOnlyList<AxisSetting> axes, Nullable<Double> obliqueSkewSinus)
   property Boolean IsItalic { get; init; }
-  property Int32 Weight { get; init; }
+  property Double Weight { get; init; }
+  property IReadOnlyList<AxisSetting> Axes { get; init; }
   property Int32 Width { get; init; }
+  property Nullable<Double> ObliqueAngle { get; init; }
+  property Nullable<Double> WidthPercent { get; init; }
   property Nullable<Rune> MustCover { get; init; }
 PeachDrawing.Text.Unicode.ArabicJoining : static class
   method static ArabicJoiningForm[] Resolve(IReadOnlyList<Int32> codepoints)
@@ -533,6 +857,9 @@ PeachDrawing.Text.Unicode.BidiRun : struct
   property Byte Level { get; init; }
   property Int32 Length { get; init; }
   property Int32 Start { get; init; }
+PeachDrawing.Text.Unicode.ComplexContextBreaking : enum Int32
+  Dictionary = 0
+  GeneralCategory = 1
 PeachDrawing.Text.Unicode.DefaultIgnorables : static class
   method static Boolean Contains(Int32 codepoint)
   method static Boolean IsVariationSelector(Int32 codepoint)
@@ -574,12 +901,33 @@ PeachDrawing.Text.Unicode.ExplicitPush : enum Byte
   Rlo = 3
 PeachDrawing.Text.Unicode.Hyphenator : static class
   method static IReadOnlyList<Int32> FindBreakPoints(String word, String language)
+PeachDrawing.Text.Unicode.KhmerCategory : enum Byte
+  C = 1
+  DottedCircle = 7
+  H = 3
+  Other = 0
+  Placeholder = 6
+  Ra = 8
+  Robatic = 13
+  V = 2
+  VAbv = 9
+  VBlw = 10
+  VPre = 11
+  VPst = 12
+  Xgroup = 14
+  Ygroup = 15
+  ZWJ = 5
+  ZWNJ = 4
+PeachDrawing.Text.Unicode.KhmerShaping : static class
+  method static KhmerCategory Classify(Int32 codepoint)
 PeachDrawing.Text.Unicode.LineBreakOpportunity : enum Byte
   Allowed = 1
   Mandatory = 2
   Prohibited = 0
 PeachDrawing.Text.Unicode.LineBreakOptions : struct
+  property ComplexContextBreaking ComplexContext { get; init; }
   property LineBreakStrictness Strictness { get; init; }
+  property String Language { get; init; }
   property WordBreakMode WordBreak { get; init; }
 PeachDrawing.Text.Unicode.LineBreakStrictness : enum Int32
   Anywhere = 4
@@ -637,3 +985,10 @@ PeachDrawing.Text.Unicode.WordBreakMode : enum Int32
   BreakAll = 1
   KeepAll = 2
   Normal = 0
+PeachDrawing.Text.VariationAxis : sealed class
+  property Boolean IsHidden { get; }
+  property Double Default { get; }
+  property Double Maximum { get; }
+  property Double Minimum { get; }
+  property String Name { get; }
+  property String Tag { get; }

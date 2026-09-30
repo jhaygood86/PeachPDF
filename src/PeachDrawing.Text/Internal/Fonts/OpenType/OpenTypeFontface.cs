@@ -88,17 +88,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
         readonly string _fullFaceName;
 
-        public ulong CheckSum
-        {
-            get
-            {
-                if (_checkSum == 0)
-                    _checkSum = FontFileData.CalcChecksum(FontSource.Bytes);
-                return _checkSum;
-            }
-        }
-        ulong _checkSum;
-
         /// <summary>
         /// Gets the bytes that represents the font data.
         /// </summary>
@@ -140,6 +129,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         internal GlyphDataTable glyf = null!;
         internal IndexToLocationTable loca = null!;
         internal CffTable cff = null!; // optional - a TrueType-outline font has no CFF table at all
+        internal Cff2Table cff2 = null!; // optional - only a font with variable-CFF outlines has a CFF2 table
         internal GlyphSubstitutionTable gsub = null!;
         internal GlyphDefinitionTable gdef = null!; // optional - absent on many fonts
         internal GlyphPositioningTable gpos = null!; // optional - absent on many fonts
@@ -149,11 +139,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>The bitmap colour glyphs (CBDT/CBLC or sbix), or null when the font has none.</summary>
         internal BitmapGlyphSource? bitmap;
 
+        /// <summary>The SVG glyph documents (the <c>SVG </c> table), or null when the font has none.</summary>
+        internal SvgGlyphSource? svg;
+
         /// <summary>
         /// True when this font draws colour glyphs: COLR + CPAL layers over glyf outlines, or CBDT/CBLC/sbix
         /// bitmaps. (A COLR font over CFF outlines is not one this renderer can paint, so it is not counted.)
         /// </summary>
-        internal bool IsColorFont => (colr != null && cpal != null && glyf != null) || bitmap != null;
+        internal bool IsColorFont => (colr != null && cpal != null && glyf != null) || bitmap != null || svg != null;
         internal GlyphMathTable math = null!; // optional - only dedicated math fonts carry one
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
         internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts
@@ -315,6 +308,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 if (TableDictionary.ContainsKey(TableTagNames.Cff))
                     cff = new CffTable(this);
 
+                if (TableDictionary.ContainsKey(TableTagNames.Cff2))
+                    cff2 = new Cff2Table(this);
+
                 if (Seek(GlyphSubstitutionTable.Tag) != -1)
                     gsub = new GlyphSubstitutionTable(this);
 
@@ -330,6 +326,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
                 // Optional bitmap colour glyphs (CBDT/CBLC, sbix): one picture per glyph and size.
                 bitmap = BitmapGlyphSource.TryCreate(this, maxp?.numGlyphs ?? 0);
+
+                // Optional SVG glyph documents (the SVG table).
+                svg = SvgGlyphSource.TryCreate(this);
 
                 // Optional glyph-definition/positioning tables (GDEF/GPOS). Absent on many fonts -
                 // no kerning/mark-attachment/mark-filtering data at all in that case.
@@ -368,7 +367,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>
         /// Creates a new font image that is a subset of this font image containing only the specified glyphs.
         /// </summary>
-        public OpenTypeFontface CreateFontSubSet(Dictionary<int, object> glyphs, bool cidFont)
+        public OpenTypeFontface CreateFontSubSet(Dictionary<int, object> glyphs, bool cidFont, Variations.VariationCoordinates? variation = null)
         {
             // Create new font image
             OpenTypeFontface fontData = new OpenTypeFontface(this);
@@ -382,19 +381,30 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             //fontData.AddTable(os2);
             if (!cidFont)
                 fontData.AddTable(cmap);
-            if (cvt != null)
+            // The hinting programs are written for the default design: the glyphs of an instance carry no instructions, and
+            // without them the programs have nothing to run on.
+            if (cvt != null && variation is null)
                 fontData.AddTable(cvt);
-            if (fpgm != null)
+            if (fpgm != null && variation is null)
                 fontData.AddTable(fpgm);
             fontData.AddTable(glyfNew);
             fontData.AddTable(head);
             fontData.AddTable(hhea);
-            fontData.AddTable(hmtx);
+            RawFontTable? hmtxInstance = null;
+            if (variation is null)
+            {
+                fontData.AddTable(hmtx);
+            }
+            else
+            {
+                hmtxInstance = new RawFontTable(TableTagNames.HMtx);
+                fontData.AddTable(hmtxInstance);
+            }
             fontData.AddTable(locaNew);
             if (maxp != null)
                 fontData.AddTable(maxp);
             //fontData.AddTable(name);
-            if (prep != null)
+            if (prep != null && variation is null)
                 fontData.AddTable(prep);
 
             // PDFium omits a shown CID from its text page when that CID's TrueType glyph has no contour.
@@ -403,12 +413,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // a valid contour. Embedding the real layer closure would not help: no Tj references those
             // layer CIDs, and their outlines are already emitted directly as PDF vector paths.
             HashSet<int>? syntheticSelectionGlyphs = null;
-            if (colr != null || bitmap != null)
+            if (colr != null || bitmap != null || svg != null)
             {
                 foreach (int glyphId in glyphs.Keys)
                 {
                     // A bitmap colour glyph (CBDT/sbix) has no outline at all: same treatment as an empty COLR base.
-                    if (((colr?.HasColorGlyph(glyphId) ?? false) || (bitmap?.HasGlyph(glyphId) ?? false)) && glyf.HasNoContours(glyphId))
+                    if (((colr?.HasColorGlyph(glyphId) ?? false) || (bitmap?.HasGlyph(glyphId) ?? false) || (svg?.HasGlyph(glyphId) ?? false)) && glyf.HasNoContours(glyphId))
                         (syntheticSelectionGlyphs ??= []).Add(glyphId);
                 }
             }
@@ -422,6 +432,21 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             glyphs.Keys.CopyTo(glyphArray, 0);
             Array.Sort(glyphArray);
 
+            // A glyph of an instance of a variable font is written afresh, with the location's deltas applied.
+            Dictionary<int, (byte[] Data, int XMin)>? instanceGlyphs = null;
+            if (variation is not null)
+            {
+                instanceGlyphs = new Dictionary<int, (byte[], int)>(glyphCount);
+                foreach (int glyphId in glyphArray)
+                {
+                    if (syntheticSelectionGlyphs?.Contains(glyphId) == true)
+                        continue;
+
+                    var data = Fonts.OpenType.Variations.InstanceGlyphEncoder.Encode(this, glyphId, variation, out int xMin);
+                    instanceGlyphs[glyphId] = (data, xMin);
+                }
+            }
+
             // Calculate new size of glyph table.
             int size = 0;
             for (int idx = 0; idx < glyphCount; idx++)
@@ -429,7 +454,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 int glyphId = glyphArray[idx];
                 size += syntheticSelectionGlyphs?.Contains(glyphId) == true
                     ? InvisibleSelectionGlyphSize
-                    : glyf.GetGlyphSize(glyphId);
+                    : instanceGlyphs is not null ? instanceGlyphs[glyphId].Data.Length : glyf.GetGlyphSize(glyphId);
             }
             glyfNew.DirectoryEntry.Length = size;
 
@@ -456,7 +481,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     }
                     else
                     {
-                        ReadOnlySpan<byte> glyphData = glyf.GetGlyphData(idx);
+                        ReadOnlySpan<byte> glyphData = instanceGlyphs is not null ? instanceGlyphs[idx].Data : glyf.GetGlyphData(idx);
                         if (!glyphData.IsEmpty)
                         {
                             glyphData.CopyTo(glyfNew.GlyphTable.AsSpan(glyphOffset));
@@ -467,10 +492,53 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             locaNew.LocaTable[numGlyphs] = glyphOffset;
 
+            if (hmtxInstance is not null)
+                hmtxInstance.Data = BuildInstanceMetrics(instanceGlyphs!, variation!);
+
             // Compile font tables into byte array
             fontData.Compile();
 
             return fontData;
+        }
+
+        /// <summary>
+        /// The <c>hmtx</c> table of an instance: the source's, with each glyph that was written afresh given its advance at the
+        /// location and its left side bearing (a renderer places a glyph by its side bearing, so it has to be its new leftmost point).
+        /// </summary>
+        private byte[] BuildInstanceMetrics(Dictionary<int, (byte[] Data, int XMin)> written, Variations.VariationCoordinates variation)
+        {
+            var entry = TableDictionary[TableTagNames.HMtx];
+            var bytes = new byte[entry.Length];
+            Buffer.BlockCopy(FontSource.Bytes, entry.Offset, bytes, 0, entry.Length);
+
+            int metricCount = hhea.numberOfHMetrics;
+            foreach (var (glyph, (data, xMin)) in written)
+            {
+                if (data.Length == 0)
+                    continue;
+
+                if (glyph < metricCount)
+                {
+                    int advance = hmtx.Metrics[glyph].advanceWidth
+                        + Fonts.OpenType.Variations.FontVariations.Round(Variations?.GetAdvanceDelta(this, glyph, variation) ?? 0);
+                    advance = Math.Clamp(advance, 0, ushort.MaxValue);
+                    bytes[glyph * 4] = (byte)(advance >> 8);
+                    bytes[glyph * 4 + 1] = (byte)advance;
+                    bytes[glyph * 4 + 2] = (byte)(xMin >> 8);
+                    bytes[glyph * 4 + 3] = (byte)xMin;
+                }
+                else
+                {
+                    int at = metricCount * 4 + (glyph - metricCount) * 2;
+                    if (at + 1 < bytes.Length)
+                    {
+                        bytes[at] = (byte)(xMin >> 8);
+                        bytes[at + 1] = (byte)xMin;
+                    }
+                }
+            }
+
+            return bytes;
         }
 
         private const int InvisibleSelectionGlyphSize = 34;
@@ -628,6 +696,27 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// recurse into another read of the same fontface on the same thread.
         /// </summary>
         internal readonly object SyncRoot = new();
+
+        /// <summary>
+        /// The variation tables of a variable font, parsed once on first use, or <see langword="null"/> for a font that is not variable.
+        /// They are read from the font's bytes and not through the shared cursor, so this needs no lock.
+        /// </summary>
+        internal Variations.FontVariations? Variations
+        {
+            get
+            {
+                if (!_variationsRead)
+                {
+                    _variations = Fonts.OpenType.Variations.FontVariations.TryCreate(this);
+                    _variationsRead = true;
+                }
+
+                return _variations;
+            }
+        }
+
+        private Variations.FontVariations? _variations;
+        private volatile bool _variationsRead;
 
         /// <summary>
         /// The lazy-lookup-cache idiom used throughout GSUB/GPOS (<c>_someCache.GetOrAdd(index, someDelegate)</c>)

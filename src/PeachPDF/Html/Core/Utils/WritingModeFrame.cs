@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 
 namespace PeachPDF.Html.Core.Utils
@@ -7,9 +7,9 @@ namespace PeachPDF.Html.Core.Utils
     /// <summary>
     /// Converts a box's own content-relative logical geometry into true physical coordinates, given that
     /// box's own resolved <c>writing-mode</c>/<c>direction</c>. A logical rectangle is measured from the
-    /// box's own inline-start/block-start corner: <see cref="RRect.X"/>/<see cref="RRect.Width"/> carry the
-    /// inline offset/size (the axis a line's content progresses along), <see cref="RRect.Y"/>/
-    /// <see cref="RRect.Height"/> carry the block offset/size (the axis lines stack along) - the same
+    /// box's own inline-start/block-start corner: <see cref="Rect.X"/>/<see cref="Rect.Width"/> carry the
+    /// inline offset/size (the axis a line's content progresses along), <see cref="Rect.Y"/>/
+    /// <see cref="Rect.Height"/> carry the block offset/size (the axis lines stack along) - the same
     /// convention <see cref="LogicalPropertyResolver"/> uses for the box-model longhands, generalized to
     /// arbitrary geometry.
     /// </summary>
@@ -82,7 +82,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Whether this box's own block-start edge is the physical-right one (<c>vertical-rl</c>) rather
         /// than physical-left (<c>vertical-lr</c>, or non-vertical) - exposed so a caller that needs to
-        /// know which edge <see cref="ToPhysical(RRect)"/> is already anchoring block-axis geometry to
+        /// know which edge <see cref="ToPhysical(Rect)"/> is already anchoring block-axis geometry to
         /// (e.g. to decide which edge stays fixed when shrinking an auto block-size to content) reads the
         /// one derivation this frame already made, rather than calling
         /// <see cref="LogicalPropertyResolver.BlockStart"/> a second time and risking the two drifting
@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Utils
         /// Whether this box's own inline-start edge is the physical-bottom one (vertical +
         /// <c>direction: rtl</c>) rather than physical-top (vertical + <c>direction: ltr</c>, or
         /// non-vertical) - exposed for the same reason as <see cref="BlockStartIsRight"/>: a caller that
-        /// needs to know which edge <see cref="ToPhysical(RRect)"/> is already anchoring inline-axis
+        /// needs to know which edge <see cref="ToPhysical(Rect)"/> is already anchoring inline-axis
         /// (physical Y, when vertical) geometry to - e.g. <see cref="Dom.CssBox.LayoutVerticalBlockChildren"/>,
         /// deciding whether a block child needs reflecting from its ltr-anchored placement to hang from the
         /// physical bottom instead - reads the one derivation this frame already made, rather than calling
@@ -110,20 +110,20 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// The physical point at logical (<paramref name="logicalInlineFromStart"/>, <paramref name="logicalBlockFromStart"/>)
-        /// - i.e. the zero-size case of <see cref="ToPhysical(RRect)"/>.
+        /// - i.e. the zero-size case of <see cref="ToPhysical(Rect)"/>.
         /// </summary>
-        public RPoint ToPhysical(double logicalInlineFromStart, double logicalBlockFromStart) =>
-            ToPhysical(new RRect(logicalInlineFromStart, logicalBlockFromStart, 0, 0)).Location;
+        public PaintPoint ToPhysical(double logicalInlineFromStart, double logicalBlockFromStart) =>
+            ToPhysical(new Rect(logicalInlineFromStart, logicalBlockFromStart, 0, 0)).Location;
 
-        /// <summary>Swaps <see cref="RSize.Width"/>/<see cref="RSize.Height"/> when <see cref="IsVertical"/>.</summary>
-        public RSize ToPhysical(RSize logical) =>
-            IsVertical ? new RSize(logical.Height, logical.Width) : logical;
+        /// <summary>Swaps <see cref="Size.Width"/>/<see cref="Size.Height"/> when <see cref="IsVertical"/>.</summary>
+        public Size ToPhysical(Size logical) =>
+            IsVertical ? new Size(logical.Height, logical.Width) : logical;
 
         /// <summary>Converts a logical rectangle (inline/block offset and size) to a true physical one.</summary>
-        public RRect ToPhysical(RRect logical)
+        public Rect ToPhysical(Rect logical)
         {
             if (!IsVertical)
-                return new RRect(_clientLeft + logical.X, _clientTop + logical.Y, logical.Width, logical.Height);
+                return new Rect(_clientLeft + logical.X, _clientTop + logical.Y, logical.Width, logical.Height);
 
             var physicalX = _blockStartIsRight
                 ? _clientRight - logical.Y - logical.Height
@@ -133,7 +133,7 @@ namespace PeachPDF.Html.Core.Utils
                 ? _clientBottom - logical.X - logical.Width
                 : _clientTop + logical.X;
 
-            return new RRect(physicalX, physicalY, logical.Height, logical.Width);
+            return new Rect(physicalX, physicalY, logical.Height, logical.Width);
         }
     }
 }

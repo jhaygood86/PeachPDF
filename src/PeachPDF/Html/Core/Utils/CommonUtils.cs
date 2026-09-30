@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using System;
 using System.Collections.Frozen;
@@ -372,9 +372,9 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Get size that is max of <paramref name="size"/> and <paramref name="other"/> for width and height separately.
         /// </summary>
-        public static RSize Max(RSize size, RSize other)
+        public static Size Max(Size size, Size other)
         {
-            return new RSize(Math.Max(size.Width, other.Width), Math.Max(size.Height, other.Height));
+            return new Size(Math.Max(size.Width, other.Width), Math.Max(size.Height, other.Height));
         }
 
         /// <summary>

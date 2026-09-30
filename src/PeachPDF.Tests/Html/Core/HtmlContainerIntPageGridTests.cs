@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 
 namespace PeachPDF.Tests.Html.Core
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             var container = new HtmlContainerInt(new PdfSharpAdapter())
             {
-                PageSize = new RSize(500, BandHeight),
+                PageSize = new Size(500, BandHeight),
                 MarginTop = MarginTop,
             };
             return container;

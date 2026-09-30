@@ -91,6 +91,9 @@ internal sealed class CliOptions
 
     /// <summary>Render what needs transparency as opaque bitmaps instead of rejecting it under PDF/A-1 and PDF/X-1a/X-3 (<c>--flatten-transparency</c>).</summary>
     public bool FlattenTransparency { get; set; }
+
+    /// <summary>Disables anti-aliasing of bitmaps PeachPDF renders itself (<c>--no-raster-antialiasing</c>).</summary>
+    public bool NoRasterAntiAliasing { get; set; }
     public bool TaggedPdf { get; set; }
     public bool InteractivePdfForms { get; set; }
     public string? PdfTitle { get; set; }

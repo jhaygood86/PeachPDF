@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using System;
 
@@ -13,7 +13,7 @@ namespace PeachPDF.Html.Core.Utils
     /// <remarks>
     /// CSS 2.1 §8.5.3 leaves the exact shading UA-defined, so "correct" here means "what a reader
     /// comparing against a browser expects". These transforms were derived by sampling Chrome's own
-    /// rasterization (Blink's <c>Color::Dark</c>/<c>Color::Light</c> and
+    /// rasterization (Blink's <c>PaintColor::Dark</c>/<c>PaintColor::Light</c> and
     /// <c>CalculateInsetOutsetColor</c>) and reproduce it exactly, including the integer truncation and
     /// the 255.99998 scale factor Blink uses - see <see cref="Dark"/>/<see cref="Light"/>.
     ///
@@ -59,7 +59,7 @@ namespace PeachPDF.Html.Core.Utils
         /// side, and exempts a table display type the way Blink does.
         /// </para>
         /// </remarks>
-        internal static readonly RColor CurrentColorBase = RColor.FromArgb(238, 238, 238);
+        internal static readonly PaintColor CurrentColorBase = PaintColor.FromArgb(238, 238, 238);
 
         /// <summary>
         /// Blink converts its 0..1 float channels back to bytes with this factor and a truncating cast,
@@ -92,7 +92,7 @@ namespace PeachPDF.Html.Core.Utils
         /// the declared color's luminance (see <see cref="NearBlackLuminance"/>), so a dark chromatic
         /// color above the threshold keeps the black this returns.
         /// </summary>
-        internal static RColor Dark(RColor c)
+        internal static PaintColor Dark(PaintColor c)
         {
             var v = Math.Max(c.R, Math.Max(c.G, c.B)) / 255.0;
             if (v <= 0) return c;
@@ -106,10 +106,10 @@ namespace PeachPDF.Html.Core.Utils
         /// <see cref="ShadeStep"/>, saturating at full brightness. Black has nothing to scale, so it
         /// maps to Blink's own "lightened black" constant instead.
         /// </summary>
-        internal static RColor Light(RColor c)
+        internal static PaintColor Light(PaintColor c)
         {
             var v = Math.Max(c.R, Math.Max(c.G, c.B)) / 255.0;
-            if (v <= 0) return RColor.FromArgb(c.A, 0x54, 0x54, 0x54);
+            if (v <= 0) return PaintColor.FromArgb(c.A, 0x54, 0x54, 0x54);
 
             var multiplier = Math.Min(1, v + ShadeStep) / v;
             return Scale(c, multiplier);
@@ -123,7 +123,7 @@ namespace PeachPDF.Html.Core.Utils
         /// distinguishable from each other; above <see cref="NearWhiteLuminance"/> the lit face keeps
         /// the declared color, because lightening it would only clip toward white.
         /// </summary>
-        internal static RColor Shade(RColor color, bool darken)
+        internal static PaintColor Shade(PaintColor color, bool darken)
         {
             var luminance = RelativeLuminance(color);
 
@@ -145,7 +145,7 @@ namespace PeachPDF.Html.Core.Utils
         /// mirror image. This per-side flip is the entire 3D effect - shading all four sides alike
         /// produces a flat two-tone frame instead of a bevel.
         /// </summary>
-        internal static RColor ForSide(RColor color, Border side, bool inset) =>
+        internal static PaintColor ForSide(PaintColor color, Border side, bool inset) =>
             Shade(color, (side is Border.Top or Border.Left) == inset);
 
         /// <summary>
@@ -172,11 +172,11 @@ namespace PeachPDF.Html.Core.Utils
         /// and <c>inset</c> would be interchangeable at every call site and a swapped pair still
         /// compiles - the two halves are never wanted apart anyway.
         /// </returns>
-        internal static (RColor Leading, RColor Trailing) ForSegment(RColor color, bool inset) =>
+        internal static (PaintColor Leading, PaintColor Trailing) ForSegment(PaintColor color, bool inset) =>
             (ForSide(color, Border.Bottom, inset), ForSide(color, Border.Top, inset));
 
-        private static RColor Scale(RColor c, double multiplier) =>
-            RColor.FromArgb(
+        private static PaintColor Scale(PaintColor c, double multiplier) =>
+            PaintColor.FromArgb(
                 c.A,
                 Channel(c.R, multiplier),
                 Channel(c.G, multiplier),
@@ -189,7 +189,7 @@ namespace PeachPDF.Html.Core.Utils
         /// WCAG 2 relative luminance. Alpha plays no part: Blink thresholds the declared color, not
         /// whatever it will end up composited over.
         /// </summary>
-        private static double RelativeLuminance(RColor c) =>
+        private static double RelativeLuminance(PaintColor c) =>
             0.2126 * Linearize(c.R) + 0.7152 * Linearize(c.G) + 0.0722 * Linearize(c.B);
 
         private static double Linearize(byte channel)

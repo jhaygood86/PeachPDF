@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -320,7 +322,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// Returns a new path holding this path's own contours, each flattened to line segments and
         /// clipped to the axis-aligned rectangle [<paramref name="left"/>, <paramref name="top"/>] -
         /// [<paramref name="right"/>, <paramref name="bottom"/>] via Sutherland-Hodgman against the
-        /// rectangle's own four half-planes. See <c>RGraphicsPath.ClipToRect</c> (the public entry
+        /// rectangle's own four half-planes. See <c>GraphicsPath.ClipToRect</c> (the public entry
         /// point this backs) for why a rectangle-only clip is sufficient here and why Sutherland-Hodgman
         /// - normally associated with convex *subject* polygons - is exact regardless of this path's own
         /// winding or convexity: clipping against a convex window never introduces a self-intersection a
@@ -333,7 +335,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             foreach (var contour in EnumerateFlattenedContours())
             {
-                var clipped = SutherlandHodgman.ClipToRect(contour, left, top, right, bottom);
+                var clipped = PolygonClipper.ClipToRect(contour.ConvertAll(p => new PaintPoint(p.X, p.Y)), new Rect(left, top, right - left, bottom - top));
 
                 // Fewer than 3 points can't enclose any area at all. That alone isn't sufficient,
                 // though: clipping against a degenerate (zero-width or zero-height) rectangle - or a
@@ -358,7 +360,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// from a degenerate sliver or point"). <see cref="ClipToRect(double,double,double,double)"/>'s
         /// own remarks explain why a point count above the 3-vertex minimum isn't sufficient on its own.
         /// </summary>
-        private static bool IsNegligibleArea(List<XPoint> polygon)
+        private static bool IsNegligibleArea(List<PaintPoint> polygon)
         {
             double area = 0;
             var n = polygon.Count;

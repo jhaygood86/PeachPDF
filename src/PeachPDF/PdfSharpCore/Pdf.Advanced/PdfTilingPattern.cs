@@ -27,6 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System;
+using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
+
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
@@ -42,6 +46,61 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             Elements.SetName(Keys.Type, "/Pattern");
             Elements[Keys.PatternType] = new PdfInteger(1);
+        }
+
+        /// <summary>
+        /// Sets this pattern up to repeat <paramref name="brush"/>'s form. <paramref name="matrix"/> maps pattern space (the brush's own
+        /// top-left-origin, y-down space, in points) onto the page's default coordinate system.
+        /// </summary>
+        internal void SetupFromBrush(XTilingBrush brush, XMatrix matrix)
+        {
+            if (brush == null)
+                throw new ArgumentNullException("brush");
+
+            Elements[Keys.PaintType] = new PdfInteger(1);
+            Elements[Keys.TilingType] = new PdfInteger(2);
+            Elements.SetRectangle(Keys.BBox, new PdfRectangle(0, 0, brush.CellWidth, brush.CellHeight));
+            Elements[Keys.XStep] = new PdfReal(brush.CellWidth);
+            Elements[Keys.YStep] = new PdfReal(brush.CellHeight);
+            Elements.SetMatrix(Keys.Matrix, matrix);
+
+            string name;
+            double cx, cy;
+            if (brush.Tile is XForm form)
+            {
+                form.Finish();
+                name = Resources.AddForm(_document.FormTable.GetForm(form));
+
+                // A form is a picture the right way up in PDF's y-up space, scaled from the form's own size to the cell.
+                cx = brush.CellWidth / form.PointWidth;
+                cy = brush.CellHeight / form.PointHeight;
+            }
+            else
+            {
+                // An image is the unit square in PDF space, so it is sized to the cell directly.
+                var image = brush.Tile;
+                var was = image.Interpolate;
+                if (brush.Interpolate is { } interpolate)
+                    image.Interpolate = interpolate;
+
+                try
+                {
+                    name = Resources.AddImage(_document.ImageTable.GetImage(image, brush.CellWidth, brush.CellHeight));
+                }
+                finally
+                {
+                    image.Interpolate = was;
+                }
+
+                cx = brush.CellWidth;
+                cy = brush.CellHeight;
+            }
+
+            // The pattern space is y down and both kinds of tile are the right way up in y-up space, so the tile is placed flipped.
+            var content = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "q {0:0.####} 0 0 {1:0.####} 0 {2:0.####} cm {3} Do Q\n", cx, -cy, brush.CellHeight, name);
+            Stream = new PdfStream(PdfEncoders.RawEncoding.GetBytes(content), this);
+            Elements.SetInteger("/Length", Stream.Length);
         }
 
         ///// <summary>

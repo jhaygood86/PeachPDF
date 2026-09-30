@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Svg
     /// Coverage for SVG <c>&lt;text&gt;</c>'s <c>font-stretch</c> support (issue #533) - previously
     /// <c>SvgTreeBuilder.FontContext</c> carried no stretch field at all, and <c>BuildTextRun</c>'s
     /// <c>_adapter.GetFont</c> calls never passed a <c>stretch:</c> argument, so every run resolved the
-    /// normal (5) width class regardless of what was authored. <see cref="RFont"/> doesn't expose its
+    /// normal (5) width class regardless of what was authored. <see cref="Font"/> doesn't expose its
     /// own resolved stretch class back out (the same reason HTML's own font-resolution tests stop at
     /// asserting <c>CssBox.ActualStretch</c>, one layer before <c>GetFont</c> - there is no SVG-side
     /// equivalent of that property to assert against instead), so this proves the keyword→numeric-scale
@@ -52,6 +52,19 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void APercentage_ResolvesItsOwnCachedFont_NotTheKeywordNearestToIt()
+        {
+            var document = Build(
+                """<text x="10" y="50" font-size="20"><tspan font-stretch="87.5%">A</tspan><tspan font-stretch="semi-condensed">B</tspan><tspan font-stretch="88%">C</tspan></text>""");
+
+            var spans = TextRoot(document).Content.OfType<SvgTextSpan>().ToList();
+
+            // 87.5% is what semi-condensed stands for, so the two share a font; 88% is a different width and gets its own.
+            Assert.Same(spans[0].Run.Font, spans[1].Run.Font);
+            Assert.NotSame(spans[0].Run.Font, spans[2].Run.Font);
+        }
+
+        [Fact]
         public void InheritsFromAncestor_ToTspan()
         {
             var document = Build("""<text x="10" y="50" font-size="20" font-stretch="expanded"><tspan>Hi</tspan></text>""");
@@ -82,7 +95,7 @@ namespace PeachPDF.Tests.Svg
         /// precedent warns a "resolves without throwing" test alone can't catch). <c>FontsHandler</c>'s
         /// font cache (<c>Html.Core.Handlers.FontsHandler._fontsCache</c>) is keyed by
         /// <c>(style, weight, stretch, obliqueSkewSinus)</c> per family+size, so two tspans differing only
-        /// in <c>font-stretch</c> resolve to distinct cached <see cref="RFont"/> instances if and only if
+        /// in <c>font-stretch</c> resolve to distinct cached <see cref="Font"/> instances if and only if
         /// the <c>stretch:</c> argument genuinely reaches <c>_adapter.GetFont</c> - if it were dropped,
         /// both would collapse onto the same (always-normal) cache entry and come back reference-equal.</summary>
         [Fact]

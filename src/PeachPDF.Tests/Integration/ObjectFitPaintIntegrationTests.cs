@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
         private static string Doc(string style) =>
             $"<!DOCTYPE html><html><head></head><body><img id='i' style='width:96px;height:96px;{style}' src='{Png2To1}'></body></html>";
 
-        private static async Task<RRect> DrawRect(string style)
+        private static async Task<Rect> DrawRect(string style)
         {
             var (root, container) = await BuildAndLayout(Doc(style));
             var g = new TestRecordingGraphics();

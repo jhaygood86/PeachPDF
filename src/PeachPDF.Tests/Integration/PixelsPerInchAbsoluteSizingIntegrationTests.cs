@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.Integration
             // The issue's own most visible symptom: an inline <svg> icon's painted content overflowing
             // its own clip box in spec-strict viewers (Foxit, Chrome), invisible in a lenient PDFium
             // bitmap render. Per CLAUDE.md's painting-test convention, assert on the actual recorded
-            // RGraphics calls (structural adjacency), not a content-stream substring or a hardcoded
+            // Canvas calls (structural adjacency), not a content-stream substring or a hardcoded
             // magic number: whatever the clip rect and the viewBox-to-viewport transform resolve to,
             // they must agree with EACH OTHER - the viewBox's four corners, mapped through the recorded
             // PushTransform matrix, must land exactly on the recorded PushClip rect's four corners.
@@ -158,15 +158,15 @@ namespace PeachPDF.Tests.Integration
             // RecordingGraphics logs exactly what was passed to PushClip/PushTransform, with none of
             // GraphicsAdapter's own real-backend conversion - PushClip's rect and a transform's own
             // OffsetX/OffsetY are still in the box's internal (PixelsPerPoint-inflated) coordinate space,
-            // dividing by PixelsPerPoint only once actually reaching the PDF (see RGraphics.PixelsPerPoint's
+            // dividing by PixelsPerPoint only once actually reaching the PDF (see Canvas.PixelsPerPoint's
             // own doc comment). The transform's linear part (M11/M22) is the one exception, already
             // pre-divided by SvgRenderer itself (issue #814) - the fix under test - since GraphicsAdapter's
             // own PushTransform never touches it. Dividing the clip and the offset by ppp here mirrors
             // that real conversion, so this comparison matches what the actual PDF page content stream
             // ends up with.
-            var clipReal = new RRect(clip.X / ppp, clip.Y / ppp, clip.Width / ppp, clip.Height / ppp);
-            var offsetXReal = matrix.OffsetX / ppp;
-            var offsetYReal = matrix.OffsetY / ppp;
+            var clipReal = new Rect(clip.X / ppp, clip.Y / ppp, clip.Width / ppp, clip.Height / ppp);
+            var offsetXReal = matrix.M31 / ppp;
+            var offsetYReal = matrix.M32 / ppp;
 
             // The <svg>'s own viewBox: (0, 0, 32, 32). Map its four corners through the (now fully
             // real-point) transform and confirm the result is exactly the real-point clip rect - i.e.

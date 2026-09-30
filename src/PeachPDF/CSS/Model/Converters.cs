@@ -36,8 +36,8 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter NaturalIntegerConverter =
             new StructValueConverter<int>(ValueExtensions.ToNaturalInteger);
 
-        public static readonly IValueConverter WeightIntegerConverter =
-            new StructValueConverter<int>(ValueExtensions.ToWeightInteger);
+        public static readonly IValueConverter WeightNumberConverter =
+            new StructValueConverter<double>(ValueExtensions.ToWeightNumber);
 
         public static readonly IValueConverter PositiveIntegerConverter =
             new StructValueConverter<int>(ValueExtensions.ToPositiveInteger);
@@ -64,6 +64,10 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter PercentConverter =
             new StructValueConverter<Percent>(ValueExtensions.ToPercent);
+
+        /// <summary>A <c>&lt;percentage&gt;</c> that is not negative, such as the <c>font-stretch: 87.5%</c> form.</summary>
+        public static readonly IValueConverter NonNegativePercentConverter =
+            new StructValueConverter<Percent>(ValueExtensions.ToNonNegativePercent);
 
         public static readonly IValueConverter RgbComponentConverter =
             new StructValueConverter<byte>(ValueExtensions.ToRgbComponent);
@@ -308,7 +312,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter OutlineStyleConverter = Map.OutlineStyles.ToConverter();
         /// <summary><c>mix-blend-mode</c> (CSS Compositing and Blending Level 1 §2). Reuses the pre-existing
         /// <see cref="BlendMode"/> enum/<see cref="Map.BlendModes"/> dictionary (built alongside
-        /// <c>Html.Adapters.Entities.RBlendMode</c> for the shared PDF blend-mode infrastructure) rather
+        /// <c>PeachDrawing.Core.PaintBlendMode</c> for the shared PDF blend-mode infrastructure) rather
         /// than a second, independently-derived keyword map.</summary>
         public static readonly IValueConverter MixBlendModeConverter = Map.BlendModes.ToConverter();
         public static readonly IValueConverter PdfTagTypeConverter = Map.PdfTagTypes.ToConverter();
@@ -380,6 +384,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter FontVariantEastAsianConverter =
             new FontVariantEastAsianValueConverter().Or(Keywords.Normal);
         public static readonly IValueConverter FontKerningModeConverter = Map.FontKerningModes.ToConverter();
+        public static readonly IValueConverter FontOpticalSizingModeConverter = Map.FontOpticalSizingModes.ToConverter();
         public static readonly IValueConverter DirectionModeConverter = Map.DirectionModes.ToConverter();
         public static readonly IValueConverter WritingModeConverter = Map.WritingModes.ToConverter();
         public static readonly IValueConverter TextOrientationConverter = Map.TextOrientations.ToConverter();
@@ -393,6 +398,8 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter TextAnchorConverter = Map.TextAnchors.ToConverter();
         public static readonly IValueConverter TextJustifyConverter = Map.TextJustifyOptions.ToConverter();
         public static readonly IValueConverter ObjectFittingConverter = Map.ObjectFittings.ToConverter();
+
+        public static readonly IValueConverter ImageRenderingConverter = Map.ImageRenderingModes.ToConverter();
         public static readonly IValueConverter PositionModeConverter = Map.PositionModes.ToConverter();
         public static readonly IValueConverter OverflowModeConverter = Map.OverflowModes.ToConverter();
         public static readonly IValueConverter FloatingConverter = Map.FloatingModes.ToConverter();
@@ -420,6 +427,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter StrokeLinecapConverter = Map.StrokeLinecaps.ToConverter();
         public static readonly IValueConverter StrokeLinejoinConverter = Map.StrokeLinejoins.ToConverter();
         public static readonly IValueConverter WordBreakConverter = Map.WordBreaks.ToConverter();
+        public static readonly IValueConverter LineBreakConverter = Map.LineBreaks.ToConverter();
         public static readonly IValueConverter OverflowWrapConverter = Map.OverflowWraps.ToConverter();
         public static readonly IValueConverter FillRuleConverter = Map.FillRules.ToConverter();
         public static readonly IValueConverter IntrinsicSizingConverter = Map.IntrinsicSizings.ToConverter();
@@ -577,7 +585,9 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter CurrentColorConverter = ColorConverter.WithCurrentColor();
         public static readonly IValueConverter InvertedColorConverter = CurrentColorConverter.Or(Keywords.Invert);
-        public static readonly IValueConverter PaintConverter = UrlConverter.Or(CurrentColorConverter.OrNone());
+        // SVG 2 <paint>: the context-fill / context-stroke keywords are the paint of the context element (a use, a marker's shape, the text).
+        public static readonly IValueConverter PaintConverter = UrlConverter.Or(CurrentColorConverter.OrNone())
+            .Or(Keywords.ContextFill).Or(Keywords.ContextStroke);
 
         public static readonly IValueConverter StrokeDasharrayConverter =
             LengthOrPercentConverter.Or(NumberConverter).Many().OrNone();

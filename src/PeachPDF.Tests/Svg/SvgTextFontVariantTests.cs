@@ -1,9 +1,8 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -16,7 +15,7 @@ namespace PeachPDF.Tests.Svg
     /// <c>font-feature-settings</c>, and <c>font-kerning</c> support (issue #533) - previously none of
     /// these were read anywhere in <see cref="SvgTreeBuilder"/>, so every run shaped with
     /// <see cref="ShapeSettings.Default"/> regardless of what was authored. Asserts the resolved
-    /// <see cref="ShapeSettings"/> actually reaches <see cref="RGraphics.DrawString"/>.
+    /// <see cref="ShapeSettings"/> actually reaches <see cref="Canvas.DrawString"/>.
     /// </summary>
     public class SvgTextFontVariantTests
     {
@@ -31,7 +30,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 
@@ -111,7 +110,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public async Task FontVariantCaps_SmallCaps_RequestedWhenFontSupportsIt()
         {
-            // Gated through RFont.SupportsFontVariantCaps, matching HTML's own
+            // Gated through Font.SupportsFontVariantCaps, matching HTML's own
             // DerivedStyle.ActualFontVariantCaps - explicitly registers BundledFonts.Ttf (Source Sans 3,
             // confirmed real smcp support - see FontVariantCapsIntegrationTests) rather than relying on
             // whatever font the platform's own default-family resolution happens to pick, which is not

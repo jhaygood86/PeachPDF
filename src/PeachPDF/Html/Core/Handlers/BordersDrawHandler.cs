@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 
@@ -30,7 +29,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// border suppression.
         /// </summary>
         public static void DrawBoxBorders(
-            RGraphics g, CssBox box, RRect rect,
+            Canvas g, CssBox box, Rect rect,
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge = true, bool hasBottomEdge = true)
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
@@ -80,8 +79,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// <see cref="BorderBevelColors.ForSegment"/>.
         /// </param>
         internal static void DrawCollapsedSegment(
-            RGraphics g, bool isHorizontal, RRect rect,
-            LineStyle style, RColor color, double width, Border? side)
+            Canvas g, bool isHorizontal, Rect rect,
+            LineStyle style, PaintColor color, double width, Border? side)
         {
             if (rect is not { Width: > 0, Height: > 0 } || width <= 0 ||
                 style is LineStyle.None or LineStyle.Hidden) return;
@@ -101,7 +100,7 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     var pen = g.GetPen(color);
                     pen.Width = width / g.PixelsPerPoint;
-                    pen.LineJoin = RLineJoin.Miter;
+                    pen.LineJoin = LineJoin.Miter;
 
                     var start = isHorizontal ? rect.Left : rect.Top;
                     var end = isHorizontal ? rect.Right : rect.Bottom;
@@ -114,8 +113,8 @@ namespace PeachPDF.Html.Core.Handlers
                     }
                     else
                     {
-                        pen.LineCap = RLineCap.Butt;
-                        pen.DashStyle = RDashStyle.Solid;
+                        pen.LineCap = LineCap.Butt;
+                        pen.DashStyle = DashStyle.Solid;
                     }
 
                     if (isHorizontal)
@@ -139,10 +138,10 @@ namespace PeachPDF.Html.Core.Handlers
                         : color;
                     g.DrawPolygon(g.GetSolidBrush(resolvedColor),
                     [
-                        new RPoint(rect.Left, rect.Top),
-                        new RPoint(rect.Right, rect.Top),
-                        new RPoint(rect.Right, rect.Bottom),
-                        new RPoint(rect.Left, rect.Bottom)
+                        new PaintPoint(rect.Left, rect.Top),
+                        new PaintPoint(rect.Right, rect.Top),
+                        new PaintPoint(rect.Right, rect.Bottom),
+                        new PaintPoint(rect.Left, rect.Bottom)
                     ]);
                     break;
                 }
@@ -155,12 +154,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// which shows both faces the same way.
         /// </summary>
         private static void DrawBandedSegment(
-            RGraphics g, bool isHorizontal, RRect rect,
-            LineStyle style, RColor color, double width, Border? side)
+            Canvas g, bool isHorizontal, Rect rect,
+            LineStyle style, PaintColor color, double width, Border? side)
         {
             double bandWidth;
-            RColor leadingColor;
-            RColor trailingColor;
+            PaintColor leadingColor;
+            PaintColor trailingColor;
 
             if (style == LineStyle.Double)
             {
@@ -199,19 +198,19 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawSegmentBand(
-            RGraphics g, bool isHorizontal, RRect rect,
-            RColor color, double from, double to)
+            Canvas g, bool isHorizontal, Rect rect,
+            PaintColor color, double from, double to)
         {
             var band = isHorizontal
-                ? RRect.FromLTRB(rect.Left, rect.Top + from, rect.Right, rect.Top + to)
-                : RRect.FromLTRB(rect.Left + from, rect.Top, rect.Left + to, rect.Bottom);
+                ? Rect.FromLTRB(rect.Left, rect.Top + from, rect.Right, rect.Top + to)
+                : Rect.FromLTRB(rect.Left + from, rect.Top, rect.Left + to, rect.Bottom);
 
             g.DrawPolygon(g.GetSolidBrush(color),
             [
-                new RPoint(band.Left, band.Top),
-                new RPoint(band.Right, band.Top),
-                new RPoint(band.Right, band.Bottom),
-                new RPoint(band.Left, band.Bottom)
+                new PaintPoint(band.Left, band.Top),
+                new PaintPoint(band.Right, band.Top),
+                new PaintPoint(band.Right, band.Bottom),
+                new PaintPoint(band.Left, band.Bottom)
             ]);
         }
     }

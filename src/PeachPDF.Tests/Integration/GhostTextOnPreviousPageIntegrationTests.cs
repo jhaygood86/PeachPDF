@@ -110,11 +110,11 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Regression tests for GitHub issue #113: a box relocated to the next page's content top (forced
     /// breaks, keep-with-next, break-inside:avoid, orphans/widows) lands with its own painted
-    /// Rectangles/word rect exactly flush against the previous page's clip bottom. RRect.Intersect
+    /// Rectangles/word rect exactly flush against the previous page's clip bottom. Rect.Intersect
     /// (mirroring the .NET RectangleF convention) treats two rects that merely touch at an edge as a
     /// valid, non-Empty zero-area result - and floating-point rounding across the several arithmetic
     /// steps a relocated box's Y goes through can even land that intersection a hair on the POSITIVE
-    /// side of exactly zero. Comparing against the literal RRect.Empty value (or a strict &lt;= 0 check)
+    /// side of exactly zero. Comparing against the literal Rect.Empty value (or a strict &lt;= 0 check)
     /// missed both cases, so CssBox.Paint/PaintWords painted a fully-clipped (invisible on screen, but
     /// present in the content stream and any text-extraction layer) duplicate of the relocated box on
     /// the page it just left. Fixed via a small epsilon (CssBox.VisibilityClipEpsilon) in the four

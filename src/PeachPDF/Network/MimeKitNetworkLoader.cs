@@ -1,6 +1,7 @@
 ﻿#nullable enable
 
 using MimeKit;
+using PeachDrawing.Core;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;

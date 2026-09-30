@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var shadow = g.Log.OfType<TestRecordingGraphics.DrawRectCall>()
-                .SingleOrDefault(r => r.Color == RColor.FromArgb(10, 20, 30));
+                .SingleOrDefault(r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
             Assert.NotNull(shadow);
             Assert.Equal(bounds.X + 4, shadow.X, 1);
             Assert.Equal(bounds.Y + 6, shadow.Y, 1);
@@ -45,8 +45,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var shadowIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(10, 20, 30));
-            var backgroundIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(1, 1, 1));
+            var shadowIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == PaintColor.FromArgb(10, 20, 30));
+            var backgroundIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == PaintColor.FromArgb(1, 1, 1));
 
             Assert.True(shadowIndex >= 0, "expected the drop-shadow to paint");
             Assert.True(backgroundIndex >= 0, "expected the background to paint");
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var shadow = g.Log.OfType<TestRecordingGraphics.DrawRectCall>()
-                .SingleOrDefault(r => r.Color == RColor.FromArgb(7, 8, 9));
+                .SingleOrDefault(r => r.PaintColor == PaintColor.FromArgb(7, 8, 9));
             Assert.NotNull(shadow);
         }
 
@@ -79,8 +79,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            Assert.NotNull(g.Log.OfType<TestRecordingGraphics.DrawRectCall>().SingleOrDefault(r => r.Color == RColor.FromArgb(1, 1, 1)));
-            Assert.NotNull(g.Log.OfType<TestRecordingGraphics.DrawRectCall>().SingleOrDefault(r => r.Color == RColor.FromArgb(2, 2, 2)));
+            Assert.NotNull(g.Log.OfType<TestRecordingGraphics.DrawRectCall>().SingleOrDefault(r => r.PaintColor == PaintColor.FromArgb(1, 1, 1)));
+            Assert.NotNull(g.Log.OfType<TestRecordingGraphics.DrawRectCall>().SingleOrDefault(r => r.PaintColor == PaintColor.FromArgb(2, 2, 2)));
         }
 
         [Fact]
@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.Integration
             // drop-shadow() in its list, so PaintFilterDropShadows has nothing to paint.
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Single(rects);
-            Assert.Equal(RColor.FromArgb(1, 1, 1), rects[0].Color);
+            Assert.Equal(PaintColor.FromArgb(1, 1, 1), rects[0].PaintColor);
         }
     }
 }

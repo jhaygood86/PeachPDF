@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 
@@ -61,9 +61,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var frame = Frame(WritingMode.HorizontalTb);
 
-            var physical = frame.ToPhysical(new RRect(5, 7, 30, 40));
+            var physical = frame.ToPhysical(new Rect(5, 7, 30, 40));
 
-            Assert.Equal(new RRect(Left + 5, Top + 7, 30, 40), physical);
+            Assert.Equal(new Rect(Left + 5, Top + 7, 30, 40), physical);
         }
 
         [Fact]
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var ltr = Frame(WritingMode.HorizontalTb, DirectionMode.Ltr);
             var rtl = Frame(WritingMode.HorizontalTb, DirectionMode.Rtl);
 
-            Assert.Equal(ltr.ToPhysical(new RRect(5, 7, 30, 40)), rtl.ToPhysical(new RRect(5, 7, 30, 40)));
+            Assert.Equal(ltr.ToPhysical(new Rect(5, 7, 30, 40)), rtl.ToPhysical(new Rect(5, 7, 30, 40)));
         }
 
         [Fact]
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var frame = Frame(WritingMode.VerticalRl, DirectionMode.Ltr);
 
             // logical: inline offset 5, block offset 0, inline size 30 (physical height), block size 12 (physical width)
-            var physical = frame.ToPhysical(new RRect(5, 0, 30, 12));
+            var physical = frame.ToPhysical(new Rect(5, 0, 30, 12));
 
             // block-start (offset 0) touches the content box's right edge; block axis runs physical-X.
             Assert.Equal(Right - 12, physical.X);
@@ -96,8 +96,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var frame = Frame(WritingMode.VerticalRl, DirectionMode.Ltr);
 
-            var firstLine = frame.ToPhysical(new RRect(0, 0, 30, 12));
-            var secondLine = frame.ToPhysical(new RRect(0, 12, 30, 12));
+            var firstLine = frame.ToPhysical(new Rect(0, 0, 30, 12));
+            var secondLine = frame.ToPhysical(new Rect(0, 12, 30, 12));
 
             Assert.Equal(firstLine.X - 12, secondLine.X);
         }
@@ -107,8 +107,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var frame = Frame(WritingMode.VerticalLr, DirectionMode.Ltr);
 
-            var firstLine = frame.ToPhysical(new RRect(0, 0, 30, 12));
-            var secondLine = frame.ToPhysical(new RRect(0, 12, 30, 12));
+            var firstLine = frame.ToPhysical(new Rect(0, 0, 30, 12));
+            var secondLine = frame.ToPhysical(new Rect(0, 12, 30, 12));
 
             Assert.Equal(Left, firstLine.X);
             Assert.Equal(firstLine.X + 12, secondLine.X);
@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var frame = Frame(WritingMode.VerticalRl, DirectionMode.Rtl);
 
-            var physical = frame.ToPhysical(new RRect(0, 0, 30, 12));
+            var physical = frame.ToPhysical(new Rect(0, 0, 30, 12));
 
             // inline-start (rtl, vertical) is the bottom edge.
             Assert.Equal(Bottom - 30, physical.Y);
@@ -133,9 +133,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var frame = Frame((WritingMode)writingMode);
 
-            var physical = frame.ToPhysical(new RSize(30, 12));
+            var physical = frame.ToPhysical(new Size(30, 12));
 
-            Assert.Equal(new RSize(12, 30), physical);
+            Assert.Equal(new Size(12, 30), physical);
         }
 
         [Fact]
@@ -143,9 +143,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var frame = Frame(WritingMode.HorizontalTb);
 
-            var physical = frame.ToPhysical(new RSize(30, 12));
+            var physical = frame.ToPhysical(new Size(30, 12));
 
-            Assert.Equal(new RSize(30, 12), physical);
+            Assert.Equal(new Size(30, 12), physical);
         }
 
         [Fact]
@@ -154,7 +154,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var frame = Frame(WritingMode.VerticalRl, DirectionMode.Ltr);
 
             var point = frame.ToPhysical(5, 7);
-            var rectLocation = frame.ToPhysical(new RRect(5, 7, 0, 0)).Location;
+            var rectLocation = frame.ToPhysical(new Rect(5, 7, 0, 0)).Location;
 
             Assert.Equal(rectLocation, point);
         }
@@ -178,7 +178,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.True(viaFor.IsVertical);
             Assert.Equal(viaContentBox.LogicalContentWidth, viaFor.LogicalContentWidth);
             Assert.Equal(viaContentBox.LogicalContentHeight, viaFor.LogicalContentHeight);
-            Assert.Equal(viaContentBox.ToPhysical(new RRect(1, 2, 3, 4)), viaFor.ToPhysical(new RRect(1, 2, 3, 4)));
+            Assert.Equal(viaContentBox.ToPhysical(new Rect(1, 2, 3, 4)), viaFor.ToPhysical(new Rect(1, 2, 3, 4)));
         }
     }
 }

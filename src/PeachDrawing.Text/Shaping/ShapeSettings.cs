@@ -154,9 +154,10 @@ namespace PeachDrawing.Text.Shaping
     /// group, never by an explicit setting, which is CSS's rule for <c>font-variant-*</c> over <c>font-feature-settings</c>.
     /// </para>
     /// <para>
-    /// <see cref="JoiningForms"/> and <see cref="UseCategories"/> are for a run of a joining script or an Indic script, and only
-    /// one of the two is ever set for a run. The lists are compared by reference when settings are used as a cache key, so two
-    /// equal lists that are separate objects cache separately, which costs a repeated lookup and never a wrong answer.
+    /// <see cref="JoiningForms"/>, <see cref="UseCategories"/> and <see cref="KhmerCategories"/> are for a run of a joining
+    /// script, an Indic script shaped by the Universal Shaping Engine, or Khmer respectively, and only one of the three is
+    /// ever set for a run. The lists are compared by reference when settings are used as a cache key, so two equal lists that
+    /// are separate objects cache separately, which costs a repeated lookup and never a wrong answer.
     /// </para>
     /// <para>
     /// Write <c>new ShapeSettings()</c> or <see cref="Default"/> for the defaults; <c>default(ShapeSettings)</c> is all zeros and
@@ -176,6 +177,7 @@ namespace PeachDrawing.Text.Shaping
     /// <param name="ReverseForDisplay">Whether to reverse the shaped glyphs into visual order at the end, and replace mirrorable glyphs by their mirror images, for a run that is laid out right to left. The text the lookups ran over is never reversed. Reversing rewrites each glyph's <see cref="PlacedGlyph.XOffset"/> so that it stays in place, and leaves <see cref="PlacedGlyph.AttachedToIndex"/> empty on every glyph of the reversed run.</param>
     /// <param name="Position">The subscript or superscript feature to apply.</param>
     /// <param name="EmojiMode">Which presentation of a character with both a text and an emoji form to choose a glyph for, which is a <c>cmap</c> format 14 lookup and not a feature.</param>
+    /// <param name="KhmerCategories">For a Khmer run, HarfBuzz's own (pre-Universal-Shaping-Engine) shaping category of each code point, as <see cref="KhmerShaping.Classify"/> gives them; otherwise <see langword="null"/>.</param>
     public readonly record struct ShapeSettings(
         LigatureSet Ligatures = LigatureSet.Default,
         CapsMode Caps = CapsMode.None,
@@ -190,7 +192,8 @@ namespace PeachDrawing.Text.Shaping
         bool ReverseForDisplay = false,
         // Appended last so that callers that construct a value with positional arguments keep their meaning.
         SubSuperMode Position = SubSuperMode.None,
-        EmojiMode EmojiMode = EmojiMode.Normal)
+        EmojiMode EmojiMode = EmojiMode.Normal,
+        IReadOnlyList<KhmerCategory>? KhmerCategories = null)
     {
         /// <summary>Creates the default settings: common and required ligatures, contextual alternates and kerning, and nothing else.</summary>
         public ShapeSettings()

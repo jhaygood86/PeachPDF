@@ -8,6 +8,21 @@ it only together with the `.txt` files and the four conformance files beside the
 - **`SegmentationConformanceTests` runs every line of those files** through `LineBreaker` (with `Strictness = Strict`, the
   algorithm's own default, because `CJ` is `NS` there) and `Segmenter`, and is the reason to trust the rules. A change to a rule
   that makes one line fail is wrong; do not "fix" it by editing the test.
+- **The CSS tailorings are outside what those files can check.** The conformance run has no language and `Strict`, so a tailoring that only applies for `loose` or for Chinese and Japanese text (`LineBreakOptions.Language`) never runs in it; `LineBreakLanguageTests` pins those, against what Chrome does with the same text, language and strictness. The line break table carries a flag for the `PR` and `PO` characters whose East Asian Width is Ambiguous, Fullwidth or Wide (`LineBreakWideOrAmbiguous`, only on those two classes, to keep the table small), which the loose breaks before a suffix and after a prefix read.
+- **The conformance run turns the dictionary off.** `LineBreakTest.txt` expects the Complex_Context class resolved as LB1 says, so
+  `SegmentationConformanceTests` sets `LineBreakOptions.ComplexContext = GeneralCategory`; with the default (`Dictionary`) the
+  Thai/Lao/Khmer/Burmese lines of that file fail, by design. The word lists are not tables of this kind:
+  `assets/unicode/generate_dictionary_breaking.py` writes them from ICU's dictionaries at one pinned release tag (each file checked
+  against a SHA-256) into `src/PeachDrawing.Text.Data/Internal/Text/Resources/Dictionaries/*.dict.br` (a different package from the
+  segmentation tables below - see
+  `.claude/invariants/fonts-shared-unicode-data-lives-in-its-own-single-target-package.md`), embedded and, like every other Unicode
+  resource there, **Brotli** (measured: Brotli over the same payload beats raw DEFLATE by roughly 7-8% per script; a host with no
+  Brotli decoder gets an empty dictionary the same way it already gets an empty table for every other resource of that package,
+  unless it registers one with `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor`). Never edit a `.dict.br` by
+  hand, and refresh them only through the script; a new ICU tag needs the script's tag and hashes updated together, and the counts
+  in `DictionaryLineBreakingTests.EachListLoads_SortedAndComplete`. Their licence (Thai/Khmer: Unicode License v3; Lao/Burmese:
+  BSD-style notices of their own) lives in `PeachDrawing.Text.Data`'s own `THIRD-PARTY-LICENSES.md`; a list whose licence turns out
+  stricter is dropped, not shipped.
 - **The tables are source, not a Brotli resource**, so they work in WebAssembly, where there is no Brotli decoder. A lookup is a
   binary search over a sorted array of range starts with a parallel array of values.
 - **Everything the line breaking rules need beyond `Line_Break` comes from the comment of `LineBreak.txt`** (the General_Category

@@ -1,13 +1,11 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Linq;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Html.Core
 {
@@ -15,19 +13,15 @@ namespace PeachPDF.Tests.Html.Core
     /// Multi-codepoint emoji sequence composition against a <b>real</b> production color font
     /// (<see cref="BundledFonts.ColorEmojiSequences"/>), complementing
     /// <see cref="DefaultIgnorableShapingTests"/>'s hand-authored fixture. Every sequence here composes
-    /// through the font's <c>ccmp</c> feature — Noto Color Emoji declares no <c>liga</c>/<c>rlig</c>/
+    /// through the font's <c>ccmp</c> feature — Noto PaintColor Emoji declares no <c>liga</c>/<c>rlig</c>/
     /// <c>clig</c> whatsoever — so a shaper that treats <c>ccmp</c> as opt-in fails all of them.
     /// </summary>
     public class EmojiSequenceCompositionTests
     {
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.ColorEmojiSequences)).Fontface;
-            return new OpenTypeDescriptor("emoji-seq-test", "emoji-seq-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.ColorEmojiSequences);
 
         private static int[] Shape(string text) =>
-            Descriptor().Shape(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
+            Descriptor().ShapeGlyphs(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
 
         [Theory]
         [InlineData("\U0001F3F3️‍\U0001F308", "rainbow flag: ZWJ sequence carrying a VS16")]

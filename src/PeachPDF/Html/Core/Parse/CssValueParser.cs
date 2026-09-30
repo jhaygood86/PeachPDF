@@ -13,8 +13,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
@@ -38,7 +37,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         ///
         /// </summary>
-        private readonly RAdapter _adapter;
+        private readonly RenderContext _adapter;
 
         /// <summary>
         /// Caches parsed inline <c>style=""</c> rules by their raw attribute text, since machine-generated
@@ -52,7 +51,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Init.
         /// </summary>
-        public CssValueParser(RAdapter adapter)
+        public CssValueParser(RenderContext adapter)
         {
             ArgumentNullException.ThrowIfNull(adapter, "global");
 
@@ -416,6 +415,37 @@ namespace PeachPDF.Html.Core.Parse
                 : ParseLength(value.LengthOrCalc!.Value, hundredPercent, box);
 
         /// <summary>
+        /// Parses a plain finite <c>&lt;number&gt;</c> such as <c>350.5</c>, for a keyword-or-value property whose non-keyword side is a
+        /// number (<c>font-weight</c>).
+        /// </summary>
+        public static bool TryParseNumber(string value, out double result)
+        {
+            if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
+                return true;
+
+            result = 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Parses a non-negative <c>&lt;percentage&gt;</c> such as <c>87.5%</c> to the number it states (87.5), for a keyword-or-value
+        /// property whose non-keyword side is a percentage of its own scale (<c>font-stretch</c>).
+        /// </summary>
+        public static bool TryParseNonNegativePercentage(string value, out double result)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length > 1 && trimmed[^1] == '%'
+                && double.TryParse(trimmed.AsSpan(0, trimmed.Length - 1), NumberStyles.Float, CultureInfo.InvariantCulture, out result)
+                && double.IsFinite(result) && result >= 0)
+            {
+                return true;
+            }
+
+            result = 0;
+            return false;
+        }
+
+        /// <summary>
         /// Parses <c>line-height</c>'s non-keyword grammar - a <c>&lt;length-percentage&gt;</c> (itself
         /// possibly a deferred-calc, via <see cref="TryParseLengthOrCalc"/>) or a bare unitless multiplier
         /// number. A bare-number <c>calc()</c> (e.g. <c>calc(1 + 0.5)</c>) has already folded to a literal
@@ -703,8 +733,8 @@ namespace PeachPDF.Html.Core.Parse
         /// Parses a color value in CSS style; e.g. #ff0000, red, rgb(255,0,0), rgb(100%, 0, 0)
         /// </summary>
         /// <param name="colorValue">color string value to parse</param>
-        /// <returns>Color value</returns>
-        public RColor GetActualColor(string colorValue)
+        /// <returns>PaintColor value</returns>
+        public PaintColor GetActualColor(string colorValue)
         {
             TryGetColor(colorValue, 0, colorValue.Length, out var color);
             return color;
@@ -718,7 +748,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="length">substring length</param>
         /// <param name="color">return the parsed color</param>
         /// <returns>true - valid color, false - otherwise</returns>
-        public bool TryGetColor(string str, int idx, int length, out RColor color)
+        public bool TryGetColor(string str, int idx, int length, out PaintColor color)
         {
             try
             {
@@ -737,7 +767,7 @@ namespace PeachPDF.Html.Core.Parse
             }
             catch
             { }
-            color = RColor.Black;
+            color = PaintColor.Black;
             return false;
         }
 
@@ -907,9 +937,9 @@ namespace PeachPDF.Html.Core.Parse
 
         private static void TokenizeInto(List<Token> tokens, string propValue, bool inValueContext, bool preserveWhitespace)
         {
-            // In a value context '#rrggbb' lexes to a single Color token; otherwise a letter-leading hex is a
+            // In a value context '#rrggbb' lexes to a single PaintColor token; otherwise a letter-leading hex is a
             // Hash token and a digit-leading hex is '#' + number. Callers that hand the tokens to the Layer-A
-            // color/gradient grammar (which reads Color tokens) must set inValueContext so hex stops resolve.
+            // color/gradient grammar (which reads PaintColor tokens) must set inValueContext so hex stops resolve.
             using var lexer = new Lexer(propValue) { IsInValue = inValueContext };
 
             Token token;
@@ -965,7 +995,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <c>perspective()</c> is not supported (see docs/html-css-support.md) and is ignored like any other
         /// unrecognized function name, contributing identity.
         /// </remarks>
-        public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBox box) =>
+        public static Matrix3x2 ParseTransform(string transformValue, string transformOriginValue, CssBox box) =>
             ParseTransformFull(transformValue, transformOriginValue, box).Affine;
 
         /// <summary>
@@ -974,11 +1004,11 @@ namespace PeachPDF.Html.Core.Parse
         /// parent will act on, is not affine once projected onto the box's plane, and the 4x4 is what the raster backend warps with; the
         /// affine matrix is then only the linearisation around the transform origin.
         /// </summary>
-        public static (RMatrix Affine, Matrix4x4? Final4) ParseTransformFull(string transformValue, string transformOriginValue, CssBox box)
+        public static (Matrix3x2 Affine, Matrix4x4? Final4) ParseTransformFull(string transformValue, string transformOriginValue, CssBox box)
         {
             var built = BuildFinal4(transformValue, transformOriginValue, box);
             if (built is not { } b)
-                return (RMatrix.Identity, null);
+                return (Matrix3x2.Identity, null);
 
             var epsilonX = Math.Max(box.ActualWidth / 2, 1);
             var epsilonY = Math.Max(box.ActualHeight / 2, 1);
@@ -1048,7 +1078,7 @@ namespace PeachPDF.Html.Core.Parse
             // This matrix is cached and computed once (see CssBox.ActualTransformMatrix),
             // so it must stay position-independent - the box's actual page position can vary across
             // repeated paint passes (e.g. pagination) and is re-applied at paint time instead, via
-            // RMatrix.RebaseOrigin.
+            // Matrix3x2Extensions.RebaseOrigin.
             var (ox, oy, oz) = ParseTransformOrigin(transformOriginValue, box);
 
             var final4 =
@@ -1407,7 +1437,7 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Projects a 4x4 transform (applied to the box's own z=0 plane) down to a 2D affine RMatrix,
+        /// Projects a 4x4 transform (applied to the box's own z=0 plane) down to a 2D affine Matrix3x2,
         /// via numeric differentiation around the transform-origin point (Ox, Oy). This is exact when
         /// the projection is linear (i.e. no perspective() in the chain - w stays constant across the
         /// plane, so the secant used here equals the true tangent everywhere), and a local approximation
@@ -1424,7 +1454,7 @@ namespace PeachPDF.Html.Core.Parse
         /// typical box sizes and perspective distances, making perspective() look like a no-op).
         /// </param>
         /// <param name="epsilonY">Probe distance along Y used to estimate the derivative there, analogous to <paramref name="epsilonX"/>.</param>
-        private static RMatrix ProjectTo2D(Matrix4x4 m, double ox, double oy, double epsilonX, double epsilonY)
+        private static Matrix3x2 ProjectTo2D(Matrix4x4 m, double ox, double oy, double epsilonX, double epsilonY)
         {
             (double X, double Y)? Project(double x, double y)
             {
@@ -1436,12 +1466,12 @@ namespace PeachPDF.Html.Core.Parse
 
             var p0 = Project(ox, oy);
             if (p0 is not { } origin)
-                return RMatrix.Identity;
+                return Matrix3x2.Identity;
 
             var px = Project(ox + epsilonX, oy);
             var py = Project(ox, oy + epsilonY);
             if (px is not { } pxv || py is not { } pyv)
-                return RMatrix.Identity;
+                return Matrix3x2.Identity;
 
             var m11 = (pxv.X - origin.X) / epsilonX;
             var m12 = (pxv.Y - origin.Y) / epsilonX;
@@ -1451,7 +1481,7 @@ namespace PeachPDF.Html.Core.Parse
             var offsetX = origin.X - (ox * m11 + oy * m21);
             var offsetY = origin.Y - (ox * m12 + oy * m22);
 
-            return new RMatrix(m11, m12, m21, m22, offsetX, offsetY);
+            return new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, (float)offsetX, (float)offsetY);
         }
 
         private ParsedLinearGradient? ParseLinearGradient(string value)
@@ -1516,7 +1546,7 @@ namespace PeachPDF.Html.Core.Parse
             if (stopGroups.Count < 2)
                 return null;
 
-            var stops = new List<(RColor? Color, Length? Position, bool IsHint)>();
+            var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
 
             foreach (var group in stopGroups)
             {
@@ -1741,7 +1771,7 @@ namespace PeachPDF.Html.Core.Parse
             if (stopGroups.Count < 2)
                 return null;
 
-            var stops = new List<(RColor? Color, Length? Position, bool IsHint)>();
+            var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
 
             foreach (var group in stopGroups)
             {
@@ -1896,7 +1926,7 @@ namespace PeachPDF.Html.Core.Parse
             if (stopGroups.Count < 2)
                 return null;
 
-            var stops = new List<(RColor? Color, double? PositionRad, bool IsHint)>();
+            var stops = new List<(PaintColor? PaintColor, double? PositionRad, bool IsHint)>();
 
             foreach (var group in stopGroups)
             {
@@ -2243,7 +2273,7 @@ namespace PeachPDF.Html.Core.Parse
         /// Get color by parsing given hex value color string (#A28B34).
         /// </summary>
         /// <returns>true - valid color, false - otherwise</returns>
-        private static bool GetColorByHex(string str, int idx, int length, out RColor color)
+        private static bool GetColorByHex(string str, int idx, int length, out PaintColor color)
         {
             int r = -1;
             int g = -1;
@@ -2265,10 +2295,10 @@ namespace PeachPDF.Html.Core.Parse
             }
             if (r > -1 && g > -1 && b > -1)
             {
-                color = RColor.FromArgb(r, g, b);
+                color = PaintColor.FromArgb(r, g, b);
                 return true;
             }
-            color = RColor.Empty;
+            color = PaintColor.Empty;
             return false;
         }
 
@@ -2276,12 +2306,12 @@ namespace PeachPDF.Html.Core.Parse
         /// Get color by parsing given RGB value color string (RGB(255,180,90))
         /// </summary>
         /// <returns>true - valid color, false - otherwise</returns>
-        private static bool GetColorByRgb(string str, int idx, int length, out RColor color)
+        private static bool GetColorByRgb(string str, int idx, int length, out PaintColor color)
         {
             int r = -1;
             int g = -1;
             int b = -1;
-            double a = 1d; // rgb() is opaque unless a CSS Color 4 `/ <alpha>` component is present.
+            double a = 1d; // rgb() is opaque unless a CSS PaintColor 4 `/ <alpha>` component is present.
 
             if (length > 10)
             {
@@ -2305,10 +2335,10 @@ namespace PeachPDF.Html.Core.Parse
 
             if (r > -1 && g > -1 && b > -1)
             {
-                color = RColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
+                color = PaintColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
                 return true;
             }
-            color = RColor.Empty;
+            color = PaintColor.Empty;
             return false;
         }
 
@@ -2316,7 +2346,7 @@ namespace PeachPDF.Html.Core.Parse
         /// Get color by parsing given RGBA value color string (RGBA(255,180,90,180))
         /// </summary>
         /// <returns>true - valid color, false - otherwise</returns>
-        private static bool GetColorByRgba(string str, int idx, int length, out RColor color)
+        private static bool GetColorByRgba(string str, int idx, int length, out PaintColor color)
         {
             int r = -1;
             int g = -1;
@@ -2346,16 +2376,16 @@ namespace PeachPDF.Html.Core.Parse
 
             if (r > -1 && g > -1 && b > -1)
             {
-                color = RColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
+                color = PaintColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
                 return true;
             }
-            color = RColor.Empty;
+            color = PaintColor.Empty;
             return false;
         }
 
         /// <summary>
         /// Parses the optional trailing alpha of an <c>rgb()/rgba()</c> value, supporting both the legacy
-        /// comma form (<c>…, 0.75</c>) and the CSS Color 4 slash form (<c>… / 75%</c> or <c>… / 0.75</c>).
+        /// comma form (<c>…, 0.75</c>) and the CSS PaintColor 4 slash form (<c>… / 75%</c> or <c>… / 0.75</c>).
         /// The component separator (comma or the space before <c>/</c>) has already been consumed by the
         /// preceding <see cref="ParseIntAtIndex"/> call, so this skips whitespace and an optional leading
         /// <c>/</c>, then reads a number optionally suffixed by <c>%</c> (percent → 0..1). Returns the alpha
@@ -2401,30 +2431,30 @@ namespace PeachPDF.Html.Core.Parse
         /// color (alpha 0 is transparent's own correct, intentional value, not a failure sentinel).
         /// </summary>
         /// <returns>true - valid color, false - otherwise</returns>
-        private bool GetColorByName(string str, int idx, int length, out RColor color)
+        private bool GetColorByName(string str, int idx, int length, out PaintColor color)
         {
             var substring = str.Substring(idx, length);
 
             // Fast path: the overwhelming majority of "by name" values are a bare identifier (a named
-            // color like "black"/"transparent"), not a CSS Color 4 function (hsl()/lab()/color-mix()/...)
+            // color like "black"/"transparent"), not a CSS PaintColor 4 function (hsl()/lab()/color-mix()/...)
             // or an escaped identifier (`\62 lack`) - skip GetCssTokens/ToResolvedColor's Lexer/
             // TextSource/StylesheetComposer allocation entirely and consult the CSS-OM's own
             // Colors.NamedColors table directly (via Colors.GetColor) - the exact same table
-            // Color.FromName/ToColor already resolve a plain Ident token against, not a second,
+            // PaintColor.FromName/ToColor already resolve a plain Ident token against, not a second,
             // independently maintained list. A miss (a function, an escape sequence, "currentcolor", or
             // genuine garbage) falls through unchanged to the tokenizer path below, so this can only ever
             // be an early exit to the same true answer, never a source of divergence from it.
             if (substring.IndexOf('(') < 0 && substring.IndexOf('\\') < 0 && Colors.GetColor(substring) is { } named)
             {
-                color = RColor.FromArgb(named.A, named.R, named.G, named.B);
+                color = PaintColor.FromArgb(named.A, named.R, named.G, named.B);
                 return true;
             }
 
             // Tokenization and grammar parsing are the CSS-OM's job: ToResolvedColor resolves named
             // colors, hex, and every color function (rgb/hsl/hwb/gray/lab/oklab/lch/oklch/color-mix) to a
-            // concrete Color. This method's only remaining role is the Color -> RColor conversion.
+            // concrete PaintColor. This method's only remaining role is the PaintColor -> PaintColor conversion.
             // inValueContext: true so a hex value nested inside a function (e.g. a color-mix() operand)
-            // always lexes to a single Color token regardless of its leading character - without it, a
+            // always lexes to a single PaintColor token regardless of its leading character - without it, a
             // digit-leading hex (e.g. "#2563eb") lexes as '#' + a number instead of a Hash token, because
             // this lexer's own non-value HashStart() path requires a name-*start* code point right after
             // '#' (Lexer.cs's IsNameStart(), no digits/hyphens) - narrower than CSS Syntax Level 3 §4.3.4's
@@ -2439,12 +2469,12 @@ namespace PeachPDF.Html.Core.Parse
             {
                 var c = parsed.Value;
                 color = c.IsDeviceCmyk
-                    ? RColor.FromCmyk(c.A, c.C, c.M, c.Y, c.K)
-                    : RColor.FromArgb(c.A, c.R, c.G, c.B);
+                    ? PaintColor.FromCmyk(c.A, c.C, c.M, c.Y, c.K)
+                    : PaintColor.FromArgb(c.A, c.R, c.G, c.B);
                 return true;
             }
 
-            color = RColor.Black;
+            color = PaintColor.Black;
             return false;
         }
 

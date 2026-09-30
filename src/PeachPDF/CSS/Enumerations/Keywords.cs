@@ -72,6 +72,13 @@
         public const string Relative = "relative";
         public const string Absolute = "absolute";
         public const string Sticky = "sticky";
+        public const string WebkitSticky = "-webkit-sticky";
+        public const string WebkitFlex = "-webkit-flex";
+        public const string WebkitBox = "-webkit-box";
+        public const string WebkitInlineBox = "-webkit-inline-box";
+        public const string MozBox = "-moz-box";
+        public const string MozInlineBox = "-moz-inline-box";
+        public const string WebkitInlineFlex = "-webkit-inline-flex";
         public const string Serif = "serif";
         public const string SansSerif = "sans-serif";
         public const string Monospace = "monospace";
@@ -143,6 +150,8 @@
         public const string Plaintext = "plaintext";
         public const string Default = "default";
         public const string ContextMenu = "context-menu";
+        public const string ContextFill = "context-fill";
+        public const string ContextStroke = "context-stroke";
         public const string Help = "help";
         public const string Pointer = "pointer";
         public const string Progress = "progress";
@@ -386,6 +395,8 @@
         public const string KeepAll = "keep-all";
         public const string BreakWord = "break-word";
         public const string Anywhere = "anywhere";
+        public const string Loose = "loose";
+        public const string Strict = "strict";
         public const string Nonzero = "nonzero";
         public const string Evenodd = "evenodd";
         public const string Row = "row";
@@ -472,5 +483,9 @@
         public const string Ellipsis = "ellipsis";
         public const string FromFont = "from-font";
         public const string Under = "under";
+        public const string Smooth = "smooth";
+        public const string HighQuality = "high-quality";
+        public const string CrispEdges = "crisp-edges";
+        public const string Pixelated = "pixelated";
     }
 }

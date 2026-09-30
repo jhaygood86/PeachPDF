@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Khmer;
 using PeachDrawing.Text.Internal.Text.Shaping.Use;
 
 namespace PeachDrawing.Text.Internal.Text
@@ -138,7 +139,7 @@ namespace PeachDrawing.Text.Internal.Text
             if (descriptor.FontFace.cmap.symbol)
                 return glyphs;
 
-            GsubTable? gsub = descriptor.FontFace.gsub?.Table;
+            GsubTable? gsub = descriptor.SubstitutionTable;
             if (gsub is null)
                 return glyphs;
 
@@ -199,6 +200,13 @@ namespace PeachDrawing.Text.Internal.Text
                 ApplyUseShaping(gsub, glyphs, useCategories, languageTag, scriptPreference, gdef);
             }
 
+            if (features.KhmerCategories is { Count: > 0 } khmerCategories)
+            {
+                var languageTag = OpenTypeLanguageTags.Resolve(features.Language);
+                var scriptPreference = ResolveScriptPreference(features.ScriptTag);
+                ApplyKhmerShaping(gsub, glyphs, khmerCategories, languageTag, scriptPreference, gdef);
+            }
+
             SortedDictionary<int, int> lookupIndices = GetActiveLookupIndices(gsub, features);
             if (lookupIndices.Count == 0)
                 return glyphs;
@@ -208,7 +216,16 @@ namespace PeachDrawing.Text.Internal.Text
             // substitution feeding into a later ligature match, or vice versa) match real OpenType
             // application order, rather than an arbitrary code-imposed order from separate passes.
             foreach ((int lookupIndex, int alternateIndex) in lookupIndices)
-                ApplyLookup(gsub, lookupIndex, alternateIndex, glyphs, gdef);
+            {
+                try
+                {
+                    ApplyLookup(gsub, lookupIndex, alternateIndex, glyphs, gdef);
+                }
+                catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException or InvalidOperationException)
+                {
+                    // A lookup the font's own data cannot be read for (a damaged table) is skipped, not fatal to the text.
+                }
+            }
 
             return glyphs;
         }
@@ -280,7 +297,8 @@ namespace PeachDrawing.Text.Internal.Text
             && features.Position == SubSuperMode.None
             && (features.ExplicitFeatures is null || features.ExplicitFeatures.Count == 0)
             && (features.JoiningForms is null || features.JoiningForms.Count == 0)
-            && (features.UseCategories is null || features.UseCategories.Count == 0);
+            && (features.UseCategories is null || features.UseCategories.Count == 0)
+            && (features.KhmerCategories is null || features.KhmerCategories.Count == 0);
 
         private static List<PlacedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text, EmojiMode emojiMode)
         {
@@ -345,6 +363,10 @@ namespace PeachDrawing.Text.Internal.Text
                 // later one (collected into customAltIndexByTag below instead).
                 var defaultTags = new HashSet<string>();
 
+                // rvrn (Required Variation Alternates) is what a variable font's FeatureVariations use for glyph swaps at a region of
+                // its design space; it is on for every script and always applied first. A font that is not variable has no such feature.
+                defaultTags.Add("rvrn");
+
                 // ccmp (Glyph Composition/Decomposition) and locl (Localized Forms) are default-on for
                 // every script in the OpenType spec's own feature registry - not opt-in the way liga/dlig
                 // are - and every real shaping engine enables them unconditionally. PeachPDF used to reach
@@ -360,7 +382,7 @@ namespace PeachDrawing.Text.Internal.Text
                 // Gated on those two pre-stages NOT having run, because they already applied ccmp/locl for
                 // this same glyph list and a second application is not idempotent in general - a Type 2
                 // (Multiple Substitution) decomposition would happily decompose its own output again.
-                if (key.JoiningForms is not { Count: > 0 } && key.UseCategories is not { Count: > 0 })
+                if (key.JoiningForms is not { Count: > 0 } && key.UseCategories is not { Count: > 0 } && key.KhmerCategories is not { Count: > 0 })
                 {
                     defaultTags.Add("ccmp");
                     defaultTags.Add("locl");
@@ -374,6 +396,16 @@ namespace PeachDrawing.Text.Internal.Text
                 {
                     defaultTags.Add("abvs"); defaultTags.Add("blws"); defaultTags.Add("haln");
                     defaultTags.Add("pres"); defaultTags.Add("psts");
+                }
+
+                // Khmer's own "other features" group (khmer_features' _KHMER_PRES.._KHMER_PSTS run,
+                // HarfBuzz's own collect_features_khmer) - applied globally after clearing per-syllable
+                // state entirely, exactly like the Universal Shaping Engine's own equivalent group above
+                // (no haln - not one of Khmer's own khmer_features).
+                if (key.KhmerCategories is { Count: > 0 })
+                {
+                    defaultTags.Add("pres"); defaultTags.Add("abvs");
+                    defaultTags.Add("blws"); defaultTags.Add("psts");
                 }
 
                 if ((key.Ligatures & LigatureSet.Common) != 0) { defaultTags.Add("liga"); defaultTags.Add("clig"); }
@@ -649,6 +681,88 @@ namespace PeachDrawing.Text.Internal.Text
             }
 
             UseReorderer.ReorderAll(glyphs, currentCategories, currentSyllables);
+        }
+
+        /// <summary>The Khmer shaper's own "basic features", applied globally after the reorder pass -
+        /// see <see cref="ApplyKhmerShaping"/>'s own remarks. <c>cfar</c> is deliberately not requested
+        /// here (see <c>.claude/accepted-gaps/no-text-shaping.md</c>).</summary>
+        private static readonly IReadOnlySet<string> KhmerBasicFeatureTags = new HashSet<string> { "pref", "blwf", "abvf", "pstf" };
+
+        /// <summary>The Khmer shaper's own default glyph pre-processing tags, requested in their own
+        /// stage <b>after</b> the reorder pass runs - unlike <see cref="UseNuktaCcmpLoclAkhnTags"/>'s
+        /// equivalent for the Universal Shaping Engine, which runs before its own reorder (see
+        /// <see cref="ApplyKhmerShaping"/>'s own remarks on why Khmer's real stage order is the
+        /// opposite).</summary>
+        private static readonly IReadOnlySet<string> KhmerLoclCcmpTags = new HashSet<string> { "locl", "ccmp" };
+
+        /// <summary>
+        /// Applies HarfBuzz's own Khmer-specific shaper (<c>hb-ot-shaper-khmer.cc</c> - not the
+        /// Universal Shaping Engine <see cref="ApplyUseShaping"/> implements; Khmer predates USE and
+        /// still uses HarfBuzz's own older, script-specific "Indic" shaper family, sharing only its raw
+        /// category data with USE - see <see cref="KhmerCategoryClassifier"/>'s own remarks): reorders a
+        /// coeng+<see cref="KhmerCategory.Ra"/> pair and a pre-base vowel sign to each syllable's own
+        /// start (<see cref="KhmerReorderer"/>), then applies the font's own default pre-processing
+        /// (<c>locl</c>/<c>ccmp</c>) and basic features (<c>pref</c>/<c>blwf</c>/<c>abvf</c>/<c>pstf</c>)
+        /// globally rather than per-syllable-masked - the same documented v1 simplification
+        /// <see cref="ApplyUseShaping"/>'s own remarks already establish for the Universal Shaping
+        /// Engine, and for the identical reason (a font's own coverage/context tables only match the
+        /// sequences they're authored for, so applying globally produces the same result in practice for
+        /// well-formed text).
+        ///
+        /// <b>Stage order is the opposite of <see cref="ApplyUseShaping"/>'s</b>: HarfBuzz's own
+        /// <c>collect_features_khmer</c> registers <c>reorder_khmer</c> as a GSUB pause *before* it ever
+        /// enables <c>locl</c>/<c>ccmp</c> or the basic features, so the reorder runs against the
+        /// syllable's still-nominal (pre-substitution) glyphs, and <c>pref</c>/<c>blwf</c>/<c>abvf</c>/
+        /// <c>pstf</c> then substitute the *already-reordered* sequence (confirmed both by reading that
+        /// function and empirically: shaping KA+COENG+RO+VOWEL-SIGN-E through real HarfBuzz for a real
+        /// font gives the pre-base vowel, then the <c>pref</c>-substituted coeng+Ro glyph, then the base
+        /// - the vowel could only land ahead of the already-front-moved coeng+Ro pair if the reorder,
+        /// not the substitution, ran first). The Universal Shaping Engine runs its own default
+        /// pre-processing/basic features *before* its reorder instead (see <see cref="ApplyUseShaping"/>'s
+        /// own remarks) - genuinely different staging between the two shaper families, not an
+        /// inconsistency in this port.
+        ///
+        /// The final "other features" group (<c>pres</c>/<c>abvs</c>/<c>blws</c>/<c>psts</c>) is folded
+        /// into <see cref="Shape"/>'s own ordered general feature pass instead of applied here directly -
+        /// see <see cref="GetActiveLookupIndices(GsubTable, ShapeSettings)"/>'s own <c>KhmerCategories</c>
+        /// check - exactly mirroring how <see cref="ApplyUseShaping"/>'s own remarks describe the same
+        /// choice for the Universal Shaping Engine.
+        /// </summary>
+        private static void ApplyKhmerShaping(GsubTable gsub, List<PlacedGlyph> glyphs, IReadOnlyList<KhmerCategory> khmerCategories,
+            string? languageTag, IReadOnlyList<string> scriptPreference, GdefTable? gdef)
+        {
+            // Snapshot by ClusterStart, not raw position - the same technique ApplyUseShaping's own
+            // categoryByClusterStart uses (see its own remarks), for the identical defense-in-depth
+            // reason: correct by construction today, since Shape's own JoiningForms/UseCategories/
+            // KhmerCategories pre-stages are mutually exclusive per ShapeSettings (see
+            // CssBox.ResolveWordShapingFeatures's own remarks on why a word can never resolve more than
+            // one), so no earlier stage in the same Shape call can have already changed glyphs' count
+            // by the time this runs. Keying by each glyph's own stable ClusterStart identity rather than
+            // its raw position means a future caller that ever broke that invariant would degrade a
+            // misaligned glyph to KhmerCategory.Other instead of silently reordering/misclassifying the
+            // wrong one.
+            var categoryByClusterStart = new Dictionary<int, KhmerCategory>();
+            for (var i = 0; i < glyphs.Count && i < khmerCategories.Count; i++)
+                categoryByClusterStart[glyphs[i].ClusterStart] = khmerCategories[i];
+
+            var categories = new KhmerCategory[glyphs.Count];
+            for (var i = 0; i < glyphs.Count; i++)
+                categories[i] = categoryByClusterStart.TryGetValue(glyphs[i].ClusterStart, out KhmerCategory category) ? category : KhmerCategory.Other;
+
+            List<KhmerSyllable> syllables = KhmerSyllableScanner.Scan(categories);
+
+            // Stage: reorder - runs first, against the still-nominal glyphs (see this method's own
+            // remarks on why Khmer's real stage order is the opposite of ApplyUseShaping's).
+            KhmerReorderer.ReorderAll(glyphs, categories, syllables);
+
+            // Stage: default glyph pre-processing, applied globally (same rationale as
+            // ApplyUseShaping's own pre-processing stage).
+            foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, KhmerLoclCcmpTags))
+                ApplyLookup(gsub, lookupIndex, alternateIndex: 0, glyphs, gdef);
+
+            // Stage: the basic features (pref/blwf/abvf/pstf) - global, same rationale.
+            foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, KhmerBasicFeatureTags))
+                ApplyLookup(gsub, lookupIndex, alternateIndex: 0, glyphs, gdef);
         }
 
         /// <summary>

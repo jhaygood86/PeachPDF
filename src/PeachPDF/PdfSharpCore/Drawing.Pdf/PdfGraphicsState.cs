@@ -97,7 +97,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             const string frmt2 = Config.SignificantFigures2;
             const string format = Config.SignificantFigures3;
-            XColor color = pen.Color;
+            XColor color = pen.PaintColor;
             bool overPrint = pen.Overprint;
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
             color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
@@ -226,7 +226,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
             // A pen that strokes with a brush (e.g. an SVG stroke="url(#gradient)") carries no
-            // meaningful pen.Color: the brush constructor leaves it at the default transparent black,
+            // meaningful pen.PaintColor: the brush constructor leaves it at the default transparent black,
             // so color.A is 0. The brush itself supplies the stroke's color, and any real transparency
             // rides the brush's own soft-mask ExtGState (see RealizeBrush), so the constant stroke
             // alpha must stay fully opaque. Driving /CA from color.A here would emit /CA 0 and make the
@@ -280,7 +280,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             XSolidBrush solidBrush = brush as XSolidBrush;
             if (solidBrush != null)
             {
-                XColor color = solidBrush.Color;
+                XColor color = solidBrush.PaintColor;
                 bool overPrint = solidBrush.Overprint;
 
                 if (renderingMode == 0)
@@ -302,7 +302,46 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 if (renderingMode != 0)
                     throw new InvalidOperationException("Rendering modes other than 0 can only be used with solid color brushes.");
 
-                if (brush is XBaseGradientBrush gradientBrush)
+                if (brush is XTilingBrush tilingBrush)
+                {
+                    Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
+
+                    // A pattern's matrix maps pattern space (here the brush's own y-down space) to the page's default coordinate system.
+                    // The renderer writes y-up coordinates and keeps user transforms in its world transform, so the map is found the way a
+                    // gradient's coordinates are: three points of the brush's space go through the brush matrix, then WorldToView (which
+                    // applies the world transform and the y flip), then the view matrix. An affine map is fixed by three points.
+                    XMatrix toDefault = _renderer.DefaultViewMatrix;
+                    toDefault.Prepend(EffectiveCtm);
+                    XPoint Map(double x, double y) => toDefault.Transform(_renderer.WorldToView(tilingBrush.Matrix.Transform(new XPoint(x, y))));
+                    XPoint origin = Map(0, 0), unitX = Map(1, 0), unitY = Map(0, 1);
+                    XMatrix matrix = new XMatrix(unitX.X - origin.X, unitX.Y - origin.Y, unitY.X - origin.X, unitY.Y - origin.Y, origin.X, origin.Y);
+
+                    PdfTilingPattern pattern = new PdfTilingPattern(_renderer.Owner);
+                    pattern.SetupFromBrush(tilingBrush, matrix);
+                    string name = _renderer.Resources.AddPattern(pattern);
+
+                    // The ambient fill alpha left by the last solid fill would otherwise carry over onto the pattern; see the gradient branch.
+                    if (!isForPen)
+                    {
+                        XColor resetColor = _realizedFillColor;
+                        resetColor.A = 1;
+                        RealizeFillColor(resetColor, false, colorMode);
+                    }
+
+                    if (isForPen)
+                    {
+                        _renderer.AppendFormatString("/Pattern CS\n", name);
+                        _renderer.AppendFormatString("{0} SCN\n", name);
+                    }
+                    else
+                    {
+                        _renderer.AppendFormatString("/Pattern cs\n", name);
+                        _renderer.AppendFormatString("{0} scn\n", name);
+                    }
+
+                    _realizedFillColor = XColor.Empty;
+                }
+                else if (brush is XBaseGradientBrush gradientBrush)
                 {
                     Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
                     XMatrix matrix = _renderer.DefaultViewMatrix;

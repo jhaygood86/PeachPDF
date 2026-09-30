@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -55,8 +55,8 @@ namespace PeachPDF.Html.Core.Paint
     /// stream free of clip pairs it does not need.
     /// </param>
     internal readonly record struct BoxDecorationGeometry(
-        RRect DecorationRect,
-        RRect ClipRect,
+        Rect DecorationRect,
+        Rect ClipRect,
         bool HasLeftEdge,
         bool HasRightEdge,
         bool HasTopEdge,
@@ -68,7 +68,7 @@ namespace PeachPDF.Html.Core.Paint
         /// page canvas and every replaced element (monolithic, per
         /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§4.1</see>) paint through this.
         /// </summary>
-        internal static BoxDecorationGeometry Unbroken(RRect rect) =>
+        internal static BoxDecorationGeometry Unbroken(Rect rect) =>
             new(rect, rect, HasLeftEdge: true, HasRightEdge: true,
                 HasTopEdge: true, HasBottomEdge: true, NeedsClip: false);
 

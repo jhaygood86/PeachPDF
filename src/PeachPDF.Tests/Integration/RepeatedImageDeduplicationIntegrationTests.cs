@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -77,7 +78,7 @@ namespace PeachPDF.Tests.Integration
             var dataUri = OpaquePngDataUri(0, 255, 0);
             // background-repeat: no-repeat, so the background draw never forces Interpolate off (see
             // SameXImageAndSize_DrawnWithDifferentInterpolate_EmbedsSeparateCopies for that case) - both
-            // draws stay at the default Interpolate, keeping this test focused on RImage/XImage identity.
+            // draws stay at the default Interpolate, keeping this test focused on Image/XImage identity.
             var html = $$"""
                 <!DOCTYPE html><html><head><style>
                 .box { width: 160px; height: 160px; background-image: url({{dataUri}}); background-repeat: no-repeat; }

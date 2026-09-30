@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -24,7 +24,7 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     /// <param name="Style">The declaring box's border style on this edge.</param>
     /// <param name="Width">The declaring box's actual border width on this edge.</param>
-    /// <param name="Color">The declaring box's actual border color on this edge.</param>
+    /// <param name="PaintColor">The declaring box's actual border color on this edge.</param>
     /// <param name="Origin">Where this declaration comes from, for the origin-priority tiebreak.</param>
     /// <param name="Row">
     /// The grid row of the declaring element - a cell's own row, a row-group's first row, or 0 for a
@@ -37,7 +37,7 @@ namespace PeachPDF.Html.Core.Dom
     internal readonly record struct CollapsedBorderCandidate(
         LineStyle Style,
         double Width,
-        RColor Color,
+        PaintColor PaintColor,
         CollapsedBorderOrigin Origin,
         int Row,
         int Column);
@@ -45,10 +45,10 @@ namespace PeachPDF.Html.Core.Dom
     /// <summary>
     /// The single border CSS 2.1 §17.6.2 resolved for one grid-line segment.
     /// </summary>
-    internal readonly record struct CollapsedBorder(LineStyle Style, double Width, RColor Color)
+    internal readonly record struct CollapsedBorder(LineStyle Style, double Width, PaintColor PaintColor)
     {
         /// <summary>No candidate contributed here, or every candidate was <c>none</c>.</summary>
-        internal static readonly CollapsedBorder None = new(LineStyle.None, 0, RColor.Empty);
+        internal static readonly CollapsedBorder None = new(LineStyle.None, 0, PaintColor.Empty);
 
         /// <summary>
         /// The room this border occupies on the grid line - zero for <see cref="LineStyle.None"/> and
@@ -70,11 +70,11 @@ namespace PeachPDF.Html.Core.Dom
     /// <param name="Rect">The segment's own bounding rect, in the same fragment-local document space <c>ColumnRuleSegments</c> uses.</param>
     /// <param name="Style">The resolved border style.</param>
     /// <param name="Width">The resolved border width.</param>
-    /// <param name="Color">The resolved border color.</param>
+    /// <param name="PaintColor">The resolved border color.</param>
     internal readonly record struct CollapsedBorderSegment(
         bool IsHorizontal,
-        RRect Rect,
+        Rect Rect,
         LineStyle Style,
         double Width,
-        RColor Color);
+        PaintColor PaintColor);
 }

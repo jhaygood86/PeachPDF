@@ -110,12 +110,19 @@
             an MHTML or ZIP carries its own. References to the web or to local files resolve to nothing.
         </li>
         <li>
-            <strong><code>hyphens: auto</code> does nothing here.</strong> PeachPDF's hyphenation patterns
-            are Brotli-compressed, and a browser has no Brotli decoder — so text lays out unhyphenated
-            rather than the render failing. Everywhere else PeachPDF runs, it hyphenates normally.
+            <strong><code>hyphens: auto</code> works here</strong>, and so does a WOFF2 <code>@@font-face</code>
+            in the document you upload: this page registers a pure-managed Brotli decoder at startup, since a
+            browser has no Brotli decoder of its own.
         </li>
         <li>WebP images are not supported by the renderer's image decoder.</li>
     </ul>
+    <p class="muted">
+        Portions of this software are copyright © 1996-2026 The FreeType Project (<a href="https://freetype.org">https://freetype.org</a>).
+        All rights reserved. This software is based in part on the work of the FreeType Team.
+        Notices: <a href="licenses/FTL.TXT">FreeType Project License</a>,
+        <a href="licenses/LICENSE">PeachPDF license</a>,
+        <a href="licenses/THIRD-PARTY-LICENSES.md">third-party licenses</a>.
+    </p>
 </section>
 
 @code {

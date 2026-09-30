@@ -8,8 +8,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using PeachDrawing.Text;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Html.Core
 {
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Html.Core
             // (macOS ships several by default), that real font is an equally valid, spec-correct answer.
             // What must always be true is that the character no longer resolves to the declared,
             // non-covering 'Latin' family, and that whatever it DOES resolve to actually has the glyph.
-            var latinFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var latinFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var html = $@"<!DOCTYPE html>
 <html><head><style>
@@ -110,7 +110,7 @@ p {{ width: 400px; }}
             // the box's own declared/default font exactly as it did before this feature existed -
             // proving the last-resort scan doesn't change behavior for a character truly nothing can
             // render.
-            var latinFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var latinFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var html = $@"<!DOCTYPE html>
 <html><head><style>

@@ -43,14 +43,21 @@ using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
-    /// <summary>One GPOS `ValueRecord`, resolved to its four positioning fields - device-table
-    /// (hinting) offsets are read (for correct cursor alignment) but never resolved, since they're
-    /// ppem-grid pixel adjustments meaningless to a vector PDF renderer at arbitrary scale.</summary>
-    internal readonly record struct GposValueRecord(short XPlacement, short YPlacement, short XAdvance, short YAdvance);
+    /// <summary>Where a value's variation delta is in the <c>GDEF</c> item variation store: an (outer, inner) pair, from a device table of
+    /// the <c>VariationIndex</c> kind (delta format 0x8000).</summary>
+    internal readonly record struct DeltaRef(ushort Outer, ushort Inner);
 
-    /// <summary>One GPOS `Anchor` table (formats 1/2/3), resolved to its x/y coordinate - format 2's
-    /// contour-point index and format 3's device offsets are hinting-only refinements, not read.</summary>
-    internal readonly record struct GposAnchor(short X, short Y);
+    /// <summary>The variation deltas of the four fields of a value record, for whichever of them a <c>VariationIndex</c> device table gave one.</summary>
+    internal sealed record ValueVariation(DeltaRef? XPlacement, DeltaRef? YPlacement, DeltaRef? XAdvance, DeltaRef? YAdvance);
+
+    /// <summary>One GPOS `ValueRecord`, resolved to its four positioning fields. A device table of the pixel-size kind (hinting) is read
+    /// (for correct cursor alignment) but never resolved, since it is a ppem-grid pixel adjustment meaningless to a vector PDF renderer at
+    /// arbitrary scale; one of the <c>VariationIndex</c> kind is kept in <see cref="Variation"/>, for an instance of a variable font.</summary>
+    internal readonly record struct GposValueRecord(short XPlacement, short YPlacement, short XAdvance, short YAdvance, ValueVariation? Variation = null);
+
+    /// <summary>One GPOS `Anchor` table (formats 1/2/3), resolved to its x/y coordinate - format 2's contour-point index is a hinting-only
+    /// refinement, not read; format 3's device tables are kept when they are of the <c>VariationIndex</c> kind (for an instance of a variable font).</summary>
+    internal readonly record struct GposAnchor(short X, short Y, DeltaRef? XDelta = null, DeltaRef? YDelta = null);
 
     /// <summary>One Single Adjustment subtable: a <see cref="Coverage"/> table over adjusted glyphs,
     /// plus either one shared <see cref="GposValueRecord"/> (format 1, <see cref="IsUniform"/>) or
@@ -334,14 +341,94 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             _face = face;
 
+            _tableStart = tableStart;
             face.Position = tableStart;
             face.ReadUShort(); // majorVersion
-            face.ReadUShort(); // minorVersion
+            int minorVersion = face.ReadUShort();
             _scriptListOffset = tableStart + face.ReadUShort();
             _featureListOffset = tableStart + face.ReadUShort();
             _lookupListOffset = tableStart + face.ReadUShort();
-            // featureVariationsOffset (minorVersion 1 only) - ignored, variable fonts aren't instanced.
+            uint featureVariationsOffset = minorVersion >= 1 ? face.ReadULong() : 0;
+            _featureVariationsOffset = featureVariationsOffset != 0 ? tableStart + (int)featureVariationsOffset : 0;
         }
+
+        // ---- FeatureVariations (variable fonts) ---------------------------------------------------------------------------------------
+
+        private readonly GposTable? _root;
+        private readonly IReadOnlyDictionary<int, int[]>? _substitutions;
+        private readonly int _tableStart;
+        private readonly int _featureVariationsOffset;
+        private Variations.FeatureVariationsTable? _featureVariations;
+        private bool _featureVariationsLoaded;
+        private readonly ConcurrentDictionary<string, GposTable> _views = new();
+
+        /// <summary>
+        /// A view of the table at a location in the design space of a variable font: the same lookups and caches, but a feature whose
+        /// <c>FeatureVariations</c> record applies there uses the substituted lookups. A view is one object for one location, so a cache keyed
+        /// by the table (the shapers' lookup caches are) is keyed by the location too. The table itself when the font has no
+        /// <c>FeatureVariations</c> or none applies at the location.
+        /// </summary>
+        public GposTable AtLocation(Variations.VariationCoordinates location)
+        {
+            var root = _root ?? this;
+            if (root._featureVariationsOffset == 0)
+                return root;
+
+            var variations = root.LoadFeatureVariations();
+            var substitutions = variations?.SubstitutionsAt(location.Normalized);
+            if (substitutions is null || substitutions.Count == 0)
+                return root;
+
+            // A location that sweeps an axis makes many; a view is cheap to make again.
+            if (root._views.Count >= 32)
+                root._views.Clear();
+
+            return root._views.GetOrAdd(location.Key, _ => new GposTable(root, substitutions));
+        }
+
+        private Variations.FeatureVariationsTable? LoadFeatureVariations()
+        {
+            lock (_face.SyncRoot)
+            {
+                if (!_featureVariationsLoaded)
+                {
+                    if (_face.TableDictionary.TryGetValue(TableTagNames.GPOS, out var entry))
+                    {
+                        var bytes = _face.FontSource.Bytes;
+                        int length = Math.Min(entry.Length, bytes.Length - entry.Offset);
+                        int at = _featureVariationsOffset - entry.Offset;
+                        _featureVariations = at >= 0 && at < length
+                            ? Variations.FeatureVariationsTable.TryParse(bytes.AsSpan(entry.Offset, length), at)
+                            : null;
+                    }
+
+                    _featureVariationsLoaded = true;
+                }
+
+                return _featureVariations;
+            }
+        }
+
+        private GposTable(GposTable root, IReadOnlyDictionary<int, int[]> substitutions)
+        {
+            _root = root;
+            _substitutions = substitutions;
+            _face = root._face;
+            _scriptListOffset = root._scriptListOffset;
+            _featureListOffset = root._featureListOffset;
+            _lookupListOffset = root._lookupListOffset;
+            _tableStart = root._tableStart;
+            _singleAdjustmentCache = root._singleAdjustmentCache;
+            _cursiveAttachmentCache = root._cursiveAttachmentCache;
+            _pairAdjustmentCache = root._pairAdjustmentCache;
+            _markToBaseCache = root._markToBaseCache;
+            _markToMarkCache = root._markToMarkCache;
+            _markToLigatureCache = root._markToLigatureCache;
+            _contextualLookupCache = root._contextualLookupCache;
+            _chainingContextLookupCache = root._chainingContextLookupCache;
+            _resolvedLookupTypeCache = root._resolvedLookupTypeCache;
+        }
+
 
         /// <summary>
         /// Collects the lookup-list indices of every feature in <paramref name="featureTags"/> under
@@ -357,6 +444,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             lock (_face.SyncRoot)
             {
                 var lookupIndices = new SortedSet<int>();
+                try
+                {
 
                 int scriptOffset = FindScript(scriptTagPreference);
                 if (scriptOffset < 0)
@@ -385,6 +474,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     if (!featureTags.Contains(tag))
                         return;
 
+                    // A FeatureVariations record that applies at this table's location replaces the feature's lookups; the tag stays.
+                    if (_substitutions is not null && _substitutions.TryGetValue(featureIndex, out var replacement))
+                    {
+                        foreach (int lookupIndex in replacement)
+                            lookupIndices.Add(lookupIndex);
+                        return;
+                    }
+
                     _face.Position = offset;
                     _face.ReadUShort(); // featureParams offset - ignored
                     int lookupIndexCount = _face.ReadUShort();
@@ -399,6 +496,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     CollectFeature(featureIndex);
 
                 return lookupIndices;
+                }
+                catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException)
+                {
+                    // A damaged script or feature list gives no lookups rather than failing the shaping of the text.
+                    return new SortedSet<int>();
+                }
             }
         }
 
@@ -537,20 +640,51 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return new LookupHeader(lookupFlag, markFilteringSetIndex, resolvedOffsets);
         }
 
-        private static GposValueRecord ReadValueRecord(OpenTypeFontface face, ushort valueFormat)
+        /// <param name="face">The font, with its cursor at the value record.</param>
+        /// <param name="valueFormat">Which fields the record has.</param>
+        /// <param name="subtableStart">Where the subtable that holds the record starts: its device-table offsets are relative to it.</param>
+        private static GposValueRecord ReadValueRecord(OpenTypeFontface face, ushort valueFormat, int subtableStart)
         {
             short xPlacement = 0, yPlacement = 0, xAdvance = 0, yAdvance = 0;
+            int xPlacementDevice = 0, yPlacementDevice = 0, xAdvanceDevice = 0, yAdvanceDevice = 0;
             if ((valueFormat & 0x0001) != 0) xPlacement = face.ReadShort();
             if ((valueFormat & 0x0002) != 0) yPlacement = face.ReadShort();
             if ((valueFormat & 0x0004) != 0) xAdvance = face.ReadShort();
             if ((valueFormat & 0x0008) != 0) yAdvance = face.ReadShort();
-            // Device-table offsets (0x0010/0x0020/0x0040/0x0080): read-and-discard to keep the cursor
-            // aligned for whatever follows, never resolved - see this file's own type-level remarks.
-            if ((valueFormat & 0x0010) != 0) face.ReadUShort();
-            if ((valueFormat & 0x0020) != 0) face.ReadUShort();
-            if ((valueFormat & 0x0040) != 0) face.ReadUShort();
-            if ((valueFormat & 0x0080) != 0) face.ReadUShort();
-            return new GposValueRecord(xPlacement, yPlacement, xAdvance, yAdvance);
+            // Device-table offsets (0x0010/0x0020/0x0040/0x0080). A pixel-size table is never resolved (see the type's remarks);
+            // a VariationIndex table is, for the deltas of an instance of a variable font.
+            if ((valueFormat & 0x0010) != 0) xPlacementDevice = face.ReadUShort();
+            if ((valueFormat & 0x0020) != 0) yPlacementDevice = face.ReadUShort();
+            if ((valueFormat & 0x0040) != 0) xAdvanceDevice = face.ReadUShort();
+            if ((valueFormat & 0x0080) != 0) yAdvanceDevice = face.ReadUShort();
+
+            ValueVariation? variation = null;
+            if ((xPlacementDevice | yPlacementDevice | xAdvanceDevice | yAdvanceDevice) != 0)
+            {
+                int resume = face.Position;
+                DeltaRef? xp = ReadVariationIndex(face, subtableStart, xPlacementDevice);
+                DeltaRef? yp = ReadVariationIndex(face, subtableStart, yPlacementDevice);
+                DeltaRef? xa = ReadVariationIndex(face, subtableStart, xAdvanceDevice);
+                DeltaRef? ya = ReadVariationIndex(face, subtableStart, yAdvanceDevice);
+                face.Position = resume;
+                if (xp is not null || yp is not null || xa is not null || ya is not null)
+                    variation = new ValueVariation(xp, yp, xa, ya);
+            }
+
+            return new GposValueRecord(xPlacement, yPlacement, xAdvance, yAdvance, variation);
+        }
+
+        /// <summary>Reads a device table at <paramref name="start"/> + <paramref name="offset"/> and returns its (outer, inner) pair when it is a VariationIndex table (delta format 0x8000), otherwise null.</summary>
+        private static DeltaRef? ReadVariationIndex(OpenTypeFontface face, int start, int offset)
+        {
+            if (offset == 0)
+                return null;
+
+            face.Position = start + offset;
+            ushort outer = face.ReadUShort();
+            ushort inner = face.ReadUShort();
+            ushort deltaFormat = face.ReadUShort();
+            return deltaFormat == 0x8000 ? new DeltaRef(outer, inner) : null;
         }
 
         private static GposAnchor ReadAnchor(OpenTypeFontface face, int offset)
@@ -559,8 +693,19 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             int format = face.ReadUShort();
             short x = face.ReadShort();
             short y = face.ReadShort();
-            if (format == 2) face.ReadUShort(); // anchorPoint - ignored, hinting-only
-            else if (format == 3) { face.ReadUShort(); face.ReadUShort(); } // xDeviceOffset, yDeviceOffset - ignored
+            if (format == 2)
+                face.ReadUShort(); // anchorPoint - ignored, hinting-only
+
+            if (format == 3)
+            {
+                int xDevice = face.ReadUShort();
+                int yDevice = face.ReadUShort();
+                // A pixel-size device table is ignored; a VariationIndex one is kept for the deltas of an instance of a variable font.
+                DeltaRef? xDelta = ReadVariationIndex(face, offset, xDevice);
+                DeltaRef? yDelta = ReadVariationIndex(face, offset, yDevice);
+                return new GposAnchor(x, y, xDelta, yDelta);
+            }
+
             return new GposAnchor(x, y);
         }
 
@@ -595,7 +740,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             {
                 int coverageOffset = offset + _face.ReadUShort();
                 ushort valueFormat = _face.ReadUShort();
-                GposValueRecord value = ReadValueRecord(_face, valueFormat);
+                GposValueRecord value = ReadValueRecord(_face, valueFormat, offset);
                 return new GposSingleAdjustmentSubtable { Coverage = CoverageTable.Read(_face, coverageOffset), Values = [value], IsUniform = true };
             }
 
@@ -606,7 +751,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 int valueCount = _face.ReadUShort();
                 var values = new GposValueRecord[valueCount];
                 for (int i = 0; i < valueCount; i++)
-                    values[i] = ReadValueRecord(_face, valueFormat);
+                    values[i] = ReadValueRecord(_face, valueFormat, offset);
                 return new GposSingleAdjustmentSubtable { Coverage = CoverageTable.Read(_face, coverageOffset), Values = values, IsUniform = false };
             }
 
@@ -711,8 +856,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     for (int j = 0; j < pairValueCount; j++)
                     {
                         ushort secondGlyph = _face.ReadUShort();
-                        GposValueRecord v1 = ReadValueRecord(_face, valueFormat1);
-                        GposValueRecord v2 = ReadValueRecord(_face, valueFormat2);
+                        // In a format 1 subtable the device-table offsets are from the start of the PairSet, not of the subtable.
+                        GposValueRecord v1 = ReadValueRecord(_face, valueFormat1, pairSetOffsets[i]);
+                        GposValueRecord v2 = ReadValueRecord(_face, valueFormat2, pairSetOffsets[i]);
                         records[j] = new GposPairValueRecord(secondGlyph, v1, v2);
                     }
                     pairSets[i] = records;
@@ -734,8 +880,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 var classValues = new (GposValueRecord, GposValueRecord)[class1Count * class2Count];
                 for (int i = 0; i < classValues.Length; i++)
                 {
-                    GposValueRecord v1 = ReadValueRecord(_face, valueFormat1);
-                    GposValueRecord v2 = ReadValueRecord(_face, valueFormat2);
+                    GposValueRecord v1 = ReadValueRecord(_face, valueFormat1, offset);
+                    GposValueRecord v2 = ReadValueRecord(_face, valueFormat2, offset);
                     classValues[i] = (v1, v2);
                 }
 

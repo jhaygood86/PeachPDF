@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\Version.props" />
+	<!--
+		A pure-managed Brotli decoder for hosts where System.IO.Compression.BrotliStream throws
+		PlatformNotSupportedException - WebAssembly in a browser, at the time of writing (confirmed; not fixed by
+		the wasm-tools workload - see PeachPDF.Demo.BlazorWasm/README.md). It exists to be registered with
+		PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor, which is the pluggable seam
+		PeachDrawing.Text.Data's resource reader and PeachDrawing.Text's own WOFF2 loader both already fall back to
+		- see PeachDrawing.Text/Compression/BrotliDecompression.cs. Kept out of PeachDrawing.Text itself (and out of
+		its NuGet package) so a consumer that never needs it never pays for it: this is an opt-in add-on, referenced
+		directly by a host project that needs Brotli decoding without the BCL's native implementation.
+
+		Not currently packed/published as its own NuGet package (see IsPackable below) - PeachPDF.Demo.BlazorWasm
+		is this repository's only consumer today, and it references this project directly.
+	-->
+	<PropertyGroup>
+		<AssemblyName>PeachDrawing.Text.Brotli</AssemblyName>
+		<RootNamespace>PeachDrawing.Text.Brotli</RootNamespace>
+		<Description>A pure-managed Brotli decoder for PeachDrawing.Text's pluggable BrotliDecompression seam, for hosts (such as WebAssembly) where System.IO.Compression.BrotliStream is unavailable.</Description>
+		<IsPackable>false</IsPackable>
+		<!--
+			No GenerateDocumentationFile: this project isn't published/packed (see IsPackable above), and the vendored
+			decoder under Internal/ carries its original Javadoc-style comments (unbalanced &lt;p&gt; tags, valid Javadoc,
+			invalid C# XML doc) verbatim, which the C# XML doc parser would otherwise warn on (CS1570) - see PORTING-NOTES.md
+			for why those files are copied as-is rather than hand-edited.
+		-->
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachDrawing.Text.Brotli.Tests" />
+	</ItemGroup>
+</Project>

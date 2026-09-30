@@ -43,6 +43,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             FontStyle = fontStyle;
             Weight = IsBold ? 700 : 400;
             Stretch = TtfFontDescription.DefaultStretch;
+            WidthPercent = WidthClasses.Normal;
         }
 
         public FontResolvingOptions(FaceStyle fontStyle, SyntheticStyle styleSimulations)
@@ -52,28 +53,52 @@ namespace PeachDrawing.Text.Internal.Fonts
             StyleSimulations = styleSimulations;
             Weight = IsBold ? 700 : 400;
             Stretch = TtfFontDescription.DefaultStretch;
+            WidthPercent = WidthClasses.Normal;
         }
 
-        public FontResolvingOptions(FaceStyle fontStyle, int weight, int stretch = 5)
+        public FontResolvingOptions(FaceStyle fontStyle, double weight, int stretch = 5)
         {
             FontStyle = fontStyle;
             Weight = weight;
             Stretch = stretch;
+            WidthPercent = WidthClasses.ToPercent(stretch);
         }
 
         /// <summary>
-        /// The real CSS Fonts Level 4 numeric weight (1-1000) this request should be matched against -
+        /// Creates options for a width that is not necessarily one of the nine classes, as a percentage of the normal width. A factory and
+        /// not an overload, since an integer literal (<c>100</c>) would otherwise bind to the constructor that takes a width class.
+        /// </summary>
+        public static FontResolvingOptions ForWidthPercent(FaceStyle fontStyle, double weight, double widthPercent) =>
+            new(fontStyle, weight, WidthClasses.FromPercent(widthPercent), widthPercent);
+
+        private FontResolvingOptions(FaceStyle fontStyle, double weight, int stretch, double widthPercent)
+        {
+            FontStyle = fontStyle;
+            Weight = weight;
+            Stretch = stretch;
+            WidthPercent = widthPercent;
+        }
+
+        /// <summary>
+        /// The real CSS Fonts Level 4 numeric weight (1-1000, fractions allowed) this request should be matched against -
         /// defaults to 700/400 (derived from <see cref="IsBold"/>) for callers that only ever specify a
         /// bold/not-bold <see cref="FaceStyle"/>, so <see cref="Fonts.FontFactory"/>/<see cref="IFontResolver"/>
         /// always have a real number to key/match on regardless of which constructor was used.
         /// </summary>
-        public int Weight { get; }
+        public double Weight { get; }
 
         /// <summary>
         /// CSS Fonts Level 3 <c>font-stretch</c> value (1-9, matching OS/2 <c>usWidthClass</c> directly) this
         /// request should be matched against - defaults to normal (5) for callers that don't specify one.
         /// </summary>
         public int Stretch { get; }
+
+        /// <summary>
+        /// The width this request should be matched against, as a percentage of the normal width (CSS <c>font-stretch: 87.5%</c>).
+        /// For a request made with a width class it is that class's percentage, and <see cref="Stretch"/> is the class nearest to it
+        /// otherwise.
+        /// </summary>
+        public double WidthPercent { get; }
 
         public bool IsBold
         {
@@ -115,6 +140,12 @@ namespace PeachDrawing.Text.Internal.Fonts
         public System.Text.Rune? Codepoint;
 
         /// <summary>
+        /// The angle of an explicit <c>font-style: oblique &lt;angle&gt;</c> request, in degrees leaning to the right, or null for any
+        /// other request. It chooses among faces that declare oblique ranges (<see cref="FontResolver"/>), so it is part of the typeface key.
+        /// </summary>
+        public double? ObliqueAngle;
+
+        /// <summary>
         /// Computes the bijective, human readable key of the typeface this request resolves for
         /// <paramref name="familyName"/>: family, italic, numeric weight and stretch, and any forced synthesis.
         /// </summary>
@@ -132,10 +163,16 @@ namespace PeachDrawing.Text.Internal.Fonts
                     default: throw new System.ArgumentOutOfRangeException();
                 }
             }
+            // The weight, the width and the angle are written as the numbers they are, so 350.5 and 350 (or 87.5% and 88%) are different
+            // typefaces; a whole weight and a class width read as they always did. Only an italic request has an angle that matters.
+            var invariant = System.Globalization.CultureInfo.InvariantCulture;
             return TypefaceKeyPrefix + familyName.ToLowerInvariant()
                 + (IsItalic ? "/i" : "/n") // normal / oblique / italic
-                + "/" + Weight
-                + "/" + Stretch
+                + (IsItalic && ObliqueAngle is { } angle ? "@" + angle.ToString("R", invariant) : "")
+                + "/" + Weight.ToString("R", invariant)
+                + "/" + (WidthPercent == WidthClasses.ToPercent(Stretch)
+                    ? Stretch.ToString(invariant)
+                    : "w" + WidthPercent.ToString("R", invariant))
                 + simulationSuffix;
         }
     }

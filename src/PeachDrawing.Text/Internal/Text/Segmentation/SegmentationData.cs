@@ -10,6 +10,13 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
     {
         internal static int LineBreak(int codePoint) => Find(LineBreakStarts, LineBreakValues, codePoint);
 
+        /// <summary>Whether a code point is a nonspacing or spacing mark of the Complex_Context class (a dependent vowel or sign of Thai, Lao, Khmer, Burmese and the like).</summary>
+        internal static bool IsComplexContextMark(int codePoint)
+        {
+            int value = LineBreak(codePoint);
+            return (LineBreakClass)(value & 0x3F) == LineBreakClass.SA && (value & LineBreakMark) != 0;
+        }
+
         internal static int Grapheme(int codePoint) => Find(GraphemeStarts, GraphemeValues, codePoint);
 
         internal static int Word(int codePoint) => Find(WordStarts, WordValues, codePoint);

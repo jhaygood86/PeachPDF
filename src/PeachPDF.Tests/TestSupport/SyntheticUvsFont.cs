@@ -91,7 +91,7 @@ namespace PeachPDF.Tests.TestSupport
             return tables;
         }
 
-        private static byte[] WriteTables(SortedDictionary<string, byte[]> tables, uint sfntVersion)
+        internal static byte[] WriteTables(SortedDictionary<string, byte[]> tables, uint sfntVersion)
         {
             using var stream = new MemoryStream();
             void U16(int v) { Span<byte> b = stackalloc byte[2]; BinaryPrimitives.WriteUInt16BigEndian(b, (ushort)v); stream.Write(b); }

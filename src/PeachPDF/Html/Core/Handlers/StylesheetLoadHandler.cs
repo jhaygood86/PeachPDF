@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using MimeKit;
+using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;

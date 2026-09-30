@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using System.Linq;
 using System.Threading.Tasks;
@@ -33,12 +33,12 @@ namespace PeachPDF.Tests.Integration
             {
                 var runningBox = FindById(root, "running")!;
 
-                var narrowRect = new RRect(50, 50, 80, 500);
+                var narrowRect = new Rect(50, 50, 80, 500);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, narrowRect, container);
                 narrowLineCount = runningBox.LineBoxes.Count;
                 narrowHeight = runningBox.ActualBottom - runningBox.Location.Y;
 
-                var wideRect = new RRect(50, 50, 400, 500);
+                var wideRect = new Rect(50, 50, 400, 500);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, wideRect, container);
                 wideLineCount = runningBox.LineBoxes.Count;
                 wideHeight = runningBox.ActualBottom - runningBox.Location.Y;
@@ -63,11 +63,11 @@ namespace PeachPDF.Tests.Integration
             {
                 var runningBox = FindById(root, "running")!;
 
-                var narrowRect = new RRect(50, 50, 80, 500);
+                var narrowRect = new Rect(50, 50, 80, 500);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, narrowRect, container);
                 narrowWidth = runningBox.ActualRight - runningBox.Location.X;
 
-                var wideRect = new RRect(50, 50, 400, 500);
+                var wideRect = new Rect(50, 50, 400, 500);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, wideRect, container);
                 wideWidth = runningBox.ActualRight - runningBox.Location.X;
             });
@@ -89,7 +89,7 @@ namespace PeachPDF.Tests.Integration
                 var parent = FindById(root, "parent")!;
                 var runningBox = FindById(root, "running")!;
 
-                var rect = new RRect(50, 50, 200, 100);
+                var rect = new Rect(50, 50, 200, 100);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, rect, container);
 
                 Assert.Same(parent, runningBox.ParentBox);
@@ -114,11 +114,11 @@ namespace PeachPDF.Tests.Integration
             {
                 var runningBox = FindById(root, "running")!;
 
-                var narrowRect = new RRect(50, 50, 80, 800);
+                var narrowRect = new Rect(50, 50, 80, 800);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, narrowRect, container);
                 narrowLineCount = runningBox.LineBoxes.Count;
 
-                var wideRect = new RRect(50, 50, 600, 800);
+                var wideRect = new Rect(50, 50, 600, 800);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, wideRect, container);
                 wideLineCount = runningBox.LineBoxes.Count;
             });
@@ -144,12 +144,12 @@ namespace PeachPDF.Tests.Integration
             {
                 var runningBox = FindById(root, "running")!;
 
-                var wideRect = new RRect(50, 50, 400, 800);
+                var wideRect = new Rect(50, 50, 400, 800);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, wideRect, container);
                 var nestedAfterWide = Descendants(runningBox).First(b => b.HtmlTag?.TryGetAttribute("id") == "nested");
                 wideNestedLines = nestedAfterWide.LineBoxes.Count;
 
-                var narrowRect = new RRect(50, 50, 80, 800);
+                var narrowRect = new Rect(50, 50, 80, 800);
                 await RunningElementLayout.LayoutRunningElementFor(g, runningBox, narrowRect, container);
                 var nestedAfterNarrow = Descendants(runningBox).First(b => b.HtmlTag?.TryGetAttribute("id") == "nested");
                 narrowNestedLines = nestedAfterNarrow.LineBoxes.Count;

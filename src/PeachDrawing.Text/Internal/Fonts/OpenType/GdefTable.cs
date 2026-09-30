@@ -7,12 +7,14 @@
 //
 // Not read: `AttachList` (attachment-point coordinates for hinting/bitmap caching - irrelevant, no
 // hinting), `LigCaretList` (ligature caret positions for interactive text editors - irrelevant,
-// PeachPDF produces static PDF output), `ItemVariationStore` (GDEF 1.3, variable-font deltas -
-// irrelevant, variable fonts aren't instanced).
+// PeachPDF produces static PDF output). `ItemVariationStore` (GDEF 1.3) is read: it holds the deltas the
+// VariationIndex device tables of GPOS name, for an instance of a variable font.
 //
 // https://learn.microsoft.com/en-us/typography/opentype/spec/gdef
 //
 #endregion
+
+using System;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
@@ -21,6 +23,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         private readonly ClassDefTable? _glyphClassDef;
         private readonly ClassDefTable? _markAttachClassDef;
         private readonly CoverageTable?[] _markGlyphSets;
+
+        /// <summary>The item variation store of a GDEF 1.3 table, whose deltas the <c>VariationIndex</c> device tables of GPOS refer to, or null.</summary>
+        public Variations.ItemVariationStore? VariationStore { get; }
 
         public GdefTable(OpenTypeFontface face, int tableStart)
         {
@@ -41,8 +46,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 face.ReadUShort(); // ligCaretListOffset - not read, see file header
                 int markAttachClassDefOffset = face.ReadUShort();
                 int markGlyphSetsDefOffset = minorVersion >= 2 ? face.ReadUShort() : 0;
-                // itemVarStoreOffset (minorVersion 3 only, Offset32) - not read, variable fonts
-                // aren't instanced.
+                uint itemVarStoreOffset = minorVersion >= 3 ? face.ReadULong() : 0;
 
                 _glyphClassDef = glyphClassDefOffset != 0
                     ? ClassDefTable.Read(face, tableStart + glyphClassDefOffset)
@@ -53,6 +57,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 _markGlyphSets = markGlyphSetsDefOffset != 0
                     ? ReadMarkGlyphSetsDef(face, tableStart + markGlyphSetsDefOffset)
                     : [];
+
+                if (itemVarStoreOffset != 0 && face.TableDictionary.TryGetValue(TableTagNames.GDEF, out var entry))
+                {
+                    var bytes = face.FontSource.Bytes;
+                    int length = Math.Min(entry.Length, bytes.Length - entry.Offset);
+                    VariationStore = length > itemVarStoreOffset
+                        ? Variations.ItemVariationStore.TryParse(bytes.AsSpan(entry.Offset, length), (int)itemVarStoreOffset)
+                        : null;
+                }
             }
         }
 

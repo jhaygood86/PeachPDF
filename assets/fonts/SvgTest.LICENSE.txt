@@ -1,0 +1,3 @@
+SvgTest.ttf is synthetic test data made by generate_svg_glyph_fixture.py in this directory: a few geometric glyphs with SVG documents
+in an `SVG ` table, one of which is a compressed document that inflates past the limit the reader allows. It contains no third-party
+design and is dedicated to the public domain under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).

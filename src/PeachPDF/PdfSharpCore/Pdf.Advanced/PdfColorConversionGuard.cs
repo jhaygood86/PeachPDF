@@ -36,9 +36,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <remarks>
         /// An <see cref="XColorSpace.Rgb"/> color's source profile is always the ICC-published sRGB
         /// profile PeachPDF already bundles for PDF/A (<see cref="PdfAResources.SRgbIccProfile"/>) - CSS
-        /// colors are sRGB by definition (CSS Color 4 §4.1) outside of <c>device-cmyk()</c>. An
+        /// colors are sRGB by definition (CSS PaintColor 4 §4.1) outside of <c>device-cmyk()</c>. An
         /// <see cref="XColorSpace.Cmyk"/> color (CSS <c>device-cmyk()</c>) is uncalibrated ink by
-        /// definition (CSS Color 5 §6) - it has no defined source profile unless the caller supplies one
+        /// definition (CSS PaintColor 5 §6) - it has no defined source profile unless the caller supplies one
         /// via <see cref="ColorOptions.FallbackCmykProfile"/>, so without that set, a <c>device-cmyk()</c>
         /// color is left exactly as authored even under a non-<see cref="ColorConversionMode.PreserveAsAuthored"/>
         /// mode (there is nothing to convert *from*). An <see cref="XColorSpace.GrayScale"/> color is

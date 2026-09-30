@@ -3,7 +3,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Unicode;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBoxAsync(
                 "<html lang=\"en\"><body><p id=\"p\" style=\"width:80px;hyphens:auto\">antidisestablishmentarianism</p></body></html>");
 
-            var candidates = HyphenationEngine.FindHyphenationPoints("antidisestablishmentarianism", "en");
+            var candidates = Hyphenator.FindBreakPoints("antidisestablishmentarianism", "en");
             var firstFragmentLength = box.Words[0].Text!.TrimEnd('-').Length;
 
             Assert.Contains(firstFragmentLength, candidates);
@@ -146,6 +146,24 @@ namespace PeachPDF.Tests.Integration
             await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new XSize(600, 800));
 
             Assert.Null(container.HtmlContainerInt.DocumentLanguage);
+        }
+
+        [Fact]
+        public async Task DefaultLanguage_IsKnownWhenTheWordsAreCut_SoItEnablesAutomaticHyphenation()
+        {
+            // The words of every text box are cut when the document is parsed, so the fallback language has to be there by then,
+            // not applied afterwards: with none, the same document is not hyphenated at all.
+            const string html = "<html><body><p id=\"p\" style=\"width:80px;hyphens:auto\">antidisestablishmentarianism</p></body></html>";
+
+            var (withDefault, _) = await PeachPDF.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(
+                html, new PdfGenerateConfig { PageSize = PageSize.A4, DefaultLanguage = "en" });
+            var (without, _) = await PeachPDF.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+            var hyphenated = PeachPDF.Tests.TestSupport.LayoutHarness.FindById(withDefault, "p")!;
+            Assert.Contains(PeachPDF.Tests.TestSupport.LayoutHarness.Descendants(hyphenated).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
+
+            var plain = PeachPDF.Tests.TestSupport.LayoutHarness.FindById(without, "p")!;
+            Assert.DoesNotContain(PeachPDF.Tests.TestSupport.LayoutHarness.Descendants(plain).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

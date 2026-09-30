@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -29,7 +28,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </remarks>
     internal sealed class FormFieldFragmentPainter : IFragmentContentPainter
     {
-        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, Canvas g, BoxFragment fragment)
         {
             var box = (CssBoxFormField)fragment.Box;
             var classification = FormFieldMapper.Classify(box);

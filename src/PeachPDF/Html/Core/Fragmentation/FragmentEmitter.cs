@@ -1,6 +1,6 @@
 ﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Parse;
@@ -65,7 +65,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>
         /// Tolerance for deciding that a decoration rectangle's edge coincides with the unbroken box's own
         /// edge — that is, that it is a real box edge rather than a fragmentation break
-        /// (<see cref="SliceGeometry.HasLeftEdge"/>). Deliberately <see cref="RRect"/>'s own equality
+        /// (<see cref="SliceGeometry.HasLeftEdge"/>). Deliberately <see cref="Rect"/>'s own equality
         /// tolerance rather than <see cref="BandOverlapEpsilon"/>'s overlap one: paint compares the strip to
         /// the rectangle with <c>==</c> to decide whether anything needs slicing at all, so a finer tolerance
         /// here could call an edge broken on a rectangle paint had already judged unbroken.
@@ -148,11 +148,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private readonly record struct FragmentRegion(double Top, double Bottom, double? Left, double? Right)
         {
-            internal bool Contains(RRect rect) =>
+            internal bool Contains(Rect rect) =>
                 Math.Min(rect.Bottom, Bottom) - Math.Max(rect.Top, Top) > BandOverlapEpsilon
                 && ContainsInlineAxis(rect);
 
-            private bool ContainsInlineAxis(RRect rect)
+            private bool ContainsInlineAxis(Rect rect)
             {
                 if (Left is not { } left || Right is not { } right) return true;
 
@@ -162,12 +162,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             /// <summary>This region's block-axis extent, with <paramref name="rect"/>'s inline axis kept.</summary>
-            internal RRect BlockCut(RRect rect, double topInset, double bottomInset)
+            internal Rect BlockCut(Rect rect, double topInset, double bottomInset)
             {
                 var top = Math.Max(rect.Top, Top + topInset);
                 var bottom = Math.Min(rect.Bottom, Bottom - bottomInset);
 
-                return bottom > top ? new RRect(rect.X, top, rect.Width, bottom - top) : rect;
+                return bottom > top ? new Rect(rect.X, top, rect.Width, bottom - top) : rect;
             }
         }
 
@@ -311,7 +311,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// fragment's extent is asked for, because the box's bounds describe a different
             /// fragmentainer entirely. See <see cref="_continuationShells"/>.
             /// </summary>
-            internal RRect? ShellRect { get; set; }
+            internal Rect? ShellRect { get; set; }
 
             /// <summary>
             /// The band a displaced fragment is confined to, in document space, or null for an ordinary
@@ -320,7 +320,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// whole height and would otherwise redraw, under the repeated header, the strip an earlier
             /// band already showed.
             /// </summary>
-            internal RRect? ConfinedTo { get; set; }
+            internal Rect? ConfinedTo { get; set; }
 
             /// <summary>
             /// How far lower than its own geometry this fragment draws — see
@@ -404,7 +404,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// Kept raw because <see cref="SliceGeometry"/> is defined over <i>every</i> rectangle the box
             /// produces across every fragmentainer, and a later pass can still add one.
             /// </summary>
-            internal List<(CssLineBox Line, RRect Rect)> Lines { get; } = [];
+            internal List<(CssLineBox Line, Rect Rect)> Lines { get; } = [];
 
             internal List<TextFragment> Words { get; } = [];
             internal List<Draft> Children { get; } = [];
@@ -439,13 +439,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// the whole set available before the first fragment is built — the concatenated strip needs the
         /// extent of a box's other fragments, and those are materialized later in the same walk.
         /// </summary>
-        private readonly Dictionary<Draft, RRect> _extents = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<Draft, Rect> _extents = new(ReferenceEqualityComparer.Instance);
 
         /// <inheritdoc cref="_extents"/>
-        private readonly Dictionary<Draft, RRect> _rects = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<Draft, Rect> _rects = new(ReferenceEqualityComparer.Instance);
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuedFrom = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuesInto = [];
-        private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, RRect>> _rectangles = [];
+        private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, Rect>> _rectangles = [];
         private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance);
         private readonly SortedSet<int> _stale = [];
         private readonly Dictionary<(CssBox Root, int Slot), List<CapturedInstance>> _capturedInstances = [];
@@ -517,7 +517,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// geometry here. Staleness in the key is harmless in the direction it errs — a low counter clears
         /// more than it had to, and the pass doing the clearing re-records.
         /// </remarks>
-        private readonly Dictionary<CssBox, SortedDictionary<int, RRect>> _continuationShells =
+        private readonly Dictionary<CssBox, SortedDictionary<int, Rect>> _continuationShells =
             new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
@@ -531,7 +531,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="FragmentRegion.Contains"/> to decide from, because the un-displaced geometry is the
         /// same in every band.
         /// </remarks>
-        private readonly Dictionary<CssBox, Dictionary<int, (CssBox Root, double Shift, RRect Band)>> _displacements =
+        private readonly Dictionary<CssBox, Dictionary<int, (CssBox Root, double Shift, Rect Band)>> _displacements =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// How far a box's border box is displaced and resized, along the inline axis, in a given
+        /// fragmentainer - <see cref="RecordInlineFrame"/>. The slot key is membership, exactly as for
+        /// <see cref="_displacements"/>: it says which fragmentainer the frame applies to, and the box's own
+        /// live geometry (which describes the fragmentainer that placed it) is the same in every slot.
+        /// </summary>
+        private readonly Dictionary<CssBox, Dictionary<int, (double X, double Width)>> _inlineFrames =
             new(ReferenceEqualityComparer.Instance);
 
         private int _lastEmittedSlot = -1;
@@ -764,7 +773,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="EmitSlot"/> call from <see cref="CatchUpStaleSlotsBehind"/>, <see cref="Finish"/>'s
         /// replay, or <see cref="EmitReservedBlankSlots"/>). Read by <see cref="ClaimsLine"/>'s own
         /// straddle tie-break (<see href="https://github.com/jhaygood86/PeachPDF/issues/1047">#1047</see>):
-        /// that tie-break exists to rescue a line whose nominal slot (<c>SlotStartingAt(rect.Top)</c>) is
+        /// that tie-break exists to rescue a line whose nominal slot (<c>SlotStartingAt(lineTop)</c>) is
         /// unreachable because it was already frozen by an earlier, separate emission (issue #1054's
         /// negative-leading escape past an already-closed page) — not to grant a bonus claim on top of one
         /// the current sweep's own ordinary test already gave the line, or will once its own turn comes.
@@ -890,7 +899,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private static bool MayBeObservedEmpty(
             CssBox box, CapturedInstance? capture, bool isFixed,
-            (CssBox Root, double Shift, RRect Band)? displacement) =>
+            (CssBox Root, double Shift, Rect Band)? displacement) =>
             capture is not { DetachedSourceRoot: null }
             && displacement is null
             && !box.IsRoot
@@ -965,18 +974,86 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// see <see cref="_emptySincePass"/>'s own remarks for the case that rules out committing any
         /// earlier.
         /// </param>
-        private void CommitRemainingObservations(bool commit)
+        /// <param name="rangeBottom">
+        /// where the walked range ends, in document space. A box is only concluded done when its own content
+        /// ends there or above: one whose content lies further down is empty in this range because it has
+        /// not got there yet, not because it has finished. Measured: a <c>flow-root</c> box inside a capped
+        /// scroll container, laid out in one piece, was empty on page 2 with its only line at 445.6pt on
+        /// page 3, and the mark pruned that line from page 3.
+        /// </param>
+        private void CommitRemainingObservations(bool commit, double rangeBottom = double.MaxValue)
         {
             if (commit)
             {
                 foreach (var (box, sinceSlot) in _emptySincePass)
                 {
+                    // A box whose content ends below the walked range has not finished; one with no geometry
+                    // of its own at all has nothing to lose and may be marked.
+                    if (SettledBottomOf(box) is { } bottom && bottom > rangeBottom) continue;
+
+                    // Nor has a box the pass stopped inside, whatever its bottom reads: its height is only
+                    // applied on the pass that completes it, so until then its ActualBottom is its top. A
+                    // flow-root box laid out up to its first line read 329.1pt on a page ending at 340pt, was
+                    // marked "nothing from page 2 on", and its flex item's text was pruned from the pages after.
+                    // CommitGeometricallySettledObservations excludes the chain for the same reason.
+                    if (_continuesInto.Contains((new FragmentKey(box, 0), sinceSlot))) continue;
+
                     var scopeOwner = ScopeOwnerOf(box);
                     box.RecordEmittedNothingAt(sinceSlot, scopeOwner, HistoryFor(scopeOwner).Count);
                 }
             }
 
             _emptySincePass.Clear();
+        }
+
+        /// <summary>
+        /// Where <paramref name="box"/>'s laid-out content ends, for the "has it already ended above this slot"
+        /// questions <see cref="CommitGeometricallySettledObservations"/> and
+        /// <see cref="CommitRemainingObservations"/> ask, or null when there is nothing to judge by.
+        /// </summary>
+        /// <remarks>
+        /// A block's <see cref="CssBox.ActualBottom"/> is where its border box ends. A plain inline box's is not
+        /// geometry at all: the inline flow never places an inline box itself, only its line rectangles and
+        /// words, so its <c>Location</c> stays at 0 and its <c>ActualBottom</c> holds whatever an earlier
+        /// sizing left there. Read as a bottom, that proved an inline box inside a float finished at 57.5pt
+        /// while its words were at 346pt, two pages later, and the mark it earned pruned those words from the
+        /// page that holds them. So an inline box is judged by its own line rectangles and words, and those of
+        /// the inline boxes inside it; one with none of either has nothing to conclude from.
+        /// </remarks>
+        /// <param name="box">the box an "emitted nothing" mark is about to be written for</param>
+        /// <returns>the lowest edge of its content in document space, or null when it has none to measure</returns>
+        private static double? SettledBottomOf(CssBox box)
+        {
+            if (!box.IsInline || DomUtils.IsAtomicInline(box)) return box.ActualBottom;
+
+            double? bottom = null;
+            AddInlineContent(box, ref bottom);
+            return bottom;
+
+            static void AddInlineContent(CssBox inline, ref double? bottom)
+            {
+                foreach (var rect in inline.Rectangles.Values)
+                {
+                    bottom = Math.Max(bottom ?? double.MinValue, rect.Bottom);
+                }
+
+                foreach (var word in inline.Words)
+                {
+                    bottom = Math.Max(bottom ?? double.MinValue, word.Bottom);
+                }
+
+                foreach (var child in inline.Boxes)
+                {
+                    if (child.IsInline && !DomUtils.IsAtomicInline(child))
+                    {
+                        AddInlineContent(child, ref bottom);
+                    }
+                    else
+                    {
+                        bottom = Math.Max(bottom ?? double.MinValue, child.ActualBottom);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -1095,7 +1172,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // (a couple of dozen points for <html>/<body> of a document still ten pages from its end).
                 // The outgoing break chain was recorded in _continuesInto for every slot of this pass
                 // before the walk began, so membership here is exact.
-                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned || box.ActualBottom > slotTop
+                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned
+                    || SettledBottomOf(box) is not { } bottom || bottom > slotTop
                     || _continuesInto.Contains((new FragmentKey(box, 0), slotIndex)))
                     continue;
 
@@ -1306,7 +1384,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// membership is never decided from it.
         /// </param>
         /// <param name="rect">the box's border box in that fragmentainer, in document space</param>
-        internal void RecordContinuationShell(CssBox box, int slot, RRect rect)
+        internal void RecordContinuationShell(CssBox box, int slot, Rect rect)
         {
             if (!_continuationShells.TryGetValue(box, out var shells))
             {
@@ -1391,7 +1469,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <param name="slot">the fragmentainer this displacement applies to</param>
         /// <param name="shift">how far lower the box draws there</param>
         /// <param name="band">the content band the fragment is confined to, in document space</param>
-        internal void RecordFragmentDisplacement(CssBox box, int slot, double shift, RRect band)
+        internal void RecordFragmentDisplacement(CssBox box, int slot, double shift, Rect band)
         {
             if (!_displacements.TryGetValue(box, out var bySlot))
             {
@@ -1433,10 +1511,97 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// States that <paramref name="box"/>'s border box spans <paramref name="x"/> to
+        /// <paramref name="x"/> + <paramref name="width"/> along the inline axis in fragmentainer
+        /// <paramref name="slot"/>, whatever its live geometry says -
+        /// <see href="https://www.w3.org/TR/css-break-3/#varying-size-boxes">css-break-3 §5.1</see>'s "each
+        /// fragment recalculates sizes and positions using its own fragmentainer's size", for a box whose
+        /// engine sized it once and whose single <see cref="CssBox.Location"/>/<see cref="CssBox.Size"/>
+        /// therefore describe only the fragmentainer that placed it.
+        /// </summary>
+        /// <remarks>
+        /// Layout <i>states</i> this rather than the emitter deriving it (contrast
+        /// <c>ComputeInlineExtentDelta</c>, which reproduces <c>GetBoxWidth</c>'s formula for an ordinary
+        /// block) because a flex container's or item's frame is the product of its engine's whole sizing
+        /// algorithm, which nothing outside that engine can re-run. Only ever consulted for a box that is
+        /// already frozen in the slot - it resizes a fragment, it never creates one.
+        /// </remarks>
+        internal void RecordInlineFrame(CssBox box, int slot, double x, double width)
+        {
+            if (!_inlineFrames.TryGetValue(box, out var bySlot))
+            {
+                _inlineFrames[box] = bySlot = [];
+            }
+
+            bySlot[slot] = (x, width);
+
+            // The frame changes where the box draws in a fragmentainer whose observation may already have
+            // been made against the old one.
+            box.DiscardEmittedNothing();
+        }
+
+        /// <summary>
+        /// Discards the frames <paramref name="box"/> stated from <paramref name="fromSlot"/> on - or, with
+        /// no slot, in every slot - because the pass about to run decides them again. Same two forms, for
+        /// the same two reasons, as <see cref="ClearContinuationShells"/>.
+        /// </summary>
+        internal void ClearInlineFrames(CssBox box, int? fromSlot = null)
+        {
+            if (fromSlot is not { } from)
+            {
+                if (_inlineFrames.Remove(box)) box.DiscardEmittedNothing();
+                return;
+            }
+
+            if (!_inlineFrames.TryGetValue(box, out var bySlot)) return;
+
+            var removedAny = false;
+
+            foreach (var slot in new List<int>(bySlot.Keys))
+            {
+                if (slot >= from && bySlot.Remove(slot)) removedAny = true;
+            }
+
+            if (bySlot.Count == 0) _inlineFrames.Remove(box);
+
+            if (removedAny) box.DiscardEmittedNothing();
+        }
+
+        /// <summary>Discards the frame stated for <paramref name="box"/> in exactly <paramref name="slot"/>.</summary>
+        internal void ClearInlineFrame(CssBox box, int slot)
+        {
+            if (!_inlineFrames.TryGetValue(box, out var bySlot) || !bySlot.Remove(slot)) return;
+
+            if (bySlot.Count == 0) _inlineFrames.Remove(box);
+
+            box.DiscardEmittedNothing();
+        }
+
+        /// <summary>
+        /// Discards every frame stated for <paramref name="box"/> or anything under it - what a container
+        /// being laid out afresh decides again for its whole subtree.
+        /// </summary>
+        internal void ClearInlineFramesUnder(CssBox box)
+        {
+            if (_inlineFrames.Count == 0) return;
+
+            ClearInlineFrames(box);
+
+            foreach (var child in box.Boxes)
+                ClearInlineFramesUnder(child);
+        }
+
+        /// <summary>What <paramref name="box"/>'s frame was stated to be in <paramref name="slot"/>, if anything.</summary>
+        internal (double X, double Width)? InlineFrameIn(CssBox box, int slot) =>
+            _inlineFrames.TryGetValue(box, out var bySlot) && bySlot.TryGetValue(slot, out var stated)
+                ? stated
+                : null;
+
+        /// <summary>
         /// What <paramref name="box"/> is displaced by in <paramref name="slot"/>, or null where it states
         /// nothing there.
         /// </summary>
-        private (CssBox Root, double Shift, RRect Band)? DisplacementIn(CssBox box, int slot) =>
+        private (CssBox Root, double Shift, Rect Band)? DisplacementIn(CssBox box, int slot) =>
             _displacements.TryGetValue(box, out var bySlot) && bySlot.TryGetValue(slot, out var stated)
                 ? stated
                 : null;
@@ -1502,7 +1667,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _currentPassFromSlot = null;
             }
 
-            CommitRemainingObservations(reachesPastEverythingSoFar);
+            CommitRemainingObservations(reachesPastEverythingSoFar, container.PageBottomOf(throughSlot));
         }
 
         /// <summary>
@@ -1715,7 +1880,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             foreach (var (slot, root, hasPrintableContent) in _emitted.Values)
             {
                 var fragmentainer = new FragmentainerFragment(
-                    new RRect(
+                    new Rect(
                         container.MarginLeft,
                         container.MarginTop,
                         container.PageSize.Width + container.MarginRight,
@@ -2131,7 +2296,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// is confined to, or the tighter of the rectangular two where a displaced run also sits inside a
         /// clipping ancestor.
         /// </summary>
-        private static (RRect? Clip, OverflowClipCurve? Curve) ClipOf(Draft draft)
+        private static (Rect? Clip, OverflowClipCurve? Curve) ClipOf(Draft draft)
         {
             // Which origin the ancestor's clip is localized against depends on whether that ancestor moves
             // with this fragment. One inside the displaced run does, so it is already in the box's own
@@ -2149,7 +2314,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var overflow = OverflowClipOf(
                 draft.Box, draft.Snapshot, displacedPastItsClip ? draft.Slot.LocalOriginY : draft.OriginY);
 
-            RRect? overflowRect = null;
+            Rect? overflowRect = null;
             OverflowClipCurve? curve = null;
             if (overflow is { } o)
             {
@@ -2166,7 +2331,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // (unconfined) Rect regardless of how this rectangular band narrows the fragment's clip.
             var confinement = Localize(band, draft.Slot.LocalOriginY);
 
-            var clip = overflowRect is { } r ? RRect.Intersect(r, confinement) : confinement;
+            var clip = overflowRect is { } r ? Rect.Intersect(r, confinement) : confinement;
             return (clip, curve);
         }
 
@@ -2223,7 +2388,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// intermediate fragment of a multi-page block lost its background and borders entirely.
         /// </para>
         /// </remarks>
-        private List<LineFragment> LinesOf(Draft draft, RRect bounds)
+        private List<LineFragment> LinesOf(Draft draft, Rect bounds)
         {
             var lines = new List<LineFragment>(draft.Lines.Count + 1);
 
@@ -2292,7 +2457,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Asked of the rectangle rather than of the slot the caller recorded against, so a stale band
         /// counter cannot make a stated fragment land nowhere. See <see cref="_continuationShells"/>.
         /// </remarks>
-        private RRect? ShellIn(CssBox box, FragmentRegion region)
+        private Rect? ShellIn(CssBox box, FragmentRegion region)
         {
             if (!_continuationShells.TryGetValue(box, out var shells)) return null;
 
@@ -2367,7 +2532,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             int instance,
             ref bool hasPrintableContent,
             ref bool subtreePrunable,
-            (CssBox Root, double Shift, RRect Band)? displacement = null,
+            (CssBox Root, double Shift, Rect Band)? displacement = null,
             (double Dx, double Dy) fixedOffset = default)
         {
             container.RecordBuildDraftCall();
@@ -2466,18 +2631,18 @@ namespace PeachPDF.Html.Core.Fragmentation
                     return null;
             }
 
-            List<(CssLineBox Line, RRect Rect)> lines = [];
+            List<(CssLineBox Line, Rect Rect)> lines = [];
             List<TextFragment> words = [];
             var usesOwnBounds = false;
-            RRect? shellRect = null;
+            Rect? shellRect = null;
 
             // A percentage left/top on a fixed box resolves against THIS page's own area (see
             // ComputeFixedPageOffset), so the delta is applied to the raw rect before anything else reads
             // it - both the region-membership tests below and the value ultimately stored. A no-op
             // (returns rect unchanged) whenever fixedOffset is (0, 0), which covers every box that isn't
             // fixed at all and every fixed box whose offset happens to resolve the same on every page.
-            RRect Shifted(RRect r) =>
-                fixedOffset is (0, 0) ? r : new RRect(r.X + fixedOffset.Dx, r.Y + fixedOffset.Dy, r.Width, r.Height);
+            Rect Shifted(Rect r) =>
+                fixedOffset is (0, 0) ? r : new Rect(r.X + fixedOffset.Dx, r.Y + fixedOffset.Dy, r.Width, r.Height);
 
             {
                 var rectangles = RectanglesOf(box, snapshot);
@@ -2522,7 +2687,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                         {
                             var ownRect = Displaced(Shifted(lineRect), shift);
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
-                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed);
+                            var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
+                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -2777,7 +2943,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// every slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsLine(RRect rect, RRect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed)
+        private bool ClaimsLine(Rect rect, Rect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop)
         {
             // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
             // own Y falls in would name a single page instead of all of them - exempt from every test below,
@@ -2793,7 +2959,23 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (!region.Contains(rect)) return false;
 
-            var nominalSlot = container.SlotStartingAt(rect.Top);
+            // The line box's own top rather than the ink's (see InkRiseAboveLineTop), unless most of the ink lies
+            // above the page that top names. A heading whose 13pt glyphs rise 1.5pt above its 12pt line box
+            // belongs to the page its line box is on. A padded `vertical-align: top` inline-block's words are
+            // drawn over its padding, a whole padding above the line top the flow recorded, so near a page foot
+            // their ink is on one page and the line top on the next: claimed by the next page, the line was drawn
+            // there almost wholly above its band and clipped away (at one page height, all but 0.25pt of it).
+            // Asking which page holds more of the ink, not whether any of it reaches the line top's page, keeps
+            // a sliver of overshoot from deciding.
+            var claimTop = lineTop;
+            if (lineTop > rect.Top)
+            {
+                var lineTopPageTop = container.PageTopOf(container.SlotStartingAt(lineTop));
+                if (rect.Top < lineTopPageTop && lineTopPageTop - rect.Top > rect.Bottom - lineTopPageTop)
+                    claimTop = rect.Top;
+            }
+
+            var nominalSlot = container.SlotStartingAt(claimTop);
 
             if (nominalSlot == slotIndex) return true;
 
@@ -2804,9 +2986,30 @@ namespace PeachPDF.Html.Core.Fragmentation
             // preserving the tie-break for a lone CatchUpStaleSlotsBehind/Finish-replay/
             // EmitReservedBlankSlots re-emission exactly as before.
             return (_currentPassFromSlot is not { } fromSlot || nominalSlot < fromSlot)
-                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
+                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(claimTop))
                 && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container);
         }
+
+        /// <summary>
+        /// How far <paramref name="lineRect"/> — one box's own rectangle on <paramref name="line"/> — starts
+        /// above the line box itself, or zero when it does not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A glyph taller than its <c>line-height</c> has a negative half-leading, so its ink rises above
+        /// the line box the flow placed (CSS 2.1 §10.8.1). A line moved to a page's top by a break then has
+        /// ink a point or two above the boundary, and asked by that ink the line's nominal slot is the page
+        /// it left — which never reaches the box, since the block holding the line starts on the next one.
+        /// The line was drawn on no page: a heading in 13pt type on a 12pt line, at a card's first line.
+        /// </para>
+        /// <para>
+        /// Measured against the box's own live rectangle rather than read as a coordinate, so the shift
+        /// and displacement already applied to that rectangle carry over unchanged. Zero for a snapshot:
+        /// the live line box describes the last layout, not the captured copy.
+        /// </para>
+        /// </remarks>
+        private static double InkRiseAboveLineTop(CssLineBox line, Rect lineRect, BoxGeometrySnapshot? snapshot) =>
+            snapshot is null && line.FlowTop is { } flowTop ? Math.Max(0, flowTop - lineRect.Top) : 0;
 
         /// <summary>
         /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
@@ -2818,8 +3021,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// no sibling content to aggregate for a word with no line of its own, so <paramref name="rect"/>
         /// stands in for both of <see cref="ClaimsLine"/>'s rectangle parameters.
         /// </summary>
-        private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
-            ClaimsLine(rect, rect, slotIndex, region, isFixed);
+        private bool ClaimsWord(Rect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
+            ClaimsLine(rect, rect, slotIndex, region, isFixed, rect.Top);
 
         /// <summary>
         /// The union of every box's own portion of physical line <paramref name="line"/> -
@@ -2837,7 +3040,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// (not itself held by it) is simply skipped, the same "can only remove a claim, never invent one"
         /// posture the rest of this file takes.
         /// </remarks>
-        private static RRect AggregateLineRect(CssLineBox line, BoxGeometrySnapshot? snapshot, RRect seed)
+        private static Rect AggregateLineRect(CssLineBox line, BoxGeometrySnapshot? snapshot, Rect seed)
         {
             double left = seed.Left, top = seed.Top, right = seed.Right, bottom = seed.Bottom;
 
@@ -2858,7 +3061,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 bottom = Math.Max(bottom, ownRect.Bottom);
             }
 
-            return RRect.FromLTRB(left, top, right, bottom);
+            return Rect.FromLTRB(left, top, right, bottom);
         }
 
         /// <summary>
@@ -2867,8 +3070,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <param name="rect">the box's own rectangle, in document space</param>
         /// <param name="shift">how far lower it draws in the fragmentainer being built</param>
-        private static RRect Displaced(RRect rect, double shift) =>
-            shift == 0 ? rect : new RRect(rect.X, rect.Y + shift, rect.Width, rect.Height);
+        private static Rect Displaced(Rect rect, double shift) =>
+            shift == 0 ? rect : new Rect(rect.X, rect.Y + shift, rect.Width, rect.Height);
 
         /// <summary>
         /// The clip an <c>overflow: hidden</c> ancestor imposes on <paramref name="box"/>, in this
@@ -2893,7 +3096,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// its own containing block outside the table, which is not proxied and so is read live correctly.
         /// </para>
         /// </remarks>
-        private static (RRect Rect, BorderRadii? Radii)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
+        private static (Rect Rect, BorderRadii? Radii)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
         {
             var containingBlock = DomUtils.ClippingContainingBlockOf(box);
 
@@ -3341,7 +3544,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// band is applied and un-displaced after, so the caller's <see cref="Localize"/> against the
         /// already-displaced origin still lands in the right place.
         /// </param>
-        private RRect BandCut(RRect rect, CssBox box, FragmentRegion region, double shift)
+        private Rect BandCut(Rect rect, CssBox box, FragmentRegion region, double shift)
         {
             var landed = Displaced(rect, shift);
 
@@ -3387,14 +3590,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private Dictionary<CssLineBox, SliceGeometry> SliceGeometriesOf(
             CssBox box,
-            IReadOnlyDictionary<CssLineBox, RRect> rectangles,
+            IReadOnlyDictionary<CssLineBox, Rect> rectangles,
             FragmentRegion region,
             double originY,
             double shift)
         {
             var slices = new Dictionary<CssLineBox, SliceGeometry>(rectangles.Count);
 
-            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, region, shift), originY);
+            Rect FragmentRectOf(Rect rect) => Localize(BandCut(rect, box, region, shift), originY);
 
             var ownsItsLines = false;
             foreach (var line in rectangles.Keys)
@@ -3414,7 +3617,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 return slices;
             }
 
-            var ordered = new List<KeyValuePair<CssLineBox, RRect>>(rectangles);
+            var ordered = new List<KeyValuePair<CssLineBox, Rect>>(rectangles);
             ordered.Sort(static (a, b) =>
             {
                 var byTop = a.Value.Y.CompareTo(b.Value.Y);
@@ -3431,7 +3634,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             foreach (var (line, rect) in ordered)
             {
                 var following = total - preceding - rect.Width;
-                var strip = new RRect(rect.X - (rtl ? following : preceding), rect.Y, total, rect.Height);
+                var strip = new Rect(rect.X - (rtl ? following : preceding), rect.Y, total, rect.Height);
 
                 slices[line] = new SliceGeometry(
                     Localize(strip, originY),
@@ -3518,7 +3721,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// clipped to the fragment rounds, positions and casts at the box's true ends only.
         /// </para>
         /// </remarks>
-        private RRect UnbrokenBlockStripOf(Draft draft, RRect bounds)
+        private Rect UnbrokenBlockStripOf(Draft draft, Rect bounds)
         {
             if (draft.Region.Left is null) return bounds;
 
@@ -3547,7 +3750,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 total += height;
             }
 
-            return new RRect(bounds.X, bounds.Y - preceding, bounds.Width, total);
+            return new Rect(bounds.X, bounds.Y - preceding, bounds.Width, total);
         }
 
         /// <summary>
@@ -3574,7 +3777,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// of them is built, which a measurement taken during materialization cannot offer.
         /// </para>
         /// </remarks>
-        private RRect ExtentOf(Draft draft)
+        private Rect ExtentOf(Draft draft)
         {
             if (_extents.TryGetValue(draft, out var cached)) return cached;
 
@@ -3588,7 +3791,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // rectangles (UsesOwnBounds) agrees with one that has them.
             if (draft.ShellRect is null && (draft.FixedOffsetX != 0 || draft.FixedOffsetY != 0))
             {
-                bounds = new RRect(
+                bounds = new Rect(
                     bounds.X + draft.FixedOffsetX, bounds.Y + draft.FixedOffsetY, bounds.Width, bounds.Height);
             }
 
@@ -3599,7 +3802,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // a stated (sliced) fragment's declared bounds are not this box's own live extent to begin with.
             if (draft.ShellRect is null && (draft.FixedSizeDeltaWidth != 0 || draft.FixedSizeDeltaHeight != 0))
             {
-                bounds = new RRect(
+                bounds = new Rect(
                     bounds.X, bounds.Y,
                     Math.Max(0, bounds.Width + draft.FixedSizeDeltaWidth),
                     Math.Max(0, bounds.Height + draft.FixedSizeDeltaHeight));
@@ -3610,9 +3813,16 @@ namespace PeachPDF.Html.Core.Fragmentation
             // FixedSizeDeltaWidth (ComputeInlineExtentDelta explicitly excludes out-of-flow boxes, which
             // includes every fixed one). Left edge (bounds.X) is unaffected - only the box's own
             // content-right edge moves per page, never its content-left one.
-            if (draft.ShellRect is null && draft.InlineExtentDeltaWidth != 0)
+            // Asked here rather than recorded on the draft when it is built, because layout states a frame
+            // in a fragmentainer from the pass that resumes into a LATER one - after this fragmentainer's
+            // draft was frozen. Everything defined over the whole box is resolved at materialization.
+            if (draft.ShellRect is null && InlineFrameIn(draft.Box, draft.Slot.Index) is { } stated)
             {
-                bounds = new RRect(bounds.X, bounds.Y, Math.Max(0, bounds.Width + draft.InlineExtentDeltaWidth), bounds.Height);
+                bounds = new Rect(stated.X, bounds.Y, Math.Max(0, stated.Width), bounds.Height);
+            }
+            else if (draft.ShellRect is null && draft.InlineExtentDeltaWidth != 0)
+            {
+                bounds = new Rect(bounds.X, bounds.Y, Math.Max(0, bounds.Width + draft.InlineExtentDeltaWidth), bounds.Height);
             }
 
             // A nonzero FixedSizeDeltaHeight means this box's height came from an explicit per-page
@@ -3680,7 +3890,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 if (container.HasCloneDecorations) bottom += DomUtils.OwnClonedBlockEnd(draft.Box);
 
                 if (bottom > bounds.Bottom)
-                    bounds = RRect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom);
+                    bounds = Rect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom);
             }
 
             _extents[draft] = bounds;
@@ -3692,11 +3902,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// children's — in fragmentainer-local space. The value <see cref="Fragment.Rect"/> carries,
         /// computed from the drafts so <see cref="ExtentOf"/> can ask it before anything is materialized.
         /// </summary>
-        private RRect RectOf(Draft draft)
+        private Rect RectOf(Draft draft)
         {
             if (_rects.TryGetValue(draft, out var cached)) return cached;
 
-            RRect? union = null;
+            Rect? union = null;
 
             if (draft.UsesOwnBounds)
             {
@@ -3710,7 +3920,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 foreach (var (_, rect) in draft.Lines)
                 {
                     var local = Localize(rect, draft.OriginY);
-                    union = union is null ? local : RRect.Union(union.Value, local);
+                    union = union is null ? local : Rect.Union(union.Value, local);
                 }
             }
 
@@ -3719,11 +3929,11 @@ namespace PeachPDF.Html.Core.Fragmentation
                 foreach (var child in draft.Children)
                 {
                     var childRect = RectOf(child);
-                    union = union is null ? childRect : RRect.Union(union.Value, childRect);
+                    union = union is null ? childRect : Rect.Union(union.Value, childRect);
                 }
             }
 
-            var fragmentRect = union ?? RRect.Empty;
+            var fragmentRect = union ?? Rect.Empty;
             _rects[draft] = fragmentRect;
 
             return fragmentRect;
@@ -3941,7 +4151,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// stream, and no <c>Tj</c> for the text). Falling back to the rectangles only when there is no
         /// border box to read leaves every box that has one measured exactly as before.
         /// </remarks>
-        private static RRect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot)
+        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot)
         {
             var bounds = BoundsOf(box, snapshot);
 
@@ -3961,19 +4171,19 @@ namespace PeachPDF.Html.Core.Fragmentation
                 bottom = Math.Max(bottom, rect.Bottom);
             }
 
-            return RRect.FromLTRB(left, top, right, bottom);
+            return Rect.FromLTRB(left, top, right, bottom);
         }
 
-        private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+        private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;
 
-        private static IReadOnlyDictionary<CssLineBox, RRect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+        private static IReadOnlyDictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.Rectangles;
 
         /// <summary>
         /// Where a word sits in this fragmentainer, or false when it belongs to a later one.
         /// </summary>
-        private static bool TryGetWordRect(CssBox box, int index, BoxGeometrySnapshot? snapshot, out RRect rect)
+        private static bool TryGetWordRect(CssBox box, int index, BoxGeometrySnapshot? snapshot, out Rect rect)
         {
             var word = box.Words[index];
 
@@ -3983,11 +4193,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 if (geometry.WordOrigins[index] is not { } origin)
                 {
-                    rect = RRect.Empty;
+                    rect = Rect.Empty;
                     return false;
                 }
 
-                rect = new RRect(origin.X, origin.Y, word.Width, word.Height);
+                rect = new Rect(origin.X, origin.Y, word.Width, word.Height);
                 return true;
             }
 
@@ -3995,7 +4205,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             return true;
         }
 
-        private static RRect Localize(RRect rect, double originY) =>
+        private static Rect Localize(Rect rect, double originY) =>
             new(rect.X, rect.Y - originY, rect.Width, rect.Height);
     }
 }

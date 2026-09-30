@@ -1241,7 +1241,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(img1.Image);
             // The whole point of a shared PdfImage: the second placement reuses the exact same decoded
-            // RImage instance rather than decoding the bytes a second time.
+            // Image instance rather than decoding the bytes a second time.
             Assert.Same(img1.Image, img2.Image);
         }
 

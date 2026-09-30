@@ -1,6 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -364,17 +363,17 @@ namespace PeachPDF.Tests.Integration
         // --- Harness (mirrors PdfGenerator.SetContent's geometry derivation; see
         //     PerPageHorizontalReflowLayoutIntegrationTests) ---
 
-        private static async Task<(HtmlContainerInt Container, RGraphics Graphics)> BuildLayoutAsync(string html)
+        private static async Task<(HtmlContainerInt Container, Canvas Graphics)> BuildLayoutAsync(string html)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            container.PageSize = new RSize(
+            container.PageSize = new Size(
                 SheetW - container.MarginLeft - container.MarginRight,
                 SheetH - container.MarginTop - container.MarginBottom);
-            container.Location = new RPoint(container.MarginLeft, container.MarginTop);
-            container.MaxSize = new RSize(container.PageSize.Width, 0);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             var measure = XGraphics.CreateMeasureContext(
                 new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);

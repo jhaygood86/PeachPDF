@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Verifies the legacy CSS 2.1 <c>clip: rect()</c> paint hook in <c>FragmentPainter.PaintFragment</c>:
-    /// a resolved rectangle is pushed (as an <c>RRect</c>, via <c>RenderUtils.ClipGraphicsByOverflow</c>)
+    /// a resolved rectangle is pushed (as an <c>Rect</c>, via <c>RenderUtils.ClipGraphicsByOverflow</c>)
     /// before an absolutely/fixed positioned element paints and popped after, and has no effect at all on
     /// a statically positioned box. Uses the recording graphics adapter so we assert the actual clip call
     /// sequence and resolved coordinates, not just that painting completed.

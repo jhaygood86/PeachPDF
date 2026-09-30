@@ -587,7 +587,7 @@ h1 { color: blue }");
 
                 //var property = (CssBorderPartColorProperty)decl;
                 //var color = property.Color;
-                //Assert.Equal(new Color(82, 168, 236, 0.8f), color);
+                //Assert.Equal(new PaintColor(82, 168, 236, 0.8f), color);
             }
         }
 
@@ -737,11 +737,12 @@ h1 { color: blue }");
         {
             var decl = ParseDeclarations("font: bold 1em/2em monospace; content: \" (\" attr(href) \")\"");
             Assert.NotNull(decl);
-            // 14 longhands the `font` shorthand expands to (font-family, font-size, font-stretch,
+            // 16 longhands the `font` shorthand expands to (font-family, font-size, font-stretch,
             // font-style, font-variant-caps, font-variant-ligatures, font-variant-numeric,
             // font-variant-east-asian, font-variant-position, font-variant-emoji,
-            // font-variant-alternates, font-kerning, font-weight, line-height) + content.
-            Assert.Equal(15, decl.Length);
+            // font-variant-alternates, font-kerning, font-optical-sizing, font-variation-settings,
+            // font-weight, line-height) + content.
+            Assert.Equal(17, decl.Length);
 
             Assert.Equal("bold 1em / 2em monospace", decl.GetPropertyValue("font"));
 

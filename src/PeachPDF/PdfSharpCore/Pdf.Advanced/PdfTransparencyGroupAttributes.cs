@@ -53,7 +53,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// � As the color space of the group as a whole when it in turn is painted as an object onto its backdrop
             /// The group color space may be any device or CIE-based color space that
             /// treats its components as independent additive or subtractive values in the
-            /// range 0.0 to 1.0, subject to the restrictions described in Section 7.2.3, �Blending Color Space.�
+            /// range 0.0 to 1.0, subject to the restrictions described in Section 7.2.3, �Blending PaintColor Space.�
             /// These restrictions exclude Lab and lightness-chromaticity ICCBased color spaces,
             /// as well as the special color spaces Pattern, Indexed, Separation, and DeviceN.
             /// Device color spaces are subject to remapping according to the DefaultGray,

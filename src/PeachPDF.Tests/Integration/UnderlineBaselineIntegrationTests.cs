@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     /// <remarks>
     /// Every assertion here is made against the <c>DrawString</c> call that painted the text, in the same
-    /// paint pass — its <c>Point</c> is the origin the glyphs were drawn from and its <c>Font</c> is the
+    /// paint pass — its <c>PaintPoint</c> is the origin the glyphs were drawn from and its <c>Font</c> is the
     /// face they were drawn with, so the baseline derived from the pair is the one on the page rather
     /// than one re-derived from the box tree the painter itself reads. That also makes these assertions
     /// relative, so they do not depend on which font the host resolves for the fixture.
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Integration
             var glyphs = g.DrawStringCalls.Single(c => c.Text == word);
 
             // Where DrawString put this run's baseline, taken from the call that drew it.
-            var baseline = glyphs.Point.Y + glyphs.Font.TextBaselineOffset;
+            var baseline = glyphs.PaintPoint.Y + glyphs.Font.TextBaselineOffset;
             var underlineTop = underline.Y1 - underline.Width / 2;
 
             Assert.True(underlineTop > baseline,
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             var underline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var glyphs = g.DrawStringCalls.Single(c => c.Text == "Hxg");
 
-            var baseline = glyphs.Point.Y + glyphs.Font.TextBaselineOffset;
+            var baseline = glyphs.PaintPoint.Y + glyphs.Font.TextBaselineOffset;
             var underlineTop = underline.Y1 - underline.Width / 2;
 
             Assert.InRange(underlineTop - baseline, 0, 2 * OneCssPixel);
@@ -134,8 +134,8 @@ namespace PeachPDF.Tests.Integration
             var onTheBaseline = g.DrawStringCalls.Single(c => c.Text == "Base");
             var raised = g.DrawStringCalls.Single(c => c.Text == "sup");
 
-            var baseline = onTheBaseline.Point.Y + onTheBaseline.Font.TextBaselineOffset;
-            var raisedBaseline = raised.Point.Y + raised.Font.TextBaselineOffset;
+            var baseline = onTheBaseline.PaintPoint.Y + onTheBaseline.Font.TextBaselineOffset;
+            var raisedBaseline = raised.PaintPoint.Y + raised.Font.TextBaselineOffset;
             var underlineTop = underline.Y1 - underline.Width / 2;
 
             // The fixture is only meaningful while the superscript really is raised off the baseline.
@@ -177,7 +177,7 @@ namespace PeachPDF.Tests.Integration
             var underline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var glyphs = Assert.Single(g.DrawStringCalls);
 
-            Assert.True(underline.Y1 > glyphs.Point.Y,
+            Assert.True(underline.Y1 > glyphs.PaintPoint.Y,
                 "the underline should still be drawn below the raised run, not discarded or placed at zero");
         }
 
@@ -192,7 +192,7 @@ namespace PeachPDF.Tests.Integration
             var underline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var glyphs = g.DrawStringCalls.Single(c => c.Text == "Hxg");
 
-            return underline.Y1 - underline.Width / 2 - (glyphs.Point.Y + glyphs.Font.TextBaselineOffset);
+            return underline.Y1 - underline.Width / 2 - (glyphs.PaintPoint.Y + glyphs.Font.TextBaselineOffset);
         }
 
         private static string Wrap(string body) =>

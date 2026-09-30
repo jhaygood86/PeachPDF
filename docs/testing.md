@@ -12,15 +12,13 @@ The suite multi-targets **`net8.0`, `net10.0`, and `net11.0`**, and all three ta
 
 ## Continuous integration
 
-Every pull request and every push to `main` runs the [test workflow](https://github.com/jhaygood86/PeachPDF/blob/main/.github/workflows/test.yml) across a three-OS matrix — **`windows-latest`, `ubuntu-latest`, and `macos-latest`** — so platform-specific behavior (most often font discovery and text metrics) is exercised everywhere PeachPDF is expected to run. On each OS the job:
+Every pull request and every push to `main` runs the [test workflow](https://github.com/jhaygood86/PeachPDF/blob/main/.github/workflows/test.yml) across a three-OS matrix — **`windows-latest`, `ubuntu-latest`, and `macos-latest`** — so platform-specific behavior (most often font discovery and text metrics) is exercised everywhere PeachPDF is expected to run. The work is split into parallel jobs so a run takes as long as its slowest leg rather than the sum of every step. On each OS:
 
-1. restores and **builds** `PeachPDF.Tests` in Release,
-2. **builds the TestHarness** showcase generator (see [below](#the-showcase-harness)),
-3. installs a **Playwright Chromium** browser used by the suite's browser-backed tests,
-4. runs `dotnet test` with code-coverage collection, and
-5. on pull requests, enforces the **diff-coverage gate**.
+1. three **test legs** run side by side: `main` (builds `PeachPDF.Tests` in Release, installs the **Playwright Chromium** browser its browser-backed tests use, and runs each target framework in turn), `engine` (the font and text engine's tests; every target framework on Ubuntu, net10.0 on Windows and macOS) and `small` (the CLI, drawing-abstraction, raster-backend and source-generator tests). All of them collect code coverage. macOS does not install the .NET 11 release-candidate SDK, so net11.0 is covered on Windows and Ubuntu;
+2. a **coverage job** merges that OS's legs into one report and, on pull requests, enforces the **diff-coverage gate**; and
+3. a separate job **builds the TestHarness** showcase generator (see [below](#the-showcase-harness)) and the Blazor WebAssembly demo.
 
-A documentation-only change shouldn't pay for the full build/test cycle, but the test job is also a required status check — so it always runs, and the heavy steps above are gated on whether anything under `src/**` actually changed. When only docs change, those steps are skipped and the job still reports success.
+A documentation-only change shouldn't pay for the full build/test cycle, but the workflow also feeds a required status check — so it always runs, and the heavy jobs above are gated on whether anything under `src/**` actually changed. When only docs change, they are skipped and the final `test-gate` job still reports success. That `test-gate` job is the single check to require: it fails if any test, coverage or build job failed or was cancelled. A newer push to the same pull request cancels its in-flight run, and every job has a timeout so a hung test host cannot hold a runner for hours.
 
 ## Coverage gate
 
@@ -47,9 +45,16 @@ This matters because automated assertions alone have real blind spots. Several g
 
 ## Benchmarks
 
-`src/PeachPDF.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) project for measuring rendering throughput and catching performance regressions. It isn't part of the per-PR gate; it's run deliberately when a change is expected to affect performance.
+`src/PeachDrawing.Text.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) project for measuring the font and text engine's hot paths and catching performance regressions. Today it covers TrueType and CFF hinting: a cold benchmark that loads every glyph of a bundled font at several sizes into an empty cache (with allocations reported), and a hot benchmark that looks glyphs up in a warm cache from one, four and eight threads at once. It reads the engine only through the public API, like the engine's tests, and isn't part of the per-PR gate or any CI job; it's run deliberately when a change is expected to affect performance. Run it from `src/`, in Release, with nothing else building or testing on the machine:
+
+```
+dotnet run -c Release --project PeachDrawing.Text.Benchmarks -- --filter "*HintingCold*"
+dotnet run -c Release --project PeachDrawing.Text.Benchmarks -- --filter "*HintingHot*"
+```
+
+For timing whole-document rendering, the [showcase harness](#the-showcase-harness) has a `--benchmark` mode that times and measures the allocations of each showcase's render.
 
 ## See also
 
 - [Architecture](architecture.md) — what each of these tests is verifying: the HTML → DOM → CSS → layout → paint → PDF pipeline.
-- [CONTRIBUTING.md](https://github.com/jhaygood86/PeachPDF/blob/main/CONTRIBUTING.md) — exact local commands, testing conventions (layout-property assertions, `RGraphics` recording mocks), and how to reproduce the coverage gate locally.
+- [CONTRIBUTING.md](https://github.com/jhaygood86/PeachPDF/blob/main/CONTRIBUTING.md) — exact local commands, testing conventions (layout-property assertions, `Canvas` recording mocks), and how to reproduce the coverage gate locally.

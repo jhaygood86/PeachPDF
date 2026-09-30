@@ -493,6 +493,34 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_KeywordOrValue_Validation_And_Storage_For_A_Percentage_Or_Keyword_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "font-stretch", "inherited": true, "initialValue": "normal",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "NormalKeyword", "keywordMap": "Map.NormalKeywords",
+                        "fallback": "NormalKeyword.Normal", "valueType": "percentage" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_FontStretch(CssValueParser parser, string value) => " +
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _);",
+                generated);
+            Assert.Contains(
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, double>(value, Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage, NormalKeyword.Normal);",
+                generated);
+        }
+
+        [Fact]
         public void Emits_KeywordOrValue_Validation_Narrowed_By_Min_For_An_Integer_Or_Auto_Property()
         {
             var json = """
@@ -517,6 +545,59 @@ namespace PeachPDF.SourceGenerators.Tests
                 generated);
             Assert.Contains(
                 "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_KeywordOrValue_Validation_And_Storage_For_A_Number_Or_Keyword_Property_Narrowed_By_Min_And_Max()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "font-weight", "inherited": true, "initialValue": "normal",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "NormalKeyword", "keywordMap": "Map.NormalKeywords",
+                        "fallback": "NormalKeyword.Normal", "valueType": "number", "min": 1, "max": 1000 },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_FontWeight(CssValueParser parser, string value) => " +
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber(value, out var parsedNumber) && parsedNumber >= 1 && parsedNumber <= 1000;",
+                generated);
+            Assert.Contains(
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, double>(value, Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber, NormalKeyword.Normal);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_KeywordOrValue_Validation_For_An_Unbounded_Number_Or_Keyword_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "font-weight", "inherited": true, "initialValue": "normal",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "NormalKeyword", "keywordMap": "Map.NormalKeywords",
+                        "fallback": "NormalKeyword.Normal", "valueType": "number" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_FontWeight(CssValueParser parser, string value) => " +
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber(value, out _);",
                 generated);
         }
 

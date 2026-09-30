@@ -392,6 +392,12 @@ namespace PeachPDF.CSS
                 {Keywords.Normal, FontKerningMode.Normal},
                 {Keywords.None, FontKerningMode.None}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontOpticalSizingMode> FontOpticalSizingModes =
+            new Dictionary<string, FontOpticalSizingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, FontOpticalSizingMode.Auto},
+                {Keywords.None, FontOpticalSizingMode.None}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, AutoKeyword> AutoKeywords =
             new Dictionary<string, AutoKeyword>(StringComparer.OrdinalIgnoreCase)
             {
@@ -812,6 +818,7 @@ namespace PeachPDF.CSS
                 {Keywords.Relative, PositionMode.Relative},
                 {Keywords.Absolute, PositionMode.Absolute},
                 {Keywords.Sticky, PositionMode.Sticky},
+                {Keywords.WebkitSticky, PositionMode.Sticky},
                 {Keywords.Fixed, PositionMode.Fixed}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, Overflow> OverflowModes =
@@ -883,6 +890,14 @@ namespace PeachPDF.CSS
                 {Keywords.TableRowGroup, DisplayMode.TableRowGroup},
                 {Keywords.Flex, DisplayMode.Flex},
                 {Keywords.InlineFlex, DisplayMode.InlineFlex},
+                {Keywords.WebkitFlex, DisplayMode.Flex},
+                {Keywords.WebkitInlineFlex, DisplayMode.InlineFlex},
+                // The 2009 flexbox model. Resolved to block/flex (inline-*) after the cascade by LegacyBox.Resolve,
+                // once -webkit-box-orient is known.
+                {Keywords.WebkitBox, DisplayMode.Flex},
+                {Keywords.WebkitInlineBox, DisplayMode.InlineFlex},
+                {Keywords.MozBox, DisplayMode.Flex},
+                {Keywords.MozInlineBox, DisplayMode.InlineFlex},
                 {Keywords.Grid, DisplayMode.Grid},
                 {Keywords.InlineGrid, DisplayMode.InlineGrid}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
@@ -960,6 +975,15 @@ namespace PeachPDF.CSS
                 {Keywords.ClosestCorner, RadialGradient.SizeMode.ClosestCorner},
                 {Keywords.FarthestCorner, RadialGradient.SizeMode.FarthestCorner}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, ImageRenderingMode> ImageRenderingModes =
+            new Dictionary<string, ImageRenderingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, ImageRenderingMode.Auto},
+                {Keywords.Smooth, ImageRenderingMode.Smooth},
+                {Keywords.HighQuality, ImageRenderingMode.HighQuality},
+                {Keywords.CrispEdges, ImageRenderingMode.CrispEdges},
+                {Keywords.Pixelated, ImageRenderingMode.Pixelated}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, ObjectFitting> ObjectFittings =
             new Dictionary<string, ObjectFitting>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1007,6 +1031,15 @@ namespace PeachPDF.CSS
                 {Keywords.Normal, WordBreak.Normal},
                 {Keywords.BreakAll, WordBreak.BreakAll},
                 {Keywords.KeepAll, WordBreak.KeepAll}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, LineBreak> LineBreaks =
+            new Dictionary<string, LineBreak>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, LineBreak.Auto},
+                {Keywords.Loose, LineBreak.Loose},
+                {Keywords.Normal, LineBreak.Normal},
+                {Keywords.Strict, LineBreak.Strict},
+                {Keywords.Anywhere, LineBreak.Anywhere}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, OverflowWrap> OverflowWraps =
             new Dictionary<string, OverflowWrap>(StringComparer.OrdinalIgnoreCase)

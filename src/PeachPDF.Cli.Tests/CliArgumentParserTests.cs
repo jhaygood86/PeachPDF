@@ -179,6 +179,15 @@ public class CliArgumentParserTests
     }
 
     [Fact]
+    public void NoRasterAntiAliasing_IsParsed()
+    {
+        var options = ArgumentParser.Parse(["--no-raster-antialiasing", "doc.html"]);
+
+        Assert.Empty(options.Errors);
+        Assert.True(options.NoRasterAntiAliasing);
+    }
+
+    [Fact]
     public void HttpTimeout_Invalid_IsError()
     {
         var options = ArgumentParser.Parse(["--http-timeout", "soon", "doc.html"]);

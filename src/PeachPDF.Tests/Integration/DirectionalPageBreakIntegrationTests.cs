@@ -527,6 +527,56 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("Tj", ContentStreams(pdf)[1]);
         }
 
+        // css-page-3 §5.1: @page :blank styles the page a forced break inserted. The spec's own recipe
+        // (content: none on the margin boxes) suppresses the running header on it alone, while the
+        // surrounding pages keep theirs and the blank page still counts toward counter(pages).
+        [Fact]
+        public async Task PageBlank_SuppressesMarginBoxesOnTheInsertedPageOnly()
+        {
+            var pdf = await RenderAsync(
+                """
+                <!DOCTYPE html><html><head><style>
+                @page { @top-center { content: "Header " counter(page) " of " counter(pages); } }
+                @page :blank { @top-center { content: none; } }
+                body { margin: 0; }
+                </style></head><body>
+                <div style='height:50pt'>first</div>
+                <div style='height:50pt; break-before: recto'>second</div>
+                </body></html>
+                """);
+
+            Assert.Equal(3, pdf.PdfDocument.PageCount);
+
+            var streams = ContentStreams(pdf);
+            Assert.Contains("Tj", streams[0]);
+            Assert.DoesNotContain("Tj", streams[1]);
+            Assert.Contains("Tj", streams[2]);
+        }
+
+        // A page that merely holds a forced page break's content is not "intentionally blank": :blank
+        // must not match a page a plain `break-before: page` produced.
+        [Fact]
+        public async Task PageBlank_DoesNotMatchAnOrdinaryPage()
+        {
+            var pdf = await RenderAsync(
+                """
+                <!DOCTYPE html><html><head><style>
+                @page { @top-center { content: "Header"; } }
+                @page :blank { @top-center { content: none; } }
+                body { margin: 0; }
+                </style></head><body>
+                <div style='height:50pt'>first</div>
+                <div style='height:50pt; break-before: page'>second</div>
+                </body></html>
+                """);
+
+            Assert.Equal(2, pdf.PdfDocument.PageCount);
+
+            var streams = ContentStreams(pdf);
+            Assert.Contains("Tj", streams[0]);
+            Assert.Contains("Tj", streams[1]);
+        }
+
         // The regression the fixtures above cannot reach: every one of them uses fixed-height blocks that
         // finish inside the page they land on, so the layout pass never ends inside the sweep that also
         // contains the reserved blank slot. Here the chapter is a paragraph far taller than a page, so the

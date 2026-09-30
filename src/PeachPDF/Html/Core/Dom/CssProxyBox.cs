@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragments;
 using System.Threading.Tasks;
 
@@ -92,7 +92,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout by resetting source box, laying it out at this proxy's location,
         /// and capturing the resulting layout state.
         /// </summary>
-        protected override async ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+        protected override async ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
         {
             // This box's own pass never routes through CssBox.BeginBlockPass (a proxy translates a source
             // box's already-laid-out geometry rather than running a prologue/placement/content pass of its

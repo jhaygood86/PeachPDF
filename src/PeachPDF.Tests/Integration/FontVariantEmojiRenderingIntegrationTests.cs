@@ -2,14 +2,14 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Paint-level proof that the emoji/text presentation choice reaches the PDF: a colour glyph (Noto Color
+    /// Paint-level proof that the emoji/text presentation choice reaches the PDF: a colour glyph (Noto PaintColor
     /// Emoji) is drawn as vector artwork carrying a per-occurrence <c>/ActualText</c>, while the outline glyph
     /// (Source Sans 3) is an ordinary text show with none. Both fonts cover U+2764, so only the requested
     /// presentation can decide - and the layout-level tests alone would not notice a resolved font that then
@@ -19,8 +19,8 @@ namespace PeachPDF.Tests.Integration
     {
         private static async Task<string> Render(string style, string body)
         {
-            var colourFamily = TtfFontDescription.LoadDescription(BundledFonts.ColorEmoji).FontFamilyInvariantCulture;
-            var textFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var colourFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.ColorEmoji);
+            var textFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var generator = new PdfGenerator();
             foreach (var path in new[] { BundledFonts.ColorEmoji, BundledFonts.Ttf })

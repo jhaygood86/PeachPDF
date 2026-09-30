@@ -1,6 +1,5 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -150,7 +149,7 @@ body {{ font-family: 'TestMultiWeight', serif; font-size: 14pt; }}
 
         // -------------------------------------------------------------------------
         // Regression: @font-face's src: local(...) must resolve against a genuinely-installed system
-        // font end-to-end (DomParser.CascadeApplyStyleFonts -> RAdapter.AddLocalFontFamily), not just
+        // font end-to-end (DomParser.CascadeApplyStyleFonts -> RenderContext.AddLocalFontFamily), not just
         // parse - no-ops (rather than skipping, matching this test project's Windows-only convention -
         // see GenericFontFamilyIntegrationTests) on any non-Windows host, since it needs a known,
         // real installed font's own internal name to reference via local().
@@ -165,7 +164,7 @@ body {{ font-family: 'TestMultiWeight', serif; font-size: 14pt; }}
             var arialPath = Path.Combine(fontsDir, "arial.ttf");
             if (!File.Exists(arialPath)) return;
 
-            var localName = TtfFontDescription.LoadDescription(arialPath).FontNameInvariantCulture;
+            var localName = TypefaceFixtures.FromFile(arialPath).FullName;
 
             var html = $@"<!DOCTYPE html>
 <html><head><style>
@@ -322,7 +321,7 @@ body {{ font-family: 'TestWoff', serif; font-size: 14pt; }}
         public async Task WoffFont_ViaAddFontFromStream_IsUsableInPdf()
         {
             var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
-            var familyName = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var familyName = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var woffBytes = WrapTtfAsWoff(ttfBytes);
 
@@ -376,8 +375,7 @@ body {{ font-family: 'TestWoff2', serif; font-size: 14pt; }}
         public async Task Woff2Font_ViaAddFontFromStream_IsUsableInPdf()
         {
             var woff2Bytes = File.ReadAllBytes(BundledFonts.Woff2);
-            var openTypeBytes = Woff2Converter.Convert(woff2Bytes);
-            var familyName = TtfFontDescription.LoadDescription(new MemoryStream(openTypeBytes)).FontFamilyInvariantCulture;
+            var familyName = TypefaceFixtures.FamilyNameOf(woff2Bytes);
 
             var generator = new PdfGenerator();
             using var woff2Stream = new MemoryStream(woff2Bytes);

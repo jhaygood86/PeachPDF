@@ -1,4 +1,4 @@
-#nullable disable
+﻿#nullable disable
 
 using System;
 using System.Collections;
@@ -217,12 +217,11 @@ namespace PeachPDF.CSS
 
         /// <summary>
         /// Resolves legacy property-name aliases to the canonical longhand name stored in
-        /// <see cref="Declarations"/>. A <c>word-wrap</c> declaration is constructed as an
-        /// <c>OverflowWrapProperty</c>, whose own name is necessarily <c>overflow-wrap</c>; CSSOM reads,
-        /// priority changes, and removals through either spelling must therefore address that same slot.
+        /// <see cref="Declarations"/>. A <c>word-wrap</c> or <c>-webkit-box-shadow</c> declaration is constructed
+        /// as its standard property, whose own name is necessarily the standard one; CSSOM reads, priority changes,
+        /// and removals through either spelling must therefore address that same slot.
         /// </summary>
-        private static string CanonicalLonghandName(string name) =>
-            name.Isi(PropertyNames.WordWrap) ? PropertyNames.OverflowWrap : name;
+        private static string CanonicalLonghandName(string name) => VendorPropertyAliases.Canonicalize(name);
 
         internal void SetProperty(Property property)
         {
@@ -1720,6 +1719,12 @@ namespace PeachPDF.CSS
         {
             get => GetPropertyValue(PropertyNames.Width);
             set => SetPropertyValue(PropertyNames.Width, value);
+        }
+
+        public string LineBreak
+        {
+            get => GetPropertyValue(PropertyNames.LineBreak);
+            set => SetPropertyValue(PropertyNames.LineBreak, value);
         }
 
         public string WordBreak

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
@@ -43,14 +43,14 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="IsOuter">
         /// whether this contour bounds region (clockwise) rather than a hole in it (counter-clockwise)
         /// </param>
-        internal sealed record Contour(IReadOnlyList<RPoint> Points, bool IsOuter);
+        internal sealed record Contour(IReadOnlyList<PaintPoint> Points, bool IsOuter);
 
         /// <summary>
         /// The contours bounding the union of <paramref name="rects"/>. Empty rectangles contribute
         /// nothing. The result may hold several contours - disjoint pieces of the region, and holes
         /// enclosed by it.
         /// </summary>
-        internal static IReadOnlyList<Contour> Union(IReadOnlyList<RRect> rects)
+        internal static IReadOnlyList<Contour> Union(IReadOnlyList<Rect> rects)
         {
             var xs = GridLines(rects, horizontal: true);
             var ys = GridLines(rects, horizontal: false);
@@ -121,7 +121,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             var points = contour.Points;
             var count = points.Count;
-            var shrunk = new List<RPoint>(count);
+            var shrunk = new List<PaintPoint>(count);
 
             for (var i = 0; i < count; i++)
             {
@@ -132,7 +132,7 @@ namespace PeachPDF.Html.Core.Utils
                 var (inX, inY) = InwardNormal(previous, current);
                 var (outX, outY) = InwardNormal(current, next);
 
-                shrunk.Add(new RPoint(
+                shrunk.Add(new PaintPoint(
                     current.X + (inX + outX) * inset,
                     current.Y + (inY + outY) * inset));
             }
@@ -151,7 +151,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <paramref name="from"/>-&gt;<paramref name="to"/>: its direction rotated a quarter turn
         /// clockwise, which in this renderer's y-down space is the right-hand side of travel.
         /// </summary>
-        private static (double X, double Y) InwardNormal(RPoint from, RPoint to)
+        private static (double X, double Y) InwardNormal(PaintPoint from, PaintPoint to)
         {
             var dx = Math.Sign(to.X - from.X);
             var dy = Math.Sign(to.Y - from.Y);
@@ -163,7 +163,7 @@ namespace PeachPDF.Html.Core.Utils
         /// of axis-aligned rectangles can only change between covered and uncovered at one of these, so
         /// they are the complete set of grid lines the region needs.
         /// </summary>
-        private static List<double> GridLines(IReadOnlyList<RRect> rects, bool horizontal)
+        private static List<double> GridLines(IReadOnlyList<Rect> rects, bool horizontal)
         {
             var values = new List<double>(rects.Count * 2);
             foreach (var rect in rects)
@@ -212,14 +212,14 @@ namespace PeachPDF.Html.Core.Utils
             {
                 if (used[start]) continue;
 
-                var points = new List<RPoint>();
+                var points = new List<PaintPoint>();
                 var current = start;
 
                 while (!used[current])
                 {
                     used[current] = true;
                     var edge = edges[current];
-                    points.Add(new RPoint(xs[edge.FromX], ys[edge.FromY]));
+                    points.Add(new PaintPoint(xs[edge.FromX], ys[edge.FromY]));
 
                     var key = edge.ToY * stride + edge.ToX;
                     if (!outgoing.TryGetValue(key, out var candidates)) break;
@@ -314,12 +314,12 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Drops points that merely continue a straight run, so each remaining point is a real corner.
         /// </summary>
-        private static List<RPoint> MergeCollinear(List<RPoint> points)
+        private static List<PaintPoint> MergeCollinear(List<PaintPoint> points)
         {
             var count = points.Count;
             if (count < 3) return points;
 
-            var merged = new List<RPoint>(count);
+            var merged = new List<PaintPoint>(count);
             for (var i = 0; i < count; i++)
             {
                 var previous = points[(i - 1 + count) % count];
@@ -338,7 +338,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Whether <paramref name="points"/> runs clockwise - a positive shoelace sum in y-down space.
         /// </summary>
-        private static bool IsClockwise(List<RPoint> points)
+        private static bool IsClockwise(List<PaintPoint> points)
         {
             double sum = 0;
             for (var i = 0; i < points.Count; i++)

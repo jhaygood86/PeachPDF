@@ -1,7 +1,5 @@
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -49,7 +47,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 200));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 200));
             return g;
         }
 
@@ -75,8 +73,8 @@ namespace PeachPDF.Tests.Svg
             // A and B (both rotated) share the same cross-axis position: no dx separates them, and a
             // rotated glyph paints at exactly Px (PaintRotatedGlyph), unlike an upright glyph's
             // font-metric-dependent centering - so this holds regardless of which font resolves.
-            Assert.Equal(10, g.DrawStringCalls[1].Point.X);
-            Assert.Equal(10, g.DrawStringCalls[2].Point.X);
+            Assert.Equal(10, g.DrawStringCalls[1].PaintPoint.X);
+            Assert.Equal(10, g.DrawStringCalls[2].PaintPoint.X);
 
             // Per this repo's own painting-test convention, order matters, not just counts: each
             // rotated glyph's own push must immediately precede its draw and its own pop must
@@ -184,7 +182,7 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(2, g.DrawStringCalls.Count);
             // Both chunks share the same start (text-anchor:start, the default) so the second chunk's
             // own explicit y=150 - not an accumulated advance from the first - determines its position.
-            Assert.NotEqual(g.DrawStringCalls[0].Point.Y, g.DrawStringCalls[1].Point.Y);
+            Assert.NotEqual(g.DrawStringCalls[0].PaintPoint.Y, g.DrawStringCalls[1].PaintPoint.Y);
         }
 
         [Fact]
@@ -208,7 +206,7 @@ namespace PeachPDF.Tests.Svg
 
             var rune = System.Text.Rune.GetRuneAt(Upright, 0);
             var expectedStep = font.GetVerticalAdvance(rune);
-            var actualStep = g.DrawStringCalls[1].Point.Y - g.DrawStringCalls[0].Point.Y;
+            var actualStep = g.DrawStringCalls[1].PaintPoint.Y - g.DrawStringCalls[0].PaintPoint.Y;
 
             Assert.Equal(expectedStep, actualStep, precision: 6);
         }
@@ -217,7 +215,7 @@ namespace PeachPDF.Tests.Svg
         public async Task Upright_ClipsEachGlyphToItsOwnCell_WhenFontHasVerticalMetrics()
         {
             // A real vmtx advance is routinely narrower than the font's own line height (see
-            // FragmentPainter.Text.cs's PaintUprightVerticalRun remarks) - RGraphics.DrawString still
+            // FragmentPainter.Text.cs's PaintUprightVerticalRun remarks) - Canvas.DrawString still
             // paints across that full line-height span regardless, so without confining each glyph's
             // paint to its own reserved cell, consecutive glyphs bleed into each other. Verifies the
             // push/pop clip actually brackets the draw call (order, not just count, per this repo's own
@@ -262,10 +260,10 @@ namespace PeachPDF.Tests.Svg
             // GlyphInfo.Py isn't exposed to this test the way CssRect.Top is to the HTML-side
             // equivalent.
             var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
-            var numGlyphs = FontFileData.GetOrCreateFrom(plainBytes).Fontface.maxp.numGlyphs;
-            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
-            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
-            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+            var numGlyphs = (ushort)SyntheticFontTables.GlyphCount(plainBytes);
+            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "vhea", SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
+            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, "vmtx", SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
+            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgBytes))
                 await Adapter.AddFont(vorgStream, "OtfVorgTest");
@@ -283,7 +281,7 @@ namespace PeachPDF.Tests.Svg
             var plainDraw = plainG.DrawStringCalls[0];
             Assert.False(plainDraw.Font.HasVerticalOrigin);
 
-            Assert.Equal(plainDraw.Point.Y + expectedShift, draw.Point.Y, precision: 6);
+            Assert.Equal(plainDraw.PaintPoint.Y + expectedShift, draw.PaintPoint.Y, precision: 6);
         }
 
         [Fact]
@@ -294,7 +292,7 @@ namespace PeachPDF.Tests.Svg
             // byte-for-byte identically to the plain no-VORG case (issue #770's already-shipped
             // behavior), not merely "no crash."
             var plainBytes = File.ReadAllBytes(BundledFonts.Cjk);
-            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgBytes))
                 await Adapter.AddFont(vorgStream, "CjkVorgIgnoredTest");
@@ -307,8 +305,8 @@ namespace PeachPDF.Tests.Svg
             var plain = Render($"""<text x="10" y="50" font-size="20" font-family="CjkPlainForIgnoreCompare" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
             var plainDraw = Assert.Single(plain.DrawStringCalls);
 
-            Assert.Equal(plainDraw.Point.Y, withVorgDraw.Point.Y, precision: 6);
-            Assert.Equal(plainDraw.Point.X, withVorgDraw.Point.X, precision: 6);
+            Assert.Equal(plainDraw.PaintPoint.Y, withVorgDraw.PaintPoint.Y, precision: 6);
+            Assert.Equal(plainDraw.PaintPoint.X, withVorgDraw.PaintPoint.X, precision: 6);
         }
 
         [Fact]
@@ -318,13 +316,13 @@ namespace PeachPDF.Tests.Svg
             // computed OriginYOffset *inside* the HasVerticalMetrics branch, so a font with a real VORG
             // table but no vhea/vmtx (unlike the fixture above, which synthesizes both) silently got no
             // origin shift at all - HasVerticalOrigin and HasVerticalMetrics are independent capability
-            // flags (see RFont's own remarks) and must be checked independently. BundledFonts.Otf (CFF)
+            // flags (see Font's own remarks) and must be checked independently. BundledFonts.Otf (CFF)
             // has neither vhea nor vmtx natively, so appending only a synthetic VORG table (no vhea/vmtx)
             // exercises exactly that combination. This also covers PaintUprightGlyph's clip gate, which
             // the same review pass found needed extending from HasVerticalMetrics alone to
             // "HasVerticalMetrics || HasVerticalOrigin" - without it, this glyph would paint unclipped.
             var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
-            var vorgOnlyBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+            var vorgOnlyBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgOnlyBytes))
                 await Adapter.AddFont(vorgStream, "OtfVorgOnlyTest");
@@ -347,7 +345,7 @@ namespace PeachPDF.Tests.Svg
             var plainDraw = plainG.DrawStringCalls[0];
             Assert.False(plainDraw.Font.HasVerticalOrigin);
 
-            Assert.Equal(plainDraw.Point.Y + expectedShift, draw.Point.Y, precision: 6);
+            Assert.Equal(plainDraw.PaintPoint.Y + expectedShift, draw.PaintPoint.Y, precision: 6);
         }
 
         [Fact]
@@ -363,7 +361,7 @@ namespace PeachPDF.Tests.Svg
             // exact sign isn't asserted here since it depends on this environment's resolved font metrics
             // (see this file's own remarks on why exact positions otherwise aren't asserted), only that
             // the shift actually applies.
-            Assert.NotEqual(startAnchored.DrawStringCalls[0].Point.Y, endAnchored.DrawStringCalls[0].Point.Y);
+            Assert.NotEqual(startAnchored.DrawStringCalls[0].PaintPoint.Y, endAnchored.DrawStringCalls[0].PaintPoint.Y);
         }
     }
 }

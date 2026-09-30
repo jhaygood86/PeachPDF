@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
@@ -22,7 +22,7 @@ namespace PeachPDF.Svg
     /// </summary>
     internal sealed class SvgDocument
     {
-        public RRect? ViewBox { get; set; }
+        public Rect? ViewBox { get; set; }
 
         /// <summary>The root <c>&lt;svg&gt;</c> element's own <c>width</c>/<c>height</c>, if present (see <see cref="SvgValueParsers.ParseLength"/>).</summary>
         public double? Width { get; set; }

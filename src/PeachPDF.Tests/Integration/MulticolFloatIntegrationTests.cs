@@ -112,10 +112,10 @@ namespace PeachPDF.Tests.Integration
             // Word counts per row are compared with each other, not with fixed numbers: how many words fit a
             // row depends on the font's metrics, so the counts are related to each other.
             static List<int> WordsPerRow(IEnumerable<TestRecordingGraphics.DrawStringCall> words) =>
-                words.GroupBy(w => Math.Round(w.Point.Y)).OrderBy(r => r.Key).Select(r => r.Count()).ToList();
+                words.GroupBy(w => Math.Round(w.PaintPoint.Y)).OrderBy(r => r.Key).Select(r => r.Count()).ToList();
 
-            var inSecondColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.Point.X >= SecondColumnLeft - 0.5));
-            var inFirstColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.Point.X < SecondColumnLeft - 0.5));
+            var inSecondColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.PaintPoint.X >= SecondColumnLeft - 0.5));
+            var inFirstColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.PaintPoint.X < SecondColumnLeft - 0.5));
 
             // Column 2's rows are all as wide as a column allows: the ones at the float's height hold as many
             // words as the ones below it, and more than one each - a scan that tests only the block axis
@@ -144,8 +144,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(8, g.DrawStringCalls.Count);
             var f1 = FindById(root, "f1")!;
             Assert.Equal(ContainerLeft, f1.Location.X, 2);
-            Assert.All(g.DrawStringCalls.Where(w => w.Point.Y < f1.ActualBottom),
-                w => Assert.True(w.Point.X >= f1.ActualRight - 0.01, $"'{w.Text}' at {w.Point.X} overlaps the float"));
+            Assert.All(g.DrawStringCalls.Where(w => w.PaintPoint.Y < f1.ActualBottom),
+                w => Assert.True(w.PaintPoint.X >= f1.ActualRight - 0.01, $"'{w.Text}' at {w.PaintPoint.X} overlaps the float"));
         }
 
         [Fact]
@@ -173,8 +173,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(container.FragmentTree.Fragmentainers);
 
             // Both columns are used: the text does not sit in one column that runs off the page.
-            Assert.Contains(g.DrawStringCalls, c => c.Point.X >= SecondColumnLeft - 0.01);
-            Assert.Contains(g.DrawStringCalls, c => c.Text.Trim().StartsWith('w') && c.Point.X < SecondColumnLeft - 0.01);
+            Assert.Contains(g.DrawStringCalls, c => c.PaintPoint.X >= SecondColumnLeft - 0.01);
+            Assert.Contains(g.DrawStringCalls, c => c.Text.Trim().StartsWith('w') && c.PaintPoint.X < SecondColumnLeft - 0.01);
         }
 
         [Fact]
@@ -186,7 +186,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, root, g);
 
-            var rect = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => r.Color.R == 255 && r.Color.G == 0);
+            var rect = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => r.PaintColor.R == 255 && r.PaintColor.G == 0);
             Assert.Equal(f1.Location.X, rect.X, 2);
             Assert.Equal(f1.Location.Y, rect.Y, 2);
             Assert.Equal(22.5, rect.Width, 2);
@@ -225,8 +225,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             Assert.NotEmpty(g.DrawStringCalls);
-            Assert.All(g.DrawStringCalls.Where(w => w.Point.Y < before.ActualBottom),
-                w => Assert.True(w.Point.X >= before.ActualRight - 0.01, $"'{w.Text}' at {w.Point.X} is under the float"));
+            Assert.All(g.DrawStringCalls.Where(w => w.PaintPoint.Y < before.ActualBottom),
+                w => Assert.True(w.PaintPoint.X >= before.ActualRight - 0.01, $"'{w.Text}' at {w.PaintPoint.X} is under the float"));
         }
 
         [Fact]

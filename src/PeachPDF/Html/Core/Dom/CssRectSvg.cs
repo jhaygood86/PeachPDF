@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Dom
     /// <summary>
     /// Represents a word inside an inline box for an SVG element - the replaced-element counterpart of
     /// <see cref="CssRectImage"/>, sized from an <c>SvgDocument</c>'s intrinsic size instead of a
-    /// raster <see cref="Adapters.RImage"/>'s pixel size.
+    /// raster <see cref="PeachDrawing.Core.Image"/>'s pixel size.
     /// </summary>
     internal sealed class CssRectSvg : CssRect
     {

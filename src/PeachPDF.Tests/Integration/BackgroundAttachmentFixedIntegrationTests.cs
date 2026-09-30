@@ -1,6 +1,6 @@
 using PeachPDF;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -60,7 +60,7 @@ namespace PeachPDF.Tests.Integration
             // HtmlContainerInt.PageClipOverride - the per-slot window PdfGenerator.AddPdfPages sets
             // before painting each page, already used the same way by FragmentPainter's own PushClip
             // and PdfGenerator.HandleLinks - over the single, page-independent PageBoxRect. Isolated at
-            // the RGraphics boundary (RecordingGraphics.DrawnImageRects), not by parsing PDF content
+            // the Canvas boundary (RecordingGraphics.DrawnImageRects), not by parsing PDF content
             // streams: PageClipOverride is set directly, sidestepping PdfGenerator.AddPdfPages' own
             // per-page paint-time translate entirely, since that translate is a separate, orthogonal
             // mechanism (correcting WHERE the whole page's content lands physically) from this ("what
@@ -78,13 +78,13 @@ namespace PeachPDF.Tests.Integration
             // but a genuinely smaller window, as a `:first`/margin-overridden page's own content band
             // could be - must be what "100% 100%" resolves against instead: (0, 0, 200, 200) puts the
             // far corner at (200, 200), so the image's top-left lands at (190, 190).
-            var withOverride = await PaintFixedBackground(pageClipOverride: new RRect(0, 0, 200, 200));
+            var withOverride = await PaintFixedBackground(pageClipOverride: new Rect(0, 0, 200, 200));
             Assert.Single(withOverride.DrawnImageRects);
             Assert.Equal(190, withOverride.DrawnImageRects[0].X, 0.01);
             Assert.Equal(190, withOverride.DrawnImageRects[0].Y, 0.01);
         }
 
-        private static async Task<RecordingGraphics> PaintFixedBackground(RRect? pageClipOverride)
+        private static async Task<RecordingGraphics> PaintFixedBackground(Rect? pageClipOverride)
         {
             var html = "<!DOCTYPE html><html><body>"
                 + "<div id='bg' style=\"width:20pt;height:20pt;"
@@ -96,9 +96,9 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            container.PageSize = new RSize(500, 500);
-            container.Location = new RPoint(0, 0);
-            container.MaxSize = new RSize(500, 0);
+            container.PageSize = new Size(500, 500);
+            container.Location = new PaintPoint(0, 0);
+            container.MaxSize = new Size(500, 0);
 
             var measure = XGraphics.CreateMeasureContext(new XSize(500, 500), XGraphicsUnit.Point, XPageDirection.Downwards);
             using (var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0))

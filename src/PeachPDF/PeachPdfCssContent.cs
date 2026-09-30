@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 
@@ -14,9 +14,9 @@ namespace PeachPDF
     public class PeachPdfCssContent
     {
         private readonly CssData _cssData;
-        private readonly RAdapter _adapter;
+        private readonly RenderContext _adapter;
 
-        internal PeachPdfCssContent(CssData cssData, RAdapter adapter)
+        internal PeachPdfCssContent(CssData cssData, RenderContext adapter)
         {
             _cssData = cssData;
             _adapter = adapter;

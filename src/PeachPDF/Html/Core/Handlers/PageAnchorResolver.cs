@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Resolves a true-point rect (see <see cref="HtmlContainer.GetElementRectangle"/>, or a live
-        /// <see cref="Dom.CssBox"/> rect converted via <see cref="Utilities.Utils.Convert(Html.Adapters.Entities.RRect, double)"/>) to the PDF
+        /// <see cref="Dom.CssBox"/> rect converted via <see cref="Utilities.Utils.Convert(PeachDrawing.Core.Rect, double)"/>) to the PDF
         /// page it lands on and its true-point Y offset on that page - <paramref name="ppp"/> converts
         /// it back to the internal pixel space <paramref name="inner"/>'s slot geometry operates in,
         /// mirroring how the rest of this pass round-trips point-space rects for slot attribution. A

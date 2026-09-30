@@ -1,5 +1,5 @@
 ﻿using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -495,7 +495,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Where the header repeated on <paramref name="slot"/> sits in that fragmentainer's own space.
         /// </summary>
-        private static RRect HeaderOn(HtmlContainerInt container, int slot)
+        private static Rect HeaderOn(HtmlContainerInt container, int slot)
         {
             var word = Flatten(container.FragmentTree!.Fragmentainers.Single(f => f.SlotIndex == slot).Root)
                 .SelectMany(f => f.Words)

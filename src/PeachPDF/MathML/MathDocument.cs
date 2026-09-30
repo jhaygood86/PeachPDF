@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {
@@ -28,7 +28,7 @@ namespace PeachPDF.MathML
         /// which both matches how real math fonts are actually authored/used and keeps every structural
         /// measurement (fraction bars, radicals, stretchy variants) anchored to one MATH table.
         /// </summary>
-        public required System.Func<double, RFont> ResolveFont { get; init; }
+        public required System.Func<double, Font> ResolveFont { get; init; }
 
         /// <summary>The root element's font, for the root-relative units (<c>rem</c>/<c>rex</c>/<c>rch</c>/...).
         /// Null when the formula was not built from a live HTML box, which takes each unit's spec fallback.</summary>

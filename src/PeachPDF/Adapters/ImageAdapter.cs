@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Adapters
@@ -18,7 +18,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for WinForms Image object for core.
     /// </summary>
-    internal sealed class ImageAdapter : RImage
+    internal sealed class ImageAdapter : Image
     {
         /// <summary>
         /// the underline win-forms image.
@@ -75,5 +75,13 @@ namespace PeachPDF.Adapters
         {
             _image.Dispose();
         }
+
+        /// <summary>
+        /// Decodes via <see cref="ImageDecodeCache"/> - a decode-once-per-image cache reached through the
+        /// backend-agnostic <see cref="Image.GetPixels"/>. Null for an <see cref="XForm"/> tile (no pixels
+        /// to decode) or a source with no RGB rendition (a CMYK image PeachPDF embeds by pass-through - see
+        /// <c>PeachImageSource</c>'s own remarks).
+        /// </summary>
+        public override PixelBuffer? GetPixels() => ImageDecodeCache.Get(_image);
     }
 }

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -204,7 +204,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, cols, g);
 
             var rules = g.Log.OfType<TestRecordingGraphics.DrawLineCall>()
-                .Where(l => l.Color == RColor.FromArgb(10, 20, 30));
+                .Where(l => l.PaintColor == PaintColor.FromArgb(10, 20, 30));
 
             Assert.Equal(expectedRules, rules.Count());
         }
@@ -250,7 +250,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, cols, g);
 
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawLineCall>(),
-                l => l.Color == RColor.FromArgb(10, 20, 30));
+                l => l.PaintColor == PaintColor.FromArgb(10, 20, 30));
         }
     }
 }

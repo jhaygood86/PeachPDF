@@ -125,7 +125,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void RFont_DefaultUnderlinePosition_IsZero()
         {
-            // The base RFont default - every RFont except the OpenType-descriptor-backed FontAdapter
+            // The base Font default - every Font except the OpenType-descriptor-backed FontAdapter
             // gets this (the same "plain default, real metric only from the real adapter" pattern
             // UnderlineThickness already uses).
             Assert.Equal(0, new TestFont(20).UnderlinePosition);

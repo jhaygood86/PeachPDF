@@ -126,7 +126,7 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static async Task<(PeachPDF.Html.Core.Dom.CssBox Span, PeachPDF.Html.Adapters.Entities.RRect Rect, TestRecordingGraphics Graphics)>
+        private static async Task<(PeachPDF.Html.Core.Dom.CssBox Span, PeachDrawing.Core.Rect Rect, TestRecordingGraphics Graphics)>
             PaintAsync(string writingMode, string decoration)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(Wrap(

@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         {
             var container = new HtmlContainerInt(new PdfSharpAdapter())
             {
-                PageSize = new RSize(500, bandHeight),
+                PageSize = new Size(500, bandHeight),
                 MarginTop = MarginTop,
             };
 
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         private static CssBox CreateBox(HtmlContainerInt container, double locationY)
         {
             var box = new CssBox(null, null) { HtmlContainer = container };
-            box.Location = new RPoint(0, locationY);
+            box.Location = new PaintPoint(0, locationY);
             return box;
         }
 

@@ -14,8 +14,7 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -34,7 +33,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for PdfSharp library platform.
     /// </summary>
-    internal sealed class PdfSharpAdapter : RAdapter
+    internal sealed class PdfSharpAdapter : RenderContext
     {
         /// <summary>The fonts this adapter renders with: the installed fonts plus everything registered on it.</summary>
         private readonly FontSet _fontSet;
@@ -143,7 +142,7 @@ namespace PeachPDF.Adapters
         /// Fonts here are built at <c>size / PixelsPerPoint</c> points (see <c>CreateFontInt</c>), so
         /// <see cref="PixelsPerPoint"/> is part of a cached font's identity.
         /// </summary>
-        internal override double LayoutUnitsPerPoint => PixelsPerPoint;
+        public override double LayoutUnitsPerPoint => PixelsPerPoint;
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
@@ -184,29 +183,37 @@ namespace PeachPDF.Adapters
             return mediaTypesAvailable.Contains("print") ? "print" : "all";
         }
 
+        /// <summary>
+        /// Every PeachPDF-driven canvas (the PDF one, and the raster fallback) shares PeachPDF's own SVG
+        /// engine through <see cref="SvgGlyphPainter"/> - the only <see cref="RenderContext"/> in this
+        /// codebase with one to offer.
+        /// </summary>
+        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new SvgGlyphPainter(host, this);
+
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
-            await AddFont(stream, fontFamilyName, weightOverride: null, isItalicOverride: null, stretchOverride: null);
+            await AddFont(stream, fontFamilyName, default);
         }
 
-        internal async Task AddFont(Stream stream, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        internal async Task AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
-            AddFont(memoryStream.ToArray(), fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+            AddFont(memoryStream.ToArray(), fontFamilyName, descriptors, unicodeRanges);
         }
 
-        private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges)
+        private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges)
         {
             // The font set recognises WOFF/WOFF2/TrueType/OpenType by content and reads the family name from the
             // file when the caller gave none.
             var family = _fontSet.AddData(data, new AddOptions
             {
                 FamilyName = fontFamilyName,
-                Weight = weightOverride,
-                IsItalic = isItalicOverride,
-                Width = stretchOverride,
+                WeightRange = descriptors.Weight,
+                IsItalic = descriptors.IsItalic,
+                WidthRange = descriptors.Width,
+                ObliqueRange = descriptors.Oblique,
                 UnicodeRanges = unicodeRanges
             });
 
@@ -245,140 +252,64 @@ namespace PeachPDF.Adapters
             }
         }
 
-        protected override RColor GetColorInt(string colorName)
+        protected override PaintColor GetColorInt(string colorName)
         {
             return Enum.TryParse<KnownColor>(colorName, true, out var knownColor)
-                ? Utils.Convert(Color.FromKnownColor(knownColor))
-                : RColor.Empty;
+                ? Utils.Convert(System.Drawing.Color.FromKnownColor(knownColor))
+                : PaintColor.Empty;
         }
 
-        protected override RPen CreatePen(RColor color)
-        {
-            return new PenAdapter(new XPen(Utils.Convert(color)));
-        }
-
-        protected override RPen CreatePen(RBrush brush)
-        {
-            return new PenAdapter(new XPen(((BrushAdapter)brush).Brush));
-        }
-
-        protected override RBrush CreateSolidBrush(RColor color)
-        {
-            XBrush solidBrush;
-            if (color == RColor.White)
-                solidBrush = XBrushes.White;
-            else if (color == RColor.Black)
-                solidBrush = XBrushes.Black;
-            else if (color.A < 1)
-                solidBrush = XBrushes.Transparent;
-            else
-                solidBrush = new XSolidBrush(Utils.Convert(color));
-
-            return new BrushAdapter(solidBrush);
-        }
-
-        protected override RBrush CreateLinearGradientBrush(RRect rect, RColor color1, RColor color2, double angle)
-        {
-            RejectMixedColorSpaceGradientStops(color1, color2);
-
-            var mode = angle switch
-            {
-                < 45 => XLinearGradientMode.ForwardDiagonal,
-                < 90 => XLinearGradientMode.Vertical,
-                < 135 => XLinearGradientMode.BackwardDiagonal,
-                _ => XLinearGradientMode.Horizontal
-            };
-
-            return new BrushAdapter(new XLinearGradientBrush(Utils.Convert(rect, PixelsPerPoint), Utils.Convert(color1), Utils.Convert(color2), mode));
-        }
-
-        protected override RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false)
-        {
-            RejectMixedColorSpaceGradientStops(stops.Select(s => s.Color));
-
-            var xp1 = new XPoint(p1.X / PixelsPerPoint, p1.Y / PixelsPerPoint);
-            var xp2 = new XPoint(p2.X / PixelsPerPoint, p2.Y / PixelsPerPoint);
-            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
-            var positions = stops.Select(s => s.Position).ToArray();
-            return new BrushAdapter(new XLinearGradientBrush(xp1, xp2, colors, positions) { IsRepeating = isRepeating });
-        }
-
-        protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
-        {
-            RejectMixedColorSpaceGradientStops(stops.Select(s => s.Color));
-
-            var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
-            var rxPt = radiusX / PixelsPerPoint;
-            var ryPt = radiusY / PixelsPerPoint;
-            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
-            var positions = stops.Select(s => s.Position).ToArray();
-            var xFocal = focalCenter is { } f ? new XPoint(f.X / PixelsPerPoint, f.Y / PixelsPerPoint) : (XPoint?)null;
-            return new BrushAdapter(new XRadialGradientBrush(xCenter, rxPt, ryPt, colors, positions, xFocal) { IsRepeating = isRepeating });
-        }
-
-        /// <summary>
-        /// Rejects a gradient whose stops mix <c>device-cmyk()</c> with RGB-authored colors, rather than
-        /// silently corrupting the shading dictionary <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/>
-        /// writes: a shading's <c>/ColorSpace</c> is one value for the whole object, and every stop's
-        /// <c>/C0</c>/<c>/C1</c> component count must agree with it - a mixed-space stop list has no single
-        /// component count that fits every stop. An all-CMYK or all-RGB stop list has no such conflict:
-        /// <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/> resolves its <c>/ColorSpace</c> per
-        /// -shading from the stops it's actually given (see <c>PdfShading.ResolveShadingColorMode</c>), not
-        /// from the document's own <see cref="PeachPDF.PdfSharpCore.Pdf.PdfDocumentOptions.ColorMode"/>, so
-        /// same-space CMYK gradients interpolate directly in C/M/Y/K space exactly like an all-RGB gradient
-        /// interpolates in RGB space. Mixing the two spaces in one gradient has no defined conversion (no
-        /// naive RGB&lt;-&gt;CMYK approximation is computed anywhere in this project) and stays rejected.
-        /// </summary>
-        private static void RejectMixedColorSpaceGradientStops(IEnumerable<RColor> colors)
-        {
-            var list = colors as IReadOnlyCollection<RColor> ?? colors.ToList();
-            if (list.Any(c => c.IsCmyk) && list.Any(c => !c.IsCmyk))
-            {
-                throw new NotSupportedException(
-                    "A gradient cannot mix device-cmyk() stops with RGB-authored stops - there is no defined " +
-                    "conversion between the two color spaces. A gradient whose stops are all device-cmyk() " +
-                    "(or all RGB-authored) is fully supported.");
-            }
-        }
-
-        private static void RejectMixedColorSpaceGradientStops(params RColor[] colors) => RejectMixedColorSpaceGradientStops((IEnumerable<RColor>)colors);
-
-        protected override RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
-        {
-            RejectMixedColorSpaceGradientStops(colors);
-
-            var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
-            var rPt = outerRadius / PixelsPerPoint;
-            var xColors = colors.Select(Utils.Convert).ToArray();
-            return new BrushAdapter(new XConicGradientBrush(xCenter, rPt, xColors, anglesRad));
-        }
-
-        protected override RImage ImageFromStreamInt(Stream memoryStream)
+        protected override Image ImageFromStreamInt(Stream memoryStream)
         {
             return new ImageAdapter(XImage.FromStream(() => memoryStream));
         }
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
+        protected override Font CreateFontInt(string family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus);
+            return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
+        protected override Font CreateFontInt(FontFamily family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus);
+            return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus)
+        private FontAdapter MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
-            var match = _fontSet.MatchOrFallback(family, new TypefaceQuery(weight, stretch, isItalic));
+            var match = _fontSet.MatchOrFallback(family, QueryFor(weight, stretch, isItalic, null, size, obliqueSkewSinus, variations));
+            return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
+        }
+
+        /// <summary>
+        /// The query a face is matched with. The weight, the width as a percentage of the normal width and the oblique angle of the box
+        /// select the face among those of a family and set a variable face's weight, width and slant axes; the axis settings of
+        /// <c>font-variation-settings</c> and the automatic optical size (for a font of <paramref name="size"/> in layout units) come after
+        /// and win. <see cref="FontVariationSettingsResolver.ToAxes"/> is CSS <c>font-variation-settings</c>
+        /// syntax resolution, genuinely specific to this HTML/CSS-facing adapter; everything else about
+        /// building the query from these primitives is shared with every backend that creates fonts this way
+        /// (<see cref="TypefaceQuery.From"/>).
+        /// </summary>
+        private TypefaceQuery QueryFor(double weight, double stretch, bool isItalic, System.Text.Rune? mustCover, double size, double? obliqueSkewSinus, string? variations) =>
+            TypefaceQuery.From(weight, stretch, isItalic, mustCover,
+                FontVariationSettingsResolver.ToAxes(variations, size / PixelsPerPoint / PeachPDF.CSS.Length.PointsPerPx),
+                obliqueSkewSinus);
+
+        private FontAdapter CreateFontAdapter(double size, XFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
+        {
+            // A face with a slant axis draws the oblique itself, so the renderer must not shear it as well.
+            if (obliqueSkewSinus is not null && match.Typeface.Axes.Any(a => a.Tag == AxisTags.Slant))
+            {
+                obliqueSkewSinus = null;
+            }
+
             var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
@@ -386,16 +317,15 @@ namespace PeachPDF.Adapters
             // A null here tells the caller to try the next family in the stack: never build an XFont for a family
             // that can't render this codepoint.
             if (!_fontSet.TryFindFamily(family, out var typefaceFamily)
-                || !typefaceFamily.TryMatch(new TypefaceQuery(weight, stretch, isItalic, codepoint), out var match))
+                || !typefaceFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
             {
                 return null;
             }
 
-            var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
-            return new FontAdapter(xFont, PixelsPerPoint);
+            return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
         }
 
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation)
+        protected override Font? CreateSystemFallbackFontForCodepointInt(double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
         {
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;
@@ -405,11 +335,10 @@ namespace PeachPDF.Adapters
 
             try
             {
-                if (!fallbackFamily.TryMatch(new TypefaceQuery(weight, stretch, isItalic, codepoint), out var match))
+                if (!fallbackFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
                     return null;
 
-                var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
-                return new FontAdapter(xFont, PixelsPerPoint);
+                return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
             }
             catch
             {
@@ -425,7 +354,7 @@ namespace PeachPDF.Adapters
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
-        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             // A missing format() hint is valid CSS (it's an optional hint, not a requirement) and must
             // still be attempted - real-world stylesheets (e.g. css4.pub's Icelandic dictionary page)
@@ -436,18 +365,18 @@ namespace PeachPDF.Adapters
             // should still be skipped.
             if (format is null or "truetype" or "woff" or "woff2" or "opentype")
             {
-                await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                await AddFont(stream, fontFamilyName, descriptors, unicodeRanges);
                 return true;
             }
 
             return false;
         }
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             if (!_fontSet.TryGetFontData(localFontFaceName, out var data)) return Task.FromResult(false);
 
-            AddFont(data, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+            AddFont(data, fontFamilyName, descriptors, unicodeRanges);
 
             return Task.FromResult(true);
         }

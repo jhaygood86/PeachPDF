@@ -1,8 +1,6 @@
 using PeachDrawing.Text;
-using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -30,7 +28,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing.Pdf
             return match.Typeface;
         }
 
-        private static Dictionary<int, XColor> Overrides(params (int Entry, XColor Color)[] entries)
+        private static Dictionary<int, XColor> Overrides(params (int Entry, XColor PaintColor)[] entries)
         {
             var map = new Dictionary<int, XColor>();
             foreach ((int entry, XColor color) in entries)

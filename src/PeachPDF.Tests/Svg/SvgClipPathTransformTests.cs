@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -24,18 +24,18 @@ namespace PeachPDF.Tests.Svg
 
         /// <summary>Builds the document, renders it, and returns the points of the single clip path
         /// pushed for the one clipped element in the fixture.</summary>
-        private static RPoint[] RenderAndCaptureClip(string markup)
+        private static PaintPoint[] RenderAndCaptureClip(string markup)
         {
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
 
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 100, 100));
 
             var clip = Assert.Single(g.ClipPaths);
             return clip.Points.ToArray();
         }
 
-        private static (double MinX, double MinY, double MaxX, double MaxY) Bounds(RPoint[] points)
+        private static (double MinX, double MinY, double MaxX, double MaxY) Bounds(PaintPoint[] points)
         {
             Assert.NotEmpty(points);
             return (points.Min(p => p.X), points.Min(p => p.Y), points.Max(p => p.X), points.Max(p => p.Y));
