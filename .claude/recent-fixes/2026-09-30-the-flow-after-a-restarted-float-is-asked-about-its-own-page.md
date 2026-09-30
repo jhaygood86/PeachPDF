@@ -35,8 +35,8 @@ column's own band. See
   without pagination.
 - Documents that lose words for other reasons change too when the content after a float shifts by a line, and
   can then meet a defect that was not reachable before: a straddling line in an unbreakable `overflow: scroll`
-  box ([the scroll container gap](../accepted-gaps/auto-height-scroll-container-in-a-flex-grid-item-column-or-with-an-absolute-box-stays-unbreakable.md)),
-  an absolute box in a multi-column container. They were already losing words.
+  box (#1528, [the scroll container gap](../accepted-gaps/auto-height-scroll-container-in-a-flex-grid-item-column-or-with-an-absolute-box-stays-unbreakable.md)),
+  the last line of an absolute box in a multi-column container (#1537). They were already losing words.
 - `PEACHPDF_TRACE_PAINT=1` (Debug builds only) prints a line per word the painter visits, with its page,
   rectangle and how much of it the page clip leaves. It is how this was found: a word painted but cut by the
   clip does not show in text extraction. `HtmlContainerInt.ClipReport` lists only the words that were drawn and
