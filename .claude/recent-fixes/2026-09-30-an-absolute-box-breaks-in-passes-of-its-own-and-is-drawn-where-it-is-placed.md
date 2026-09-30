@@ -78,10 +78,11 @@ them, 28,952 words, printed through Chrome.
   The 250 ordinary documents are unchanged.
 - The 5 documents that `main` draws completely and this change does not lose 1, 21, 5, 3 and 2 words. In each of
   them, removing the absolute boxes makes `main` lose exactly the same words, so the loss is a bug of `main`'s that
-  the misplaced content hid, not one of this change. Two are filed: two floats that leave no room between them
-  ([#1531](https://github.com/jhaygood86/PeachPDF/issues/1531)) and a multi-column container that starts with less
-  than a line of room left on the page ([#1532](https://github.com/jhaygood86/PeachPDF/issues/1532)). The other three
-  (columns with an `overflow` box; a float beside a table; columns, flex and a table) are not reduced.
+  the misplaced content hid, not one of this change. Four are reduced and filed: two floats that leave no room
+  between them ([#1531](https://github.com/jhaygood86/PeachPDF/issues/1531)), a multi-column container that starts at
+  the foot of the page (two documents, [#1532](https://github.com/jhaygood86/PeachPDF/issues/1532)) and a paragraph
+  beside a float that follows a table ([#1533](https://github.com/jhaygood86/PeachPDF/issues/1533)). The fifth, columns
+  with an `overflow` box, is not reduced.
 - Timings, fastest of three, on a 217-page ordinary document and a 237-page one with cards, floats and
   `flow-root` boxes: 83.3s to 86.8s and 141.1s to 140.0s. A document with one absolute badge in a
   `position: relative` parent per paragraph, 2,600 paragraphs, takes 129s on `main` (273 pages, 56 too many) and
