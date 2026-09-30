@@ -202,7 +202,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, _) = await LayoutHarness.LayoutAsync("<style>p{margin:0}</style>alpha bravo");
 
-            Assert.True(DomUtils.ContainsInlinesOnly(DomUtils.GetBoxByTagName(root, "body")));
+            Assert.True(DomUtils.ContainsInlinesOnly(DomUtils.GetBoxByTagName(root, "body")!));
         }
 
         [Fact]
