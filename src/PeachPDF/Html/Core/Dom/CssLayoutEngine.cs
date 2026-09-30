@@ -3263,6 +3263,7 @@ namespace PeachPDF.Html.Core.Dom
                 Right = limitRight,
                 Top = startY,
                 MaxBottom = startY,
+                MarginTop = box.ActualMarginTop,
                 MarginLeft = box.ActualMarginLeft,
                 MarginRight = box.ActualMarginRight,
                 ReferenceWidth = box.ActualBoxSizingWidth

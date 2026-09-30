@@ -1734,7 +1734,7 @@ namespace PeachPDF.Html.Core.Utils
             if (!targetBox.IsFloated) return false;
 
             // vertical conflict
-            if (!(coordinates.Top < targetBox.ActualBottom) || !(targetBox.Location.Y <= coordinates.Top)) return false;
+            if (!(coordinates.OuterTop < targetBox.ActualBottom) || !(targetBox.Location.Y <= coordinates.OuterTop)) return false;
 
             var targetRight = targetBox.ActualRight + targetBox.ActualMarginRight;
             var targetLeft = targetBox.Location.X - targetBox.ActualMarginLeft;
