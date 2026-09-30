@@ -10,9 +10,8 @@ container's internal breaks and the page clip cut through whatever line fell on 
 A scroll container is now monolithic when it has a definite logical height or maximum logical height
 (`HasConstrainedLogicalHeight`, which reads a percentage that cannot resolve as automatic and uses the width
 in a vertical writing mode), when an engine other than block flow lays it out
-(`IsLaidOutByAnEngineThatCannotContinueIt`: a flex or grid item, or a box inside a multi-column container), or
-when it holds an absolutely positioned box that renders (`HoldsAnAbsolutelyPositionedBox`). Everything else,
-an auto-height overflow box in ordinary block flow, breaks like any other block.
+(`IsLaidOutByAnEngineThatCannotContinueIt`: a flex or grid item, or a box inside a multi-column container).
+Everything else, an auto-height overflow box in ordinary block flow, breaks like any other block.
 
 CSS Fragmentation 3 4.1 lets a user agent treat `overflow: auto`/`scroll` as monolithic, but `overflow: hidden`
 only with a non-auto logical height and no specified maximum. The rule here is deliberately narrower than
@@ -45,15 +44,9 @@ unmet, which css-break-3 4.3 allows as a last resort. A reduced form of the cras
   combinations, three multi-column shapes, and the classification).
 - The same first version let `overflow: hidden` with a `max-height` break, which dropped the paragraph after
   the box at all 10 break positions tried. That box stays whole again.
-- A `position: relative; overflow: hidden` wrapper holding an absolute box lost that box's words when the
-  wrapper straddled a page edge (6 and 3 words at lead paragraphs of 60 and 75 words; 30 and 45 were fine).
-  Making every positioned wrapper monolithic fixed that but also put the reported document back to its old
-  output, so the condition looks at descendants. A wrapper with no `position` of its own lost the same words
-  when its absolute descendant was placed against an ancestor above it, so the wrapper's own `position` is not
-  part of the condition either, and a `display: none` absolute box does not count (it renders nothing).
-  Scanning the subtree on every layout pass cost 7 to 27% on a 6,000-block wrapper (a long document re-enters
-  the wrapper on every page), so the answer is cached on the box (`CssBox.HoldsAbsolutelyPositionedBox`):
-  7.59 s against 7.61 s on upstream for the static wrapper, 7.52 s against 7.52 s for the positioned one.
+- A wrapper holding an absolute box lost that box's words when the wrapper straddled a page edge and was
+  allowed to break, so for a while it stayed whole. That exception is gone since an absolute box runs as passes
+  of its own (see [the later entry](2026-09-30-an-absolute-box-breaks-in-passes-of-its-own-and-is-drawn-where-it-is-placed.md)).
 - Auto-height `overflow: hidden` and `scroll` boxes in block flow now split across pages the way Chrome does
   (5 | 13 | 12 words in the probe document, where before one word was lost at a page edge).
 - The page content of every showcase that existed before this change was byte-identical to the previous tree,

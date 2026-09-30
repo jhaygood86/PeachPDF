@@ -4066,13 +4066,6 @@ namespace PeachPDF.Html.Core.Dom
         internal string? HeightBeforeItemPin { get; set; }
 
         /// <summary>
-        /// Whether this box's subtree holds an absolutely positioned box that renders, as
-        /// <see cref="Fragmentation.MonolithicContent"/> asks it on every layout pass. It depends only on the
-        /// style of boxes that exist before layout begins, so it is worked out once.
-        /// </summary>
-        internal bool? HoldsAbsolutelyPositionedBox { get; set; }
-
-        /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
         /// measuring its words, applying <c>string-set</c>, resolving its used page name, and taking any
         /// forced break that falls before it.
