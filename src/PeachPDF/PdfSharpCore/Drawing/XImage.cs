@@ -30,8 +30,8 @@
 #nullable disable warnings
 
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
+using PeachPDF.Adapters;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.Raster;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -263,7 +263,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal bool IsGrayscale => _source.IsGrayscale;
 
         /// <summary>
-        /// True for an image produced by the raster backend (see <c>RGraphics.DrawRaster</c>), whose pixel
+        /// True for an image produced by the raster backend (see <c>Canvas.DrawRaster</c>), whose pixel
         /// dimensions were chosen on purpose to give a stated physical resolution. The PDF embedder must
         /// keep such an image at its own size: <see cref="PdfImageTable"/> would otherwise resample it down
         /// to its on-page display size and discard exactly the resolution the raster was rendered at.

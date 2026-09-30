@@ -2,7 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -393,7 +393,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.Equal("currentcolor", box.BorderTopColor, ignoreCase: true);
             // ...and the used value is still the box's own color, since no border-style makes it bevelled.
-            Assert.Equal(RColor.FromArgb(10, 20, 30), box.ActualBorderTopColor);
+            Assert.Equal(PaintColor.FromArgb(10, 20, 30), box.ActualBorderTopColor);
         }
 
         [Fact]

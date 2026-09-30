@@ -83,7 +83,7 @@ namespace PeachPDF.Tests.Html.Core
 
             var size = new XSize(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = new PeachPDF.Html.Adapters.Entities.RSize(595, 0);
+            container.MaxSize = new PeachDrawing.Core.Size(595, 0);
 
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);

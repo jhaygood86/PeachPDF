@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Integration
     public class AbsolutelyPositionedInInlineContentTests
     {
         private const double Origin = 20;
-        private static readonly RColor Ring = RColor.FromArgb(217, 74, 74);
+        private static readonly PaintColor Ring = PaintColor.FromArgb(217, 74, 74);
 
         [Fact]
         public async Task AbsolutelyPositionedChild_DoesNotEndTheLineItSitsOn()
@@ -809,9 +809,9 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static bool IsRing(object e) =>
-            e is TestRecordingGraphics.DrawPathCall { Stroked: false } p && p.Color == Ring
-            || e is TestRecordingGraphics.DrawRectCall r && r.Color == Ring
-            || e is TestRecordingGraphics.DrawPolygonCall q && q.Color == Ring;
+            e is TestRecordingGraphics.DrawPathCall { Stroked: false } p && p.PaintColor == Ring
+            || e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == Ring
+            || e is TestRecordingGraphics.DrawPolygonCall q && q.PaintColor == Ring;
 
         [Fact]
         public async Task InlineSplitAroundABlock_KeepsItsOutlineOnEveryPiece()

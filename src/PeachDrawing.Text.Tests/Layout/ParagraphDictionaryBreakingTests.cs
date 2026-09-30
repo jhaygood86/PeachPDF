@@ -5,7 +5,7 @@ using PeachPDF.Tests.TestSupport;
 namespace PeachDrawing.Text.Tests.Layout
 {
     /// <summary>
-    /// A paragraph of Thai or Khmer wraps at the words the dictionary finds. The font gives every character (a mark or a
+    /// A paragraph of Thai, Lao, Khmer or Burmese wraps at the words the dictionary finds. The font gives every character (a mark or a
     /// vowel sign included) an advance of one em, so a width in whole ems says how many characters a line holds.
     /// </summary>
     public class ParagraphDictionaryBreakingTests
@@ -49,10 +49,15 @@ namespace PeachDrawing.Text.Tests.Layout
         }
 
         [Fact]
-        public void LaoAndBurmese_HaveNoWordListYet_AndStayWhole()
+        public void Lao_WrapsAtWords()
         {
-            Assert.Equal(["ຂ້ອຍຮັກພາສາລາວ"], Lines("ຂ້ອຍຮັກພາສາລາວ", 4));
-            Assert.Equal(["ကျွန်တော်မြန်မာစာကိုချစ်တယ်"], Lines("ကျွန်တော်မြန်မာစာကိုချစ်တယ်", 6));
+            Assert.Equal(["ຂ້ອຍ", "ຮັກ", "ພາສາ", "ລາວ"], Lines("ຂ້ອຍຮັກພາສາລາວ", 4));
+        }
+
+        [Fact]
+        public void Burmese_WrapsAtWords()
+        {
+            Assert.Equal(["ကျွန်တော်", "မြန်မာ", "စာကို", "ချစ်", "တယ်"], Lines("ကျွန်တော်မြန်မာစာကိုချစ်တယ်", 6));
         }
 
         [Fact]

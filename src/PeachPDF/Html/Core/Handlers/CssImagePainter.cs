@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -17,7 +16,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Paints one CSS image layer. Gradient types get a brush that is passed to <paramref name="drawBrush"/>
         /// (or, when a real <c>background-size</c> makes the layer smaller/larger than the box, get rendered
-        /// once into a <see cref="RGraphics.CreateTile"/> tile and then positioned/repeated exactly like a
+        /// once into a <see cref="Canvas.CreateTile"/> tile and then positioned/repeated exactly like a
         /// url() image); URL images are drawn directly via <see cref="BackgroundImageDrawHandler"/>.
         /// <para>
         /// A layer is painted over whatever positioning area it is handed, with no notion of which of a
@@ -50,19 +49,19 @@ namespace PeachPDF.Html.Core.Handlers
         /// </para>
         /// </summary>
         public static void Paint(
-            RGraphics g,
+            Canvas g,
             CssImage image,
             int layerIndex,
-            RRect originRect,
-            RRect clipRect,
-            RGraphicsPath? roundedClipPath,
+            Rect originRect,
+            Rect clipRect,
+            GraphicsPath? roundedClipPath,
             string positionList,
             string sizeList,
             string repeatList,
             string attachmentList,
-            RRect viewportRect,
+            Rect viewportRect,
             CssBox box,
-            Action<RBrush> drawBrush,
+            Action<Brush> drawBrush,
             double? gradientEmSizePt = null)
         {
             var attachmentValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(attachmentList), layerIndex);
@@ -108,12 +107,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// so it gets positioned and repeated exactly like a url() image.
         /// </summary>
         private static void PaintGradientLayer(
-            RGraphics g,
-            RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
+            Canvas g,
+            Rect originRect, Rect clipRect, GraphicsPath? roundedClipPath,
             int layerIndex, string sizeList, string positionList, string repeatList,
             CssBox box,
-            Func<RGraphics, RRect, RBrush> createBrush,
-            Action<RBrush> drawBrush)
+            Func<Canvas, Rect, Brush> createBrush,
+            Action<Brush> drawBrush)
         {
             var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
             var (tileWidth, tileHeight) = BackgroundLayerResolver.ResolveSize(
@@ -139,7 +138,7 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            var tileRect = new RRect(0, 0, tileWidth, tileHeight);
+            var tileRect = new Rect(0, 0, tileWidth, tileHeight);
             using (var tileBrush = createBrush(t.Graphics, tileRect))
             {
                 t.Graphics.DrawRectangle(tileBrush, 0, 0, tileWidth, tileHeight);
@@ -158,16 +157,16 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Renders a <c>url()</c> SVG source once into a <see cref="RGraphics.CreateTile"/> tile sized to the
+        /// Renders a <c>url()</c> SVG source once into a <see cref="Canvas.CreateTile"/> tile sized to the
         /// resolved <c>background-size</c>/<c>list-style-image</c> layer size (using the SVG's own intrinsic
         /// width/height/ratio, via <see cref="SvgIntrinsicSize"/>, exactly as <see cref="Dom.CssBoxImage"/> does
         /// for <c>&lt;img src="x.svg"&gt;</c>), then hands the tile to <see cref="BackgroundImageDrawHandler"/>
         /// so it gets positioned/repeated exactly like a raster url() image - mirrors <see cref="PaintGradientLayer"/>.
         /// </summary>
         private static void PaintSvgLayer(
-            RGraphics g,
+            Canvas g,
             SvgDocument svgDocument,
-            int layerIndex, RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
+            int layerIndex, Rect originRect, Rect clipRect, GraphicsPath? roundedClipPath,
             string positionList, string sizeList, string repeatList,
             CssBox box)
         {
@@ -209,7 +208,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// into its own tile the same way a <c>background-image</c> gradient layer's tile is built above,
         /// without a second, independently-derived copy of this gradient-line/stop-normalization math.
         /// </summary>
-        internal static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect, CssBox box, double? emSizePt)
+        internal static Brush GetLinearGradientBrush(Canvas g, ParsedLinearGradient gradient, Rect originRect, CssBox box, double? emSizePt)
         {
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
@@ -220,10 +219,10 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>See <see cref="GetLinearGradientBrush"/>'s own doc comment - same reason, radial gradients.</summary>
-        internal static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect, CssBox box, double? emSizePt)
+        internal static Brush GetRadialGradientBrush(Canvas g, ParsedRadialGradient radialGradient, Rect originRect, CssBox box, double? emSizePt)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
-            var center = new RPoint(
+            var center = new PaintPoint(
                 originRect.X + radialGradient.CenterX * originRect.Width,
                 originRect.Y + radialGradient.CenterY * originRect.Height);
 
@@ -301,11 +300,11 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>See <see cref="GetLinearGradientBrush"/>'s own doc comment - same reason, conic gradients.</summary>
-        internal static RBrush GetConicGradientBrush(RGraphics g, ParsedConicGradient conicGradient, RRect originRect)
+        internal static Brush GetConicGradientBrush(Canvas g, ParsedConicGradient conicGradient, Rect originRect)
         {
             double cx = originRect.X + conicGradient.CenterX * originRect.Width;
             double cy = originRect.Y + conicGradient.CenterY * originRect.Height;
-            var conicCenter = new RPoint(cx, cy);
+            var conicCenter = new PaintPoint(cx, cy);
 
             double dxFar = Math.Max(conicGradient.CenterX * originRect.Width,
                                     (1.0 - conicGradient.CenterX) * originRect.Width);
@@ -317,15 +316,15 @@ namespace PeachPDF.Html.Core.Handlers
             return g.GetConicGradientBrush(conicCenter, outerRadius, conicColors, conicAngles);
         }
 
-        private static (RPoint p1, RPoint p2) ComputeGradientLine(RRect rect, double angleRad)
+        private static (PaintPoint p1, PaintPoint p2) ComputeGradientLine(Rect rect, double angleRad)
         {
             double dx = Math.Sin(angleRad);
             double dy = -Math.Cos(angleRad);
             double cx = rect.X + rect.Width / 2;
             double cy = rect.Y + rect.Height / 2;
             double halfLen = Math.Abs(dx) * rect.Width / 2 + Math.Abs(dy) * rect.Height / 2;
-            var p1 = new RPoint(cx - dx * halfLen, cy - dy * halfLen);
-            var p2 = new RPoint(cx + dx * halfLen, cy + dy * halfLen);
+            var p1 = new PaintPoint(cx - dx * halfLen, cy - dy * halfLen);
+            var p2 = new PaintPoint(cx + dx * halfLen, cy + dy * halfLen);
             return (p1, p2);
         }
 
@@ -414,18 +413,18 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private static RColor LerpColor(RColor a, RColor b, double t)
+        private static PaintColor LerpColor(PaintColor a, PaintColor b, double t)
         {
             t = Math.Clamp(t, 0.0, 1.0);
-            return RColor.FromArgb(
+            return PaintColor.FromArgb(
                 (int)Math.Round(a.A + t * (b.A - a.A)),
                 (int)Math.Round(a.R + t * (b.R - a.R)),
                 (int)Math.Round(a.G + t * (b.G - a.G)),
                 (int)Math.Round(a.B + t * (b.B - a.B)));
         }
 
-        private static (RColor Color, double Position)[] ApplyColorSpaceInterpolation(
-            (RColor Color, double Position)[] stops,
+        private static (PaintColor PaintColor, double Position)[] ApplyColorSpaceInterpolation(
+            (PaintColor PaintColor, double Position)[] stops,
             GradientColorSpace colorSpace,
             HueInterpolationMethod hueMethod)
         {
@@ -433,7 +432,7 @@ namespace PeachPDF.Html.Core.Handlers
                 return stops;
 
             const int kSamples = 15;
-            var result = new List<(RColor, double)>(stops.Length * (kSamples + 1));
+            var result = new List<(PaintColor, double)>(stops.Length * (kSamples + 1));
             result.Add(stops[0]);
             for (int i = 1; i < stops.Length; i++)
             {
@@ -450,8 +449,8 @@ namespace PeachPDF.Html.Core.Handlers
             return result.ToArray();
         }
 
-        private static (RColor[] Colors, double[] AnglesRad) ApplyConicColorSpaceInterpolation(
-            List<RColor> colors,
+        private static (PaintColor[] Colors, double[] AnglesRad) ApplyConicColorSpaceInterpolation(
+            List<PaintColor> colors,
             List<double> angles,
             GradientColorSpace colorSpace,
             HueInterpolationMethod hueMethod)
@@ -460,7 +459,7 @@ namespace PeachPDF.Html.Core.Handlers
                 return (colors.ToArray(), angles.ToArray());
 
             const int kSamples = 15;
-            var outC = new List<RColor>(colors.Count * (kSamples + 1));
+            var outC = new List<PaintColor>(colors.Count * (kSamples + 1));
             var outA = new List<double>(angles.Count * (kSamples + 1));
             outC.Add(colors[0]); outA.Add(angles[0]);
             for (int i = 1; i < colors.Count; i++)
@@ -502,7 +501,7 @@ namespace PeachPDF.Html.Core.Handlers
                 positions[n - 1] = max;
         }
 
-        internal static (RColor[] Colors, double[] AnglesRad) NormalizeConicStops(ParsedConicGradient g)
+        internal static (PaintColor[] Colors, double[] AnglesRad) NormalizeConicStops(ParsedConicGradient g)
         {
             const double TwoPi = 2.0 * Math.PI;
             var rawStops = g.Stops.Where(s => !s.IsHint).ToArray();
@@ -543,7 +542,7 @@ namespace PeachPDF.Html.Core.Handlers
                     pos[j] = pA + (pB - pA) * (j - runStart + 1) / count;
             }
 
-            var colors  = new List<RColor>();
+            var colors  = new List<PaintColor>();
             var angles  = new List<double>();
             int colorIdx = 0;
 
@@ -551,15 +550,15 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 if (!g.Stops[i].IsHint)
                 {
-                    colors.Add(rawStops[colorIdx].Color!.Value);
+                    colors.Add(rawStops[colorIdx].PaintColor!.Value);
                     angles.Add(g.FromAngleRad + pos[colorIdx]);
                     colorIdx++;
                 }
                 else
                 {
                     if (colorIdx == 0 || colorIdx >= n) continue;
-                    var s1Color = rawStops[colorIdx - 1].Color!.Value;
-                    var s2Color = rawStops[colorIdx].Color!.Value;
+                    var s1Color = rawStops[colorIdx - 1].PaintColor!.Value;
+                    var s2Color = rawStops[colorIdx].PaintColor!.Value;
                     double p1 = pos[colorIdx - 1], p2 = pos[colorIdx];
                     double range = p2 - p1;
                     double hintPos = g.Stops[i].PositionRad ?? (p1 + range * 0.5);
@@ -581,7 +580,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (g.ColorSpace != GradientColorSpace.Srgb)
             {
                 var (csColors, csAngles) = ApplyConicColorSpaceInterpolation(colors, angles, g.ColorSpace, g.HueMethod);
-                colors = new List<RColor>(csColors);
+                colors = new List<PaintColor>(csColors);
                 angles = new List<double>(csAngles);
             }
 
@@ -592,7 +591,7 @@ namespace PeachPDF.Html.Core.Handlers
                 double tileLen   = tileEnd - tileStart;
                 if (tileLen > 1e-6 && tileLen < TwoPi - 1e-6)
                 {
-                    var allC = new List<RColor>();
+                    var allC = new List<PaintColor>();
                     var allA = new List<double>();
                     int kMin = (int)Math.Floor((g.FromAngleRad - tileEnd) / tileLen);
                     int kMax = (int)Math.Ceiling((g.FromAngleRad + TwoPi - tileStart) / tileLen);
@@ -624,7 +623,7 @@ namespace PeachPDF.Html.Core.Handlers
             return (colors.ToArray(), angles.ToArray());
         }
 
-        private static (RColor Color, double Position)[] ExpandRepeatingStops((RColor Color, double Position)[] stops)
+        private static (PaintColor PaintColor, double Position)[] ExpandRepeatingStops((PaintColor PaintColor, double Position)[] stops)
         {
             if (stops.Length < 2) return stops;
             double tileStart = stops[0].Position;
@@ -632,7 +631,7 @@ namespace PeachPDF.Html.Core.Handlers
             double tileLen   = tileEnd - tileStart;
             if (tileLen < 1e-6 || (tileStart <= 0.0 && tileEnd >= 1.0)) return stops;
             const double eps = 0.0001;
-            var result = new List<(RColor Color, double Position)>();
+            var result = new List<(PaintColor PaintColor, double Position)>();
             int kMin = (int)Math.Floor(-tileEnd / tileLen);
             int kMax = (int)Math.Ceiling((1.0 - tileStart) / tileLen);
             for (int k = kMin; k <= kMax; k++)
@@ -644,7 +643,7 @@ namespace PeachPDF.Html.Core.Handlers
                     bool isLastStop = i == stops.Length - 1;
                     double adjPos = isLastStop && k < kMax ? rawPos - eps : rawPos;
                     if (adjPos >= -eps && adjPos <= 1.0 + eps)
-                        result.Add((stops[i].Color, Math.Clamp(adjPos, 0.0, 1.0)));
+                        result.Add((stops[i].PaintColor, Math.Clamp(adjPos, 0.0, 1.0)));
                 }
             }
             result.Sort((a, b) => a.Position.CompareTo(b.Position));
@@ -656,7 +655,7 @@ namespace PeachPDF.Html.Core.Handlers
             return result.ToArray();
         }
 
-        private static RColor SampleRepeatingColor((RColor Color, double Position)[] stops, double tileStart, double tileLen, double pos)
+        private static PaintColor SampleRepeatingColor((PaintColor PaintColor, double Position)[] stops, double tileStart, double tileLen, double pos)
         {
             double relPos = (pos - tileStart) % tileLen;
             if (relPos < 0) relPos += tileLen;
@@ -667,14 +666,14 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     double range = stops[i + 1].Position - stops[i].Position;
                     double t = range > 1e-12 ? (absWithinTile - stops[i].Position) / range : 0.0;
-                    return LerpColor(stops[i].Color, stops[i + 1].Color, t);
+                    return LerpColor(stops[i].PaintColor, stops[i + 1].PaintColor, t);
                 }
             }
-            return absWithinTile <= stops[0].Position ? stops[0].Color : stops[^1].Color;
+            return absWithinTile <= stops[0].Position ? stops[0].PaintColor : stops[^1].PaintColor;
         }
 
-        private static (RColor Color, double Position)[] NormalizeGradientStops(
-            (RColor? Color, Length? Position, bool IsHint)[] stops,
+        private static (PaintColor PaintColor, double Position)[] NormalizeGradientStops(
+            (PaintColor? PaintColor, Length? Position, bool IsHint)[] stops,
             double gradientLength,
             CssBox box,
             double pixelsPerPoint,
@@ -684,7 +683,7 @@ namespace PeachPDF.Html.Core.Handlers
         {
             var colorStops = stops.Where(s => !s.IsHint).ToArray();
             int n = colorStops.Length;
-            if (n == 0) return Array.Empty<(RColor, double)>();
+            if (n == 0) return Array.Empty<(PaintColor, double)>();
 
             var rawPos = new double?[n];
             for (int i = 0; i < n; i++)
@@ -692,18 +691,18 @@ namespace PeachPDF.Html.Core.Handlers
 
             ClampStopPositionsToRunningMaximum(rawPos, 1.0);
 
-            var resolved = new (RColor Color, double Position)[n];
+            var resolved = new (PaintColor PaintColor, double Position)[n];
             double first = rawPos[0] ?? 0.0;
             double last  = rawPos[n - 1] ?? 1.0;
-            resolved[0]     = (colorStops[0].Color!.Value, first);
-            resolved[n - 1] = (colorStops[n - 1].Color!.Value, last);
+            resolved[0]     = (colorStops[0].PaintColor!.Value, first);
+            resolved[n - 1] = (colorStops[n - 1].PaintColor!.Value, last);
 
             int runStart = -1;
             for (int i = 1; i < n - 1; i++)
             {
                 if (rawPos[i].HasValue)
                 {
-                    resolved[i] = (colorStops[i].Color!.Value, rawPos[i]!.Value);
+                    resolved[i] = (colorStops[i].PaintColor!.Value, rawPos[i]!.Value);
                     if (runStart >= 0)
                     {
                         double posA = resolved[runStart - 1].Position;
@@ -712,7 +711,7 @@ namespace PeachPDF.Html.Core.Handlers
                         for (int j = runStart; j < i; j++)
                         {
                             double t = (double)(j - runStart + 1) / count;
-                            resolved[j] = (colorStops[j].Color!.Value, posA + t * (posB - posA));
+                            resolved[j] = (colorStops[j].PaintColor!.Value, posA + t * (posB - posA));
                         }
                         runStart = -1;
                     }
@@ -720,7 +719,7 @@ namespace PeachPDF.Html.Core.Handlers
                 else
                 {
                     if (runStart < 0) runStart = i;
-                    resolved[i] = (colorStops[i].Color!.Value, 0);
+                    resolved[i] = (colorStops[i].PaintColor!.Value, 0);
                 }
             }
             if (runStart >= 0)
@@ -731,14 +730,14 @@ namespace PeachPDF.Html.Core.Handlers
                 for (int j = runStart; j < n - 1; j++)
                 {
                     double t = (double)(j - runStart + 1) / count;
-                    resolved[j] = (colorStops[j].Color!.Value, posA + t * (posB - posA));
+                    resolved[j] = (colorStops[j].PaintColor!.Value, posA + t * (posB - posA));
                 }
             }
 
             if (!stops.Any(s => s.IsHint))
                 return ApplyColorSpaceInterpolation(resolved, colorSpace, hueMethod);
 
-            var result = new List<(RColor Color, double Position)>();
+            var result = new List<(PaintColor PaintColor, double Position)>();
             int colorIdx = 0;
             for (int i = 0; i < stops.Length; i++)
             {
@@ -763,7 +762,7 @@ namespace PeachPDF.Html.Core.Handlers
                     {
                         double t       = (double)k / (kSteps + 1);
                         double curved  = Math.Pow(t, logHalf / logH);
-                        result.Add((LerpColor(s1.Color, s2.Color, curved), s1.Position + t * range));
+                        result.Add((LerpColor(s1.PaintColor, s2.PaintColor, curved), s1.Position + t * range));
                     }
                 }
             }

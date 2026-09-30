@@ -1,9 +1,9 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Parse;
+using PeachDrawing;
 using System;
 using System.Collections.Generic;
 
@@ -41,7 +41,7 @@ namespace PeachPDF.Html.Core.Paint
         /// transform or clip already pushed onto <paramref name="g"/> for this box applies to the bitmap's placement
         /// automatically, just as it does to a tile.
         /// </remarks>
-        private bool PaintRasterized(RGraphics g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
+        private bool PaintRasterized(Canvas g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
         {
             var box = fragment.Box;
 
@@ -84,7 +84,7 @@ namespace PeachPDF.Html.Core.Paint
             using (builder?.OpenArtifact(g))
             {
                 var mode = ToRBlendMode(box.ActualMixBlendMode);
-                if (mode == RBlendMode.Normal)
+                if (mode == PaintBlendMode.Normal)
                 {
                     g.DrawRaster(scope.Surface);
                 }
@@ -111,7 +111,7 @@ namespace PeachPDF.Html.Core.Paint
         /// region inside a raster region: the outermost one supplies the text). Text inside SVG, MathML and other replaced content is
         /// not supplied - only the CSS box tree's own text is.
         /// </remarks>
-        private void PaintSelectableText(RGraphics g, BoxFragment fragment)
+        private void PaintSelectableText(Canvas g, BoxFragment fragment)
         {
             if (g.IsOffscreenTile)
                 return;
@@ -132,7 +132,7 @@ namespace PeachPDF.Html.Core.Paint
         /// The union of everything <paramref name="fragment"/> and its descendants paint, or null when nothing has an extent. Fragments in
         /// <paramref name="excluded"/> (the other planes of a 3D rendering context) and their subtrees are left out.
         /// </summary>
-        private static RRect? SubtreeExtent(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
+        private static Rect? SubtreeExtent(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
         {
             var union = new ExtentUnion();
             union.Add(fragment.WholeBoxRect);
@@ -166,7 +166,7 @@ namespace PeachPDF.Html.Core.Paint
             private double _left, _top, _right, _bottom;
             private bool _any;
 
-            public void Add(RRect rect)
+            public void Add(Rect rect)
             {
                 // A box that draws nothing of its own (an anonymous text box: its words carry the rectangles) reports a degenerate rectangle
                 // at the origin, which would drag the union there.
@@ -185,7 +185,7 @@ namespace PeachPDF.Html.Core.Paint
                 _bottom = Math.Max(_bottom, rect.Bottom);
             }
 
-            public readonly RRect? ToRect() => _any ? new RRect(_left, _top, _right - _left, _bottom - _top) : null;
+            public readonly Rect? ToRect() => _any ? new Rect(_left, _top, _right - _left, _bottom - _top) : null;
         }
 
         /// <summary>
@@ -288,23 +288,23 @@ namespace PeachPDF.Html.Core.Paint
             return bleed;
         }
 
-        private static RRect Union(RRect a, RRect b)
+        private static Rect Union(Rect a, Rect b)
         {
             var left = Math.Min(a.Left, b.Left);
             var top = Math.Min(a.Top, b.Top);
-            return new RRect(left, top, Math.Max(a.Right, b.Right) - left, Math.Max(a.Bottom, b.Bottom) - top);
+            return new Rect(left, top, Math.Max(a.Right, b.Right) - left, Math.Max(a.Bottom, b.Bottom) - top);
         }
 
-        private static RRect Inflate(RRect rect, double amount) =>
+        private static Rect Inflate(Rect rect, double amount) =>
             new(rect.X - amount, rect.Y - amount, rect.Width + 2 * amount, rect.Height + 2 * amount);
 
-        private static RRect Intersect(RRect a, RRect b)
+        private static Rect Intersect(Rect a, Rect b)
         {
             var left = Math.Max(a.Left, b.Left);
             var top = Math.Max(a.Top, b.Top);
             var right = Math.Min(a.Right, b.Right);
             var bottom = Math.Min(a.Bottom, b.Bottom);
-            return right <= left || bottom <= top ? RRect.Empty : new RRect(left, top, right - left, bottom - top);
+            return right <= left || bottom <= top ? Rect.Empty : new Rect(left, top, right - left, bottom - top);
         }
     }
 }

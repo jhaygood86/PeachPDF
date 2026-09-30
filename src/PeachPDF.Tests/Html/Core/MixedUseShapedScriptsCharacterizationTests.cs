@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using System;
 using System.IO;
 using System.Linq;
@@ -100,6 +101,77 @@ p {{ width: 400px; }}
             Assert.Null(latinWord.EffectiveUseCategories);
             Assert.NotEqual("beng", latinWord.ScriptTag);
             Assert.NotNull(bengaliWord.EffectiveUseCategories);
+        }
+
+        private const string KhmerKa = "ក";
+        private const string KhmerCoeng = "្";
+        private const string KhmerRo = "រ";
+
+        [Fact]
+        public async Task EndToEndLayout_DevanagariAndKhmerInTheSameParagraph_EachResolvesItsOwnCategoryKind()
+        {
+            // Khmer is shaped by a genuinely different model from the Universal Shaping Engine (see
+            // KhmerCategory's own remarks) - CssBox.UseCategories and CssBox.KhmerCategories are two
+            // separate paragraph-wide allocations, each sliced independently onto every contributing
+            // box, including a word whose own script is the *other* one. A paragraph mixing the two
+            // exercises both allocations - and both "does this word's own span actually contain a
+            // non-inert category" guards (ToRuneIndexedUseCategories/ToRuneIndexedKhmerCategories) -
+            // at once, the same way EndToEndLayout_DevanagariAndBengaliInTheSameParagraph does for two
+            // scripts that share one allocation.
+            var words = await LayoutAllWords($@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'DevaTest'; src: url('data:font/truetype;base64,{B64(BundledFonts.Devanagari)}') format('truetype'); }}
+@font-face {{ font-family: 'KhmerTest'; src: url('data:font/truetype;base64,{B64(BundledFonts.Khmer)}') format('truetype'); }}
+body {{ font-family: 'DevaTest', 'KhmerTest'; font-size: 14pt; }}
+p {{ width: 400px; }}
+</style></head>
+<body><p>{DevanagariKa}{DevanagariVowelSignI} {KhmerKa}{KhmerCoeng}{KhmerRo}</p></body>
+</html>");
+
+            var devanagariWord = words.First(w => w.Text == $"{DevanagariKa}{DevanagariVowelSignI}");
+            var khmerWord = words.First(w => w.Text == $"{KhmerKa}{KhmerCoeng}{KhmerRo}");
+
+            Assert.Equal("deva", devanagariWord.ScriptTag);
+            Assert.NotNull(devanagariWord.EffectiveUseCategories);
+            Assert.Null(devanagariWord.EffectiveKhmerCategories);
+
+            Assert.Equal("khmr", khmerWord.ScriptTag);
+            Assert.NotNull(khmerWord.EffectiveKhmerCategories);
+            Assert.Null(khmerWord.EffectiveUseCategories);
+        }
+
+        [Fact]
+        public async Task WordCarryingBothUseAndKhmerCategories_NeverForwardsBothAtOnce()
+        {
+            // CssBox.AppendWordsFromText has no dedicated script-boundary word split (its own remarks
+            // give exactly this shape of example - a script change with no adjacent whitespace stays
+            // inside one CssRectWord), so gluing a USE-shaped script directly against Khmer with no
+            // separating boundary can, in principle, resolve a single word's own
+            // EffectiveUseCategories AND EffectiveKhmerCategories both non-null (in practice this also
+            // needs both scripts' codepoints to resolve to the *same* font - a real end-to-end HTML
+            // reproduction is confounded by NeedsPerCodepointFont's own, entirely separate, per-codepoint
+            // font-fallback word split, which already splits the two scripts apart whenever - as for
+            // every bundled test font here - they need different fonts; that pre-existing split is not
+            // what this test is about). Forwarding both into one ShapeSettings would run ApplyUseShaping
+            // then ApplyKhmerShaping back-to-back over the same glyph list, and ApplyUseShaping's own
+            // conjunct-formation stage can shrink the glyph count first - silently misaligning
+            // ApplyKhmerShaping's own category-to-glyph mapping. Regression test for the fix in
+            // CssBox.ResolveWordShapingFeatures: constructs the CssRectWord directly (bypassing whatever
+            // word-splitting behavior real layout would apply) so it carries both categories in the
+            // shape this method must still handle safely, and asserts at most one of
+            // UseCategories/KhmerCategories is ever forwarded.
+            var (root, _) = await LayoutHarness.LayoutAsync("<!DOCTYPE html><html><body><p>x</p></body></html>", pageWidth: 595, pageHeight: 842, margin: 0);
+            var box = LayoutHarness.Descendants(root).First(b => b.HtmlTag?.Name.Equals("p", StringComparison.OrdinalIgnoreCase) == true);
+
+            var gluedWord = new CssRectWord(box, "xy", false, false,
+                useCategories: [UseCategory.B, UseCategory.B],
+                khmerCategories: [KhmerCategory.C, KhmerCategory.C]);
+
+            // The underlying data may legitimately carry both (that's the whole point of this test) -
+            // what must never happen is both reaching GsubShaper at once.
+            var settings = box.ResolveWordShapingFeatures(gluedWord);
+            Assert.False(settings.UseCategories is { Count: > 0 } && settings.KhmerCategories is { Count: > 0 },
+                "ResolveWordShapingFeatures forwarded both UseCategories and KhmerCategories for the same word");
         }
     }
 }

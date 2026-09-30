@@ -14,8 +14,7 @@
 
 using PeachPDF;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Network;
@@ -35,7 +34,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// 
         /// </summary>
-        private readonly RAdapter _adapter;
+        private readonly RenderContext _adapter;
 
         /// <summary>
         /// Utility for value parsing.
@@ -50,7 +49,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Init.
         /// </summary>
-        public CssParser(RAdapter adapter, HtmlContainerInt? htmlContainer)
+        public CssParser(RenderContext adapter, HtmlContainerInt? htmlContainer)
         {
             ArgumentNullException.ThrowIfNull(adapter, "global");
 
@@ -76,7 +75,7 @@ namespace PeachPDF.Html.Core.Parse
             // adding the caller's rules here - or later via PeachPdfCssContent.AddStyleSheet - never
             // mutates the shared instance (which would leak those rules into other renders). This
             // mirrors the render path's clone-on-write (DomParser.CloneCssData).
-            var cssData = combineWithDefault ? (await _adapter.GetDefaultCssData()).Clone() : new CssData();
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_adapter)).Clone() : new CssData();
 
             if (!string.IsNullOrEmpty(stylesheet))
             {
@@ -93,7 +92,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
         {
-            var cssData = combineWithDefault ? (await _adapter.GetDefaultCssData()).Clone() : new CssData();
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_adapter)).Clone() : new CssData();
 
             if (!stylesheet.IsEmpty)
             {
@@ -151,7 +150,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <param name="colorStr">color string value to parse</param>
         /// <returns>color value</returns>
-        public RColor ParseColor(string colorStr)
+        public PaintColor ParseColor(string colorStr)
         {
             return _valueParser.GetActualColor(colorStr);
         }

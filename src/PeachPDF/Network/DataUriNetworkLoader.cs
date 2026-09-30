@@ -1,5 +1,6 @@
 ﻿#nullable enable
 
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
 using System.IO;

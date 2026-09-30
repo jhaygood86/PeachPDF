@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using System.Collections.Generic;
 
@@ -356,8 +357,27 @@ namespace PeachPDF
         public long MaxRasterPixels { get; set; } = 64_000_000;
 
         /// <summary>
+        /// Whether a bitmap PeachPDF rasterizes itself (see <see cref="RasterizationDpi"/>) is anti-aliased.
+        /// Defaults to <c>true</c>. This is a single, graphics-wide switch: it governs every pixel PeachPDF's
+        /// own raster backend writes for a document — shape fills and strokes, images, and any glyph fill
+        /// drawn while <see cref="TextHinting"/> routes text through the raster path — not text alone. Set to
+        /// <c>false</c> to threshold every pixel to fully transparent or fully opaque instead of the usual
+        /// smoothed, fractional-coverage edge.
+        /// </summary>
+        /// <remarks>
+        /// It affects only bitmaps PeachPDF renders itself: a CSS <c>filter:</c>-triggered region, a region
+        /// rendered opaque under <see cref="TransparencyPolicy.Flatten"/>, and glyph fills drawn while
+        /// <see cref="TextHinting"/> is not <see cref="PeachDrawing.Core.TextHinting.None"/>. It has no effect on the
+        /// PDF's own vector text and path content stream, which is not a bitmap at all - a PDF viewer (or a
+        /// rasterizer such as PDFium or MuPDF) anti-aliases that content on its own when displaying it,
+        /// independent of this setting. A document with no rasterized regions and no raster-hinted text is
+        /// byte-for-byte the same regardless of this value.
+        /// </remarks>
+        public bool RasterAntiAliasing { get; set; } = true;
+
+        /// <summary>
         /// Whether the text PeachPDF draws into a bitmap (see <see cref="RasterizationDpi"/>) is fitted to the pixel grid by the font's own
-        /// hinting. Defaults to <see cref="PeachPDF.TextHinting.None"/>, so output does not change unless it is asked for.
+        /// hinting. Defaults to <see cref="PeachDrawing.Core.TextHinting.None"/>, so output does not change unless it is asked for.
         /// </summary>
         /// <remarks>
         /// It helps text set small at a low <see cref="RasterizationDpi"/>, where pixels are big enough to see. It never affects the PDF's own
@@ -370,7 +390,7 @@ namespace PeachPDF
 
         /// <summary>
         /// Whether hinted text that PeachPDF draws into a bitmap is also made a little heavier at its stems, when its font has CFF outlines.
-        /// Defaults to <see langword="false"/>. It has an effect only where <see cref="TextHinting"/> is not <see cref="PeachPDF.TextHinting.None"/>.
+        /// Defaults to <see langword="false"/>. It has an effect only where <see cref="TextHinting"/> is not <see cref="PeachDrawing.Core.TextHinting.None"/>.
         /// </summary>
         /// <remarks>
         /// Thin stems of small text tend to look lighter than the designer intended once they are anti-aliased; this is the compensation of

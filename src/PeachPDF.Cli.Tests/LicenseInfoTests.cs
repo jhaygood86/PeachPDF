@@ -39,13 +39,23 @@ public class LicenseInfoTests
     }
 
     [Fact]
-    public void Credits_CarriesTheNoticesOfTheThaiAndKhmerWordLists()
+    public void Credits_CarriesTheNoticesOfTheThaiLaoKhmerAndBurmeseWordLists()
     {
         var text = LicenseInfo.Credits;
         Assert.Contains("ICU word lists", text);
         Assert.Contains("UNICODE LICENSE V3", text);
         Assert.Contains("Copyright (c) 2006-2015 International Business Machines Corporation", text);
         Assert.Contains("Copyright (c) 2011-2015 International Business Machines Corporation", text);
+        Assert.Contains("Brian Eugene Wilson, Robert Martin Campbell", text);
+        Assert.Contains("LeRoy Benjamin Sharon", text);
+    }
+
+    [Fact]
+    public void Credits_CarriesTheTextDataPackagesOwnThirdPartyNotices()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("Third-Party Licenses (PeachDrawing.Text.Data)", text);
+        Assert.Contains("Unicode Character Database", text);
     }
 
     [Fact]

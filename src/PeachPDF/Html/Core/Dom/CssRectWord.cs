@@ -65,6 +65,17 @@ namespace PeachPDF.Html.Core.Dom
         private readonly UseCategory[]? _logicalUseCategories;
 
         /// <summary>
+        /// This word's own resolved <see cref="KhmerCategory"/> per codepoint of <see cref="Text"/> (the
+        /// exact mirror of <see cref="_logicalUseCategories"/>'s own indexing convention) - null for a
+        /// word with no Khmer codepoint in it at all (the overwhelming common case - see
+        /// <see cref="CssBox.KhmerCategories"/>, this word's own slice of it). Set once at construction,
+        /// never mutated. Like <see cref="_logicalUseCategories"/>, Khmer text is never reversed for
+        /// display, so there is no analogous <see cref="DisplayOrderReversed"/> concern for this field
+        /// either.
+        /// </summary>
+        private readonly KhmerCategory[]? _logicalKhmerCategories;
+
+        /// <summary>
         /// Init.
         /// </summary>
         /// <param name="owner">the CSS box owner of the word</param>
@@ -74,8 +85,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="originalText">the pre-text-transform source text (see <see cref="CssRect.OriginalText"/>), if different from <paramref name="text"/></param>
         /// <param name="joiningForms">this word's own resolved joining forms in true logical order (see <see cref="_logicalJoiningForms"/>), if any</param>
         /// <param name="useCategories">this word's own resolved USE categories (see <see cref="_logicalUseCategories"/>), if any</param>
+        /// <param name="khmerCategories">this word's own resolved Khmer categories (see <see cref="_logicalKhmerCategories"/>), if any</param>
         public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter, string? originalText = null,
-            ArabicJoiningForm[]? joiningForms = null, UseCategory[]? useCategories = null)
+            ArabicJoiningForm[]? joiningForms = null, UseCategory[]? useCategories = null, KhmerCategory[]? khmerCategories = null)
             : base(owner)
         {
             _text = text;
@@ -85,6 +97,7 @@ namespace PeachPDF.Html.Core.Dom
             OriginalText = originalText ?? text;
             _logicalJoiningForms = joiningForms;
             _logicalUseCategories = useCategories;
+            _logicalKhmerCategories = khmerCategories;
         }
 
         /// <summary>This word's own resolved OpenType script tag (<c>OpenTypeTags</c>), or null
@@ -110,6 +123,10 @@ namespace PeachPDF.Html.Core.Dom
         /// null for a word with no codepoint in a USE-shaped script (Devanagari/Bengali/Gujarati/Tamil)
         /// in it.</summary>
         internal UseCategory[]? EffectiveUseCategories => _logicalUseCategories;
+
+        /// <summary>This word's resolved Khmer categories (see <see cref="_logicalKhmerCategories"/>) -
+        /// null for a word with no Khmer codepoint in it.</summary>
+        internal KhmerCategory[]? EffectiveKhmerCategories => _logicalKhmerCategories;
 
         /// <summary>
         /// Whether this word currently reads right-to-left on the page - set by
@@ -285,7 +302,8 @@ namespace PeachPDF.Html.Core.Dom
             var slice = new CssRectWord(OwnerBox, PreMirrorText.Substring(charStart, charLength), hasSpaceBefore,
                 hasSpaceAfter, originalText.Substring(charStart, charLength),
                 SliceRuneData(_logicalJoiningForms, runeStart, runeLength),
-                SliceRuneData(_logicalUseCategories, runeStart, runeLength))
+                SliceRuneData(_logicalUseCategories, runeStart, runeLength),
+                SliceRuneData(_logicalKhmerCategories, runeStart, runeLength))
             {
                 BidiLevel = BidiLevel,
                 FontSizeScale = FontSizeScale,

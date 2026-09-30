@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint.Content;
@@ -51,7 +51,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, FindById(root, "el")!, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColor.FromArgb(10, 20, 30));
+                r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
             Assert.Empty(g.DrawImageCalls);
             Assert.Empty(g.DrawStringCalls);
         }
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, FindById(root, "el")!, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColor.FromArgb(10, 20, 30));
+                r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────

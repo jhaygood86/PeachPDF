@@ -16,8 +16,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 
@@ -26,7 +25,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for WinForms Font object for core.
     /// </summary>
-    internal sealed class FontAdapter : RFont
+    internal sealed class FontAdapter : Font
     {
         /// <summary>
         /// the vertical offset of the font underline location from the top of the font.
@@ -68,7 +67,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// Init. Resolves <see cref="Height"/>/<see cref="Ascent"/>/<see cref="UnderlineOffset"/>
-        /// eagerly, right here, rather than lazily on this font's first <c>RGraphics.MeasureString</c>
+        /// eagerly, right here, rather than lazily on this font's first <c>Canvas.MeasureString</c>
         /// call (as a previous version of this constructor did): <paramref name="font"/>'s own descriptor/
         /// metrics are already fully resolved by the time <c>XFont</c>'s constructor returns
         /// (<c>XFont.Initialize</c> calls <c>InitializeFontMetrics</c> synchronously), so
@@ -128,7 +127,7 @@ namespace PeachPDF.Adapters
             // property, not here) - post.underlineThickness is occasionally 0 in a poorly-authored font
             // (no real stroke-width guidance), which would otherwise paint an invisible decoration line
             // under text-decoration-thickness: from-font; falling back to the engine's own pre-existing
-            // fixed thickness (RFont.UnderlineThickness's own default) is safer than a literal 0.
+            // fixed thickness (Font.UnderlineThickness's own default) is safer than a literal 0.
             _underlineThickness = metrics.UnderlineThickness > 0 ? ScaleUnits(metrics.UnderlineThickness) : 1d / pixelsPerPoint;
             // Unlike UnderlineThickness, 0 is a plausible authored value here (an underline sitting
             // exactly on the baseline) rather than an obvious authoring mistake, so it is not special-
@@ -144,6 +143,12 @@ namespace PeachPDF.Adapters
         private double PixelsPerPoint { get; set; }
 
         public override double Size => Font.Size;
+
+        public override Typeface Typeface => Font.Typeface;
+
+        public override SyntheticStyle SyntheticStyle => Font.Synthesis;
+
+        public override double? ObliqueSkewSinus => Font.ObliqueSkewSinus;
 
         public override double UnderlineOffset => Math.Round(_underlineOffset * PixelsPerPoint);
 
@@ -169,7 +174,7 @@ namespace PeachPDF.Adapters
         public override double LeftPadding => Height / 6f;
 
 
-        public override double GetWhitespaceWidth(RGraphics graphics)
+        public override double GetWhitespaceWidth(Canvas graphics)
         {
             if (_whitespaceWidth < 0)
             {
@@ -201,7 +206,7 @@ namespace PeachPDF.Adapters
 
         // ---- CPAL color-palette query surface --------------------------------------------------
         // Backed by the font's OpenTypeDescriptor.ColorPalette (the CPAL table). Null for a non-color font,
-        // in which case each member falls back to the RFont "no palettes" default.
+        // in which case each member falls back to the Font "no palettes" default.
 
         private ColorPalette? ColorPalette => Font.Typeface.ColorPalette;
 
@@ -213,15 +218,15 @@ namespace PeachPDF.Adapters
 
         public override int? FirstDarkPalette() => ColorPalette?.FirstDarkPalette();
 
-        public override bool TryGetPaletteColor(int paletteIndex, int entryIndex, out RColor color)
+        public override bool TryGetPaletteColor(int paletteIndex, int entryIndex, out PaintColor color)
         {
             if (ColorPalette is { } cpal && cpal.TryGetColor(paletteIndex, entryIndex, out var c))
             {
-                color = RColor.FromArgb(c.A, c.R, c.G, c.B);
+                color = PaintColor.FromArgb(c.A, c.R, c.G, c.B);
                 return true;
             }
 
-            color = RColor.Empty;
+            color = PaintColor.Empty;
             return false;
         }
 

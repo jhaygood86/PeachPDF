@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Network;
 
 namespace PeachPDF.Tests.Network

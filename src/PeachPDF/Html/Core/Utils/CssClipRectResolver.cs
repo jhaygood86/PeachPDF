@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using System.Collections.Generic;
@@ -11,11 +10,11 @@ namespace PeachPDF.Html.Core.Utils
     /// <summary>
     /// Layer B of the legacy CSS 2.1 <c>clip</c> pipeline (§11.1.2): resolves a <c>clip</c> value (already
     /// validated and preserved verbatim by <see cref="Converters.ShapeConverter"/> at parse time) into an
-    /// absolute-coordinate <see cref="RRect"/> the paint hook pushes directly via
-    /// <c>RGraphics.PushClip(RRect)</c>. Unlike <see cref="CssClipPathResolver"/>, no
-    /// <see cref="RGraphicsPath"/>/<c>PixelsPerPoint</c> division is needed here: <c>rect()</c> is always
-    /// axis-aligned, and <c>PushClip(RRect)</c> already divides by <c>PixelsPerPoint</c> internally, unlike
-    /// the <c>PushClip(RGraphicsPath)</c> overload <see cref="CssClipPathResolver"/> has to pre-divide for.
+    /// absolute-coordinate <see cref="Rect"/> the paint hook pushes directly via
+    /// <c>Canvas.PushClip(Rect)</c>. Unlike <see cref="CssClipPathResolver"/>, no
+    /// <see cref="GraphicsPath"/>/<c>PixelsPerPoint</c> division is needed here: <c>rect()</c> is always
+    /// axis-aligned, and <c>PushClip(Rect)</c> already divides by <c>PixelsPerPoint</c> internally, unlike
+    /// the <c>PushClip(GraphicsPath)</c> overload <see cref="CssClipPathResolver"/> has to pre-divide for.
     /// </summary>
     internal static class CssClipRectResolver
     {
@@ -28,7 +27,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <c>false</c> for the bare keyword <c>auto</c> (the initial value - "do not clip") or anything
         /// invalid, in which case the caller pushes no clip.
         /// </returns>
-        public static bool TryBuildClipRect(string value, RRect referenceBox, CssBox box, out RRect clipRect)
+        public static bool TryBuildClipRect(string value, Rect referenceBox, CssBox box, out Rect clipRect)
         {
             clipRect = default;
             if (string.IsNullOrWhiteSpace(value)) return false;
@@ -60,7 +59,7 @@ namespace PeachPDF.Html.Core.Utils
             var bottom = ResolveEdge(edges[2], box, referenceBox.Height, referenceBox.Y, referenceBox.Bottom);
             var left = ResolveEdge(edges[3], box, referenceBox.Width, referenceBox.X, referenceBox.X);
 
-            clipRect = RRect.FromLTRB(left, top, right, bottom);
+            clipRect = Rect.FromLTRB(left, top, right, bottom);
             return true;
         }
 

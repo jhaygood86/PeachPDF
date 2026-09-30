@@ -1,4 +1,5 @@
 ﻿using PeachDrawing.Text.Outlines;
+using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
@@ -577,7 +578,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("narrow slice", "repeating-conic-gradient(red 0 5deg, blue 5deg 10deg)")
     ) +
 
-    "<h2>13 — Color Space Interpolation: in oklab</h2>" +
+    "<h2>13 — PaintColor Space Interpolation: in oklab</h2>" +
     Row(
         Swatch("sRGB red→blue", "linear-gradient(to right, red, blue)"),
         Swatch("oklab red→blue", "linear-gradient(in oklab to right, red, blue)"),
@@ -585,7 +586,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("oklab red→yellow→blue", "linear-gradient(in oklab to right, red, yellow, blue)")
     ) +
 
-    "<h2>14 — Color Space Interpolation: Polar (HSL, OKLch)</h2>" +
+    "<h2>14 — PaintColor Space Interpolation: Polar (HSL, OKLch)</h2>" +
     Row(
         Swatch("hsl shorter red→blue", "linear-gradient(in hsl, red, blue)"),
         Swatch("hsl longer red→blue", "linear-gradient(in hsl longer hue, red, blue)"),
@@ -593,7 +594,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("oklch longer red→blue", "linear-gradient(in oklch longer hue, red, blue)")
     ) +
 
-    "<h2>15 — Color Space Interpolation: Lab, LCH, sRGB-linear</h2>" +
+    "<h2>15 — PaintColor Space Interpolation: Lab, LCH, sRGB-linear</h2>" +
     Row(
         Swatch("lab red→blue", "linear-gradient(in lab to right, red, blue)"),
         Swatch("lch red→blue", "linear-gradient(in lch to right, red, blue)"),
@@ -601,7 +602,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("display-p3 red→blue", "linear-gradient(in display-p3 to right, red, blue)")
     ) +
 
-    "<h2>16 — Color Space: Radial &amp; Conic</h2>" +
+    "<h2>16 — PaintColor Space: Radial &amp; Conic</h2>" +
     Row(
         Swatch("radial oklab", "radial-gradient(in oklab circle, red, blue)"),
         Swatch("radial oklch", "radial-gradient(in oklch circle, red, blue)"),
@@ -612,7 +613,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
     "</body></html>";
 
 await SaveShowcaseAsync("gradients", "Backgrounds & Borders", "CSS Gradients",
-    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, and CSS Color Level 4 interpolation spaces.",
+    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, and CSS PaintColor Level 4 interpolation spaces.",
     html, pdfConfig);
 
 // --- Border-radius showcase ---
@@ -1075,7 +1076,7 @@ var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
     "<h1>CSS background-origin &amp; background-clip Test Page</h1>" +
     "<p class=\"intro\">Each box has border: 8px solid #333 and padding: 12px. Three regions: border-box (full), padding-box (inside border), content-box (inside padding).</p>" +
 
-    "<h2>1 — background-origin: Solid Color</h2>" +
+    "<h2>1 — background-origin: Solid PaintColor</h2>" +
     "<p class=\"intro\">Solid colors fill the clip area regardless of origin — this verifies no rendering errors.</p>" +
     Row(
         OriginSwatch("default (padding-box)", "background-color: steelblue"),
@@ -1102,7 +1103,7 @@ var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
         OriginSwatch("content-box", "background: radial-gradient(circle, yellow, navy); background-origin: content-box", "background-origin: content-box")
     ) +
 
-    "<h2>4 — background-clip: Solid Color</h2>" +
+    "<h2>4 — background-clip: Solid PaintColor</h2>" +
     "<p class=\"intro\">background-clip controls where the background is painted. padding-box: no color behind border. content-box: color only in content area.</p>" +
     Row(
         OriginSwatch("default (border-box)", "background-color: coral"),
@@ -1936,6 +1937,42 @@ await SaveShowcaseAsync("paged_media", "Paged Media", "Paged Media",
     "url() logo image in a margin box (@top-left-corner).",
     pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Floats taller than a page ─────────────────────────────────────────────
+
+// A float that is taller than the space left on its page continues onto the following pages, and the text
+// that flows beside it carries on beside the continuation. Before this, the float's own lines were split
+// across pages but the text beside it was dropped after the first page. Three shapes are shown: text beside
+// a tall left float, a block that clears the float (it starts below the float's last line, at the left
+// edge), and a tall float inside a break-inside: avoid box.
+static string TallFloatLines(string prefix, int count) =>
+    string.Concat(Enumerable.Range(1, count).Select(i => $"<div class='line'>{prefix} line {i}</div>"));
+
+static string BesideText(int count) =>
+    string.Join(" ", Enumerable.Range(1, count).Select(i => $"The text beside the float, sentence {i}, keeps flowing."));
+
+var tallFloatHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 220pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/14pt sans-serif }" +
+    ".line { height: 14pt; padding: 0 4pt; background: #ffe9d6; border-bottom: 1pt solid #fff }" +
+    ".float { float: left; width: 110pt; margin: 0 8pt 0 0 }" +
+    "h2 { font-size: 11pt; margin: 0 0 4pt; clear: both }" +
+    "</style></head><body>" +
+    "<h2>Text beside a float taller than the page</h2>" +
+    "<div class='float'>" + TallFloatLines("Float", 30) + "</div>" +
+    "<p>" + BesideText(40) + "</p>" +
+    "<h2>A block that clears it starts below the float's last line</h2>" +
+    "<p style='background:#d6ecff'>This paragraph clears the float, so it starts at the left edge below the float's last line.</p>" +
+    "<div style='break-inside: avoid; border: 1pt solid #999; padding: 4pt'>" +
+    "<div class='float' style='width:90pt'>" + TallFloatLines("Boxed", 20) + "</div>" +
+    "<p>" + BesideText(20) + "</p></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("tall_floats_across_pages", "Layout", "Floats Taller Than A Page",
+    "A float taller than a page continues onto the following pages with the text beside it, a block that clears " +
+    "the float starts below its last line, and a tall float inside a break-inside: avoid box keeps its content.",
+    tallFloatHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Paged Media showcase — margin-box image alignment ─────────────────
 
 // A margin box's image content follows the box's alignment exactly as text does (CSS Paged
@@ -2387,6 +2424,107 @@ await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
     "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page, and float-reference: column pinning a float to the edge of the column its anchor sits in so only that column gives up room.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Scroll containers across page breaks ───────────────────────────────────
+// Unconstrained overflow containers retain line and block break points (css-break-3 §4.1).
+// A scroll container with a definite height or maximum stays monolithic; an auto-height one in
+// ordinary block flow breaks like any other block.
+var scrollContainerCodeLines = string.Join("\n", Enumerable.Range(1, 34).Select(i =>
+    $"{i,2}  " + (i % 5) switch
+    {
+        0 => "return total;",
+        1 => "var total = 0;",
+        2 => "foreach (var line in invoice.Lines)",
+        3 => "    total += line.Quantity * line.UnitPrice;",
+        _ => "// apply discounts and taxes per line",
+    }));
+
+var scrollContainersAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; }
+    h2 { break-after: avoid; font-size: 10pt; margin: 10pt 0 4pt; }
+    pre {
+      overflow: auto;
+      background: #f3f4f6;
+      border: 0.75pt solid #9ca3af;
+      padding: 6pt;
+      font-size: 7.5pt;
+      line-height: 1.3;
+      margin: 0;
+    }
+    .panel {
+      overflow: hidden;
+      border: 0.75pt solid #2563eb;
+      background: #eff6ff;
+      padding: 4pt 8pt;
+    }
+    .panel p { margin: 0 0 4pt; }
+    .capped {
+      overflow: auto;
+      height: 170pt;
+      border: 0.75pt solid #b45309;
+      background: #fffbeb;
+      padding: 4pt 8pt;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Scroll containers across page breaks</h1>
+    <p>A box with <code>overflow: auto</code> or <code>hidden</code> and no height of its own grows with its
+    content, so on paper it has nothing to clip. It breaks between its lines like any other block, as it
+    does when a browser prints it, instead of being sliced with a line lost at every page edge.</p>
+
+    <h2>A code listing with overflow: auto</h2>
+    <pre>{{scrollContainerCodeLines}}</pre>
+
+    <h2>An overflow: hidden panel</h2>
+    <div class="panel">
+    <p>Every paragraph in this panel is drawn whole on one page or the next. The border and background
+    are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
+    <p>Because the panel has no height of its own, print treats it as an ordinary block: a page edge
+    falls between two of its lines instead of slicing through one.</p>
+    <p>Add break-inside: avoid to keep a short panel together instead.</p>
+    <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
+    is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
+    <p>Its height grows with its content, so there is nothing it can clip in the block axis, and the page
+    edge simply falls between two of its lines.</p>
+    <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
+    </div>
+
+    <p>An overflow: auto box whose own height is capped is different. With a height or a max-height
+    PeachPDF treats it as monolithic content, like an image, and never breaks it between its lines
+    (browsers split such a box instead). Where it would straddle a page boundary, it is carried to the next page whole.</p>
+
+    <p>Everything above uses up most of this page, so the box below is left with less room than its own
+    height. A box that scrolls has a fixed extent, so the page edge cannot be allowed to fall through it.</p>
+
+    <h2>A fixed-height box stays whole</h2>
+    <div class="capped">
+    <p>This box has overflow: auto and height: 170pt, so it is treated as monolithic: it moves whole
+    to the next page when it does not fit where it starts, rather than breaking.</p>
+    <p>It starts too close to the foot of the page for all of its paragraphs, so the whole box, border
+    and all, has moved to this page instead of leaving its first lines behind on the last one.</p>
+    <p>An auto-height box in the same place would have broken between two of these paragraphs.</p>
+    <p>To keep a short auto-height box together as well, give it break-inside: avoid.</p>
+    </div>
+
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
+    scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)
@@ -2604,6 +2742,53 @@ var perPageReflowHtml = """
 await SaveShowcaseAsync("paged_media_horizontal_reflow", "Paged Media", "Per-page Reflow",
     "Left/right per-page margins reflow content to each page's own width: mirrored :left/:right binding gutters re-wrap the justified body text to each page's own measure (CSS Paged Media page-area containing block), not just shift it.",
     perPageReflowHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ── Flex containers across pages of different widths (#196) ─────────────────
+// A flex container that continues onto a page whose content area is a different width sizes each
+// fragment to the page it is on (css-break-3 5.1: each fragment recalculates sizes and positions using
+// its own fragmentainer's size). The wide first page here has no left margin, so its three columns
+// share a wider measure than the narrower pages that follow - the column boundaries visibly move at
+// each page break, and the container's own tinted frame follows. A wrapping row's later lines are
+// collected against the measure of the page they land on, so two cards fit a narrower page's line
+// where three fit the wide one.
+var flexPerPageHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page { margin: 14mm 30mm 14mm 12mm; }
+    @page :first { margin-left: 0; margin-right: 0; }
+    body { font: 9pt Arial, sans-serif; margin: 0; color: #1f2937 }
+    h2 { font-size: 11pt; margin: 6pt 0 3pt; }
+    .cards { display: flex; flex-wrap: wrap; background: #fef3c7; }
+    .cards > div { flex: 1 0 60mm; height: 60mm; break-inside: avoid; background: #fde68a;
+                   border: 1px solid #b45309; box-sizing: border-box; padding: 3pt; }
+    .cols { display: flex; background: #eef2ff; }
+    .cols > div { flex: 1 1 0; background: #dbeafe; border: 1px solid #1d4ed8; padding: 3pt; }
+    </style>
+    </head>
+    <body>
+      <h2>Wrapping cards: two to a line on the wide first page, one to a line after it</h2>
+      <div class="cards">
+    """ +
+    string.Concat(Enumerable.Range(1, 12).Select(i => $"<div>Card {i}</div>")) +
+    """
+      </div>
+      <h2>Columns re-fitted as they cross onto a narrower page</h2>
+      <div class="cols">
+    """ +
+    string.Concat(Enumerable.Range(1, 3).Select(c =>
+        "<div>" + string.Concat(Enumerable.Range(1, 26).Select(i =>
+            $"Column {c}, sentence {i}: the columns share the page's own measure. ")) + "</div>")) +
+    """
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_flex_per_page_reflow", "Paged Media", "Flex Across Pages of Different Widths",
+    "A flex container that continues onto a page of a different width sizes each fragment to its own page (CSS Fragmentation 5.1): the columns of a row re-fit as they cross a page boundary, a wrapping row collects its later lines against the measure of the page each lands on, and the container's own frame follows.",
+    flexPerPageHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── Full-bleed page showcase ───────────────────────────────────────────────
 // The headline capability behind layout-affecting per-page margins: a `margin: 0` first
@@ -2921,14 +3106,13 @@ var monolithicHtml = """
     }
     .card h2 { font-size: 10pt; margin: 0 0 0.3em; color: #1d4ed8 }
     .card p { margin: 0; font-size: 8.5pt }
-    .clipped { overflow: hidden }
+    .clipped { break-inside: avoid }
     .tag { font-size: 7pt; letter-spacing: .04em; text-transform: uppercase; color: #64748b }
     </style></head><body>
     <h1>Monolithic content at a page break</h1>
-    <p class="intro">CSS Fragmentation Level 3 &sect;2 makes a scroll container &mdash; any box with
-    <code>overflow</code> other than <code>visible</code> &mdash; monolithic: it may not be split, so where it
-    would straddle a page boundary it moves to the next page whole. The two cards below are identical apart
-    from that one declaration.</p>
+    <p class="intro">Content that asks not to be broken &mdash; a box with <code>break-inside: avoid</code>, or a
+    replaced element such as an image &mdash; is not split: where it would straddle a page boundary it moves to
+    the next page whole. The two cards below are identical apart from <code>break-inside: avoid</code>.</p>
     """
     + string.Concat(Enumerable.Range(1, 14).Select(i =>
         $"<p>Filler paragraph {i}. This body copy pushes the cards down the page so that each one meets the "
@@ -2946,10 +3130,10 @@ var monolithicHtml = """
         + "page boundary at the same place its twin met the first one.</p>"))
     + """
     <div class="card clipped">
-      <span class="tag">overflow: hidden</span>
+      <span class="tag">break-inside: avoid</span>
       <h2>This card moves whole</h2>
-      <p>Being a scroll container makes it monolithic, so rather than being cut in half it is carried
-      wholesale onto the next page, leaving the gap above it.</p>
+      <p>Because it asks not to be broken, rather than being cut in half it is carried wholesale onto the
+      next page, leaving the gap above it.</p>
     </div>
     """
     + string.Concat(Enumerable.Range(31, 4).Select(i =>
@@ -2966,7 +3150,7 @@ var monolithicHtml = """
         + "between its own lines rather than above it.</p>"))
     + """
     <div class="card clipped">
-      <span class="tag">overflow: hidden &mdash; multi-line</span>
+      <span class="tag">break-inside: avoid &mdash; multi-line</span>
       <h2>Its lines stay evenly spaced</h2>
       <p>The page boundary falls part-way through this paragraph, so the box is relocated after some of its
       text had already been placed on the following page. Because it is laid out again at its destination
@@ -2991,9 +3175,9 @@ var monolithicHtml = """
     + """
     <div style="border:1px solid #a3a3a3; border-radius:6px; padding:8px 10px; background:#fafafa">
       <div class="card clipped">
-        <span class="tag">first child &mdash; monolithic</span>
+        <span class="tag">first child &mdash; break-inside: avoid</span>
         <h2>The panel moves too</h2>
-        <p>This card may not be split, so it starts on the next page. The panel around it is not what
+        <p>This card is not split, so it starts on the next page. The panel around it is not what
         asked for the break, but the break point is the panel's own, so the panel opens on that page as
         well rather than being cut open on this one.</p>
       </div>
@@ -3126,8 +3310,8 @@ var monolithicHtml = """
     """;
 
 await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monolithic Content",
-    "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
-    + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
+    "A box with break-inside: avoid moves to the next page whole instead of being cut in half by the page "
+    + "boundary. A flex line and a "
     + "grid row that ask not to be broken move as a unit for the same reason, and the lines below a "
     + "moved one follow it rather than staying put. A forced break is taken from either side of a break "
     + "point, so break-after on one line opens the next page for the line after it — and break-after: "
@@ -4094,7 +4278,7 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
         TransformSwatch("translate then scale", "translate(15px, 0) scale(1.3)")
     ) +
 
-    "<h2>3 — transform-origin Pivot Point</h2>" +
+    "<h2>3 — transform-origin Pivot PaintPoint</h2>" +
     "<p class=\"intro\">The same rotate(45deg) pivoting around different origins.</p>" +
     Row(
         TransformSwatch("origin: center (default)", "rotate(45deg)"),
@@ -4379,6 +4563,9 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
         SvgSwatch("radialGradient, centered",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg1" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40"><stop offset="0" stop-color="#fff9c4"/><stop offset="1" stop-color="#f57f17"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#rg1)"/></svg>""",
             "radialGradient cx/cy/r"),
+        SvgSwatch("radialGradient + rotated gradientTransform",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg3" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="20" gradientTransform="translate(50 50) rotate(45) scale(2 1) translate(-50 -50)"><stop offset="0" stop-color="#fff9c4"/><stop offset="1" stop-color="#d84315"/></radialGradient></defs><rect x="5" y="5" width="90" height="90" fill="url(#rg3)"/></svg>""",
+            "radialGradient rotated gradientTransform"),
         SvgSwatch("radialGradient + gradientTransform",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg2" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40" gradientTransform="matrix(1 0 0 0.5 0 25)"><stop offset="0" stop-color="#e0f7fa"/><stop offset="1" stop-color="#006064"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#rg2)"/></svg>""",
             "gradientTransform squishes the radial into an ellipse")
@@ -5200,20 +5387,30 @@ await SaveShowcaseAsync("line_break_language", "Typography & Text", "line-break 
     "The breaks CSS Text 3 allows for line-break: normal and loose only in Chinese and Japanese text follow the lang attribute: the wave dash and centred punctuation may start a line, and a suffix or prefix of East Asian width may be split from its number, while English text keeps them together.",
     lineBreakLanguageHtml, pdfConfig);
 
-// --- Dictionary line breaking (Thai and Khmer) showcase ---
+// --- Dictionary line breaking (Thai, Lao, Khmer and Burmese) showcase ---
 // These scripts write no spaces between words, so where a line may end is found in a word list (ICU's dictionaries, in PeachDrawing.Text).
-// Thai is set in a subset of Noto Sans Thai (assets/fonts/NotoSansThaiSubset.LICENSE.txt) in columns of three widths, so the same paragraph
-// wraps at its words wherever the line ends; Thai and Khmer are also set in the line breaking test font, where every character is a square
-// one em wide, which makes the words themselves visible as blocks (and is the only rendering of Khmer: PeachPDF does not yet shape its
-// subscript consonants).
+// Thai, Lao and Khmer are set in subsets of Noto Sans Thai/Noto Sans Lao/Noto Sans Khmer (assets/fonts/NotoSansThaiSubset.LICENSE.txt,
+// assets/fonts/NotoSansLaoSubset.LICENSE.txt, assets/fonts/NotoSansKhmerSubset.LICENSE.txt) in columns of three widths, so the same
+// paragraph wraps at its words wherever the line ends; Khmer's own sentence also exercises real coeng/subjoined-consonant shaping (a
+// `pref`-reordered coeng+RO pair and two `blwf` coeng+other-consonant pairs - see KhmerReorderer). All four scripts are also set in the
+// line breaking test font, where every character is a square one em wide, which makes the words themselves visible as blocks. Burmese is
+// shown this way only (PeachPDF does not yet shape Burmese's own stacked/subscript consonants).
 static string DictionaryFontFace(string family, string file) =>
     $"@font-face {{ font-family: '{family}'; src: url('data:font/truetype;base64,{Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, file)))}') format('truetype'); }}";
 
 var dictionaryBreakingThai = "ประเทศไทยเป็นประเทศที่ตั้งอยู่ในเอเชียตะวันออกเฉียงใต้ กรุงเทพมหานครเป็นเมืองหลวงและเมืองที่ใหญ่ที่สุดของประเทศ ประชากรส่วนใหญ่พูดภาษาไทยและนับถือศาสนาพุทธ";
+var dictionaryBreakingLao = "ປະເທດລາວຕັ້ງຢູ່ໃນເອເຊຍຕາເວັນອອກສຽງໃຕ້ ນະຄອນຫຼວງວຽງຈັນເປັນເມືອງຫຼວງຂອງປະເທດລາວ ຂ້ອຍຮັກພາສາລາວ";
+// "I love the Khmer language very much" - ខ្ញ (KHA+COENG+NYO, subjoined) / ស្រ
+// (SA+COENG+RO, reordered before the base and pref-ligated) / ខ្ម (KHA+COENG+MO, subjoined)
+// exercise real coeng shaping (see KhmerReorderer/KhmerUseShapingCharacterizationTests for the exact
+// glyph reordering this renders).
+var dictionaryBreakingKhmer = "ខ្ញុំស្រឡាញ់ភាសាខ្មែរណាស់";
 
 var dictionaryBreakingHtml = $$"""
 <!DOCTYPE html><html><head><meta charset="utf-8"><style>
     {{DictionaryFontFace("SeaThai", "NotoSansThaiSubset.ttf")}}
+    {{DictionaryFontFace("SeaLao", "NotoSansLaoSubset.ttf")}}
+    {{DictionaryFontFace("SeaKhmer", "NotoSansKhmerSubset.ttf")}}
     {{DictionaryFontFace("LineBreakTest", "LineBreakTest.ttf")}}
     @page { size: A4; margin: 28pt }
     body { font-family: Arial, sans-serif; color: #222 }
@@ -5223,28 +5420,39 @@ var dictionaryBreakingHtml = $$"""
     .cell { flex: none }
     .cap { font-size: 7pt; color: #777; margin-bottom: 2pt; font-family: monospace }
     .col { margin: 0; padding: 4pt; box-sizing: border-box; font: 11pt/1.55 SeaThai; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
+    .collao { margin: 0; padding: 4pt; box-sizing: border-box; font: 11pt/1.55 SeaLao; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
+    .colkhmer { margin: 0; padding: 4pt; box-sizing: border-box; font: 11pt/1.55 SeaKhmer; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
     .blocks { font: 12pt/1.5 LineBreakTest; width: 6.4em; margin: 0; padding: 3pt; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
     .blockrow { display: flex; gap: 14pt; margin-top: 4pt }
     .blockcell { flex: none; width: 90pt }
 </style></head><body>
-<h1>Dictionary line breaking: Thai and Khmer</h1>
-<p class="intro">These scripts put no spaces between words, so no rule can say where a line may end: PeachPDF looks the words up in a word list (ICU's dictionaries) and wraps between them, never inside a syllable. The same Thai paragraph is set in three widths: the words move to the next line whole, whatever the width. The lang attribute does not matter, the script does.</p>
+<h1>Dictionary line breaking: Thai, Lao, Khmer and Burmese</h1>
+<p class="intro">These scripts put no spaces between words, so no rule can say where a line may end: PeachPDF looks the words up in a word list (ICU's dictionaries) and wraps between them, never inside a syllable. The same Thai (then Lao, then Khmer) paragraph is set in three widths: the words move to the next line whole, whatever the width. The lang attribute does not matter, the script does. The Khmer paragraph also shows real coeng/subjoined-consonant shaping: a subjoined consonant stacks below its base rather than rendering as a separate nominal glyph.</p>
 <div class="row">
   <div class="cell" style="width:120pt"><div class="cap">120pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
   <div class="cell" style="width:170pt"><div class="cap">170pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
   <div class="cell" style="width:210pt"><div class="cap">210pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
 </div>
-<h2 style="font-size:11pt;margin:0 0 3pt">The words as blocks: Thai and Khmer</h2>
-<p class="intro" style="margin-bottom:0">The same idea in the line breaking test font, where every character (a vowel sign or tone mark too) is a square one em wide, and each box holds six of them: a word that does not fit the rest of the line starts the next one, and a syllable is never cut. Khmer is shown this way only: its subscript consonants are not shaped yet.</p>
+<div class="row">
+  <div class="cell" style="width:120pt"><div class="cap">120pt</div><p class="collao" lang="lo">{{dictionaryBreakingLao}}</p></div>
+  <div class="cell" style="width:170pt"><div class="cap">170pt</div><p class="collao" lang="lo">{{dictionaryBreakingLao}}</p></div>
+  <div class="cell" style="width:210pt"><div class="cap">210pt</div><p class="collao" lang="lo">{{dictionaryBreakingLao}}</p></div>
+</div>
+<div class="row">
+  <div class="cell" style="width:120pt"><div class="cap">120pt</div><p class="colkhmer" lang="km">{{dictionaryBreakingKhmer}}</p></div>
+  <div class="cell" style="width:170pt"><div class="cap">170pt</div><p class="colkhmer" lang="km">{{dictionaryBreakingKhmer}}</p></div>
+  <div class="cell" style="width:210pt"><div class="cap">210pt</div><p class="colkhmer" lang="km">{{dictionaryBreakingKhmer}}</p></div>
+</div>
+<h2 style="font-size:11pt;margin:0 0 3pt">The words as blocks: Burmese</h2>
+<p class="intro" style="margin-bottom:0">The same idea in the line breaking test font, where every character (a vowel sign or tone mark too) is a square one em wide, and each box holds six of them: a word that does not fit the rest of the line starts the next one, and a syllable is never cut. Burmese is shown this way only (PeachPDF does not yet shape its own stacked/subscript consonants - Khmer's own equivalent is shown above, in real glyphs).</p>
 <div class="blockrow">
-  <div class="blockcell"><div class="cap">Thai</div><p class="blocks">ฉันรักภาษาไทยมากกว่าหกสิบล้านคน</p></div>
-  <div class="blockcell"><div class="cap">Khmer</div><p class="blocks">ខ្ញុំស្រលាញ់ភាសាខ្មែរមានប្រជាជនច្រើន</p></div>
+  <div class="blockcell"><div class="cap">Burmese</div><p class="blocks">မြန်မာစာကိုချစ်တယ်</p></div>
 </div>
 </body></html>
 """;
 
-await SaveShowcaseAsync("dictionary_line_breaking", "Typography & Text", "Thai and Khmer Line Breaking",
-    "Scripts written without spaces wrap at the words a dictionary finds and never inside a syllable: a Thai paragraph in real Noto Sans glyphs at three widths, and Thai and Khmer as blocks in the line breaking test font, where the word boundaries are visible.",
+await SaveShowcaseAsync("dictionary_line_breaking", "Typography & Text", "Thai, Lao, Khmer and Burmese Line Breaking",
+    "Scripts written without spaces wrap at the words a dictionary finds and never inside a syllable: Thai, Lao and Khmer paragraphs in real Noto Sans glyphs at three widths each (Khmer also shaped with real coeng/subjoined-consonant stacking), and Burmese as blocks in the line breaking test font, where the word boundaries are visible.",
     dictionaryBreakingHtml, pdfConfig);
 
 // --- SVG vertical writing-mode text showcase ---
@@ -9213,7 +9421,7 @@ var emojiHtml = $$"""
         <p class="demo">{{emojiRow}}</p>
         <p class="note">Every glyph above U+FFFF (e.g. {{grinning}} = U+1F600) is resolved through the
         font's cmap format-12 subtable and rendered from this font's monochrome outline. The separate
-        Color Fonts showcase demonstrates COLR/CPAL color emoji.</p>
+        PaintColor Fonts showcase demonstrates COLR/CPAL color emoji.</p>
         <h1>Grapheme-aware wrapping</h1>
         <div class="wrap">Northline Office B.V. <span class="emoji-run">{{wrappedEmojiRow}}</span> following-unbreakable-token</div>
         <p class="note">Adjacent emoji wrap between complete grapheme clusters without requiring spaces.
@@ -9224,7 +9432,7 @@ var emojiHtml = $$"""
     """;
 
 await SaveShowcaseAsync("emoji", "Typography & Text", "Emoji (astral codepoints)",
-    "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate Color Fonts showcase covers COLR/CPAL.",
+    "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate PaintColor Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
 // clip-path with CSS basic shapes (polygon/inset/circle/ellipse/path/url), a <geometry-box>
@@ -9715,6 +9923,46 @@ await SaveShowcaseAsync("object_fit", "Images & Replaced Content", "object-fit &
     "markers making each fit and crop obvious.",
     objectFitHtml, pdfConfig);
 
+// ── image-rendering: how a raster image is resampled ────────────────────────────────────
+var pixelArt = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAUUlEQVR4nGP8//8/Awj8PisGYUABq/ErRhDNhE0SWYwJxlAJ4oRLwtggOcZfZ0QxdCMDsBXIutFNgZuArujOuu8QBSBfYHMkzCdgK2BewuZNAH4iJnECnYKiAAAAAElFTkSuQmCC";
+static string RenderingCell(string img, string mode, string note) =>
+    "<div class=\"cell\">" +
+    $"<div class=\"frame\"><img src=\"{img}\" style=\"width:128px;height:128px;image-rendering:{mode}\"></div>" +
+    $"<div class=\"lbl\">image-rendering: {mode}</div><div class=\"sub\">{note}</div></div>";
+var imageRenderingHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 20px 0 10px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 4px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 14px; }" +
+    ".cell { font-size: 11px; color: #555; width: 128px; }" +
+    ".frame { width: 128px; height: 128px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #dbeafe; }" +
+    ".lbl { margin-top: 6px; font-family: monospace; } .sub { margin-top: 2px; }" +
+    ".inherit { image-rendering: pixelated; } .tile { width: 128px; height: 128px; border: 1px solid #cbd5e1; border-radius: 6px; background-size: 32px 32px; }" +
+    "</style></head><body>" +
+    "<h2>image-rendering</h2>" +
+    "<p class=\"note\">The same 8&times;8 pixel-art image enlarged sixteen times. The keyword picks how the pixels in between are computed.</p>" +
+    "<h3>On an &lt;img&gt;</h3>" +
+    "<div class=\"row\">" +
+    RenderingCell(pixelArt, "auto", "the viewer smooths") +
+    RenderingCell(pixelArt, "smooth", "bilinear blend") +
+    RenderingCell(pixelArt, "high-quality", "sharper curve") +
+    RenderingCell(pixelArt, "crisp-edges", "hard-edged pixels") +
+    RenderingCell(pixelArt, "pixelated", "hard-edged pixels") +
+    "</div>" +
+    "<h3>Inherited, and on a repeating background</h3>" +
+    "<div class=\"row inherit\">" +
+    $"<div class=\"cell\"><div class=\"frame\"><img src=\"{pixelArt}\" style=\"width:128px;height:128px\"></div><div class=\"lbl\">inherited pixelated</div></div>" +
+    $"<div class=\"cell\"><div class=\"tile\" style=\"background-image:url('{pixelArt}')\"></div><div class=\"lbl\">background, repeat</div></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("image_rendering", "Images & Replaced Content", "image-rendering",
+    "The CSS image-rendering property (auto, smooth, high-quality, crisp-edges, pixelated) on a small pixel-art " +
+    "image enlarged sixteen times: blended pixels versus hard-edged ones, inherited down the tree and applied " +
+    "to a repeating background as well as an img.",
+    imageRenderingHtml, pdfConfig);
+
 // ── CMYK JPEG images: preserved, never converted to RGB ────────────────────────────────
 // A real Adobe-authored CMYK JPEG (Adobe APP14 transform=0, inverted-CMYK convention) - copied
 // byte-for-byte from PeachImage's own test corpus (tests/corpus/image-rs-jpeg-decoder/tests/reftest/
@@ -9880,7 +10128,7 @@ static byte[] BuildTrnsStarIconPngBytes(int size, (byte R, byte G, byte B) backg
     double cx = size / 2.0, cy = size / 2.0;
     double outerR = size * 0.48, innerR = outerR * 0.42;
 
-    // Point-in-polygon test against a 10-vertex star (5 outer points, 5 inner points).
+    // PaintPoint-in-polygon test against a 10-vertex star (5 outer points, 5 inner points).
     var star = new (double X, double Y)[10];
     for (int i = 0; i < 10; i++)
     {
@@ -10018,10 +10266,10 @@ var modernColorHtml =
     "</div>" +
     "</body></html>";
 
-await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, color-mix)",
+await SaveShowcaseAsync("modern_colors", "PaintColor", "Modern CSS Colors (oklch, color-mix)",
     "A wide-gamut palette authored in oklch() with oklab()/lab()/lch()/hsl()/hwb() companions, plus " +
     "color-mix() opacity modifiers (including hex operands of either form) and blends composited over a " +
-    "checkerboard — the CSS Color 4/5 function set modern utility frameworks emit, resolved to real PDF colors.",
+    "checkerboard — the CSS PaintColor 4/5 function set modern utility frameworks emit, resolved to real PDF colors.",
     modernColorHtml, pdfConfig);
 
 // ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
@@ -10787,12 +11035,12 @@ await SaveShowcaseAsync("viewport_units", "Responsive Design", "Viewport units (
     "zero-width box, and a `ch`-sized box (the `0.5em` approximation).",
     viewportUnitsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
-// Color fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
-// build of Noto Color Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
+// PaintColor fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
+// build of Noto PaintColor Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
 // fixture whose glyphs isolate each paint feature.
 var notoColorB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf")));
 var colorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf")));
-// A separate Noto Color Emoji subset that keeps the font's `ccmp` feature and the glyphs the
+// A separate Noto PaintColor Emoji subset that keeps the font's `ccmp` feature and the glyphs the
 // multi-codepoint sequences need - NotoColorEmoji-Subset.ttf above carries no GSUB at all.
 var notoSeqB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmojiSequences-Subset.ttf")));
 string ColorGlyph(string ch, string title, string detail) =>
@@ -10825,11 +11073,11 @@ var colorEmojiHtml =
     ".desc { font-size: 8pt; font-weight: bold; color: #444; margin-top: 4px }" +
     ".css { font-size: 7pt; color: #666 }" +
     "</style></head><body>" +
-    "<h1>Color fonts (COLR / CPAL)</h1>" +
+    "<h1>PaintColor fonts (COLR / CPAL)</h1>" +
     "<p class=\"intro\">COLR/CPAL color-glyph fonts render their visible artwork as native PDF vector " +
     "content. An embedded subset supplies invisible selectable/searchable text, while per-glyph " +
     "<code>/ActualText</code> preserves exact emoji sequences when copied. The row below is the real " +
-    "COLR&nbsp;v1 build of Noto Color Emoji (gradients, transforms, compositing all handled).</p>" +
+    "COLR&nbsp;v1 build of Noto PaintColor Emoji (gradients, transforms, compositing all handled).</p>" +
     "<div class=\"emoji\">\U0001F600 ❤ \U0001F44D \U0001F680 \U0001F308 ⭐ \U0001F525 \U0001F642</div>" +
     "<h2>COLR paint features</h2>" +
     "<p class=\"intro\">The same pipeline, broken down by paint type (hand-authored COLR&nbsp;v1 fixture):</p>" +
@@ -10844,7 +11092,7 @@ var colorEmojiHtml =
     "</tr></table>" +
     "<h2>Emoji sequences</h2>" +
     "<p class=\"intro\">A multi-codepoint emoji sequence composes into the single glyph the font " +
-    "defines for it, via the font's <code>ccmp</code> feature — which is where Noto Color Emoji keeps " +
+    "defines for it, via the font's <code>ccmp</code> feature — which is where Noto PaintColor Emoji keeps " +
     "every one of these (it declares no <code>liga</code>/<code>rlig</code> at all). A " +
     "<code>U+FE0F</code> variation selector inside a sequence draws nothing of its own and does not " +
     "stop the ligature forming.</p>" +
@@ -10865,14 +11113,14 @@ var colorEmojiHtml =
     "<div class=\"cg seq\">\U0001F44D \U0001F44D\U0001F3FB \U0001F44D\U0001F3FC \U0001F44D\U0001F3FD " +
     "\U0001F44D\U0001F3FE \U0001F44D\U0001F3FF</div>" +
     "</body></html>";
-await SaveShowcaseAsync("color_emoji", "Typography & Text", "Color Fonts (COLR/CPAL)",
-    "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto Color Emoji — rendered as " +
+await SaveShowcaseAsync("color_emoji", "Typography & Text", "PaintColor Fonts (COLR/CPAL)",
+    "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto PaintColor Emoji — rendered as " +
     "native PDF vector content: layered palette colors, gradients, transforms, and blend-mode " +
     "compositing, with an invisible embedded subset for searchable, selectable, exact-copy text.",
     colorEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // font-variant-emoji and the U+FE0E/U+FE0F presentation selectors: two fonts that both cover U+2764 -
-// a colour one (Noto Color Emoji) and an outline one (Source Sans 3) - so only the requested
+// a colour one (Noto PaintColor Emoji) and an outline one (Source Sans 3) - so only the requested
 // presentation can tell which one draws it. Each cell is the same character three ways: bare, followed
 // by U+FE0E (text), and followed by U+FE0F (emoji).
 var textFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
@@ -11375,10 +11623,40 @@ var svgContextHtml =
     "<path d=\"M2,2 L20,11 L2,20 Z\" fill=\"context-stroke\"/><circle cx=\"6\" cy=\"11\" r=\"3\" fill=\"context-fill\"/></marker></defs>" +
     "<path d=\"M30,35 C120,5 200,65 250,35\" fill=\"#fde68a\" stroke=\"#b45309\" stroke-width=\"4\" marker-end=\"url(#head)\"/>" +
     "<path d=\"M290,95 C380,65 460,125 500,95\" fill=\"#bfdbfe\" stroke=\"#1d4ed8\" stroke-width=\"4\" marker-end=\"url(#head)\"/></svg>" +
+    "<p>A gradient or pattern context paint works the same way: a marker's own placement maps the paint server back into the shape's " +
+    "coordinate space, and a transform between what a <code>&lt;use&gt;</code> instantiates and the shape actually painting it is undone.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"520\" height=\"130\" viewBox=\"0 0 520 130\">" +
+    "<defs>" +
+    "<linearGradient id=\"arrowGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#f59e0b\"/><stop offset=\"1\" stop-color=\"#7c2d12\"/></linearGradient>" +
+    "<marker id=\"gradHead\" markerWidth=\"22\" markerHeight=\"22\" refX=\"11\" refY=\"11\" markerUnits=\"userSpaceOnUse\" orient=\"auto\">" +
+    "<circle cx=\"11\" cy=\"11\" r=\"10\" fill=\"context-stroke\"/></marker>" +
+    "<linearGradient id=\"pairGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#38bdf8\"/><stop offset=\"1\" stop-color=\"#0c4a6e\"/></linearGradient>" +
+    "<g id=\"pairShape\"><rect width=\"60\" height=\"90\" fill=\"#e2e8f0\"/>" +
+    "<g transform=\"translate(60,0)\"><rect width=\"60\" height=\"90\" fill=\"context-fill\"/></g></g>" +
+    "</defs>" +
+    "<path d=\"M30,65 C120,25 200,105 250,65\" fill=\"none\" stroke=\"url(#arrowGrad)\" stroke-width=\"6\" marker-end=\"url(#gradHead)\"/>" +
+    "<use xlink:href=\"#pairShape\" x=\"320\" y=\"20\" fill=\"url(#pairGrad)\"/></svg>" +
+    "<p>The same context paint reaches into a <code>&lt;use&gt;</code>'s <code>&lt;symbol&gt;</code> or nested <code>&lt;svg&gt;</code> " +
+    "target too, measured against that target's whole content (both boxes below), not just the piece that actually paints with it " +
+    "(each box's right-hand half).</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"520\" height=\"110\" viewBox=\"0 0 520 110\">" +
+    "<defs>" +
+    "<linearGradient id=\"symGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#f59e0b\"/><stop offset=\"1\" stop-color=\"#7c2d12\"/></linearGradient>" +
+    "<symbol id=\"halves\" viewBox=\"0 0 20 20\"><rect width=\"10\" height=\"20\" fill=\"#e2e8f0\"/><rect x=\"10\" width=\"10\" height=\"20\" fill=\"context-fill\"/></symbol>" +
+    "<linearGradient id=\"nestGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#38bdf8\"/><stop offset=\"1\" stop-color=\"#0c4a6e\"/></linearGradient>" +
+    "<svg id=\"nestedHalves\" viewBox=\"0 0 20 20\" width=\"20\" height=\"20\"><rect width=\"10\" height=\"20\" fill=\"#e2e8f0\"/><rect x=\"10\" width=\"10\" height=\"20\" fill=\"context-fill\"/></svg>" +
+    "</defs>" +
+    "<text x=\"20\" y=\"14\" font-size=\"11\" fill=\"#555\">&lt;use&gt; of a &lt;symbol&gt;</text>" +
+    "<use xlink:href=\"#halves\" x=\"20\" y=\"20\" width=\"90\" height=\"90\" fill=\"url(#symGrad)\"/>" +
+    "<text x=\"150\" y=\"14\" font-size=\"11\" fill=\"#555\">&lt;use&gt; of a nested &lt;svg&gt;</text>" +
+    "<use xlink:href=\"#nestedHalves\" x=\"150\" y=\"20\" width=\"90\" height=\"90\" fill=\"url(#nestGrad)\"/>" +
+    "</svg>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_context_paint", "Graphics & Effects", "SVG context paint",
-    "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, and a marker " +
-    "draws with the fill and stroke of the shape it is placed on.",
+    "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, a marker " +
+    "draws with the fill and stroke of the shape it is placed on - including a gradient or pattern, mapped through the marker's own " +
+    "placement - and a use's context paint follows a transform between what it instantiates and the shape that actually paints it, " +
+    "including when the use targets a symbol or a nested svg.",
     svgContextHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
@@ -12392,7 +12670,7 @@ const string FilterCss = """
 
 var cssFilterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><body>" +
 
-    "<h1>CSS filter: Native PDF Color Math</h1>" +
+    "<h1>CSS filter: Native PDF PaintColor Math</h1>" +
     "<p class=\"intro\">opacity(), brightness(), contrast(), and invert() apply as real PDF color math - opacity() reuses the same isolated transparency group as the opacity property, the other three compose into one ExtGState /TR transfer function - not a rasterized approximation. (docs/html-css-support.md#filters-and-blend-modes)</p>" +
 
     "<h2>1 — Individual functions</h2>" +
@@ -12594,6 +12872,56 @@ await SaveShowcaseAsync("text_hinting_cff2_none", "Graphics & Effects", "Raster 
         RasterizationDpi = 72
     });
 
+// --- Raster anti-aliasing toggle: the same small shape and small text, with and without RasterAntiAliasing ---
+
+const string RasterAaCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.9em; color: #555; font-size: 8pt }
+    .raster { filter: grayscale(1); margin-bottom: 10px }
+    .cap { font-size: 6.5pt; color: #666; margin: 10px 0 2px }
+    .shapes { display: flex; align-items: center; gap: 14px }
+    .circle { width: 34px; height: 34px; border-radius: 50%; background: #2a5db0 }
+    .diamond { width: 26px; height: 26px; background: #c33; transform: rotate(45deg) }
+    .text { font-size: 9px }
+    </style>
+    """;
+
+string RasterAaHtml(string intro) =>
+    "<!DOCTYPE html><html><head>" + RasterAaCss + "</head><body><h1>Raster anti-aliasing</h1><p class=\"intro\">" + intro + "</p>" +
+    "<div class=\"cap\">shapes</div>" +
+    "<div class=\"raster shapes\"><div class=\"circle\"></div><div class=\"diamond\"></div></div>" +
+    "<div class=\"cap\">small text</div>" +
+    "<div class=\"raster text\">Hamburgefonstiv: HEH illicit 0123456789 The quick brown fox jumps over the lazy dog</div>" +
+    "</body></html>";
+
+var rasterAaConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    ShrinkToFit = true,
+    RasterizationDpi = 72,
+};
+
+await SaveShowcaseAsync("raster_antialiasing_on", "Graphics & Effects", "Raster Anti-Aliasing (On, Default)",
+    "PdfGenerateConfig.RasterAntiAliasing left at its default, true: a circle, a rotated square and small text, all drawn into a bitmap (here under filter: grayscale(1), at a deliberately low RasterizationDpi of 72), have smoothed, fractional-coverage edges. This is a whole-graphics setting - it affects shape fills, images and text alike, not text alone. Compare with the same page with it off.",
+    RasterAaHtml("The circle, diamond and text below are rasterized at 72 dpi with anti-aliasing on. Compare with the same page with it off."),
+    rasterAaConfig);
+
+await SaveShowcaseAsync("raster_antialiasing_off", "Graphics & Effects", "Raster Anti-Aliasing (Off)",
+    "The same page with PdfGenerateConfig.RasterAntiAliasing = false: every pixel PeachPDF rasterizes itself is thresholded to fully transparent or fully opaque instead of smoothed, so the curved and diagonal edges look stair-stepped and the small text looks harder-edged. The PDF's own vector text and paths are unaffected either way, since a viewer anti-aliases those itself.",
+    RasterAaHtml("The circle, diamond and text below are rasterized at 72 dpi with anti-aliasing off. Compare with the same page with it on."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72,
+        RasterAntiAliasing = false,
+    });
+
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---
 
 // A 64x64 PNG whose corners are fully transparent: a filled circle with a soft (partial-alpha) rim.
@@ -12787,6 +13115,41 @@ body { margin: 0; font-family: sans-serif; }
 await SaveShowcaseAsync("backdrop_filter", "Graphics & Effects", "Backdrop Filter",
     "backdrop-filter on frosted-glass panels over a gradient and text: blur, grayscale + contrast, blur + saturate, and invert + hue-rotate, each applied to what was painted behind the panel and clipped to its rounded corners.",
     backdropFilterHtml, pdfConfig);
+
+// --- legacy vendor-prefixed CSS showcase ---
+
+const string vendorPrefixedHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; font-size: 12px; }
+.row { display: -webkit-flex; display: flex; margin: 10px; }
+.cell { -webkit-box-sizing: border-box; -moz-box-sizing: border-box; width: 110px; height: 90px; margin-right: 10px; padding: 8px; color: #fff; font-weight: bold;
+        -webkit-border-radius: 14px; -webkit-box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+.lin1 { background: -webkit-linear-gradient(left, #e33, #36f); }
+.lin2 { background: -webkit-linear-gradient(top, #fc3, #3c6); }
+.lin3 { background: -moz-linear-gradient(45deg, #e33, #fc3, #3c6); }
+.lin4 { background: -webkit-linear-gradient(bottom right, #36f, #e33); }
+.rad1 { background: -webkit-radial-gradient(center, circle cover, #fc3, #e33 70%, #36f); }
+.rad2 { background: -moz-radial-gradient(30% 40%, circle, #fff, #36f); }
+.rep  { background: -webkit-repeating-linear-gradient(45deg, #e33 0, #e33 10px, #fc3 10px, #fc3 20px); }
+.rot  { -webkit-transform: rotate(-8deg); background: #3c6; }
+.sticky { position: -webkit-sticky; position: sticky; top: 0; background: #e33; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; width: 200px; height: auto; background: #36f; }
+.legacybox { display: -webkit-box; -webkit-box-orient: horizontal; -webkit-box-pack: justify; -webkit-box-align: center; width: 330px; height: 90px; padding: 8px; background: #3c6; margin-right: 10px; }
+.legacybox span { display: block; width: 60px; height: 40px; background: #fc3; -webkit-box-flex: 0; }
+.legacybox span + span { height: 70px; background: #e33; }
+</style></head><body>
+<div class="row"><div class="cell lin1">webkit linear left</div><div class="cell lin2">webkit linear top</div><div class="cell lin3">moz linear 45deg</div><div class="cell lin4">bottom right</div></div>
+<div class="row"><div class="cell rad1">webkit radial</div><div class="cell rad2">moz radial at 30% 40%</div><div class="cell rep">repeating</div><div class="cell rot">-webkit-transform</div></div>
+<div class="row"><div class="cell sticky">-webkit-sticky</div>
+<div class="cell clamp">-webkit-line-clamp: 3 with display: -webkit-box and -webkit-box-orient: vertical cuts this long paragraph of text off after exactly three lines and marks the cut with an ellipsis, however much more text follows it.</div></div>
+<div class="row"><div class="legacybox"><span></span><span></span><span></span></div></div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("vendor_prefixed_css", "Graphics & Effects", "Legacy Vendor-Prefixed CSS",
+    "A stylesheet written only with the legacy -webkit-/-moz- spellings (autoprefixer-era output): prefixed linear, radial and repeating gradients in their pre-standard syntax, box-shadow, border-radius, box-sizing, transform, flex and sticky, the -webkit-box flexbox model (box-pack, box-align) and the -webkit-box + -webkit-line-clamp text-truncation idiom - each renders exactly as its standard spelling.",
+    vendorPrefixedHtml, pdfConfig);
 
 // --- PDF/A-1 with flattened transparency showcase ---
 
@@ -13489,7 +13852,7 @@ var iccPreservationHtml =
     $"<img src=\"data:image/png;base64,{iccPngBase64}\" width=\"160\" height=\"160\">" +
     "</body></html>";
 
-await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content", "ICC Color Profile Preservation",
+await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content", "ICC PaintColor Profile Preservation",
     "A PNG, WebP, or AVIF source's embedded ICC color profile is now extracted and embedded as an " +
     "/ICCBased color space (/N + /Alternate + the raw profile bytes) instead of being silently dropped " +
     "in favor of a bare /DeviceRGB or /DeviceGray - preserving the source's actual color intent for " +

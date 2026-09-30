@@ -1,8 +1,8 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
-using PeachPDF.Raster.Filters;
+using PeachDrawing.Core;
+using PeachDrawing;
+using PeachDrawing.Filters;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Raster
@@ -52,21 +52,21 @@ namespace PeachPDF.Tests.Raster
 
         // ---- erase ----
 
-        private static RasterGraphics NewGraphics(int w, int h)
+        private static RasterCanvas NewGraphics(int w, int h)
         {
             var surface = new RasterSurface(w, h, 0, 0, 1, 1);
-            return new RasterGraphics(new PdfSharpAdapter(), surface, 1);
+            return new RasterCanvas(new PdfSharpAdapter(), surface, 1);
         }
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         [Fact]
         public void Erase_RemovesInkInsideAShape_AndKeepsAnEdgePixelsRemainder()
         {
             var g = NewGraphics(10, 10);
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
 
-            g.EraseRectangle(new RRect(2, 2, 4.5, 4));
+            g.EraseRectangle(new Rect(2, 2, 4.5, 4));
 
             Assert.Equal(0, Pixel(g, 3, 3)[3]);
             Assert.InRange(Pixel(g, 6, 3)[3], 120, 135);
@@ -78,14 +78,14 @@ namespace PeachPDF.Tests.Raster
         public void Erase_WithAPath_FollowsItsShape_AndRespectsTheClip()
         {
             var g = NewGraphics(20, 20);
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 20, 20);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 20, 20);
             var triangle = g.GetGraphicsPath();
             triangle.Start(0, 0);
             triangle.LineTo(20, 0);
             triangle.LineTo(0, 20);
             triangle.CloseFigure();
 
-            g.PushClip(new RRect(0, 0, 10, 20));
+            g.PushClip(new Rect(0, 0, 10, 20));
             g.Erase(triangle);
             g.PopClip();
 
@@ -98,10 +98,10 @@ namespace PeachPDF.Tests.Raster
         public void Erase_WithAnEmptyClip_DoesNothing()
         {
             var g = NewGraphics(10, 10);
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
 
-            g.PushClip(new RRect(50, 50, 2, 2));
-            g.EraseRectangle(new RRect(0, 0, 10, 10));
+            g.PushClip(new Rect(50, 50, 2, 2));
+            g.EraseRectangle(new Rect(0, 0, 10, 10));
             g.PopClip();
 
             Assert.Equal(255, Pixel(g, 5, 5)[3]);
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Raster
 
         // ---- painted through a real page layout onto a raster page ----
 
-        private static async Task<RasterGraphics> PaintAsync(string html, int width = 160, int height = 120)
+        private static async Task<RasterCanvas> PaintAsync(string html, int width = 160, int height = 120)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), margin: 0);
             var page = NewGraphics(width, height);
@@ -171,8 +171,8 @@ namespace PeachPDF.Tests.Raster
             var plain = await PaintAsync("<div style=\"font:30pt Arial;color:#000\">HI</div>");
             var shadowed = await PaintAsync("<div style=\"font:30pt Arial;color:#000;text-shadow:6pt 6pt 0 #f00\">HI</div>");
 
-            int Ink(RasterGraphics g) => Enumerable.Range(0, g.Surface.Width * g.Surface.Height).Count(i => g.Surface.Pixels[i * 4 + 3] > 128);
-            int Red(RasterGraphics g) => Enumerable.Range(0, g.Surface.Width * g.Surface.Height)
+            int Ink(RasterCanvas g) => Enumerable.Range(0, g.Surface.Width * g.Surface.Height).Count(i => g.Surface.Pixels[i * 4 + 3] > 128);
+            int Red(RasterCanvas g) => Enumerable.Range(0, g.Surface.Width * g.Surface.Height)
                 .Count(i => g.Surface.Pixels[i * 4] > 200 && g.Surface.Pixels[i * 4 + 1] < 60 && g.Surface.Pixels[i * 4 + 3] > 200);
 
             Assert.Equal(0, Red(plain));

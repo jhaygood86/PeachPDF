@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -15,7 +14,7 @@ namespace PeachPDF.Html.Core.Paint
     /// <param name="Rect">the word's rectangle, in fragmentainer-local coordinates</param>
     /// <param name="Word">the word itself — the source of its text and per-word shaping facts</param>
     /// <param name="Owner">the box whose style the word is drawn with</param>
-    internal readonly record struct DecorationWord(RRect Rect, CssRect Word, CssBox Owner);
+    internal readonly record struct DecorationWord(Rect Rect, CssRect Word, CssBox Owner);
 
     /// <summary>
     /// What a text decoration line needs to know about the content it covers: the area to draw over, the
@@ -37,7 +36,7 @@ namespace PeachPDF.Html.Core.Paint
     /// </remarks>
     internal sealed class DecorationContent
     {
-        private readonly Dictionary<CssLineBox, RRect> _spans = [];
+        private readonly Dictionary<CssLineBox, Rect> _spans = [];
         private readonly Dictionary<CssLineBox, List<DecorationInterval>> _exclusions = [];
         private readonly Dictionary<CssRect, DecorationWord> _words;
         private readonly List<CssLineBox> _order = [];
@@ -81,7 +80,7 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>The union rectangle collected for <paramref name="line"/>.</summary>
-        internal RRect SpanOf(CssLineBox line) => _spans[line];
+        internal Rect SpanOf(CssLineBox line) => _spans[line];
 
         /// <summary>
         /// The x-ranges on <paramref name="line"/> that no decoration line may cross — the margin boxes
@@ -115,7 +114,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// The alphabetic baseline the words of <paramref name="line"/> sit on, in the same
         /// fragmentainer-local space as every rectangle here, or null when the line holds no word that
-        /// sits on it. Measured in layout's own convention - a whole <see cref="RFont.Ascent"/> below each
+        /// sits on it. Measured in layout's own convention - a whole <see cref="Font.Ascent"/> below each
         /// word's rectangle - so the caller applies its own font's ascent rounding to reach the baseline
         /// the glyphs are painted on.
         /// </summary>
@@ -147,7 +146,7 @@ namespace PeachPDF.Html.Core.Paint
         /// the decorating box itself has already moved these words, so the baseline follows it, while a
         /// shift below it excludes that word and leaves the line where the rest of the text is. Every word that remains reports the same baseline however
         /// large it is set, because layout placed each one's rectangle exactly its own
-        /// <see cref="RFont.Ascent"/> above the line's baseline - so the first is taken and the rest
+        /// <see cref="Font.Ascent"/> above the line's baseline - so the first is taken and the rest
         /// cannot disagree.
         /// </para>
         /// </remarks>
@@ -236,7 +235,7 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (_spans.TryGetValue(lineBox, out var existing))
                 {
-                    _spans[lineBox] = RRect.Union(existing, lineFragment.Rect);
+                    _spans[lineBox] = Rect.Union(existing, lineFragment.Rect);
                 }
                 else
                 {

@@ -18,7 +18,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         private static byte[]? _sRgbIccProfile;
 
         /// <summary>
-        /// The raw bytes of the embedded "sRGB2014.icc" profile (International Color Consortium,
+        /// The raw bytes of the embedded "sRGB2014.icc" profile (International PaintColor Consortium,
         /// freely redistributable - see <c>sRGB2014.LICENSE.txt</c> alongside the embedded file).
         /// Loaded once and cached - the profile is immutable, shared read-only content.
         /// </summary>

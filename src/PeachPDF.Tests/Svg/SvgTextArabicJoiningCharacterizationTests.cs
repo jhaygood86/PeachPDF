@@ -2,7 +2,7 @@ using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Svg;
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
     /// it isn't a no-op" standard against real font data, applied to SVG's independent pipeline:
     /// renders through the real SVG pipeline with a <see cref="TestRecordingGraphics"/> mock to
     /// capture exactly the <c>(text, ShapeSettings)</c> pair <c>SvgRenderer.PaintGlyphs</c>
-    /// actually hands to <see cref="RGraphics.DrawString"/>, then re-shapes that exact pair through a
+    /// actually hands to <see cref="Canvas.DrawString"/>, then re-shapes that exact pair through a
     /// real <see cref="PeachDrawing.Text.Typeface"/> (the same bundled Noto Sans Arabic/Aref Ruqaa subsets
     /// HTML's own characterization tests use) to confirm real GSUB/GPOS substitution/positioning
     /// actually happens - not just that a correctly-shaped <see cref="ShapeSettings"/> value got
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return Assert.Single(g.DrawStringCalls);
         }
 

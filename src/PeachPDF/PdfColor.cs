@@ -5,7 +5,7 @@ namespace PeachPDF
 {
     /// <summary>
     /// An RGBA color for the declarative document-building API (<see cref="PdfGenerator.CreateDocument"/>).
-    /// Deliberately not <c>System.Drawing.Color</c> - that assembly isn't available/trim-friendly on every
+    /// Deliberately not <c>System.Drawing.PaintColor</c> - that assembly isn't available/trim-friendly on every
     /// target this library supports (WebAssembly, NativeAOT). Internally formats to a canonical
     /// <c>rgb()</c>/<c>rgba()</c> CSS color token, resolved by PeachPDF's own existing CSS color parser
     /// at layout time - not a new, independent color implementation.

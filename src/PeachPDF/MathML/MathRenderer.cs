@@ -1,17 +1,16 @@
 #region PeachPDF - A .NET library for rendering HTML to PDF
 //
-// Paints a laid-out MathBox tree into the PDF content stream via ordinary RGraphics calls - the
+// Paints a laid-out MathBox tree into the PDF content stream via ordinary Canvas calls - the
 // MathML equivalent of SvgRenderer. Never rasterizes: token text goes through the same DrawString
 // path any other HTML/SVG text uses, fraction bars/radical rules are plain filled rectangles, and
-// stretchy-operator glyphs (MATH-table variants/assemblies) go through the new RGraphics.DrawGlyphs
+// stretchy-operator glyphs (MATH-table variants/assemblies) go through the new Canvas.DrawGlyphs
 // primitive - all real vector PDF content.
 //
 #endregion
 
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {
@@ -21,29 +20,29 @@ namespace PeachPDF.MathML
         /// baseline lands at <c>destination.Y + root.Ascent</c>, matching how
         /// <see cref="Html.Core.Dom.CssBoxMath"/> sized the phantom word this rect comes from (its
         /// height is exactly <c>root.Ascent + root.Descent</c>).</summary>
-        public static void RenderInto(RGraphics g, MathBox root, RRect destination)
+        public static void RenderInto(Canvas g, MathBox root, Rect destination)
         {
             RenderBox(g, root, destination.X, destination.Y + root.Ascent);
         }
 
-        static void RenderBox(RGraphics g, MathBox box, double x, double y)
+        static void RenderBox(Canvas g, MathBox box, double x, double y)
         {
             switch (box.PaintKind)
             {
                 case MathPaintKind.Text when !string.IsNullOrEmpty(box.Text):
-                    g.DrawString(box.Text!, box.Font!, box.Color, new RPoint(x, y - box.Font!.Ascent),
-                        new RSize(box.InlineSize, box.Ascent + box.Descent));
+                    g.DrawString(box.Text!, box.Font!, box.PaintColor, new PaintPoint(x, y - box.Font!.Ascent),
+                        new Size(box.InlineSize, box.Ascent + box.Descent));
                     break;
 
                 case MathPaintKind.Rule when box.RuleWidth > 0 && box.RuleHeight > 0:
-                    g.DrawRectangle(g.GetSolidBrush(box.Color), x + box.RuleX, y + box.RuleY, box.RuleWidth, box.RuleHeight);
+                    g.DrawRectangle(g.GetSolidBrush(box.PaintColor), x + box.RuleX, y + box.RuleY, box.RuleWidth, box.RuleHeight);
                     break;
 
                 case MathPaintKind.Glyphs when box.Glyphs is { Count: > 0 }:
                     var placements = box.Glyphs
                         .Select(gl => new GlyphPlacement(gl.GlyphIndex, x + gl.X, y + gl.Y))
                         .ToList();
-                    g.DrawGlyphs(placements, box.Font!, box.Color);
+                    g.DrawGlyphs(placements, box.Font!, box.PaintColor);
                     break;
             }
 

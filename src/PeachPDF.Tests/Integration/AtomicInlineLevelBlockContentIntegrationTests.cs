@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -172,7 +172,7 @@ namespace PeachPDF.Tests.Integration
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, graphics);
             Assert.Contains(graphics.DrawStringCalls, call => call.Text == "Description");
-            Assert.Contains(graphics.FilledShapes, shape => shape.Color == RColor.FromArgb(7, 8, 9));
+            Assert.Contains(graphics.FilledShapes, shape => shape.PaintColor == PaintColor.FromArgb(7, 8, 9));
         }
 
         [Fact]
@@ -472,14 +472,14 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, graphics);
             Assert.DoesNotContain(graphics.DrawStringCalls, call => call.Text.Contains("HiddenCardTitle"));
 
-            var border = RColor.FromArgb(1, 2, 3);
-            var background = RColor.FromArgb(4, 5, 6);
+            var border = PaintColor.FromArgb(1, 2, 3);
+            var background = PaintColor.FromArgb(4, 5, 6);
             Assert.DoesNotContain(graphics.Log, call => call switch
             {
-                TestRecordingGraphics.DrawRectCall rect => rect.Color == border || rect.Color == background,
-                TestRecordingGraphics.DrawPathCall path => path.Color == border || path.Color == background,
-                TestRecordingGraphics.DrawPolygonCall polygon => polygon.Color == border || polygon.Color == background,
-                TestRecordingGraphics.DrawLineCall line => line.Color == border || line.Color == background,
+                TestRecordingGraphics.DrawRectCall rect => rect.PaintColor == border || rect.PaintColor == background,
+                TestRecordingGraphics.DrawPathCall path => path.PaintColor == border || path.PaintColor == background,
+                TestRecordingGraphics.DrawPolygonCall polygon => polygon.PaintColor == border || polygon.PaintColor == background,
+                TestRecordingGraphics.DrawLineCall line => line.PaintColor == border || line.PaintColor == background,
                 _ => false
             });
         }

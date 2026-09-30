@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System;
@@ -23,14 +23,14 @@ internal sealed class TransparencyProbe : IDisposable
     [ThreadStatic]
     private static TransparencyProbe? s_current;
 
-    private readonly RAdapter _adapter;
+    private readonly RenderContext _adapter;
     private readonly double _pixelsPerPoint;
     private PdfDocument? _document;
     private XGraphics? _xGraphics;
     private GraphicsAdapter? _graphics;
     private int _probes;
 
-    internal TransparencyProbe(RAdapter adapter, double pixelsPerPoint)
+    internal TransparencyProbe(RenderContext adapter, double pixelsPerPoint)
     {
         _adapter = adapter;
         _pixelsPerPoint = pixelsPerPoint;
@@ -49,7 +49,7 @@ internal sealed class TransparencyProbe : IDisposable
     }
 
     /// <summary>Whether <paramref name="paint"/> needs transparency. Anything else that goes wrong while painting is ignored: the real paint reports it.</summary>
-    public bool Requires(Action<RGraphics> paint)
+    public bool Requires(Action<Canvas> paint)
     {
         if (_graphics is null || _probes++ >= ProbesPerScratchDocument)
             Reset();

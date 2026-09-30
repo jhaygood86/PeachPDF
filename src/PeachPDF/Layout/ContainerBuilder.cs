@@ -1,4 +1,5 @@
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -488,7 +489,7 @@ namespace PeachPDF.Layout
             return imageBox;
         }
 
-        private RImage DecodeRasterBytes(byte[] bytes) =>
+        private Image DecodeRasterBytes(byte[] bytes) =>
             properties.Adapter.ImageFromStream(new MemoryStream(bytes));
 
         private SvgDocument DecodeSvgMarkup(string svgMarkup) =>
@@ -582,7 +583,7 @@ namespace PeachPDF.Layout
             // Cloned so this fragment's own <style> tag collection (DomParser.GenerateFragmentCssTree's own
             // CascadeParseStyles call) never mutates a caller-shared PeachPdfCssContent instance, or the
             // adapter's cached UA-default CssData.
-            var cssData = (stylesheet?.CssData ?? await adapter.GetDefaultCssData()).Clone();
+            var cssData = (stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(adapter)).Clone();
 
             var cssParser = new CssParser(adapter, htmlContainer: null);
             var domParser = new DomParser(cssParser);

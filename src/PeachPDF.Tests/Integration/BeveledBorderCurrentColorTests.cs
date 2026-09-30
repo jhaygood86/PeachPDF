@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// black text would paint a black-on-black frame.
     /// <para>
     /// Two layers are asserted separately here, because the substitution belongs to the first and it
-    /// is the second a reader sees: <c>ActualBorder*Color</c> is the RESOLVED base, still unshaded,
+    /// is the second a reader sees: <c>ActualBorder*PaintColor</c> is the RESOLVED base, still unshaded,
     /// and <c>BorderBevelColors</c> derives the two faces from it at paint time. So a beveled
     /// currentColor border resolves to <c>#eee</c> and paints <c>#9a9a9a</c>/<c>#eeeeee</c>.
     /// </para>
@@ -26,14 +26,14 @@ namespace PeachPDF.Tests.Integration
     public class BeveledBorderCurrentColorTests
     {
         /// <summary>The base a beveled currentColor border resolves to, before any shading.</summary>
-        private static readonly RColor Base = RColor.FromArgb(238, 238, 238);
+        private static readonly PaintColor Base = PaintColor.FromArgb(238, 238, 238);
 
         /// <summary>Its two faces - Chrome's bytes for any beveled currentColor border.</summary>
-        private static readonly RColor Darkened = RColor.FromArgb(154, 154, 154);
-        private static readonly RColor Lit = RColor.FromArgb(238, 238, 238);
+        private static readonly PaintColor Darkened = PaintColor.FromArgb(154, 154, 154);
+        private static readonly PaintColor Lit = PaintColor.FromArgb(238, 238, 238);
 
-        private static readonly RColor Red = RColor.FromArgb(255, 0, 0);
-        private static readonly RColor Gray = RColor.FromArgb(128, 128, 128);
+        private static readonly PaintColor Red = PaintColor.FromArgb(255, 0, 0);
+        private static readonly PaintColor Gray = PaintColor.FromArgb(128, 128, 128);
 
         [Theory]
         // Chrome paints the same two greys for every one of these, however different the colors are:
@@ -61,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             // ...and the two faces derived from it are what actually reach the page.
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, box, graphics);
-            Assert.Equal([Darkened, Lit], graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
+            Assert.Equal([Darkened, Lit], graphics.FilledShapes.Select(shape => shape.PaintColor).Distinct().ToList());
         }
 
         [Theory]
@@ -121,8 +121,8 @@ namespace PeachPDF.Tests.Integration
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, box, graphics);
             Assert.Equal(
-                [RColor.FromArgb(44, 44, 44), RColor.FromArgb(212, 212, 212)],
-                graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
+                [PaintColor.FromArgb(44, 44, 44), PaintColor.FromArgb(212, 212, 212)],
+                graphics.FilledShapes.Select(shape => shape.PaintColor).Distinct().ToList());
         }
 
         [Fact]
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Integration
                 + "</div></body></html>");
 
             Assert.Equal(Red, LayoutHarness.FindById(root, "sameColor")!.ActualBorderTopColor);
-            Assert.Equal(RColor.FromArgb(0, 0, 255), LayoutHarness.FindById(root, "ownColor")!.ActualBorderTopColor);
+            Assert.Equal(PaintColor.FromArgb(0, 0, 255), LayoutHarness.FindById(root, "ownColor")!.ActualBorderTopColor);
         }
 
         [Fact]
@@ -174,7 +174,7 @@ namespace PeachPDF.Tests.Integration
             // The mirror pair this replaced (`inset solid solid inset` and `solid inset inset solid`)
             // left LEFT equal to TOP in both, so a left longhand reading the top style survived the
             // whole file.
-            async Task AssertSides(string styles, RColor top, RColor right, RColor bottom, RColor left)
+            async Task AssertSides(string styles, PaintColor top, PaintColor right, PaintColor bottom, PaintColor left)
             {
                 var (root, _) = await LayoutHarness.LayoutAsync(
                     "<!DOCTYPE html><html><body>"
@@ -208,10 +208,10 @@ namespace PeachPDF.Tests.Integration
                 + "</body></html>");
 
             var box = LayoutHarness.FindById(root, "el")!;
-            Assert.Equal(RColor.FromArgb(1, 0, 0), box.ActualBorderTopColor);
-            Assert.Equal(RColor.FromArgb(0, 2, 0), box.ActualBorderRightColor);
-            Assert.Equal(RColor.FromArgb(0, 0, 3), box.ActualBorderBottomColor);
-            Assert.Equal(RColor.FromArgb(4, 4, 4), box.ActualBorderLeftColor);
+            Assert.Equal(PaintColor.FromArgb(1, 0, 0), box.ActualBorderTopColor);
+            Assert.Equal(PaintColor.FromArgb(0, 2, 0), box.ActualBorderRightColor);
+            Assert.Equal(PaintColor.FromArgb(0, 0, 3), box.ActualBorderBottomColor);
+            Assert.Equal(PaintColor.FromArgb(4, 4, 4), box.ActualBorderLeftColor);
         }
 
         [Fact]
@@ -431,7 +431,7 @@ namespace PeachPDF.Tests.Integration
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, box, graphics);
             Assert.Contains(graphics.Log.OfType<TestRecordingGraphics.DrawLineCall>(),
-                line => line.Color == Gray && line.DashPattern is { Count: > 0 });
+                line => line.PaintColor == Gray && line.DashPattern is { Count: > 0 });
         }
 
         [Fact]
@@ -451,7 +451,7 @@ namespace PeachPDF.Tests.Integration
 
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, beveled, graphics);
-            Assert.Equal([Darkened, Lit], graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
+            Assert.Equal([Darkened, Lit], graphics.FilledShapes.Select(shape => shape.PaintColor).Distinct().ToList());
 
             // ...and the inherited green reaches neither rule, because the sheet's own `color: gray`
             // is what a flat one resolves through.

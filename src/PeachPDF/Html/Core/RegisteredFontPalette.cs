@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core
@@ -41,10 +41,10 @@ namespace PeachPDF.Html.Core
         public int BaseIndex { get; }
 
         /// <summary>Per-entry color overrides (CPAL entry index → color); empty when the rule declares none.</summary>
-        public IReadOnlyList<KeyValuePair<int, RColor>> Overrides { get; }
+        public IReadOnlyList<KeyValuePair<int, PaintColor>> Overrides { get; }
 
         private RegisteredFontPalette(string name, string family, FontPaletteBaseKind baseKind, int baseIndex,
-            IReadOnlyList<KeyValuePair<int, RColor>> overrides)
+            IReadOnlyList<KeyValuePair<int, PaintColor>> overrides)
         {
             Name = name;
             Family = family;
@@ -114,12 +114,12 @@ namespace PeachPDF.Html.Core
         }
 
         // override-colors: [ <index> <color> ]#  e.g. "0 #ff0000, 1 rgb(0, 255, 0)"
-        private static IReadOnlyList<KeyValuePair<int, RColor>> ParseOverrideColors(string? raw, CssValueParser valueParser)
+        private static IReadOnlyList<KeyValuePair<int, PaintColor>> ParseOverrideColors(string? raw, CssValueParser valueParser)
         {
             if (string.IsNullOrWhiteSpace(raw))
                 return [];
 
-            var result = new List<KeyValuePair<int, RColor>>();
+            var result = new List<KeyValuePair<int, PaintColor>>();
             foreach (var item in SplitTopLevelComma(raw))
             {
                 var trimmed = item.Trim();
@@ -133,7 +133,7 @@ namespace PeachPDF.Html.Core
                     continue;
 
                 if (valueParser.TryGetColor(colorPart, 0, colorPart.Length, out var color))
-                    result.Add(new KeyValuePair<int, RColor>(entryIndex, color));
+                    result.Add(new KeyValuePair<int, PaintColor>(entryIndex, color));
             }
 
             return result;

@@ -1,13 +1,14 @@
 using PeachDrawing.Text.OpenType;
 using System;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.MathML
 {
     /// <summary>
     /// Scales a resolved math font's <see cref="MathConstantsTable"/> (design units) into the working
-    /// unit space <c>RGraphics</c> measures/draws in, via the same
+    /// unit space <c>Canvas</c> measures/draws in, via the same
     /// <c>sizePt / unitsPerEm * PixelsPerPoint</c> formula <c>FontAdapter.ScaleDesignUnits</c> already
     /// uses for vertical metrics. When the resolved font has no MATH table, each named accessor falls
     /// back to a fixed ratio of the current size instead (MathML Core's own documented fallback
@@ -20,8 +21,8 @@ namespace PeachPDF.MathML
 
         public double UnitsPerEm { get; }
         public double PixelsPerPoint { get; }
-        public Func<double, Html.Adapters.RFont> ResolveFont { get; }
-        public RGraphics Graphics { get; }
+        public Func<double, Font> ResolveFont { get; }
+        public Canvas Graphics { get; }
 
         /// <summary>The root element's font, for <c>rex</c>/<c>rch</c>/<c>rcap</c>/<c>ric</c>/<c>rlh</c>; null takes each
         /// unit's spec fallback.</summary>
@@ -31,7 +32,7 @@ namespace PeachPDF.MathML
         public double RootSizePt { get; }
 
         public MathMetrics(MathTable? mathTable, double unitsPerEm, double pixelsPerPoint,
-            Func<double, Html.Adapters.RFont> resolveFont, RGraphics graphics,
+            Func<double, Font> resolveFont, Canvas graphics,
             IFontMetricSource? rootFonts = null, double rootSizePt = 0)
         {
             RootFonts = rootFonts;

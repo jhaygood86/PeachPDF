@@ -60,13 +60,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         public XSolidBrush(XSolidBrush brush)
         {
-            _color = brush.Color;
+            _color = brush.PaintColor;
         }
 
         /// <summary>
         /// Gets or sets the color of this brush.
         /// </summary>
-        public XColor Color
+        public XColor PaintColor
         {
             get { return _color; }
             set

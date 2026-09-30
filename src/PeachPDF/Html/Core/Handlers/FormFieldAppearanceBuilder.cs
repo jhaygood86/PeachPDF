@@ -1,7 +1,6 @@
 using System;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Paint.Content;
@@ -64,8 +63,8 @@ namespace PeachPDF.Html.Core.Handlers
             return font;
         }
 
-        static PdfFormXObject CreateForm(PdfDocument document, RAdapter adapter, double pixelsPerPoint,
-            double widthPt, double heightPt, Action<RGraphics, RRect> draw)
+        static PdfFormXObject CreateForm(PdfDocument document, RenderContext adapter, double pixelsPerPoint,
+            double widthPt, double heightPt, Action<Canvas, Rect> draw)
         {
             var form = new XForm(document, new XSize(widthPt, heightPt));
             var formGraphics = XGraphics.FromForm(form);
@@ -76,10 +75,10 @@ namespace PeachPDF.Html.Core.Handlers
             return form.PdfForm;
         }
 
-        static RRect LayoutRect(double widthPt, double heightPt, double pixelsPerPoint) =>
+        static Rect LayoutRect(double widthPt, double heightPt, double pixelsPerPoint) =>
             new(0, 0, widthPt * pixelsPerPoint, heightPt * pixelsPerPoint);
 
-        static RRect ContentRect(CssBox box, RRect rect) => new(
+        static Rect ContentRect(CssBox box, Rect rect) => new(
             rect.X + box.ActualBorderLeftWidth + box.ActualPaddingLeft,
             rect.Y + box.ActualBorderTopWidth + box.ActualPaddingTop,
             Math.Max(0, rect.Width - box.ActualBorderLeftWidth - box.ActualBorderRightWidth - box.ActualPaddingLeft - box.ActualPaddingRight),
@@ -92,7 +91,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// content-box height when <c>-peachpdf-pdf-form-field-auto-font-size</c> requested it (via
         /// <see cref="CssBox.GetActualFontAtSize"/> - only the size differs).
         /// </summary>
-        static RFont ResolveTextFont(CssBox box, RRect contentRect, double pixelsPerPoint, bool autoFontSize)
+        static Font ResolveTextFont(CssBox box, Rect contentRect, double pixelsPerPoint, bool autoFontSize)
         {
             if (!autoFontSize) return box.ActualFont;
 
@@ -116,7 +115,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// the whole sequence, so the hint disappears on the first keystroke instead of sitting
         /// behind what is typed.
         /// </remarks>
-        internal static PdfFormXObject BuildTextAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint,
+        internal static PdfFormXObject BuildTextAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint,
             CssBox box, double widthPt, double heightPt, string text, bool autoFontSize, int? combCells,
             bool isPlaceholder, out double resolvedFontSizePt)
         {
@@ -131,7 +130,7 @@ namespace PeachPDF.Html.Core.Handlers
             return CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
                 // Everything a reader must KEEP when the user edits the field goes before the "/Tx
-                // BMC" below and after the matching "EMC" - see RGraphics.BeginVariableText. A comb
+                // BMC" below and after the matching "EMC" - see Canvas.BeginVariableText. A comb
                 // field's cell dividers are chrome too, so they are drawn here with the border
                 // rather than alongside the characters they separate.
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
@@ -172,21 +171,21 @@ namespace PeachPDF.Html.Core.Handlers
         /// opacity group while letting the normal PDF graphics path enforce PDF/A's transparency
         /// rules for an author-specified translucent <c>::placeholder</c> style.
         /// </summary>
-        static RColor ApplyOpacity(RColor color, double opacity)
+        static PaintColor ApplyOpacity(PaintColor color, double opacity)
         {
             var alpha = (int)Math.Round(color.A * Math.Clamp(opacity, 0, 1));
-            return RColor.FromArgb(alpha, color.R, color.G, color.B);
+            return PaintColor.FromArgb(alpha, color.R, color.G, color.B);
         }
 
-        static void DrawSingleLine(RGraphics g, CssBox box, RColor color, RRect contentRect, RFont font, string text)
+        static void DrawSingleLine(Canvas g, CssBox box, PaintColor color, Rect contentRect, Font font, string text)
         {
             var y = contentRect.Y + Math.Max((contentRect.Height - font.Height) / 2, 0);
             // letter-spacing is deliberately not read here: CssBox.ActualLetterSpacing is only
             // populated by the normal word-measurement pass (DerivedStyle.MeasureLetterSpacing),
             // which a form-field box's own replaced-element sizing (CssBoxFormField.MeasureWordsSize)
             // never runs - reading it here would hit its NaN-sentinel default instead.
-            g.DrawString(text, font, color, new RPoint(contentRect.X, y),
-                new RSize(contentRect.Width, font.Height), fontPalette: box.ActualFontPalette, features: box.ActualTextShapingFeatures);
+            g.DrawString(text, font, color, new PaintPoint(contentRect.X, y),
+                new Size(contentRect.Width, font.Height), fontPalette: box.ActualFontPalette, features: box.ActualTextShapingFeatures);
         }
 
         /// <summary>
@@ -194,7 +193,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// with the border rather than with the characters, so a reader regenerating the value keeps
         /// them (see <see cref="BuildTextAppearance"/>).
         /// </summary>
-        static void DrawCombDividers(RGraphics g, CssBox box, RRect fieldRect, RRect contentRect, int cells)
+        static void DrawCombDividers(Canvas g, CssBox box, Rect fieldRect, Rect contentRect, int cells)
         {
             if (cells <= 1 || box.ActualBorderLeftWidth <= 0) return;
 
@@ -211,7 +210,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>Each character centered in its own evenly divided cell (ISO 32000-1 §12.7.4.3's "comb" field).</summary>
-        static void DrawCombCharacters(RGraphics g, RColor color, RRect contentRect, RFont font, string text, int cells)
+        static void DrawCombCharacters(Canvas g, PaintColor color, Rect contentRect, Font font, string text, int cells)
         {
             var cellWidth = contentRect.Width / cells;
             var y = contentRect.Y + Math.Max((contentRect.Height - font.Height) / 2, 0);
@@ -221,16 +220,16 @@ namespace PeachPDF.Html.Core.Handlers
                 var ch = text[i].ToString();
                 var chWidth = g.MeasureString(ch, font).Width;
                 var x = contentRect.X + i * cellWidth + Math.Max((cellWidth - chWidth) / 2, 0);
-                g.DrawString(ch, font, color, new RPoint(x, y), new RSize(cellWidth, font.Height));
+                g.DrawString(ch, font, color, new PaintPoint(x, y), new Size(cellWidth, font.Height));
             }
         }
 
         /// <summary>A checkbox/radio "off" appearance: the field's border/background chrome only.</summary>
-        internal static PdfFormXObject BuildCheckboxOffAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+        internal static PdfFormXObject BuildCheckboxOffAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
             CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) => FormFieldChrome.PaintBorderAndBackground(g, box, rect));
 
         /// <summary>A checkbox "on" appearance: border/background chrome plus the check mark, in the field's real resolved text color.</summary>
-        internal static PdfFormXObject BuildCheckboxOnAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+        internal static PdfFormXObject BuildCheckboxOnAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
             CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
@@ -238,11 +237,11 @@ namespace PeachPDF.Html.Core.Handlers
             });
 
         /// <summary>A radio button "off" appearance: the field's circular background/ring only.</summary>
-        internal static PdfFormXObject BuildRadioOffAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+        internal static PdfFormXObject BuildRadioOffAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
             CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) => FormFieldChrome.PaintRadioBackground(g, box, rect));
 
         /// <summary>A radio button "on" appearance: circular background/ring plus the filled inner dot, in the field's real resolved text color.</summary>
-        internal static PdfFormXObject BuildRadioOnAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+        internal static PdfFormXObject BuildRadioOnAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
             CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
                 FormFieldChrome.PaintRadioBackground(g, box, rect);

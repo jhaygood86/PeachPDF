@@ -13,19 +13,20 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace PeachPDF.Svg
 {
     /// <summary>
-    /// Paints a parsed <see cref="SvgDocument"/> into an <see cref="RGraphics"/>, mapping its
+    /// Paints a parsed <see cref="SvgDocument"/> into an <see cref="Canvas"/>, mapping its
     /// viewBox onto a target viewport rectangle and walking the scene graph. Whole documents can
     /// be stored as reusable forms by <see cref="RenderCachedInto"/>.
     /// </summary>
@@ -34,14 +35,14 @@ namespace PeachPDF.Svg
         // A form belongs to one PDF document. ConditionalWeakTable also lets a finished PDF and all
         // its cached forms be collected, even though each form refers back to its owning document.
         private static readonly ConditionalWeakTable<object, Dictionary<(SvgDocument Document, double Width,
-            double Height, double PixelsPerPoint), RImage>> FormCaches = new();
+            double Height, double PixelsPerPoint), Image>> FormCaches = new();
 
         /// <summary>
         /// Paints a whole SVG from a document-local Form XObject. Position is only a placement concern;
         /// size and PixelsPerPoint affect the artwork rendered into the form. A scene graph is shared
         /// only by identity, since separately built inline SVGs may have different resolved currentColor.
         /// </summary>
-        public static void RenderCachedInto(RGraphics g, SvgDocument document, RRect viewportRect)
+        public static void RenderCachedInto(Canvas g, SvgDocument document, Rect viewportRect)
         {
             if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
                 return;
@@ -55,7 +56,7 @@ namespace PeachPDF.Svg
 
             // Recording/measurement graphics have no PDF document to own a form and should still
             // receive the individual drawing calls directly.
-            if (g.FormCacheOwner is null)
+            if (g.TileCacheOwner is null)
             {
                 RenderInto(g, document, viewportRect);
                 return;
@@ -69,15 +70,15 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Returns the reusable SVG artwork tile, or null if this graphics cannot create one.</summary>
-        public static RImage? GetOrCreateForm(RGraphics g, SvgDocument document, double width, double height)
+        public static Image? GetOrCreateForm(Canvas g, SvgDocument document, double width, double height)
         {
             if (width <= 0 || height <= 0 ||
-                (g.FormCacheOwner is not null && (width / g.PixelsPerPoint < 1 || height / g.PixelsPerPoint < 1)))
+                (g.TileCacheOwner is not null && (width / g.PixelsPerPoint < 1 || height / g.PixelsPerPoint < 1)))
                 return null;
 
-            var owner = g.FormCacheOwner;
+            var owner = g.TileCacheOwner;
             var key = (document, width, height, g.PixelsPerPoint);
-            Dictionary<(SvgDocument Document, double Width, double Height, double PixelsPerPoint), RImage>? cache =
+            Dictionary<(SvgDocument Document, double Width, double Height, double PixelsPerPoint), Image>? cache =
                 owner is null ? null : FormCaches.GetValue(owner, _ => new());
             if (cache is not null && cache.TryGetValue(key, out var existing))
                 return existing;
@@ -87,7 +88,7 @@ namespace PeachPDF.Svg
                 return null;
 
             using (t.Graphics)
-                RenderInto(t.Graphics, document, new RRect(0, 0, width, height));
+                RenderInto(t.Graphics, document, new Rect(0, 0, width, height));
 
             cache?.Add(key, t.Image);
             return t.Image;
@@ -99,7 +100,7 @@ namespace PeachPDF.Svg
         /// point used to paint the cached form's content, or to paint directly when no form can be
         /// created. Replaced elements call <see cref="RenderCachedInto"/> instead.
         /// </summary>
-        public static void RenderInto(RGraphics g, SvgDocument document, RRect viewportRect)
+        public static void RenderInto(Canvas g, SvgDocument document, Rect viewportRect)
         {
             if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
                 return;
@@ -121,16 +122,16 @@ namespace PeachPDF.Svg
 
             var viewport = (viewBoxWidth, viewBoxHeight);
 
-            var previousBackdrop = g.SvgBackdrop;
+            var previousBackdrop = SvgBackdropSlot.Get(g);
             if (document.ReadsBackdrop)
             {
-                g.SvgBackdrop = new SvgBackdropContext(document, PageBackdropFor(document))
+                SvgBackdropSlot.Set(g, new SvgBackdropContext(document, PageBackdropFor(document))
                 {
                     Frame = frame,
                     ViewportRect = viewportRect,
                     ViewBoxMatrix = matrix,
                     Viewport = viewport,
-                };
+                });
             }
 
             try
@@ -140,7 +141,7 @@ namespace PeachPDF.Svg
             }
             finally
             {
-                g.SvgBackdrop = previousBackdrop;
+                SvgBackdropSlot.Set(g, previousBackdrop);
             }
 
             g.PopTransform();
@@ -151,14 +152,14 @@ namespace PeachPDF.Svg
         /// Walks the scene graph purely to compute the final page-space bounding rectangle of every
         /// <c>&lt;a&gt;</c> element's content, for PDF link-annotation registration. Deliberately
         /// separate from <see cref="RenderInto"/>/<see cref="RenderElement"/> - it never touches
-        /// <see cref="RGraphics"/> (no painting, just matrix composition + bounding-box math), so it's
+        /// <see cref="Canvas"/> (no painting, just matrix composition + bounding-box math), so it's
         /// safe to call exactly once regardless of how many times the document is actually painted
         /// (e.g. once per output page during pagination - painting is a repeated "scroll and repaint"
         /// pass in this renderer, which would make link rectangles collected *during* paint duplicate
         /// once per page). Callers should gather link rectangles from this method's output instead of
         /// hooking into paint at all.
         /// </summary>
-        public static void CollectLinks(SvgDocument document, RRect viewportRect, List<(RRect Rect, string Href)> sink)
+        public static void CollectLinks(SvgDocument document, Rect viewportRect, List<(Rect Rect, string Href)> sink)
         {
             if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
                 return;
@@ -177,7 +178,7 @@ namespace PeachPDF.Svg
                 CollectLinksFromElement(element, matrix, sink);
         }
 
-        private static void CollectLinksFromElement(SvgElement element, RMatrix ambientMatrix, List<(RRect Rect, string Href)> sink)
+        private static void CollectLinksFromElement(SvgElement element, Matrix3x2 ambientMatrix, List<(Rect Rect, string Href)> sink)
         {
             var matrix = element.Transform is { } t ? MultiplyMatrix(t, ambientMatrix) : ambientMatrix;
 
@@ -193,7 +194,7 @@ namespace PeachPDF.Svg
 
                 case SvgUseElement { Target: { } target } use:
                     var useMatrix = use.X != 0 || use.Y != 0
-                        ? MultiplyMatrix(new RMatrix(1, 0, 0, 1, use.X, use.Y), matrix)
+                        ? MultiplyMatrix(new Matrix3x2(1, 0, 0, 1, (float)use.X, (float)use.Y), matrix)
                         : matrix;
                     CollectLinksFromElement(target, useMatrix, sink);
                     break;
@@ -201,16 +202,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Composes two matrices for row-vector point transformation: applies <paramref name="first"/>, then <paramref name="second"/> (i.e. <c>p' = p * first * second</c>).</summary>
-        private static RMatrix MultiplyMatrix(RMatrix first, RMatrix second)
-        {
-            return new RMatrix(
-                first.M11 * second.M11 + first.M12 * second.M21,
-                first.M11 * second.M12 + first.M12 * second.M22,
-                first.M21 * second.M11 + first.M22 * second.M21,
-                first.M21 * second.M12 + first.M22 * second.M22,
-                first.OffsetX * second.M11 + first.OffsetY * second.M21 + second.OffsetX,
-                first.OffsetX * second.M12 + first.OffsetY * second.M22 + second.OffsetY);
-        }
+        private static Matrix3x2 MultiplyMatrix(Matrix3x2 first, Matrix3x2 second) => first.Then(second);
 
         /// <summary>
         /// Transforms an axis-aligned local-space rect by <paramref name="matrix"/> and returns the
@@ -219,14 +211,14 @@ namespace PeachPDF.Svg
         /// approximation for a rotated/skewed <c>&lt;a&gt;</c>: PDF link annotations are themselves
         /// always axis-aligned rectangles, so this is the closest any implementation could get anyway.
         /// </summary>
-        private static RRect TransformBoundingBox(RRect localBounds, RMatrix matrix)
+        private static Rect TransformBoundingBox(Rect localBounds, Matrix3x2 matrix)
         {
             var corners = new[]
             {
-                ApplyMatrix(new RPoint(localBounds.X, localBounds.Y), matrix),
-                ApplyMatrix(new RPoint(localBounds.X + localBounds.Width, localBounds.Y), matrix),
-                ApplyMatrix(new RPoint(localBounds.X, localBounds.Y + localBounds.Height), matrix),
-                ApplyMatrix(new RPoint(localBounds.X + localBounds.Width, localBounds.Y + localBounds.Height), matrix),
+                ApplyMatrix(new PaintPoint(localBounds.X, localBounds.Y), matrix),
+                ApplyMatrix(new PaintPoint(localBounds.X + localBounds.Width, localBounds.Y), matrix),
+                ApplyMatrix(new PaintPoint(localBounds.X, localBounds.Y + localBounds.Height), matrix),
+                ApplyMatrix(new PaintPoint(localBounds.X + localBounds.Width, localBounds.Y + localBounds.Height), matrix),
             };
 
             var minX = corners.Min(c => c.X);
@@ -234,7 +226,7 @@ namespace PeachPDF.Svg
             var minY = corners.Min(c => c.Y);
             var maxY = corners.Max(c => c.Y);
 
-            return new RRect(minX, minY, maxX - minX, maxY - minY);
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
         /// <summary>
@@ -242,25 +234,25 @@ namespace PeachPDF.Svg
         /// that method's own math (shared with <see cref="CollectLinks"/>, which needs it unmodified)
         /// resolves entirely in <paramref name="g"/>'s own coordinate space, where <paramref name="viewportRect"/>
         /// lives - but <c>viewBoxWidth</c>/<c>viewBoxHeight</c> (and the resulting linear "scale") are
-        /// plain SVG user-unit numbers, never scaled by <see cref="RGraphics.PixelsPerPoint"/> the way
-        /// <paramref name="viewportRect"/> itself already is. <see cref="RGraphics.PushTransform"/> only
+        /// plain SVG user-unit numbers, never scaled by <see cref="Canvas.PixelsPerPoint"/> the way
+        /// <paramref name="viewportRect"/> itself already is. <see cref="Canvas.PushTransform"/> only
         /// divides a matrix's translation by <c>PixelsPerPoint</c> before handing it to the backend, not
         /// its linear part - correct for an ordinary CSS <c>transform: scale()</c> (already scale-neutral),
         /// wrong for this transform's scale (a ratio of a <c>PixelsPerPoint</c>-scaled length over a
         /// never-scaled one), which would otherwise land <c>PixelsPerPoint</c> times too large (issue
         /// #814: an inline SVG icon's content overflowing its own, correctly-sized clip). Pre-dividing
         /// the linear part here - leaving the translation untouched, since that still wants
-        /// <see cref="RGraphics.PushTransform"/>'s own single division - is why this exists as a distinct
+        /// <see cref="Canvas.PushTransform"/>'s own single division - is why this exists as a distinct
         /// helper from <see cref="ComputeViewportTransform"/> rather than a change to it directly.
         /// </summary>
-        private static RMatrix ComputePaintViewportTransform(RGraphics g, RRect viewportRect, double viewBoxX, double viewBoxY, double viewBoxWidth, double viewBoxHeight, SvgPreserveAspectRatio par)
+        private static Matrix3x2 ComputePaintViewportTransform(Canvas g, Rect viewportRect, double viewBoxX, double viewBoxY, double viewBoxWidth, double viewBoxHeight, SvgPreserveAspectRatio par)
         {
             var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
             var pixelsPerPoint = g.PixelsPerPoint;
             return pixelsPerPoint == 1.0
                 ? matrix
-                : new RMatrix(matrix.M11 / pixelsPerPoint, matrix.M12 / pixelsPerPoint,
-                    matrix.M21 / pixelsPerPoint, matrix.M22 / pixelsPerPoint, matrix.OffsetX, matrix.OffsetY);
+                : new Matrix3x2((float)(matrix.M11 / pixelsPerPoint), (float)(matrix.M12 / pixelsPerPoint),
+                    (float)(matrix.M21 / pixelsPerPoint), (float)(matrix.M22 / pixelsPerPoint), matrix.M31, matrix.M32);
         }
 
         /// <summary>
@@ -271,13 +263,13 @@ namespace PeachPDF.Svg
         /// the caller's viewport clip) instead of the smaller; <c>none</c> stretches each axis
         /// independently, ignoring aspect ratio.
         /// </summary>
-        private static RMatrix ComputeViewportTransform(RRect viewportRect, double viewBoxX, double viewBoxY, double viewBoxWidth, double viewBoxHeight, SvgPreserveAspectRatio par)
+        private static Matrix3x2 ComputeViewportTransform(Rect viewportRect, double viewBoxX, double viewBoxY, double viewBoxWidth, double viewBoxHeight, SvgPreserveAspectRatio par)
         {
             if (par.Align == SvgAlign.None)
             {
                 var sx = viewportRect.Width / viewBoxWidth;
                 var sy = viewportRect.Height / viewBoxHeight;
-                return new RMatrix(sx, 0, 0, sy, viewportRect.X - viewBoxX * sx, viewportRect.Y - viewBoxY * sy);
+                return new Matrix3x2((float)sx, 0, 0, (float)sy, (float)(viewportRect.X - viewBoxX * sx), (float)(viewportRect.Y - viewBoxY * sy));
             }
 
             var scale = par.Slice
@@ -295,7 +287,7 @@ namespace PeachPDF.Svg
             var offsetX = viewportRect.X + (viewportRect.Width - viewBoxWidth * scale) * alignX - viewBoxX * scale;
             var offsetY = viewportRect.Y + (viewportRect.Height - viewBoxHeight * scale) * alignY - viewBoxY * scale;
 
-            return new RMatrix(scale, 0, 0, scale, offsetX, offsetY);
+            return new Matrix3x2((float)scale, 0, 0, (float)scale, (float)offsetX, (float)offsetY);
         }
 
         /// <summary>
@@ -306,7 +298,27 @@ namespace PeachPDF.Svg
         /// shape as <see cref="RenderInto"/>, just relative to whatever transform is already active
         /// rather than the page's own initial (identity) transform.
         /// </summary>
-        private static void RenderViewport(RGraphics g, SvgDocument document, double x, double y, double width, double height, RRect? viewBox, SvgPreserveAspectRatio par, IReadOnlyList<SvgElement> children, double opacity)
+        /// <param name="g">The graphics to paint through.</param>
+        /// <param name="document">The owning document (gradient/clip/mask/pattern/filter registries for <paramref name="children"/> to resolve against).</param>
+        /// <param name="x">Local X of the viewport rectangle.</param>
+        /// <param name="y">Local Y of the viewport rectangle.</param>
+        /// <param name="width">Width of the viewport rectangle.</param>
+        /// <param name="height">Height of the viewport rectangle.</param>
+        /// <param name="viewBox">The viewBox mapped onto the viewport rectangle, or null for an identity (viewBox-less) mapping.</param>
+        /// <param name="par">Alignment/meet-slice mode for the viewBox-to-viewport mapping.</param>
+        /// <param name="children">The content to render into the new viewport.</param>
+        /// <param name="opacity">Accumulated ancestor opacity to multiply into <paramref name="children"/>'s own.</param>
+        /// <param name="contextElement">
+        /// The <c>&lt;use&gt;</c> reaching this viewport as a <c>&lt;symbol&gt;</c>/nested-<c>&lt;svg&gt;</c> target, when
+        /// that's how it's being rendered - null for every other caller (a directly-authored nested <c>&lt;svg&gt;</c>, a
+        /// <c>&lt;marker&gt;</c>, a <c>&lt;pattern&gt;</c>). When given, this viewport's own children's frame (the viewBox-
+        /// to-viewport <c>matrix</c> composed with the ambient transform active here) is recorded under it in
+        /// <see cref="s_paintContextFrames"/> for the duration of <paramref name="children"/>'s paint - the same mechanism
+        /// the plain-element <c>RenderElementSwitch</c> arm already uses for its own target, letting <see cref="ContextBounds"/>
+        /// map a gradient/pattern context paint that reaches into <paramref name="children"/> out of the (pre-mapping)
+        /// frame <see cref="SvgGeometryBounds.GetUseTargetBoundingBox"/> reports its box in.
+        /// </param>
+        private static void RenderViewport(Canvas g, SvgDocument document, double x, double y, double width, double height, Rect? viewBox, SvgPreserveAspectRatio par, IReadOnlyList<SvgElement> children, double opacity, SvgElement? contextElement = null)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -319,18 +331,42 @@ namespace PeachPDF.Svg
 
             var viewBoxX = viewBox?.X ?? 0;
             var viewBoxY = viewBox?.Y ?? 0;
-            var viewportRect = new RRect(x, y, width, height);
+            var viewportRect = new Rect(x, y, width, height);
             var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
 
-            g.PushClip(viewportRect);
-            g.PushTransform(matrix);
+            var hadOuterFrame = false;
+            var outerFrame = default(Matrix3x2);
+            if (contextElement is not null)
+            {
+                hadOuterFrame = s_paintContextFrames.TryGetValue(contextElement, out outerFrame);
+                s_paintContextFrames[contextElement] = MultiplyMatrix(matrix, g.CurrentTransform);
+            }
 
-            var nestedViewport = (viewBoxWidth, viewBoxHeight);
-            foreach (var child in children)
-                RenderElement(g, document, child, opacity, nestedViewport);
+            var pushedClip = false;
+            var pushedTransform = false;
 
-            g.PopTransform();
-            g.PopClip();
+            try
+            {
+                g.PushClip(viewportRect);
+                pushedClip = true;
+                g.PushTransform(matrix);
+                pushedTransform = true;
+
+                var nestedViewport = (viewBoxWidth, viewBoxHeight);
+                foreach (var child in children)
+                    RenderElement(g, document, child, opacity, nestedViewport);
+            }
+            finally
+            {
+                if (pushedTransform) g.PopTransform();
+                if (pushedClip) g.PopClip();
+
+                if (contextElement is not null)
+                {
+                    if (hadOuterFrame) s_paintContextFrames[contextElement] = outerFrame;
+                    else s_paintContextFrames.Remove(contextElement);
+                }
+            }
         }
 
         /// <summary>
@@ -341,12 +377,12 @@ namespace PeachPDF.Svg
         /// against its own gradient/clip/mask/pattern registries, not the host document's). Does
         /// nothing for an unresolved <c>href</c> (see <see cref="SvgImageElement"/>).
         /// </summary>
-        private static void RenderImage(RGraphics g, SvgImageElement image, double opacity)
+        private static void RenderImage(Canvas g, SvgImageElement image, double opacity)
         {
             if (image.Width <= 0 || image.Height <= 0)
                 return;
 
-            var viewportRect = new RRect(image.X, image.Y, image.Width, image.Height);
+            var viewportRect = new Rect(image.X, image.Y, image.Width, image.Height);
 
             if (image.NestedDocument is { } nestedDocument)
             {
@@ -380,7 +416,7 @@ namespace PeachPDF.Svg
 
                 g.PushClip(viewportRect);
                 g.PushTransform(matrix);
-                g.DrawImage(raster, new RRect(0, 0, raster.Width, raster.Height));
+                g.DrawImage(raster, new Rect(0, 0, raster.Width, raster.Height));
                 g.PopTransform();
                 g.PopClip();
             }
@@ -411,7 +447,7 @@ namespace PeachPDF.Svg
             /// </summary>
             public string? LogicalGlyph { get; set; }
             public required SvgTextElement Run { get; init; }
-            public required RFont Font { get; init; }
+            public required Font Font { get; init; }
             public double Opacity { get; init; }
             public double? X { get; set; }
             public double? Y { get; set; }
@@ -429,7 +465,7 @@ namespace PeachPDF.Svg
             /// recomputed if bidi mirroring later rewrites <see cref="Glyph"/> (see
             /// <c>ApplyBidiReordering</c>'s own remarks) - a mirror pair's two glyphs are practically
             /// always the same width in any real font.</summary>
-            public RSize Size { get; set; }
+            public Size Size { get; set; }
 
             /// <summary>Set by <see cref="LayoutGlyphs"/> - whether this glyph paints upright (unrotated)
             /// rather than rotated, under a vertical writing mode. Always false when the text root's
@@ -437,7 +473,7 @@ namespace PeachPDF.Svg
             public bool IsUpright { get; set; }
 
             /// <summary>Set by <see cref="LayoutGlyphs"/> for an upright glyph whose font carries a real
-            /// <c>VORG</c> table (<see cref="RFont.HasVerticalOrigin"/>, issue #775) - the anchor
+            /// <c>VORG</c> table (<see cref="Font.HasVerticalOrigin"/>, issue #775) - the anchor
             /// correction <see cref="PaintUprightGlyph"/> applies, <c>GetVerticalOriginY(rune) -
             /// Font.Ascent</c>. Zero for a font without a real <c>VORG</c> table, reproducing the plain
             /// top-of-cell anchor exactly.</summary>
@@ -507,10 +543,10 @@ namespace PeachPDF.Svg
         /// Renders a whole <c>&lt;text&gt;</c> element: its subtree is flattened to an addressable-character
         /// stream (SVG 1.1 §10.4), laid out (per-character x/y/dx/dy/rotate lists, text chunks, per-chunk
         /// <c>text-anchor</c>), and painted - consecutive same-run, unrotated, in-flow characters as one
-        /// selectable <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>, anything positioned/rotated/gradient/stroked per
+        /// selectable <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/>, anything positioned/rotated/gradient/stroked per
         /// glyph. A <c>&lt;textPath&gt;</c> descendant lays out independently along its path.
         /// </summary>
-        private static void RenderText(RGraphics g, SvgDocument document, SvgTextElement text, double opacity)
+        private static void RenderText(Canvas g, SvgDocument document, SvgTextElement text, double opacity)
         {
             var glyphs = new List<GlyphInfo>();
             var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
@@ -958,7 +994,7 @@ namespace PeachPDF.Svg
         /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
         /// defined meaning changing mid-text.
         /// </summary>
-        private static void LayoutGlyphs(RGraphics g, List<GlyphInfo> glyphs, bool isVertical)
+        private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical)
         {
             double penX = 0, penY = 0;
             var chunkStarts = new List<int> { 0 };
@@ -998,7 +1034,7 @@ namespace PeachPDF.Svg
                     // An upright glyph's down-the-column advance is its real vmtx advance height when
                     // its font carries real OpenType vertical metrics (issue #770), same as
                     // CssLayoutEngine.NaturalWordSize's own upright branch. Otherwise it falls back to
-                    // the font's own line height, not its measured width (RGraphics.DrawString always
+                    // the font's own line height, not its measured width (Canvas.DrawString always
                     // renders a glyph across the font's full line-height span regardless of that glyph's
                     // own narrower advance width - see NaturalWordSize's remarks for the visual-overlap
                     // failure mode this avoids). A rotated glyph's down-the-column footprint is its own
@@ -1063,7 +1099,7 @@ namespace PeachPDF.Svg
                         }
                         else
                         {
-                            gi.Size = new RSize(0, gi.Font.Height);
+                            gi.Size = new Size(0, gi.Font.Height);
                             gi.Advance = 0;
                         }
                     }
@@ -1136,7 +1172,7 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Paints the laid-out character stream. Under <c>horizontal-tb</c>: a maximal contiguous group
-        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
+        /// of same-run, unrotated, in-flow characters is painted as one <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/>
         /// (kept selectable); an explicitly-rotated character is painted on its own, rotated about its
         /// own position (<see cref="PaintRotatedGlyph"/>). Under a vertical writing mode, every glyph
         /// paints individually - never batched into one string - since consecutive upright glyphs stack
@@ -1147,7 +1183,7 @@ namespace PeachPDF.Svg
         /// over the orientation-driven default when both apply, matching how <c>rotate=""</c> already
         /// overrides in-flow layout today.
         /// </summary>
-        private static void PaintGlyphs(RGraphics g, SvgDocument document, List<GlyphInfo> glyphs, double opacity, bool isVertical)
+        private static void PaintGlyphs(Canvas g, SvgDocument document, List<GlyphInfo> glyphs, double opacity, bool isVertical)
         {
             var i = 0;
             while (i < glyphs.Count)
@@ -1255,7 +1291,7 @@ namespace PeachPDF.Svg
         /// baseline-relative <c>Py - Ascent</c> convention (see <see cref="PaintTextGlyphs"/>, which
         /// already computes glyph draw origins the same way).
         /// </summary>
-        private static void PaintTextDecorations(RGraphics g, List<GlyphInfo> glyphs, double opacity)
+        private static void PaintTextDecorations(Canvas g, List<GlyphInfo> glyphs, double opacity)
         {
             // One forward pass tracking every decorator's currently-open span at once (keyed by
             // decorator, bounded by nesting depth per glyph, not the total distinct-decorator count),
@@ -1329,7 +1365,7 @@ namespace PeachPDF.Svg
             }
         }
 
-        private static void DrawDecorationSpan(RGraphics g, SvgTextElement decorator, RFont font, GlyphInfo start, GlyphInfo end, double opacity)
+        private static void DrawDecorationSpan(Canvas g, SvgTextElement decorator, Font font, GlyphInfo start, GlyphInfo end, double opacity)
         {
             var x1 = start.Px;
             var x2 = end.Px + end.Advance;
@@ -1340,9 +1376,12 @@ namespace PeachPDF.Svg
             // TextDecorationColor null for both "unset" and literal "currentColor") falls back to the
             // decorator's own solid fill - SVG has no separate tracked `color` property the way HTML
             // does, and the text's own fill is the closest available proxy for what a reader perceives
-            // as "this text's color".
+            // as "this text's color". Resolved through ResolveInMarker first (a no-op outside a marker)
+            // so a context-fill keyword on marker text isn't mistaken for "no solid color" and falls
+            // back to black instead of the shape it is on.
+            var resolvedFill = ResolveInMarker(decorator.Fill);
             var color = decorator.TextDecorationColor
-                ?? (decorator.Fill.Kind == SvgPaintKind.Solid ? decorator.Fill.Color : RColor.Black);
+                ?? (resolvedFill.Kind == SvgPaintKind.Solid ? resolvedFill.PaintColor : PaintColor.Black);
             var actualColor = ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity);
             const double thickness = 1;
             var isWavy = decorator.TextDecorationStyle == Keywords.Wavy;
@@ -1381,15 +1420,15 @@ namespace PeachPDF.Svg
         /// so a 90° rotation makes horizontal-reading text run top-to-bottom, the correct sense for
         /// <c>vertical-rl</c>/<c>vertical-lr</c>.
         /// </summary>
-        private static void PaintRotatedGlyph(RGraphics g, SvgDocument document, GlyphInfo start, RFont font, double degrees, double opacity)
+        private static void PaintRotatedGlyph(Canvas g, SvgDocument document, GlyphInfo start, Font font, double degrees, double opacity)
         {
             var glyphSize = start.Size;
             var radians = degrees * (Math.PI / 180.0);
             var cos = Math.Cos(radians);
             var sin = Math.Sin(radians);
-            var toOrigin = new RMatrix(1, 0, 0, 1, -start.Px, -start.Py);
-            var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
-            var fromOrigin = new RMatrix(1, 0, 0, 1, start.Px, start.Py);
+            var toOrigin = new Matrix3x2(1, 0, 0, 1, (float)-start.Px, (float)-start.Py);
+            var rotate = new Matrix3x2((float)cos, (float)sin, (float)-sin, (float)cos, 0, 0);
+            var fromOrigin = new Matrix3x2(1, 0, 0, 1, (float)start.Px, (float)start.Py);
             g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
             PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity,
                 start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
@@ -1412,7 +1451,7 @@ namespace PeachPDF.Svg
         /// into whatever paints next down the column unless this glyph's paint is confined to its own
         /// reserved cell, the same clip-per-cell fix that file applies.
         ///
-        /// When the font also carries a real <c>VORG</c> table (<see cref="RFont.HasVerticalOrigin"/> -
+        /// When the font also carries a real <c>VORG</c> table (<see cref="Font.HasVerticalOrigin"/> -
         /// issue #775), <see cref="GlyphInfo.OriginYOffset"/> (computed in <see cref="LayoutGlyphs"/>,
         /// same derivation as <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> - see its
         /// remarks) nudges the anchor away from the plain top-of-cell position. Added, not subtracted -
@@ -1425,12 +1464,12 @@ namespace PeachPDF.Svg
         /// <c>PaintUprightVerticalRun</c>'s own remarks on why (the unshifted per-cell reservation, not
         /// the origin-adjusted anchor, is what actually prevents bleed into neighboring cells; a
         /// self-consistent <c>VORG</c> table keeps ink inside it by construction). The clip is pushed
-        /// whenever either <see cref="RFont.HasVerticalMetrics"/> or <see cref="RFont.HasVerticalOrigin"/>
+        /// whenever either <see cref="Font.HasVerticalMetrics"/> or <see cref="Font.HasVerticalOrigin"/>
         /// is true, not just the former: a VORG-shifted anchor can push the painted span past the
         /// reserved cell even when <see cref="GlyphInfo.Advance"/> is the line-height fallback (its "the
         /// advance already equals the full painted span" guarantee assumes an unshifted anchor).
         /// </summary>
-        private static void PaintUprightGlyph(RGraphics g, SvgDocument document, GlyphInfo start, RFont font, double opacity)
+        private static void PaintUprightGlyph(Canvas g, SvgDocument document, GlyphInfo start, Font font, double opacity)
         {
             var glyphSize = start.Size;
             var drawX = start.Px - glyphSize.Width / 2;
@@ -1440,13 +1479,13 @@ namespace PeachPDF.Svg
             {
                 // Only the block (Y) axis needs bounding - the cross axis has no overlap risk to guard
                 // against, so this just needs to be generous enough to never itself clip real glyph ink.
-                // An actually-unbounded RRect (double.MinValue/MaxValue) breaks under the viewBox-to-
+                // An actually-unbounded Rect (double.MinValue/MaxValue) breaks under the viewBox-to-
                 // viewport transform PushTransform/RenderInto already has active here (the extreme
                 // coordinates overflow through that matrix multiply), which silently produced an empty
                 // effective clip and made every upright glyph invisible - a finite, merely-generous margin
                 // avoids that without reintroducing any real cross-axis clipping risk.
                 var crossAxisMargin = Math.Max(glyphSize.Width, font.Size) * 8;
-                g.PushClip(new RRect(start.Px - crossAxisMargin, start.Py, crossAxisMargin * 2, start.Advance));
+                g.PushClip(new Rect(start.Px - crossAxisMargin, start.Py, crossAxisMargin * 2, start.Advance));
                 PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity,
                     start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
                 g.PopClip();
@@ -1461,29 +1500,34 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Paints one straight-baseline group of characters (<paramref name="text"/>, all sharing one run's
         /// font/fill/stroke) at a given top-left origin. Plain solid, non-stroked text keeps the fast
-        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> path (a single-color PDF text show, so it stays
+        /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/> path (a single-color PDF text show, so it stays
         /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
-        /// needs the glyphs as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
+        /// needs the glyphs as an addressable vector path (<see cref="Canvas.GetTextOutline"/>),
         /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
         /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
         /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
         /// positionally aligned with it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
-        private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity,
+        private static void PaintTextGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, double drawX, double drawY, Size size, double opacity,
             double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null)
         {
-            var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
-            var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+            // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - same as a shape's own
+            // fill/stroke (PaintShape). Outside a marker this is a no-op (the tree builder already resolved these through `use`).
+            var fill = ResolveInMarker(run.Fill);
+            var stroke = ResolveInMarker(run.Stroke);
+
+            var hasStroke = stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
+            var needsOutline = fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
 
             if (!needsOutline)
             {
                 // Fast path: solid fill (or no fill at all) with no stroke.
-                if (run.Fill.Kind != SvgPaintKind.Solid)
+                if (fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
-                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
+                var solid = ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity);
+                g.DrawString(text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -1491,36 +1535,38 @@ namespace PeachPDF.Svg
             // directly, so shift down by the ascent. The measured box (top-left drawX/drawY, size) is
             // the objectBoundingBox reference for gradient/pattern paint - SvgGeometryBounds can't
             // measure text statically.
-            var baseline = new RPoint(drawX, drawY + font.Ascent);
+            var baseline = new PaintPoint(drawX, drawY + font.Ascent);
             var outline = g.GetTextOutline(text, font, baseline, letterSpacing, features);
 
             if (outline is null)
             {
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
-                if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
+                if (fill.Kind == SvgPaintKind.Solid)
+                    g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
                 return;
             }
 
-            // `size` comes from RGraphics.MeasureString, which (like HTML's own CssBox/CssLayoutEngine
+            // `size` comes from Canvas.MeasureString, which (like HTML's own CssBox/CssLayoutEngine
             // word measurement) has no letterSpacing parameter of its own - widen it the same
             // established way those callers do, via CountShapedGlyphs, so the objectBoundingBox
             // reference actually bounds the letter-spaced outline painted below rather than the
             // narrower unspaced advance.
             var spacedWidth = size.Width + (letterSpacing != 0 ? g.CountShapedGlyphs(text, font, features) * letterSpacing : 0);
-            var textBounds = new RRect(drawX, drawY, spacedWidth, size.Height);
+            var textBounds = new Rect(drawX, drawY, spacedWidth, size.Height);
 
-            // Fill then stroke, matching SVG paint order.
-            if (run.Fill.Kind != SvgPaintKind.None)
+            // Fill then stroke, matching SVG paint order. A gradient/pattern that came through context-fill/context-stroke is measured
+            // against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
+            if (fill.Kind != SvgPaintKind.None)
             {
-                if (run.Fill.Kind == SvgPaintKind.PatternRef)
+                var fillBounds = ContextBounds(g, fill) ?? textBounds;
+                if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, textBounds);
+                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
-                    var brush = ResolvePaintBrush(g, document, run, run.Fill, opacity * run.FillOpacity, textBounds);
+                    var brush = ResolvePaintBrush(g, document, run, fill, opacity * run.FillOpacity, fillBounds);
                     if (brush is not null)
                         g.DrawPath(brush, outline);
                 }
@@ -1528,7 +1574,8 @@ namespace PeachPDF.Svg
 
             if (hasStroke)
             {
-                var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, textBounds);
+                var strokeBounds = ContextBounds(g, stroke) ?? textBounds;
+                var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (pen is not null)
                     g.DrawPath(pen, outline);
             }
@@ -1544,7 +1591,7 @@ namespace PeachPDF.Svg
         /// to the path tangent there. A glyph whose midpoint falls off the path is dropped. Each glyph paints
         /// in its own run's font/fill/stroke via <see cref="PaintGlyphAlongPath"/>.
         /// </summary>
-        private static void RenderTextPath(RGraphics g, SvgDocument document, SvgTextElement run, double inheritedOpacity)
+        private static void RenderTextPath(Canvas g, SvgDocument document, SvgTextElement run, double inheritedOpacity)
         {
             if (run.PathData is not { } segments)
                 return;
@@ -1598,76 +1645,64 @@ namespace PeachPDF.Svg
                 var mid = startOffset + pen + extraDx + advance / 2;
                 pen += advance + extraDx;   // dx shifts the current position along the path
 
-                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°).
-                var distance = run.Side == SvgTextPathSide.Right ? totalLength - mid : mid;
-
-                // A glyph centered off the ends of the path is not rendered.
-                if (distance < 0 || distance > totalLength)
+                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°); dy offsets the glyph
+                // perpendicular to the path; the glyph turns to the tangent plus any per-character rotate. A glyph centred off
+                // either end of the path is not rendered.
+                if (PathText.GetGlyphFrame(geometry.Measure, mid, run.Side == SvgTextPathSide.Right ? PathTextSide.Right : PathTextSide.Left,
+                        extraDy, gi.Rotate ?? 0) is not { } frame)
                     continue;
 
-                var (px, py, tangentDegrees) = geometry.PointAtLength(distance);
-                if (run.Side == SvgTextPathSide.Right)
-                    tangentDegrees += 180;
-
-                var tangentRad = tangentDegrees * (Math.PI / 180.0);
-                var tangentCos = Math.Cos(tangentRad);
-                var tangentSin = Math.Sin(tangentRad);
-
-                // dy offsets the glyph perpendicular to the path (along the normal).
-                var offsetX = px - tangentSin * extraDy;
-                var offsetY = py + tangentCos * extraDy;
-
-                // The glyph frame rotates to the tangent plus any per-character rotate, then translates.
-                var glyphRad = (tangentDegrees + (gi.Rotate ?? 0)) * (Math.PI / 180.0);
-                var frame = MultiplyMatrix(
-                    new RMatrix(Math.Cos(glyphRad), Math.Sin(glyphRad), -Math.Sin(glyphRad), Math.Cos(glyphRad), 0, 0),
-                    new RMatrix(1, 0, 0, 1, offsetX, offsetY));
-
-                var hasStroke = gi.Run.Stroke.Kind != SvgPaintKind.None && gi.Run.StrokeWidth > 0;
-                var needsOutline = gi.Run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
-
                 g.PushTransform(frame);
-                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, needsOutline, hasStroke, gi.LogicalGlyph);
+                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, gi.LogicalGlyph);
                 g.PopTransform();
             }
         }
 
         /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
-        private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke, string? logicalGlyph = null)
+        private static void PaintGlyphAlongPath(Canvas g, SvgDocument document, SvgTextElement run, Font font, string glyph, double advance, double opacity, string? logicalGlyph = null)
         {
+            // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - see PaintTextGlyphs.
+            var fill = ResolveInMarker(run.Fill);
+            var stroke = ResolveInMarker(run.Stroke);
+
+            var hasStroke = stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
+            var needsOutline = fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+
             var leftX = -advance / 2;
             var glyphSize = g.MeasureString(glyph, font, run.ShapingFeatures);
 
             if (!needsOutline)
             {
-                if (run.Fill.Kind != SvgPaintKind.Solid)
+                if (fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 
-            var outline = g.GetTextOutline(glyph, font, new RPoint(leftX, 0), features: run.ShapingFeatures);
+            var outline = g.GetTextOutline(glyph, font, new PaintPoint(leftX, 0), features: run.ShapingFeatures);
             if (outline is null)
             {
-                if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                if (fill.Kind == SvgPaintKind.Solid)
+                    g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 
             // objectBoundingBox gradient/pattern on a textPath glyph uses the glyph's own local box (an
             // envelope approximation, since the run's straight bbox is meaningless in the rotated frame).
-            var bounds = new RRect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
+            // A gradient/pattern that came through context-fill/context-stroke instead measures against the context element.
+            var bounds = new Rect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
 
-            if (run.Fill.Kind != SvgPaintKind.None)
+            if (fill.Kind != SvgPaintKind.None)
             {
-                if (run.Fill.Kind == SvgPaintKind.PatternRef)
+                var fillBounds = ContextBounds(g, fill) ?? bounds;
+                if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, bounds);
+                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
-                    var brush = ResolvePaintBrush(g, document, run, run.Fill, opacity * run.FillOpacity, bounds);
+                    var brush = ResolvePaintBrush(g, document, run, fill, opacity * run.FillOpacity, fillBounds);
                     if (brush is not null)
                         g.DrawPath(brush, outline);
                 }
@@ -1675,7 +1710,8 @@ namespace PeachPDF.Svg
 
             if (hasStroke)
             {
-                var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, bounds);
+                var strokeBounds = ContextBounds(g, stroke) ?? bounds;
+                var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (strokePen is not null)
                     g.DrawPath(strokePen, outline);
             }
@@ -1683,10 +1719,10 @@ namespace PeachPDF.Svg
             outline.Dispose();
         }
 
-        private static void RenderElement(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
+        private static void RenderElement(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
             // A backdrop repaint ends where the element it is repainting for begins.
-            if (g.SvgBackdrop is { } backdrop && backdrop.ShouldSkip(element))
+            if (SvgBackdropSlot.Get(g) is { } backdrop && backdrop.ShouldSkip(element))
                 return;
 
             var opacity = inheritedOpacity * element.Opacity;
@@ -1699,19 +1735,19 @@ namespace PeachPDF.Svg
                 pushedTransform = true;
             }
 
-            RGraphicsPath? clipPath = null;
+            GraphicsPath? clipPath = null;
 
             if (element.ClipPathRef is { } clipRef && document.ClipPaths.TryGetValue(clipRef, out var clipDefinition))
             {
                 // objectBoundingBox: map the clipPath's 0..1 child geometry onto the referencing
                 // element's bounding box (SVG 1.1 §14.3.5). The clip is built in the element's local space
                 // (element.Transform is already pushed above), the same space GetBoundingBox reports, so
-                // the mapping is RMatrix(w, 0, 0, h, x, y). A missing/zero bbox falls back to no mapping.
-                RMatrix? unitsMatrix = null;
+                // the mapping is Matrix3x2(w, 0, 0, h, x, y). A missing/zero bbox falls back to no mapping.
+                Matrix3x2? unitsMatrix = null;
                 if (!clipDefinition.ClipPathUnitsUserSpaceOnUse &&
                     SvgGeometryBounds.GetBoundingBox(element) is { Width: > 0, Height: > 0 } bbox)
                 {
-                    unitsMatrix = new RMatrix(bbox.Width, 0, 0, bbox.Height, bbox.X, bbox.Y);
+                    unitsMatrix = new Matrix3x2((float)bbox.Width, 0, 0, (float)bbox.Height, (float)bbox.X, (float)bbox.Y);
                 }
 
                 clipPath = BuildClipPath(g, clipDefinition, unitsMatrix);
@@ -1763,6 +1799,7 @@ namespace PeachPDF.Svg
         {
             SvgGroupElement or SvgNestedSvgElement => true,
             SvgUseElement { Target: SvgGroupElement or SvgSymbolElement or SvgNestedSvgElement } => true,
+            SvgUseElement { Target: SvgUseElement inner } => NeedsContainerOpacityGroup(inner),
             _ => false,
         };
 
@@ -1775,7 +1812,7 @@ namespace PeachPDF.Svg
         /// <c>CssBox.PaintWithOpacity</c>), applied here to fix the double-blend limitation this renderer
         /// previously had for SVG group opacity.
         /// </summary>
-        private static void RenderContainerOpacityGroup(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
+        private static void RenderContainerOpacityGroup(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
             // The tile's content is painted in the SAME raw SVG user-space coordinates the normal
             // (non-tiled) path would use, translated to the tile's own local origin - exactly like
@@ -1795,13 +1832,10 @@ namespace PeachPDF.Svg
             // whose only content is those types (previously unboundable) still gets an isolated composite
             // instead of falling back to a double-blend-prone per-shape alpha multiply.
             //
-            // Approximation (same as SvgGeometryBounds, which this reuses for objectBoundingBox
-            // gradients/masks): a descendant's own `transform` is NOT folded into the bounds, so a child
-            // carrying a large translate/scale that pushes its painted geometry outside the untransformed
-            // union can be clipped by the raster tile - a pre-existing renderer limitation that applies
-            // equally to the boundable-geometry path, mitigated (not eliminated) by the margin. Likewise a
-            // <use>-of-a-<use>-of-a-container isn't routed here (NeedsContainerOpacityGroup only unwraps one
-            // <use> level), so its target's children fall back to the per-shape multiply.
+            // A descendant's own `transform` IS folded into the bounds (UnionOpacityGroupBounds composes it the
+            // same way SvgGeometryBounds.UnionAll does), so a child carrying a translate/scale is still sized
+            // correctly, not just approximately. A <use> of a <use> of a container is routed here too
+            // (NeedsContainerOpacityGroup unwraps <use> chains).
             if (GetOpacityGroupBounds(g, element, viewport) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
             {
                 // Truly empty / zero-area content: nothing paints, so there is nothing to double-blend -
@@ -1815,28 +1849,17 @@ namespace PeachPDF.Svg
             var width = bbox.Width * 1.2;
             var height = bbox.Height * 1.2;
 
-            var tile = g.CreateTile(width, height);
-            if (tile is not { } t)
+            using var layer = g.BeginLayer(new LayerOptions(element.Opacity, Bounds: new Rect(x, y, width, height)));
+            if (layer is null)
             {
-                // No page/document context (a measure-only pass - CreateTile returns null there) - keep
+                // No page/document context (a measure-only pass - BeginLayer returns null there) - keep
                 // the graceful direct fallback rather than throwing. Tested by
                 // Opacity_SvgGroupOpacity_NoPageContext_FallsBackToDirectRender.
                 RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
                 return;
             }
 
-            var pushedOffset = x != 0 || y != 0;
-            if (pushedOffset)
-                t.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
-
-            RenderElementSwitch(t.Graphics, document, element, inheritedOpacity, viewport);
-
-            if (pushedOffset)
-                t.Graphics.PopTransform();
-
-            t.Graphics.Dispose();
-
-            g.DrawImageWithOpacity(t.Image, new RRect(x, y, width, height), element.Opacity);
+            RenderElementSwitch(layer.Canvas, document, element, inheritedOpacity, viewport);
         }
 
         /// <summary>
@@ -1850,29 +1873,35 @@ namespace PeachPDF.Svg
         /// <c>objectBoundingBox</c> gradient/mask/clip resolution, which relies on those types reporting
         /// <c>null</c> there, is unaffected.
         /// </summary>
-        private static RRect? GetOpacityGroupBounds(RGraphics g, SvgElement element, (double Width, double Height) viewport) => element switch
+        private static Rect? GetOpacityGroupBounds(Canvas g, SvgElement element, (double Width, double Height) viewport) => element switch
         {
             SvgTextElement text => MeasureTextBounds(g, text),
-            SvgImageElement { Width: > 0, Height: > 0 } image => new RRect(image.X, image.Y, image.Width, image.Height),
-            SvgNestedSvgElement { Width: > 0, Height: > 0 } nestedSvg => new RRect(nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height),
-            SvgUseElement { Target: SvgSymbolElement } use => new RRect(use.X, use.Y, use.Width ?? viewport.Width, use.Height ?? viewport.Height),
-            SvgUseElement { Target: SvgNestedSvgElement nestedTarget } use => new RRect(use.X, use.Y, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height),
+            SvgImageElement { Width: > 0, Height: > 0 } image => new Rect(image.X, image.Y, image.Width, image.Height),
+            SvgNestedSvgElement { Width: > 0, Height: > 0 } nestedSvg => new Rect(nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height),
+            SvgUseElement { Target: SvgSymbolElement } use => new Rect(use.X, use.Y, use.Width ?? viewport.Width, use.Height ?? viewport.Height),
+            SvgUseElement { Target: SvgNestedSvgElement nestedTarget } use => new Rect(use.X, use.Y, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height),
             SvgUseElement { Target: { } target } use => OffsetBounds(GetOpacityGroupBounds(g, target, viewport), use.X, use.Y),
             SvgGroupElement group => UnionOpacityGroupBounds(g, group.Children, viewport),
             _ => SvgGeometryBounds.GetBoundingBox(element),
         };
 
-        private static RRect? OffsetBounds(RRect? rect, double dx, double dy) =>
-            rect is { } r ? new RRect(r.X + dx, r.Y + dy, r.Width, r.Height) : null;
+        private static Rect? OffsetBounds(Rect? rect, double dx, double dy) =>
+            rect is { } r ? new Rect(r.X + dx, r.Y + dy, r.Width, r.Height) : null;
 
-        private static RRect? UnionOpacityGroupBounds(RGraphics g, IEnumerable<SvgElement> elements, (double Width, double Height) viewport)
+        private static Rect? UnionOpacityGroupBounds(Canvas g, IEnumerable<SvgElement> elements, (double Width, double Height) viewport)
         {
-            RRect? result = null;
+            Rect? result = null;
 
             foreach (var element in elements)
             {
                 if (GetOpacityGroupBounds(g, element, viewport) is not { } b)
                     continue;
+
+                // Same composition SvgGeometryBounds.UnionAll makes: a child's own transform has to be folded in
+                // before unioning, or a translated/scaled child is sized as if it sat at its own untransformed
+                // position, silently clipping it against the tile's margin (or, previously, the tile itself).
+                if (element.Transform is { } transform)
+                    b = SvgGeometryBounds.TransformBounds(b, transform);
 
                 result = result is { } r ? UnionRects(r, b) : b;
             }
@@ -1880,13 +1909,13 @@ namespace PeachPDF.Svg
             return result;
         }
 
-        private static RRect UnionRects(RRect a, RRect b)
+        private static Rect UnionRects(Rect a, Rect b)
         {
             var minX = Math.Min(a.X, b.X);
             var minY = Math.Min(a.Y, b.Y);
             var maxX = Math.Max(a.X + a.Width, b.X + b.Width);
             var maxY = Math.Max(a.Y + a.Height, b.Y + b.Height);
-            return new RRect(minX, minY, maxX - minX, maxY - minY);
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
         /// <summary>
@@ -1896,9 +1925,9 @@ namespace PeachPDF.Svg
         /// per-character <c>rotate</c> about its position); a <c>&lt;textPath&gt;</c> descendant contributes
         /// its flattened path's bbox inflated by the font ascent. The tile's own -10%/+20% margin absorbs slack.
         /// </summary>
-        private static RRect? MeasureTextBounds(RGraphics g, SvgTextElement text)
+        private static Rect? MeasureTextBounds(Canvas g, SvgTextElement text)
         {
-            RRect? result = null;
+            Rect? result = null;
 
             var glyphs = new List<GlyphInfo>();
             var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
@@ -1923,7 +1952,7 @@ namespace PeachPDF.Svg
                     if (explicitRotateOverridesOrientation)
                     {
                         var explicitDegrees = gi.Rotate!.Value;
-                        var rotated = new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
+                        var rotated = new Rect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
                         result = result is { } r1 ? UnionRects(r1, RotateRectBounds(rotated, explicitDegrees, gi.Px, gi.Py)) : RotateRectBounds(rotated, explicitDegrees, gi.Px, gi.Py);
                         continue;
                     }
@@ -1931,10 +1960,10 @@ namespace PeachPDF.Svg
                     // Matches PaintUprightGlyph/PaintRotatedGlyph's own box shapes exactly - see their
                     // remarks for why Py needs no ascent adjustment in the upright case.
                     var box = isVertical && gi.IsUpright
-                        ? new RRect(gi.Px - size.Width / 2, gi.Py, size.Width, gi.Font.Height)
+                        ? new Rect(gi.Px - size.Width / 2, gi.Py, size.Width, gi.Font.Height)
                         : isVertical
-                            ? RotateRectBounds(new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height), 90.0, gi.Px, gi.Py)
-                            : new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
+                            ? RotateRectBounds(new Rect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height), 90.0, gi.Px, gi.Py)
+                            : new Rect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
 
                     result = result is { } r ? UnionRects(r, box) : box;
                 }
@@ -1951,7 +1980,7 @@ namespace PeachPDF.Svg
 
                 var inflate = pathFont.Ascent;
                 var pathBox = geometry.Bounds;
-                var runBox = new RRect(pathBox.X - inflate, pathBox.Y - inflate, pathBox.Width + 2 * inflate, pathBox.Height + 2 * inflate);
+                var runBox = new Rect(pathBox.X - inflate, pathBox.Y - inflate, pathBox.Width + 2 * inflate, pathBox.Height + 2 * inflate);
                 result = result is { } existing ? UnionRects(existing, runBox) : runBox;
             }
 
@@ -1959,7 +1988,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Axis-aligned envelope of <paramref name="rect"/> rotated <paramref name="degrees"/> about (<paramref name="pivotX"/>, <paramref name="pivotY"/>) - matches the pivot <see cref="PaintGlyphs"/> rotates its glyphs around.</summary>
-        private static RRect RotateRectBounds(RRect rect, double degrees, double pivotX, double pivotY)
+        private static Rect RotateRectBounds(Rect rect, double degrees, double pivotX, double pivotY)
         {
             var radians = degrees * (Math.PI / 180.0);
             var cos = Math.Cos(radians);
@@ -1981,19 +2010,19 @@ namespace PeachPDF.Svg
                 maxY = Math.Max(maxY, ry);
             }
 
-            return new RRect(minX, minY, maxX - minX, maxY - minY);
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
         /// <summary>
         /// Renders <paramref name="element"/> (which has its own <c>mask="url(#...)"</c>) into a
         /// fresh tile sized to the mask's resolved region, then composites that tile onto the page in
-        /// one atomic placement (<see cref="RGraphics.DrawImageMasked"/>) with the mask's own tile
-        /// attached - see <see cref="RGraphics.DrawImageMasked"/>'s doc comment for why this (rather
+        /// one atomic placement (<see cref="Canvas.DrawImageMasked"/>) with the mask's own tile
+        /// attached - see <see cref="Canvas.DrawImageMasked"/>'s doc comment for why this (rather
         /// than a simpler-looking "push the mask as ambient state, render normally, pop it" approach)
         /// is required for the mask to land in the same place as the content it's masking.
         /// </summary>
         /// <summary>
-        /// Delegates to <see cref="SvgFilterEvaluator.Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics}, SvgFilterInputs?)"/>, supplying its <c>SourceGraphic</c> input
+        /// Delegates to <see cref="SvgFilterEvaluator.Render(Canvas, SvgFilter, SvgElement, Rect?, Action{Canvas}, SvgFilterInputs?)"/>, supplying its <c>SourceGraphic</c> input
         /// as a callback that paints <paramref name="element"/>'s own ordinary content - the same
         /// <see cref="RenderElementSwitch"/> call <see cref="RenderMaskedElementContent"/> makes for its
         /// mask tile, at the same (already inheritedOpacity*element.Opacity-multiplied)
@@ -2001,8 +2030,8 @@ namespace PeachPDF.Svg
         /// consistency with this renderer's existing (not fully spec-order-strict, but already
         /// established) convention rather than introducing a second, different opacity-timing rule.
         /// </summary>
-        private static void RenderFilteredElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgFilter filter, double opacity, (double Width, double Height) viewport) =>
-            SvgFilterEvaluator.Render(g, filter, element, new RRect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport),
+        private static void RenderFilteredElementContent(Canvas g, SvgDocument document, SvgElement element, SvgFilter filter, double opacity, (double Width, double Height) viewport) =>
+            SvgFilterEvaluator.Render(g, filter, element, new Rect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport),
                 filter.RequiresRaster ? new RendererFilterInputs(g, document, element, viewport) : null);
 
         [ThreadStatic]
@@ -2043,16 +2072,19 @@ namespace PeachPDF.Svg
         private static int s_definitionNesting;
 
         /// <summary>The painted inputs of one raster filter evaluation, drawn with this renderer's own paint code.</summary>
-        private sealed class RendererFilterInputs(RGraphics owner, SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
+        private sealed class RendererFilterInputs(Canvas owner, SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
         {
-            public override SvgPaint PaintOf(bool stroke) => stroke ? element.Stroke : element.Fill;
+            // Inside a marker, context-fill / context-stroke (a filter's FillPaint/StrokePaint input on a marker shape) are the paints of
+            // the shape the marker is drawn on - same resolution PaintShape/PaintTextGlyphs use; a no-op outside a marker.
+            public override SvgPaint PaintOf(bool stroke) => ResolveInMarker(stroke ? element.Stroke : element.Fill);
 
-            public override void PaintPaint(RGraphics g, bool stroke, RRect region)
+            public override void PaintPaint(Canvas g, bool stroke, Rect region)
             {
                 var paint = PaintOf(stroke);
 
-                // The paint is the element's own, so an objectBoundingBox gradient or pattern is measured against the element, not the region.
-                var bounds = SvgFilterEvaluator.ElementBounds(element, new RRect(0, 0, viewport.Width, viewport.Height));
+                // The paint is the element's own, so an objectBoundingBox gradient or pattern is measured against the element, not the
+                // region - unless it came through context-fill/context-stroke, which measures against the context element instead.
+                var bounds = ContextBounds(g, paint) ?? SvgFilterEvaluator.ElementBounds(element, new Rect(0, 0, viewport.Width, viewport.Height));
                 var rect = new SvgRectElement { X = region.X, Y = region.Y, Width = region.Width, Height = region.Height, Fill = paint, Stroke = SvgPaint.None };
                 using var path = BuildRectPath(g, rect);
 
@@ -2066,7 +2098,7 @@ namespace PeachPDF.Svg
                 }
             }
 
-            public override void PaintImage(RGraphics g, FeImage image, RRect subregion, double offsetX, double offsetY)
+            public override void PaintImage(Canvas g, FeImage image, Rect subregion, double offsetX, double offsetY)
             {
                 if (s_filterInputDepth >= MaxFilterInputDepth)
                     return;
@@ -2095,7 +2127,7 @@ namespace PeachPDF.Svg
                         // A referenced element keeps the filtered element's user space; a subregion x/y moves its origin.
                         var moved = offsetX != 0 || offsetY != 0;
                         if (moved)
-                            g.PushTransform(new RMatrix(1, 0, 0, 1, offsetX, offsetY));
+                            g.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)offsetX, (float)offsetY));
 
                         RenderElement(g, document, target, 1.0, viewport);
 
@@ -2112,29 +2144,29 @@ namespace PeachPDF.Svg
             }
 
             /// <summary>The bounding rectangle, in layout space, of <paramref name="region"/> (user space) under <paramref name="toLayout"/>.</summary>
-            private static RRect LayoutBounds(RMatrix toLayout, RRect region)
+            private static Rect LayoutBounds(Matrix3x2 toLayout, Rect region)
             {
                 double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
                 for (var i = 0; i < 4; i++)
                 {
                     var x = i % 2 == 0 ? region.Left : region.Right;
                     var y = i < 2 ? region.Top : region.Bottom;
-                    var lx = x * toLayout.M11 + y * toLayout.M21 + toLayout.OffsetX;
-                    var ly = x * toLayout.M12 + y * toLayout.M22 + toLayout.OffsetY;
+                    var lx = x * toLayout.M11 + y * toLayout.M21 + toLayout.M31;
+                    var ly = x * toLayout.M12 + y * toLayout.M22 + toLayout.M32;
                     minX = Math.Min(minX, lx);
                     maxX = Math.Max(maxX, lx);
                     minY = Math.Min(minY, ly);
                     maxY = Math.Max(maxY, ly);
                 }
 
-                return new RRect(minX, minY, maxX - minX, maxY - minY);
+                return new Rect(minX, minY, maxX - minX, maxY - minY);
             }
 
-            public override bool PaintBackdrop(RGraphics g, RRect region)
+            public override bool PaintBackdrop(Canvas g, Rect region)
             {
                 // Only the graphics that paints the document's own content knows how to repaint what came before; a group's isolated
                 // tile has no backdrop, and neither does a document that is not being painted with one.
-                if (owner.SvgBackdrop is not { } context || context.Depth >= MaxBackdropDepth || !owner.CurrentTransform.TryInvert(out var toUserSpace))
+                if (SvgBackdropSlot.Get(owner) is not { } context || context.Depth >= MaxBackdropDepth || !owner.CurrentTransform.TryInvert(out var toUserSpace))
                     return false;
 
                 // The page layer: the page is drawn in layout space, so put layout space into this element's user space.
@@ -2160,7 +2192,7 @@ namespace PeachPDF.Svg
                 };
 
                 // The document is clipped to its viewport when painted, so what overflows it is not part of the backdrop either.
-                g.SvgBackdrop = repaint;
+                SvgBackdropSlot.Set(g, repaint);
                 g.PushTransform(context.Frame.Then(toUserSpace));
                 g.PushClip(context.ViewportRect);
                 g.PushTransform(context.ViewBoxMatrix);
@@ -2175,12 +2207,12 @@ namespace PeachPDF.Svg
                 g.PopTransform();
                 g.PopClip();
                 g.PopTransform();
-                g.SvgBackdrop = null;
+                SvgBackdropSlot.Set(g, null);
                 return true;
             }
         }
 
-        private static void RenderMaskedElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
+        private static void RenderMaskedElementContent(Canvas g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
         {
             var (x, y, width, height) = ResolveMaskRect(element, mask);
             if (width <= 0 || height <= 0)
@@ -2199,7 +2231,7 @@ namespace PeachPDF.Svg
 
             var pushedOffset = x != 0 || y != 0;
             if (pushedOffset)
-                content.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
+                content.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-x, (float)-y));
 
             RenderElementSwitch(content.Graphics, document, element, opacity, viewport);
 
@@ -2208,10 +2240,10 @@ namespace PeachPDF.Svg
 
             content.Graphics.Dispose();
 
-            g.DrawImageMasked(content.Image, maskImage, new RRect(x, y, width, height));
+            g.DrawImageMasked(content.Image, maskImage, new Rect(x, y, width, height));
         }
 
-        private static void RenderElementSwitch(RGraphics g, SvgDocument document, SvgElement element, double opacity, (double Width, double Height) viewport)
+        private static void RenderElementSwitch(Canvas g, SvgDocument document, SvgElement element, double opacity, (double Width, double Height) viewport)
         {
             switch (element)
             {
@@ -2244,7 +2276,9 @@ namespace PeachPDF.Svg
                 case SvgPolylineElement polyline:
                 {
                     using var graphicsPath = BuildPolylinePath(g, polyline);
-                    PaintShape(g, document, polyline, graphicsPath, opacity);
+                    // The shape is closed implicitly for fill purposes only (SVG 1.1 §9.6); the stroke stays open.
+                    using var fillPath = BuildPolylineFillPath(g, polyline);
+                    PaintShape(g, document, polyline, graphicsPath, opacity, fillPath);
                     break;
                 }
 
@@ -2285,26 +2319,50 @@ namespace PeachPDF.Svg
                 {
                     var pushedUseOffset = use.X != 0 || use.Y != 0;
                     if (pushedUseOffset)
-                        g.PushTransform(new RMatrix(1, 0, 0, 1, use.X, use.Y));
+                        g.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)use.X, (float)use.Y));
 
                     switch (target)
                     {
                         // A <symbol> has no size of its own - it's sized entirely by the referencing
                         // <use>'s width/height, defaulting to the current (ambient) viewport's size
-                        // when <use> doesn't specify them (spec's 100% default).
+                        // when <use> doesn't specify them (spec's 100% default). Passing `use` as
+                        // RenderViewport's contextElement records this viewport's own children's frame
+                        // under it, the same role the default arm's own s_paintContextFrames write plays
+                        // below - see RenderViewport's contextElement doc and
+                        // SvgGeometryBounds.GetUseTargetBoundingBox for the matching (pre-mapping) box.
                         case SvgSymbolElement symbol:
-                            RenderViewport(g, document, 0, 0, use.Width ?? viewport.Width, use.Height ?? viewport.Height, symbol.ViewBox, symbol.PreserveAspectRatio, symbol.Children, opacity);
+                            RenderViewport(g, document, 0, 0, use.Width ?? viewport.Width, use.Height ?? viewport.Height, symbol.ViewBox, symbol.PreserveAspectRatio, symbol.Children, opacity, use);
                             break;
 
                         // A nested <svg> target already has its own resolved size; <use>'s width/height
                         // only override it when actually specified.
                         case SvgNestedSvgElement nestedTarget:
-                            RenderViewport(g, document, 0, 0, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height, nestedTarget.ViewBox, nestedTarget.PreserveAspectRatio, nestedTarget.Children, opacity);
+                            RenderViewport(g, document, 0, 0, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height, nestedTarget.ViewBox, nestedTarget.PreserveAspectRatio, nestedTarget.Children, opacity, use);
                             break;
 
                         default:
-                            RenderElement(g, document, target, opacity, viewport);
+                        {
+                            // The frame target's own content paints in (post target.Transform, matching the frame
+                            // SvgGeometryBounds.GetBoundingBox(target) reports its bbox in) - what ContextBounds
+                            // maps a gradient/pattern tagged with this use as its context element out of, once it
+                            // reaches a shape further down that actually paints with it (SvgUseElement.Fill/Stroke's
+                            // OfContextElement(use) in SvgTreeBuilder). Recorded under the use itself (a fresh
+                            // object per use occurrence), not the target, so a use of a use resolves each level's
+                            // context paint against its own frame.
+                            var targetFrame = target.Transform is { } t ? MultiplyMatrix(t, g.CurrentTransform) : g.CurrentTransform;
+                            var hadOuterFrame = s_paintContextFrames.TryGetValue(use, out var outerFrame);
+                            s_paintContextFrames[use] = targetFrame;
+                            try
+                            {
+                                RenderElement(g, document, target, opacity, viewport);
+                            }
+                            finally
+                            {
+                                if (hadOuterFrame) s_paintContextFrames[use] = outerFrame; else s_paintContextFrames.Remove(use);
+                            }
+
                             break;
+                        }
                     }
 
                     if (pushedUseOffset)
@@ -2317,13 +2375,13 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Renders <paramref name="mask"/>'s content (a full paint, not just geometry - see
         /// <see cref="SvgMask"/>) into a tile sized to its own resolved region, for use as the
-        /// luminosity source in <see cref="RGraphics.DrawImageMasked"/>. Unlike <see cref="RenderViewport"/> (used for
+        /// luminosity source in <see cref="Canvas.DrawImageMasked"/>. Unlike <see cref="RenderViewport"/> (used for
         /// <c>&lt;pattern&gt;</c>/<c>&lt;symbol&gt;</c>/nested <c>&lt;svg&gt;</c>), a mask doesn't
         /// establish its own viewBox-scaled coordinate system - its content is drawn in ordinary
         /// user-space units, just positioned relative to the tile's own local origin rather than the
         /// mask region's <see cref="SvgMask.X"/>/<see cref="SvgMask.Y"/>.
         /// </summary>
-        private static RImage? BuildMaskTile(RGraphics g, SvgDocument document, SvgElement owner, SvgMask mask)
+        private static Image? BuildMaskTile(Canvas g, SvgDocument document, SvgElement owner, SvgMask mask)
         {
             var (x, y, width, height) = ResolveMaskRect(owner, mask);
             if (width <= 0 || height <= 0)
@@ -2335,7 +2393,7 @@ namespace PeachPDF.Svg
 
             var pushedOffset = x != 0 || y != 0;
             if (pushedOffset)
-                t.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
+                t.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-x, (float)-y));
 
             foreach (var child in mask.Children)
                 RenderElement(t.Graphics, document, child, 1.0, (width, height));
@@ -2359,7 +2417,7 @@ namespace PeachPDF.Svg
             return (bbox.X + mask.X * bbox.Width, bbox.Y + mask.Y * bbox.Height, mask.Width * bbox.Width, mask.Height * bbox.Height);
         }
 
-        private static void PaintShape(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity)
+        private static void PaintShape(Canvas g, SvgDocument document, SvgElement element, GraphicsPath path, double opacity, GraphicsPath? fillPath = null)
         {
             // Per spec, <line> has no interior region - "fill" never applies to it, regardless of the
             // element's own/inherited fill paint (which otherwise defaults to solid black). Emitting a
@@ -2373,22 +2431,22 @@ namespace PeachPDF.Svg
             if (element is not SvgLineElement && fill.Kind != SvgPaintKind.None)
             {
                 // A gradient or pattern that came through context-fill is measured against the context element, not this one.
-                var fillBounds = ContextBounds(fill);
+                var fillBounds = ContextBounds(g, fill);
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, element, path, opacity * element.FillOpacity, fillBounds, fill);
+                    PaintPatternFill(g, document, element, fillPath ?? path, opacity * element.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
                     var brush = ResolvePaintBrush(g, document, element, fill, opacity * element.FillOpacity, fillBounds);
                     if (brush is not null)
-                        g.DrawPath(brush, path);
+                        g.DrawPath(brush, fillPath ?? path);
                 }
             }
 
             if (stroke.Kind != SvgPaintKind.None && element.StrokeWidth > 0)
             {
-                var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity, ContextBounds(stroke), stroke);
+                var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity, ContextBounds(g, stroke), stroke);
                 if (pen is not null)
                     g.DrawPath(pen, path);
             }
@@ -2401,7 +2459,7 @@ namespace PeachPDF.Svg
         /// <c>&lt;polygon&gt;</c> - not basic shapes like <c>&lt;rect&gt;</c>/<c>&lt;circle&gt;</c>/
         /// <c>&lt;ellipse&gt;</c>, which have no defined vertex sequence to attach to.
         /// </summary>
-        private static void PaintMarkers(RGraphics g, SvgDocument document, SvgElement element, double opacity)
+        private static void PaintMarkers(Canvas g, SvgDocument document, SvgElement element, double opacity)
         {
             if (element.MarkerStartRef is null && element.MarkerMidRef is null && element.MarkerEndRef is null)
                 return;
@@ -2419,9 +2477,17 @@ namespace PeachPDF.Svg
                 return;
 
             // This shape is the context element of what its markers draw. Its own paint may itself be a context keyword (a shape inside a
-            // marker), which is resolved against the marker it is in, before this shape's markers take over.
+            // marker), which is resolved against the marker it is in, before this shape's markers take over. A gradient/pattern paint keeps
+            // whichever context element it already names (the nearest one wins - OfContextElement is a no-op once one is set) so a marker
+            // nested inside another marker or a use still measures against the original context, not this shape; a plain gradient/pattern
+            // authored directly on this shape's own fill/stroke gets tagged with this shape, so ContextBounds below has something to map from.
             var outer = s_markerContext;
-            s_markerContext = new MarkerContext(ForMarker(ResolveInMarker(element.Fill)), ForMarker(ResolveInMarker(element.Stroke)));
+            s_markerContext = new MarkerContext(ForMarker(element, ResolveInMarker(element.Fill)), ForMarker(element, ResolveInMarker(element.Stroke)));
+            // The frame this shape's own content paints in - what a gradient/pattern paint tagged with this shape as its context element
+            // needs mapped into the marker's own frame later (see ContextBounds). Saved/restored the same way s_markerContext is, in case
+            // painting this shape's own markers somehow re-enters painting this same shape (already bounded by MaxDefinitionNesting).
+            var hadOuterFrame = s_paintContextFrames.TryGetValue(element, out var outerFrame);
+            s_paintContextFrames[element] = g.CurrentTransform;
             try
             {
                 foreach (var vertex in vertices)
@@ -2435,6 +2501,7 @@ namespace PeachPDF.Svg
             finally
             {
                 s_markerContext = outer;
+                if (hadOuterFrame) s_paintContextFrames[element] = outerFrame; else s_paintContextFrames.Remove(element);
             }
         }
 
@@ -2443,6 +2510,19 @@ namespace PeachPDF.Svg
 
         [ThreadStatic]
         private static MarkerContext? s_markerContext;
+
+        /// <summary>
+        /// The frame (<see cref="Canvas.CurrentTransform"/> snapshot) each live context element's own content paints in, keyed by the
+        /// element itself (a <c>use</c>, or the shape a marker is drawn on) - what <see cref="ContextBounds"/> maps a gradient/pattern's
+        /// box out of, into whatever frame is active when the paint is actually resolved. Reference-keyed: <see cref="SvgElement"/> has no
+        /// value equality, and a fresh instance is built per <c>use</c> occurrence, so the same key is never live for two different places
+        /// in the tree at once. <see cref="ThreadStaticAttribute"/> like every other renderer-scoped field in this class.
+        /// </summary>
+        [ThreadStatic]
+        private static Dictionary<SvgElement, Matrix3x2>? s_paintContextFramesField;
+
+        private static Dictionary<SvgElement, Matrix3x2> s_paintContextFrames =>
+            s_paintContextFramesField ??= new Dictionary<SvgElement, Matrix3x2>(ReferenceEqualityComparer.Instance);
 
         /// <summary>
         /// A paint with its context keywords replaced, when it is drawn inside a marker (the only place the tree builder leaves them, because the
@@ -2456,19 +2536,64 @@ namespace PeachPDF.Svg
         };
 
         /// <summary>
-        /// The paint a marker's content gets from its shape: a colour or none. A gradient or pattern would have to be measured in the shape's
-        /// own coordinate system, which the marker's placement has moved away from, so it is not carried into the marker.
+        /// The paint a marker's content gets from <paramref name="element"/> (the shape the marker is drawn on): per SVG 2 (painting,
+        /// "context paint"), a gradient/pattern paint server keeps the context element's own coordinate space and bounding box - tagging it
+        /// with <paramref name="element"/> as its context element (a no-op if it already names one further out) is what lets
+        /// <see cref="ContextBounds"/> later map that box into the marker content's frame via <see cref="s_paintContextFrames"/>, the same
+        /// way a gradient/pattern reaching a shape through a <c>use</c> already does.
         /// </summary>
-        private static SvgPaint ForMarker(SvgPaint paint) => paint.Kind is SvgPaintKind.Solid or SvgPaintKind.None ? paint : SvgPaint.None;
+        private static SvgPaint ForMarker(SvgElement element, SvgPaint paint) => paint.OfContextElement(element);
 
-        /// <summary>The box a gradient or pattern that came through context paint is measured against: the context element's. Null when the paint was the element's own.</summary>
-        private static RRect? ContextBounds(SvgPaint paint) => paint.ContextElement switch
+        /// <summary>
+        /// The box a gradient or pattern that came through context paint is measured against, remapped from the context element's own frame
+        /// (recorded in <see cref="s_paintContextFrames"/> when its content began painting) into <paramref name="g"/>'s current one - the
+        /// marker's placement matrix, or any transform between a <c>use</c>'s target and the shape actually painting, has moved the two
+        /// apart. Null when the paint was the element's own (no context element), or when the context element's frame was never recorded.
+        /// </summary>
+        private static Rect? ContextBounds(Canvas g, SvgPaint paint)
         {
-            // What a use instantiates is drawn in the use's own coordinate system, already moved by its x and y.
-            SvgUseElement { Target: { } target } => SvgGeometryBounds.GetBoundingBox(target),
-            { } context => SvgGeometryBounds.GetBoundingBox(context),
-            _ => null,
-        };
+            if (paint.ContextElement is not { } context)
+                return null;
+
+            // What a use instantiates is drawn in the use's own coordinate system, already moved by its x and y (folded into the
+            // recorded frame below, not applied here - see the use render switch). GetUseTargetBoundingBox (rather than plain
+            // GetBoundingBox) is what measures a symbol/nested-svg target too - see its own remarks for why that can't just be
+            // a new GetBoundingBox case instead.
+            var geometrySource = context is SvgUseElement { Target: { } target } ? target : context;
+            if (SvgGeometryBounds.GetUseTargetBoundingBox(geometrySource) is not { } box)
+                return null;
+
+            if (!s_paintContextFrames.TryGetValue(context, out var contextFrame))
+                return box;
+
+            if (!g.CurrentTransform.TryInvert(out var toCurrentFrame))
+                return box;
+
+            return TransformRectAabb(box, contextFrame.Then(toCurrentFrame));
+        }
+
+        /// <summary>The axis-aligned envelope of <paramref name="rect"/>'s four corners mapped through <paramref name="matrix"/>.</summary>
+        private static Rect TransformRectAabb(Rect rect, Matrix3x2 matrix)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+            ReadOnlySpan<PaintPoint> corners =
+            [
+                new(rect.X, rect.Y), new(rect.Right, rect.Y),
+                new(rect.X, rect.Bottom), new(rect.Right, rect.Bottom),
+            ];
+
+            foreach (var corner in corners)
+            {
+                var p = ApplyMatrix(corner, matrix);
+                minX = Math.Min(minX, p.X);
+                maxX = Math.Max(maxX, p.X);
+                minY = Math.Min(minY, p.Y);
+                maxY = Math.Max(maxY, p.Y);
+            }
+
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
+        }
 
         /// <summary>
         /// Places one marker instance: establishes its own (markerWidth x markerHeight, optionally
@@ -2476,7 +2601,7 @@ namespace PeachPDF.Svg
         /// <see cref="SvgMarkerElement.OrientAngle"/> and positioned so (refX, refY) - resolved through
         /// the marker's own viewBox, if any - lands exactly on <paramref name="vertex"/>.
         /// </summary>
-        private static void PaintMarker(RGraphics g, SvgDocument document, SvgMarkerElement marker, MarkerVertex vertex, double strokeWidth, double opacity)
+        private static void PaintMarker(Canvas g, SvgDocument document, SvgMarkerElement marker, MarkerVertex vertex, double strokeWidth, double opacity)
         {
             if (marker.MarkerWidth <= 0 || marker.MarkerHeight <= 0)
                 return;
@@ -2499,8 +2624,8 @@ namespace PeachPDF.Svg
 
             if (viewBoxWidth > 0 && viewBoxHeight > 0)
             {
-                var probeMatrix = ComputeViewportTransform(new RRect(0, 0, marker.MarkerWidth, marker.MarkerHeight), marker.ViewBox?.X ?? 0, marker.ViewBox?.Y ?? 0, viewBoxWidth, viewBoxHeight, marker.PreserveAspectRatio);
-                var refPoint = ApplyMatrix(new RPoint(marker.RefX, marker.RefY), probeMatrix);
+                var probeMatrix = ComputeViewportTransform(new Rect(0, 0, marker.MarkerWidth, marker.MarkerHeight), marker.ViewBox?.X ?? 0, marker.ViewBox?.Y ?? 0, viewBoxWidth, viewBoxHeight, marker.PreserveAspectRatio);
+                var refPoint = ApplyMatrix(new PaintPoint(marker.RefX, marker.RefY), probeMatrix);
                 refLocalX = refPoint.X;
                 refLocalY = refPoint.Y;
             }
@@ -2509,9 +2634,9 @@ namespace PeachPDF.Svg
             var cos = Math.Cos(radians);
             var sin = Math.Sin(radians);
 
-            var preShift = new RMatrix(1, 0, 0, 1, -refLocalX, -refLocalY);
-            var rotateScale = new RMatrix(cos * scale, sin * scale, -sin * scale, cos * scale, 0, 0);
-            var toVertex = new RMatrix(1, 0, 0, 1, vertex.X, vertex.Y);
+            var preShift = new Matrix3x2(1, 0, 0, 1, (float)-refLocalX, (float)-refLocalY);
+            var rotateScale = new Matrix3x2((float)(cos * scale), (float)(sin * scale), (float)(-sin * scale), (float)(cos * scale), 0, 0);
+            var toVertex = new Matrix3x2(1, 0, 0, 1, (float)vertex.X, (float)vertex.Y);
             var placement = MultiplyMatrix(MultiplyMatrix(preShift, rotateScale), toVertex);
 
             if (s_definitionNesting >= MaxDefinitionNesting)
@@ -2537,14 +2662,14 @@ namespace PeachPDF.Svg
         /// <see cref="SvgGeometryBounds.GetBoundingBox"/> can't measure a <c>&lt;text&gt;</c> statically;
         /// every non-text caller passes null and keeps the geometric bounds.
         /// </summary>
-        private static RRect? OwnerBounds(SvgElement owner, RRect? boundsOverride)
+        private static Rect? OwnerBounds(SvgElement owner, Rect? boundsOverride)
             => boundsOverride ?? SvgGeometryBounds.GetBoundingBox(owner);
 
-        private static RBrush? ResolvePaintBrush(RGraphics g, SvgDocument document, SvgElement owner, SvgPaint paint, double opacity, RRect? boundsOverride = null)
+        private static Brush? ResolvePaintBrush(Canvas g, SvgDocument document, SvgElement owner, SvgPaint paint, double opacity, Rect? boundsOverride = null)
         {
             return paint.Kind switch
             {
-                SvgPaintKind.Solid => g.GetSolidBrush(ApplyOpacity(paint.Color, opacity)),
+                SvgPaintKind.Solid => g.GetSolidBrush(ApplyOpacity(paint.PaintColor, opacity)),
                 SvgPaintKind.GradientRef when paint.ReferenceId is { } id && document.Gradients.TryGetValue(id, out var gradient)
                     => ResolveGradientBrush(g, owner, gradient, opacity, boundsOverride),
                 _ => null,
@@ -2553,13 +2678,13 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Fills <paramref name="path"/> with a tiled <c>&lt;pattern&gt;</c>: renders the pattern's own
-        /// content once into a small Form XObject "tile" (via <see cref="RGraphics.CreateTile"/>), then
+        /// content once into a small Form XObject "tile" (via <see cref="Canvas.CreateTile"/>), then
         /// clips to the shape's own fill geometry and draws that SAME tile repeatedly across its
         /// bounding box. Each repeated draw is a reference to the one already-vector tile content, so
         /// this stays fully vector - never rasterizes, matching this renderer's core design principle
         /// - unlike a "render once to a bitmap, then repeat the bitmap" approach would.
         /// </summary>
-        private static void PaintPatternFill(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity, RRect? boundsOverride = null,
+        private static void PaintPatternFill(Canvas g, SvgDocument document, SvgElement element, GraphicsPath path, double opacity, Rect? boundsOverride = null,
             SvgPaint? paint = null)
         {
             if ((paint ?? element.Fill).ReferenceId is not { } id || !document.Patterns.TryGetValue(id, out var pattern))
@@ -2588,42 +2713,18 @@ namespace PeachPDF.Svg
 
             t.Graphics.Dispose();
 
-            var bounds = OwnerBounds(element, boundsOverride) ?? new RRect(x, y, width, height);
+            // The tile repeats from (x, y), with the pattern's own transform applied on top: a brush whose space starts at the cell's top-left
+            // and whose transform carries both. Painting the shape with it fills exactly the part of the grid under the shape.
+            var brushToUser = Matrix3x2.CreateTranslation((float)x, (float)y);
+            if (pattern.PatternTransform is { } patternTransform)
+                brushToUser = brushToUser.Then(patternTransform);
 
-            // One tile of margin on every side absorbs any shift introduced by patternTransform below,
-            // which the col/row computation itself (deliberately kept simple) doesn't account for -
-            // any surplus tiles are clipped away, so this only costs a few harmless extra draw calls.
-            var startCol = Math.Floor((bounds.X - x) / width) - 1;
-            var endCol = Math.Ceiling((bounds.X + bounds.Width - x) / width) + 1;
-            var startRow = Math.Floor((bounds.Y - y) / height) - 1;
-            var endRow = Math.Ceiling((bounds.Y + bounds.Height - y) / height) + 1;
-
-            const int maxTiles = 10_000;
-            if ((endCol - startCol) * (endRow - startRow) is <= 0 or > maxTiles)
-                return;
-
-            g.PushClip(path);
-
-            var pushedPatternTransform = pattern.PatternTransform is not null;
-            if (pushedPatternTransform)
-                g.PushTransform(pattern.PatternTransform!.Value);
-
-            for (var row = startRow; row < endRow; row++)
-            {
-                for (var col = startCol; col < endCol; col++)
-                {
-                    g.DrawImage(t.Image, new RRect(x + col * width, y + row * height, width, height));
-                }
-            }
-
-            if (pushedPatternTransform)
-                g.PopTransform();
-
-            g.PopClip();
+            using var brush = new TileBrush(t.Image, width, height, brushToUser);
+            g.DrawPath(brush, path);
         }
 
         /// <summary>Resolves a pattern's tile rect, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>.</summary>
-        private static (double X, double Y, double Width, double Height) ResolvePatternRect(SvgElement owner, SvgPattern pattern, RRect? boundsOverride = null)
+        private static (double X, double Y, double Width, double Height) ResolvePatternRect(SvgElement owner, SvgPattern pattern, Rect? boundsOverride = null)
         {
             if (pattern.PatternUnitsUserSpaceOnUse)
                 return (pattern.X, pattern.Y, pattern.Width, pattern.Height);
@@ -2634,13 +2735,13 @@ namespace PeachPDF.Svg
             return (bbox.X + pattern.X * bbox.Width, bbox.Y + pattern.Y * bbox.Height, pattern.Width * bbox.Width, pattern.Height * bbox.Height);
         }
 
-        private static RBrush? ResolveGradientBrush(RGraphics g, SvgElement owner, SvgGradient gradient, double opacity, RRect? boundsOverride = null)
+        private static Brush? ResolveGradientBrush(Canvas g, SvgElement owner, SvgGradient gradient, double opacity, Rect? boundsOverride = null)
         {
             if (gradient.Stops.Count == 0)
                 return null;
 
             var stops = gradient.Stops
-                .Select(s => (Color: ApplyOpacity(s.Color, opacity), Position: s.Offset))
+                .Select(s => (PaintColor: ApplyOpacity(s.PaintColor, opacity), Position: s.Offset))
                 .ToArray();
 
             var isRepeating = gradient.SpreadMethod != SvgSpreadMethod.Pad;
@@ -2652,8 +2753,8 @@ namespace PeachPDF.Svg
                 {
                     var (x1, y1) = ResolveGradientPoint(owner, gradient, linear.X1, linear.Y1, boundsOverride);
                     var (x2, y2) = ResolveGradientPoint(owner, gradient, linear.X2, linear.Y2, boundsOverride);
-                    var p1 = new RPoint(x1, y1);
-                    var p2 = new RPoint(x2, y2);
+                    var p1 = new PaintPoint(x1, y1);
+                    var p2 = new PaintPoint(x2, y2);
 
                     // Unlike CSS's repeating-linear-gradient (whose axis is already sized to span the
                     // whole background box before the stop list is ever built), SVG's x1/y1/x2/y2
@@ -2679,10 +2780,16 @@ namespace PeachPDF.Svg
                     // Radial counterpart: tiles concentric rings outward from the center to cover the
                     // shape's bounding box, rather than extending along a linear axis.
                     if (isRepeating)
-                        (r, stops) = ExpandRadialSpread(owner, new RPoint(cx, cy), r, stops, reflect, boundsOverride);
+                        (r, stops) = ExpandRadialSpread(owner, new PaintPoint(cx, cy), r, stops, reflect, boundsOverride);
 
-                    var center = ApplyMatrix(new RPoint(cx, cy), gradient.GradientTransform);
-                    var focal = ApplyMatrix(new RPoint(fx, fy), gradient.GradientTransform);
+                    // A rotation/skew turns the circle into a rotated ellipse, which two axis-aligned radii cannot
+                    // state - the matrix travels with the brush instead. Translate/scale-only stays pre-applied.
+                    if (gradient.GradientTransform is { } gt && (gt.M12 != 0 || gt.M21 != 0))
+                        return g.GetRadialGradientBrush(new PaintPoint(cx, cy), r, r, stops, isRepeating, new PaintPoint(fx, fy),
+                            GradientTransformInUserSpace(owner, gradient, gt, boundsOverride));
+
+                    var center = ApplyMatrix(new PaintPoint(cx, cy), gradient.GradientTransform);
+                    var focal = ApplyMatrix(new PaintPoint(fx, fy), gradient.GradientTransform);
                     var (radiusX, radiusY) = ApplyMatrixToRadius(r, gradient.GradientTransform);
                     return g.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focal);
                 }
@@ -2707,8 +2814,8 @@ namespace PeachPDF.Svg
         /// box or the axis is degenerate (zero length) - the caller's <c>/Extend=false</c> then simply
         /// paints one cycle and leaves the rest of the shape unpainted, same as before this existed.
         /// </summary>
-        private static (RPoint P1, RPoint P2, (RColor Color, double Position)[] Stops) ExpandLinearSpread(
-            SvgElement owner, RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool reflect, RRect? boundsOverride = null)
+        private static (PaintPoint P1, PaintPoint P2, (PaintColor PaintColor, double Position)[] Stops) ExpandLinearSpread(
+            SvgElement owner, PaintPoint p1, PaintPoint p2, (PaintColor PaintColor, double Position)[] stops, bool reflect, Rect? boundsOverride = null)
         {
             if (stops.Length < 2 || OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return (p1, p2, stops);
@@ -2721,10 +2828,10 @@ namespace PeachPDF.Svg
 
             var corners = new[]
             {
-                new RPoint(bbox.X, bbox.Y),
-                new RPoint(bbox.X + bbox.Width, bbox.Y),
-                new RPoint(bbox.X, bbox.Y + bbox.Height),
-                new RPoint(bbox.X + bbox.Width, bbox.Y + bbox.Height),
+                new PaintPoint(bbox.X, bbox.Y),
+                new PaintPoint(bbox.X + bbox.Width, bbox.Y),
+                new PaintPoint(bbox.X, bbox.Y + bbox.Height),
+                new PaintPoint(bbox.X + bbox.Width, bbox.Y + bbox.Height),
             };
 
             var tMin = double.MaxValue;
@@ -2745,10 +2852,10 @@ namespace PeachPDF.Svg
                 kMax = kMin + MaxSpreadCycles;
 
             var cycles = kMax - kMin;
-            var newP1 = new RPoint(p1.X + kMin * dx, p1.Y + kMin * dy);
-            var newP2 = new RPoint(p1.X + kMax * dx, p1.Y + kMax * dy);
+            var newP1 = new PaintPoint(p1.X + kMin * dx, p1.Y + kMin * dy);
+            var newP2 = new PaintPoint(p1.X + kMax * dx, p1.Y + kMax * dy);
 
-            var expanded = new List<(RColor Color, double Position)>(stops.Length * cycles);
+            var expanded = new List<(PaintColor PaintColor, double Position)>(stops.Length * cycles);
             for (var k = kMin; k < kMax; k++)
             {
                 var reflectedCycle = reflect && PositiveMod(k, 2) != 0;
@@ -2756,7 +2863,7 @@ namespace PeachPDF.Svg
                 {
                     var localPos = reflectedCycle ? 1 - stop.Position : stop.Position;
                     var newPos = (k - kMin + localPos) / cycles;
-                    expanded.Add((stop.Color, Math.Clamp(newPos, 0.0, 1.0)));
+                    expanded.Add((stop.PaintColor, Math.Clamp(newPos, 0.0, 1.0)));
                 }
             }
 
@@ -2765,18 +2872,18 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Radial counterpart of <see cref="ExpandLinearSpread"/> - tiles concentric rings outward from <paramref name="center"/> to cover <paramref name="owner"/>'s bounding box.</summary>
-        private static (double R, (RColor Color, double Position)[] Stops) ExpandRadialSpread(
-            SvgElement owner, RPoint center, double r, (RColor Color, double Position)[] stops, bool reflect, RRect? boundsOverride = null)
+        private static (double R, (PaintColor PaintColor, double Position)[] Stops) ExpandRadialSpread(
+            SvgElement owner, PaintPoint center, double r, (PaintColor PaintColor, double Position)[] stops, bool reflect, Rect? boundsOverride = null)
         {
             if (stops.Length < 2 || r < 1e-9 || OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return (r, stops);
 
             var corners = new[]
             {
-                new RPoint(bbox.X, bbox.Y),
-                new RPoint(bbox.X + bbox.Width, bbox.Y),
-                new RPoint(bbox.X, bbox.Y + bbox.Height),
-                new RPoint(bbox.X + bbox.Width, bbox.Y + bbox.Height),
+                new PaintPoint(bbox.X, bbox.Y),
+                new PaintPoint(bbox.X + bbox.Width, bbox.Y),
+                new PaintPoint(bbox.X, bbox.Y + bbox.Height),
+                new PaintPoint(bbox.X + bbox.Width, bbox.Y + bbox.Height),
             };
 
             var maxDist = 0.0;
@@ -2794,7 +2901,7 @@ namespace PeachPDF.Svg
             cycles = Math.Min(cycles, MaxSpreadCycles);
 
             var newR = r * cycles;
-            var expanded = new List<(RColor Color, double Position)>(stops.Length * cycles);
+            var expanded = new List<(PaintColor PaintColor, double Position)>(stops.Length * cycles);
             for (var k = 0; k < cycles; k++)
             {
                 var reflectedCycle = reflect && k % 2 != 0;
@@ -2802,7 +2909,7 @@ namespace PeachPDF.Svg
                 {
                     var localPos = reflectedCycle ? 1 - stop.Position : stop.Position;
                     var newPos = (k + localPos) / cycles;
-                    expanded.Add((stop.Color, Math.Clamp(newPos, 0.0, 1.0)));
+                    expanded.Add((stop.PaintColor, Math.Clamp(newPos, 0.0, 1.0)));
                 }
             }
 
@@ -2820,7 +2927,7 @@ namespace PeachPDF.Svg
         /// positioned shapes via <c>fill:url(#id)</c>. Falls back to treating the fraction as a raw
         /// coordinate if <paramref name="owner"/> has no computable bounding box (e.g. zero-size).
         /// </summary>
-        private static (double X, double Y) ResolveGradientPoint(SvgElement owner, SvgGradient gradient, double rawX, double rawY, RRect? boundsOverride = null)
+        private static (double X, double Y) ResolveGradientPoint(SvgElement owner, SvgGradient gradient, double rawX, double rawY, Rect? boundsOverride = null)
         {
             if (gradient.GradientUnitsUserSpaceOnUse)
                 return (rawX, rawY);
@@ -2832,7 +2939,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Same as <see cref="ResolveGradientPoint"/> but for a single scalar radius, scaled by the bounding box's spec-defined diagonal formula.</summary>
-        private static double ResolveGradientRadius(SvgElement owner, SvgGradient gradient, double rawR, RRect? boundsOverride = null)
+        private static double ResolveGradientRadius(SvgElement owner, SvgGradient gradient, double rawR, Rect? boundsOverride = null)
         {
             if (gradient.GradientUnitsUserSpaceOnUse)
                 return rawR;
@@ -2843,15 +2950,15 @@ namespace PeachPDF.Svg
             return rawR * Math.Sqrt((bbox.Width * bbox.Width + bbox.Height * bbox.Height) / 2.0);
         }
 
-        private static RPen? ResolveStrokePen(RGraphics g, SvgDocument document, SvgElement element, double opacity, RRect? boundsOverride = null,
+        private static Pen? ResolveStrokePen(Canvas g, SvgDocument document, SvgElement element, double opacity, Rect? boundsOverride = null,
             SvgPaint? paint = null)
         {
-            RPen pen;
+            Pen pen;
             var stroke = paint ?? element.Stroke;
 
             if (stroke.Kind == SvgPaintKind.Solid)
             {
-                pen = g.GetPen(ApplyOpacity(stroke.Color, opacity));
+                pen = g.GetPen(ApplyOpacity(stroke.PaintColor, opacity));
             }
             else if (stroke.Kind == SvgPaintKind.GradientRef &&
                      stroke.ReferenceId is { } id &&
@@ -2876,30 +2983,43 @@ namespace PeachPDF.Svg
             return pen;
         }
 
-        private static RColor ApplyOpacity(RColor color, double opacity)
+        private static PaintColor ApplyOpacity(PaintColor color, double opacity)
         {
             if (opacity >= 1.0)
                 return color;
 
             var alpha = (int)Math.Round(color.A * Math.Clamp(opacity, 0.0, 1.0));
-            return RColor.FromArgb(alpha, color.R, color.G, color.B);
+            return PaintColor.FromArgb(alpha, color.R, color.G, color.B);
         }
 
-        private static RPoint ApplyMatrix(RPoint p, RMatrix? matrix)
+        private static PaintPoint ApplyMatrix(PaintPoint p, Matrix3x2? matrix)
         {
             if (matrix is not { } m)
                 return p;
 
-            return new RPoint(p.X * m.M11 + p.Y * m.M21 + m.OffsetX, p.X * m.M12 + p.Y * m.M22 + m.OffsetY);
+            return new PaintPoint(p.X * m.M11 + p.Y * m.M21 + m.M31, p.X * m.M12 + p.Y * m.M22 + m.M32);
+        }
+
+        /// <summary>
+        /// The user-space matrix equivalent of a <c>gradientTransform</c>. In <c>objectBoundingBox</c> units the
+        /// transform acts inside the 0-1 box space (SVG 1.1 §13.2.2), so it is conjugated by the box matrix.
+        /// </summary>
+        private static Matrix3x2 GradientTransformInUserSpace(SvgElement owner, SvgGradient gradient, Matrix3x2 gt, Rect? boundsOverride)
+        {
+            if (gradient.GradientUnitsUserSpaceOnUse || OwnerBounds(owner, boundsOverride) is not { } bbox
+                || bbox.Width <= 0 || bbox.Height <= 0)
+                return gt;
+
+            var box = new Matrix3x2((float)bbox.Width, 0, 0, (float)bbox.Height, (float)bbox.X, (float)bbox.Y);
+            return Matrix3x2.Invert(box, out var inverse) ? inverse * gt * box : gt;
         }
 
         /// <summary>
         /// Transforms a radial gradient's radius as a pair of axis vectors (ignoring translation) -
-        /// valid for the translate/scale-only <c>gradientTransform</c> subset supported in v1. A
-        /// rotated matrix would turn the circle into a rotated ellipse, which
-        /// <see cref="RGraphics.GetRadialGradientBrush"/> has no way to express; documented limitation.
+        /// valid for the translate/scale-only <c>gradientTransform</c> subset. A rotated or skewed
+        /// matrix travels with the brush instead (see <see cref="ResolveGradientBrush"/>).
         /// </summary>
-        private static (double RadiusX, double RadiusY) ApplyMatrixToRadius(double r, RMatrix? matrix)
+        private static (double RadiusX, double RadiusY) ApplyMatrixToRadius(double r, Matrix3x2? matrix)
         {
             if (matrix is not { } m)
                 return (r, r);
@@ -2907,7 +3027,7 @@ namespace PeachPDF.Svg
             return (Math.Abs(r * m.M11), Math.Abs(r * m.M22));
         }
 
-        private static RGraphicsPath BuildPath(RGraphics g, SvgPathElement path)
+        private static GraphicsPath BuildPath(Canvas g, SvgPathElement path)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = path.FillRule;
@@ -2915,7 +3035,7 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath BuildCirclePath(RGraphics g, SvgCircleElement circle)
+        private static GraphicsPath BuildCirclePath(Canvas g, SvgCircleElement circle)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = circle.FillRule;
@@ -2923,7 +3043,7 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath BuildPolygonPath(RGraphics g, SvgPolygonElement polygon)
+        private static GraphicsPath BuildPolygonPath(Canvas g, SvgPolygonElement polygon)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = polygon.FillRule;
@@ -2931,7 +3051,7 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath BuildPolylinePath(RGraphics g, SvgPolylineElement polyline)
+        private static GraphicsPath BuildPolylinePath(Canvas g, SvgPolylineElement polyline)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = polyline.FillRule;
@@ -2939,7 +3059,17 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath BuildRectPath(RGraphics g, SvgRectElement rect)
+        /// <summary>The polyline's geometry closed back to its first point - for fill only; the stroke keeps the open path.</summary>
+        private static GraphicsPath BuildPolylineFillPath(Canvas g, SvgPolylineElement polyline)
+        {
+            var graphicsPath = g.GetGraphicsPath();
+            graphicsPath.FillMode = polyline.FillRule;
+            AppendPolylinePoints(graphicsPath, polyline.Points);
+            graphicsPath.CloseFigure();
+            return graphicsPath;
+        }
+
+        private static GraphicsPath BuildRectPath(Canvas g, SvgRectElement rect)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = rect.FillRule;
@@ -2947,7 +3077,7 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath BuildEllipsePath(RGraphics g, SvgEllipseElement ellipse)
+        private static GraphicsPath BuildEllipsePath(Canvas g, SvgEllipseElement ellipse)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = ellipse.FillRule;
@@ -2955,7 +3085,7 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath BuildLinePath(RGraphics g, SvgLineElement line)
+        private static GraphicsPath BuildLinePath(Canvas g, SvgLineElement line)
         {
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = line.FillRule;
@@ -2968,12 +3098,12 @@ namespace PeachPDF.Svg
         /// <paramref name="unitsMatrix"/>. Internal (not private) so <c>CssClipPathResolver</c> can
         /// reuse it for an HTML element's <c>clip-path: url(#id)</c> - every coordinate is baked
         /// directly into the returned path via <see cref="AppendClipShapeGeometry"/>/<see cref="AppendClipLeaf"/>
-        /// rather than relying on any ambient <see cref="RGraphics"/> transform still being pushed, so
+        /// rather than relying on any ambient <see cref="Canvas"/> transform still being pushed, so
         /// the caller can supply a synthetic matrix (translating/scaling into its own box-geometry
-        /// space, already divided by <see cref="RGraphics.PixelsPerPoint"/>) instead of the SVG-internal
+        /// space, already divided by <see cref="Canvas.PixelsPerPoint"/>) instead of the SVG-internal
         /// <c>objectBoundingBox</c>/<c>userSpaceOnUse</c> mapping <see cref="RenderElement"/> builds.
         /// </summary>
-        internal static RGraphicsPath? BuildClipPath(RGraphics g, SvgClipPath clipPath, RMatrix? unitsMatrix)
+        internal static GraphicsPath? BuildClipPath(Canvas g, SvgClipPath clipPath, Matrix3x2? unitsMatrix)
         {
             var path = g.GetGraphicsPath();
             path.FillMode = clipPath.ClipRule;
@@ -3002,9 +3132,9 @@ namespace PeachPDF.Svg
         /// When a transform is in effect the shape is built into its own sub-path, transformed, then
         /// merged; the common no-transform case appends straight into <paramref name="path"/> unchanged.
         /// </summary>
-        private static bool AppendClipShapeGeometry(RGraphics g, RGraphicsPath path, SvgElement shape, RMatrix? ambient)
+        private static bool AppendClipShapeGeometry(Canvas g, GraphicsPath path, SvgElement shape, Matrix3x2? ambient)
         {
-            var m = shape.Transform is { } t ? MultiplyMatrix(t, ambient ?? RMatrix.Identity) : ambient;
+            var m = shape.Transform is { } t ? MultiplyMatrix(t, ambient ?? Matrix3x2.Identity) : ambient;
 
             switch (shape)
             {
@@ -3034,7 +3164,7 @@ namespace PeachPDF.Svg
                     // <use> contributes its own transform (already folded into m above) plus its
                     // x/y translation; the target's own transform is folded when it's processed below.
                     var um = use.X != 0 || use.Y != 0
-                        ? MultiplyMatrix(new RMatrix(1, 0, 0, 1, use.X, use.Y), m ?? RMatrix.Identity)
+                        ? MultiplyMatrix(new Matrix3x2(1, 0, 0, 1, (float)use.X, (float)use.Y), m ?? Matrix3x2.Identity)
                         : m;
                     return AppendClipShapeGeometry(g, path, target, um);
                 }
@@ -3059,7 +3189,7 @@ namespace PeachPDF.Svg
         /// is built into a fresh sub-path, transformed by <paramref name="matrix"/>, and merged as a
         /// disjoint subpath.
         /// </summary>
-        private static bool AppendClipLeaf(RGraphics g, RGraphicsPath path, RMatrix? matrix, Action<RGraphicsPath> build)
+        private static bool AppendClipLeaf(Canvas g, GraphicsPath path, Matrix3x2? matrix, Action<GraphicsPath> build)
         {
             if (matrix is not { } m)
             {
@@ -3077,14 +3207,14 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Appends normalized path segments to <paramref name="path"/>. Every subpath start
-        /// (<see cref="PathSegmentKind.MoveTo"/>) uses <see cref="RGraphicsPath.AddMove"/> rather than
-        /// <see cref="RGraphicsPath.Start"/> - safe even for the very first point of a brand new path
+        /// (<see cref="PathSegmentKind.MoveTo"/>) uses <see cref="GraphicsPath.AddMove"/> rather than
+        /// <see cref="GraphicsPath.Start"/> - safe even for the very first point of a brand new path
         /// (the underlying core path dedupes the resulting degenerate zero-length "connector" segment
         /// any subsequent draw call would otherwise implicitly add), and required for correctness when
-        /// appending more than one subpath/shape into the same <see cref="RGraphicsPath"/> (e.g. a
+        /// appending more than one subpath/shape into the same <see cref="GraphicsPath"/> (e.g. a
         /// multi-subpath <c>d</c> attribute, or a clip region built from several shapes).
         /// </summary>
-        private static void AppendPathSegments(RGraphicsPath path, IReadOnlyList<PathSegment> segments)
+        internal static void AppendPathSegments(GraphicsPath path, IReadOnlyList<PathSegment> segments)
         {
             foreach (var segment in segments)
             {
@@ -3110,7 +3240,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Builds a circle as four quarter-circle elliptical arcs (each becomes an accurate bezier approximation, same machinery already used for CSS border-radius corners).</summary>
-        private static void AppendCircleGeometry(RGraphicsPath path, SvgCircleElement circle)
+        private static void AppendCircleGeometry(GraphicsPath path, SvgCircleElement circle)
         {
             var cx = circle.Cx;
             var cy = circle.Cy;
@@ -3119,15 +3249,10 @@ namespace PeachPDF.Svg
             if (r <= 0)
                 return;
 
-            path.AddMove(cx + r, cy);
-            path.AddArc(cx, cy + r, r, r, 0, false, true);
-            path.AddArc(cx - r, cy, r, r, 0, false, true);
-            path.AddArc(cx, cy - r, r, r, 0, false, true);
-            path.AddArc(cx + r, cy, r, r, 0, false, true);
-            path.CloseFigure();
+            path.AddCircle(cx, cy, r);
         }
 
-        private static void AppendPolygonGeometry(RGraphicsPath path, SvgPolygonElement polygon)
+        private static void AppendPolygonGeometry(GraphicsPath path, SvgPolygonElement polygon)
         {
             AppendPolylinePoints(path, polygon.Points);
             path.CloseFigure();
@@ -3138,10 +3263,10 @@ namespace PeachPDF.Svg
         /// <see cref="SvgPolylineElement"/>'s doc comment for the resulting (documented) fill/stroke
         /// simplification.
         /// </summary>
-        private static void AppendPolylineGeometry(RGraphicsPath path, SvgPolylineElement polyline) =>
+        private static void AppendPolylineGeometry(GraphicsPath path, SvgPolylineElement polyline) =>
             AppendPolylinePoints(path, polyline.Points);
 
-        private static void AppendPolylinePoints(RGraphicsPath path, RPoint[] points)
+        private static void AppendPolylinePoints(GraphicsPath path, PaintPoint[] points)
         {
             if (points.Length == 0)
                 return;
@@ -3157,7 +3282,7 @@ namespace PeachPDF.Svg
         /// are assumed already defaulted/clamped by <see cref="SvgTreeBuilder.BuildRect"/>. Rounded
         /// corners reuse the same quarter-ellipse-arc technique as <see cref="AppendCircleGeometry"/>.
         /// </summary>
-        private static void AppendRectGeometry(RGraphicsPath path, SvgRectElement rect)
+        private static void AppendRectGeometry(GraphicsPath path, SvgRectElement rect)
         {
             var x = rect.X;
             var y = rect.Y;
@@ -3172,28 +3297,15 @@ namespace PeachPDF.Svg
 
             if (rx <= 0 || ry <= 0)
             {
-                path.AddMove(x, y);
-                path.LineTo(x + width, y);
-                path.LineTo(x + width, y + height);
-                path.LineTo(x, y + height);
-                path.CloseFigure();
+                path.AddRoundedRectangle(new Rect(x, y, width, height), 0);
                 return;
             }
 
-            path.AddMove(x + rx, y);
-            path.LineTo(x + width - rx, y);
-            path.AddArc(x + width, y + ry, rx, ry, 0, false, true);
-            path.LineTo(x + width, y + height - ry);
-            path.AddArc(x + width - rx, y + height, rx, ry, 0, false, true);
-            path.LineTo(x + rx, y + height);
-            path.AddArc(x, y + height - ry, rx, ry, 0, false, true);
-            path.LineTo(x, y + ry);
-            path.AddArc(x + rx, y, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddRoundedRectangle(new Rect(x, y, width, height), rx, ry, rx, ry, rx, ry, rx, ry);
         }
 
         /// <summary>Same four-quarter-arc technique as <see cref="AppendCircleGeometry"/>, with independent x/y radii.</summary>
-        private static void AppendEllipseGeometry(RGraphicsPath path, SvgEllipseElement ellipse)
+        private static void AppendEllipseGeometry(GraphicsPath path, SvgEllipseElement ellipse)
         {
             var cx = ellipse.Cx;
             var cy = ellipse.Cy;
@@ -3203,16 +3315,11 @@ namespace PeachPDF.Svg
             if (rx <= 0 || ry <= 0)
                 return;
 
-            path.AddMove(cx + rx, cy);
-            path.AddArc(cx, cy + ry, rx, ry, 0, false, true);
-            path.AddArc(cx - rx, cy, rx, ry, 0, false, true);
-            path.AddArc(cx, cy - ry, rx, ry, 0, false, true);
-            path.AddArc(cx + rx, cy, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddEllipse(cx, cy, rx, ry);
         }
 
         /// <summary>An open (unclosed) two-point line - fill has no visible effect since it has zero area.</summary>
-        private static void AppendLineGeometry(RGraphicsPath path, SvgLineElement line)
+        private static void AppendLineGeometry(GraphicsPath path, SvgLineElement line)
         {
             path.AddMove(line.X1, line.Y1);
             path.LineTo(line.X2, line.Y2);

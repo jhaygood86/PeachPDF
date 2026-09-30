@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 
@@ -87,7 +87,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" fill="rgb(0,128,0)" text-decoration-line="underline" text-decoration-color="rgb(255,0,0)">Hi</text>""");
 
             var line = Assert.Single(Lines(g));
-            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), line.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 255, 0, 0), line.PaintColor);
         }
 
         [Fact]
@@ -96,7 +96,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" fill="rgb(0,128,0)" text-decoration-line="underline">Hi</text>""");
 
             var line = Assert.Single(Lines(g));
-            Assert.Equal(RColor.FromArgb(255, 0, 128, 0), line.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 128, 0), line.PaintColor);
         }
 
         [Fact]
@@ -105,7 +105,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" text-decoration-line="underline" text-decoration-style="dotted">Hi</text>""");
 
             var line = Assert.Single(Lines(g));
-            Assert.Equal(RDashStyle.Dot, line.DashStyle);
+            Assert.Equal(DashStyle.Dot, line.DashStyle);
         }
 
         /// <summary>
@@ -122,7 +122,7 @@ namespace PeachPDF.Tests.Svg
             Assert.Empty(Lines(g));
             var path = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
             Assert.True(path.Stroked);
-            Assert.Equal(RColor.FromArgb(255, 0, 0, 0), path.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0, 0), path.PaintColor);
         }
 
         [Fact]

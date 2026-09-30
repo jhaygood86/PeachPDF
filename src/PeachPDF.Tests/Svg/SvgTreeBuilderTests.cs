@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><path id="star" fill-rule="evenodd" d="M0,0 L10,0 L10,10 Z"/></svg>""");
 
             var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
-            Assert.Equal(RFillMode.EvenOdd, path.FillRule);
+            Assert.Equal(FillMode.EvenOdd, path.FillRule);
         }
 
         [Fact]
@@ -109,7 +109,7 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L10,0 L10,10 Z"/></svg>""");
 
             var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
-            Assert.Equal(RFillMode.Nonzero, path.FillRule);
+            Assert.Equal(FillMode.Nonzero, path.FillRule);
         }
 
         [Fact]
@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.Svg
 
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
-            Assert.Equal(RFillMode.EvenOdd, path.FillRule);
+            Assert.Equal(FillMode.EvenOdd, path.FillRule);
         }
 
         [Fact]
@@ -131,7 +131,7 @@ namespace PeachPDF.Tests.Svg
 
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
-            Assert.Equal(RFillMode.EvenOdd, path.FillRule);
+            Assert.Equal(FillMode.EvenOdd, path.FillRule);
         }
 
         [Fact]
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Svg
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
             Assert.Equal(SvgPaintKind.Solid, path.Fill.Kind);
-            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), path.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0xff, 0x00, 0x00), path.Fill.PaintColor);
         }
 
         [Fact]
@@ -156,9 +156,9 @@ namespace PeachPDF.Tests.Svg
 
             var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
             Assert.Equal(SvgPaintKind.Solid, path.Fill.Kind);
-            Assert.Equal(RColor.FromArgb(0xff, 0xff, 0xff), path.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0xff, 0xff, 0xff), path.Fill.PaintColor);
             Assert.Equal(SvgPaintKind.Solid, path.Stroke.Kind);
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), path.Stroke.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), path.Stroke.PaintColor);
         }
 
         [Fact]
@@ -168,7 +168,7 @@ namespace PeachPDF.Tests.Svg
 
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), path.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), path.Fill.PaintColor);
         }
 
         [Fact]
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.Svg
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
             Assert.Equal(SvgPaintKind.Solid, path.Stroke.Kind);
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), path.Stroke.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), path.Stroke.PaintColor);
         }
 
         [Fact]
@@ -228,7 +228,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(RFillMode.Nonzero, document.ClipPaths["clip"].ClipRule);
+            Assert.Equal(FillMode.Nonzero, document.ClipPaths["clip"].ClipRule);
         }
 
         [Fact]
@@ -241,7 +241,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(RFillMode.EvenOdd, document.ClipPaths["clip"].ClipRule);
+            Assert.Equal(FillMode.EvenOdd, document.ClipPaths["clip"].ClipRule);
         }
 
         [Fact]
@@ -272,8 +272,8 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L10,0" stroke="black" stroke-linecap="round" stroke-linejoin="bevel"/></svg>""");
 
             var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
-            Assert.Equal(RLineCap.Round, path.StrokeLineCap);
-            Assert.Equal(RLineJoin.Bevel, path.StrokeLineJoin);
+            Assert.Equal(LineCap.Round, path.StrokeLineCap);
+            Assert.Equal(LineJoin.Bevel, path.StrokeLineJoin);
         }
 
         [Fact]
@@ -285,8 +285,8 @@ namespace PeachPDF.Tests.Svg
 
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
-            Assert.Equal(RLineCap.Round, path.StrokeLineCap);
-            Assert.Equal(RLineJoin.Bevel, path.StrokeLineJoin);
+            Assert.Equal(LineCap.Round, path.StrokeLineCap);
+            Assert.Equal(LineJoin.Bevel, path.StrokeLineJoin);
         }
 
         [Fact]
@@ -541,11 +541,11 @@ namespace PeachPDF.Tests.Svg
         public void CurrentColor_ResolvesToContextColorPassedToBuild()
         {
             var xdoc = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>""");
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), Adapter, RColor.FromArgb(0x10, 0x20, 0x30));
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), Adapter, PaintColor.FromArgb(0x10, 0x20, 0x30));
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
             Assert.Equal(SvgPaintKind.Solid, circle.Fill.Kind);
-            Assert.Equal(RColor.FromArgb(0x10, 0x20, 0x30), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x10, 0x20, 0x30), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -554,7 +554,7 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>""");
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.Black, circle.Fill.Color);
+            Assert.Equal(PaintColor.Black, circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -564,7 +564,7 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" fill="#ff0000" style="fill: #00ff00"/></svg>""");
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -573,8 +573,8 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" fill="#ff0000" style="stroke: #0000ff"/></svg>""");
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), circle.Fill.Color);
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), circle.Stroke.Color);
+            Assert.Equal(PaintColor.FromArgb(0xff, 0x00, 0x00), circle.Fill.PaintColor);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), circle.Stroke.PaintColor);
         }
 
         [Fact]
@@ -583,9 +583,9 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L10,0" style="stroke: #ff0000; stroke-width: 3; fill-rule: evenodd"/></svg>""");
 
             var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), path.Stroke.Color);
+            Assert.Equal(PaintColor.FromArgb(0xff, 0x00, 0x00), path.Stroke.PaintColor);
             Assert.Equal(3, path.StrokeWidth);
-            Assert.Equal(RFillMode.EvenOdd, path.FillRule);
+            Assert.Equal(FillMode.EvenOdd, path.FillRule);
         }
 
         // The inline-<svg><style> case (issue #159) now works end-to-end through the full PdfGenerator
@@ -603,7 +603,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0xff, 0x00, 0x00), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -625,7 +625,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -639,7 +639,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -655,7 +655,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -1024,7 +1024,7 @@ namespace PeachPDF.Tests.Svg
 
             var anchor = Assert.IsType<SvgAnchorElement>(Assert.Single(document.Children));
             var rect = Assert.IsType<SvgRectElement>(Assert.Single(anchor.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), rect.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), rect.Fill.PaintColor);
         }
 
         /// <summary>
@@ -1079,7 +1079,7 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(image.Image);
             Assert.NotNull(image.NestedDocument);
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(image.NestedDocument!.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -1128,7 +1128,7 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(image.Image);
             Assert.NotNull(image.NestedDocument);
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(image.NestedDocument!.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -1200,7 +1200,7 @@ namespace PeachPDF.Tests.Svg
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.NotNull(image.NestedDocument);
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(image.NestedDocument!.Children));
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.PaintColor);
         }
 
         [Fact]
@@ -1339,7 +1339,7 @@ namespace PeachPDF.Tests.Svg
             // between "Hello" and "World" is preserved on the following run's leading edge rather than
             // trimmed away per-run - the run's own text still stays separate from its parent's.
             Assert.Equal(" World", span.Text);
-            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), span.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0xff, 0x00, 0x00), span.Fill.PaintColor);
         }
 
         [Fact]
@@ -1503,7 +1503,7 @@ namespace PeachPDF.Tests.Svg
         {
             // 2ex against a 20-unit ancestor is two x-heights of the ancestor's font (0.5em where it carries none).
             var parentFont = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text font-size="20">Hi</text></svg>""").Children.Select(FirstText).First(t => t is not null).Font!;
-            var xHeightEm = PeachPDF.Html.Adapters.FontMetricMeasurement.Ratio(parentFont, PeachPDF.CSS.FontMetric.Ex);
+            var xHeightEm = PeachPDF.Html.Core.Utils.FontMetricMeasurement.Ratio(parentFont, PeachPDF.CSS.FontMetric.Ex);
             Assert.Equal(2 * 20 * xHeightEm,
                          TextFontSize("""<g font-size="20"><text font-size="2ex">Hi</text></g>"""), 3);
         }

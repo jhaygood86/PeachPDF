@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using Xunit;
@@ -52,8 +52,8 @@ namespace PeachPDF.Tests.Html.Core
             var reg = Register("font-family: Nabla; override-colors: 0 #ff0000, 2 rgb(0, 255, 0);");
             Assert.NotNull(reg);
             Assert.Equal(2, reg!.Overrides.Count);
-            Assert.Equal(new KeyValuePair<int, RColor>(0, RColor.FromArgb(255, 255, 0, 0)), reg.Overrides[0]);
-            Assert.Equal(new KeyValuePair<int, RColor>(2, RColor.FromArgb(255, 0, 255, 0)), reg.Overrides[1]);
+            Assert.Equal(new KeyValuePair<int, PaintColor>(0, PaintColor.FromArgb(255, 255, 0, 0)), reg.Overrides[0]);
+            Assert.Equal(new KeyValuePair<int, PaintColor>(2, PaintColor.FromArgb(255, 0, 255, 0)), reg.Overrides[1]);
         }
 
         [Fact]
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.Html.Core
             Assert.NotNull(reg);
             var kv = Assert.Single(reg!.Overrides);
             Assert.Equal(3, kv.Key);
-            Assert.Equal(RColor.FromArgb(255, 0, 0, 255), kv.Value);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0, 255), kv.Value);
         }
 
         [Fact]

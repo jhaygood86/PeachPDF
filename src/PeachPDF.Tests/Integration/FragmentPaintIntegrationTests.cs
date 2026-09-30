@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -69,11 +69,11 @@ namespace PeachPDF.Tests.Integration
                 // coordinates - no page offset is applied at paint time any more.
                 foreach (var call in recording.DrawStringCalls)
                 {
-                    Assert.Contains(wordRects, r => System.Math.Abs(r.X - call.Point.X) < 0.001);
+                    Assert.Contains(wordRects, r => System.Math.Abs(r.X - call.PaintPoint.X) < 0.001);
                 }
 
                 // Page 1's content is 200pt down the document but paints near its own page top.
-                Assert.All(recording.DrawStringCalls, c => Assert.InRange(c.Point.Y, Math.Min(0, halfLeading), 200));
+                Assert.All(recording.DrawStringCalls, c => Assert.InRange(c.PaintPoint.Y, Math.Min(0, halfLeading), 200));
             }
         }
 
@@ -94,7 +94,7 @@ namespace PeachPDF.Tests.Integration
                 // Sliced, not cloned: each fragment paints the whole box's background rectangle and
                 // the page clip does the cutting (box-decoration-break: slice, the initial value).
                 Assert.Contains(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                    r => r.Color == RColorOf(10, 20, 30));
+                    r => r.PaintColor == RColorOf(10, 20, 30));
             }
         }
 
@@ -118,7 +118,7 @@ namespace PeachPDF.Tests.Integration
                 FragmentPaintHarness.PaintPage(container, recording, page);
 
                 painted.Add(Assert.Single(
-                    recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => r.Color == RColorOf(1, 2, 3)));
+                    recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => r.PaintColor == RColorOf(1, 2, 3)));
             }
 
             Assert.Equal(painted[0].X, painted[1].X, 3);
@@ -140,8 +140,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, recording);
 
             var rects = recording.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var red = rects.FindIndex(r => r.Color == RColorOf(255, 0, 0));
-            var blue = rects.FindIndex(r => r.Color == RColorOf(0, 0, 255));
+            var red = rects.FindIndex(r => r.PaintColor == RColorOf(255, 0, 0));
+            var blue = rects.FindIndex(r => r.PaintColor == RColorOf(0, 0, 255));
 
             Assert.True(red >= 0 && blue >= 0, "both positioned boxes must paint");
             Assert.True(red < blue, "the lower z-index sibling must paint first");
@@ -182,11 +182,11 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, recording, 0);
 
             Assert.DoesNotContain(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColorOf(10, 20, 30));
+                r => r.PaintColor == RColorOf(10, 20, 30));
             Assert.DoesNotContain(recording.DrawStringCalls, c => c.Text.Contains("Hidden"));
 
             Assert.Contains(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColorOf(40, 50, 60));
+                r => r.PaintColor == RColorOf(40, 50, 60));
             Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("Visible"));
         }
 
@@ -211,18 +211,18 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, recording, 0);
 
             Assert.DoesNotContain(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColorOf(10, 20, 30));
+                r => r.PaintColor == RColorOf(10, 20, 30));
             Assert.DoesNotContain(recording.DrawStringCalls, c => c.Text.Contains("Collapsed"));
 
             Assert.Contains(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColorOf(40, 50, 60));
+                r => r.PaintColor == RColorOf(40, 50, 60));
             Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("Visible"));
         }
 
-        private static RColor RColorOf(int r, int g, int b) =>
-            RColor.FromArgb(r, g, b);
+        private static PaintColor RColorOf(int r, int g, int b) =>
+            PaintColor.FromArgb(r, g, b);
 
-        private static System.Collections.Generic.IEnumerable<RRect> WordRects(BoxFragment fragment)
+        private static System.Collections.Generic.IEnumerable<Rect> WordRects(BoxFragment fragment)
         {
             foreach (var word in fragment.Words)
             {

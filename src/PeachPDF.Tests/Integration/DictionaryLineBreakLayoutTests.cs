@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Thai and Khmer wrap at the words a dictionary finds, as they do in a browser. The breaks themselves are checked in
+    /// Thai, Lao, Khmer and Burmese wrap at the words a dictionary finds, as they do in a browser. The breaks themselves are checked in
     /// <c>PeachDrawing.Text.Tests</c>; these tests are about how the layout uses them: where the words land, and what
     /// <c>word-break</c>, <c>overflow-wrap</c> and inline boxes do on top. Every character is set in
     /// <see cref="BundledFonts.LineBreak"/>, one em wide (a mark or a vowel sign as much as a letter), so with 16pt text a line 50pt wide
@@ -50,10 +50,15 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task LaoAndBurmese_HaveNoWordListYet_AndOverflowAsOneWord()
+        public async Task Lao_WrapsBetweenWords()
         {
-            Assert.Equal(["ຂ້ອຍຮັກພາສາລາວ"], LineTexts(await LayOut($"<p id='p' style='{Style(50)}'>ຂ້ອຍຮັກພາສາລາວ</p>")));
-            Assert.Equal(["ကျွန်တော်မြန်မာစာကိုချစ်တယ်"], LineTexts(await LayOut($"<p id='p' style='{Style(50)}'>ကျွန်တော်မြန်မာစာကိုချစ်တယ်</p>")));
+            Assert.Equal(["ຂ້ອຍ", "ຮັກ", "ພາສາ", "ລາວ"], LineTexts(await LayOut($"<p id='p' style='{Style(50)}'>ຂ້ອຍຮັກພາສາລາວ</p>")));
+        }
+
+        [Fact]
+        public async Task Burmese_WrapsBetweenWords()
+        {
+            Assert.Equal(["ကျွန်တော်", "မြန်မာ", "စာ", "ကို", "ချစ်", "တယ်"], LineTexts(await LayOut($"<p id='p' style='{Style(50)}'>ကျွန်တော်မြန်မာစာကိုချစ်တယ်</p>")));
         }
 
         [Fact]

@@ -2,13 +2,13 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using PeachPDF;
 
 namespace PeachPDF.Html.Core.Dom
@@ -16,7 +16,7 @@ namespace PeachPDF.Html.Core.Dom
     /// <summary>
     /// The cascaded (<see cref="ComputedStyle"/>) and calculated-from-cascade (<see cref="DerivedStyle"/>)
     /// halves of what used to be <c>CssBoxProperties</c>. Every property below keeps the exact name/type
-    /// it always had, so the ~40 other files that read <c>box.Color</c>/<c>box.ActualFont</c>/etc. need no
+    /// it always had, so the ~40 other files that read <c>box.PaintColor</c>/<c>box.ActualFont</c>/etc. need no
     /// changes - only the storage moved. See <see cref="ComputedStyle"/> and <see cref="DerivedStyle"/> for
     /// what's cascaded vs. calculated, and why <see cref="SmallCapsFontScale"/>/<c>UsedPageName</c>/
     /// <c>SubgridContext</c> below are neither (a plain constant and two non-cascaded, layout-only fields
@@ -145,7 +145,7 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion
 
-        #region Color, content, display, direction, float, clear, position
+        #region PaintColor, content, display, direction, float, clear, position
 
         /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>
         public bool IsPositioned => DerivedStyle.IsPositioned;
@@ -220,7 +220,7 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualLetterSpacing => DerivedStyle.ActualLetterSpacing;
 
         /// <summary>Measures the width of whitespace between words (set <see cref="ActualWordSpacing"/>).</summary>
-        protected void MeasureWordSpacing(RGraphics g) => DerivedStyle.MeasureWordSpacing(g);
+        protected void MeasureWordSpacing(Canvas g) => DerivedStyle.MeasureWordSpacing(g);
 
         /// <summary>Measures the extra space added between each pair of adjacent characters (set <see cref="ActualLetterSpacing"/>).</summary>
         protected void MeasureLetterSpacing() => DerivedStyle.MeasureLetterSpacing();
@@ -296,16 +296,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the actual column-rule width (the line drawn between columns in a multi-column container).</summary>
         public double ActualColumnRuleWidth => DerivedStyle.ActualColumnRuleWidth;
 
-        public RColor ActualBorderTopColor => DerivedStyle.ActualBorderTopColor;
-        public RColor ActualBorderRightColor => DerivedStyle.ActualBorderRightColor;
-        public RColor ActualBorderBottomColor => DerivedStyle.ActualBorderBottomColor;
-        public RColor ActualBorderLeftColor => DerivedStyle.ActualBorderLeftColor;
+        public PaintColor ActualBorderTopColor => DerivedStyle.ActualBorderTopColor;
+        public PaintColor ActualBorderRightColor => DerivedStyle.ActualBorderRightColor;
+        public PaintColor ActualBorderBottomColor => DerivedStyle.ActualBorderBottomColor;
+        public PaintColor ActualBorderLeftColor => DerivedStyle.ActualBorderLeftColor;
 
         /// <summary>Gets the actual column-rule color (the line drawn between columns in a multi-column container).</summary>
-        public RColor ActualColumnRuleColor => DerivedStyle.ActualColumnRuleColor;
+        public PaintColor ActualColumnRuleColor => DerivedStyle.ActualColumnRuleColor;
 
         public double ActualOutlineWidth => DerivedStyle.ActualOutlineWidth;
-        public RColor ActualOutlineColor => DerivedStyle.ActualOutlineColor;
+        public PaintColor ActualOutlineColor => DerivedStyle.ActualOutlineColor;
         public double ActualOutlineOffset => DerivedStyle.ActualOutlineOffset;
 
         public double ActualBorderTopLeftRadiusX => DerivedStyle.ActualBorderTopLeftRadiusX;
@@ -324,7 +324,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>background-clip: border-box</c>); for a padding-edge or content-edge rectangle, use
         /// <see cref="ComputeInnerRadii"/> instead so the radius is also reduced per §5.5.
         /// </summary>
-        internal BorderRadii ComputeRadii(RRect rect) => DerivedStyle.ComputeRadii(rect);
+        internal BorderRadii ComputeRadii(Rect rect) => DerivedStyle.ComputeRadii(rect);
 
         /// <summary>
         /// Computes overlap-reduced radii for a padding-edge or content-edge rectangle, first reducing
@@ -334,7 +334,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Borders Module Level 3 §5.5</see> - border widths alone for the padding edge, border widths
         /// plus padding for the content edge.
         /// </summary>
-        internal BorderRadii ComputeInnerRadii(RRect borderBoxRect, RRect innerRect,
+        internal BorderRadii ComputeInnerRadii(Rect borderBoxRect, Rect innerRect,
             double insetLeft, double insetTop, double insetRight, double insetBottom) =>
             DerivedStyle.ComputeInnerRadii(borderBoxRect, innerRect, insetLeft, insetTop, insetRight, insetBottom);
 
@@ -356,7 +356,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Lazily computes the combined 2D transform matrix for the <c>transform</c>/<c>transform-origin</c>
         /// properties, resolved against this box's own border-box size.
         /// </summary>
-        public RMatrix ActualTransformMatrix => DerivedStyle.ActualTransformMatrix;
+        public Matrix3x2 ActualTransformMatrix => DerivedStyle.ActualTransformMatrix;
 
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => DerivedStyle.IsTransformed;
@@ -395,26 +395,26 @@ namespace PeachPDF.Html.Core.Dom
         public BlendMode ActualMixBlendMode => DerivedStyle.ActualMixBlendMode;
 
         /// <summary>Gets the actual color for the text.</summary>
-        public RColor ActualColor => DerivedStyle.ActualColor;
+        public PaintColor ActualColor => DerivedStyle.ActualColor;
 
         /// <summary>Gets the actual background color of the box.</summary>
-        public RColor ActualBackgroundColor => DerivedStyle.ActualBackgroundColor;
+        public PaintColor ActualBackgroundColor => DerivedStyle.ActualBackgroundColor;
 
         /// <summary>
         /// Gets the resolved <c>font-palette</c> selection for this box's used font (CSS Fonts 4), or null
         /// for the default palette.
         /// </summary>
-        public RFontPalette? ActualFontPalette => DerivedStyle.ActualFontPalette;
+        public FontPalette? ActualFontPalette => DerivedStyle.ActualFontPalette;
 
         /// <summary>Gets the font that should be actually used to paint the text of the box.</summary>
-        public RFont ActualFont => DerivedStyle.ActualFont;
+        public Font ActualFont => DerivedStyle.ActualFont;
 
         /// <summary>
         /// Resolves a font with this box's own family/style/weight/stretch/oblique - the same identity
         /// <see cref="ActualFont"/> uses - at an explicit point size instead of the box's own cascaded
         /// <c>font-size</c>. For a caller that computes its own target size out-of-band.
         /// </summary>
-        internal RFont GetActualFontAtSize(double fontSize) => DerivedStyle.GetActualFontAtSize(fontSize);
+        internal Font GetActualFontAtSize(double fontSize) => DerivedStyle.GetActualFontAtSize(fontSize);
 
         /// <summary>Gets the resolved GSUB ligature features (CSS <c>font-variant-ligatures</c>) for this box's text.</summary>
         public LigatureSet ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
@@ -455,13 +455,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// <see cref="ActualTextShapingFeatures"/>, overridden with <paramref name="word"/>'s own
         /// <see cref="CssRectWord.ScriptTag"/>/<see cref="CssRectWord.EffectiveJoiningForms"/>/
-        /// <see cref="CssRectWord.EffectiveUseCategories"/> when it carries any of them -
+        /// <see cref="CssRectWord.EffectiveUseCategories"/>/<see cref="CssRectWord.EffectiveKhmerCategories"/>
+        /// when it carries any of them -
         /// <see cref="ActualTextShapingFeatures"/> is a box-level (not per-word) cached value, but
-        /// script tag/joining forms/USE categories are resolved per word (see <see cref="CssBox.CharScripts"/>/
-        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/>), so every measure/paint
+        /// script tag/joining forms/USE/Khmer categories are resolved per word (see <see cref="CssBox.CharScripts"/>/
+        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/>/<see cref="CssBox.KhmerCategories"/>),
+        /// so every measure/paint
         /// call site that shapes one specific word's own text needs this instead of the plain box-level
         /// property. A no-op (returns the unmodified box-level value) for the overwhelming common case
-        /// of a word with none of the three - only evaluates <see cref="ActualTextShapingFeatures"/>
+        /// of a word with none of the four - only evaluates <see cref="ActualTextShapingFeatures"/>
         /// once either way, so this costs nothing beyond the existing cached-property read. When the
         /// word also carries joining forms, this also copies
         /// its own <see cref="CssRectWord.DisplayOrderReversed"/> into <see cref="ShapeSettings.ReverseForDisplay"/>
@@ -479,17 +481,29 @@ namespace PeachPDF.Html.Core.Dom
                     ScriptTag: var scriptTag,
                     EffectiveJoiningForms: var joiningForms,
                     EffectiveUseCategories: var useCategories,
+                    EffectiveKhmerCategories: var khmerCategories,
                 } rectWord
-                || (scriptTag is null && joiningForms is null && useCategories is null))
+                || (scriptTag is null && joiningForms is null && useCategories is null && khmerCategories is null))
             {
                 return features;
             }
 
+            // At most one of JoiningForms/UseCategories/KhmerCategories is ever forwarded, in that
+            // precedence order - mirroring Paragraph.ShapePiece's own if/else-if discipline exactly.
+            // CssBox.AppendWordsFromText has no dedicated script-boundary word split (see its own
+            // remarks - e.g. Katakana directly followed by Latin stays one CssRectWord), so a word that
+            // glues a USE-shaped script directly against Khmer with no separating boundary can resolve
+            // BOTH EffectiveUseCategories and EffectiveKhmerCategories non-null on the very same word.
+            // Forwarding both into one ShapeSettings would run ApplyUseShaping then ApplyKhmerShaping
+            // back-to-back over the same glyph list - and ApplyUseShaping's own conjunct-formation stage
+            // can shrink glyphs.Count before ApplyKhmerShaping ever runs, silently misaligning its own
+            // (position-keyed, not ClusterStart-keyed) category snapshot against the wrong glyphs.
             return features with
             {
                 ScriptTag = scriptTag,
                 JoiningForms = joiningForms,
-                UseCategories = useCategories,
+                UseCategories = joiningForms is null ? useCategories : null,
+                KhmerCategories = joiningForms is null && useCategories is null ? khmerCategories : null,
                 ReverseForDisplay = joiningForms is not null && rectWord.DisplayOrderReversed,
             };
         }
@@ -518,7 +532,7 @@ namespace PeachPDF.Html.Core.Dom
         internal double ActualStretch => DerivedStyle.ActualStretch;
 
         /// <summary>
-        /// This box's own <see cref="FontStyle"/>, resolved to a faux-italic skew factor when it's the CSS
+        /// This box's own <see cref="PaintFontStyle"/>, resolved to a faux-italic skew factor when it's the CSS
         /// Fonts Level 4 <c>oblique &lt;angle&gt;</c> form - null otherwise.
         /// </summary>
         internal double? ActualObliqueSkewSinus => DerivedStyle.ActualObliqueSkewSinus;
@@ -527,11 +541,11 @@ namespace PeachPDF.Html.Core.Dom
         /// A cached font derived from <see cref="ActualFont"/> at a reduced size, used to synthesize
         /// <c>font-variant: small-caps</c>.
         /// </summary>
-        public RFont ActualSmallCapsFont => DerivedStyle.ActualSmallCapsFont;
+        public Font ActualSmallCapsFont => DerivedStyle.ActualSmallCapsFont;
 
         /// <summary>The scaled face a synthesized <c>font-variant-position</c> sub/superscript is drawn
         /// with - see <see cref="DerivedStyle.ActualSubSuperscriptFont"/>.</summary>
-        public RFont ActualSubSuperscriptFont => DerivedStyle.ActualSubSuperscriptFont;
+        public Font ActualSubSuperscriptFont => DerivedStyle.ActualSubSuperscriptFont;
 
         /// <summary>The face scale and signed baseline shift for a synthesized <c>font-variant-position</c>
         /// sub/superscript, or null when none is needed - see
@@ -542,7 +556,7 @@ namespace PeachPDF.Html.Core.Dom
         /// The font this box uses for <paramref name="codepoint"/> specifically. See
         /// <see cref="DerivedStyle.ActualFontForCodepoint"/>.
         /// </summary>
-        public RFont ActualFontForCodepoint(System.Text.Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference) =>
+        public Font ActualFontForCodepoint(System.Text.Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference) =>
             DerivedStyle.ActualFontForCodepoint(codepoint, sizeScale, presentation);
 
         /// <summary>This box's <c>font-variant-emoji</c> keyword - see <see cref="DerivedStyle.ActualFontVariantEmoji"/>.</summary>
@@ -709,13 +723,13 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Layout-engine output (not cascaded, not derived - assigned directly by layout)
 
-        private RPoint _location;
+        private PaintPoint _location;
 
         /// <inheritdoc cref="Size"/>
-        private RSize _size;
+        private Size _size;
 
         /// <summary>Gets or sets the location of the box.</summary>
-        public RPoint Location
+        public PaintPoint Location
         {
             get => _location;
             set
@@ -741,7 +755,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="Location"/> or <c>OffsetTop</c>, so without this a box could grow into a band the
         /// emitter had already observed it to be absent from, and nothing would say so.
         /// </remarks>
-        public RSize Size
+        public Size Size
         {
             get => _size;
             set
@@ -755,12 +769,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>Gets the bounds of the box.</summary>
-        public RRect Bounds
+        public Rect Bounds
         {
             get
             {
-                var boundingBoxSize = new RSize(ActualBoxSizingWidth, ActualBoxSizingHeight);
-                return new RRect(Location, boundingBoxSize);
+                var boundingBoxSize = new Size(ActualBoxSizingWidth, ActualBoxSizingHeight);
+                return new Rect(Location, boundingBoxSize);
             }
         }
 
@@ -801,7 +815,7 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualRight
         {
             get => Location.X + ActualBoxSizingWidth;
-            set => Size = new RSize(value - ActualBoxSizeIncludedWidth - Location.X, Size.Height);
+            set => Size = new Size(value - ActualBoxSizeIncludedWidth - Location.X, Size.Height);
         }
 
         /// <summary>
@@ -811,7 +825,7 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualBottom
         {
             get => Location.Y + ActualBoxSizingHeight;
-            set => Size = new RSize(Size.Width, value - ActualBoxSizeIncludedHeight - Location.Y);
+            set => Size = new Size(Size.Width, value - ActualBoxSizeIncludedHeight - Location.Y);
         }
 
         /// <summary>
@@ -853,7 +867,7 @@ namespace PeachPDF.Html.Core.Dom
         public double ClientBottom => ActualBottom - ActualPaddingBottom - ActualBorderBottomWidth;
 
         /// <summary>Gets the client rectangle.</summary>
-        public RRect ClientRectangle => RRect.FromLTRB(ClientLeft, ClientTop, ClientRight, ClientBottom);
+        public Rect ClientRectangle => Rect.FromLTRB(ClientLeft, ClientTop, ClientRight, ClientBottom);
 
         /// <summary>Gets the actual height.</summary>
         public double ActualHeight => ActualBoxSizingHeight;
@@ -975,9 +989,15 @@ namespace PeachPDF.Html.Core.Dom
             inheritedGeneratedContent = inheritedGeneratedContent.SetPropertyValue(inheritedGeneratedContent.Quotes, parentStyle.GeneratedContent.Quotes, static (a, v) => a with { Quotes = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.GeneratedContent, inheritedGeneratedContent, static (s, a) => s with { GeneratedContent = a });
 
+            // `image-rendering` is the one Inherited: true property in BackgroundArea (the rest are box-local), so, like
+            // `quotes` above, it is copied on its own rather than by adopting the whole area.
+            var inheritedBackground = _computedStyle.Background;
+            inheritedBackground = inheritedBackground.SetPropertyValue(inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
+
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
             // are intentionally skipped here - every value copied above either has no such cache, or (for
-            // Color, FontPalette) is safe to leave stale since a fresh box's DerivedStyle cache starts
+            // PaintColor, FontPalette) is safe to leave stale since a fresh box's DerivedStyle cache starts
             // empty and this method only ever runs before anything else has read from it.
             if (!everything) return;
 

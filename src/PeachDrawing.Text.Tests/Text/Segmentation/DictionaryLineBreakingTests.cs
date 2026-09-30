@@ -6,7 +6,7 @@ using System.Text;
 namespace PeachDrawing.Text.Tests.Text.Segmentation
 {
     /// <summary>
-    /// Thai and Khmer line breaking through a word list. A fixture writes the text with a <c>|</c> wherever a line may
+    /// Thai, Lao, Khmer and Burmese line breaking through a word list. A fixture writes the text with a <c>|</c> wherever a line may
     /// end. The sentences are ordinary prose, and where a test says "Chrome" its breaks are the ones Chrome's line breaker gives for
     /// the same text (measured by laying the text out in a container of no width, which breaks at every opportunity).
     /// </summary>
@@ -44,19 +44,37 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [InlineData("ខ្ញុំ|ស្រលាញ់|ភាសាខ្មែរ")]
         [InlineData("កម្ពុជា|ជា|ប្រទេស|មួយ|នៅ|អាស៊ី|អាគ្នេយ៍")]
         [InlineData("អាហារ|ខ្មែរ|មាន|រសជាតិ|ឆ្ងាញ់|ណាស់")]
+        // Lao
+        [InlineData("ຂ້ອຍ|ຮັກ|ພາສາ|ລາວ")]
+        [InlineData("ປະເທດ|ລາວ|ມີ|ປະຊາຊົນ|ຫຼາຍ")]
+        [InlineData("ຂ້ອຍ|ໄປ|ໂຮງຮຽນ|ທຸກມື້")]
+        [InlineData("ອາຫານ|ລາວ|ມີ|ລົດຊາດ|ແຊບ|ຫຼາຍ")]
+        [InlineData("ພວກ|ເຮົາ|ຮັກ|ປະເທດ|ຂອງ|ພວກ|ເຮົາ")]
+        // Burmese
+        [InlineData("ကျွန်တော်|မြန်မာ|စာ|ကို|ချစ်|တယ်")]
+        [InlineData("မြန်မာနိုင်ငံ|သည်|အာ|ရှ|တိုက်|တွင်|ရှိ|သည်")]
+        [InlineData("ရန်|ကုန်|မြို့|သည်|မြန်မာနိုင်ငံ၏အကြီး|ဆုံး|မြို့|ဖြစ်သည်")]
+        [InlineData("ကျွန်ုပ်|တို့သည်|မိတ်ဆွေ|များ|ဖြစ်|ကြ|သည်")]
+        [InlineData("ဒီ|နေ့|ရာသီဥတု|ကောင်း|ပါ|တယ်")]
+        [InlineData("အင်္ဂလိပ်|ဘာသာစကား")]
+        [InlineData("ကျောင်းသား|များ")]
         public void Sentences_BreakWhereChromeBreaksThem(string expected)
         {
             Assert.Equal(expected, Render(expected.Replace("|", "")));
         }
 
         [Theory]
-        // Where the list decides and Chrome does not agree: Chrome splits a compound the list has as one word (school, each, in) and keeps
-        // "Cambodia" whole though the list has it as two words.
+        // Where the list decides and Chrome does not agree: Chrome splits a compound the list has as one word (school, each, in, the east,
+        // capital city, everyone) and, for Khmer, keeps "Cambodia" whole though the list has it as two words.
         [InlineData("ប្រទេស|កម្ពុជា|មាន|ប្រជាជន|ច្រើន")]
         [InlineData("ខ្ញុំ|ទៅ|សាលារៀន|រៀងរាល់ថ្ងៃ")]
         [InlineData("រាជធានី|ភ្នំពេញ|ជាទី|ក្រុង|ធំ|បំផុត|នៅក្នុង|ប្រទេស")]
+        [InlineData("ປະເທດ|ລາວ|ຕັ້ງ|ຢູ່ໃນ|ເອເຊຍ|ຕາເວັນອອກ|ສຽງ|ໃຕ້")]
+        [InlineData("ສະບາຍດີ|ທຸກຄົນ")]
         [InlineData("ធ្វើការ")]
         [InlineData("ក្រុមហ៊ុន")]
+        [InlineData("ນະຄອນຫຼວງວຽງຈັນ|ເປັນ|ເມືອງຫຼວງ|ຂອງ|ປະເທດ|ລາວ")]
+        [InlineData("ຂ້ອຍ|ຮັກ|ພາສາ|ລາວ|ນະຄອນຫຼວງ")]
         public void WhereChromeDiffers_TheListDecides(string expected)
         {
             Assert.Equal(expected, Render(expected.Replace("|", "")));
@@ -107,6 +125,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [InlineData("ๆภาษา", "ๆ|ภาษา")]
         [InlineData("ก็ตาม", "ก็ตาม")]
         [InlineData("ខ្ញុំ\u200Bស្រលាញ់ភាសាខ្មែរ", "ខ្ញុំ\u200B|ស្រលាញ់|ភាសាខ្មែរ")]
+        [InlineData("ສະບາຍດີ ທຸກຄົນ", "ສະບາຍດີ |ທຸກຄົນ")]
         public void TextAroundARun_IsBrokenAsTheAlgorithmBreaksIt(string text, string expected)
         {
             Assert.Equal(expected, Render(text));
@@ -213,8 +232,6 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         [Theory]
         [InlineData("ᨠᨡᨢᨣᨤ")]                                                 // Tai Tham
-        [InlineData("ຂ້ອຍຮັກພາສາລາວ")]                                      // Lao
-        [InlineData("ကျွန်တော်မြန်မာစာကိုချစ်တယ်")]                            // Burmese
         public void OtherComplexContextScripts_KeepTheFallbackOfLb1(string text)
         {
             // These have no word list: a run of one has no opportunity inside.
@@ -225,7 +242,9 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         [Theory]
         [InlineData("Thai", 26383, 20)]
+        [InlineData("Lao", 30550, 32)]
         [InlineData("Khmer", 81025, 19)]
+        [InlineData("Burmese", 41120, 33)]
         public void EachListLoads_SortedAndComplete(string scriptName, int count, int longest)
         {
             var dictionary = WordDictionary.For(Enum.Parse<ComplexScript>(scriptName));
@@ -286,23 +305,26 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
             Assert.Null(WordDictionary.For(ComplexScript.None));
             Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf('a'));
             Assert.Equal(ComplexScript.Thai, DictionarySegmenter.ScriptOf(0x0E01));
-            Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf(0x0E81));      // Lao and Burmese have no list yet
+            Assert.Equal(ComplexScript.Lao, DictionarySegmenter.ScriptOf(0x0E81));
             Assert.Equal(ComplexScript.Khmer, DictionarySegmenter.ScriptOf(0x1780));
-            Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf(0x1000));
+            Assert.Equal(ComplexScript.Burmese, DictionarySegmenter.ScriptOf(0x1000));
+            Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf(0x1A20));       // Tai Tham: a Complex_Context script with no list
         }
 
         [Fact]
-        public void TheResourcesAreDeflate_NotBrotli()
+        public void TheResourcesAreBrotli()
         {
-            // WebAssembly has no Brotli decoder: each list must inflate with DeflateStream, whose absence would leave no list at all.
-            var assembly = typeof(WordDictionary).Assembly;
-            foreach (var script in new[] { "thai", "khmer" })
+            // Like the other Unicode data PeachDrawing.Text.Data carries: a host with no Brotli decoder gets an empty
+            // dictionary (WordDictionary.Load's own fallback), not a failed read, unless it registers a decoder of its own.
+            var assembly = System.Reflection.Assembly.Load("PeachDrawing.Text.Data");
+
+            foreach (var script in new[] { "thai", "lao", "khmer", "burmese" })
             {
-                var name = assembly.GetManifestResourceNames().Single(n => n.EndsWith("." + script + ".dict", StringComparison.Ordinal));
+                var name = assembly.GetManifestResourceNames().Single(n => n.EndsWith("." + script + ".dict.br", StringComparison.Ordinal));
                 using var stream = assembly.GetManifestResourceStream(name)!;
-                using var inflated = new System.IO.Compression.DeflateStream(stream, System.IO.Compression.CompressionMode.Decompress);
+                using var decompressed = new System.IO.Compression.BrotliStream(stream, System.IO.Compression.CompressionMode.Decompress);
                 using var output = new MemoryStream();
-                inflated.CopyTo(output);
+                decompressed.CopyTo(output);
                 Assert.True(output.Length > 100_000);
                 Assert.Equal("PDW1", Encoding.ASCII.GetString(output.GetBuffer(), 0, 4));
             }
@@ -312,14 +334,15 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         public void TheListsAreSmall()
         {
             long total = 0;
-            var assembly = typeof(WordDictionary).Assembly;
-            foreach (var name in assembly.GetManifestResourceNames().Where(n => n.EndsWith(".dict", StringComparison.Ordinal)))
+            var assembly = System.Reflection.Assembly.Load("PeachDrawing.Text.Data");
+
+            foreach (var name in assembly.GetManifestResourceNames().Where(n => n.EndsWith(".dict.br", StringComparison.Ordinal)))
             {
                 using var stream = assembly.GetManifestResourceStream(name)!;
                 total += stream.Length;
             }
 
-            Assert.InRange(total, 250_000, 320_000);
+            Assert.InRange(total, 400_000, 480_000);
         }
 
         [Fact]
@@ -358,7 +381,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         // ---- hostile input -----------------------------------------------------------------------------------------------------------
 
-        private static readonly (int First, int Last)[] Blocks = [(0x0E00, 0x0E7F), (0x1780, 0x17FF)];
+        private static readonly (int First, int Last)[] Blocks = [(0x0E00, 0x0E7F), (0x1780, 0x17FF), (0x0E80, 0x0EFF), (0x1000, 0x109F)];
 
         private static string RandomText(Random random, int length, (int First, int Last) block)
         {
@@ -410,15 +433,20 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         private static string Escape(string text) => string.Concat(text.Select(c => "\\u" + ((int)c).ToString("X4")));
 
-        /// <summary>The Thai leading vowels and the Khmer coeng: what a break must never follow.</summary>
-        private static bool IsLeading(char c) => c is >= '\u0E40' and <= '\u0E44' or '\u17D2';
+        /// <summary>The Thai and Lao leading vowels and the Khmer coeng and Myanmar virama: what a break must never follow.</summary>
+        private static bool IsLeading(char c) =>
+            c is >= '\u0E40' and <= '\u0E44'    // Thai SARA E..AI MAIMALAI
+            or >= '\u0EC0' and <= '\u0EC4'      // Lao VOWEL SIGN E..AI (the same prepended-vowel role as the Thai set above)
+            or '\u17D2'                         // Khmer coeng: precedes the subscript consonant it forms
+            or '\u1039';                        // Myanmar virama: precedes the stacked consonant it forms, the same role as coeng
 
-        /// <summary>The marks and dependent vowels of the two scripts (the categories Mn and Mc), and the letters that only follow one.</summary>
+        /// <summary>The marks and dependent vowels of the four scripts (the categories Mn and Mc), and the letters that only follow one.</summary>
         private static bool IsDependent(char c)
         {
             var category = char.GetUnicodeCategory(c);
             return category is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark
-                || c is '\u0E30' or '\u0E32' or '\u0E33' or '\u0E45';
+                || c is '\u0E30' or '\u0E32' or '\u0E33' or '\u0E45'   // Thai SARA A, SARA AA, SARA AM, LAKKHANGYAO
+                || c is '\u0EB0' or '\u0EB2' or '\u0EB3';              // Lao SARA A, SARA AA, SARA AM (the same follow-only vowels, Lao has no LAKKHANGYAO analogue)
         }
 
         [Fact]

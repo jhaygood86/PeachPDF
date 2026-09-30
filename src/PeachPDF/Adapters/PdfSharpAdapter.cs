@@ -14,8 +14,7 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -34,7 +33,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for PdfSharp library platform.
     /// </summary>
-    internal sealed class PdfSharpAdapter : RAdapter
+    internal sealed class PdfSharpAdapter : RenderContext
     {
         /// <summary>The fonts this adapter renders with: the installed fonts plus everything registered on it.</summary>
         private readonly FontSet _fontSet;
@@ -143,7 +142,7 @@ namespace PeachPDF.Adapters
         /// Fonts here are built at <c>size / PixelsPerPoint</c> points (see <c>CreateFontInt</c>), so
         /// <see cref="PixelsPerPoint"/> is part of a cached font's identity.
         /// </summary>
-        internal override double LayoutUnitsPerPoint => PixelsPerPoint;
+        public override double LayoutUnitsPerPoint => PixelsPerPoint;
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
@@ -183,6 +182,13 @@ namespace PeachPDF.Adapters
         {
             return mediaTypesAvailable.Contains("print") ? "print" : "all";
         }
+
+        /// <summary>
+        /// Every PeachPDF-driven canvas (the PDF one, and the raster fallback) shares PeachPDF's own SVG
+        /// engine through <see cref="SvgGlyphPainter"/> - the only <see cref="RenderContext"/> in this
+        /// codebase with one to offer.
+        /// </summary>
+        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new SvgGlyphPainter(host, this);
 
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
@@ -246,130 +252,29 @@ namespace PeachPDF.Adapters
             }
         }
 
-        protected override RColor GetColorInt(string colorName)
+        protected override PaintColor GetColorInt(string colorName)
         {
             return Enum.TryParse<KnownColor>(colorName, true, out var knownColor)
-                ? Utils.Convert(Color.FromKnownColor(knownColor))
-                : RColor.Empty;
+                ? Utils.Convert(System.Drawing.Color.FromKnownColor(knownColor))
+                : PaintColor.Empty;
         }
 
-        protected override RPen CreatePen(RColor color)
-        {
-            return new PenAdapter(new XPen(Utils.Convert(color)));
-        }
-
-        protected override RPen CreatePen(RBrush brush)
-        {
-            return new PenAdapter(new XPen(((BrushAdapter)brush).Brush));
-        }
-
-        protected override RBrush CreateSolidBrush(RColor color)
-        {
-            XBrush solidBrush;
-            if (color == RColor.White)
-                solidBrush = XBrushes.White;
-            else if (color == RColor.Black)
-                solidBrush = XBrushes.Black;
-            else if (color.A < 1)
-                solidBrush = XBrushes.Transparent;
-            else
-                solidBrush = new XSolidBrush(Utils.Convert(color));
-
-            return new BrushAdapter(solidBrush);
-        }
-
-        protected override RBrush CreateLinearGradientBrush(RRect rect, RColor color1, RColor color2, double angle)
-        {
-            RejectMixedColorSpaceGradientStops(color1, color2);
-
-            var mode = angle switch
-            {
-                < 45 => XLinearGradientMode.ForwardDiagonal,
-                < 90 => XLinearGradientMode.Vertical,
-                < 135 => XLinearGradientMode.BackwardDiagonal,
-                _ => XLinearGradientMode.Horizontal
-            };
-
-            return new BrushAdapter(new XLinearGradientBrush(Utils.Convert(rect, PixelsPerPoint), Utils.Convert(color1), Utils.Convert(color2), mode));
-        }
-
-        protected override RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false)
-        {
-            RejectMixedColorSpaceGradientStops(stops.Select(s => s.Color));
-
-            var xp1 = new XPoint(p1.X / PixelsPerPoint, p1.Y / PixelsPerPoint);
-            var xp2 = new XPoint(p2.X / PixelsPerPoint, p2.Y / PixelsPerPoint);
-            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
-            var positions = stops.Select(s => s.Position).ToArray();
-            return new BrushAdapter(new XLinearGradientBrush(xp1, xp2, colors, positions) { IsRepeating = isRepeating });
-        }
-
-        protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
-        {
-            RejectMixedColorSpaceGradientStops(stops.Select(s => s.Color));
-
-            var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
-            var rxPt = radiusX / PixelsPerPoint;
-            var ryPt = radiusY / PixelsPerPoint;
-            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
-            var positions = stops.Select(s => s.Position).ToArray();
-            var xFocal = focalCenter is { } f ? new XPoint(f.X / PixelsPerPoint, f.Y / PixelsPerPoint) : (XPoint?)null;
-            return new BrushAdapter(new XRadialGradientBrush(xCenter, rxPt, ryPt, colors, positions, xFocal) { IsRepeating = isRepeating });
-        }
-
-        /// <summary>
-        /// Rejects a gradient whose stops mix <c>device-cmyk()</c> with RGB-authored colors, rather than
-        /// silently corrupting the shading dictionary <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/>
-        /// writes: a shading's <c>/ColorSpace</c> is one value for the whole object, and every stop's
-        /// <c>/C0</c>/<c>/C1</c> component count must agree with it - a mixed-space stop list has no single
-        /// component count that fits every stop. An all-CMYK or all-RGB stop list has no such conflict:
-        /// <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/> resolves its <c>/ColorSpace</c> per
-        /// -shading from the stops it's actually given (see <c>PdfShading.ResolveShadingColorMode</c>), not
-        /// from the document's own <see cref="PeachPDF.PdfSharpCore.Pdf.PdfDocumentOptions.ColorMode"/>, so
-        /// same-space CMYK gradients interpolate directly in C/M/Y/K space exactly like an all-RGB gradient
-        /// interpolates in RGB space. Mixing the two spaces in one gradient has no defined conversion (no
-        /// naive RGB&lt;-&gt;CMYK approximation is computed anywhere in this project) and stays rejected.
-        /// </summary>
-        private static void RejectMixedColorSpaceGradientStops(IEnumerable<RColor> colors)
-        {
-            var list = colors as IReadOnlyCollection<RColor> ?? colors.ToList();
-            if (list.Any(c => c.IsCmyk) && list.Any(c => !c.IsCmyk))
-            {
-                throw new NotSupportedException(
-                    "A gradient cannot mix device-cmyk() stops with RGB-authored stops - there is no defined " +
-                    "conversion between the two color spaces. A gradient whose stops are all device-cmyk() " +
-                    "(or all RGB-authored) is fully supported.");
-            }
-        }
-
-        private static void RejectMixedColorSpaceGradientStops(params RColor[] colors) => RejectMixedColorSpaceGradientStops((IEnumerable<RColor>)colors);
-
-        protected override RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
-        {
-            RejectMixedColorSpaceGradientStops(colors);
-
-            var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
-            var rPt = outerRadius / PixelsPerPoint;
-            var xColors = colors.Select(Utils.Convert).ToArray();
-            return new BrushAdapter(new XConicGradientBrush(xCenter, rPt, xColors, anglesRad));
-        }
-
-        protected override RImage ImageFromStreamInt(Stream memoryStream)
+        protected override Image ImageFromStreamInt(Stream memoryStream)
         {
             return new ImageAdapter(XImage.FromStream(() => memoryStream));
         }
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
+        protected override Font CreateFontInt(string family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
+        protected override Font CreateFontInt(FontFamily family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
+        private FontAdapter MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
@@ -382,20 +287,15 @@ namespace PeachPDF.Adapters
         /// The query a face is matched with. The weight, the width as a percentage of the normal width and the oblique angle of the box
         /// select the face among those of a family and set a variable face's weight, width and slant axes; the axis settings of
         /// <c>font-variation-settings</c> and the automatic optical size (for a font of <paramref name="size"/> in layout units) come after
-        /// and win.
+        /// and win. <see cref="FontVariationSettingsResolver.ToAxes"/> is CSS <c>font-variation-settings</c>
+        /// syntax resolution, genuinely specific to this HTML/CSS-facing adapter; everything else about
+        /// building the query from these primitives is shared with every backend that creates fonts this way
+        /// (<see cref="TypefaceQuery.From"/>).
         /// </summary>
         private TypefaceQuery QueryFor(double weight, double stretch, bool isItalic, System.Text.Rune? mustCover, double size, double? obliqueSkewSinus, string? variations) =>
-            new(weight, TypefaceQuery.NormalWidth, isItalic, mustCover,
+            TypefaceQuery.From(weight, stretch, isItalic, mustCover,
                 FontVariationSettingsResolver.ToAxes(variations, size / PixelsPerPoint / PeachPDF.CSS.Length.PointsPerPx),
-                stretch,
-                obliqueSkewSinus is { } sinus ? ObliqueAngleOf(sinus) : null);
-
-        /// <summary>
-        /// The angle in degrees of an oblique skew's sine. The angle a box asks for went through a single-precision radian and a sine to get
-        /// here, so it does not come back exact (10 degrees comes back as 10.000001), and it is compared with the exact ends of the ranges that
-        /// faces declare. It is rounded to four decimals, far finer than any angle an author writes.
-        /// </summary>
-        private static double ObliqueAngleOf(double sinus) => Math.Round(Math.Asin(Math.Clamp(sinus, -1, 1)) * 180 / Math.PI, 4);
+                obliqueSkewSinus);
 
         private FontAdapter CreateFontAdapter(double size, XFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
         {
@@ -409,7 +309,7 @@ namespace PeachPDF.Adapters
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
+        protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
@@ -425,7 +325,7 @@ namespace PeachPDF.Adapters
             return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
         }
 
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
+        protected override Font? CreateSystemFallbackFontForCodepointInt(double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
         {
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;

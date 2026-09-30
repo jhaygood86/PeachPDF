@@ -28,6 +28,20 @@ namespace PeachPDF.Tests.Integration
             Assert.Same(rules[0], result);
         }
 
+        // css-page-3 §5.1: :blank ranks with :first, above :left/:right, and matches only a page a
+        // directional break inserted.
+        [Theory]
+        [InlineData(true, 1)]
+        [InlineData(false, 0)]
+        public void Blank_OutranksLeft_OnlyOnAnInsertedPage(bool isBlank, int expectedRule)
+        {
+            var rules = ParsePageRules("@page :left { margin: 1mm; } @page :blank { margin: 2mm; }");
+
+            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 0, pageHeight: 800, isBlank);
+
+            Assert.Same(rules[expectedRule], result);
+        }
+
         [Fact]
         public void NoRules_ReturnsNull()
         {

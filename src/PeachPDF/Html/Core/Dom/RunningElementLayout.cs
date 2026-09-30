@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -54,15 +53,15 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// </remarks>
         internal static async ValueTask LayoutRunningElementFor(
-            RGraphics g, CssBox runningBox, RRect marginBoxContentRect, HtmlContainerInt container)
+            Canvas g, CssBox runningBox, Rect marginBoxContentRect, HtmlContainerInt container)
         {
             var savedParent = runningBox.ParentBox;
             var syntheticContainer = new CssBox(null, null)
             {
                 HtmlContainer = container,
                 Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
-                Location = new RPoint(marginBoxContentRect.X, marginBoxContentRect.Y),
-                Size = new RSize(marginBoxContentRect.Width, marginBoxContentRect.Height)
+                Location = new PaintPoint(marginBoxContentRect.X, marginBoxContentRect.Y),
+                Size = new Size(marginBoxContentRect.Width, marginBoxContentRect.Height)
             };
 
             // Before the reparent, deliberately. Re-resolving `content` re-runs
@@ -76,7 +75,7 @@ namespace PeachPDF.Html.Core.Dom
             RefreshPageCounterContent(runningBox, container);
 
             runningBox.ParentBox = syntheticContainer;
-            runningBox.Location = new RPoint(marginBoxContentRect.X, marginBoxContentRect.Y);
+            runningBox.Location = new PaintPoint(marginBoxContentRect.X, marginBoxContentRect.Y);
             runningBox.ActualBottom = runningBox.Location.Y;
             ResetRectanglesRecursively(runningBox);
 

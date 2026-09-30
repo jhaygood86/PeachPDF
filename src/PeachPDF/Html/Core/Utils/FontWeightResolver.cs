@@ -42,22 +42,32 @@ namespace PeachPDF.Html.Core.Utils
             return fontWeight.Keyword switch
             {
                 FontWeightKeyword.Bold => 700,
-                // CSS2.1 §15.6's own worked example table ("bolder"/"lighter" columns against an
-                // inherited 100-900 value) - not a fixed "always bold"/"always normal" as this box's own
+                // CSS Fonts 4 §2.2.1's own table ("bolder"/"lighter" columns against an inherited weight
+                // w, fractions included) - not a fixed "always bold"/"always normal" as this box's own
                 // FontWeight text might otherwise suggest:
-                //   inherited: 100 200 300 400 500 600 700 800 900
-                //     bolder:  400 400 400 700 700 900 900 900 900
-                //    lighter:  100 100 100 100 100 400 400 700 700
+                //   w:       <100  [100,350)  [350,550)  [550,750)  [750,900)  >=900
+                //   bolder:   400     400        700        900        900     no change
+                //   lighter: no change 100        100        400        700       700
+                // The two middle "no change" cells above (bolder's is the ceiling; lighter's is the
+                // floor) are what makes the two switch expressions below collapse to three/four arms
+                // each rather than mirroring the table's six rows one-for-one:
+                //   - bolder's <100 and [100,350) rows both resolve to 400, and its [550,750) and
+                //     [750,900) rows both resolve to 900, leaving only >=900 (no change) as the
+                //     top branch;
+                //   - lighter's [100,350) and [350,550) rows both resolve to 100, leaving <100 (no
+                //     change) as the bottom branch.
                 FontWeightKeyword.Bolder => parentWeight switch
                 {
-                    < 400 => 400,
-                    <= 500 => 700,
-                    _ => 900
+                    < 350 => 400,
+                    < 550 => 700,
+                    < 900 => 900,
+                    _ => parentWeight
                 },
                 FontWeightKeyword.Lighter => parentWeight switch
                 {
-                    <= 500 => 100,
-                    <= 700 => 400,
+                    < 100 => parentWeight,
+                    < 550 => 100,
+                    < 750 => 400,
                     _ => 700
                 },
                 _ => 400

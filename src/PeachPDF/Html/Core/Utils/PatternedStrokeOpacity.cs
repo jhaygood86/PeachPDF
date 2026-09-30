@@ -1,6 +1,6 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System;
+using System.Numerics;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -12,12 +12,12 @@ namespace PeachPDF.Html.Core.Utils
     internal static class PatternedStrokeOpacity
     {
         internal static void Paint(
-            RGraphics g, RRect bounds, RColor color, Action<RGraphics, RColor> paint)
+            Canvas g, Rect bounds, PaintColor color, Action<Canvas, PaintColor> paint)
         {
             // A tight tile also works when the caller has no page-sized clip (e.g. a form-field
             // appearance). Leave one point of breathing room for antialiasing at the outer edge.
             var padding = g.PixelsPerPoint;
-            var tileRect = RRect.FromLTRB(
+            var tileRect = Rect.FromLTRB(
                 bounds.Left - padding, bounds.Top - padding,
                 bounds.Right + padding, bounds.Bottom + padding);
             if (g.CreateTile(tileRect.Width, tileRect.Height) is not { } tile)
@@ -27,15 +27,15 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             var opaque = color.IsCmyk
-                ? RColor.FromCmyk(byte.MaxValue, color.C, color.M, color.Y, color.K)
-                : RColor.FromArgb(byte.MaxValue, color.R, color.G, color.B);
+                ? PaintColor.FromCmyk(byte.MaxValue, color.C, color.M, color.Y, color.K)
+                : PaintColor.FromArgb(byte.MaxValue, color.R, color.G, color.B);
 
             using (tile.Image)
             {
                 using (tile.Graphics)
                 {
-                    tile.Graphics.PushTransform(new RMatrix(
-                        1, 0, 0, 1, -tileRect.Left, -tileRect.Top));
+                    tile.Graphics.PushTransform(new Matrix3x2(
+                        1, 0, 0, 1, (float)-tileRect.Left, (float)-tileRect.Top));
                     paint(tile.Graphics, opaque);
                 }
 

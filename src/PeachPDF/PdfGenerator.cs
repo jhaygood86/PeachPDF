@@ -13,8 +13,7 @@
 using PeachDrawing.Text;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -206,7 +205,7 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Validates the raster backend's settings and hands them to the adapter every <see cref="RGraphics"/> reads
+        /// Validates the raster backend's settings and hands them to the adapter every <see cref="Canvas"/> reads
         /// them from. Called wherever <see cref="PdfGenerateConfig.PixelsPerInch"/> is applied, so the two always agree.
         /// </summary>
         private void ApplyRasterizationSettings(PdfGenerateConfig config)
@@ -233,6 +232,7 @@ namespace PeachPDF
             _pdfSharpAdapter.MaxRasterPixels = config.MaxRasterPixels;
             _pdfSharpAdapter.TextHinting = config.TextHinting;
             _pdfSharpAdapter.TextStemDarkening = config.TextStemDarkening;
+            _pdfSharpAdapter.RasterAntiAliasing = config.RasterAntiAliasing;
         }
 
         /// <summary>
@@ -963,18 +963,21 @@ namespace PeachPDF
                 // point-space MarginTop for named-page attribution.
                 var geom = fragmentainer.Geometry;
                 var pageY = geom.Top;
+                var isBlankPage = container.HtmlContainerInt.IsReservedBlankSlot(fragmentainer.SlotIndex);
                 var applicableMargins = SelectApplicableMarginRules(
                     container.PageRules,
                     pageNumber,
                     container.NamedPageElements,
                     pageY,
-                    geom.BandHeight);
+                    geom.BandHeight,
+                    isBlankPage);
                 var applicablePageStyle = SelectApplicablePageStyle(
                     container.PageRules,
                     pageNumber,
                     container.NamedPageElements,
                     pageY,
-                    geom.BandHeight);
+                    geom.BandHeight,
+                    isBlankPage);
 
                 var (mL, mT, mR, mB) = (geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt);
                 // The page box's own resolved border/padding (issue #1147) - all zero for a page with no
@@ -993,7 +996,7 @@ namespace PeachPDF
 
                 using var g = XGraphics.FromPdfPage(page);
 
-                var sheetRect = new RRect(0, 0,
+                var sheetRect = new Rect(0, 0,
                     page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint);
 
                 // The page box's own border-box/padding-box/content-box rects (css-page-3 §3's box
@@ -1013,7 +1016,7 @@ namespace PeachPDF
                 var paddingBoxRect = Utils.Convert(paddingBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
                 var contentBoxRect = Utils.Convert(contentBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
 
-                RRect ResolvePagePositioningRect(string value) => value switch
+                Rect ResolvePagePositioningRect(string value) => value switch
                 {
                     Keywords.ContentBox => contentBoxRect,
                     Keywords.BorderBox => borderBoxRect,
@@ -1086,8 +1089,8 @@ namespace PeachPDF
 
                 // No content-area clip pushed here (an earlier version of this method intersected one
                 // directly on the raw XGraphics, ahead of FragmentPainter.Paint's own push below) - a raw
-                // XGraphics.IntersectClip call made here is invisible to the RGraphics abstraction's own
-                // clip-stack bookkeeping, which is what RGraphics.SuspendClipping walks to let a
+                // XGraphics.IntersectClip call made here is invisible to the Canvas abstraction's own
+                // clip-stack bookkeeping, which is what Canvas.SuspendClipping walks to let a
                 // position: fixed box's own paint reach back out to the full page box (margins included,
                 // its actual containing block per CSS2.1 §10.1). Baking the content clip in here put it
                 // permanently out of that call's reach, silently discarding every fixed box's own geometry
@@ -1113,7 +1116,7 @@ namespace PeachPDF
                 // content band from the geometry table — pagination itself ran on the same variable
                 // bands, so a margin-0 page's window reclaims the full sheet height without ever
                 // exposing a neighboring slot's content.
-                container.HtmlContainerInt.PageClipOverride = new RRect(
+                container.HtmlContainerInt.PageClipOverride = new Rect(
                     container.HtmlContainerInt.MarginLeft,
                     container.HtmlContainerInt.MarginTop,
                     (page.Width - mL) * _pdfSharpAdapter.PixelsPerPoint,
@@ -1379,7 +1382,7 @@ namespace PeachPDF
         /// </para>
         /// </remarks>
         private static async Task PaintElementMarginBoxes(
-            XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
+            XGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             XSize pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
@@ -1439,7 +1442,7 @@ namespace PeachPDF
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
         /// (which is an ordinary box and paints its rule through the normal border path).
         /// </summary>
-        private static void PaintFootnoteArea(XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        private static void PaintFootnoteArea(XGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
@@ -1448,13 +1451,13 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// The <see cref="RGraphics"/>-level half of <see cref="PaintFootnoteArea(XGraphics, RAdapter, HtmlContainerInt, FootnoteAreaFragment)"/>,
-        /// split out so a test can drive it with a recording <see cref="RGraphics"/> and assert the actual
+        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(XGraphics, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
+        /// split out so a test can drive it with a recording <see cref="Canvas"/> and assert the actual
         /// draw call sequence (which calls, in what order) rather than only that a full PDF pipeline
         /// completes without error or that a fragment holds the right data - see this repo's own testing
         /// conventions on why a token/page-count check alone is not proof a paint path isn't a no-op.
         /// </summary>
-        internal static void PaintFootnoteArea(RGraphics graphicsAdapter, RAdapter adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        internal static void PaintFootnoteArea(Canvas graphicsAdapter, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
             // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
             // wrapper), so it needs its own content-area bound - previously provided for free by a raw
@@ -1485,11 +1488,11 @@ namespace PeachPDF
         /// UA-drawn separator with no element of its own to inherit a text color from), otherwise the
         /// declared color parsed the same way any other CSS color value is.
         /// </summary>
-        internal static RColor ResolveFootnoteDividerColor(string? declaredColor, RAdapter adapter) =>
+        internal static PaintColor ResolveFootnoteDividerColor(string? declaredColor, RenderContext adapter) =>
             string.IsNullOrWhiteSpace(declaredColor) ||
             declaredColor.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
             declaredColor.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase)
-                ? RColor.Black
+                ? PaintColor.Black
                 : new CssValueParser(adapter).GetActualColor(declaredColor);
 
         /// <summary>
@@ -1754,27 +1757,30 @@ namespace PeachPDF
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
-            double pageHeight)
+            double pageHeight,
+            bool isBlank = false)
             => PageRuleResolver.SelectPageRule(rules, pageNumber,
-                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight));
+                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight), isBlank);
 
         internal static IReadOnlyList<MarginStyleRule> SelectApplicableMarginRules(
             IReadOnlyList<PageRule> rules,
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
-            double pageHeight)
+            double pageHeight,
+            bool isBlank = false)
             => PageRuleResolver.SelectApplicableMarginRules(rules, pageNumber,
-                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight));
+                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight), isBlank);
 
         internal static StyleDeclaration? SelectApplicablePageStyle(
             IReadOnlyList<PageRule> rules,
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
-            double pageHeight)
+            double pageHeight,
+            bool isBlank = false)
             => PageRuleResolver.SelectApplicablePageStyle(rules, pageNumber,
-                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight));
+                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight), isBlank);
 
         internal static (double L, double T, double R, double B) ResolvePageMargins(
             PageRule? rule, double baseL, double baseT, double baseR, double baseB)

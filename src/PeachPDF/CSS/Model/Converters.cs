@@ -312,7 +312,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter OutlineStyleConverter = Map.OutlineStyles.ToConverter();
         /// <summary><c>mix-blend-mode</c> (CSS Compositing and Blending Level 1 §2). Reuses the pre-existing
         /// <see cref="BlendMode"/> enum/<see cref="Map.BlendModes"/> dictionary (built alongside
-        /// <c>Html.Adapters.Entities.RBlendMode</c> for the shared PDF blend-mode infrastructure) rather
+        /// <c>PeachDrawing.Core.PaintBlendMode</c> for the shared PDF blend-mode infrastructure) rather
         /// than a second, independently-derived keyword map.</summary>
         public static readonly IValueConverter MixBlendModeConverter = Map.BlendModes.ToConverter();
         public static readonly IValueConverter PdfTagTypeConverter = Map.PdfTagTypes.ToConverter();
@@ -398,6 +398,8 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter TextAnchorConverter = Map.TextAnchors.ToConverter();
         public static readonly IValueConverter TextJustifyConverter = Map.TextJustifyOptions.ToConverter();
         public static readonly IValueConverter ObjectFittingConverter = Map.ObjectFittings.ToConverter();
+
+        public static readonly IValueConverter ImageRenderingConverter = Map.ImageRenderingModes.ToConverter();
         public static readonly IValueConverter PositionModeConverter = Map.PositionModes.ToConverter();
         public static readonly IValueConverter OverflowModeConverter = Map.OverflowModes.ToConverter();
         public static readonly IValueConverter FloatingConverter = Map.FloatingModes.ToConverter();

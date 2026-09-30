@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -14,7 +13,7 @@ namespace PeachPDF.Html.Core.Paint
 {
     /// <summary>
     /// The paint phase. Consumes one <see cref="FragmentainerFragment"/> — one page of the immutable
-    /// fragment tree layout produced — and draws it to an <see cref="RGraphics"/>.
+    /// fragment tree layout produced — and draws it to an <see cref="Canvas"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -66,21 +65,21 @@ namespace PeachPDF.Html.Core.Paint
         /// window plus the room an outline on this page needs to spill into the page margin.
         /// </summary>
         /// <remarks>
-        /// This is the only page-level clip <c>RGraphics.PushClip</c> pushes for page content - and that
+        /// This is the only page-level clip <c>Canvas.PushClip</c> pushes for page content - and that
         /// is exactly what lets a <c>position: fixed</c> box's own paint reach its spec-correct containing block (the
-        /// page box, margins included, per CSS2.1 §10.1): <c>RGraphics.SuspendClipping</c> pops the clip
+        /// page box, margins included, per CSS2.1 §10.1): <c>Canvas.SuspendClipping</c> pops the clip
         /// stack down to exactly one entry, which is always the unconditionally-infinite clip
         /// <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor pushes before this method ever
         /// runs - not "one level below whatever is on top" - so a single push here is already as far out
         /// as suspension can ever reach; a second, wider clip pushed above it would be popped by the same
         /// loop and change nothing. What DOES need to be single-level is that this push go through
-        /// <c>RGraphics.PushClip</c> at all: an earlier version of <see cref="PdfGenerator"/> intersected
+        /// <c>Canvas.PushClip</c> at all: an earlier version of <see cref="PdfGenerator"/> intersected
         /// the equivalent window directly on the raw <c>XGraphics</c> object, ahead of and invisible to
         /// this abstraction's own clip stack - <c>SuspendClipping</c> could never undo that one, so a fixed
         /// box's own geometry inside the page's margins was silently discarded on every page. See issue
         /// #880.
         /// </remarks>
-        internal void Paint(RGraphics g, FragmentainerFragment fragmentainer)
+        internal void Paint(Canvas g, FragmentainerFragment fragmentainer)
         {
             var pageClip = container.PageClipOverride ?? container.PageBoxRect;
             var reach = MeasurePaintReach(g, fragmentainer.Root, pageClip);
@@ -96,7 +95,7 @@ namespace PeachPDF.Html.Core.Paint
                 // box, and with it the indent, is gone - hangs into the margin, and clipping it to the
                 // ordinary window deleted the marker outright. Widen only the page-level clip here. Any
                 // ancestor/own overflow clips pushed below still constrain all of it normally.
-                pageClip = RRect.FromLTRB(
+                pageClip = Rect.FromLTRB(
                     pageClip.Left - reach.Outline - reach.MarkerLeft,
                     pageClip.Top - reach.Outline,
                     pageClip.Right + reach.Outline,
@@ -124,7 +123,7 @@ namespace PeachPDF.Html.Core.Paint
                 Math.Max(MarkerLeft, other.MarkerLeft));
         }
 
-        private static PaintReach MeasurePaintReach(RGraphics g, BoxFragment fragment, RRect pageClip)
+        private static PaintReach MeasurePaintReach(Canvas g, BoxFragment fragment, Rect pageClip)
         {
             var outline = fragment.Lines.Count > 0
                 ? OutlineDrawHandler.OutwardReach(g, fragment.Box)
@@ -151,7 +150,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <see cref="MarkerFragmentPainter"/> draws at - or false for a marker that draws nothing on this
         /// page (<c>list-style-type: none</c>, or its word landed in another fragmentainer).
         /// </summary>
-        private static bool TryGetMarkerInk(BoxFragment fragment, CssBoxMarker marker, out RRect ink)
+        private static bool TryGetMarkerInk(BoxFragment fragment, CssBoxMarker marker, out Rect ink)
         {
             if (marker.ContentImage is not null)
             {
@@ -162,7 +161,7 @@ namespace PeachPDF.Html.Core.Paint
             if (marker.Words.Count > 0 && fragment.TryGetWordRect(marker.Words[0], out ink))
                 return true;
 
-            ink = RRect.Empty;
+            ink = Rect.Empty;
             return false;
         }
 
@@ -171,7 +170,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Fragmentation Level 3 §2) — establishing the whole-element effects (<c>transform</c>,
         /// <c>clip-path</c>, <c>opacity</c>) around it.
         /// </summary>
-        internal void PaintFragment(RGraphics g, BoxFragment fragment)
+        internal void PaintFragment(Canvas g, BoxFragment fragment)
         {
             var box = fragment.Box;
 
@@ -287,7 +286,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Paints one fragment inside its own clips - <c>clip-path</c>, the legacy <c>clip</c> - and with its group effects (opacity, blend
         /// mode, filter): everything an element does between "its transform is in place" and "its transform is undone".
         /// </summary>
-        private void PaintClippedWithEffects(RGraphics g, BoxFragment fragment)
+        private void PaintClippedWithEffects(Canvas g, BoxFragment fragment)
         {
             var box = fragment.Box;
 
@@ -363,7 +362,7 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Whether the element needs group compositing - opacity, a blend mode or a colour function - which a graphics that
-        /// composites bitmaps directly (<see cref="RGraphics.PrefersRasterGroups"/>) does in a tight bitmap of the element.
+        /// composites bitmaps directly (<see cref="Canvas.PrefersRasterGroups"/>) does in a tight bitmap of the element.
         /// </summary>
         private static bool NeedsGroupCompositing(CssBox box, FilterEffectResolver.Resolved filter) =>
             !box.IsOpaque || box.ActualMixBlendMode != BlendMode.Normal || filter.OpacityMultiplier < 1.0 || filter.HasColorMatrix;
@@ -374,7 +373,7 @@ namespace PeachPDF.Html.Core.Paint
         /// fragment whose rectangles are far apart on the line cannot be kept alive by empty space
         /// between them.
         /// </summary>
-        private static bool IsAnyRectVisible(BoxFragment fragment, RRect clip)
+        private static bool IsAnyRectVisible(BoxFragment fragment, Rect clip)
         {
             foreach (var line in fragment.Lines)
             {
@@ -407,13 +406,16 @@ namespace PeachPDF.Html.Core.Paint
         /// automatically, since PDF's own <c>cm</c> operator concatenates - no separate
         /// transform-folding is needed here.
         /// </remarks>
-        private void PaintWithOpacity(RGraphics g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
+        private void PaintWithOpacity(Canvas g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
         {
-            var clip = g.GetClip();
-            var tileRect = new RRect(0, 0, clip.Right, clip.Bottom);
+            var opacity = fragment.Box.ActualOpacity * filter.OpacityMultiplier;
+            var options = new LayerOptions(
+                opacity,
+                ToRBlendMode(fragment.Box.ActualMixBlendMode),
+                filter.HasColorMatrix ? filter.ColorMatrix : null);
 
-            var tile = g.CreateTile(tileRect.Width, tileRect.Height);
-            if (tile is not { } t)
+            using var layer = g.BeginLayer(options);
+            if (layer is null)
             {
                 // No page/document context to own a Form XObject in (e.g. a measure-only pass) -
                 // opacity/blend-mode/filter have no visual effect there anyway, so just paint directly.
@@ -421,57 +423,36 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
-            t.Graphics.PushClip(clip);
-            PaintTagged(t.Graphics, fragment);
-            t.Graphics.Dispose();
-
-            var image = t.Image;
-
-            // The color matrix is a separate ExtGState (/TR) from opacity/blend-mode's (/ca, /BM), so a
-            // filter list needing both goes through a second tile - correctness first, per this repo's own
-            // "don't over-optimize call count in this pass" note; most boxes need at most one of the two.
-            if (filter.HasColorMatrix)
-            {
-                var matrixTile = g.CreateTile(tileRect.Width, tileRect.Height);
-                if (matrixTile is { } mt)
-                {
-                    mt.Graphics.DrawImageWithColorMatrix(image, tileRect, filter.ColorMatrix);
-                    mt.Graphics.Dispose();
-                    image = mt.Image;
-                }
-            }
-
-            var opacity = fragment.Box.ActualOpacity * filter.OpacityMultiplier;
-            g.DrawImageWithOpacity(image, tileRect, opacity, ToRBlendMode(fragment.Box.ActualMixBlendMode));
+            PaintTagged(layer.Canvas, fragment);
         }
 
         /// <summary>
         /// Maps the CSS-namespace <see cref="BlendMode"/> (the enum-keyword source generator's
         /// <c>enumType</c> codegen hardcodes <c>PeachPDF.CSS</c> as its namespace, so <c>mix-blend-mode</c>
-        /// can't bind directly to <see cref="RBlendMode"/> despite the two enums being identical in shape)
-        /// onto the <see cref="RBlendMode"/> the PDF-writing layer actually understands. The one call site
+        /// can't bind directly to <see cref="PaintBlendMode"/> despite the two enums being identical in shape)
+        /// onto the <see cref="PaintBlendMode"/> the PDF-writing layer actually understands. The one call site
         /// that needs this conversion, per CLAUDE.md's guidance to map at paint time rather than duplicate
-        /// <c>RBlendMode</c> a second time under a different name.
+        /// <c>PaintBlendMode</c> a second time under a different name.
         /// </summary>
-        private static RBlendMode ToRBlendMode(BlendMode mode) => mode switch
+        private static PaintBlendMode ToRBlendMode(BlendMode mode) => mode switch
         {
-            BlendMode.Normal => RBlendMode.Normal,
-            BlendMode.Multiply => RBlendMode.Multiply,
-            BlendMode.Screen => RBlendMode.Screen,
-            BlendMode.Overlay => RBlendMode.Overlay,
-            BlendMode.Darken => RBlendMode.Darken,
-            BlendMode.Lighten => RBlendMode.Lighten,
-            BlendMode.ColorDodge => RBlendMode.ColorDodge,
-            BlendMode.ColorBurn => RBlendMode.ColorBurn,
-            BlendMode.HardLight => RBlendMode.HardLight,
-            BlendMode.SoftLight => RBlendMode.SoftLight,
-            BlendMode.Difference => RBlendMode.Difference,
-            BlendMode.Exclusion => RBlendMode.Exclusion,
-            BlendMode.Hue => RBlendMode.Hue,
-            BlendMode.Saturation => RBlendMode.Saturation,
-            BlendMode.Color => RBlendMode.Color,
-            BlendMode.Luminosity => RBlendMode.Luminosity,
-            _ => RBlendMode.Normal,
+            BlendMode.Normal => PaintBlendMode.Normal,
+            BlendMode.Multiply => PaintBlendMode.Multiply,
+            BlendMode.Screen => PaintBlendMode.Screen,
+            BlendMode.Overlay => PaintBlendMode.Overlay,
+            BlendMode.Darken => PaintBlendMode.Darken,
+            BlendMode.Lighten => PaintBlendMode.Lighten,
+            BlendMode.ColorDodge => PaintBlendMode.ColorDodge,
+            BlendMode.ColorBurn => PaintBlendMode.ColorBurn,
+            BlendMode.HardLight => PaintBlendMode.HardLight,
+            BlendMode.SoftLight => PaintBlendMode.SoftLight,
+            BlendMode.Difference => PaintBlendMode.Difference,
+            BlendMode.Exclusion => PaintBlendMode.Exclusion,
+            BlendMode.Hue => PaintBlendMode.Hue,
+            BlendMode.Saturation => PaintBlendMode.Saturation,
+            BlendMode.Color => PaintBlendMode.Color,
+            BlendMode.Luminosity => PaintBlendMode.Luminosity,
+            _ => PaintBlendMode.Normal,
         };
 
         /// <summary>
@@ -482,7 +463,7 @@ namespace PeachPDF.Html.Core.Paint
         /// When tagging is disabled this adds one null check and otherwise behaves exactly as calling
         /// <see cref="PaintContent"/> directly would.
         /// </summary>
-        private void PaintTagged(RGraphics g, BoxFragment fragment)
+        private void PaintTagged(Canvas g, BoxFragment fragment)
         {
             // Mirrors PaintBoxContent's own early-out: skip classification/tagging entirely for a
             // fragment that has already been painted on this page.
@@ -516,7 +497,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// <see cref="PaintTagged"/>'s structure-tree bookkeeping around one fragment's content.
         /// </summary>
-        private void PaintTaggedContent(RGraphics g, BoxFragment fragment, StructureTagBuilder? builder)
+        private void PaintTaggedContent(Canvas g, BoxFragment fragment, StructureTagBuilder? builder)
         {
             var box = fragment.Box;
             if (builder == null)
@@ -585,7 +566,7 @@ namespace PeachPDF.Html.Core.Paint
         /// reading order) - the marker's own on-page paint position is unaffected by this call-order
         /// swap, since it's driven entirely by pre-computed layout coordinates, not paint order.
         /// </summary>
-        private void PaintListItem(RGraphics g, BoxFragment fragment, StructureTagBuilder builder)
+        private void PaintListItem(Canvas g, BoxFragment fragment, StructureTagBuilder builder)
         {
             using (builder.OpenGroupingElement(fragment.Box, Keywords.Li))
             {
@@ -629,7 +610,7 @@ namespace PeachPDF.Html.Core.Paint
         /// (<see cref="PaintBoxContent"/>) otherwise. This is the type-dispatch seam that
         /// replaced-element subclasses used to provide by overriding a virtual paint method on the box.
         /// </summary>
-        internal void PaintContent(RGraphics g, BoxFragment fragment)
+        internal void PaintContent(Canvas g, BoxFragment fragment)
         {
             if (FragmentContentPainters.For(fragment.Box) is { } contentPainter)
             {
@@ -653,7 +634,7 @@ namespace PeachPDF.Html.Core.Paint
         /// false only on the tagged-PDF &lt;li&gt; path, which paints the marker itself as a separate
         /// sibling structure element ("/Lbl") ahead of the list item's body ("/LBody").
         /// </param>
-        internal void PaintBoxContent(RGraphics g, BoxFragment fragment, bool paintMarkers = true)
+        internal void PaintBoxContent(Canvas g, BoxFragment fragment, bool paintMarkers = true)
         {
             var box = fragment.Box;
 
@@ -743,7 +724,7 @@ namespace PeachPDF.Html.Core.Paint
                         var pageBreakBottomVisual = pageBreakBottom - fragment.OriginY;
                         if (pageBreakBottomVisual < rectForBorders.Bottom)
                         {
-                            rectForBorders = new RRect(
+                            rectForBorders = new Rect(
                                 rectForBorders.Left,
                                 rectForBorders.Top,
                                 rectForBorders.Width,
@@ -916,7 +897,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Paints one z-index layer of a stacking context's participants, in CSS 2.1 Appendix E's
         /// block / float / inline / positioned order.
         /// </summary>
-        private void PaintLayer(RGraphics g, List<StackingOrder.StackingParticipant> layerBoxes)
+        private void PaintLayer(Canvas g, List<StackingOrder.StackingParticipant> layerBoxes)
         {
             // Split paint to handle z-order, per CSS2.1 Appendix E's within-a-stacking-context
             // order: in-flow block-level descendants, then non-positioned floats, then in-flow
@@ -977,7 +958,7 @@ namespace PeachPDF.Html.Core.Paint
         /// never applied on its own. Re-apply it explicitly here instead, scoped to exactly this
         /// participant's own paint call. A no-op for a direct plain child (empty ClipAncestors).
         /// </summary>
-        private void PaintStackingParticipant(RGraphics g, StackingOrder.StackingParticipant participant)
+        private void PaintStackingParticipant(Canvas g, StackingOrder.StackingParticipant participant)
         {
             var fragment = participant.Fragment;
             var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.Box, participant.ClipAncestors);
@@ -992,7 +973,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Whether <paramref name="rect"/> survives <paramref name="clip"/>. A rect merely touching the
         /// clip edge isn't actually visible - see <see cref="VisibilityClipEpsilon"/>.
         /// </summary>
-        private static bool IsRectVisible(RRect rect, RRect clip)
+        private static bool IsRectVisible(Rect rect, Rect clip)
         {
             rect.X -= 2;
             rect.Width += 2;

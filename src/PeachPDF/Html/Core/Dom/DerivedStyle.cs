@@ -2,8 +2,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -181,13 +180,13 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Border colors
 
-        private RColor _actualBorderTopColor = RColor.Empty;
-        private RColor _actualBorderRightColor = RColor.Empty;
-        private RColor _actualBorderBottomColor = RColor.Empty;
-        private RColor _actualBorderLeftColor = RColor.Empty;
-        private RColor _actualColumnRuleColor = RColor.Empty;
+        private PaintColor _actualBorderTopColor = PaintColor.Empty;
+        private PaintColor _actualBorderRightColor = PaintColor.Empty;
+        private PaintColor _actualBorderBottomColor = PaintColor.Empty;
+        private PaintColor _actualBorderLeftColor = PaintColor.Empty;
+        private PaintColor _actualColumnRuleColor = PaintColor.Empty;
 
-        public RColor ActualBorderTopColor
+        public PaintColor ActualBorderTopColor
         {
             get
             {
@@ -197,7 +196,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public RColor ActualBorderRightColor
+        public PaintColor ActualBorderRightColor
         {
             get
             {
@@ -207,7 +206,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public RColor ActualBorderBottomColor
+        public PaintColor ActualBorderBottomColor
         {
             get
             {
@@ -217,7 +216,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public RColor ActualBorderLeftColor
+        public PaintColor ActualBorderLeftColor
         {
             get
             {
@@ -251,7 +250,7 @@ namespace PeachPDF.Html.Core.Dom
         /// color where a browser uses the child's.
         /// </para>
         /// </remarks>
-        private RColor ResolveBorderSideColor(string colorValue, LineStyle lineStyle)
+        private PaintColor ResolveBorderSideColor(string colorValue, LineStyle lineStyle)
         {
             if (!Keywords.CurrentColor.Equals(colorValue, StringComparison.OrdinalIgnoreCase))
                 return Owner.GetActualColor(colorValue);
@@ -277,7 +276,7 @@ namespace PeachPDF.Html.Core.Dom
                 or Keywords.TableRowGroup;
 
         /// <summary>Actual column-rule color (the line drawn between columns in a multi-column container).</summary>
-        public RColor ActualColumnRuleColor
+        public PaintColor ActualColumnRuleColor
         {
             get
             {
@@ -286,17 +285,17 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        internal void InvalidateBorderTopColor() => _actualBorderTopColor = RColor.Empty;
-        internal void InvalidateBorderRightColor() => _actualBorderRightColor = RColor.Empty;
-        internal void InvalidateBorderBottomColor() => _actualBorderBottomColor = RColor.Empty;
-        internal void InvalidateBorderLeftColor() => _actualBorderLeftColor = RColor.Empty;
+        internal void InvalidateBorderTopColor() => _actualBorderTopColor = PaintColor.Empty;
+        internal void InvalidateBorderRightColor() => _actualBorderRightColor = PaintColor.Empty;
+        internal void InvalidateBorderBottomColor() => _actualBorderBottomColor = PaintColor.Empty;
+        internal void InvalidateBorderLeftColor() => _actualBorderLeftColor = PaintColor.Empty;
 
         #endregion
 
         #region Outline
 
         private double _actualOutlineWidth = double.NaN;
-        private RColor _actualOutlineColor = RColor.Empty;
+        private PaintColor _actualOutlineColor = PaintColor.Empty;
         private double _actualOutlineOffset = double.NaN;
 
         public double ActualOutlineWidth
@@ -318,7 +317,7 @@ namespace PeachPDF.Html.Core.Dom
         /// raw <see cref="CssBox.OutlineColor"/> string for <c>"invert"</c> itself and bypasses this
         /// property entirely in that case, painting via a PDF blend mode instead of a resolved color.
         /// </summary>
-        public RColor ActualOutlineColor
+        public PaintColor ActualOutlineColor
         {
             get
             {
@@ -338,7 +337,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         internal void InvalidateOutlineWidth() => _actualOutlineWidth = double.NaN;
-        internal void InvalidateOutlineColor() => _actualOutlineColor = RColor.Empty;
+        internal void InvalidateOutlineColor() => _actualOutlineColor = PaintColor.Empty;
         internal void InvalidateOutlineOffset() => _actualOutlineOffset = double.NaN;
 
         #endregion
@@ -484,7 +483,7 @@ namespace PeachPDF.Html.Core.Dom
         /// more overconstrained on one axis than the other (e.g. `border-radius: 999px` on a short,
         /// wide box), it stretches what should be a circular corner into a near-degenerate ellipse.
         /// </summary>
-        internal BorderRadii ComputeRadii(RRect rect)
+        internal BorderRadii ComputeRadii(Rect rect)
         {
             double tlX = ActualBorderTopLeftRadiusX, tlY = ActualBorderTopLeftRadiusY;
             double trX = ActualBorderTopRightRadiusX, trY = ActualBorderTopRightRadiusY;
@@ -518,7 +517,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="insetTop">border-top width (plus padding-top for the content edge)</param>
         /// <param name="insetRight">border-right width (plus padding-right for the content edge)</param>
         /// <param name="insetBottom">border-bottom width (plus padding-bottom for the content edge)</param>
-        internal BorderRadii ComputeInnerRadii(RRect borderBoxRect, RRect innerRect,
+        internal BorderRadii ComputeInnerRadii(Rect borderBoxRect, Rect innerRect,
             double insetLeft, double insetTop, double insetRight, double insetBottom)
         {
             var outer = ComputeRadii(borderBoxRect);
@@ -543,7 +542,7 @@ namespace PeachPDF.Html.Core.Dom
         /// clip shape's own corner radii, which need the identical reduction against the inset
         /// rectangle but aren't a box's declared <c>border-radius</c> at all.
         /// </summary>
-        internal static BorderRadii ApplyCornerOverlap(RRect rect,
+        internal static BorderRadii ApplyCornerOverlap(Rect rect,
             double tlX, double tlY, double trX, double trY,
             double brX, double brY, double blX, double blY)
         {
@@ -665,7 +664,7 @@ namespace PeachPDF.Html.Core.Dom
         #region Transform, opacity
 
         private bool _actualTransformComputed;
-        private RMatrix _actualTransformMatrix;
+        private Matrix3x2 _actualTransformMatrix;
         private Matrix4x4? _actualTransform4;
 
         /// <summary>
@@ -673,7 +672,7 @@ namespace PeachPDF.Html.Core.Dom
         /// properties, resolved against this box's own border-box size. Identity when Transform is "none"
         /// or unparsable. 3D transform functions are projected down to a 2D matrix - see CssValueParser.ParseTransform.
         /// </summary>
-        public RMatrix ActualTransformMatrix
+        public Matrix3x2 ActualTransformMatrix
         {
             get
             {
@@ -802,7 +801,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Lazily parses the used value of the <c>filter</c> property (Filter Effects Level 1 §3) into its
         /// ordered function list - empty for <c>none</c> or an unparsable value. Kept as the raw
         /// <see cref="FilterGrammar.FilterFunction"/> list (never pre-resolved
-        /// <see cref="Adapters.Entities.ColorMatrix"/>es) for the same reason <see cref="BoxShadowGrammar"/>'s
+        /// <see cref="PeachDrawing.Core.ColorMatrix"/>es) for the same reason <see cref="BoxShadowGrammar"/>'s
         /// own layers stay raw text: <c>drop-shadow()</c>'s lengths still need box-relative resolution via
         /// <c>CssValueParser.ParseLength</c> against THIS box, which only the paint-time caller
         /// (<c>FragmentPainter.PaintFilterDropShadows</c>) can do.
@@ -897,7 +896,7 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualLetterSpacing => _actualLetterSpacing;
 
         /// <summary>Measures the width of whitespace between words (populates <see cref="ActualWordSpacing"/>).</summary>
-        internal void MeasureWordSpacing(RGraphics g)
+        internal void MeasureWordSpacing(Canvas g)
         {
             if (!double.IsNaN(ActualWordSpacing)) return;
 
@@ -911,7 +910,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Measures the extra space added between each pair of adjacent characters (populates
         /// <see cref="ActualLetterSpacing"/>). Unlike <see cref="MeasureWordSpacing"/>, there's no
         /// whitespace-glyph base width to add to - the base is always 0 for <c>normal</c>, so this
-        /// needs no <see cref="RGraphics"/>/font-metric input.
+        /// needs no <see cref="Canvas"/>/font-metric input.
         /// </summary>
         internal void MeasureLetterSpacing()
         {
@@ -1003,12 +1002,12 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion
 
-        #region Color, background-color
+        #region PaintColor, background-color
 
-        private RColor _actualColor = RColor.Empty;
-        private RColor _actualBackgroundColor = RColor.Empty;
+        private PaintColor _actualColor = PaintColor.Empty;
+        private PaintColor _actualBackgroundColor = PaintColor.Empty;
 
-        public RColor ActualColor
+        public PaintColor ActualColor
         {
             get
             {
@@ -1017,7 +1016,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public RColor ActualBackgroundColor
+        public PaintColor ActualBackgroundColor
         {
             get
             {
@@ -1026,7 +1025,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        internal void InvalidateColor() => _actualColor = RColor.Empty;
+        internal void InvalidateColor() => _actualColor = PaintColor.Empty;
 
         #endregion
 
@@ -1102,14 +1101,14 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Font palette
 
-        private RFontPalette? _actualFontPalette;
+        private FontPalette? _actualFontPalette;
         private bool _actualFontPaletteResolved;
 
         /// <summary>
         /// The resolved <c>font-palette</c> selection for this box's used font (CSS Fonts 4), or null for
         /// the default palette. Only meaningful for a COLR/CPAL color font.
         /// </summary>
-        public RFontPalette? ActualFontPalette
+        public FontPalette? ActualFontPalette
         {
             get
             {
@@ -1150,7 +1149,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The caps feature that should actually be requested from the shaping layer for this box's
         /// text: <see cref="CapsMode.None"/> for <c>normal</c>, for a keyword the
-        /// resolved font lacks full GSUB support for (see <see cref="RFont.SupportsFontVariantCaps"/>),
+        /// resolved font lacks full GSUB support for (see <see cref="Font.SupportsFontVariantCaps"/>),
         /// or - for small-caps/all-small-caps specifically - whenever <c>CssBox.AddWord</c> is instead
         /// synthesizing the effect (real substitution must never also be requested in that case).
         /// </summary>
@@ -1341,10 +1340,10 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Font
 
-        private RFont? _actualFont;
+        private Font? _actualFont;
 
         /// <summary>The font that should be actually used to paint the text of the box.</summary>
-        public RFont ActualFont
+        public Font ActualFont
         {
             get
             {
@@ -1436,7 +1435,7 @@ namespace PeachPDF.Html.Core.Dom
         /// an interactive PDF form field's "auto font size" fit-to-height appearance stream) and needs
         /// the box's real font identity at that size, not a re-derivation of what size to use.
         /// </summary>
-        internal RFont GetActualFontAtSize(double fsize)
+        internal Font GetActualFontAtSize(double fsize)
         {
             var st = GetActualFontStyleFlags();
             return Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
@@ -1506,31 +1505,31 @@ namespace PeachPDF.Html.Core.Dom
         public double? ActualObliqueSkewSinus => FontObliqueAngleResolver.ResolveSkewSinus(Style.Font.FontStyle);
 
         /// <summary>
-        /// Computes the <see cref="RFontStyle"/> flags (italic/bold) for this box's own font-style/numeric
+        /// Computes the <see cref="PaintFontStyle"/> flags (italic/bold) for this box's own font-style/numeric
         /// weight - shared between <see cref="ActualFont"/> and any derived font (e.g. a synthesized
         /// small-caps run) that needs the same style bits at a different size, so the two never drift apart.
         /// </summary>
-        private RFontStyle GetActualFontStyleFlags()
+        private PaintFontStyle GetActualFontStyleFlags()
         {
-            var st = RFontStyle.Regular;
+            var st = PaintFontStyle.Regular;
 
-            // FontStyle may be the bare "oblique" keyword or CSS Fonts Level 4's "oblique <angle>" form
-            // (e.g. "oblique 10deg") - both are italic-equivalent for RFontStyle purposes, so match by
+            // PaintFontStyle may be the bare "oblique" keyword or CSS Fonts Level 4's "oblique <angle>" form
+            // (e.g. "oblique 10deg") - both are italic-equivalent for PaintFontStyle purposes, so match by
             // prefix rather than exact equality.
             if (Style.Font.FontStyle is Keywords.Italic || Style.Font.FontStyle.StartsWith(Keywords.Oblique, StringComparison.Ordinal))
             {
-                st |= RFontStyle.Italic;
+                st |= PaintFontStyle.Italic;
             }
 
             if (ActualNumericWeight >= 700)
             {
-                st |= RFontStyle.Bold;
+                st |= PaintFontStyle.Bold;
             }
 
             return st;
         }
 
-        private RFont? _smallCapsFont;
+        private Font? _smallCapsFont;
 
         /// <summary>
         /// A cached font derived from <see cref="ActualFont"/> at a reduced size (same family/style), used
@@ -1538,7 +1537,7 @@ namespace PeachPDF.Html.Core.Dom
         /// real <c>smcp</c>/<c>c2sc</c> glyph substitution, so originally-lowercase runs are upper-cased and
         /// drawn at this smaller size instead. See <c>CssBox.ParseToWords</c>.
         /// </summary>
-        public RFont ActualSmallCapsFont
+        public Font ActualSmallCapsFont
         {
             get
             {
@@ -1564,7 +1563,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ActualFontVariantPosition"/> is non-None and real substitution does the work.
         /// </summary>
         /// <remarks>
-        /// The numbers come from the font's own OS/2 table (<see cref="RFont.GetSubSuperscriptMetrics"/>),
+        /// The numbers come from the font's own OS/2 table (<see cref="Font.GetSubSuperscriptMetrics"/>),
         /// whose <c>ySuperscript*</c>/<c>ySubscript*</c> fields exist precisely to tell a UA how to build
         /// these - so a synthesized variant follows the type designer's intent rather than one ratio
         /// imposed on every face. The fallbacks are only for a font that leaves those fields at zero.
@@ -1599,7 +1598,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private RFont? _subSuperscriptFont;
+        private Font? _subSuperscriptFont;
 
         /// <summary>
         /// A cached font derived from <see cref="ActualFont"/> at <see cref="SubSuperscriptSynthesis"/>'s
@@ -1607,7 +1606,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ActualFont"/> itself when no synthesis applies or the smaller face can't be
         /// resolved.
         /// </summary>
-        public RFont ActualSubSuperscriptFont
+        public Font ActualSubSuperscriptFont
         {
             get
             {
@@ -1627,7 +1626,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private Dictionary<(int Codepoint, double Scale, EmojiPresentation Presentation), RFont>? _codepointFontCache;
+        private Dictionary<(int Codepoint, double Scale, EmojiPresentation Presentation), Font>? _codepointFontCache;
 
         /// <summary>This box's <c>font-variant-emoji</c> keyword.</summary>
         public FontVariantEmojiMode ActualFontVariantEmoji => Style.Font.FontVariantEmoji.Value;
@@ -1642,7 +1641,7 @@ namespace PeachPDF.Html.Core.Dom
         /// emoji/text presentation the character is to be drawn in (<see cref="Emoji.ResolveAt"/>),
         /// which steers the choice between a colour and an outline font that both cover it.
         /// </summary>
-        public RFont ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)
+        public Font ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)
         {
             var cacheKey = (codepoint.Value, sizeScale, presentation);
             if (_codepointFontCache is not null && _codepointFontCache.TryGetValue(cacheKey, out var cached))
@@ -1790,7 +1789,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (Style.Text.LineHeight.Value.Value is not { } lineHeight)
                     // `normal` (CSS 2.1 §10.8.1) resolves from the used font's own metrics, matching browsers -
-                    // see RFont.NormalLineHeight (issue #956). Already fully scaled, same convention as
+                    // see Font.NormalLineHeight (issue #956). Already fully scaled, same convention as
                     // ActualFont.Ascent/Height elsewhere - no further PixelsPerPoint correction here.
                     return ActualFont.NormalLineHeight;
 

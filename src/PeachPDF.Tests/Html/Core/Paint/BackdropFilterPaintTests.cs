@@ -1,5 +1,6 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 
@@ -11,12 +12,12 @@ namespace PeachPDF.Tests.Html.Core.Paint
     /// </summary>
     public class BackdropFilterPaintTests
     {
-        private static RasterGraphics NewPage(int width, int height) =>
+        private static RasterCanvas NewPage(int width, int height) =>
             new(new PdfSharpAdapter(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
-        private static async Task<RasterGraphics> Paint(string body, int width = 120, int height = 100)
+        private static async Task<RasterCanvas> Paint(string body, int width = 120, int height = 100)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), margin: 0);
             var page = NewPage(width, height);

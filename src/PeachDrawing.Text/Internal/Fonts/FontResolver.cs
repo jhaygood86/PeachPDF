@@ -648,11 +648,14 @@ namespace PeachDrawing.Text.Internal.Fonts
 
         /// <summary>
         /// The style step of CSS Fonts 4 §5.2 over the faces that survived the width step. A request for upright text takes the faces that
-        /// are upright (<see cref="PreferStrictSlant"/>), and when there are none the oblique range nearest to upright. A request for
-        /// <c>italic</c> takes the faces declared italic and, when there are none, the oblique range nearest to 11 degrees; a request for
-        /// <c>oblique &lt;angle&gt;</c> is the other way round, oblique ranges first (the one holding the angle, else the nearest by
-        /// <see cref="NearestOblique"/>) and then italic faces. Where the family has no face of the kind that was asked for, the faces
-        /// are returned as they were and the caller fakes the slant.
+        /// are upright (<see cref="PreferStrictSlant"/>), and when there are none the oblique range nearest to upright. An explicit
+        /// <c>oblique 0deg</c> request is upright's equivalent on the specification's scale and is matched the same way, ahead of every other
+        /// step below. A request for <c>italic</c> takes the faces declared italic and, when there are none, the oblique range nearest to 11
+        /// degrees; a request for <c>oblique &lt;angle&gt;</c> of 0 degrees or more is the other way round and tries, in order: the oblique
+        /// ranges on the same side of upright as the angle (<see cref="LeaningOblique"/>), then the italic faces, then
+        /// <see cref="NearestOblique"/>'s wider search (which also reaches ranges on the other side of upright). A negative angle keeps the
+        /// simpler oblique-only search, since this engine has no notion of a "negative italic" face to fall back to. Where the family has no
+        /// face of the kind that was asked for, the faces are returned as they were and the caller fakes the slant.
         /// </summary>
         private static List<FontFaceEntry> NarrowByStyle(List<FontFaceEntry> faces, FaceRequest request)
         {
@@ -660,34 +663,65 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             if (!request.IsItalic)
             {
-                var upright = PreferStrictSlant(faces.Where(f => SlantMatches(f, false)).ToList(), false);
+                var upright = UprightCandidates(faces);
                 if (upright.Count > 0)
                     return upright;
 
                 return oblique.Count > 0 ? NearestOblique(oblique, 0) : faces;
             }
 
+            if (request.ObliqueAngle == 0)
+            {
+                var upright = UprightCandidates(faces);
+                if (upright.Count > 0)
+                    return upright;
+            }
+
             var italic = faces.Where(f => f.Italic && f.Ranges.Oblique is null).ToList();
 
             List<FontFaceEntry> preferred;
             if (oblique.Count == 0)
+            {
                 preferred = italic;
+            }
             else if (request.ObliqueAngle is { } angle)
-                preferred = NearestOblique(oblique, angle);
+            {
+                if (angle >= 0)
+                {
+                    var leaning = LeaningOblique(oblique, angle);
+                    preferred = leaning.Count > 0 ? leaning
+                        : italic.Count > 0 ? italic
+                        : CrossZeroOblique(oblique, angle);
+                }
+                else
+                {
+                    preferred = NearestOblique(oblique, angle);
+                }
+            }
             else
+            {
                 preferred = italic.Count > 0 ? italic : NearestOblique(oblique, ItalicAsObliqueAngle);
+            }
 
             return preferred.Count > 0 ? preferred : faces;
         }
 
         /// <summary>
-        /// Of faces that all declare an oblique range, the ones that hold <paramref name="angle"/> or, when none does, the ones at the end of
-        /// a range that the specification's search order reaches first: for an angle of 11 degrees or more the angles above it in
-        /// ascending order and then the ones below it in descending order, for a smaller one the angles below it descending and then those
-        /// above it ascending, in both cases only angles above 0 until nothing is left and then the angles at or below 0 descending. A lean
-        /// to the left (a negative angle) is the mirror image.
+        /// Of faces that all match the slant of an upright request (<see cref="SlantMatches"/>), the ones that are genuinely upright
+        /// themselves (<see cref="PreferStrictSlant"/>) - shared by the plain-upright style step and the equivalent check an explicit
+        /// <c>oblique 0deg</c> request makes before trying anything else.
         /// </summary>
-        private static List<FontFaceEntry> NearestOblique(List<FontFaceEntry> faces, double angle)
+        private static List<FontFaceEntry> UprightCandidates(List<FontFaceEntry> faces) =>
+            PreferStrictSlant(faces.Where(f => SlantMatches(f, false)).ToList(), false);
+
+        /// <summary>
+        /// Of faces that all declare an oblique range, the ones that hold <paramref name="angle"/> or, when none does, the ones at the end of
+        /// a range that the specification's search order reaches first, without ever crossing over to the other side of upright: for an
+        /// angle of 11 degrees or more the angles above it in ascending order and then the ones below it (but still above 0) in descending
+        /// order, for a smaller one the other way round. Empty when every declared range is on the other side of upright, which is the cue
+        /// <see cref="NarrowByStyle"/> uses to try italic faces before <see cref="CrossZeroOblique"/> crosses over.
+        /// </summary>
+        private static List<FontFaceEntry> LeaningOblique(List<FontFaceEntry> faces, double angle)
         {
             var containing = faces.Where(f => f.Ranges.Oblique.Value.Contains(angle)).ToList();
             if (containing.Count > 0)
@@ -702,10 +736,36 @@ namespace PeachDrawing.Text.Internal.Fonts
             var values = faces.Select(Measure).Distinct().ToList();
             var above = values.Where(v => v > target).OrderBy(v => v);
             var below = values.Where(v => v > 0 && v < target).OrderByDescending(v => v);
-            var leaning = target >= ItalicAsObliqueAngle ? above.Concat(below) : below.Concat(above);
-            var chosen = leaning.Concat(values.Where(v => v <= 0).OrderByDescending(v => v)).First();
+            var leaning = (target >= ItalicAsObliqueAngle ? above.Concat(below) : below.Concat(above)).ToList();
+            if (leaning.Count == 0)
+                return [];
+
+            var chosen = leaning[0];
+            return faces.Where(f => Measure(f) == chosen).ToList();
+        }
+
+        /// <summary>
+        /// Of faces that all declare an oblique range and none of which lean the same way as <paramref name="angle"/> (<see
+        /// cref="LeaningOblique"/> found nothing), the ones at or below 0 nearest to it, descending. A lean to the left (a negative angle)
+        /// is the mirror image.
+        /// </summary>
+        private static List<FontFaceEntry> CrossZeroOblique(List<FontFaceEntry> faces, double angle)
+        {
+            var mirror = angle < 0 ? -1.0 : 1.0;
+            double Measure(FontFaceEntry f) => mirror * f.Ranges.Oblique.Value.Clamp(angle);
+            var chosen = faces.Select(Measure).Where(v => v <= 0).OrderByDescending(v => v).First();
 
             return faces.Where(f => Measure(f) == chosen).ToList();
+        }
+
+        /// <summary>
+        /// <see cref="LeaningOblique"/>, and when that finds nothing (every declared range is on the other side of upright from
+        /// <paramref name="angle"/>) <see cref="CrossZeroOblique"/>. A lean to the left (a negative angle) is the mirror image.
+        /// </summary>
+        private static List<FontFaceEntry> NearestOblique(List<FontFaceEntry> faces, double angle)
+        {
+            var leaning = LeaningOblique(faces, angle);
+            return leaning.Count > 0 ? leaning : CrossZeroOblique(faces, angle);
         }
 
         /// <summary>

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.AcroForms;
@@ -17,10 +17,10 @@ namespace PeachPDF.Html.Core.Handlers
     /// <c>PdfGenerator.HandleFormFields</c>, a pass over the finished layout that runs after painting,
     /// the same way link annotations are placed by <c>PdfGenerator.HandleLinks</c>.
     /// </summary>
-    internal sealed class FormFieldBuilder(PdfDocument document, RAdapter adapter)
+    internal sealed class FormFieldBuilder(PdfDocument document, RenderContext adapter)
     {
         internal PdfDocument Document { get; } = document;
-        internal RAdapter Adapter { get; } = adapter;
+        internal RenderContext Adapter { get; } = adapter;
 
         /// <summary>
         /// The container's real device-pixel-to-point scale, read fresh on every use (not captured at

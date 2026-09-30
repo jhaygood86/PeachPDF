@@ -1,15 +1,15 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// CSS Color 5 <c>device-cmyk()</c> (https://www.w3.org/TR/css-color-5/#device-cmyk) grammar and
+    /// CSS PaintColor 5 <c>device-cmyk()</c> (https://www.w3.org/TR/css-color-5/#device-cmyk) grammar and
     /// native-CMYK resolution (issue #1083) - the color is carried through as real CMYK components
-    /// (<see cref="RColor.IsCmyk"/>/<see cref="RColor.C"/>/<see cref="RColor.M"/>/<see cref="RColor.Y"/>/
-    /// <see cref="RColor.K"/>), never collapsed to a naive sRGB approximation. See
+    /// (<see cref="PaintColor.IsCmyk"/>/<see cref="PaintColor.C"/>/<see cref="PaintColor.M"/>/<see cref="PaintColor.Y"/>/
+    /// <see cref="PaintColor.K"/>), never collapsed to a naive sRGB approximation. See
     /// <c>DeviceCmykColorIntegrationTests</c> for the end-to-end HTML -&gt; PDF operator coverage.
     /// </summary>
     public class DeviceCmykColorParsingTests
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ToString_RoundTrips_AsDeviceCmykSyntax()
         {
-            // Color.ToString() must re-serialize a device-cmyk() color as device-cmyk() (CSS Color 5
-            // syntax), not silently drop it or fall back to rgb() - see Color.IsDeviceCmyk/ToDeviceCmykString.
+            // PaintColor.ToString() must re-serialize a device-cmyk() color as device-cmyk() (CSS PaintColor 5
+            // syntax), not silently drop it or fall back to rgb() - see PaintColor.IsDeviceCmyk/ToDeviceCmykString.
             var color = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
 
             var text = color.ToString();
@@ -167,9 +167,9 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ── color-mix() between two device-cmyk() operands ─────────────────────────
-        // CSS Color 5 has no "cmyk" interpolation space and no defined behavior for a device-cmyk()
+        // CSS PaintColor 5 has no "cmyk" interpolation space and no defined behavior for a device-cmyk()
         // operand without a real ICC profile - this project extends color-mix() to mix two CMYK-tagged
-        // operands directly in C/M/Y/K space instead (see Color.MixCmyk's remarks). A mix of one CMYK and
+        // operands directly in C/M/Y/K space instead (see PaintColor.MixCmyk's remarks). A mix of one CMYK and
         // one non-CMYK operand still has no defined conversion and stays invalid.
 
         [Fact]
@@ -201,7 +201,7 @@ namespace PeachPDF.Tests.Integration
         public void ColorMix_TwoDeviceCmykOperands_SubTotalPercentages_ScaleResultAlpha()
         {
             // 30% + 30% sums to 60% - the CMYK branch applies the same alpha-multiplier normalization as
-            // the RGB Color.Mix path.
+            // the RGB PaintColor.Mix path.
             var color = Parser().GetActualColor("color-mix(in srgb, device-cmyk(0 1 1 0) 30%, device-cmyk(1 0 0 0) 30%)");
 
             Assert.True(color.IsCmyk);

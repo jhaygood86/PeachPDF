@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using System.Threading.Tasks;
@@ -42,7 +42,7 @@ namespace PeachPDF.Html.Core.Dom
             Words.Add(_word);
         }
 
-        internal override ValueTask MeasureWordsSize(RGraphics g)
+        internal override ValueTask MeasureWordsSize(Canvas g)
         {
             if (_wordsSizeMeasured)
                 return ValueTask.CompletedTask;

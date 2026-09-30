@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -17,8 +17,8 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class BoxShadowPaintIntegrationTests
     {
-        private static bool IsOpaqueBlack(RColor c) => c.A == 255 && c is { R: 0, G: 0, B: 0 };
-        private static bool IsWhite(RColor c) => c is { A: 255, R: 255, G: 255, B: 255 };
+        private static bool IsOpaqueBlack(PaintColor c) => c.A == 255 && c is { R: 0, G: 0, B: 0 };
+        private static bool IsWhite(PaintColor c) => c is { A: 255, R: 255, G: 255, B: 255 };
 
         [Fact]
         public async Task OutsetShadow_DrawsBeforeBackground()
@@ -30,8 +30,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            var shadowIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
-            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.Color));
+            var shadowIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.PaintColor));
+            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.PaintColor));
 
             Assert.True(shadowIndex >= 0, "an outset shadow rectangle should be drawn");
             Assert.True(bgIndex >= 0, "the white background should be drawn");
@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, el, g);
 
             // A zero-blur shadow is a single solid fill (no gradient falloff bands).
-            var shadowRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().Where(r => IsOpaqueBlack(r.Color)).ToList();
+            var shadowRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().Where(r => IsOpaqueBlack(r.PaintColor)).ToList();
             var shadow = Assert.Single(shadowRects);
 
             // The solid shape is the border box translated by the 5px (= 3.75pt) offset, spread 0.
@@ -70,8 +70,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.Color));
-            var shadowIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
+            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.PaintColor));
+            var shadowIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.PaintColor));
 
             Assert.True(bgIndex >= 0, "the white background should be drawn");
             Assert.True(shadowIndex >= 0, "an inset shadow rectangle should be drawn");
@@ -96,14 +96,14 @@ namespace PeachPDF.Tests.Integration
             // semi-transparent black. So there are several black DrawPath calls with partial alpha - the
             // shadow is neither a no-op nor a single hard-edged solid.
             var layerPaths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
+                .Where(p => p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
                 .ToList();
 
             Assert.True(layerPaths.Count >= 6, $"expected several concentric blur layers, got {layerPaths.Count}");
 
             // Those falloff layers must paint before the white background (an outset shadow sits behind).
-            var firstLayer = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && p.Color is { R: 0, G: 0, B: 0, A: > 0 and < 255 });
-            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.Color));
+            var firstLayer = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 and < 255 });
+            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.PaintColor));
             Assert.True(firstLayer >= 0 && bgIndex > firstLayer, "blur layers must paint before the background");
         }
 
@@ -120,12 +120,12 @@ namespace PeachPDF.Tests.Integration
             // The inset falloff is a stack of even-odd ring fills (DrawPath), each a semi-transparent black,
             // all painted after (over) the white background.
             var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
+                .Where(p => p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
                 .ToList();
             Assert.True(rings.Count >= 6, $"expected several inset ring layers, got {rings.Count}");
 
-            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.Color));
-            var firstRing = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && p.Color is { R: 0, G: 0, B: 0, A: > 0 and < 255 });
+            var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.PaintColor));
+            var firstRing = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 and < 255 });
             Assert.True(bgIndex >= 0 && firstRing > bgIndex, "inset rings must paint after the background");
         }
 
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Integration
             // count all black ring fills, not just the semi-transparent ones.)
             Assert.NotEmpty(g.ClipPaths);
             var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Count(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 });
+                .Count(p => p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 });
             Assert.True(rings >= 6, $"expected inset ring layers, got {rings}");
         }
 
@@ -192,7 +192,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.Color));
+            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.PaintColor));
             Assert.Equal(el.Bounds.X + 8, shadow.X, 1);
         }
 
@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.Color));
+            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.PaintColor));
             Assert.Equal(el.Bounds.X + 12, shadow.X, 1);
         }
 
@@ -220,7 +220,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.Color));
+            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.PaintColor));
             Assert.Equal(el.Bounds.X + 5, shadow.X, 1);
             Assert.Equal(el.Bounds.Y, shadow.Y, 1);
         }
@@ -243,11 +243,11 @@ namespace PeachPDF.Tests.Integration
 
             // A rounded box's zero-blur shadow is a rounded-rect path fill (DrawPath), not a plain rectangle,
             // and it still sits behind the (also rounded, DrawPath) background.
-            var shadowPath = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && IsOpaqueBlack(p.Color));
-            var bgPath = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && IsWhite(p.Color));
+            var shadowPath = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && IsOpaqueBlack(p.PaintColor));
+            var bgPath = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawPathCall p && IsWhite(p.PaintColor));
             Assert.True(shadowPath >= 0, "the rounded shadow should be a path fill");
             Assert.True(bgPath > shadowPath, "the outset shadow path must paint before the background");
-            Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
+            Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.PaintColor));
         }
 
         [Fact]
@@ -261,8 +261,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            var blueIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 0, G: 0, B: 255, A: 255 });
-            var redIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 255, G: 0, B: 0, A: 255 });
+            var blueIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && r.PaintColor is { R: 0, G: 0, B: 255, A: 255 });
+            var redIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && r.PaintColor is { R: 255, G: 0, B: 0, A: 255 });
 
             Assert.True(blueIndex >= 0 && redIndex >= 0, "both shadow layers should paint");
             Assert.True(blueIndex < redIndex, "the last-listed (blue) shadow paints first, under the first-listed (red)");
@@ -278,7 +278,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
+            Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.PaintColor));
         }
 
         [Fact]
@@ -299,7 +299,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Issue #812 (reopened): the concentric ring fills a blurred inset shadow paints
         /// (<c>FragmentPainter.Decorations.BuildRingPath</c>) are built from raw layout-space coordinates
-        /// and drawn via <c>RGraphics.DrawPath</c>, which never divides by <c>PixelsPerPoint</c> - so
+        /// and drawn via <c>Canvas.DrawPath</c>, which never divides by <c>PixelsPerPoint</c> - so
         /// <c>BuildRingPath</c> itself must divide. Verified end-to-end (real layout at a non-default
         /// <c>PixelsPerPoint</c>, not just the isolated path builder) since the bug's actual trigger is the
         /// box's own layout-space geometry, not a hand-constructed rect.
@@ -323,7 +323,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, el, g);
 
             var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 }).ToList();
+                .Where(p => p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 }).ToList();
             Assert.NotEmpty(rings);
 
             // The box (with its default 20pt margin) is only 40x30pt - a generous bound around it. Before
@@ -370,7 +370,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, el, g);
 
             var layers = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
+                .Where(p => p.PaintColor is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
                 .ToList();
             Assert.NotEmpty(layers);
             return layers.Count;

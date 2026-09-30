@@ -1,5 +1,6 @@
 using PeachDrawing.Text.Internal.Text;
 using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Khmer;
 using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
@@ -49,5 +50,22 @@ namespace PeachDrawing.Text.Unicode
         /// <param name="codepoint">A Unicode code point.</param>
         /// <returns>The category, which is <see cref="UseCategory.O"/> for a character of another script.</returns>
         public static UseCategory Classify(int codepoint) => UseCategoryClassifier.Classify(codepoint);
+    }
+
+    /// <summary>
+    /// HarfBuzz's own (pre-Universal-Shaping-Engine) classification of characters for Khmer - the
+    /// script's coeng/subjoined-consonant stacking model, which <see cref="UniversalShaping"/> does not
+    /// cover (see <see cref="KhmerCategory"/>'s own remarks on why this is a separate model, not an
+    /// extension of it).
+    /// </summary>
+    public static class KhmerShaping
+    {
+        /// <summary>
+        /// The Khmer shaping category of a code point, derived from its Indic syllabic and positional
+        /// categories plus a small table of Khmer-specific overrides.
+        /// </summary>
+        /// <param name="codepoint">A Unicode code point.</param>
+        /// <returns>The category, which is <see cref="KhmerCategory.Other"/> for a character outside the Khmer script.</returns>
+        public static KhmerCategory Classify(int codepoint) => KhmerCategoryClassifier.Classify(codepoint);
     }
 }

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.Linq;
 using System.Net.Http;
 using PeachPDF.Network;

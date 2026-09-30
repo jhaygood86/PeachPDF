@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Layer-B tests for <see cref="CssClipPathResolver.TryBuildClipPath"/>: resolves a validated
     /// <c>clip-path</c> value against a known reference box and asserts the produced
-    /// <see cref="RGraphicsPath"/> geometry (captured via <see cref="TestGraphicsPath"/>).
+    /// <see cref="GraphicsPath"/> geometry (captured via <see cref="TestGraphicsPath"/>).
     /// </summary>
     public class ClipPathResolverIntegrationTests
     {
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "polygon(0% 0%, 100% 0%, 50% 100%)", reference, box, out var path, out var useEvenOdd);
@@ -64,14 +64,14 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 100, 100);
+            var reference = new Rect(0, 0, 100, 100);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "polygon(evenodd, 0 0, 100px 0, 0 100px)", reference, box, out var path, out var useEvenOdd);
 
             Assert.True(built);
             Assert.True(useEvenOdd);
-            Assert.Equal(RFillMode.EvenOdd, path!.FillMode);
+            Assert.Equal(FillMode.EvenOdd, path!.FillMode);
         }
 
         [Fact]
@@ -79,7 +79,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 200, 100);
+            var reference = new Rect(0, 0, 200, 100);
 
             // top/bottom against height(100), left/right against width(200): inset(10pt 20pt 30pt 40pt).
             // pt units are used so the expected values equal the layout units (points) 1:1.
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 100, 50);
+            var reference = new Rect(0, 0, 100, 50);
 
             // left(40) + right(80) = 120 > width(100): CSS Shapes 1 §3.1 scales both by 100/120 = 5/6,
             // preserving their 1:2 ratio and reducing the inset rectangle's width to exactly 0 rather
@@ -131,7 +131,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 200, 100);
+            var reference = new Rect(0, 0, 200, 100);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "inset(10pt round 5pt)", reference, box, out var path, out _);
@@ -159,7 +159,7 @@ namespace PeachPDF.Tests.Integration
             // A 40x20 inset rectangle with a 30pt round radius on every corner: the top edge's two
             // 30pt radii would sum to 60 > 40, so CSS Backgrounds 3 §4's corner-overlap factor
             // (40/60 = 2/3) must be applied uniformly - reduced radius = 20pt.
-            var reference = new RRect(0, 0, 40, 20);
+            var reference = new Rect(0, 0, 40, 20);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "inset(0 round 30pt)", reference, box, out var path, out _);
@@ -177,7 +177,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 200, 100);
+            var reference = new Rect(0, 0, 200, 100);
 
             // center default 50% 50% => (100,50). closest-side = min(100,100,50,50) = 50.
             var built = CssClipPathResolver.TryBuildClipPath(
@@ -202,7 +202,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 200, 100);
+            var reference = new Rect(0, 0, 200, 100);
 
             // rx 25% of 200 = 50, ry 40% of 100 = 40, center 50% 50% = (100,50).
             var built = CssClipPathResolver.TryBuildClipPath(
@@ -222,7 +222,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             // path() coordinates are unitless CSS pixels (1px = 0.75pt via Length.PointsPerPx),
             // translated (not scaled) so the path's own (0,0) lands on the reference box's origin.
@@ -247,14 +247,14 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 100, 100);
+            var reference = new Rect(0, 0, 100, 100);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, """path(evenodd, "M0 0 L10 0 L0 10 Z")""", reference, box, out var path, out var useEvenOdd);
 
             Assert.True(built);
             Assert.True(useEvenOdd);
-            Assert.Equal(RFillMode.EvenOdd, path!.FillMode);
+            Assert.Equal(FillMode.EvenOdd, path!.FillMode);
         }
 
         [Fact]
@@ -262,7 +262,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics();
-            var reference = new RRect(0, 0, 100, 100);
+            var reference = new Rect(0, 0, 100, 100);
 
             // A diametrically-opposed (180°) arc: this is the shape that previously exposed a bug
             // where direction must come from the sweep flag alone, not endpoint geometry (see
@@ -296,7 +296,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
 
             var built = CssClipPathResolver.TryBuildClipPath(
-                g, value, new RRect(0, 0, 100, 100), box, out var path, out var useEvenOdd);
+                g, value, new Rect(0, 0, 100, 100), box, out var path, out var useEvenOdd);
 
             Assert.False(built);
             Assert.Null(path);
@@ -306,7 +306,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Issue #812 (reopened): like <c>RenderUtils.GetRoundRect</c> and the rounded border contour builders,
         /// <c>TryBuildClipPath</c> is fed raw layout-space coordinates and pushes its path via
-        /// <c>RGraphics.PushClip(RGraphicsPath)</c>, which never divides by <c>PixelsPerPoint</c> - so the
+        /// <c>Canvas.PushClip(GraphicsPath)</c>, which never divides by <c>PixelsPerPoint</c> - so the
         /// resolver itself must divide every final coordinate before it reaches the path. Verified directly
         /// against the resolver (not full layout), so <see cref="TestRecordingGraphics.PixelsPerPointOverride"/>
         /// alone drives the division; the values below are exactly this class's own
@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "polygon(0% 0%, 100% 0%, 50% 100%)", reference, box, out var path, out _);
@@ -339,7 +339,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
-            var reference = new RRect(0, 0, 200, 100);
+            var reference = new Rect(0, 0, 200, 100);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "inset(10pt 20pt 30pt 40pt)", reference, box, out var path, out _);
@@ -364,7 +364,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
-            var reference = new RRect(0, 0, 200, 100);
+            var reference = new Rect(0, 0, 200, 100);
 
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, "circle()", reference, box, out var path, out _);
@@ -384,7 +384,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
             var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             // Halved coordinates of Path_ResolvesPxCoordinatesAgainstReferenceBoxOrigin_NoAxisScaling's
             // (100,200)/(175,200)/(100,275).

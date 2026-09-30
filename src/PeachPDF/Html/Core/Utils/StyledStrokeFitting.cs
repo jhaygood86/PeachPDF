@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using System;
 
 namespace PeachPDF.Html.Core.Utils
@@ -155,7 +154,7 @@ namespace PeachPDF.Html.Core.Utils
         /// the span to actually stroke. Returns null when the edge cannot carry a pattern, meaning the
         /// caller should stroke it solid over the original span.
         /// </summary>
-        /// <param name="pen">the pen to configure - its <see cref="RPen.Width"/> must already be set</param>
+        /// <param name="pen">the pen to configure - its <see cref="Pen.Width"/> must already be set</param>
         /// <param name="dotted">true for <c>dotted</c>, false for <c>dashed</c></param>
         /// <param name="strokeWidth">the border/outline width, in the caller's raw layout-space units</param>
         /// <param name="edgeStart">where the edge begins along its axis, in layout-space units</param>
@@ -166,14 +165,14 @@ namespace PeachPDF.Html.Core.Utils
         /// has to be converted here rather than being passed through as a layout-space value.
         /// </param>
         internal static (double Start, double End)? Apply(
-            RPen pen, bool dotted, double strokeWidth, double edgeStart, double edgeEnd, double pixelsPerPoint)
+            Pen pen, bool dotted, double strokeWidth, double edgeStart, double edgeEnd, double pixelsPerPoint)
         {
             var fitted = Fit(dotted, strokeWidth, Math.Abs(edgeEnd - edgeStart));
             if (fitted is not { } pattern) return null;
 
             if (!dotted)
             {
-                pen.LineCap = RLineCap.Butt;
+                pen.LineCap = LineCap.Butt;
                 pen.SetDashPattern([pattern.DashLength / pixelsPerPoint, pattern.GapLength / pixelsPerPoint], 0);
                 return (edgeStart, edgeEnd);
             }
@@ -181,7 +180,7 @@ namespace PeachPDF.Html.Core.Utils
             // A round cap turns each zero-length dash into a circle centred on the path, so the path
             // runs centre-to-centre: inset half a width at each end, leaving the first and last dots
             // tangent to the box's corners exactly as a browser draws them.
-            pen.LineCap = RLineCap.Round;
+            pen.LineCap = LineCap.Round;
             pen.SetDashPattern([0, pattern.Period / pixelsPerPoint], 0);
 
             var direction = Math.Sign(edgeEnd - edgeStart);

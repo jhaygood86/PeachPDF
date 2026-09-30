@@ -1,5 +1,5 @@
 ﻿using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.TestSupport
         /// behaviour is the subject, rather than a box some markup happens to produce.
         /// </param>
         /// <param name="after">
-        /// Optional: run once layout has finished, with the same <see cref="RGraphics"/> layout itself
+        /// Optional: run once layout has finished, with the same <see cref="Canvas"/> layout itself
         /// used, for a test whose subject is a layout call the document cannot make on its own — running
         /// one engine again over a box it already laid out, say. It runs before the graphics context is
         /// disposed, which is why it belongs here rather than after the call returns.
@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.TestSupport
             double pageHeight = 842,
             double margin = 20,
             Action<CssBox>? prepare = null,
-            Func<CssBox, HtmlContainerInt, RGraphics, Task>? after = null,
+            Func<CssBox, HtmlContainerInt, Canvas, Task>? after = null,
             double pixelsPerPoint = 1.0,
             Func<PdfSharpAdapter, Task>? configureAdapter = null)
         {

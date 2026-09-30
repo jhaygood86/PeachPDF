@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 
@@ -51,13 +51,13 @@ namespace PeachPDF.Tests.Svg
             var paths = PathCalls(g);
             Assert.Single(paths);
             // The gradient brush carries its first stop's color (red).
-            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), paths[0].Color);
+            Assert.Equal(PaintColor.FromArgb(255, 255, 0, 0), paths[0].PaintColor);
         }
 
         [Fact]
         public void GradientFillText_LetterSpacing_WidensTheObjectBoundingBoxToMatchTheOutline()
         {
-            // Regression: RGraphics.MeasureString has no letterSpacing parameter, so the size used to
+            // Regression: Canvas.MeasureString has no letterSpacing parameter, so the size used to
             // build the gradient's objectBoundingBox reference must be widened separately (the same
             // CountShapedGlyphs(text, font, features) * letterSpacing pattern CssBox/CssLayoutEngine
             // already use for their own letter-spacing-aware measurements) - otherwise the box stays
@@ -91,8 +91,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Empty(g.DrawStringCalls);
             var paths = PathCalls(g);
             Assert.Equal(2, paths.Count);
-            Assert.Equal(RColor.FromArgb(255, 0, 128, 0), paths[0].Color);   // fill
-            Assert.Equal(RColor.FromArgb(255, 0, 0, 255), paths[1].Color);   // stroke
+            Assert.Equal(PaintColor.FromArgb(255, 0, 128, 0), paths[0].PaintColor);   // fill
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0, 255), paths[1].PaintColor);   // stroke
         }
 
         [Fact]
@@ -103,7 +103,7 @@ namespace PeachPDF.Tests.Svg
             // Plain solid, non-stroked text keeps the selectable DrawString fast path.
             var draw = Assert.Single(g.DrawStringCalls);
             Assert.Equal("Hi", draw.Text);
-            Assert.Equal(RColor.FromArgb(255, 10, 20, 30), draw.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 10, 20, 30), draw.PaintColor);
             Assert.Empty(PathCalls(g));
         }
 
@@ -117,7 +117,7 @@ namespace PeachPDF.Tests.Svg
             Assert.Empty(g.DrawStringCalls);
             var paths = PathCalls(g);
             Assert.Equal(2, paths.Count);
-            Assert.Equal(RColor.FromArgb(255, 0, 0, 0), paths[1].Color); // stroke last
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0, 0), paths[1].PaintColor); // stroke last
         }
 
         [Fact]
@@ -286,9 +286,9 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal(3, g.DrawStringCalls.Count);
             Assert.Collection(g.DrawStringCalls,
-                c => { Assert.Equal("a", c.Text); Assert.Equal(10, c.Point.X, 3); },
-                c => { Assert.Equal("b", c.Text); Assert.Equal(30, c.Point.X, 3); },
-                c => { Assert.Equal("c", c.Text); Assert.Equal(50, c.Point.X, 3); });
+                c => { Assert.Equal("a", c.Text); Assert.Equal(10, c.PaintPoint.X, 3); },
+                c => { Assert.Equal("b", c.Text); Assert.Equal(30, c.PaintPoint.X, 3); },
+                c => { Assert.Equal("c", c.Text); Assert.Equal(50, c.PaintPoint.X, 3); });
         }
 
         [Fact]

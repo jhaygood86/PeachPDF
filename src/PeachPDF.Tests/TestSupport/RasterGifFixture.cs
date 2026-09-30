@@ -151,7 +151,7 @@ namespace PeachPDF.Tests.TestSupport
             ms.WriteByte(0); // background color index
             ms.WriteByte(0); // pixel aspect ratio
 
-            // --- Global Color Table (padded to a power of two) ---
+            // --- Global PaintColor Table (padded to a power of two) ---
             for (int i = 0; i < paddedPaletteEntries; i++)
             {
                 if (i < paletteEntries)

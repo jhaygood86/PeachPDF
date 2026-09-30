@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.Integration
         /// <c>background-clip: padding-box</c> curve, must come out identical (in true point-space terms)
         /// regardless of <c>PixelsPerInch</c> - it's a pure internal layout-coordinate-scale knob with zero
         /// intended visual effect. <c>RenderUtils.GetRoundRect</c> is fed raw layout-space coordinates but
-        /// neither it nor its two consumers (<c>PushClip(RGraphicsPath)</c>/<c>DrawPath</c>) used to divide
+        /// neither it nor its two consumers (<c>PushClip(GraphicsPath)</c>/<c>DrawPath</c>) used to divide
         /// by <c>PixelsPerPoint</c> before building/pushing the path, unlike every other draw primitive.
         /// </summary>
         [Fact]

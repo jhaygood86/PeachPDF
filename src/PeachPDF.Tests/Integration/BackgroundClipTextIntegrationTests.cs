@@ -1,6 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
@@ -23,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     public class BackgroundClipTextIntegrationTests
     {
         /// <summary>A distinct, non-null stand-in outline per call, so a test can tell how many runs contributed to a union.</summary>
-        private static RGraphicsPath FakeOutline(RGraphics g, string text, RPoint origin)
+        private static GraphicsPath FakeOutline(Canvas g, string text, PaintPoint origin)
         {
             var path = g.GetGraphicsPath();
             path.Start(origin.X, origin.Y);
@@ -147,11 +146,11 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// A stand-in outline whose points sit far from the word's own physical footprint (near the
         /// coordinate origin) - so a test can tell whether <see cref="FragmentPainter.SidewaysRotation"/>
-        /// (via <see cref="RGraphicsPath.Transform"/>) actually ran: an untransformed (bugged) union
+        /// (via <see cref="GraphicsPath.Transform"/>) actually ran: an untransformed (bugged) union
         /// would still contain these origin-relative points, while a correctly transformed one lands
         /// inside the word's real fragment rectangle instead.
         /// </summary>
-        private static RGraphicsPath OriginRelativeOutline(RGraphics g, double width, double height)
+        private static GraphicsPath OriginRelativeOutline(Canvas g, double width, double height)
         {
             // Both dimensions are non-negative - matching where a natural, pre-rotation glyph box
             // actually sits (DrawString's own "point" argument is its top-left, not its center), so a
@@ -166,10 +165,10 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// An oversized stand-in outline reaching well past <paramref name="cell"/> on every side - used
-        /// to prove <see cref="RGraphicsPath.ClipToRect"/> actually confines a character's glyph outline
+        /// to prove <see cref="GraphicsPath.ClipToRect"/> actually confines a character's glyph outline
         /// to its own reserved cell rather than unioning it in raw (issue #1194).
         /// </summary>
-        private static RGraphicsPath OversizedOutline(RGraphics g, RRect cell)
+        private static GraphicsPath OversizedOutline(Canvas g, Rect cell)
         {
             const double overflow = 30;
             var path = g.GetGraphicsPath();
@@ -187,7 +186,7 @@ namespace PeachPDF.Tests.Integration
             // Issue #1194 (found during #1123's own review): a font with real vhea/vmtx metrics makes
             // PaintUprightVerticalRun clip each character's PAINT to its own reserved cell (a real vmtx
             // advance is routinely narrower than the font's line height) - CollectUprightWord now
-            // reproduces that same clip on the glyph-outline UNION via RGraphicsPath.ClipToRect, rather
+            // reproduces that same clip on the glyph-outline UNION via GraphicsPath.ClipToRect, rather
             // than falling back to border-box. BundledFonts.Cjk genuinely carries real vhea/vmtx data
             // (see TextOrientationIntegrationTests's own use of it).
             //
@@ -332,14 +331,14 @@ namespace PeachPDF.Tests.Integration
             });
         }
 
-        private static RRect FindWordRect(BoxFragment fragment)
+        private static Rect FindWordRect(BoxFragment fragment)
         {
             var found = FindWordRectOrNull(fragment);
             Assert.True(found.HasValue, "expected a descendant fragment carrying at least one word");
             return found!.Value;
         }
 
-        private static RRect? FindWordRectOrNull(BoxFragment fragment)
+        private static Rect? FindWordRectOrNull(BoxFragment fragment)
         {
             if (fragment.Words.Count > 0) return fragment.Words[0].Rect;
 

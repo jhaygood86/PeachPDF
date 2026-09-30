@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using System;
 using System.Collections.Generic;
@@ -68,7 +68,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         IReadOnlyList<UnfinishedGridItem> UnfinishedItems,
         IReadOnlyList<CssBox> FinishedItems,
         IReadOnlyDictionary<CssBox, GridSubgridContext> SubgridContexts,
-        RPoint PlacementOrigin) : BreakToken(Box, ResumeSlotIndex)
+        PaintPoint PlacementOrigin) : BreakToken(Box, ResumeSlotIndex)
     {
         /// <inheritdoc />
         internal override IReadOnlyList<BreakToken> FanOutContinuations =>

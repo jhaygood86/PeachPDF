@@ -106,9 +106,13 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             byte[] uncompressed;
             using (var cs = new MemoryStream(woff2, compressedStart, (int)totalCompressedSize))
-            using (var brotli = new BrotliStream(cs, CompressionMode.Decompress))
-            using (var ms = new MemoryStream())
             {
+                // A registered custom decoder (PeachDrawing.Text.Compression.BrotliDecompression) is always preferred once set; with
+                // none registered this is exactly the unguarded BrotliStream call this had before that seam existed, so a host where
+                // it throws (e.g. WebAssembly's PlatformNotSupportedException) sees the same behavior as always.
+                var custom = PeachDrawing.Text.Internal.Text.BrotliDecoderRegistry.Custom;
+                using var brotli = custom is not null ? custom(cs) : new BrotliStream(cs, CompressionMode.Decompress);
+                using var ms = new MemoryStream();
                 brotli.CopyTo(ms);
                 uncompressed = ms.ToArray();
             }

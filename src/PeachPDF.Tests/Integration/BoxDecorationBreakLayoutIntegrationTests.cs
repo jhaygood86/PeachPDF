@@ -1,4 +1,4 @@
-﻿using PeachPDF.Html.Adapters.Entities;
+﻿using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -357,7 +357,7 @@ namespace PeachPDF.Tests.Integration
             return words.Where(w => w.Top >= lastTop - 0.01).Min(w => w.Left);
         }
 
-        private static List<RRect> Rectangles(CssBox box) =>
+        private static List<Rect> Rectangles(CssBox box) =>
             box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
 
         /// <summary>How many of a block's own text lines land in one page's content band.</summary>

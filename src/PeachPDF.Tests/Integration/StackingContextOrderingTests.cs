@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -33,8 +33,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var backIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(255, 0, 0));
-            var frontIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 255));
+            var backIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(255, 0, 0));
+            var frontIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 0, 255));
 
             Assert.True(backIndex >= 0, "z-index:1 sibling never painted");
             Assert.True(frontIndex >= 0, "z-index:2 sibling never painted");
@@ -57,8 +57,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
-            var deepIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(255, 165, 0));
+            var negIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 128, 0));
+            var deepIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(255, 165, 0));
 
             Assert.True(negIndex >= 0, "z-index:-1 sibling never painted");
             Assert.True(deepIndex >= 0, "deeply-nested z-index:5 box never painted");
@@ -86,8 +86,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var siblingIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(128, 0, 128));
-            var nestedIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(139, 69, 19));
+            var siblingIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(128, 0, 128));
+            var nestedIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(139, 69, 19));
 
             Assert.True(siblingIndex >= 0, "sibling never painted");
             Assert.True(nestedIndex >= 0, "nested z-index:-1 box never painted");
@@ -110,9 +110,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
-            var opIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(100, 100, 100));
-            var posIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 255));
+            var negIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 128, 0));
+            var opIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(100, 100, 100));
+            var posIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 0, 255));
 
             Assert.True(negIndex >= 0 && opIndex >= 0 && posIndex >= 0, "one of the three siblings never painted");
             Assert.True(negIndex < opIndex, "the opacity box must paint after the negative-z-index sibling");
@@ -133,9 +133,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
-            var trIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(100, 100, 100));
-            var posIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 255));
+            var negIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 128, 0));
+            var trIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(100, 100, 100));
+            var posIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 0, 255));
 
             Assert.True(negIndex >= 0 && trIndex >= 0 && posIndex >= 0, "one of the three siblings never painted");
             Assert.True(negIndex < trIndex, "the transformed box must paint after the negative-z-index sibling");
@@ -161,8 +161,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var ctxIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 221));
-            var kidIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(221, 0, 0));
+            var ctxIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 0, 221));
+            var kidIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(221, 0, 0));
 
             Assert.True(ctxIndex >= 0 && kidIndex >= 0, "one of the two boxes never painted");
             Assert.True(ctxIndex < kidIndex, "the z-index:-1 child must paint above the stacking context's own background");
@@ -182,8 +182,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var ctxIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 221));
-            var kidIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(221, 0, 0));
+            var ctxIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(0, 0, 221));
+            var kidIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(221, 0, 0));
 
             Assert.True(ctxIndex >= 0 && kidIndex >= 0, "one of the two boxes never painted");
             Assert.True(kidIndex < ctxIndex, "without a stacking context the z-index:-1 child paints first");
@@ -205,10 +205,10 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var fixedIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(10, 20, 30));
-            var absoluteIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(40, 50, 60));
-            var stickyIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(55, 65, 75));
-            var relativeIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(70, 80, 90));
+            var fixedIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
+            var absoluteIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(40, 50, 60));
+            var stickyIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(55, 65, 75));
+            var relativeIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(70, 80, 90));
 
             Assert.True(fixedIndex >= 0 && absoluteIndex >= 0 && stickyIndex >= 0 && relativeIndex >= 0,
                 "one of the positioned siblings never painted");
@@ -244,7 +244,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var drawIndex = g.Log.FindIndex(e =>
-                e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
+                e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == PaintColor.FromArgb(200, 0, 0));
             Assert.True(drawIndex >= 0, "hoisted box never painted");
 
             var pushesBeforeDraw = g.Log.Take(drawIndex).OfType<TestRecordingGraphics.PushClipCall>().ToList();
@@ -279,7 +279,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var drawIndex = g.Log.FindIndex(e =>
-                e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
+                e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == PaintColor.FromArgb(200, 0, 0));
             Assert.True(drawIndex >= 0, "hoisted box never painted");
 
             var pushesBeforeDraw = g.Log.Take(drawIndex).OfType<TestRecordingGraphics.PushClipCall>().ToList();
@@ -301,7 +301,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            Assert.Contains(rects, r => r.Color == RColor.FromArgb(10, 20, 30));
+            Assert.Contains(rects, r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
         }
 
         [Fact]
@@ -319,7 +319,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            Assert.Contains(rects, r => r.Color == RColor.FromArgb(11, 22, 33));
+            Assert.Contains(rects, r => r.PaintColor == PaintColor.FromArgb(11, 22, 33));
         }
 
         [Fact]
@@ -340,8 +340,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var parentIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(1, 2, 3));
-            var floatIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(4, 5, 6));
+            var parentIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(1, 2, 3));
+            var floatIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(4, 5, 6));
 
             Assert.True(parentIndex >= 0, "positioned parent never painted");
             Assert.True(floatIndex >= 0, "positioned float never painted");
@@ -362,8 +362,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var positionedIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(7, 8, 9));
-            var plainIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(10, 11, 12));
+            var positionedIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(7, 8, 9));
+            var plainIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(10, 11, 12));
 
             Assert.True(positionedIndex >= 0 && plainIndex >= 0, "one of the floats never painted");
             Assert.True(plainIndex < positionedIndex,

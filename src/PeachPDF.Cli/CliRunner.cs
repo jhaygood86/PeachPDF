@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -111,6 +112,11 @@ internal static class CliRunner
         if (options.FlattenTransparency)
         {
             config.TransparencyPolicy = TransparencyPolicy.Flatten;
+        }
+
+        if (options.NoRasterAntiAliasing)
+        {
+            config.RasterAntiAliasing = false;
         }
 
         if (options.PageSize is { } pageSize)

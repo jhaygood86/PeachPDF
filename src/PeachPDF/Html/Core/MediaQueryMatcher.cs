@@ -105,7 +105,7 @@ namespace PeachPDF.Html.Core
                     if (feature.AsRatio() is not { } dpr) return true;
                     return CompareNumeric(context.ResolutionDpi / 96d, dpr, feature.Comparison);
 
-                // Color output: 8 bits/channel, not a color-index or monochrome device, not a grid/tty.
+                // PaintColor output: 8 bits/channel, not a color-index or monochrome device, not a grid/tty.
                 case "color":
                     return CompareCountOrBoolean(feature, 8);
                 case "color-index":

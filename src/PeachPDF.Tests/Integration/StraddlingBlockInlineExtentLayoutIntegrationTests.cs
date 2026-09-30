@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -253,11 +253,12 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task StraddlingFlexContainerDirectlyUnderBody_StaysUnaffected()
+        public async Task StraddlingFlexContainerDirectlyUnderBody_ResizesPerFragment()
         {
-            // The flex/grid counterpart of the table test above - a flex container's own width comes from
-            // CssLayoutEngineFlex, not GetBoxWidth's auto-width branch, even though it sits directly under
-            // <body> and would otherwise satisfy every other guard.
+            // A flex container's own width comes from CssLayoutEngineFlex, not GetBoxWidth's auto-width
+            // branch, so the emitter cannot derive its per-fragment frame the way it does for a block: the
+            // engine states it instead (CssLayoutEngineFlex.StateContainerFrame). The result is the same as
+            // for a block - each fragment's frame is its own page's measure (issue #196).
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }
@@ -283,7 +284,8 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(page0Fragment);
             Assert.NotNull(page1Fragment);
 
-            Assert.Equal(page0Fragment!.WholeBoxRect.Width, page1Fragment!.WholeBoxRect.Width, 0.5);
+            Assert.Equal(SheetW - BaseMr, page0Fragment!.WholeBoxRect.Width, 0.5);
+            Assert.Equal(BaseContentWidth, page1Fragment!.WholeBoxRect.Width, 0.5);
         }
 
         [Fact]
@@ -358,11 +360,11 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            container.PageSize = new RSize(
+            container.PageSize = new Size(
                 SheetW * ppp - container.MarginLeft - container.MarginRight,
                 SheetH * ppp - container.MarginTop - container.MarginBottom);
-            container.Location = new RPoint(container.MarginLeft, container.MarginTop);
-            container.MaxSize = new RSize(container.PageSize.Width, 0);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             var measure = XGraphics.CreateMeasureContext(
                 new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);

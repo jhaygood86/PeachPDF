@@ -10,8 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
 using System;
@@ -97,7 +96,7 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Parses a <c>viewBox="min-x min-y width height"</c> attribute.
         /// </summary>
-        public static RRect? ParseViewBox(string? value)
+        public static Rect? ParseViewBox(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -109,7 +108,7 @@ namespace PeachPDF.Svg
             if (!SvgNumberScanner.TryReadNumber(value, ref pos, out var width)) return null;
             if (!SvgNumberScanner.TryReadNumber(value, ref pos, out var height)) return null;
 
-            return new RRect(x, y, width, height);
+            return new Rect(x, y, width, height);
         }
 
         /// <summary>
@@ -243,7 +242,7 @@ namespace PeachPDF.Svg
         /// defaulting to <c>nonzero</c> for a missing/unrecognized value) - both attributes share
         /// the same grammar.
         /// </summary>
-        public static RFillMode ParseFillRule(string? value)
+        public static FillMode ParseFillRule(string? value)
         {
             TryParseFillRule(value, out var mode);
             return mode;
@@ -255,52 +254,52 @@ namespace PeachPDF.Svg
         /// lenient <see cref="ParseFillRule"/> (used by real rendering, which always wants a value even
         /// for a bad one) discards.
         /// </summary>
-        public static bool TryParseFillRule(string? value, out RFillMode mode)
+        public static bool TryParseFillRule(string? value, out FillMode mode)
         {
             var trimmed = value?.Trim();
 
-            if (string.Equals(trimmed, "nonzero", StringComparison.OrdinalIgnoreCase)) { mode = RFillMode.Nonzero; return true; }
-            if (string.Equals(trimmed, "evenodd", StringComparison.OrdinalIgnoreCase)) { mode = RFillMode.EvenOdd; return true; }
+            if (string.Equals(trimmed, "nonzero", StringComparison.OrdinalIgnoreCase)) { mode = FillMode.Nonzero; return true; }
+            if (string.Equals(trimmed, "evenodd", StringComparison.OrdinalIgnoreCase)) { mode = FillMode.EvenOdd; return true; }
 
-            mode = RFillMode.Nonzero;
+            mode = FillMode.Nonzero;
             return false;
         }
 
         /// <summary>Parses a <c>stroke-linecap</c> value (<c>butt</c>/<c>round</c>/<c>square</c>), defaulting to <c>butt</c>.</summary>
-        public static RLineCap ParseLineCap(string? value)
+        public static LineCap ParseLineCap(string? value)
         {
             TryParseLineCap(value, out var cap);
             return cap;
         }
 
         /// <summary>Validity-returning sibling of <see cref="ParseLineCap"/> — see <see cref="TryParseFillRule"/>'s remarks.</summary>
-        public static bool TryParseLineCap(string? value, out RLineCap cap)
+        public static bool TryParseLineCap(string? value, out LineCap cap)
         {
             switch (value?.Trim().ToLowerInvariant())
             {
-                case "butt": cap = RLineCap.Butt; return true;
-                case "round": cap = RLineCap.Round; return true;
-                case "square": cap = RLineCap.Square; return true;
-                default: cap = RLineCap.Butt; return false;
+                case "butt": cap = LineCap.Butt; return true;
+                case "round": cap = LineCap.Round; return true;
+                case "square": cap = LineCap.Square; return true;
+                default: cap = LineCap.Butt; return false;
             }
         }
 
         /// <summary>Parses a <c>stroke-linejoin</c> value (<c>miter</c>/<c>round</c>/<c>bevel</c>), defaulting to <c>miter</c>.</summary>
-        public static RLineJoin ParseLineJoin(string? value)
+        public static LineJoin ParseLineJoin(string? value)
         {
             TryParseLineJoin(value, out var join);
             return join;
         }
 
         /// <summary>Validity-returning sibling of <see cref="ParseLineJoin"/> — see <see cref="TryParseFillRule"/>'s remarks.</summary>
-        public static bool TryParseLineJoin(string? value, out RLineJoin join)
+        public static bool TryParseLineJoin(string? value, out LineJoin join)
         {
             switch (value?.Trim().ToLowerInvariant())
             {
-                case "miter": join = RLineJoin.Miter; return true;
-                case "round": join = RLineJoin.Round; return true;
-                case "bevel": join = RLineJoin.Bevel; return true;
-                default: join = RLineJoin.Miter; return false;
+                case "miter": join = LineJoin.Miter; return true;
+                case "round": join = LineJoin.Round; return true;
+                case "bevel": join = LineJoin.Bevel; return true;
+                default: join = LineJoin.Miter; return false;
             }
         }
 
@@ -428,7 +427,7 @@ namespace PeachPDF.Svg
         /// standalone/<c>&lt;img&gt;</c> SVG, which has no CSS context to inherit from), or a solid
         /// color (hex/named, delegated to <see cref="CssValueParser.GetActualColor"/>).
         /// </summary>
-        public static SvgPaint ParsePaint(string value, RAdapter adapter, RColor contextColor)
+        public static SvgPaint ParsePaint(string value, RenderContext adapter, PaintColor contextColor)
         {
             TryParsePaint(value, adapter, contextColor, out var paint);
             return paint;
@@ -440,7 +439,7 @@ namespace PeachPDF.Svg
         /// string <see cref="CssValueParser.IsColorValid"/> rejects; <c>paint</c> still gets the same
         /// fallback <see cref="ParsePaint"/> would have returned, for callers that want a value regardless.
         /// </summary>
-        public static bool TryParsePaint(string value, RAdapter adapter, RColor contextColor, out SvgPaint paint)
+        public static bool TryParsePaint(string value, RenderContext adapter, PaintColor contextColor, out SvgPaint paint)
         {
             var trimmed = value.Trim();
 
@@ -531,21 +530,21 @@ namespace PeachPDF.Svg
         /// either as plain attributes or from a <c>style="stop-color:...; stop-opacity:..."</c> attribute
         /// (the latter overrides the former, matching CSS precedence over presentation attributes).
         /// </summary>
-        public static RColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RAdapter adapter)
+        public static PaintColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RenderContext adapter)
         {
             var declarations = ParseStyleDeclarations(style);
             var colorValue = declarations.TryGetValue("stop-color", out var colorFromStyle) ? colorFromStyle : stopColorAttr;
             var opacityValue = declarations.TryGetValue("stop-opacity", out var opacityFromStyle) ? opacityFromStyle : stopOpacityAttr;
 
             var color = string.IsNullOrWhiteSpace(colorValue)
-                ? RColor.Black
+                ? PaintColor.Black
                 : new CssValueParser(adapter).GetActualColor(colorValue);
 
             var opacity = ParseOpacity(opacityValue);
 
             return opacity >= 1.0
                 ? color
-                : RColor.FromArgb((int)Math.Round(color.A * opacity), color.R, color.G, color.B);
+                : PaintColor.FromArgb((int)Math.Round(color.A * opacity), color.R, color.G, color.B);
         }
 
         /// <summary>

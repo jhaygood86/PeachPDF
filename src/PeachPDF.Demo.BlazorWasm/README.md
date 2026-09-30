@@ -36,12 +36,21 @@ web or to a local file resolves to nothing.
 - **This is not a performance benchmark.** Blazor WebAssembly interprets IL rather than JIT-compiling it,
   so the same document renders far faster on any non-browser host. Enabling `RunAOTCompilation` would
   narrow the gap at a large cost in download size and build time, and it is not what this demo is for.
-- **Fonts are WOFF 1.0, not WOFF2.** WOFF2 is Brotli-compressed and a browser/WebAssembly host has no
-  Brotli decoder — `System.IO.Compression.Brotli` throws there, and installing the `wasm-tools` workload
-  to natively relink the runtime does not change it (measured; the limitation is managed-side). WOFF 1.0
-  uses deflate and works, at about 2.3 MB for the twelve faces against WOFF2's 1.6 MB.
-- **`hyphens: auto` does nothing here**, for the same reason: the hyphenation patterns are
-  Brotli-compressed. Text lays out unhyphenated rather than the render failing. The page says so.
+- **Fonts are WOFF 1.0, not WOFF2**, for a historical reason that no longer holds: `System.IO.Compression.BrotliStream`
+  throws `PlatformNotSupportedException` in the browser (installing the `wasm-tools` workload to natively relink the
+  runtime does not change it — measured; the limitation is managed-side), so this demo used to have no way to read
+  WOFF2's Brotli-compressed tables at all. That gap is closed now (see the next bullet), but the shipped Liberation
+  faces were not switched over — WOFF 1.0's deflate compression is close enough (about 2.3 MB for the twelve faces
+  against WOFF2's 1.6 MB) that re-doing the OFL round-trip verification `convert_liberation_webfonts.py` requires
+  wasn't worth it just for this demo's own UI text. A `@font-face` pointing at a WOFF2 file in an *uploaded* document
+  works correctly, and is what actually exercises the fix (see the next bullet).
+- **`hyphens: auto` and WOFF2 fonts both work now.** Program.cs registers a pure-managed Brotli decoder
+  (`PeachDrawing.Text.Brotli`, gated on `OperatingSystem.IsBrowser()`) at startup, which every Brotli-compressed
+  resource this library reads — the shared hyphenation/dictionary-line-breaking data and WOFF2 font tables alike —
+  falls back to wherever the runtime's own `BrotliStream` would otherwise throw. `hyphens: auto` hyphenates
+  normally here, Thai/Lao/Khmer/Burmese text wraps at dictionary word boundaries, and a WOFF2 `@font-face` in an
+  uploaded document loads like any other font. See `PeachDrawing.Text.Brotli`'s own `PORTING-NOTES.md` for exactly
+  what was ported and verified.
 - **The footer names the build it is running.** A `GenerateDemoBuildInfo` target bakes in the library's
   `PackageVersion`, this commit, and whether the two agree — a release is tagged `v{PackageVersion}`, so a
   commit that is not that tag's commit is a prerelease of it, and the footer links the commit instead of

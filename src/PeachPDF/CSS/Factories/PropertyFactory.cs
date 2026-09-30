@@ -95,9 +95,17 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.BoxShadow, () => new BoxShadowProperty(), true);
             AddLonghand(PropertyNames.MixBlendMode, () => new MixBlendModeProperty());
             AddLonghand(PropertyNames.Filter, () => new FilterProperty(), true);
-            AddLonghand(PropertyNames.BackdropFilter, () => new BackdropFilterProperty(PropertyNames.BackdropFilter), true);
-            AddLonghand(PropertyNames.WebkitBackdropFilter, () => new BackdropFilterProperty(PropertyNames.WebkitBackdropFilter), true);
+            AddLonghand(PropertyNames.BackdropFilter, () => new BackdropFilterProperty(), true);
             AddLonghand(PropertyNames.BoxDecorationBreak, () => new BoxDecorationBreak());
+            foreach (var legacyPrefix in LegacyBoxProperty.Prefixes)
+            {
+                foreach (var legacyBase in new[] { LegacyBoxProperty.Orient, LegacyBoxProperty.Direction, LegacyBoxProperty.Pack, LegacyBoxProperty.Align })
+                {
+                    var prefix = legacyPrefix;
+                    var baseName = legacyBase;
+                    AddLonghand(prefix + baseName, () => new LegacyBoxProperty(prefix, baseName));
+                }
+            }
             AddLonghand(PropertyNames.BreakAfter, () => new BreakAfterProperty());
             AddLonghand(PropertyNames.BreakBefore, () => new BreakBeforeProperty());
             AddLonghand(PropertyNames.BreakInside, () => new BreakInsideProperty());
@@ -494,10 +502,10 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.Width, () => new WidthProperty(), true);
             AddLonghand(PropertyNames.WordBreak, () => new WordBreakProperty(), true);
             AddLonghand(PropertyNames.WordSpacing, () => new WordSpacingProperty(), true);
-            AddLonghand(PropertyNames.WordWrap, () => new OverflowWrapProperty());
             AddLonghand(PropertyNames.WritingMode, () => new WritingModeProperty());
             AddLonghand(PropertyNames.ZIndex, () => new ZIndexProperty(), true);
             AddLonghand(PropertyNames.ObjectFit, () => new ObjectFitProperty());
+            AddLonghand(PropertyNames.ImageRendering, () => new ImageRenderingProperty());
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
             AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
@@ -685,6 +693,7 @@ namespace PeachPDF.CSS
 
         public Property Create(string name)
         {
+            name = VendorPropertyAliases.Canonicalize(name);
             return CreateLonghand(name) ?? CreateShorthand(name) ?? CreateCustomProperty(name);
         }
 
@@ -731,12 +740,12 @@ namespace PeachPDF.CSS
 
         public Property CreateLonghand(string name)
         {
-            return _longhands.TryGetValue(name, out var createProperty) ? createProperty() : null;
+            return _longhands.TryGetValue(VendorPropertyAliases.Canonicalize(name), out var createProperty) ? createProperty() : null;
         }
 
         public ShorthandProperty CreateShorthand(string name)
         {
-            return _shorthands.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
+            return _shorthands.TryGetValue(VendorPropertyAliases.Canonicalize(name), out var propertyCreator) ? propertyCreator() : null;
         }
 
         public Property[] CreateLonghandsFor(string name)
@@ -748,11 +757,12 @@ namespace PeachPDF.CSS
 
         public bool IsShorthand(string name)
         {
-            return _shorthands.ContainsKey(name);
+            return _shorthands.ContainsKey(VendorPropertyAliases.Canonicalize(name));
         }
 
         public bool IsAnimatable(string name)
         {
+            name = VendorPropertyAliases.Canonicalize(name);
             return _longhands.ContainsKey(name)
                 ? _animatables.Contains(name)
                 : GetLonghands(name).Any(_ => _animatables.Contains(name));
@@ -760,7 +770,7 @@ namespace PeachPDF.CSS
 
         public string[] GetLonghands(string name)
         {
-            return _mappings.TryGetValue(name, out var mapping)
+            return _mappings.TryGetValue(VendorPropertyAliases.Canonicalize(name), out var mapping)
                 ? mapping
                 : Array.Empty<string>();
         }

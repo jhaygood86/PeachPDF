@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Integration
         /// would see a fragmentainer the real call never gives it.
         /// </summary>
         private static async Task RunEngine(
-            RGraphics g, HtmlContainerInt container, CssBox table, BreakToken? resume)
+            Canvas g, HtmlContainerInt container, CssBox table, BreakToken? resume)
         {
             var previous = container.DetachFragmentainer();
 
@@ -78,7 +78,7 @@ namespace PeachPDF.Tests.Integration
         /// <paramref name="continuePass"/>, which runs the engine over it again.
         /// </summary>
         private static async Task WithALaidOutTable(
-            string markup, Func<CssBox, HtmlContainerInt, RGraphics, Task> continuePass) =>
+            string markup, Func<CssBox, HtmlContainerInt, Canvas, Task> continuePass) =>
             await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(markup), pageHeight: PageHeight, margin: Margin,
                 after: (root, container, g) => continuePass(TableOf(root), container, g));
@@ -209,7 +209,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException("layout failed while the header was being measured");
         }
 

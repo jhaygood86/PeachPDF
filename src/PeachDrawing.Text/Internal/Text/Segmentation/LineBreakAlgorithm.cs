@@ -57,7 +57,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             // LB2: never break at the start of text, which is the default, LineBreakOpportunity.Prohibited.
             var units = BuildUnits(text, options, out int unitCount);
 
-            // LB1 leaves the words of Thai and Khmer, which have no spaces, to a dictionary: where one starts, a line may end
+            // LB1 leaves the words of Thai, Lao, Khmer and Burmese, which have no spaces, to a dictionary: where one starts, a line may end
             // (the rules on either side see two letters and keep them together).
             var wordStarts = options.ComplexContext == ComplexContextBreaking.Dictionary ? FindComplexContextWordStarts(text) : null;
 
@@ -91,7 +91,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         }
 
         /// <summary>
-        /// For each scalar, whether it starts a word of Thai or Khmer text (a maximal run of Complex_Context characters
+        /// For each scalar, whether it starts a word of Thai, Lao, Khmer or Burmese text (a maximal run of Complex_Context characters
         /// of one script, which a zero width joiner or non-joiner does not end), or <see langword="null"/> when there are none.
         /// </summary>
         private static bool[]? FindComplexContextWordStarts(in ScalarText text)

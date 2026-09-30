@@ -369,16 +369,15 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Frozen;");
             sb.AppendLine("using System.Collections.Generic;");
-            sb.AppendLine("using PeachPDF.Html.Adapters;");
-            sb.AppendLine("using PeachPDF.Html.Adapters.Entities;");
+            sb.AppendLine("using PeachDrawing.Core;");
             sb.AppendLine();
             sb.AppendLine("namespace PeachPDF.Svg");
             sb.AppendLine("{");
             sb.AppendLine("    /// <summary>Everything a generated SVG customSetter/default setter needs beyond the raw value — see CLAUDE.md's generator section.</summary>");
             sb.AppendLine("    internal readonly struct SvgPropertyContext");
             sb.AppendLine("    {");
-            sb.AppendLine("        public RAdapter Adapter { get; }");
-            sb.AppendLine("        public RColor ContextColor { get; }");
+            sb.AppendLine("        public RenderContext Adapter { get; }");
+            sb.AppendLine("        public PaintColor ContextColor { get; }");
             sb.AppendLine();
             sb.AppendLine("        /// <summary>The current viewport's diagonal (per the SVG percentage-length formula) — needed to resolve a percentage stroke-width/dashoffset/dasharray entry; null where no viewport is established yet.</summary>");
             sb.AppendLine("        public double? ViewportDiagonal { get; }");
@@ -389,7 +388,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>The element's own font, for the font-relative units (em/ex/ch/cap/ic/lh and the root-element variants) in a stroke-width/dashoffset/dasharray length; null where no font is in scope, which resolves them against the 16px initial size and each unit's spec fallback.</summary>");
             sb.AppendLine("        public ISvgLengthBasis? LengthBasis { get; }");
             sb.AppendLine();
-            sb.AppendLine("        public SvgPropertyContext(RAdapter adapter, RColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind, ISvgLengthBasis? lengthBasis = null)");
+            sb.AppendLine("        public SvgPropertyContext(RenderContext adapter, PaintColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind, ISvgLengthBasis? lengthBasis = null)");
             sb.AppendLine("        {");
             sb.AppendLine("            Adapter = adapter;");
             sb.AppendLine("            ContextColor = contextColor;");
@@ -421,7 +420,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>Validation only, with a nominal default context — the @supports render-layer oracle for SVG.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(string name, string value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            var ctx = new SvgPropertyContext(new global::PeachPDF.Adapters.PdfSharpAdapter(), RColor.Black, null, static p => p);");
+            sb.AppendLine("            var ctx = new SvgPropertyContext(new global::PeachPDF.Adapters.PdfSharpAdapter(), PaintColor.Black, null, static p => p);");
             sb.AppendLine("            return _validators.TryGetValue(name, out var validator) && validator(ctx, value);");
             sb.AppendLine("        }");
 

@@ -34,6 +34,8 @@ PeachDrawing.Text.AxisTags : static class
   field const String Slant
   field const String Weight
   field const String Width
+PeachDrawing.Text.Compression.BrotliDecompression : static class
+  method static Void SetDecompressor(Func<Stream, Stream> decompressor)
 PeachDrawing.Text.Export.ExportedFont : sealed class
   property Boolean HasCffOutlines { get; }
   property Boolean IsSubset { get; }
@@ -470,6 +472,8 @@ PeachDrawing.Text.Outlines.GlyphOutline : sealed class
   property Boolean IsEmpty { get; }
   property Boolean IsGridFitted { get; }
   property Double PixelsPerEm { get; }
+  property Double PixelsPerEmX { get; }
+  property Double PixelsPerEmY { get; }
   property IReadOnlyList<OutlineContour> Contours { get; }
   property Nullable<Double> GridFittedAdvance { get; }
 PeachDrawing.Text.Outlines.GridFitting : enum Int32
@@ -491,6 +495,8 @@ PeachDrawing.Text.Outlines.OutlinePoint : struct
 PeachDrawing.Text.Outlines.OutlineRequest : struct
   property Boolean StemDarkening { get; init; }
   property Double PixelsPerEm { get; init; }
+  property Double PixelsPerEmX { get; init; }
+  property Double PixelsPerEmY { get; init; }
   property GridFitting GridFitting { get; init; }
 PeachDrawing.Text.Outlines.OutlineSegment : struct
   method static OutlineSegment Cubic(OutlinePoint control1, OutlinePoint control2, OutlinePoint end)
@@ -644,13 +650,13 @@ PeachDrawing.Text.Shaping.PlacedGlyph : struct
   property Nullable<Int32> AttachedToIndex { get; init; }
 PeachDrawing.Text.Shaping.ShapeSettings : struct
   ctor()
-  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal)
+  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal, IReadOnlyList<KhmerCategory> KhmerCategories = null)
   field static ShapeSettings Default
   method Boolean Equals(Object obj)
   method Boolean Equals(ShapeSettings other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode)
+  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode, out IReadOnlyList<KhmerCategory> KhmerCategories)
   property Boolean Kerning { get; init; }
   property Boolean ReverseForDisplay { get; init; }
   property CapsMode Caps { get; init; }
@@ -658,6 +664,7 @@ PeachDrawing.Text.Shaping.ShapeSettings : struct
   property EmojiMode EmojiMode { get; init; }
   property IReadOnlyList<ArabicJoiningForm> JoiningForms { get; init; }
   property IReadOnlyList<FeatureSetting> ExplicitFeatures { get; init; }
+  property IReadOnlyList<KhmerCategory> KhmerCategories { get; init; }
   property IReadOnlyList<UseCategory> UseCategories { get; init; }
   property LigatureSet Ligatures { get; init; }
   property NumeralSet Numeric { get; init; }
@@ -772,6 +779,7 @@ PeachDrawing.Text.TypefaceQuery : struct
   method Int32 GetHashCode()
   method String ToString()
   method Void Deconstruct(out Double Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes, out Nullable<Double> WidthPercent, out Nullable<Double> ObliqueAngle)
+  method static TypefaceQuery From(Double weight, Double widthPercent, Boolean isItalic, Nullable<Rune> mustCover, IReadOnlyList<AxisSetting> axes, Nullable<Double> obliqueSkewSinus)
   property Boolean IsItalic { get; init; }
   property Double Weight { get; init; }
   property IReadOnlyList<AxisSetting> Axes { get; init; }
@@ -893,6 +901,25 @@ PeachDrawing.Text.Unicode.ExplicitPush : enum Byte
   Rlo = 3
 PeachDrawing.Text.Unicode.Hyphenator : static class
   method static IReadOnlyList<Int32> FindBreakPoints(String word, String language)
+PeachDrawing.Text.Unicode.KhmerCategory : enum Byte
+  C = 1
+  DottedCircle = 7
+  H = 3
+  Other = 0
+  Placeholder = 6
+  Ra = 8
+  Robatic = 13
+  V = 2
+  VAbv = 9
+  VBlw = 10
+  VPre = 11
+  VPst = 12
+  Xgroup = 14
+  Ygroup = 15
+  ZWJ = 5
+  ZWNJ = 4
+PeachDrawing.Text.Unicode.KhmerShaping : static class
+  method static KhmerCategory Classify(Int32 codepoint)
 PeachDrawing.Text.Unicode.LineBreakOpportunity : enum Byte
   Allowed = 1
   Mandatory = 2

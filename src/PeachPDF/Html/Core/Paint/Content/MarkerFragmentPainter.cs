@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -15,7 +14,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </summary>
     internal sealed class MarkerFragmentPainter : IFragmentContentPainter
     {
-        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, Canvas g, BoxFragment fragment)
         {
             var box = (CssBoxMarker)fragment.Box;
 
@@ -42,12 +41,12 @@ namespace PeachPDF.Html.Core.Paint.Content
             else
             {
                 g.DrawString(box.Text ?? string.Empty, box.ActualFont, box.ActualColor,
-                    new RPoint(wordRect.X, wordRect.Y), new RSize(wordRect.Width, wordRect.Height),
+                    new PaintPoint(wordRect.X, wordRect.Y), new Size(wordRect.Width, wordRect.Height),
                     letterSpacing: 0, fontPalette: null, box.ActualTextShapingFeatures);
             }
         }
 
-        private static void PaintMarkerImage(RGraphics g, CssBoxMarker box, RRect rect)
+        private static void PaintMarkerImage(Canvas g, CssBoxMarker box, Rect rect)
         {
             CssImagePainter.Paint(g, box.ContentImage!, layerIndex: 0,
                 originRect: rect, clipRect: rect, roundedClipPath: null,
@@ -64,7 +63,7 @@ namespace PeachPDF.Html.Core.Paint.Content
                 });
         }
 
-        private static void PaintShape(RGraphics g, CssBoxMarker box, RRect rect)
+        private static void PaintShape(Canvas g, CssBoxMarker box, Rect rect)
         {
             if (box.MarkerShape == Keywords.Square)
             {

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
@@ -13,8 +13,8 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class PositiveZIndexLayerPaintOrderTests
     {
-        private static readonly RColor Blue = RColor.FromArgb(10, 20, 200);
-        private static readonly RColor Green = RColor.FromArgb(10, 200, 20);
+        private static readonly PaintColor Blue = PaintColor.FromArgb(10, 20, 200);
+        private static readonly PaintColor Green = PaintColor.FromArgb(10, 200, 20);
 
         [Fact]
         public async Task RaisedChild_PaintsOverItsTablesCollapsedBorders()
@@ -26,9 +26,9 @@ namespace PeachPDF.Tests.Integration
                 "<div style='position: relative; z-index: 1; margin: -6pt; background: rgb(10,20,200)'>raised</div></td></tr>" +
                 "</table>");
 
-            var lastBorder = g.Log.FindLastIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.Color == Green
-                                                      || e is TestRecordingGraphics.DrawPolygonCall p && p.Color == Green);
-            var raised = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.Color == Blue);
+            var lastBorder = g.Log.FindLastIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == Green
+                                                      || e is TestRecordingGraphics.DrawPolygonCall p && p.PaintColor == Green);
+            var raised = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == Blue);
 
             Assert.True(lastBorder >= 0, "no collapsed border was painted");
             Assert.True(raised > lastBorder, "a collapsed border was painted over a positive z-index child");
@@ -43,7 +43,7 @@ namespace PeachPDF.Tests.Integration
                 "item</li></ol>");
 
             var marker = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawStringCall { Text: "1." });
-            var raised = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.Color == Blue);
+            var raised = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawRectCall r && r.PaintColor == Blue);
 
             Assert.True(marker >= 0, "no marker was painted");
             Assert.True(raised > marker, "the list marker was painted over a positive z-index child");

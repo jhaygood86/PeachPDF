@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -100,6 +100,13 @@ namespace PeachPDF.Tests.Integration
         [InlineData("300", "lighter", 100)]
         [InlineData("600", "lighter", 400)]
         [InlineData("800", "lighter", 700)]
+        // CSS Fonts 4 §2.2.1 bands where its table disagrees with the CSS2.1 table this used to follow
+        // (CSS2.1 would give 400/900/400/700 respectively - see FontWeightResolverTests for the unit-level
+        // coverage of every such band).
+        [InlineData("380", "bolder", 700)]
+        [InlineData("520", "bolder", 700)]
+        [InlineData("520", "lighter", 100)]
+        [InlineData("720", "lighter", 400)]
         public async Task FontWeight_BolderLighter_StepsRelativeToRealParentWeight(string parentWeight, string childKeyword, int expected)
         {
             var html = $"""

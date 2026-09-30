@@ -380,7 +380,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Returns a new path holding this path's own geometry clipped to <paramref name="rect"/> - see
         /// <see cref="CoreGraphicsPath.ClipToRect(double,double,double,double)"/> (and, above it,
-        /// <c>RGraphicsPath.ClipToRect</c>) for what "clipped" means here and why a rectangle-only clip
+        /// <c>GraphicsPath.ClipToRect</c>) for what "clipped" means here and why a rectangle-only clip
         /// is what this needs to support.
         /// </summary>
         public XGraphicsPath ClipToRect(XRect rect)

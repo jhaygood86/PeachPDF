@@ -379,6 +379,91 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void AnItalicFace_BeatsAnObliqueRangeThatIsAtOrBelowZero_ForAPositiveObliqueAngle()
+        {
+            // The family's only oblique range leans left of upright (entirely at or below 0), and a positive oblique angle is requested.
+            // CSS Fonts 4 §5.2 tries the oblique ranges on the same (positive) side of upright first, then the italic faces, and only then
+            // crosses over to the ranges on the other side - so the italic face must win here, not the negative range.
+            var resolver = Build(Oblique(-30, -20), Italic());
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 20));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+            Assert.Null(info.DeclaredRanges);
+        }
+
+        [Fact]
+        public void AnItalicRequest_StillPrefersItsItalicFace_OverAnObliqueRangeAtOrBelowZero()
+        {
+            // The plain `italic` keyword (no explicit angle) already prefers a declared italic face over any oblique range, whichever
+            // side of upright that range leans - unaffected by the explicit-angle fall-through fix above.
+            var resolver = Build(Oblique(-30, -20), Italic());
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+        }
+
+        [Fact]
+        public void AnUprightFace_BeatsAnObliqueRangeThatExcludesZero_ForAnExplicitObliqueZeroRequest()
+        {
+            // `oblique 0deg` is upright's equivalent on the specification's scale: an upright face should win over an oblique range that
+            // merely happens to exclude 0, the same preference `PreferStrictSlant` already gives upright requests.
+            var resolver = Build(Oblique(10, 14), Upright());
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 0));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+            Assert.Null(info.DeclaredRanges);
+        }
+
+        [Fact]
+        public void AnUprightFace_BeatsAnObliqueRangeThatIncludesZero_ForAnExplicitObliqueZeroRequest()
+        {
+            // Even a range that does include 0 is only "equivalent to upright" for the text it draws - an upright face declared as such
+            // is still the more precise match, same as `AnUprightFace_BeatsAnObliqueRangeForUprightText_HoweverTheyWereDeclared` above.
+            var resolver = Build(Oblique(-10, 10), Upright());
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 0));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+            Assert.Null(info.DeclaredRanges);
+        }
+
+        [Fact]
+        public void AnObliqueZeroRequest_FallsBackToTheOldSearch_WhereThereIsNoUprightFace()
+        {
+            // With no upright face and no range covering 0, an explicit `oblique 0deg` request behaves like any other non-negative angle:
+            // the nearest oblique range wins.
+            var resolver = Build(Oblique(20, 30), Oblique(10, 14));
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 0));
+
+            Assert.Equal(new AxisRange(10, 14), info.DeclaredRanges!.Oblique);
+        }
+
+        [Fact]
+        public void WidthThenStyleThenWeight_OrderingAndPreferStrictSlant_StillHoldAfterTheObliqueFallThroughFix()
+        {
+            // Regression guard for the ordering the prior face-matching PR established: width narrows before style, style narrows before
+            // weight, and PreferStrictSlant still prefers a genuinely upright/italic face over a range that merely covers the request.
+            var widthFirst = Build(At(400, italic: true, width: 75), At(400, italic: false, width: 100));
+            var condensedItalicRequest = widthFirst.ResolveFace(Family, Request(400, 75, italic: true));
+            Assert.Equal(FaceNameOf(BundledFonts.Ttf), condensedItalicRequest.FaceName);
+            Assert.False(condensedItalicRequest.MustSimulateItalic);
+
+            var styleBeforeWeight = Build(At(700, italic: false, width: 100), At(300, italic: true, width: 100));
+            var italicBoldRequest = styleBeforeWeight.ResolveFace(Family, Request(700, italic: true));
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), italicBoldRequest.FaceName);
+            Assert.True(italicBoldRequest.MustSimulateBold);
+            Assert.False(italicBoldRequest.MustSimulateItalic);
+
+            var strictSlant = Build(new FontResolver.DeclaredFace(null, false, null, null), new FontResolver.DeclaredFace(null, true, null, new AxisRange(0, 14)));
+            var uprightRequest = strictSlant.ResolveFace(Family, Request(400, italic: false));
+            Assert.Equal(FaceNameOf(BundledFonts.Ttf), uprightRequest.FaceName);
+        }
+
+        [Fact]
         public void ATypefaceKey_CarriesAFractionalWeight_AndTheAngleOfAnItalicRequestOnly()
         {
             var whole = new FontResolvingOptions(FaceStyle.Regular, 350).ComputeTypefaceKey("F");

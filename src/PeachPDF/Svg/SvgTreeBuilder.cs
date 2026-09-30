@@ -13,8 +13,7 @@
 using PeachDrawing.Text.Shaping;
 using MimeKit;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -44,8 +43,8 @@ namespace PeachPDF.Svg
         /// <summary>Guards against a pathological/malicious &lt;use&gt; reference cycle.</summary>
         private const int MaxUseDepth = 8;
 
-        private readonly RAdapter _adapter;
-        private readonly RColor _contextColor;
+        private readonly RenderContext _adapter;
+        private readonly PaintColor _contextColor;
         private readonly IReadOnlyDictionary<string, SvgImageResource>? _prefetchedImages;
         private readonly Dictionary<string, ISvgSourceNode> _nodesById = new(StringComparer.Ordinal);
         private readonly List<FeImage> _feImageReferences = [];
@@ -113,7 +112,7 @@ namespace PeachPDF.Svg
         private double? ViewportDiagonal =>
             _viewportWidth is { } w && _viewportHeight is { } h ? Math.Sqrt((w * w + h * h) / 2.0) : null;
 
-        private SvgTreeBuilder(RAdapter adapter, RColor contextColor, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages)
+        private SvgTreeBuilder(RenderContext adapter, PaintColor contextColor, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages)
         {
             _adapter = adapter;
             _contextColor = contextColor;
@@ -149,11 +148,11 @@ namespace PeachPDF.Svg
             SvgPaint Stroke,
             double StrokeWidth,
             double StrokeMiterLimit,
-            RFillMode FillRule,
+            FillMode FillRule,
             double FillOpacity,
             double StrokeOpacity,
-            RLineCap StrokeLineCap,
-            RLineJoin StrokeLineJoin,
+            LineCap StrokeLineCap,
+            LineJoin StrokeLineJoin,
             double[] StrokeDashArray,
             double StrokeDashOffset,
             string? MarkerStartRef,
@@ -166,15 +165,15 @@ namespace PeachPDF.Svg
             SvgPaint ContextStroke)
         {
             public static readonly InheritedPaint Initial = new(
-                Fill: SvgPaint.Solid(RColor.Black),
+                Fill: SvgPaint.Solid(PaintColor.Black),
                 Stroke: SvgPaint.None,
                 StrokeWidth: 1,
                 StrokeMiterLimit: 4,
-                FillRule: RFillMode.Nonzero,
+                FillRule: FillMode.Nonzero,
                 FillOpacity: 1,
                 StrokeOpacity: 1,
-                StrokeLineCap: RLineCap.Butt,
-                StrokeLineJoin: RLineJoin.Miter,
+                StrokeLineCap: LineCap.Butt,
+                StrokeLineJoin: LineJoin.Miter,
                 StrokeDashArray: [],
                 StrokeDashOffset: 0,
                 MarkerStartRef: null,
@@ -193,7 +192,7 @@ namespace PeachPDF.Svg
         /// inherits them from ANY ancestor (<c>&lt;g&gt;</c>/<c>&lt;svg&gt;</c>/<c>&lt;a&gt;</c>/<c>&lt;use&gt;</c>),
         /// per normal SVG/CSS inheritance - not just from its own <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>
         /// text-run ancestors. Deliberately kept separate from <see cref="InheritedPaint"/> and carried
-        /// as cheap resolved values (no <see cref="RFont"/>): only <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>/
+        /// as cheap resolved values (no <see cref="Font"/>): only <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>/
         /// <c>&lt;tref&gt;</c> resolve an actual font from it, so non-text elements only propagate the
         /// context, never realize a font. Relative <c>font-size</c> (<c>em</c>/<c>ex</c>/<c>%</c>) resolves
         /// against <see cref="Size"/> (the parent's used size); <c>rem</c> against the root's (see
@@ -236,10 +235,10 @@ namespace PeachPDF.Svg
         /// glyph document). Omitted, there is no context element and the keyword paints nothing (SVG 2, painting).
         /// </param>
         /// <param name="contextStroke">What <c>context-stroke</c> stands for there; see <paramref name="contextFill"/>.</param>
-        public static SvgDocument Build(ISvgSourceNode root, RAdapter adapter, RColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null,
+        public static SvgDocument Build(ISvgSourceNode root, RenderContext adapter, PaintColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null,
             SvgPaint? contextFill = null, SvgPaint? contextStroke = null)
         {
-            var builder = new SvgTreeBuilder(adapter, contextColor ?? RColor.Black, prefetchedImages)
+            var builder = new SvgTreeBuilder(adapter, contextColor ?? PaintColor.Black, prefetchedImages)
             {
                 _seed = InheritedPaint.Initial with { ContextFill = contextFill ?? SvgPaint.None, ContextStroke = contextStroke ?? SvgPaint.None },
             };
@@ -252,7 +251,7 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Fetches every non-<c>data:</c> <c>&lt;image&gt;</c> href in <paramref name="root"/>'s tree
         /// through the same async resource pipeline HTML <c>&lt;img&gt;</c> uses
-        /// (<see cref="RAdapter.GetResourceStream"/> over network/<c>file:</c>/archive schemes), so the
+        /// (<see cref="RenderContext.GetResourceStream"/> over network/<c>file:</c>/archive schemes), so the
         /// synchronous <see cref="Build"/> can resolve them from the returned map. Runs in the caller's
         /// already-async context (measure/load), before the sync build. <c>data:</c> hrefs are skipped
         /// here - they decode in-memory inside <see cref="BuildImage"/> with no I/O.
@@ -1058,11 +1057,11 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Decodes raster image bytes (from either a <c>data:</c> URI or a fetched resource) into an
-        /// <see cref="RImage"/>, returning null on a decode failure - the same non-fatal
+        /// <see cref="Image"/>, returning null on a decode failure - the same non-fatal
         /// <see cref="InvalidOperationException"/> <c>ImageLoadHandler.LoadImageFromStream</c> already
         /// swallows.
         /// </summary>
-        private RImage? DecodeRasterImage(byte[] bytes)
+        private Image? DecodeRasterImage(byte[] bytes)
         {
             try
             {
@@ -1369,7 +1368,7 @@ namespace PeachPDF.Svg
         /// Resolves an element's own declared font properties (font-family/font-size/font-weight/
         /// font-style, via <see cref="ResolveStyledAttr"/>) layered over the <paramref name="inherited"/>
         /// context, honoring the literal <c>inherit</c> keyword. Cheap - it produces resolved values only
-        /// (no <see cref="RFont"/>); a text run realizes the actual font from the result. Used both to
+        /// (no <see cref="Font"/>); a text run realizes the actual font from the result. Used both to
         /// propagate the font context through container elements and to resolve a text run's own font.
         /// </summary>
         private FontContext ComputeFontContext(ISvgSourceNode node, FontContext inherited)
@@ -1504,7 +1503,7 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// The font a length is resolved against (<see cref="ISvgLengthBasis"/>): a <see cref="FontContext"/> - the
-        /// element's own, computed on first use when built from a node - realized as an <see cref="RFont"/> only when a
+        /// element's own, computed on first use when built from a node - realized as an <see cref="Font"/> only when a
         /// measured unit actually asks for a measurement, then cached per metric. 1em is the context's size once any
         /// element on the way down declared a <c>font-size</c>, else the CSS initial 16px.
         /// </summary>
@@ -1554,11 +1553,11 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Realizes <paramref name="font"/> the way a text run does, so a measurement is taken from the very face the run would use.</summary>
-        private RFont? RealizeFont(FontContext font)
+        private Font? RealizeFont(FontContext font)
         {
-            var fontStyle = RFontStyle.Regular;
-            if (font.Bold) fontStyle |= RFontStyle.Bold;
-            if (font.Italic) fontStyle |= RFontStyle.Italic;
+            var fontStyle = PaintFontStyle.Regular;
+            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
+            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
 
             var size = Math.Max(font.Size, 1);
             return _adapter.GetFont(font.Family, size, fontStyle, stretch: font.Stretch)
@@ -1682,9 +1681,9 @@ namespace PeachPDF.Svg
 
             var runFont = ComputeFontContext(node, fontContext);
 
-            var fontStyle = RFontStyle.Regular;
-            if (runFont.Bold) fontStyle |= RFontStyle.Bold;
-            if (runFont.Italic) fontStyle |= RFontStyle.Italic;
+            var fontStyle = PaintFontStyle.Regular;
+            if (runFont.Bold) fontStyle |= PaintFontStyle.Bold;
+            if (runFont.Italic) fontStyle |= PaintFontStyle.Italic;
 
             run.Font = _adapter.GetFont(runFont.Family, runFont.Size, fontStyle, stretch: runFont.Stretch)
                        ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size, fontStyle, stretch: runFont.Stretch);
@@ -2192,7 +2191,7 @@ namespace PeachPDF.Svg
             var inAttr = node.GetAttribute("in");
             var floodColorAttr = node.GetAttribute("flood-color");
             var color = string.IsNullOrWhiteSpace(floodColorAttr)
-                ? RColor.Black
+                ? PaintColor.Black
                 : floodColorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
                     : new CssValueParser(_adapter).GetActualColor(floodColorAttr);
@@ -2201,7 +2200,7 @@ namespace PeachPDF.Svg
             {
                 In = inAttr,
                 Result = node.GetAttribute("result"),
-                Color = color,
+                PaintColor = color,
                 Opacity = SvgValueParsers.ParseOpacity(node.GetAttribute("flood-opacity")),
             };
         }
@@ -2279,31 +2278,31 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// <c>mode</c>'s keyword vocabulary is exactly <see cref="RBlendMode"/>'s own member set
+        /// <c>mode</c>'s keyword vocabulary is exactly <see cref="PaintBlendMode"/>'s own member set
         /// (separable + non-separable PDF 32000-1 §11.3.5 modes), so this maps 1:1 rather than through
         /// an intermediate enum - unlike CSS <c>mix-blend-mode</c> (<c>FragmentPainter</c>'s own mapping
-        /// switch), which goes through the HTML-side <c>BlendMode</c> enum for CSS-OM reasons that don't
+        /// switch), which goes through the HTML-side <c>PaintBlendMode</c> enum for CSS-OM reasons that don't
         /// apply to this hand-parsed SVG attribute. An unrecognized/absent value defaults to Normal, the
         /// same lenient-fallback shape every other enumerated presentation attribute in this file uses.
         /// </summary>
-        private static RBlendMode ParseFeBlendMode(string? value) => value?.Trim().ToLowerInvariant() switch
+        private static PaintBlendMode ParseFeBlendMode(string? value) => value?.Trim().ToLowerInvariant() switch
         {
-            "multiply" => RBlendMode.Multiply,
-            "screen" => RBlendMode.Screen,
-            "overlay" => RBlendMode.Overlay,
-            "darken" => RBlendMode.Darken,
-            "lighten" => RBlendMode.Lighten,
-            "color-dodge" => RBlendMode.ColorDodge,
-            "color-burn" => RBlendMode.ColorBurn,
-            "hard-light" => RBlendMode.HardLight,
-            "soft-light" => RBlendMode.SoftLight,
-            "difference" => RBlendMode.Difference,
-            "exclusion" => RBlendMode.Exclusion,
-            "hue" => RBlendMode.Hue,
-            "saturation" => RBlendMode.Saturation,
-            "color" => RBlendMode.Color,
-            "luminosity" => RBlendMode.Luminosity,
-            _ => RBlendMode.Normal,
+            "multiply" => PaintBlendMode.Multiply,
+            "screen" => PaintBlendMode.Screen,
+            "overlay" => PaintBlendMode.Overlay,
+            "darken" => PaintBlendMode.Darken,
+            "lighten" => PaintBlendMode.Lighten,
+            "color-dodge" => PaintBlendMode.ColorDodge,
+            "color-burn" => PaintBlendMode.ColorBurn,
+            "hard-light" => PaintBlendMode.HardLight,
+            "soft-light" => PaintBlendMode.SoftLight,
+            "difference" => PaintBlendMode.Difference,
+            "exclusion" => PaintBlendMode.Exclusion,
+            "hue" => PaintBlendMode.Hue,
+            "saturation" => PaintBlendMode.Saturation,
+            "color" => PaintBlendMode.Color,
+            "luminosity" => PaintBlendMode.Luminosity,
+            _ => PaintBlendMode.Normal,
         };
 
         private FilterPrimitive? BuildFeColorMatrix(ISvgSourceNode node)
@@ -2438,7 +2437,7 @@ namespace PeachPDF.Svg
 
             var colorAttr = node.GetAttribute("flood-color");
             var color = string.IsNullOrWhiteSpace(colorAttr)
-                ? RColor.Black
+                ? PaintColor.Black
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
                     : new CssValueParser(_adapter).GetActualColor(colorAttr);
@@ -2451,7 +2450,7 @@ namespace PeachPDF.Svg
                 Dy = ParseFilterNumber(node.GetAttribute("dy"), 2),
                 StdDeviationX = deviation.First,
                 StdDeviationY = deviation.Second,
-                Color = color,
+                PaintColor = color,
                 Opacity = SvgValueParsers.ParseOpacity(node.GetAttribute("flood-opacity")),
             };
         }
@@ -2598,7 +2597,7 @@ namespace PeachPDF.Svg
 
             var colorAttr = node.GetAttribute("lighting-color");
             var color = string.IsNullOrWhiteSpace(colorAttr)
-                ? RColor.White
+                ? PaintColor.White
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
                     : new CssValueParser(_adapter).GetActualColor(colorAttr);
@@ -2702,7 +2701,7 @@ namespace PeachPDF.Svg
                     child.GetAttribute("style"),
                     _adapter);
 
-                stops.Add(new SvgGradientStop { Offset = offset, Color = color });
+                stops.Add(new SvgGradientStop { Offset = offset, PaintColor = color });
             }
 
             // Defensive: stop offsets must be monotonically non-decreasing per spec.

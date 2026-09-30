@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         private static HtmlContainerInt CreateContainer(double bandHeight = BandHeight) =>
             new(new PdfSharpAdapter())
             {
-                PageSize = new RSize(500, bandHeight),
+                PageSize = new Size(500, bandHeight),
                 MarginTop = MarginTop,
             };
 

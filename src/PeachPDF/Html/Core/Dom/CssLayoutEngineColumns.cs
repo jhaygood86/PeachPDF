@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -49,7 +49,7 @@ namespace PeachPDF.Html.Core.Dom
         private static readonly IReadOnlySet<CssBox> NoBoxes = FrozenSet<CssBox>.Empty;
 
 
-        public static async ValueTask PerformLayout(RGraphics g, CssBox columnsBox, BreakToken? resume = null)
+        public static async ValueTask PerformLayout(Canvas g, CssBox columnsBox, BreakToken? resume = null)
         {
             try
             {
@@ -62,7 +62,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private static async ValueTask Layout(RGraphics g, CssBox columnsBox, BreakToken? resume)
+        private static async ValueTask Layout(Canvas g, CssBox columnsBox, BreakToken? resume)
         {
             var htmlContainer = columnsBox.HtmlContainer!;
 
@@ -355,7 +355,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Absolutely positioned boxes resolve against the container itself, as they do beside in-flow content.
         /// </remarks>
         private static async ValueTask LayoutOutOfFlowChildrenOnly(
-            RGraphics g, CssBox columnsBox, double columnLeft, double columnWidth, double containerWidth)
+            Canvas g, CssBox columnsBox, double columnLeft, double columnWidth, double containerWidth)
         {
             static bool IsLaidOutHere(CssBox box) =>
                 (box.IsFloated || box.IsPageFloated) && box.DerivedStyle.ActualDisplay != Keywords.None;
@@ -450,7 +450,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static async ValueTask<(BreakToken? Carry, double ContentBottom, int FilledColumns,
             List<(double X, double Top, double Bottom)> RuleSegments)> LayoutRunSegment(
-            RGraphics g, CssBox columnsBox, List<CssBox> children, BreakToken? resume, BreakToken? startAt,
+            Canvas g, CssBox columnsBox, List<CssBox> children, BreakToken? resume, BreakToken? startAt,
             double boxTop, double pageBudget, double columnLeft, double pitch, double columnWidth,
             double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer,
             double originalRight, int recordedBefore)
@@ -617,7 +617,7 @@ namespace PeachPDF.Html.Core.Dom
         /// how far down the content reached, and how many columns it took.
         /// </summary>
         private static async ValueTask<(BreakToken? Carry, double ContentBottom, int FilledColumns)> FillColumns(
-            RGraphics g, CssBox columnsBox, List<CssBox> children, BreakToken? resume,
+            Canvas g, CssBox columnsBox, List<CssBox> children, BreakToken? resume,
             double boxTop, double target, double columnLeft, double pitch, double columnWidth,
             double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer)
         {
