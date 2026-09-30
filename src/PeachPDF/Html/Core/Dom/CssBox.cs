@@ -2940,6 +2940,19 @@ namespace PeachPDF.Html.Core.Dom
         private double? _firstChildRestartedTop;
 
         /// <summary>
+        /// The restarted float <see cref="TryRestartAt"/> stepped the pass's fragmentainer cursor for, and the
+        /// slot the cursor was on before it did, so the cursor can go back once that float is laid out.
+        /// </summary>
+        /// <remarks>
+        /// A float is out of flow: moving it to a later fragmentainer moves nothing that follows it, so the
+        /// in-flow siblings after it are still laid out from where they were and must be asked about the
+        /// fragmentainer they are in. Left on the float's slot, the cursor answers every line-straddle
+        /// question for them against the band of the page the float went to, and a line crossing the foot of
+        /// the page they really sit on is never broken.
+        /// </remarks>
+        private (CssBox Float, int Slot)? _cursorToRestoreAfterFloat;
+
+        /// <summary>
         /// A <c>direction: rtl</c> vertical box's own block-level children, set by
         /// <see cref="LayoutVerticalBlockChildren"/> and consumed - then cleared - by
         /// <see cref="PerformLayoutEpilogue"/>, once this box's own height is truly final.
@@ -4736,6 +4749,12 @@ namespace PeachPDF.Html.Core.Dom
                     // appended by the loop rather than assigned by the child (see LayoutBlockChild).
                     await LayoutBlockChild(g, childBox);
 
+                    if (_cursorToRestoreAfterFloat is { } restoring && ReferenceEquals(restoring.Float, childBox))
+                    {
+                        _cursorToRestoreAfterFloat = null;
+                        HtmlContainer?.CurrentFragmentainer?.StepBackTo(restoring.Slot);
+                    }
+
                     if (_requestedChildRestart is { } restart)
                     {
                         _requestedChildRestart = null;
@@ -5005,6 +5024,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _canRestartChildLoop = false;
                 _requestedChildRestart = null;
+                _cursorToRestoreAfterFloat = null;
             }
 
             return false;
@@ -5934,7 +5954,14 @@ namespace PeachPDF.Html.Core.Dom
 
             // See "The pass's own fragmentainer cursor has to move too" above (#1047): without this, the
             // head re-enters ResumeAt still measuring against the band this pass is leaving.
-            HtmlContainer?.CurrentFragmentainer?.StepOverTo(restart.Slot);
+            var fragmentainer = HtmlContainer?.CurrentFragmentainer;
+
+            if (fragmentainer is not null && Boxes[resumeFrom].IsFloated && fragmentainer.SlotIndex < restart.Slot)
+            {
+                _cursorToRestoreAfterFloat = (Boxes[resumeFrom], fragmentainer.SlotIndex);
+            }
+
+            fragmentainer?.StepOverTo(restart.Slot);
 
             // The restarted head is about to land at restart.Top, on this box's own account, without this
             // box's own Location moving to match — a phantom gap between the two if the head is this
