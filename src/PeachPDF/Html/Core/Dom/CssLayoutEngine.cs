@@ -3308,6 +3308,16 @@ namespace PeachPDF.Html.Core.Dom
 
         }
 
+        private static double EnclosingMulticolRight(CssBox containingBox)
+        {
+            for (var ancestor = containingBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.EstablishesMultiColumnContext) return ancestor.ClientRight;
+            }
+
+            return double.NegativeInfinity;
+        }
+
         private static void FloatBoxRight(CssBox box, CssBox containingBox, double startX, double startY)
         {
             var limitRight = ContentRightOf(containingBox, startY);
@@ -3316,6 +3326,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 Left = startX,
                 Right = limitRight - box.ActualMarginRight,
+                ContainingRight = limitRight,
+                MulticolRight = EnclosingMulticolRight(containingBox),
                 Top = startY,
                 MaxBottom = startY,
                 MarginLeft = box.ActualMarginLeft,
@@ -3335,7 +3347,10 @@ namespace PeachPDF.Html.Core.Dom
                         coordinates.Left = intersectingFloat.ActualRight;
                         break;
                     case Floating.Right:
-                        coordinates.Right = intersectingFloat.Location.X;
+                        // A negative margin-right puts the margin edge inside the border box, so the
+                        // border box has to end that far past the blocker for the margin edges to meet;
+                        // otherwise the same blocker is found again and the loop never ends.
+                        coordinates.Right = intersectingFloat.Location.X + Math.Max(0, -box.ActualMarginRight);
                         break;
                 }
                 if (intersectingFloat.ActualBottom > coordinates.MaxBottom)

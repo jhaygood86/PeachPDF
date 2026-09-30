@@ -1023,6 +1023,34 @@ namespace PeachPDF.Tests.Integration
             Assert.True(b.Location.Y < a.ActualBottom);
         }
 
+        [Theory]
+        [InlineData("margin-right:-3pt")]
+        [InlineData("margin-right:0pt")]
+        public async Task RightFloat_InAColumn_IgnoresAnEarlierRightFloatInAnotherColumn(string margin)
+        {
+            // The earlier float lies in the second column's area, outside the first column's content
+            // box. Taking its left edge as the new limit widened the float's range past its own
+            // column, and a negative margin-right then left it overlapping the same blocker forever.
+            var html = Wrap($@"
+                <div style='width:300pt'>
+                    <div id='a' style='float:right; width:52pt; height:300pt'>a</div>
+                    <div id='cols' style='columns:2; column-gap:8pt'>
+                        <div id='b' style='float:right; width:97pt; height:10pt; {margin}'></div>
+                    </div>
+                </div>");
+
+            var layout = BuildAndLayout(html);
+            var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+            Assert.Same(layout, finished);
+
+            var (root, _) = await layout;
+            var cols = FindById(root, "cols")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(b.ActualRight + b.ActualMarginRight <= cols.ClientRight + 0.01,
+                $"float extends past its container: right={b.ActualRight}, container right={cols.ClientRight}");
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
