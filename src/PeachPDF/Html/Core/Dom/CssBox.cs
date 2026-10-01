@@ -2565,6 +2565,13 @@ namespace PeachPDF.Html.Core.Dom
         internal bool PlacedByForcedBreak { get; private set; }
 
         /// <summary>
+        /// For a multi-column container laid out beside a float, the left edge and width its columns were narrowed to
+        /// so as to clear it (CSS 2.1 Â§9.5); null when it was not narrowed. Kept on the box because the pages it
+        /// continues onto must use the same extent as the first, and the float is not beside it there.
+        /// </summary>
+        internal (double Left, double Width)? ColumnsBesideFloats { get; set; }
+
+        /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
         /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
         /// turn, so the record unwinds to the fragmentation-context root.
@@ -3436,7 +3443,7 @@ namespace PeachPDF.Html.Core.Dom
             try
             {
                 // A float and an absolutely positioned box take no part in placing the in-flow boxes around them
-                // (CSS 2.1 §9.3.1), so a break inside one must not end its parent's pass: the boxes after it would
+                // (CSS 2.1 ï¿½9.3.1), so a break inside one must not end its parent's pass: the boxes after it would
                 // be placed back on a page that pass had already left. Each runs as its own fragmentainer pass and
                 // is resumed page by page, the way a browser fragments an out-of-flow box. A float starts in the
                 // slot being filled; an absolutely positioned box in the slot its offsets place it in, usually an
@@ -3938,6 +3945,10 @@ namespace PeachPDF.Html.Core.Dom
 
             var resume = _incomingToken;
             _incomingToken = null;
+
+            // Laid out from its start again (a balancing retry, a fresh generation): the first fragment is this one.
+            if (resume is null) FirstColumnFragmentOrigin = null;
+
             PendingBreakToken = null;
             RequestedBreakBeforeTop = null;
             RequestedBreakEscapesNestedFragmentainer = false;
@@ -3984,7 +3995,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Whether this float ran as more than one nested fragmentainer pass, so its content already fills
         /// fragmentainers before the one its container resumes in. A break before the container's first in-flow
-        /// child then cannot be the container's own break point (css-break-3 §3.1): the container has content in
+        /// child then cannot be the container's own break point (css-break-3 ï¿½3.1): the container has content in
         /// the fragmentainer it is leaving, and moving it whole would re-lay the float from the later one.
         /// </summary>
         internal bool FragmentedAcrossFloatPasses { get; set; }
@@ -3993,7 +4004,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Whether this box, or anything in its subtree, is a float that ran as several fragmentainer passes.
         /// Such a float's content in each fragmentainer is recorded by its own break tokens, not by where it sits,
         /// so relocating the box that holds it (a <c>break-inside: avoid</c> move) would re-lay it from a later
-        /// fragmentainer and lose what the earlier passes placed. The avoid is relaxed instead (css-break-3 §4.3).
+        /// fragmentainer and lose what the earlier passes placed. The avoid is relaxed instead (css-break-3 ï¿½4.3).
         /// </summary>
         private bool HoldsAFloatThatRanAcrossFragmentainers()
         {
@@ -4011,9 +4022,32 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal void ResumeAt(BreakToken? incomingToken, double? resumeTopOverride)
         {
+            // Resumed into a later column: Location is still where the fragment just left was placed, which is where
+            // an absolutely positioned descendant is anchored (see FirstColumnFragmentOrigin).
+            //
+            // Only within one page, though: a box on a page already emitted cannot be drawn into, so an origin recorded on
+            // an earlier page is dropped, and a Location left on an earlier page is not taken for one.
+            if (incomingToken is not null && HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } fragmentainer } container)
+            {
+                var pageTop = container.PageTopOf(fragmentainer.SlotIndex);
+
+                if (FirstColumnFragmentOrigin is { } kept && kept.Y < pageTop - 0.01) FirstColumnFragmentOrigin = null;
+                if (Location.Y >= pageTop - 0.01) FirstColumnFragmentOrigin ??= Location;
+            }
+
             _incomingToken = incomingToken;
             _resumeTopOverride = resumeTopOverride;
         }
+
+        /// <summary>
+        /// Where the first fragment of this box was placed, when it continued from one column into the next, or null.
+        /// A box has one <see cref="Location"/>, which each column re-places, so by the time the last column has been
+        /// filled it holds only the last fragment's. An absolutely positioned box is positioned against the containing
+        /// block's first fragment (CSS Positioned Layout 3 Â§2.1: the containing block is formed from the fragments, and
+        /// the offsets are measured from its start), so it reads this instead; read from <see cref="Location"/> it was
+        /// anchored at the last column, which can be off the page.
+        /// </summary>
+        internal PaintPoint? FirstColumnFragmentOrigin { get; set; }
 
         /// <summary>
         /// Whether an engine has already decided this box's final <see cref="CssBox.Location"/>
@@ -6197,7 +6231,7 @@ namespace PeachPDF.Html.Core.Dom
             // Clearance can carry a box past a float that ran as its own fragmentainer passes, into a later
             // fragmentainer than the one this pass is filling. Laying it out here would break its first line
             // with an inline token, and resuming that puts the line at the top of the band instead of at the
-            // clearance, so the break falls before the box instead, at the clearance (css-break-3 §4.4).
+            // clearance, so the break falls before the box instead, at the clearance (css-break-3 ï¿½4.4).
             if (child.Clear.Value is not ClearMode.None
                 && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: false } context } container
                 && container.SlotStartingAt(child.Location.Y) > context.SlotIndex
@@ -6995,10 +7029,12 @@ namespace PeachPDF.Html.Core.Dom
                     // and the same child at `bottom: 0; right: 0` agreed with Chrome before and
                     // after, as does every offset once the ancestor's padding is zero.
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
+                    var containingBlockOrigin = nearestPositionedAncestor.FirstColumnFragmentOrigin
+                                                ?? nearestPositionedAncestor.Location;
                     var containingBlockLeft = inlineContainingBlock?.Left
-                                              ?? nearestPositionedAncestor.Location.X + nearestPositionedAncestor.ActualBorderLeftWidth;
+                                              ?? containingBlockOrigin.X + nearestPositionedAncestor.ActualBorderLeftWidth;
                     var containingBlockTop = inlineContainingBlock?.Top
-                                             ?? nearestPositionedAncestor.Location.Y + nearestPositionedAncestor.ActualBorderTopWidth;
+                                             ?? containingBlockOrigin.Y + nearestPositionedAncestor.ActualBorderTopWidth;
 
                     var left = containingBlockLeft + child.ActualMarginLeft +
                                ResolveOffsetOrZero(child.Left, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, child);
@@ -7230,7 +7266,7 @@ namespace PeachPDF.Html.Core.Dom
             // Not for an absolutely positioned box: its position comes from its offsets, so the push and the
             // rewind, which lay it out again from another page's top, put it back where it was. Its last line was
             // then left across the page foot with no fragment on the next page, and was drawn on no page. Its
-            // widows are relaxed instead, as they are when they cannot be satisfied (§4.3).
+            // widows are relaxed instead, as they are when they cannot be satisfied (ï¿½4.3).
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
                 && !_earlyBreakTaken && !PositionAssignedByEngine && Position.Value is not PositionMode.Absolute
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)

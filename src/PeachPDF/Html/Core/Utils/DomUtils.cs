@@ -1033,7 +1033,7 @@ namespace PeachPDF.Html.Core.Utils
                 // of two-column grids each holding one float, it costs 237,757 box visits across
                 // 2,880 calls — 83 per call — against 1,200 visits with the break in place. The
                 // right-side walk, identical in shape but for this rule, has always been ~7.
-                if (!isStartingLevel && EstablishesIndependentFormattingContext(reference))
+                if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null))
                 {
                     return null;
                 }
@@ -1245,7 +1245,9 @@ namespace PeachPDF.Html.Core.Utils
                 // itself as `reference`, and a float always establishes one — breaking at its
                 // starting level would stop it being positioned against its own siblings, which is
                 // the whole job. Same rule, different starting box.
-                if (EstablishesIndependentFormattingContext(reference)) break;
+                // A multi-column container that was narrowed to clear a float is a formatting context root that has
+                // already kept out of it (CssLayoutEngineColumns), so the float must not narrow the lines inside again.
+                if (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null) break;
 
                 var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
 

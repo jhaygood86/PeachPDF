@@ -146,8 +146,25 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// one, so no rectangle is claimed twice unless it genuinely spills across a column gap.
         /// </para>
         /// </remarks>
-        private readonly record struct FragmentRegion(double Top, double Bottom, double? Left, double? Right)
+        private readonly record struct FragmentRegion(
+            double Top, double Bottom, double? Left, double? Right,
+            double? EarlierColumnRight = null, BoxGeometrySnapshot? EarlierGeometry = null)
         {
+            /// <summary>
+            /// Whether <paramref name="rect"/>, a word of <paramref name="box"/>, is the previous column's rather than this one's.
+            /// </summary>
+            /// <remarks>
+            /// A word wider than its column spills into the next column's extent. It belongs to the column it starts in, so
+            /// one that starts inside an earlier column's extent, of a box that column holds too, is that column's, or it is
+            /// emitted twice. A box only this column holds (a float that overflows its column leftward) is this one's
+            /// wherever it lies, and so is a word that starts in the gap between the columns.
+            /// </remarks>
+            internal bool YieldsToEarlierColumn(CssBox box, Rect rect) =>
+                EarlierColumnRight is { } earlierRight
+                && rect.Left < earlierRight - EdgeEpsilon
+                && EarlierGeometry is { } earlier
+                && earlier.Holds(box);
+
             internal bool Contains(Rect rect) =>
                 Math.Min(rect.Bottom, Bottom) - Math.Max(rect.Top, Top) > BandOverlapEpsilon
                 && ContainsInlineAxis(rect);
@@ -224,6 +241,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <param name="ContinuedFrom">See this type's own remarks on <see cref="ContinuedFrom"/>.</param>
         /// <param name="Self">See this type's own remarks on <see cref="Self"/>.</param>
         /// <param name="ParentContext">See this type's own remarks on <see cref="ParentContext"/>.</param>
+        /// <param name="ContextRoot">The multi-column container this instance is a column of, when it is one.</param>
         /// <param name="DetachedSourceRoot">
         /// Null for an ordinary multi-column capture, whose held children are found by filtering the
         /// container's own <see cref="CssBox.Boxes"/> through <see cref="BoxGeometrySnapshot.Holds"/> (its
@@ -239,7 +257,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             IReadOnlySet<CssBox> ContinuedFrom,
             FragmentainerContext Self,
             FragmentainerContext? ParentContext,
-            CssBox? DetachedSourceRoot = null);
+            CssBox? DetachedSourceRoot = null,
+            CssBox? ContextRoot = null);
 
         /// <summary>
         /// A fragment before its first/last flags are known — which cannot be until every slot has been
@@ -1227,12 +1246,19 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             fragmentainers.Add(new CapturedInstance(
-                new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right),
+                new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right,
+                    EarlierColumnRight: fragmentainers.Count > 0
+                                        && fragmentainers[^1].Region is { Right: { } previousRight } previous
+                                        && previous.Top == band.Top
+                        ? previousRight
+                        : null,
+                    EarlierGeometry: fragmentainers.Count > 0 ? fragmentainers[^1].Geometry : null),
                 geometry,
                 continuing,
                 fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes,
                 self,
-                parentContext));
+                parentContext,
+                ContextRoot: contextRoot));
 
             // Which children this container yields, how many times, and against which geometry, are all
             // decided by the set of fragmentainers recorded for it - so an earlier "emitted nothing
@@ -2518,6 +2544,30 @@ namespace PeachPDF.Html.Core.Fragmentation
             return draft;
         }
 
+        /// <summary>
+        /// Whether a column recorded after <paramref name="capture"/>, in the same row of the same container, also
+        /// holds <paramref name="box"/> in its snapshot.
+        /// </summary>
+        private bool HeldByALaterColumn(CssBox box, CssBox columnsRoot, int slotIndex, CapturedInstance capture)
+        {
+            if (!_capturedInstances.TryGetValue((columnsRoot, slotIndex), out var instances)) return false;
+
+            var index = instances.FindIndex(i => ReferenceEquals(i.Self, capture.Self));
+            if (index < 0) return false;
+
+            // The same row of columns shares a top; the bottoms differ, a column's band being stretched to its content.
+            for (var later = index + 1; later < instances.Count; later++)
+            {
+                var other = instances[later];
+                if (other.Region.Top == capture.Region.Top && other.Geometry.Holds(box))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <remarks>
         /// <c>subtreePrunable</c> is set to false by the walk when anything at or below the box means an
         /// "emitted nothing here" observation about it could not be relied on later — see
@@ -2539,6 +2589,20 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             // A display:none subtree paints nothing at all, so it produces no fragments either.
             if (box.DerivedStyle.ActualDisplay == Keywords.None) return null;
+
+            // An absolutely positioned box in a column's snapshot is where its offsets put it, not where the column
+            // is: it is laid out once the flow of its containing block ends, in whichever column that is, while its
+            // containing block's first fragment (and so the box) may lie in an earlier one. The column's own extent
+            // then does not claim it, and it was drawn in no fragmentainer. It appears in one snapshot, so the page's
+            // band claims it exactly once. Every column that holds (part of) the containing block snapshots the box,
+            // so only the last of them, where it was finally laid out, emits it.
+            if (capture is { Region.Left: not null, ContextRoot: { } columnsRoot } inAColumn
+                && box.Position.Value is PositionMode.Absolute)
+            {
+                if (HeldByALaterColumn(box, columnsRoot, slot.Index, inAColumn)) return null;
+
+                capture = inAColumn with { Region = PageRegionOf(isFixed: false, slot) };
+            }
 
             // A line-clamp that rejects an atomic inline-block before placement suppresses the whole
             // subtree for this layout generation. Width/intrinsic measurement can still touch the box
@@ -2707,7 +2771,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                         claims = ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed);
                     }
 
-                    if (claims)
+                    if (claims && !region.YieldsToEarlierColumn(box, Displaced(shiftedRect, shift)))
                         words.Add(new TextFragment(Localize(shiftedRect, originY), word));
                 }
             }
