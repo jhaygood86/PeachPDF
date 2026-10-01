@@ -29,6 +29,13 @@ namespace PeachPDF.Html.Core.Entities
         /// </summary>
         public double MulticolRight { get; init; } = double.NegativeInfinity;
 
+        /// <summary>
+        /// Set by the line-flow cursor lookup, which asks only where a <i>left</i> float pushes the cursor. A right
+        /// float is the lookahead limit's business: reported here as well, one whose left edge meets the cursor
+        /// exactly (two floats leaving no room between them) pushed the cursor across it to its far edge.
+        /// </summary>
+        public bool LeftFloatsOnly { get; init; }
+
         public double FloatRightStartX => Right - ReferenceWidth;
     }
 }
