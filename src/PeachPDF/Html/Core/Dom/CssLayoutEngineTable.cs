@@ -2213,13 +2213,10 @@ namespace PeachPDF.Html.Core.Dom
         /// source, identical for both algorithms so it lives in one place rather than two.
         /// </summary>
         /// <remarks>
-        /// Deliberately preserves the exact grammar the auto path has always accepted here: a percentage
-        /// (resolved against <paramref name="availCellSpace"/>), or a px/unitless value converted through
-        /// <see cref="Length.PointsPerPx"/>. An absolute unit (<c>pt</c>, <c>em</c>, ...) on a
-        /// <c>&lt;col&gt;</c> is not read - a pre-existing limitation of automatic layout that fixed layout
-        /// inherits rather than diverges from; widening it would change auto tables' output too and
-        /// belongs in its own change. A cell's own <c>width</c> is unaffected - that path goes through
-        /// <see cref="CssValueParser.ParseLength(string, double, CssBox)"/> and accepts every length unit.
+        /// A percentage resolves against <paramref name="availCellSpace"/>; every other length unit goes
+        /// through <see cref="CssValueParser.ParseLength(string, double, CssBox)"/> against the column's
+        /// own box, exactly as a cell's <c>width</c> does, so <c>mm</c>/<c>pt</c>/<c>em</c> behave the same
+        /// on a <c>&lt;col&gt;</c> as on a <c>&lt;td&gt;</c>.
         /// </remarks>
         private bool TryGetColumnElementWidth(int columnIndex, double availCellSpace, out double width)
         {
@@ -2231,19 +2228,10 @@ namespace PeachPDF.Html.Core.Dom
 
             if (!(len.Number > 0)) return false;
 
-            if (len.IsPercentage)
-            {
-                width = CssValueParser.ParseNumber(columnInlineSize, availCellSpace);
-                return true;
-            }
-
-            if (len.Unit is CssUnit.Pixels or CssUnit.None)
-            {
-                width = len.Number * Length.PointsPerPx;
-                return true;
-            }
-
-            return false;
+            width = len.IsPercentage
+                ? CssValueParser.ParseNumber(columnInlineSize, availCellSpace)
+                : CssValueParser.ParseLength(columnInlineSize, availCellSpace, _columns[columnIndex]);
+            return width > 0;
         }
 
         /// <summary>
