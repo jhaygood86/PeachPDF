@@ -4418,6 +4418,48 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The inline extent <paramref name="block"/> may take beside the floats that reach its top edge:
+        /// <paramref name="left"/> and <paramref name="right"/> narrowed to leave them clear.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#floats">CSS 2.1 §9.5</see>: the border box of an
+        /// in-flow box that establishes a new block formatting context (a multi-column container is one,
+        /// css-multicol-1 §2) must not overlap the margin box of a float in the same context, and is narrowed or
+        /// moved below it. Left to the line flow, the floats narrowed the lines <i>inside</i> a container whose columns
+        /// are placed by their own geometry, pushing them past every column's extent where nothing claimed them.
+        /// A box that is itself a float, absolutely positioned, a table cell or a flex or grid item is isolated from
+        /// outer floats (<see cref="LineOwnerIsIsolatedFromOuterFloats"/>), so this returns the extent unchanged.
+        /// </remarks>
+        internal static (double Left, double Right) ExtentBesideFloats(CssBox block, double top, double left, double right)
+        {
+            // The line box only carries the coordinates the lookups read, but its constructor adds it to the owner's
+            // line boxes, so it is taken off again: a container left with a line box of its own was read as holding
+            // inline content and its children's words were emitted a second time.
+            var line = new CssLineBox(block) { ContentLeft = left, ContentRight = right };
+            var coordinates = new CssLineBoxCoordinates
+            {
+                Line = line,
+                CurrentX = left,
+                CurrentY = top,
+                MaxRight = right,
+                MaxBottom = top
+            };
+
+            try
+            {
+                var leftFloat = LeftFloatAt(coordinates, block);
+                var rightFloat = RightFloatAt(coordinates, block);
+
+                return (leftFloat is null ? left : Math.Max(left, leftFloat.ActualRight + leftFloat.ActualMarginRight),
+                    rightFloat is null ? right : Math.Min(right, rightFloat.Location.X - rightFloat.ActualMarginLeft));
+            }
+            finally
+            {
+                block.LineBoxes.Remove(line);
+            }
+        }
+
+        /// <summary>
         /// The more restrictive of the last LEFT float intersecting the line at <paramref name="reference"/>'s
         /// position - combining <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> (a float preceding
         /// <paramref name="reference"/> as a sibling of it, or of one of its ancestors) with

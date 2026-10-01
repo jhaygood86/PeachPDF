@@ -48,6 +48,28 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static readonly IReadOnlySet<CssBox> NoBoxes = FrozenSet<CssBox>.Empty;
 
+        /// <summary>
+        /// The least width (in the layout unit, points) worth narrowing a container to so that it clears a float; below
+        /// it the container keeps the width it had rather than collapsing its columns to slivers.
+        /// </summary>
+        private const double MinimumRoomBesideAFloat = 20;
+
+        /// <summary>
+        /// Whether the container, at <paramref name="width"/>, still has several columns. One column is laid out by
+        /// the block flow (and a vertical-writing-mode container always is), which does not use a narrowed extent, so
+        /// such a container is left as it was and its text avoids the float itself.
+        /// </summary>
+        private static bool HasSeveralColumnsAt(CssBox columnsBox, double width)
+        {
+            if (columnsBox.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr) return false;
+
+            var gap = columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
+                ? CssValueParser.ParseLength(columnGapLength, width, columnsBox)
+                : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), width, columnsBox);
+
+            return ResolveColumns(columnsBox, width, gap).Count >= 2;
+        }
+
 
         public static async ValueTask PerformLayout(Canvas g, CssBox columnsBox, BreakToken? resume = null)
         {
@@ -81,7 +103,38 @@ namespace PeachPDF.Html.Core.Dom
             // other block box's width, using this invocation's own page (boxTop) rather than the box's
             // own (possibly much earlier) Location.Y.
             var containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox, boxTop);
-            columnsBox.ActualRight = columnsBox.Location.X + containerWidth + columnsBox.ActualBoxSizeIncludedWidth;
+
+            // The container is a formatting context root, so it keeps clear of the floats beside it (CSS 2.1 §9.5)
+            // instead of laying its columns under them: left to the line flow a float pushed the lines inside a
+            // column past every column's extent, where nothing claimed them and the words were lost. When too little
+            // is left beside the float to be worth narrowing to, it keeps the width it had.
+            //
+            // Worked out once, when the container is laid out afresh, and kept for the pages it continues onto: a
+            // continuation's top is the page's, where the float is no longer, and the frame does not place the box
+            // again, so its Location.X is the one the previous page's layout left and cannot be asked again.
+            var floatInset = 0d;
+            if (resume is not null && columnsBox.ColumnsBesideFloats is { } kept)
+            {
+                floatInset = kept.Left - columnsBox.ClientLeft;
+                containerWidth = kept.Width;
+            }
+            else
+            {
+                var contentLeft = columnsBox.ClientLeft;
+                var beside = CssLayoutEngine.ExtentBesideFloats(columnsBox, columnsBox.ClientTop, contentLeft, contentLeft + containerWidth);
+                columnsBox.ColumnsBesideFloats = null;
+
+                if ((beside.Left > contentLeft || beside.Right < contentLeft + containerWidth)
+                    && beside.Right - beside.Left >= MinimumRoomBesideAFloat
+                    && HasSeveralColumnsAt(columnsBox, beside.Right - beside.Left))
+                {
+                    floatInset = beside.Left - contentLeft;
+                    containerWidth = beside.Right - beside.Left;
+                    columnsBox.ColumnsBesideFloats = (beside.Left, containerWidth);
+                }
+            }
+
+            columnsBox.ActualRight = columnsBox.Location.X + floatInset + containerWidth + columnsBox.ActualBoxSizeIncludedWidth;
 
             // A position: running() child (css-gcpm-3) never becomes a column child - it is excluded from
             // this container's own algorithm the same way it is excluded from plain block flow
@@ -129,7 +182,7 @@ namespace PeachPDF.Html.Core.Dom
             if (children.Count == 0)
             {
                 columnsBox.ActualBottom = columnsBox.Location.Y + columnsBox.ActualBoxSizeIncludedHeight;
-                await LayoutOutOfFlowChildrenOnly(g, columnsBox, columnsBox.ClientLeft, columnWidth, containerWidth);
+                await LayoutOutOfFlowChildrenOnly(g, columnsBox, columnsBox.ClientLeft + floatInset, columnWidth, containerWidth);
                 return;
             }
 
@@ -163,7 +216,7 @@ namespace PeachPDF.Html.Core.Dom
             // handling for free rather than needing a second, separately-tested code path.
             var segments = BuildSegments(children);
 
-            var columnLeft = columnsBox.ClientLeft;
+            var columnLeft = columnsBox.ClientLeft + floatInset;
             var pitch = columnWidth + gap;
             var originalRight = columnsBox.ActualRight;
 
