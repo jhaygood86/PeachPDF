@@ -82,6 +82,9 @@ namespace PeachPDF.Html.Core.Paint
         internal void Paint(Canvas g, FragmentainerFragment fragmentainer)
         {
             var pageClip = container.PageClipOverride ?? container.PageBoxRect;
+#if DEBUG
+            TracePage(fragmentainer, pageClip);
+#endif
             var reach = MeasurePaintReach(g, fragmentainer.Root, pageClip);
             if (reach.Outline > 0 || reach.MarkerLeft > 0)
             {

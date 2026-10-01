@@ -545,6 +545,12 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private int _lastEmittedSlot = -1;
 
+        /// <summary>
+        /// The last slot emitted so far, or -1 before the first: a box placed after it lands where nothing is
+        /// frozen yet, so there is nothing to re-open for it.
+        /// </summary>
+        internal int LastEmittedSlot => _lastEmittedSlot;
+
 #if DEBUG
         /// <summary>
         /// Diagnostic-only invariant check for issue
@@ -968,18 +974,86 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// see <see cref="_emptySincePass"/>'s own remarks for the case that rules out committing any
         /// earlier.
         /// </param>
-        private void CommitRemainingObservations(bool commit)
+        /// <param name="rangeBottom">
+        /// where the walked range ends, in document space. A box is only concluded done when its own content
+        /// ends there or above: one whose content lies further down is empty in this range because it has
+        /// not got there yet, not because it has finished. Measured: a <c>flow-root</c> box inside a capped
+        /// scroll container, laid out in one piece, was empty on page 2 with its only line at 445.6pt on
+        /// page 3, and the mark pruned that line from page 3.
+        /// </param>
+        private void CommitRemainingObservations(bool commit, double rangeBottom = double.MaxValue)
         {
             if (commit)
             {
                 foreach (var (box, sinceSlot) in _emptySincePass)
                 {
+                    // A box whose content ends below the walked range has not finished; one with no geometry
+                    // of its own at all has nothing to lose and may be marked.
+                    if (SettledBottomOf(box) is { } bottom && bottom > rangeBottom) continue;
+
+                    // Nor has a box the pass stopped inside, whatever its bottom reads: its height is only
+                    // applied on the pass that completes it, so until then its ActualBottom is its top. A
+                    // flow-root box laid out up to its first line read 329.1pt on a page ending at 340pt, was
+                    // marked "nothing from page 2 on", and its flex item's text was pruned from the pages after.
+                    // CommitGeometricallySettledObservations excludes the chain for the same reason.
+                    if (_continuesInto.Contains((new FragmentKey(box, 0), sinceSlot))) continue;
+
                     var scopeOwner = ScopeOwnerOf(box);
                     box.RecordEmittedNothingAt(sinceSlot, scopeOwner, HistoryFor(scopeOwner).Count);
                 }
             }
 
             _emptySincePass.Clear();
+        }
+
+        /// <summary>
+        /// Where <paramref name="box"/>'s laid-out content ends, for the "has it already ended above this slot"
+        /// questions <see cref="CommitGeometricallySettledObservations"/> and
+        /// <see cref="CommitRemainingObservations"/> ask, or null when there is nothing to judge by.
+        /// </summary>
+        /// <remarks>
+        /// A block's <see cref="CssBox.ActualBottom"/> is where its border box ends. A plain inline box's is not
+        /// geometry at all: the inline flow never places an inline box itself, only its line rectangles and
+        /// words, so its <c>Location</c> stays at 0 and its <c>ActualBottom</c> holds whatever an earlier
+        /// sizing left there. Read as a bottom, that proved an inline box inside a float finished at 57.5pt
+        /// while its words were at 346pt, two pages later, and the mark it earned pruned those words from the
+        /// page that holds them. So an inline box is judged by its own line rectangles and words, and those of
+        /// the inline boxes inside it; one with none of either has nothing to conclude from.
+        /// </remarks>
+        /// <param name="box">the box an "emitted nothing" mark is about to be written for</param>
+        /// <returns>the lowest edge of its content in document space, or null when it has none to measure</returns>
+        private static double? SettledBottomOf(CssBox box)
+        {
+            if (!box.IsInline || DomUtils.IsAtomicInline(box)) return box.ActualBottom;
+
+            double? bottom = null;
+            AddInlineContent(box, ref bottom);
+            return bottom;
+
+            static void AddInlineContent(CssBox inline, ref double? bottom)
+            {
+                foreach (var rect in inline.Rectangles.Values)
+                {
+                    bottom = Math.Max(bottom ?? double.MinValue, rect.Bottom);
+                }
+
+                foreach (var word in inline.Words)
+                {
+                    bottom = Math.Max(bottom ?? double.MinValue, word.Bottom);
+                }
+
+                foreach (var child in inline.Boxes)
+                {
+                    if (child.IsInline && !DomUtils.IsAtomicInline(child))
+                    {
+                        AddInlineContent(child, ref bottom);
+                    }
+                    else
+                    {
+                        bottom = Math.Max(bottom ?? double.MinValue, child.ActualBottom);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -1098,7 +1172,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // (a couple of dozen points for <html>/<body> of a document still ten pages from its end).
                 // The outgoing break chain was recorded in _continuesInto for every slot of this pass
                 // before the walk began, so membership here is exact.
-                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned || box.ActualBottom > slotTop
+                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned
+                    || SettledBottomOf(box) is not { } bottom || bottom > slotTop
                     || _continuesInto.Contains((new FragmentKey(box, 0), slotIndex)))
                     continue;
 
@@ -1592,7 +1667,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _currentPassFromSlot = null;
             }
 
-            CommitRemainingObservations(reachesPastEverythingSoFar);
+            CommitRemainingObservations(reachesPastEverythingSoFar, container.PageBottomOf(throughSlot));
         }
 
         /// <summary>
@@ -1631,8 +1706,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal bool HoldsFragmentsFor(CssBox box) => _frozen.Contains(box);
 
         /// <summary>
-        /// Drops every frozen slot from <paramref name="fromSlot"/> on, so it is emitted again once layout
-        /// has settled.
+        /// Drops every frozen slot from <paramref name="fromSlot"/> on (through <paramref name="throughSlot"/>
+        /// when one is given), so it is emitted again once layout has settled.
         /// </summary>
         /// <remarks>
         /// The one thing per-pass emission cannot assume away: §4.3's retroactive movers are bounded within
@@ -1645,7 +1720,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// itself filling or anything after it, since those are not frozen yet, so ordinary forward layout
         /// never re-emits anything.
         /// </remarks>
-        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox)
+        /// <param name="fromSlot">the first slot to re-open</param>
+        /// <param name="relocatedBox">the box whose geometry changed there</param>
+        /// <param name="throughSlot">
+        /// the last slot to re-open, when the change is confined to known slots rather than moving
+        /// everything after it. <c>null</c> re-opens every emitted slot from <paramref name="fromSlot"/> on.
+        /// </param>
+        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox, int? throughSlot = null)
         {
             // Deliberately after the early return, not before it: this method is reached on every
             // block-axis reposition of a box that holds fragments, which during a pass is constant, and
@@ -1665,7 +1746,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             // suffix-minimum over one scope's own reopenings answers this without enumerating boxes.
             HistoryFor(ScopeOwnerOf(relocatedBox)).Record(fromSlot);
 
-            for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
+            var lastSlot = Math.Min(_lastEmittedSlot, throughSlot ?? _lastEmittedSlot);
+            for (var slot = fromSlot; slot <= lastSlot; slot++)
             {
 #if DEBUG
                 // Release this slot's claims the moment it is un-frozen, not only when (and if) something

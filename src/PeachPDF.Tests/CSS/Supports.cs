@@ -437,7 +437,8 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.Equal("(box-shadow: 0 0 2px black) or (-moz-box-shadow: 0 0 2px black) or (-webkit-box-shadow: 0 0 2px black) or (-o-box-shadow: 0 0 2px black)", supports.ConditionText);
+            // -moz-/-webkit- box-shadow resolve to box-shadow; -o- was never aliased and stays as written.
+            Assert.Equal("(box-shadow: 0 0 2px black) or (box-shadow: 0 0 2px black) or (box-shadow: 0 0 2px black) or (-o-box-shadow: 0 0 2px black)", supports.ConditionText);
             Assert.True(supports.Condition.Check());
         }
 

@@ -84,7 +84,11 @@ namespace PeachPDF.Html.Core.Paint
                 // epsilon does. Without this, a fully-clipped (invisible on screen, but present in the
                 // content stream and text-extraction layer) duplicate of the word painted on the page it
                 // just left. See GitHub issue #113.
-                if (clip.Width <= VisibilityClipEpsilon || clip.Height <= VisibilityClipEpsilon) continue;
+                var invisible = clip.Width <= VisibilityClipEpsilon || clip.Height <= VisibilityClipEpsilon;
+#if DEBUG
+                TraceWord(wordFragment, clip, drawn: !invisible);
+#endif
+                if (invisible) continue;
 
                 // Past this point the word IS drawn, and the surviving intersection can still be
                 // smaller than the word itself - the glyphs go into the content stream whole and the

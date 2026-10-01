@@ -28,8 +28,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         AvoidBreakInside,
 
         /// <summary>
-        /// The box may not be broken by any user agent — a replaced element or a scroll container
-        /// (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>).
+        /// The box is kept unbroken: a replaced element, which no user agent may break
+        /// (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>), or a scroll container that
+        /// <see cref="MonolithicContent.IsMonolithic"/> keeps whole
+        /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>).
         /// </summary>
         Monolithic,
 
@@ -290,7 +292,18 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             return BreakPropagation.FirstInFlowChild(container) is { } first
                    && BreakPropagation.PropagatesBreakBeforeOutward(first)
-                   && container.Boxes.IndexOf(first) == block.ResumeChildIndex;
+                   && container.Boxes.IndexOf(first) == block.ResumeChildIndex
+                   && !HoldsAFragmentedFloatBefore(container, block.ResumeChildIndex);
+        }
+
+        internal static bool HoldsAFragmentedFloatBefore(CssBox container, int childIndex)
+        {
+            for (var i = 0; i < childIndex && i < container.Boxes.Count; i++)
+            {
+                if (container.Boxes[i].FragmentedAcrossFloatPasses) return true;
+            }
+
+            return false;
         }
     }
 }

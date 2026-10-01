@@ -2940,6 +2940,19 @@ namespace PeachPDF.Html.Core.Dom
         private double? _firstChildRestartedTop;
 
         /// <summary>
+        /// The restarted float <see cref="TryRestartAt"/> stepped the pass's fragmentainer cursor for, and the
+        /// slot the cursor was on before it did, so the cursor can go back once that float is laid out.
+        /// </summary>
+        /// <remarks>
+        /// A float is out of flow: moving it to a later fragmentainer moves nothing that follows it, so the
+        /// in-flow siblings after it are still laid out from where they were and must be asked about the
+        /// fragmentainer they are in. Left on the float's slot, the cursor answers every line-straddle
+        /// question for them against the band of the page the float went to, and a line crossing the foot of
+        /// the page they really sit on is never broken.
+        /// </remarks>
+        private (CssBox Float, int Slot)? _cursorToRestoreAfterFloat;
+
+        /// <summary>
         /// A <c>direction: rtl</c> vertical box's own block-level children, set by
         /// <see cref="LayoutVerticalBlockChildren"/> and consumed - then cleared - by
         /// <see cref="PerformLayoutEpilogue"/>, once this box's own height is truly final.
@@ -3422,13 +3435,70 @@ namespace PeachPDF.Html.Core.Dom
 
             try
             {
-                await child.PerformLayoutImp(g, this, framePlacesChild);
+                // A float and an absolutely positioned box take no part in placing the in-flow boxes around them
+                // (CSS 2.1 �9.3.1), so a break inside one must not end its parent's pass: the boxes after it would
+                // be placed back on a page that pass had already left. Each runs as its own fragmentainer pass and
+                // is resumed page by page, the way a browser fragments an out-of-flow box. A float starts in the
+                // slot being filled; an absolutely positioned box in the slot its offsets place it in, usually an
+                // earlier one, which the emitter re-opens to draw it (InvalidateEmittedFragmentainersReceiving).
+                if ((child.IsFloated || child.Position.Value is PositionMode.Absolute)
+                    && child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true, HasOwnBand: false } } floatContainer)
+                {
+                    var previous = floatContainer.CurrentFragmentainer;
+                    var slot = child.IsFloated
+                        ? previous.SlotIndex
+                        : Math.Max(floatContainer.SlotStartingAt(Math.Max(AbsoluteTopBeforePlacement(child), 0)), 0);
+                    HashSet<BreakToken> entered = [];
+                    child.FragmentedAcrossFloatPasses = false;
+                    try
+                    {
+                        while (true)
+                        {
+                            floatContainer.EnterNestedFragmentainer(floatContainer.CreateIndependentPageFragmentainer(child, slot, previous));
+                            await child.PerformLayoutImp(g, this, framePlacesChild);
+                            if (child.PendingBreakToken is not { } next) break;
+                            child.ResumeAt(next, null);
+                            child.FragmentedAcrossFloatPasses = child.IsFloated;
+                            if (!entered.Add(next) || entered.Count >= 10000)
+                            {
+                                floatContainer.DetachFragmentainer();
+                                await child.PerformLayoutImp(g, this, framePlacesChild);
+                                break;
+                            }
+                            slot = next.ResumeSlotIndex;
+                        }
+                    }
+                    finally
+                    {
+                        floatContainer.RestoreFragmentainer(previous);
+                    }
+                }
+                else
+                {
+                    await child.PerformLayoutImp(g, this, framePlacesChild);
+                }
             }
             catch (Exception ex)
             {
                 if (child.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
             }
+        }
+
+        /// <summary>
+        /// Where an absolutely positioned <paramref name="child"/>'s top edge will be placed, before the frame
+        /// places it: its containing block's edge plus its margin and <c>top</c> offset, as
+        /// <c>ResolveBlockChildOffset</c> computes it. The fragmentainer slot that contains it is the one the box's
+        /// own layout passes start in.
+        /// </summary>
+        private static double AbsoluteTopBeforePlacement(CssBox child)
+        {
+            var ancestor = DomUtils.GetNearestPositionedAncestor(child);
+            var inlineContainingBlock = DomUtils.InlineContainingBlockOf(ancestor);
+            var containingBlockTop = inlineContainingBlock?.Top ?? ancestor.Location.Y + ancestor.ActualBorderTopWidth;
+
+            return containingBlockTop + child.ActualMarginTop
+                   + ResolveOffsetOrZero(child.Top, inlineContainingBlock?.Height ?? ancestor.ActualHeight, child);
         }
 
         /// <summary>
@@ -3912,6 +3982,30 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether this float ran as more than one nested fragmentainer pass, so its content already fills
+        /// fragmentainers before the one its container resumes in. A break before the container's first in-flow
+        /// child then cannot be the container's own break point (css-break-3 �3.1): the container has content in
+        /// the fragmentainer it is leaving, and moving it whole would re-lay the float from the later one.
+        /// </summary>
+        internal bool FragmentedAcrossFloatPasses { get; set; }
+
+        /// <summary>
+        /// Whether this box, or anything in its subtree, is a float that ran as several fragmentainer passes.
+        /// Such a float's content in each fragmentainer is recorded by its own break tokens, not by where it sits,
+        /// so relocating the box that holds it (a <c>break-inside: avoid</c> move) would re-lay it from a later
+        /// fragmentainer and lose what the earlier passes placed. The avoid is relaxed instead (css-break-3 �4.3).
+        /// </summary>
+        private bool HoldsAFloatThatRanAcrossFragmentainers()
+        {
+            foreach (var child in Boxes)
+            {
+                if (child.FragmentedAcrossFloatPasses || child.HoldsAFloatThatRanAcrossFragmentainers()) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Seeds this box's resumption state for the pass about to run. Called by the parent's child
         /// loop immediately before it re-enters the child it stopped at.
         /// </summary>
@@ -4200,8 +4294,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    // css-break-3 §2: monolithic content (here, a scroll container - a replaced element
-                    // has no children to reach this dispatch at all) may not be broken. Detaching the
+                    // css-break-3 §4.1: monolithic content (here, a scroll container that IsMonolithic keeps
+                    // whole - a replaced element has no children to reach this dispatch at all) is not broken. Detaching the
                     // fragmentainer for the duration of its own children's layout means nothing inside can
                     // record a page break at all, so its content lays out as one continuous run whose
                     // natural height may exceed a single fragmentainer - exactly like any other tall
@@ -4334,8 +4428,9 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether this box is <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>
-        /// monolithic content that the epilogue's page-context mover may move at all. Whether there is
+        /// Whether this box is monolithic content (a replaced element, <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>,
+        /// or a scroll container kept whole, <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>)
+        /// that the epilogue's page-context mover may move at all. Whether there is
         /// somewhere to move it <i>to</i> is a separate question, asked at the call site against the
         /// destination band.
         /// </summary>
@@ -4374,13 +4469,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Whether this box paginates its own content but recorded no break inside itself on this pass,
         /// so it did not fragment and the §4.3 mover beside this one applies to it as it does to content
-        /// that <see cref="MonolithicContent.IsMonolithic">may not be broken at all</see>.
+        /// that <see cref="MonolithicContent.IsMonolithic">is kept unbroken</see>.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <b>Only a table asserts this, and it asserts it as a fact rather than as a property.</b> A
         /// table's own break points are between its rows, and whether one was taken is settled by the
-        /// engine and recorded in <see cref="PageBreakBottoms"/> — so unlike §2's set, which is decided
+        /// engine and recorded in <see cref="PageBreakBottoms"/> — so unlike the monolithic set, which is decided
         /// from style, this is a question that can only be answered once the box has finished laying out.
         /// That is exactly the epilogue's own position, and it is why the correction belongs here rather
         /// than at the end of <c>CssLayoutEngineTable.LayoutCells</c>, where it used to sit: the engine
@@ -4674,6 +4769,12 @@ namespace PeachPDF.Html.Core.Dom
                     // appended by the loop rather than assigned by the child (see LayoutBlockChild).
                     await LayoutBlockChild(g, childBox);
 
+                    if (_cursorToRestoreAfterFloat is { } restoring && ReferenceEquals(restoring.Float, childBox))
+                    {
+                        _cursorToRestoreAfterFloat = null;
+                        HtmlContainer?.CurrentFragmentainer?.StepBackTo(restoring.Slot);
+                    }
+
                     if (_requestedChildRestart is { } restart)
                     {
                         _requestedChildRestart = null;
@@ -4943,6 +5044,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _canRestartChildLoop = false;
                 _requestedChildRestart = null;
+                _cursorToRestoreAfterFloat = null;
             }
 
             return false;
@@ -5872,7 +5974,14 @@ namespace PeachPDF.Html.Core.Dom
 
             // See "The pass's own fragmentainer cursor has to move too" above (#1047): without this, the
             // head re-enters ResumeAt still measuring against the band this pass is leaving.
-            HtmlContainer?.CurrentFragmentainer?.StepOverTo(restart.Slot);
+            var fragmentainer = HtmlContainer?.CurrentFragmentainer;
+
+            if (fragmentainer is not null && Boxes[resumeFrom].IsFloated && fragmentainer.SlotIndex < restart.Slot)
+            {
+                _cursorToRestoreAfterFloat = (Boxes[resumeFrom], fragmentainer.SlotIndex);
+            }
+
+            fragmentainer?.StepOverTo(restart.Slot);
 
             // The restarted head is about to land at restart.Top, on this box's own account, without this
             // box's own Location moving to match — a phantom gap between the two if the head is this
@@ -6085,6 +6194,20 @@ namespace PeachPDF.Html.Core.Dom
                 CommitBlockChildOffset(child, offset);
             }
 
+            // Clearance can carry a box past a float that ran as its own fragmentainer passes, into a later
+            // fragmentainer than the one this pass is filling. Laying it out here would break its first line
+            // with an inline token, and resuming that puts the line at the top of the band instead of at the
+            // clearance, so the break falls before the box instead, at the clearance (css-break-3 �4.4).
+            if (child.Clear.Value is not ClearMode.None
+                && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: false } context } container
+                && container.SlotStartingAt(child.Location.Y) > context.SlotIndex
+                && Fragmentation.EarlyBreak.HoldsAFragmentedFloatBefore(this, Boxes.IndexOf(child)))
+            {
+                child.RequestBreakBefore(child.Location.Y);
+                return false;
+            }
+
+            HtmlContainer?.InvalidateEmittedFragmentsForPlacement(child);
             return true;
         }
 
@@ -6213,7 +6336,7 @@ namespace PeachPDF.Html.Core.Dom
             if (!child._isForcedBreak || child.HtmlContainer is not { } container) return null;
 
             // A measurement pass at a provisional position (flex/grid item sizing), or a monolithic
-            // subtree whose own breaking css-break-3 §2 forbids (#350: CssBox.LayoutContents suppresses
+            // subtree whose own breaking is suppressed as monolithic content (css-break-3 §2, §4.1; #350: CssBox.LayoutContents suppresses
             // both this and CurrentFragmentainer for such a subtree) - either way, nothing here should act
             // on a break. Reading the flag those callers already set (rather than IsFragmenting, which is
             // equally false once layout has simply finished and no pass is running at all - a shape
@@ -6546,6 +6669,22 @@ namespace PeachPDF.Html.Core.Dom
                         // An unpaginated pass has no band at all and so nothing to cross out of, which
                         // EndingAt answers by naming no fragmentainer.
                         var boundary = BlockConstraint.EndingAt(child.HtmlContainer!, child, baseTop);
+
+                        // A first child whose parent's leading padding or border has already crossed out of
+                        // the fragmentainer being filled: the break falls before the child, and the parent,
+                        // left with nothing on this page but that leading edge, moves whole. Asked of the live
+                        // fragmentainer, not of the band baseTop ends in - that band is already the next one,
+                        // so the child used to be placed at the parent's content top there (plus its own top
+                        // margin, which then "crossed" nothing) while this pass still filled the previous page.
+                        // Its first line then resumed at the next band's top, above the child's own box. The
+                        // child's own margin is beside the point: it only made the mismatch larger.
+                        if (prevSibling is null
+                            && child.HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { } filling }
+                            && HtmlContainerInt.FallsPast(baseTop, filling.Band))
+                        {
+                            child.RequestBreakBefore(filling.BandBottom);
+                            return null;
+                        }
 
                         if (boundary.FallsPast(top))
                         {
@@ -7028,8 +7167,8 @@ namespace PeachPDF.Html.Core.Dom
             // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
             // so a hint naming a different fragmentation context must not suppress a page break.
             //
-            // Monolithic content (css-break-3 §2 - a replaced element, a scroll container) reaches the same
-            // mover, because "may not be broken" and "asks not to be broken" want the same relocation. So
+            // Monolithic content (css-break-3 §2 for a replaced element, §4.1 for a scroll container kept
+            // whole) reaches the same mover, because "is not broken" and "asks not to be broken" want the same relocation. So
             // does a table that did not break between any two of its own rows: it did not fragment, which
             // is what the other two say about themselves in advance rather than after the fact.
             var avoidsBreak = BreakValues.AvoidsBreak(BreakInside.Value, FragmentationContext.Page);
@@ -7047,7 +7186,7 @@ namespace PeachPDF.Html.Core.Dom
             // it is the engine's own final answer, and this page-context mover (built for an ordinary
             // block sibling with siblings and a page grid of its own to relocate against) would ask the
             // same question again with none of that context and can disagree.
-            if ((avoidsBreak || monolithic) && !_earlyBreakTaken && !PositionAssignedByEngine)
+            if ((avoidsBreak || monolithic) && !_earlyBreakTaken && !PositionAssignedByEngine && !HoldsAFloatThatRanAcrossFragmentainers())
             {
                 // The space this box's own top already sits in - BlockConstraint.For reproduces the same
                 // shifted-grid convention (see HtmlContainer.PageIndexOf) the pre-BlockConstraint version
@@ -7059,7 +7198,7 @@ namespace PeachPDF.Html.Core.Dom
                 // The two arms part company on a box that fits in no fragmentainer. An unsatisfiable
                 // `avoid` is relaxed and the box still moves, maximizing what lands on one page (§4.3); a
                 // monolithic box is left exactly where it is instead, because there is nowhere to move it
-                // to - §2 has it overflow in place, which for a scroll container's own children is what
+                // to - §2 has it overflow in place (§4.1 likewise for a scroll container), which for its own children is what
                 // LayoutContents' own fragmentainer-detach around this box's content already arranged
                 // (#350) before this mover ever runs; this arm just declines to also try relocating the
                 // box itself. The question is asked of the *destination* band, which per-page @page
@@ -7087,8 +7226,13 @@ namespace PeachPDF.Html.Core.Dom
             // the box, in one of two ways: by moving the minimum number of lines the spec asks for, or,
             // where that cannot be arranged, by pushing the whole box to the next fragmentainer. A
             // paragraph taller than one page is not pushed: it would just recreate the violation there.
+            //
+            // Not for an absolutely positioned box: its position comes from its offsets, so the push and the
+            // rewind, which lay it out again from another page's top, put it back where it was. Its last line was
+            // then left across the page foot with no fragment on the next page, and was drawn on no page. Its
+            // widows are relaxed instead, as they are when they cannot be satisfied (�4.3).
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
-                && !_earlyBreakTaken && !PositionAssignedByEngine
+                && !_earlyBreakTaken && !PositionAssignedByEngine && Position.Value is not PositionMode.Absolute
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
                 && (orphans > 1 || widows > 1))
             {
@@ -7191,6 +7335,13 @@ namespace PeachPDF.Html.Core.Dom
             // The answer can be provisional here - see ResolvePositionedAutoBlockMargins.
             ResolvePositionedAutoBlockMargins();
 
+            // Its position and height are final now. Placed by its offsets, it can land on a fragmentainer
+            // this pass has already emitted, which has to be re-opened to draw it (#1349).
+            if (Position.Value is PositionMode.Absolute)
+            {
+                HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+            }
+
             // Named-page registration tail: block containers already registered before child layout
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a
             // box that never entered the block branch) registers here, after every branch above that
@@ -7262,6 +7413,10 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
                         child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
+
+                        // This is the box's final position, and it can be on a fragmentainer already emitted
+                        // that its provisional one, from its own epilogue, did not reach (#1349).
+                        HtmlContainer?.InvalidateEmittedFragmentainersReceiving(child);
                     }
 
                     // A positioned descendant establishes the containing block for anything below it and
@@ -8184,7 +8339,7 @@ namespace PeachPDF.Html.Core.Dom
         /// table column beside it.
         /// </para>
         /// </summary>
-        private static bool IsFlexOrGridItem(CssBox box) =>
+        internal static bool IsFlexOrGridItem(CssBox box) =>
             box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid;
 
@@ -9590,7 +9745,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <para>
         /// The single place the §4.3 corrections — <c>break-inside: avoid</c>,
-        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> monolithic content,
+        /// monolithic content (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>, <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>),
         /// <c>orphans</c>/<c>widows</c>, and the keep-with-next pull they share — turn a stated
         /// decision into geometry, so that how a break is <i>taken</i> is decided once rather than per
         /// mover.

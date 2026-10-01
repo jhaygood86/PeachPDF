@@ -591,7 +591,7 @@ namespace PeachPDF.Html.Core
         /// ends up, and that pass is never resumed - permanently desyncing the word from its own box.
         /// <para>
         /// Also set, for a different reason, around a monolithic subtree's own children
-        /// (<see cref="Dom.CssBox.LayoutContents"/>, #350): css-break-3 §2 forbids breaking such content
+        /// (<see cref="Dom.CssBox.LayoutContents"/>, #350): css-break-3 §2 and §4.1 keep such content unbroken
         /// at all, so a forced break inside it must not take effect either. <see cref="Dom.CssBox.ForcedBreakTopFor"/>
         /// reads this flag (rather than <see cref="IsFragmenting"/>, which is equally false once a pass
         /// has simply finished with none running at all) to tell "inside a suppressed subtree" from that.
@@ -628,6 +628,22 @@ namespace PeachPDF.Html.Core
 
         internal void LeaveNestedFragmentainer(FragmentainerContext? previous) =>
             CurrentFragmentainer = previous;
+
+        internal FragmentainerContext CreateIndependentPageFragmentainer(CssBox root, int slot,
+            FragmentainerContext enclosing)
+        {
+            var context = new FragmentainerContext(this, root, slot);
+            var endInset = TotalBandEndReservationFor(slot);
+            var startInset = TopFloatAreaHeightsBySlot.GetValueOrDefault(slot);
+            if (enclosing.SlotIndex == slot)
+            {
+                endInset = Math.Max(endInset, enclosing.BandEndInsetOf(slot));
+                startInset = Math.Max(startInset, enclosing.BandStartInsetOf(slot));
+            }
+            if (endInset > 0) context.ReserveBandEnd(slot, endInset);
+            if (startInset > 0) context.ReserveBandStart(slot, startInset);
+            return context;
+        }
 
         /// <summary>
         /// Whether a break may be taken for the content being laid out right now. False during a
@@ -2176,8 +2192,9 @@ namespace PeachPDF.Html.Core
                 {
                     var pageY = geom.Top;
                     var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, pageY, geom.BandHeight);
-                    var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName);
-                    var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
+                    var isBlankPage = IsReservedBlankSlot(fragmentainer.SlotIndex);
+                    var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName, isBlankPage);
+                    var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName, isBlankPage);
 
                     foreach (var marginRule in applicableMargins)
                     {
@@ -2966,6 +2983,11 @@ namespace PeachPDF.Html.Core
             switch (token)
             {
                 case InlineBreakToken inline when ReferenceEquals(inline.Box, box):
+                    // The record says how many lines the box had completed; one whose line boxes have since
+                    // been replaced by a later layout of the same box (a re-flow within the pass that asked
+                    // for the rewind) holds fewer, so the request is stale and there is nothing to cut down.
+                    if (box.LineBoxes.Count < inline.CompletedLineCount) return false;
+
                     rebuilt = inline with
                     {
                         // The walk position of the first line the budget gives up, which is where the flow
@@ -3061,6 +3083,65 @@ namespace PeachPDF.Html.Core
             if (box.IsInDetachedRepeatingGroup) return;
 
             _emitter.InvalidateFrom(PageIndexOf(documentY), box);
+        }
+
+        /// <summary>
+        /// Un-freezes the already-emitted fragmentainers an absolutely positioned <paramref name="box"/>
+        /// has just been laid out into, so they are emitted again with the box in them. Called once the box
+        /// has its final position and height; a no-op for every box that lands where layout has not yet
+        /// emitted anything, which is every placement in forward layout.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="InvalidateEmittedFragmentsFor"/> covers a box that already holds fragments and moves.
+        /// An absolutely positioned box can instead land behind the pass that places it without ever having
+        /// been emitted: its containing block is laid out on an earlier fragmentainer than the box itself,
+        /// most often the initial containing block on the first page (CSS 2.1 §10.1), while the box is
+        /// reached in the tree on a later pass. Nothing re-opened that fragmentainer, so the box was drawn
+        /// on no page (#1349).
+        /// </para>
+        /// <para>
+        /// Only the fragmentainers the box's border box reaches are re-opened, not everything after them:
+        /// the box is out of flow, so nothing else moved. A box a frozen fragmentainer already holds is
+        /// left to <see cref="InvalidateEmittedFragmentsFor"/>, and one entirely above the first page (a
+        /// skip link at <c>top: -9999px</c>) has nowhere to be drawn. Without those limits a document with
+        /// one badge per paragraph re-emitted every page for each badge on every pass, more than doubling
+        /// its layout time.
+        /// </para>
+        /// </remarks>
+        internal void InvalidateEmittedFragmentainersReceiving(CssBox box)
+        {
+            if (_emitter is null || !HasRealPageGrid) return;
+            if (box.IsInDetachedRepeatingGroup || _emitter.HoldsFragmentsFor(box)) return;
+            if (box.ActualBottom <= 0) return;
+
+            var first = Math.Max(SlotStartingAt(Math.Max(box.Location.Y, 0)), 0);
+
+            // Forward layout, which is every ordinary placement: nothing from the box's top on is frozen yet.
+            // Asked before the subtree walk below, since content that overflows the box cannot start above it.
+            if (first > _emitter.LastEmittedSlot) return;
+
+            // Content that overflows the box (overflow: visible) is drawn past its border box, on pages the
+            // border box does not reach; those have to be re-opened too, or the overflowing lines are lost.
+            var bottom = box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+                ? CssBox.GetMaximumBottom(box, box.ActualBottom)
+                : box.ActualBottom;
+            var last = SlotEndingAt(Math.Max(bottom, PageBoundaryEpsilon));
+
+            _emitter.InvalidateFrom(first, box, throughSlot: Math.Max(last, first));
+        }
+
+        /// <summary>
+        /// A sibling following a fragmented float can first be placed beside its top on an
+        /// already-emitted page. It has no fragments to invalidate yet, but that page is stale.
+        /// </summary>
+        internal void InvalidateEmittedFragmentsForPlacement(CssBox box)
+        {
+            if (_emitter is null || !HasRealPageGrid || box.IsInDetachedRepeatingGroup
+                || CurrentFragmentainer is not { HasOwnBand: false } context
+                || box.Location.Y >= PageTopOf(context.SlotIndex)) return;
+
+            _emitter.InvalidateFrom(PageIndexOf(box.Location.Y), box);
         }
 
         /// <summary>

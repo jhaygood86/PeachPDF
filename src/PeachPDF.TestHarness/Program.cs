@@ -1937,6 +1937,78 @@ await SaveShowcaseAsync("paged_media", "Paged Media", "Paged Media",
     "url() logo image in a margin box (@top-left-corner).",
     pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Floats taller than a page ─────────────────────────────────────────────
+
+// A float that is taller than the space left on its page continues onto the following pages, and the text
+// that flows beside it carries on beside the continuation. Before this, the float's own lines were split
+// across pages but the text beside it was dropped after the first page. Three shapes are shown: text beside
+// a tall left float, a block that clears the float (it starts below the float's last line, at the left
+// edge), and a tall float inside a break-inside: avoid box.
+static string TallFloatLines(string prefix, int count) =>
+    string.Concat(Enumerable.Range(1, count).Select(i => $"<div class='line'>{prefix} line {i}</div>"));
+
+static string BesideText(int count) =>
+    string.Join(" ", Enumerable.Range(1, count).Select(i => $"The text beside the float, sentence {i}, keeps flowing."));
+
+var tallFloatHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 220pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/14pt sans-serif }" +
+    ".line { height: 14pt; padding: 0 4pt; background: #ffe9d6; border-bottom: 1pt solid #fff }" +
+    ".float { float: left; width: 110pt; margin: 0 8pt 0 0 }" +
+    "h2 { font-size: 11pt; margin: 0 0 4pt; clear: both }" +
+    "</style></head><body>" +
+    "<h2>Text beside a float taller than the page</h2>" +
+    "<div class='float'>" + TallFloatLines("Float", 30) + "</div>" +
+    "<p>" + BesideText(40) + "</p>" +
+    "<h2>A block that clears it starts below the float's last line</h2>" +
+    "<p style='background:#d6ecff'>This paragraph clears the float, so it starts at the left edge below the float's last line.</p>" +
+    "<div style='break-inside: avoid; border: 1pt solid #999; padding: 4pt'>" +
+    "<div class='float' style='width:90pt'>" + TallFloatLines("Boxed", 20) + "</div>" +
+    "<p>" + BesideText(20) + "</p></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("tall_floats_across_pages", "Layout", "Floats Taller Than A Page",
+    "A float taller than a page continues onto the following pages with the text beside it, a block that clears " +
+    "the float starts below its last line, and a tall float inside a break-inside: avoid box keeps its content.",
+    tallFloatHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── Panels whose top edge crosses the page foot ───────────────────────────
+
+// A block whose top border or padding reaches past the foot of a page moves whole to the next page, with its
+// first child inside it. Before this, the child was placed on the next page but its first line was drawn at that
+// page's top, above the child's own box: a heading's highlight was lost, a border bar was drawn into the page
+// margin, and text sat above the paragraph it belonged to. Each section starts a new page, and the panel starts a
+// few points above that page's foot: a bordered panel with a highlighted heading, a padded panel whose first
+// child has no margin of its own, and a padded wrapper inside a padded panel.
+const string panelFootIntro = "font-size:8pt;color:#666";
+
+var panelAtFootHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 220pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/14pt sans-serif }" +
+    "section { break-before: page }" +
+    "section:first-of-type { break-before: auto }" +
+    "p { margin: 0 0 4pt }" +
+    ".hl { background: #ffe9a8 }" +
+    ".panel-border { border-top: 5pt solid #7a8794 }" +
+    ".panel-border h2 { margin: 20pt 0 4pt; font-size: 12pt }" +
+    ".panel-padded { padding-top: 20pt; background: #eef4fb }" +
+    ".panel-nested { padding-top: 5pt; background: #eef4fb }" +
+    "</style></head><body>" +
+    "<section><div style='height:176pt;" + panelFootIntro + "'>A panel with a top border and a highlighted heading, starting 4pt above the foot.</div>" +
+    "<div class='panel-border'><h2 class='hl'>Heading inside the panel</h2><p>The panel moved to this page whole, so its border bar, the heading's highlight and the heading's text all sit together.</p></div></section>" +
+    "<section><div style='height:162pt;" + panelFootIntro + "'>A panel with 20pt of top padding and a first child that has no margin, starting 18pt above the foot.</div>" +
+    "<div class='panel-padded'><p class='hl'>The first paragraph starts inside its own highlight, not above it.</p><p>The second paragraph follows.</p></div></section>" +
+    "<section><div style='height:170pt;" + panelFootIntro + "'>A padded wrapper inside a padded panel, starting 10pt above the foot.</div>" +
+    "<div class='panel-nested'><div style='padding-top:3pt'><p class='hl'>Text in the inner wrapper, inside its highlight.</p></div></div></section>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("panels_at_the_page_foot", "Paged Media", "Panels At The Page Foot",
+    "A panel whose top border or padding crosses the page foot moves whole to the next page, and its first child's " +
+    "text starts inside the child's own box instead of above it.",
+    panelAtFootHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Paged Media showcase — margin-box image alignment ─────────────────
 
 // A margin box's image content follows the box's alignment exactly as text does (CSS Paged
@@ -2387,6 +2459,208 @@ var pageFloatsHtml = """
 await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
     "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page, and float-reference: column pinning a float to the edge of the column its anchor sits in so only that column gives up room.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── Scroll containers across page breaks ───────────────────────────────────
+// Unconstrained overflow containers retain line and block break points (css-break-3 §4.1).
+// A scroll container with a definite height or maximum stays monolithic; an auto-height one in
+// ordinary block flow breaks like any other block.
+var scrollContainerCodeLines = string.Join("\n", Enumerable.Range(1, 34).Select(i =>
+    $"{i,2}  " + (i % 5) switch
+    {
+        0 => "return total;",
+        1 => "var total = 0;",
+        2 => "foreach (var line in invoice.Lines)",
+        3 => "    total += line.Quantity * line.UnitPrice;",
+        _ => "// apply discounts and taxes per line",
+    }));
+
+var scrollContainersAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; }
+    h2 { break-after: avoid; font-size: 10pt; margin: 10pt 0 4pt; }
+    pre {
+      overflow: auto;
+      background: #f3f4f6;
+      border: 0.75pt solid #9ca3af;
+      padding: 6pt;
+      font-size: 7.5pt;
+      line-height: 1.3;
+      margin: 0;
+    }
+    .panel {
+      overflow: hidden;
+      border: 0.75pt solid #2563eb;
+      background: #eff6ff;
+      padding: 4pt 8pt;
+    }
+    .panel p { margin: 0 0 4pt; }
+    .capped {
+      overflow: auto;
+      height: 170pt;
+      border: 0.75pt solid #b45309;
+      background: #fffbeb;
+      padding: 4pt 8pt;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Scroll containers across page breaks</h1>
+    <p>A box with <code>overflow: auto</code> or <code>hidden</code> and no height of its own grows with its
+    content, so on paper it has nothing to clip. It breaks between its lines like any other block, as it
+    does when a browser prints it, instead of being sliced with a line lost at every page edge.</p>
+
+    <h2>A code listing with overflow: auto</h2>
+    <pre>{{scrollContainerCodeLines}}</pre>
+
+    <h2>An overflow: hidden panel</h2>
+    <div class="panel">
+    <p>Every paragraph in this panel is drawn whole on one page or the next. The border and background
+    are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
+    <p>Because the panel has no height of its own, print treats it as an ordinary block: a page edge
+    falls between two of its lines instead of slicing through one.</p>
+    <p>Add break-inside: avoid to keep a short panel together instead.</p>
+    <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
+    is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
+    <p>Its height grows with its content, so there is nothing it can clip in the block axis, and the page
+    edge simply falls between two of its lines.</p>
+    <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
+    </div>
+
+    <p>An overflow: auto box whose own height is capped is different. With a height or a max-height
+    PeachPDF treats it as monolithic content, like an image, and never breaks it between its lines
+    (browsers split such a box instead). Where it would straddle a page boundary, it is carried to the next page whole.</p>
+
+    <p>Everything above uses up most of this page, so the box below is left with less room than its own
+    height. A box that scrolls has a fixed extent, so the page edge cannot be allowed to fall through it.</p>
+
+    <h2>A fixed-height box stays whole</h2>
+    <div class="capped">
+    <p>This box has overflow: auto and height: 170pt, so it is treated as monolithic: it moves whole
+    to the next page when it does not fit where it starts, rather than breaking.</p>
+    <p>It starts too close to the foot of the page for all of its paragraphs, so the whole box, border
+    and all, has moved to this page instead of leaving its first lines behind on the last one.</p>
+    <p>An auto-height box in the same place would have broken between two of these paragraphs.</p>
+    <p>To keep a short auto-height box together as well, give it break-inside: avoid.</p>
+    </div>
+
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
+    scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── Cards that start just above the page foot ─────────────────────────────
+
+// A card is an auto-height overflow: hidden or auto panel whose first child, usually a title, has a top margin.
+// When the card starts within that margin of the page foot its first page holds nothing, and the whole card was
+// once drawn on no page at all: the emitter concluded from the empty first page that nothing more was left to
+// draw. Each section starts a new page and puts the card a few points above the foot: an overflow: hidden card with
+// a 30pt title margin, and an overflow: auto card with a 20pt one.
+static string CardLines(int count) =>
+    string.Concat(Enumerable.Range(1, count).Select(i => $"<p>Card line {i}</p>"));
+
+var cardsAtFootHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 200pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/12pt sans-serif }" +
+    "section { break-before: page }" +
+    "section:first-of-type { break-before: auto }" +
+    "p { margin: 0 0 4pt }" +
+    ".card { background: #eaf3ea; border-left: 3pt solid #4a8f4a; padding-left: 6pt }" +
+    ".card h2 { font-size: 11pt }" +
+    ".note { font-size: 8pt; color: #666 }" +
+    "</style></head><body>" +
+    "<section><div class='note' style='height:146pt'>An overflow: hidden card whose title has a 30pt top margin, starting 14pt above the foot.</div>" +
+    "<div class='card' style='overflow:hidden'><h2 style='margin:30pt 0 4pt'>Card title</h2>" + CardLines(20) + "</div><p>After the card.</p></section>" +
+    "<section><div class='note' style='height:152pt'>An overflow: auto card whose title has a 20pt top margin, starting 8pt above the foot.</div>" +
+    "<div class='card' style='overflow:auto'><h2 style='margin:20pt 0 4pt'>Card title</h2>" + CardLines(20) + "</div><p>After the card.</p></section>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("cards_at_the_page_foot", "Paged Media", "Cards At The Page Foot",
+    "An auto-height overflow: hidden or auto card whose title has a top margin, starting just above the page foot, " +
+    "is drawn whole on the following pages instead of vanishing.",
+    cardsAtFootHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── Absolutely positioned boxes across page breaks ─────────────────────────
+// An absolute box is drawn on the page its offsets place it on, even when layout has already moved past
+// that page, and it never displaces the in-flow content after it (CSS 2.1 §9.3.1). A tall one is laid out
+// as passes of its own that break between its lines and add the pages it needs, so its break can no longer lose the paragraphs after it.
+var absoluteParagraphs = string.Concat(Enumerable.Range(1, 14).Select(i =>
+    $"<p>Paragraph {i}. The text after an absolutely positioned box starts where it would without it, and "
+    + "flows on across the page boundary like any other text, with nothing lost at the break.</p>"));
+var absoluteSidebarLines = string.Join("<br>", Enumerable.Range(1, 40).Select(i => $"Sidebar note {i}"));
+
+var absoluteBoxesAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; padding-right: 48pt; }
+    p { margin: 0 0 4pt; }
+    .section { position: relative; }
+    .sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 80pt;
+      background: #f0f9ff;
+      border-left: 2pt solid #0284c7;
+      padding: 2pt 4pt;
+      font-size: 7pt;
+    }
+    .text { margin-right: 96pt; }
+    .stamp {
+      position: absolute;
+      top: 0;
+      right: 0;
+      border: 1.5pt solid #dc2626;
+      color: #dc2626;
+      font-weight: bold;
+      font-size: 9pt;
+      padding: 2pt 6pt;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Absolute boxes across pages</h1>
+    <p>The blue sidebar below is absolutely positioned inside a relative section, and taller than a page.
+    It breaks between its lines and continues on the pages after the first. The paragraphs after
+    it are not moved by it, and none of them is lost at the page boundary.</p>
+    <div class="section">
+    <p>Section introduction.</p>
+    <div class="sidebar">{{absoluteSidebarLines}}</div>
+    <div class="text">{{absoluteParagraphs}}</div>
+    </div>
+    <p>The DRAFT stamp at the top right of the first page is written at the very end of this document. It
+    has no positioned ancestor, so it is placed against the first page's area and drawn there, and the
+    paragraph after it is not moved by it.</p>
+    <div class="stamp">DRAFT</div>
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("absolute_boxes_across_pages", "Paged Media", "Absolute Boxes Across Pages",
+    "An absolutely positioned sidebar taller than a page breaking between its lines across pages while the paragraphs after it flow on undisturbed, and a DRAFT stamp declared at the end of the document drawn at the top of the first page.",
+    absoluteBoxesAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
@@ -2969,14 +3243,13 @@ var monolithicHtml = """
     }
     .card h2 { font-size: 10pt; margin: 0 0 0.3em; color: #1d4ed8 }
     .card p { margin: 0; font-size: 8.5pt }
-    .clipped { overflow: hidden }
+    .clipped { break-inside: avoid }
     .tag { font-size: 7pt; letter-spacing: .04em; text-transform: uppercase; color: #64748b }
     </style></head><body>
     <h1>Monolithic content at a page break</h1>
-    <p class="intro">CSS Fragmentation Level 3 &sect;2 makes a scroll container &mdash; any box with
-    <code>overflow</code> other than <code>visible</code> &mdash; monolithic: it may not be split, so where it
-    would straddle a page boundary it moves to the next page whole. The two cards below are identical apart
-    from that one declaration.</p>
+    <p class="intro">Content that asks not to be broken &mdash; a box with <code>break-inside: avoid</code>, or a
+    replaced element such as an image &mdash; is not split: where it would straddle a page boundary it moves to
+    the next page whole. The two cards below are identical apart from <code>break-inside: avoid</code>.</p>
     """
     + string.Concat(Enumerable.Range(1, 14).Select(i =>
         $"<p>Filler paragraph {i}. This body copy pushes the cards down the page so that each one meets the "
@@ -2994,10 +3267,10 @@ var monolithicHtml = """
         + "page boundary at the same place its twin met the first one.</p>"))
     + """
     <div class="card clipped">
-      <span class="tag">overflow: hidden</span>
+      <span class="tag">break-inside: avoid</span>
       <h2>This card moves whole</h2>
-      <p>Being a scroll container makes it monolithic, so rather than being cut in half it is carried
-      wholesale onto the next page, leaving the gap above it.</p>
+      <p>Because it asks not to be broken, rather than being cut in half it is carried wholesale onto the
+      next page, leaving the gap above it.</p>
     </div>
     """
     + string.Concat(Enumerable.Range(31, 4).Select(i =>
@@ -3014,7 +3287,7 @@ var monolithicHtml = """
         + "between its own lines rather than above it.</p>"))
     + """
     <div class="card clipped">
-      <span class="tag">overflow: hidden &mdash; multi-line</span>
+      <span class="tag">break-inside: avoid &mdash; multi-line</span>
       <h2>Its lines stay evenly spaced</h2>
       <p>The page boundary falls part-way through this paragraph, so the box is relocated after some of its
       text had already been placed on the following page. Because it is laid out again at its destination
@@ -3039,9 +3312,9 @@ var monolithicHtml = """
     + """
     <div style="border:1px solid #a3a3a3; border-radius:6px; padding:8px 10px; background:#fafafa">
       <div class="card clipped">
-        <span class="tag">first child &mdash; monolithic</span>
+        <span class="tag">first child &mdash; break-inside: avoid</span>
         <h2>The panel moves too</h2>
-        <p>This card may not be split, so it starts on the next page. The panel around it is not what
+        <p>This card is not split, so it starts on the next page. The panel around it is not what
         asked for the break, but the break point is the panel's own, so the panel opens on that page as
         well rather than being cut open on this one.</p>
       </div>
@@ -3174,8 +3447,8 @@ var monolithicHtml = """
     """;
 
 await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monolithic Content",
-    "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
-    + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
+    "A box with break-inside: avoid moves to the next page whole instead of being cut in half by the page "
+    + "boundary. A flex line and a "
     + "grid row that ask not to be broken move as a unit for the same reason, and the lines below a "
     + "moved one follow it rather than staying put. A forced break is taken from either side of a break "
     + "point, so break-after on one line opens the next page for the line after it — and break-after: "
@@ -12994,6 +13267,41 @@ body { margin: 0; font-family: sans-serif; }
 await SaveShowcaseAsync("backdrop_filter", "Graphics & Effects", "Backdrop Filter",
     "backdrop-filter on frosted-glass panels over a gradient and text: blur, grayscale + contrast, blur + saturate, and invert + hue-rotate, each applied to what was painted behind the panel and clipped to its rounded corners.",
     backdropFilterHtml, pdfConfig);
+
+// --- legacy vendor-prefixed CSS showcase ---
+
+const string vendorPrefixedHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; font-size: 12px; }
+.row { display: -webkit-flex; display: flex; margin: 10px; }
+.cell { -webkit-box-sizing: border-box; -moz-box-sizing: border-box; width: 110px; height: 90px; margin-right: 10px; padding: 8px; color: #fff; font-weight: bold;
+        -webkit-border-radius: 14px; -webkit-box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+.lin1 { background: -webkit-linear-gradient(left, #e33, #36f); }
+.lin2 { background: -webkit-linear-gradient(top, #fc3, #3c6); }
+.lin3 { background: -moz-linear-gradient(45deg, #e33, #fc3, #3c6); }
+.lin4 { background: -webkit-linear-gradient(bottom right, #36f, #e33); }
+.rad1 { background: -webkit-radial-gradient(center, circle cover, #fc3, #e33 70%, #36f); }
+.rad2 { background: -moz-radial-gradient(30% 40%, circle, #fff, #36f); }
+.rep  { background: -webkit-repeating-linear-gradient(45deg, #e33 0, #e33 10px, #fc3 10px, #fc3 20px); }
+.rot  { -webkit-transform: rotate(-8deg); background: #3c6; }
+.sticky { position: -webkit-sticky; position: sticky; top: 0; background: #e33; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; width: 200px; height: auto; background: #36f; }
+.legacybox { display: -webkit-box; -webkit-box-orient: horizontal; -webkit-box-pack: justify; -webkit-box-align: center; width: 330px; height: 90px; padding: 8px; background: #3c6; margin-right: 10px; }
+.legacybox span { display: block; width: 60px; height: 40px; background: #fc3; -webkit-box-flex: 0; }
+.legacybox span + span { height: 70px; background: #e33; }
+</style></head><body>
+<div class="row"><div class="cell lin1">webkit linear left</div><div class="cell lin2">webkit linear top</div><div class="cell lin3">moz linear 45deg</div><div class="cell lin4">bottom right</div></div>
+<div class="row"><div class="cell rad1">webkit radial</div><div class="cell rad2">moz radial at 30% 40%</div><div class="cell rep">repeating</div><div class="cell rot">-webkit-transform</div></div>
+<div class="row"><div class="cell sticky">-webkit-sticky</div>
+<div class="cell clamp">-webkit-line-clamp: 3 with display: -webkit-box and -webkit-box-orient: vertical cuts this long paragraph of text off after exactly three lines and marks the cut with an ellipsis, however much more text follows it.</div></div>
+<div class="row"><div class="legacybox"><span></span><span></span><span></span></div></div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("vendor_prefixed_css", "Graphics & Effects", "Legacy Vendor-Prefixed CSS",
+    "A stylesheet written only with the legacy -webkit-/-moz- spellings (autoprefixer-era output): prefixed linear, radial and repeating gradients in their pre-standard syntax, box-shadow, border-radius, box-sizing, transform, flex and sticky, the -webkit-box flexbox model (box-pack, box-align) and the -webkit-box + -webkit-line-clamp text-truncation idiom - each renders exactly as its standard spelling.",
+    vendorPrefixedHtml, pdfConfig);
 
 // --- PDF/A-1 with flattened transparency showcase ---
 

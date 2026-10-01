@@ -1,13 +1,15 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Linq;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
     /// Classifies content that cannot be broken, per
-    /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">CSS Fragmentation Level 3 §2</see>.
+    /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">CSS Fragmentation Level 3 §4.1</see>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -19,20 +21,52 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </para>
     /// <para>
     /// <b>The two questions below are not the same question, and keeping them apart is the point of this
-    /// file.</b> <see cref="IsMonolithic"/> is §2's own set: a property of the <i>content</i>, which no
-    /// user agent may break. <see cref="PaginatesItsOwnContent"/> is a PeachPDF implementation constraint:
+    /// file.</b> <see cref="IsMonolithic"/> covers unfragmentable content and §4.1's optional treatment
+    /// of scroll containers. <see cref="PaginatesItsOwnContent"/> is a PeachPDF implementation constraint:
     /// four layout engines fragment their own subtrees, so the driver must not hand them a half-laid-out
     /// one. Conflating them is what made the second look like a spec claim.
     /// </para>
     /// </remarks>
     internal static class MonolithicContent
     {
-        // ── css-break-3 §2's own set ──────────────────────────────────────────
+        // ── css-break-3 §4.1's monolithic content ─────────────────────────────
 
         /// <summary>
-        /// Whether §2 forbids breaking inside <paramref name="box"/>.
+        /// Whether content is kept unbroken under CSS Fragmentation §4.1.
         /// </summary>
-        internal static bool IsMonolithic(CssBox box) => IsReplaced(box) || IsScrollContainer(box);
+        internal static bool IsMonolithic(CssBox box) =>
+            IsReplaced(box) || (IsScrollContainer(box)
+                && (HasConstrainedLogicalHeight(box)
+                    || IsLaidOutByAnEngineThatCannotContinueIt(box)));
+
+        // An uncapped auto-height box grows with its content, so there is no block-axis scroll
+        // area to keep together. In print, allow its normal line and block break points.
+        // A definite height or maximum keeps the box unbreakable for every overflow value. §4.1 only
+        // permits that for hidden without a maximum, but breaking a hidden box that has one dropped
+        // the content after it on the trees measured, so the sized box stays whole as it always has.
+        private static bool HasConstrainedLogicalHeight(CssBox box) =>
+            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
+                ? CssValueParser.IsValidLength(box.Width) || CssValueParser.IsValidLength(box.MaxWidth)
+                : CssLayoutEngine.HasDefiniteHeight(box)
+                    || (CssValueParser.IsValidLength(box.MaxHeight)
+                        && (!CssValueParser.DependsOnPercentage(box.MaxHeight)
+                            || CssLayoutEngine.IsHeightDefinite(box.ContainingBlock)));
+
+        // A flex or grid item is sized and finally placed by its container's commit pass, which pins the
+        // item's used size before its own layout, and a box inside a multi-column container is clipped and
+        // continued per column. An auto-height scroll container laid out by either lost lines at the
+        // fragmentainer edge when it was allowed to break, so it keeps the unbreakable treatment there.
+        private static bool IsLaidOutByAnEngineThatCannotContinueIt(CssBox box)
+        {
+            if (CssBox.IsFlexOrGridItem(box)) return true;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.EstablishesMultiColumnContext) return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Whether <paramref name="box"/> is a replaced element, whose content the UA cannot fragment
@@ -58,8 +92,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         };
 
         /// <summary>
-        /// Whether <paramref name="box"/> is a scroll container — §2's "elements with <c>overflow</c> other
-        /// than <c>visible</c> or <c>clip</c>".
+        /// Whether <paramref name="box"/> establishes a scroll container rather than propagating
+        /// its overflow to the viewport. This alone does not make its content monolithic.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -74,7 +108,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>&lt;body&gt;</c> is excluded only <b>conditionally</b>, which §3.3 is specific about: the
         /// body's value propagates just when the root's own computed <c>overflow</c> is <c>visible</c>. If
         /// the root already declared one, the root took the propagation and the body is a scroll container
-        /// in its own right — so <c>html { overflow: hidden } body { overflow: auto }</c> makes the body
+        /// in its own right — so <c>html { overflow: hidden } body { overflow: scroll }</c> makes the body
         /// monolithic, where excluding it unconditionally would not.
         /// </para>
         /// <para>

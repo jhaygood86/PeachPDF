@@ -977,6 +977,80 @@ namespace PeachPDF.Tests.Integration
             return right;
         }
 
+        [Theory]
+        [InlineData("margin-top:-3pt")]
+        [InlineData("margin:-3pt")]
+        [InlineData("margin-top:-12pt")]
+        public async Task LeftFloat_WithNegativeMarginTop_DropsBelowAnEarlierFloatItDoesNotFitBeside(string secondMargin)
+        {
+            // The drop lands the margin edge on the blocker's bottom; a negative margin-top puts the
+            // border-box top above that edge, and a collision test on the border top found the same
+            // blocker again on every iteration, so layout never finished.
+            var html = Wrap($@"
+                <div style='width:260pt'>
+                    <div id='a' style='float:left; width:134pt; height:30pt'>a</div>
+                    <div id='b' style='float:left; width:144pt; height:20pt; {secondMargin}'>b</div>
+                </div>");
+
+            var layout = BuildAndLayout(html);
+            var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+            Assert.Same(layout, finished);
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var marginTop = b.ActualMarginTop;
+
+            Assert.True(marginTop < 0);
+            Assert.Equal(a.Location.X - a.ActualMarginLeft, b.Location.X - b.ActualMarginLeft, 3);
+            Assert.Equal(a.ActualBottom, b.Location.Y - marginTop, 3);
+        }
+
+        [Fact]
+        public async Task LeftFloat_WithNegativeMarginTop_BesideAnEarlierFloatItFitsBesideStaysBeside()
+        {
+            var html = Wrap(@"
+                <div style='width:260pt'>
+                    <div id='a' style='float:left; width:100pt; height:30pt'>a</div>
+                    <div id='b' style='float:left; width:100pt; height:20pt; margin-top:-3pt'>b</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(b.Location.X >= a.ActualRight - 0.01);
+            Assert.True(b.Location.Y < a.ActualBottom);
+        }
+
+        [Theory]
+        [InlineData("margin-right:-3pt")]
+        [InlineData("margin-right:0pt")]
+        public async Task RightFloat_InAColumn_IgnoresAnEarlierRightFloatInAnotherColumn(string margin)
+        {
+            // The earlier float lies in the second column's area, outside the first column's content
+            // box. Taking its left edge as the new limit widened the float's range past its own
+            // column, and a negative margin-right then left it overlapping the same blocker forever.
+            var html = Wrap($@"
+                <div style='width:300pt'>
+                    <div id='a' style='float:right; width:52pt; height:300pt'>a</div>
+                    <div id='cols' style='columns:2; column-gap:8pt'>
+                        <div id='b' style='float:right; width:97pt; height:10pt; {margin}'></div>
+                    </div>
+                </div>");
+
+            var layout = BuildAndLayout(html);
+            var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+            Assert.Same(layout, finished);
+
+            var (root, _) = await layout;
+            var cols = FindById(root, "cols")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(b.ActualRight + b.ActualMarginRight <= cols.ClientRight + 0.01,
+                $"float extends past its container: right={b.ActualRight}, container right={cols.ClientRight}");
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

@@ -74,6 +74,13 @@
         public const string Relative = "relative";
         public const string Absolute = "absolute";
         public const string Sticky = "sticky";
+        public const string WebkitSticky = "-webkit-sticky";
+        public const string WebkitFlex = "-webkit-flex";
+        public const string WebkitBox = "-webkit-box";
+        public const string WebkitInlineBox = "-webkit-inline-box";
+        public const string MozBox = "-moz-box";
+        public const string MozInlineBox = "-moz-inline-box";
+        public const string WebkitInlineFlex = "-webkit-inline-flex";
         public const string Serif = "serif";
         public const string SansSerif = "sans-serif";
         public const string Monospace = "monospace";

@@ -36,7 +36,9 @@ namespace PeachPDF.CSS
                     Add(token);
                     break;
                 case TokenType.Function:
-                    Add(token);
+                    // Legacy vendor gradient functions are rewritten to standard syntax here, the one place every
+                    // declaration value passes through (see LegacyGradientSyntax).
+                    Add(LegacyGradientSyntax.Rewrite(token));
                     break;
                 case TokenType.Ident:
                     IsImportant = CheckImportant(token);
