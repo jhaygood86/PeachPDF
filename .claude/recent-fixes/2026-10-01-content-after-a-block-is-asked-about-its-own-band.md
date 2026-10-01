@@ -38,3 +38,7 @@ Measured on 300 generated documents against `main` with #1550: 7 documents impro
 232). Two of those were traced: seed 36 contains an absolute box inside a relative wrapper in `columns` (#1537), and
 seed 88's lost lines are a heading in a table cell across the page foot (#1485's shape). A minimal table case did not
 reproduce either.
+
+## The line's top, not the word's
+
+Found by the corpus (seeds 88, 188, 232, 260): the rule above misfired on a heading at the top of a page. A heading set tighter than its font has words that poke ~0.7pt above their line box, so a line starting exactly at a page's top edge has words that start in the page before; asked of the word, they were held to the earlier page's foot, straddled it, and the page's last line kept its place across the foot and was clipped. The question is asked of the line's flow top (`CssRect.WouldStraddleFragmentainer`). A first attempt exempted table cells and then restricted the rule to cursor steps made by a child's overflow; both were wrong readings (the table cell was only where the heading happened to be), and the second broke the #1480 cases. Reductions of this document stop failing, because the loss depends on the exact vertical position at the foot; `HeadingAtAPageTop_DoesNotCostTheLastLineItsBreak` keeps the whole document.

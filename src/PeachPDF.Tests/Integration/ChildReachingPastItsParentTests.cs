@@ -74,6 +74,29 @@ public class ChildReachingPastItsParentTests
         Assert.Empty(doubled);
     }
 
+    // A heading set tighter than its font has words that poke above their line box, so a heading at the top of a page has words that start in the page before. Asked of the word's top, the cursor in the later page and the word in the earlier one, they were held to the earlier page's foot and broke again, and the page's last line was left across its own foot and clipped (found by a generated corpus).
+    [Fact]
+    public async Task HeadingAtAPageTop_DoesNotCostTheLastLineItsBreak()
+    {
+        static string Run(int from, int to) => string.Join(' ', Enumerable.Range(from, to - from + 1).Select(i => $"w88_{i}")) + " ";
+
+        var body = $"<h3>{Run(29, 34)}</h3>" +
+                   $"<table border='1'><td><div style='columns:3;column-gap:8pt'><h3>{Run(35, 37)}</h3><h3>{Run(40, 42)}</h3>{Run(43, 51)}</div></td>{Run(52, 52)}</table>" +
+                   $"{Run(55, 55)}<table border='1'><td><h3>{Run(61, 65)}</h3></td>{Run(66, 66)}</table>{Run(71, 85)}" +
+                   $"<p>{Run(86, 117)}</p>{Run(118, 147)}";
+        var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page { size: 300pt 250pt; margin: 20pt } " +
+                   "body { margin:0; font: 10pt/12pt Arial } p { margin:0 0 4pt } td { vertical-align: top }</style></head><body>" +
+                   body + "</body></html>";
+
+        var (visible, _) = await PaintedWords.LayOutAndCollectVisibleAsync(html);
+        var (lost, doubled) = PaintedWords.Diff(body, visible);
+
+        // The cell's own first line sits a point above the next page's top edge, which the strict check also reports and
+        // which is a separate matter: it is the paragraph's words after the table that must not be clipped.
+        Assert.DoesNotContain(lost, word => int.Parse(word[4..]) > 66);
+        Assert.Empty(doubled);
+    }
+
     // The same documents with an auto-height scroll container in place of the plain div, which breaks like a block.
     [Theory]
     [MemberData(nameof(Cases))]
