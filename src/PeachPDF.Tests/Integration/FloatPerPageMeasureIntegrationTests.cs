@@ -142,14 +142,12 @@ namespace PeachPDF.Tests.Integration
         public async Task FloatRight_DroppedByANarrowedScanBoundary_RederivesAtTheLandingPage()
         {
             // Exercises FloatBoxRight's own mid-scan re-derivation (inside the drop branch, not the
-            // simpler "re-run from scratch after clear" path above). `ghost` is a float:right box with a
-            // (valid, if unusual) negative margin-left - IsFloatIntersecting's Floating.Right case reads
-            // an existing candidate's own margin-left-adjusted left edge, so a small negative value is
-            // what makes an already-in-bounds box register as "intersecting" at all under that formula,
-            // which is the only way this branch is reachable through DomUtils.GetFirstIntersectingFloatBox
-            // as it exists today. Once found, `ghost`'s height carries the drop's MaxBottom well past the
-            // page-0/page-1 boundary, and f2's own width (wider than either page's own remaining room
-            // once narrowed) forces the drop that must re-derive the boundary at the Y it lands on.
+            // simpler "re-run from scratch after clear" path above). `ghost` is a tall float:right box
+            // that f2, wider than the room left beside it, cannot sit next to (CSS 2.1 §9.5.1 rules 2 and 7),
+            // so it drops below ghost. ghost's height carries the drop's MaxBottom well past the
+            // page-0/page-1 boundary, and the drop must re-derive the boundary at the Y it lands on.
+            // (This used to need a negative margin-left on ghost to be reachable at all, because the
+            // right-float intersection test did not see an earlier float in the same containing block.)
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }
@@ -157,7 +155,7 @@ namespace PeachPDF.Tests.Integration
                 body { margin: 0; }
                 div, p { margin: 0; }
                 </style></head><body>
-                <div id='ghost' style='float:right; width:10pt; margin-left:-20pt; height:700pt;'></div>
+                <div id='ghost' style='float:right; width:10pt; height:700pt;'></div>
                 <div id='f2' style='float:right; width:560pt; height:20pt;'></div>
                 </body></html>
                 """);
