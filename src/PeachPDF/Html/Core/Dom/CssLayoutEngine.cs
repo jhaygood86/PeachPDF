@@ -539,7 +539,14 @@ namespace PeachPDF.Html.Core.Dom
 
                 var box = setAside.Box;
                 var emptyInline = EmptyInlineContainingBlockFor(setAside);
-                var previous = box.HtmlContainer?.DetachFragmentainer();
+
+                // Outside a column the box is left to run as passes of its own: LayoutBlockChild resumes the record
+                // its break leaves, which is what detaching here was written to avoid depending on, and unbroken the
+                // box's last line crossed the page foot and was clipped away. Inside a column the box still cannot
+                // be fragmented against the page (its containing block is placed per column), so it keeps the
+                // detached, whole layout.
+                var detach = box.HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: false };
+                var previous = detach ? box.HtmlContainer?.DetachFragmentainer() : null;
 
                 try
                 {
@@ -547,7 +554,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 finally
                 {
-                    box.HtmlContainer?.RestoreFragmentainer(previous);
+                    if (detach) box.HtmlContainer?.RestoreFragmentainer(previous);
                     if (emptyInline is not null) emptyInline.EmptyInlineContainingBlock = null;
                 }
             }
