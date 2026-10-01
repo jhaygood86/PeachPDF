@@ -148,6 +148,38 @@ var tallCellHeight = tallCell.ActualBottom - tallCell.Location.Y;
 
       #endregion
 
+        #region Column Element Width Units (issue #1540)
+
+        [Theory]
+        [InlineData("30mm")]
+        [InlineData("3cm")]
+        [InlineData("85.04pt")]
+        [InlineData("1.18in")]
+        [InlineData("7.5em")]
+        [InlineData("113px")]
+        public async Task ColElementWidth_AnyLengthUnit_SizesTheColumnLikeACellWould(string width)
+        {
+            string Html(bool onCol) => $@"<!DOCTYPE html><html><head><style>
+body {{ margin: 0; font: 11pt Arial; }}
+table {{ border-collapse: collapse; table-layout: fixed; width: 500pt; }}
+td {{ padding: 0; }}
+</style></head><body><table>
+{(onCol ? $"<colgroup><col style='width: {width}'><col></colgroup>" : "")}
+<tr><td id='a' {(onCol ? "" : $"style='width: {width}'")}>AAA</td><td id='b'>BBB</td></tr>
+</table></body></html>";
+
+            var (onColRoot, _) = await BuildCssBoxTree(Html(true));
+            var (onCellRoot, _) = await BuildCssBoxTree(Html(false));
+
+            var second = FindById(onColRoot, "b")!;
+            var expected = FindById(onCellRoot, "b")!;
+
+            Assert.True(expected.Location.X > 20 && expected.Location.X < 250);
+            Assert.Equal(expected.Location.X, second.Location.X, 1);
+        }
+
+        #endregion
+
         #region Explicit Cell Height Smaller Than Content Tests
 
         [Fact]
@@ -2297,9 +2329,8 @@ Assert.NotNull(tbody);
         public async Task FixedLayout_ColElementWidths_Honored_RemainderGoesToTheUnsetColumn()
         {
             // <col> width is fixed layout's first (and highest) priority: a px column and a percentage
-            // column both get their stated widths, and the third <col> - which states a width in an
-            // unsupported unit (pt), the same pre-existing px/unitless/% -only grammar auto layout's
-            // <col> reading already has - is treated as unset and takes the true remainder.
+            // column both get their stated widths, and the third <col> - which states no width - is
+            // treated as unset and takes the true remainder.
             var html = @"
 <!DOCTYPE html>
 <html><head><style>
@@ -2308,7 +2339,7 @@ Assert.NotNull(tbody);
 </style></head>
 <body>
 <table>
-  <colgroup><col style='width: 160px'><col style='width: 40%'><col style='width: 999pt'></colgroup>
+  <colgroup><col style='width: 160px'><col style='width: 40%'><col></colgroup>
   <tbody><tr><td id='c1'>A</td><td id='c2'>B</td><td id='c3'>C</td></tr></tbody>
 </table>
 </body></html>";
