@@ -49,6 +49,36 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(items[1].Location.Y, items[2].Location.Y, 1.0);
         }
 
+        // ─── Inline items containing blocks (block-in-inline must not split items) ──
+
+        [Theory]
+        [InlineData("display:grid;grid-template-columns:1fr 1fr")]
+        [InlineData("display:grid;grid-template-columns:repeat(4,100pt)")]
+        [InlineData("display:flex")]
+        public async Task InlineItemsWithBlockChildren_StayOneItemEach(string containerStyle)
+        {
+            var html = Wrap($@"
+                <div style='{containerStyle};width:400pt;margin:0'>
+                    <span class='item'><h4 class='h' style='margin:0'>Recipient</h4><p class='p' style='margin:0'>XXXXX</p></span>
+                    <span class='item'><h4 class='h' style='margin:0'>Sender</h4><p class='p' style='margin:0'>YYYYY</p></span>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            var heads = FindAllByClass(root, "h");
+            var paras = FindAllByClass(root, "p");
+            Assert.Equal(2, items.Count);
+            Assert.Equal(2, heads.Count);
+            Assert.Equal(2, paras.Count);
+            Assert.Equal(items[0].Location.Y, items[1].Location.Y, 1.0);
+            Assert.True(items[0].Location.X < items[1].Location.X);
+            for (var i = 0; i < 2; i++)
+            {
+                Assert.Equal(heads[i].Location.Y, items[i].Location.Y, 1.0);
+                Assert.True(paras[i].Location.Y > heads[i].Location.Y);
+                Assert.Equal(heads[i].Location.X, paras[i].Location.X, 1.0);
+            }
+        }
+
         // ─── Column layout ───────────────────────────────────────────────────────
 
         [Fact]
