@@ -202,7 +202,31 @@ namespace PeachPDF.Html.Core.Dom
 
             if (resume is not null)
             {
-                var resumeBoundary = children[FirstChildIndexOf(resume, children)];
+                var resumeIndex = FirstChildIndexOf(resume, children);
+
+                // The boundary can be an out-of-flow box (a float the earlier fragment left for this page), and
+                // when no in-flow child follows it, nothing is left for the columns: what remains is the
+                // out-of-flow content alone. It continues through the ordinary block loop, which hands the
+                // resumed float its own record - laying it out afresh would draw its first lines a second time.
+                if (resumeIndex >= children.Count)
+                {
+                    columnsBox.ActualBottom = boxTop;
+                    PlaceColumn(columnsBox, columnLeft, columnWidth);
+
+                    try
+                    {
+                        await columnsBox.FillFragmentainerWithBlockChildren(g, resume);
+                    }
+                    finally
+                    {
+                        PlaceColumn(columnsBox, columnLeft, containerWidth);
+                    }
+
+                    await columnsBox.LayoutOutOfFlowChildrenAgain(g);
+                    return;
+                }
+
+                var resumeBoundary = children[resumeIndex];
                 var foundAt = segments.FindIndex(s => s.Children.Contains(resumeBoundary));
                 if (foundAt >= 0) segmentStartIndex = foundAt;
             }
