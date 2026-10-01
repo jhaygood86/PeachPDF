@@ -111,6 +111,47 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Null(DomUtils.GetPreviousSibling(a));
         }
 
+        // An out-of-flow first child is not a previous sibling: it takes no part in placing the box after
+        // it. Absolute used to be stepped over only while the walk had further boxes to try, so an
+        // absolutely positioned first child was returned, and the box after it was placed below it (#1349).
+        [Theory]
+        [InlineData("position:absolute")]
+        [InlineData("position:fixed")]
+        [InlineData("display:none")]
+        public async Task GetPreviousSibling_OnlyAnOutOfFlowOrUndisplayedBoxBefore_ReturnsNull(string css)
+        {
+            var root = await Render($"<div><div style='{css}'>A</div><p id='b'>B</p></div>");
+            var b = DomUtils.GetBoxById(root, "b")!;
+
+            Assert.Null(DomUtils.GetPreviousSibling(b));
+        }
+
+        // Every absolutely positioned box is out of flow, whether or not it holds columns, is floated or comes
+        // after another one: none of them places the box after it, however many precede it.
+        [Theory]
+        [InlineData("<div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute'>P</div><div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute;display:none'>H</div><div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute;float:left'>F</div><div style='position:absolute;columns:2'>X</div>")]
+        [InlineData("<div style='position:absolute;float:top'>F</div><div style='position:absolute;columns:2'>X</div>")]
+        public async Task GetPreviousSibling_AfterOnlyAbsoluteBoxes_ReturnsNull(string before)
+        {
+            var root = await Render($"<div>{before}<p id='b'>B</p></div>");
+            var b = DomUtils.GetBoxById(root, "b")!;
+
+            Assert.Null(DomUtils.GetPreviousSibling(b));
+            Assert.Null(DomUtils.GetPreviousSibling(b, includeFloats: false));
+        }
+
+        [Fact]
+        public async Task GetPreviousSibling_StepsOverAnAbsoluteBoxToTheInFlowOneBeforeIt()
+        {
+            var root = await Render("<div><p id='a'>A</p><div style='position:absolute'>X</div><p id='b'>B</p></div>");
+            var b = DomUtils.GetBoxById(root, "b")!;
+
+            Assert.Equal("a", DomUtils.GetPreviousSibling(b)!.HtmlTag!.TryGetAttribute("id"));
+        }
+
         [Fact]
         public async Task GetFollowingSiblings_ReturnsMatchingLaterSiblings()
         {

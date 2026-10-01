@@ -8,8 +8,8 @@ namespace PeachPDF.Tests.Integration;
 /// An auto-height scroll container in ordinary block flow breaks between its lines. One that is a flex or grid
 /// item, or that sits inside a multi-column container, is laid out by an engine that sizes or clips it per
 /// container or column, and letting it break there dropped whole lines at the fragmentainer edge, so it keeps
-/// the unbreakable treatment. So does one that holds an absolutely positioned box, which was drawn off the
-/// page once its container could break.
+/// the unbreakable treatment. One that holds an absolutely positioned box breaks like any other: the box runs
+/// as passes of its own and does not end its container's.
 /// </summary>
 public class OverflowBoxInLayoutEngineTests
 {
@@ -131,11 +131,11 @@ public class OverflowBoxInLayoutEngineTests
     [InlineData("<div style='display:inline-flex'><div id='box' style='overflow:scroll'>text</div></div>", true)]
     [InlineData("<div style='columns:2'><div id='box' style='overflow:hidden'>text</div></div>", true)]
     [InlineData("<div style='column-width:100pt'><div><div id='box' style='overflow:hidden'>text</div></div></div>", true)]
-    [InlineData("<div id='box' style='position:relative;overflow:hidden'><div style='position:absolute'>x</div></div>", true)]
-    [InlineData("<div id='box' style='position:relative;overflow:hidden'><div><div style='position:absolute'>x</div></div></div>", true)]
+    [InlineData("<div id='box' style='position:relative;overflow:hidden'><div style='position:absolute'>x</div></div>", false)]
+    [InlineData("<div id='box' style='position:relative;overflow:hidden'><div><div style='position:absolute'>x</div></div></div>", false)]
     [InlineData("<div id='box' style='position:relative;overflow:hidden'>text</div>", false)]
-    [InlineData("<div id='box' style='overflow:hidden'><div style='position:absolute'>x</div></div>", true)]
-    [InlineData("<div id='box' style='position:sticky;overflow:hidden'><div style='position:absolute'>x</div></div>", true)]
+    [InlineData("<div id='box' style='overflow:hidden'><div style='position:absolute'>x</div></div>", false)]
+    [InlineData("<div id='box' style='position:sticky;overflow:hidden'><div style='position:absolute'>x</div></div>", false)]
     [InlineData("<div id='box' style='position:relative;overflow:hidden'><div style='position:absolute;display:none'>x</div>text</div>", false)]
     [InlineData("<div id='box' style='overflow:hidden'><div style='position:relative'>text</div></div>", false)]
     [InlineData("<div><div id='box' style='overflow:hidden'>text</div></div>", false)]

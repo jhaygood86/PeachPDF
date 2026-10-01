@@ -17,8 +17,6 @@ Unchanged, and still unbreakable:
   vertical writing mode the logical height is the physical width);
 - a scroll container that is a flex or grid item, or that sits inside a multi-column container, even
   when it has no size of its own;
-- a scroll container that holds an absolutely positioned box (a `display: none` one does not count),
-  whatever its own `position`. Wrappers without one, the usual clearfix case, do break.
 
 An `overflow: hidden` box with a `max-height` therefore stays whole, as before, including when the
 maximum is larger than the `height`.

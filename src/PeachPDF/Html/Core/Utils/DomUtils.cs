@@ -173,18 +173,32 @@ namespace PeachPDF.Html.Core.Utils
 
             var index = b.ParentBox.Boxes.IndexOf(b);
             if (index <= 0) return null;
-            var diff = 1;
-            var sib = b.ParentBox.Boxes[index - diff];
-
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
+            for (var i = index - 1; i >= 0; i--)
             {
-                sib = b.ParentBox.Boxes[index - ++diff];
+                var sib = b.ParentBox.Boxes[i];
+                if (!IsSteppedOverAsPreviousSibling(sib, includeFloats)) return sib;
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox ? null : sib;
-
-            return sib;
+            return null;
         }
+
+        /// <summary>
+        /// Whether <see cref="GetPreviousSibling"/> steps over <paramref name="sib"/>: a box that takes no
+        /// part in placing its following sibling.
+        /// </summary>
+        /// <remarks>
+        /// One predicate for both the walk and its end. The two used to be separate conditions, and the
+        /// end's omitted <c>position: absolute</c>: an absolutely positioned first child was returned as
+        /// the previous sibling of the box after it, which was then placed below the absolutely
+        /// positioned box rather than at the top of its parent (#1349).
+        /// </remarks>
+        private static bool IsSteppedOverAsPreviousSibling(CssBox sib, bool includeFloats) =>
+            sib.DerivedStyle.ActualDisplay == Keywords.None
+            || sib.Position.Value is PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running
+            || (!includeFloats && sib.IsFloated)
+            || sib.IsPageFloated
+            || CssBox.IsOutsideMarker(sib)
+            || sib.IsTableGridDecorationBox;
 
         /// <summary>
         /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by
@@ -614,12 +628,36 @@ namespace PeachPDF.Html.Core.Utils
             {
                 if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
-                return GetPreviousSibling(child) ?? child.ParentBox;
+                return PreviousSiblingInDocumentOrder(child) ?? child.ParentBox;
             }
 
             var parent = box.ParentBox;
             while (parent is { IsDisplayContentsShell: true }) parent = parent.ParentBox;
             return parent ?? box;
+        }
+
+        /// <summary>
+        /// The sibling just before <paramref name="box"/> in document order that generates a box, whatever its
+        /// positioning: counters follow the document tree (CSS Lists 3 §4), so an absolutely positioned, fixed
+        /// or floated sibling's <c>counter-increment</c> is in effect after it all the same.
+        /// </summary>
+        /// <remarks>
+        /// Not <see cref="GetPreviousSibling"/>, which answers a layout question (which box places this one)
+        /// and so steps over every out-of-flow box.
+        /// </remarks>
+        private static CssBox? PreviousSiblingInDocumentOrder(CssBox box)
+        {
+            var siblings = box.ParentBox!.Boxes;
+            for (var i = siblings.IndexOf(box) - 1; i >= 0; i--)
+            {
+                var sibling = siblings[i];
+                if (sibling.DerivedStyle.ActualDisplay == Keywords.None || CssBox.IsOutsideMarker(sibling)
+                    || sibling.IsTableGridDecorationBox) continue;
+
+                return sibling;
+            }
+
+            return null;
         }
 
         private static CssBox? FirstLaidOut(IReadOnlyList<CssBox> children)

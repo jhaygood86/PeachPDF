@@ -3435,10 +3435,19 @@ namespace PeachPDF.Html.Core.Dom
 
             try
             {
-                if (child.IsFloated && child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true, HasOwnBand: false } } floatContainer)
+                // A float and an absolutely positioned box take no part in placing the in-flow boxes around them
+                // (CSS 2.1 §9.3.1), so a break inside one must not end its parent's pass: the boxes after it would
+                // be placed back on a page that pass had already left. Each runs as its own fragmentainer pass and
+                // is resumed page by page, the way a browser fragments an out-of-flow box. A float starts in the
+                // slot being filled; an absolutely positioned box in the slot its offsets place it in, usually an
+                // earlier one, which the emitter re-opens to draw it (InvalidateEmittedFragmentainersReceiving).
+                if ((child.IsFloated || child.Position.Value is PositionMode.Absolute)
+                    && child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true, HasOwnBand: false } } floatContainer)
                 {
                     var previous = floatContainer.CurrentFragmentainer;
-                    var slot = previous.SlotIndex;
+                    var slot = child.IsFloated
+                        ? previous.SlotIndex
+                        : Math.Max(floatContainer.SlotStartingAt(Math.Max(AbsoluteTopBeforePlacement(child), 0)), 0);
                     HashSet<BreakToken> entered = [];
                     child.FragmentedAcrossFloatPasses = false;
                     try
@@ -3449,7 +3458,7 @@ namespace PeachPDF.Html.Core.Dom
                             await child.PerformLayoutImp(g, this, framePlacesChild);
                             if (child.PendingBreakToken is not { } next) break;
                             child.ResumeAt(next, null);
-                            child.FragmentedAcrossFloatPasses = true;
+                            child.FragmentedAcrossFloatPasses = child.IsFloated;
                             if (!entered.Add(next) || entered.Count >= 10000)
                             {
                                 floatContainer.DetachFragmentainer();
@@ -3474,6 +3483,22 @@ namespace PeachPDF.Html.Core.Dom
                 if (child.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
             }
+        }
+
+        /// <summary>
+        /// Where an absolutely positioned <paramref name="child"/>'s top edge will be placed, before the frame
+        /// places it: its containing block's edge plus its margin and <c>top</c> offset, as
+        /// <c>ResolveBlockChildOffset</c> computes it. The fragmentainer slot that contains it is the one the box's
+        /// own layout passes start in.
+        /// </summary>
+        private static double AbsoluteTopBeforePlacement(CssBox child)
+        {
+            var ancestor = DomUtils.GetNearestPositionedAncestor(child);
+            var inlineContainingBlock = DomUtils.InlineContainingBlockOf(ancestor);
+            var containingBlockTop = inlineContainingBlock?.Top ?? ancestor.Location.Y + ancestor.ActualBorderTopWidth;
+
+            return containingBlockTop + child.ActualMarginTop
+                   + ResolveOffsetOrZero(child.Top, inlineContainingBlock?.Height ?? ancestor.ActualHeight, child);
         }
 
         /// <summary>
@@ -4052,13 +4077,6 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <inheritdoc cref="WidthBeforeItemPin"/>
         internal string? HeightBeforeItemPin { get; set; }
-
-        /// <summary>
-        /// Whether this box's subtree holds an absolutely positioned box that renders, as
-        /// <see cref="Fragmentation.MonolithicContent"/> asks it on every layout pass. It depends only on the
-        /// style of boxes that exist before layout begins, so it is worked out once.
-        /// </summary>
-        internal bool? HoldsAbsolutelyPositionedBox { get; set; }
 
         /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
@@ -7206,8 +7224,13 @@ namespace PeachPDF.Html.Core.Dom
             // the box, in one of two ways: by moving the minimum number of lines the spec asks for, or,
             // where that cannot be arranged, by pushing the whole box to the next fragmentainer. A
             // paragraph taller than one page is not pushed: it would just recreate the violation there.
+            //
+            // Not for an absolutely positioned box: its position comes from its offsets, so the push and the
+            // rewind, which lay it out again from another page's top, put it back where it was. Its last line was
+            // then left across the page foot with no fragment on the next page, and was drawn on no page. Its
+            // widows are relaxed instead, as they are when they cannot be satisfied (§4.3).
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
-                && !_earlyBreakTaken && !PositionAssignedByEngine
+                && !_earlyBreakTaken && !PositionAssignedByEngine && Position.Value is not PositionMode.Absolute
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
                 && (orphans > 1 || widows > 1))
             {
@@ -7310,6 +7333,13 @@ namespace PeachPDF.Html.Core.Dom
             // The answer can be provisional here - see ResolvePositionedAutoBlockMargins.
             ResolvePositionedAutoBlockMargins();
 
+            // Its position and height are final now. Placed by its offsets, it can land on a fragmentainer
+            // this pass has already emitted, which has to be re-opened to draw it (#1349).
+            if (Position.Value is PositionMode.Absolute)
+            {
+                HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+            }
+
             // Named-page registration tail: block containers already registered before child layout
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a
             // box that never entered the block branch) registers here, after every branch above that
@@ -7381,6 +7411,10 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
                         child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
+
+                        // This is the box's final position, and it can be on a fragmentainer already emitted
+                        // that its provisional one, from its own epilogue, did not reach (#1349).
+                        HtmlContainer?.InvalidateEmittedFragmentainersReceiving(child);
                     }
 
                     // A positioned descendant establishes the containing block for anything below it and

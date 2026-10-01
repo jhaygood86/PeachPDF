@@ -37,8 +37,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal static bool IsMonolithic(CssBox box) =>
             IsReplaced(box) || (IsScrollContainer(box)
                 && (HasConstrainedLogicalHeight(box)
-                    || IsLaidOutByAnEngineThatCannotContinueIt(box)
-                    || HoldsAnAbsolutelyPositionedBox(box)));
+                    || IsLaidOutByAnEngineThatCannotContinueIt(box)));
 
         // An uncapped auto-height box grows with its content, so there is no block-axis scroll
         // area to keep together. In print, allow its normal line and block break points.
@@ -68,16 +67,6 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             return false;
         }
-
-        // An absolutely positioned box is placed against its containing block's first fragment, so when a
-        // scroll container that held one was allowed to break, the box was drawn above the page area and its
-        // text was lost on the documents measured. The container need not be the containing block itself (an
-        // ancestor above it can be), so any unsized scroll container that holds one stays whole; a wrapper
-        // without one, the common clearfix case, still breaks. A display: none box renders nothing to lose.
-        private static bool HoldsAnAbsolutelyPositionedBox(CssBox box) =>
-            box.HoldsAbsolutelyPositionedBox ??= box.Boxes.Any(child =>
-                child.DerivedStyle.ActualDisplay is not Keywords.None
-                && (child.Position.Value is PositionMode.Absolute || HoldsAnAbsolutelyPositionedBox(child)));
 
         /// <summary>
         /// Whether <paramref name="box"/> is a replaced element, whose content the UA cannot fragment
