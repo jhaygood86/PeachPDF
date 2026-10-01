@@ -54,6 +54,26 @@ public class ChildReachingPastItsParentTests
         Assert.Empty(doubled);
     }
 
+    // A multi-column container whose only child is a float reaching past the page foot (found by a generated corpus):
+    // the float's own passes leave the cursor on a later band, and the paragraph after the container, placed beside
+    // the float on the first page, had its last line across the foot.
+    [Fact]
+    public async Task ContentAfterAColumnsContainerHoldingOnlyATallFloat_KeepsEveryWord()
+    {
+        var body = "<div style='height:110pt'></div><div style='columns:2;column-gap:8pt'>" +
+                   "<div style='float:left;width:47pt;height:135pt'>w1_1 w1_2</div></div>" +
+                   "<h3>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7</h3><p>" +
+                   string.Join(' ', Enumerable.Range(1, 27).Select(i => $"w3_{i}")) + "</p>";
+        var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page { size: 300pt 250pt; margin: 20pt } " +
+                   "body { margin:0; font: 10pt/12pt Arial } p { margin:0 0 4pt }</style></head><body>" + body + "</body></html>";
+
+        var (visible, _) = await PaintedWords.LayOutAndCollectVisibleAsync(html);
+        var (lost, doubled) = PaintedWords.Diff(body, visible);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+    }
+
     // The same documents with an auto-height scroll container in place of the plain div, which breaks like a block.
     [Theory]
     [MemberData(nameof(Cases))]

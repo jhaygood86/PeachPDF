@@ -24,3 +24,17 @@ issue's measurement for all three was on an older `main`.
 
 Evidence: `ChildReachingPastItsParentTests` (the three triggers, plus the same with an `overflow: hidden` wrapper);
 full net8.0 suite (14844 tests) passes.
+
+## A float-only multi-column container is the same shape
+
+A generated document (seed 79) lost the last line of a paragraph once #1535 moved content below a float: a
+`columns: 2` container holding only a `float: left` that reaches past the page foot, then a heading and a paragraph.
+The float runs as passes of its own and leaves the cursor on a later band, while the heading and paragraph are placed
+beside it on the first page, so the paragraph's last line (y=222, bottom 234 against a 230 foot) was never broken. The
+same one-line rule fixes it (`ContentAfterAColumnsContainerHoldingOnlyATallFloat_KeepsEveryWord`); the document also
+reproduces on the build before any of the float work, so #1535 only moved content into it.
+
+Measured on 300 generated documents against `main` with #1550: 7 documents improve, 5 get worse (seeds 36, 57, 88, 162,
+232). Two of those were traced: seed 36 contains an absolute box inside a relative wrapper in `columns` (#1537), and
+seed 88's lost lines are a heading in a table cell across the page foot (#1485's shape). A minimal table case did not
+reproduce either.
