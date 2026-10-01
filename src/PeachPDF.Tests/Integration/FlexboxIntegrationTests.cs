@@ -2591,6 +2591,107 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.ClientTop, FindById(root, "c")!.Location.Y, 0.5);
         }
 
+        // ─── Border-box column cross size (issue #1542) ────────────────────────
+
+        [Theory]
+        [InlineData("border-box")]
+        [InlineData("content-box")]
+        public async Task Column_AlignCenter_CentersItemInContentBox_WhateverBoxSizing(string sizing)
+        {
+            var html = Wrap($@"
+                <div id='c' style='display:flex; flex-direction:column; align-items:center; box-sizing:{sizing};
+                                   width:300pt; border:2pt solid #999; padding:0 20pt;'>
+                    <div id='i' style='width:60pt; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var i = FindById(root, "i")!;
+            var contentCentre = (c.ClientLeft + c.ClientRight) / 2;
+            Assert.Equal(contentCentre, i.Location.X + i.ActualBoxSizingWidth / 2, 0.5);
+        }
+
+        // ─── stretch / -webkit-fill-available (issue #1541) ────────────────────
+
+        [Theory]
+        [InlineData("stretch")]
+        [InlineData("-webkit-fill-available")]
+        [InlineData("-moz-available")]
+        public async Task RowFlexItems_WidthStretch_SplitContainerEqually(string keyword)
+        {
+            var html = Wrap($@"
+                <div id='c' style='display:flex; justify-content:space-between; width:400pt;'>
+                    <div id='a' style='width:{keyword}; height:10pt; border:1pt solid #999; padding:0 4pt;'>Transfer date</div>
+                    <div id='b' style='width:{keyword}; height:10pt; border:1pt solid #999; padding:0 4pt;'>ID</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(200, a.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(200, b.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task BlockWidthStretch_FillsContainingBlockMinusMargins_BothBoxSizings()
+        {
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <div id='cb' style='width:stretch; margin:0 10pt; padding:0 5pt; border:1pt solid #000; height:10pt;'></div>
+                    <div id='bb' style='width:stretch; box-sizing:border-box; margin:0 10pt; padding:0 5pt; border:1pt solid #000; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(280, FindById(root, "cb")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(280, FindById(root, "bb")!.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task HeightStretch_FillsDefiniteParent_MinusMargins()
+        {
+            var html = Wrap(@"
+                <div style='height:200pt; overflow:hidden;'>
+                    <div id='k' style='height:stretch; margin:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(180, FindById(root, "k")!.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Fact]
+        public async Task HeightStretch_AutoHeightParent_BehavesAsAuto()
+        {
+            var html = Wrap(@"
+                <div>
+                    <div id='k' style='height:stretch;'><div style='height:30pt'></div></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(30, FindById(root, "k")!.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Fact]
+        public async Task MinAndMaxWidthStretch_ResolveToContainingBlock()
+        {
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <div id='mn' style='min-width:stretch; width:10pt; height:10pt;'></div>
+                    <div id='mx' style='max-width:stretch; width:500pt; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(300, FindById(root, "mx")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(300, FindById(root, "mn")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(300, FindById(root, "mx")!.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task FlexBasisStretch_ItemsSplitContainer()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; width:400pt;'>
+                    <div id='a' style='flex-basis:stretch; height:10pt;'></div>
+                    <div id='b' style='flex-basis:-webkit-fill-available; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(200, FindById(root, "a")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(200, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

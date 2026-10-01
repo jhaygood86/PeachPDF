@@ -2457,6 +2457,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         public static async ValueTask<double> GetBoxWidth(Canvas g, CssBox box, double? blockTop = null)
         {
+            box.ResolveStretchSizes();
+
             // Keyed off `blockTop` - the border-box top the frame placing this box has just decided on, not
             // the box's own Location.Y, which on the pass that places it still holds whatever position an
             // earlier layout generation left there (page 0's measure, on the first). The frame's offset is
@@ -2631,6 +2633,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public static double? GetBoxHeight(CssBox box)
         {
+            box.ResolveStretchSizes();
+
             var height = box.ActualBoxSizingHeight;
 
             if (box == box.ContainingBlock && box.HtmlContainer is not null)

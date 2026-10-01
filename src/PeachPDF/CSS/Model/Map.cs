@@ -444,7 +444,10 @@ namespace PeachPDF.CSS
             new Dictionary<string, FlexBasisKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, FlexBasisKeyword.Auto},
-                {Keywords.Content, FlexBasisKeyword.Content}
+                {Keywords.Content, FlexBasisKeyword.Content},
+                {Keywords.Stretch, FlexBasisKeyword.Stretch},
+                {"-webkit-fill-available", FlexBasisKeyword.Stretch},
+                {"-moz-available", FlexBasisKeyword.Stretch}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, BoxSizingMode> BoxSizingModes =
             new Dictionary<string, BoxSizingMode>(StringComparer.OrdinalIgnoreCase)

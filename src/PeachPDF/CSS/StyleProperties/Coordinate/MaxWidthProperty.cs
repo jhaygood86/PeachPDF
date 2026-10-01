@@ -3,7 +3,7 @@
     internal sealed class MaxWidthProperty : Property
     {
         private static readonly IValueConverter
-            StyleConverter = Converters.OptionalLengthOrPercentConverter.OrDefault();
+            StyleConverter = Converters.OptionalLengthOrPercentOrStretchConverter.OrDefault();
 
         internal MaxWidthProperty()
             : base(PropertyNames.MaxWidth, PropertyFlags.Animatable)
