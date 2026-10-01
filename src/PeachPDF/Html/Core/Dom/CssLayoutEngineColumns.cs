@@ -135,18 +135,14 @@ namespace PeachPDF.Html.Core.Dom
 
             if (columnCount <= 1)
             {
-                // Degenerates to ordinary single-column block flow — defer to the normal block layout
-                // path, which (unlike this engine's atomic-child model) already supports real
-                // inline-level page fragmentation via paint-time clipping.
-                columnsBox.ActualBottom = columnsBox.Location.Y;
-                foreach (var childBox in columnsBox.Boxes)
-                {
-                    // Already registered (as the current running-element occupant) by the loop above -
-                    // a running child is excluded from this fallback's own block flow too.
-                    if (childBox.IsRunningPositioned) continue;
+                // Degenerates to ordinary single-column block flow: a single column is a multi-column
+                // container still (css-multicol-1 §2), and a paginated one continues on the next page the
+                // way any block does. The block loop is handed the resumption record and records the break
+                // when a child does not fit - a loop of this engine's own did neither, so everything past the
+                // first page was dropped. A running() child is skipped by that loop, as it is here.
+                if (resume is null) columnsBox.ActualBottom = columnsBox.Location.Y;
 
-                    await columnsBox.LayoutBlockChild(g, childBox);
-                }
+                if (await columnsBox.FillFragmentainerWithBlockChildren(g, resume)) return;
 
                 columnsBox.ActualRight = columnsBox.CalculateActualRight();
                 if (columnsBox.Boxes.Any(b => !b.IsExcludedFromFlow))
