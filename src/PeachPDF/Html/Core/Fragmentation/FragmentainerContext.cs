@@ -109,9 +109,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// bands it left still applies here.
         /// </para>
         /// <para>
-        /// Monotonic, because a pass fills fragmentainers in document order and never goes back to an
+        /// Forward-moving, because a pass fills fragmentainers in document order and never goes back to an
         /// earlier one; a pass that has to reconsider an earlier fragmentainer is re-entered from the
-        /// driver with a context of its own (<c>HtmlContainerInt.TryRewindForRunPull</c>).
+        /// driver with a context of its own (<c>HtmlContainerInt.TryRewindForRunPull</c>). The one
+        /// caller that moves it back is <see cref="StepBackTo"/>, for content that left the flow.
         /// </para>
         /// <para>
         /// A no-op for a nested fragmentainer. A multi-column column's band is not a slot of the page grid
@@ -123,6 +124,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal void StepOverTo(int slot)
         {
             if (_ownBand is not null || slot <= SlotIndex) return;
+
+            SlotIndex = slot;
+        }
+
+        /// <summary>
+        /// Returns the cursor to <paramref name="slot"/>, a slot it was stepped past only on behalf of content that
+        /// left the flow (a float moved to a later fragmentainer), so the flow that follows is asked about the
+        /// fragmentainer it is actually in.
+        /// </summary>
+        /// <remarks>
+        /// The one exception to <see cref="StepOverTo"/> being monotonic, and only for a caller that stepped
+        /// it itself a moment earlier: the pass fills fragmentainers in document order, and the in-flow content
+        /// after a float is still in the fragmentainer it was in before the float was moved.
+        /// </remarks>
+        internal void StepBackTo(int slot)
+        {
+            if (_ownBand is not null || slot >= SlotIndex) return;
 
             SlotIndex = slot;
         }
