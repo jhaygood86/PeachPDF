@@ -1784,6 +1784,12 @@ namespace PeachPDF.Html.Core.Utils
                 case Floating.Left when targetRight > currentLeft && targetLeft <= currentLeft:
                 case Floating.Right when targetLeft > coordinates.FloatRightStartX + coordinates.ReferenceWidth + coordinates.MarginRight
                     && !(targetLeft >= coordinates.ContainingRight && targetLeft < coordinates.MulticolRight):
+                // A float beside this one, in the same containing block: CSS 2.1 §9.5.1 rules 1-3 keep the
+                // outer edges of floats from overlapping, so an earlier float whose margin box shares any of
+                // the width this right float would take is a blocker (and a left one pushes it down below it).
+                case Floating.Right when targetLeft < coordinates.Right + coordinates.MarginRight
+                    && targetRight > coordinates.FloatRightStartX - coordinates.MarginLeft
+                    && !(targetLeft >= coordinates.ContainingRight && targetLeft < coordinates.MulticolRight):
                     return true;
                 default:
                     return false;

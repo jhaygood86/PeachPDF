@@ -3348,23 +3348,29 @@ namespace PeachPDF.Html.Core.Dom
                 switch (intersectingFloat.EffectiveFloatSide)
                 {
                     case Floating.Left:
-                        coordinates.Left = intersectingFloat.ActualRight;
+                        coordinates.Left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
                         break;
                     case Floating.Right:
-                        // A negative margin-right puts the margin edge inside the border box, so the
-                        // border box has to end that far past the blocker for the margin edges to meet;
-                        // otherwise the same blocker is found again and the loop never ends.
-                        coordinates.Right = intersectingFloat.Location.X + Math.Max(0, -box.ActualMarginRight);
+                        // The margin edges meet: this float's border box ends its own margin-right short of
+                        // the blocker's margin box. A negative margin-right puts that edge inside the border
+                        // box, so the border box ends that far past the blocker; otherwise the same blocker is
+                        // found again and the loop never ends.
+                        coordinates.Right = intersectingFloat.Location.X - intersectingFloat.ActualMarginLeft
+                                            - box.ActualMarginRight;
                         break;
                 }
-                if (intersectingFloat.ActualBottom > coordinates.MaxBottom)
+
+                // The next float goes below the blocker's margin box (CSS 2.1 §9.5.1 rule 8 puts it as high as
+                // possible, which is the margin edge, not the border edge).
+                var blockerBottom = intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom;
+                if (blockerBottom > coordinates.MaxBottom)
                 {
-                    coordinates.MaxBottom = intersectingFloat.ActualBottom;
+                    coordinates.MaxBottom = blockerBottom;
                 }
 
-                if (coordinates.Left > coordinates.FloatRightStartX)
+                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft)
                 {
-                    coordinates.Top = coordinates.MaxBottom;
+                    coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
 
                     // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
                     limitRight = ContentRightOf(containingBox, coordinates.Top);
