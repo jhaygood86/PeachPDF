@@ -2928,6 +2928,21 @@ namespace PeachPDF.Html.Core.Parse
             if (box is CssBoxSvg or CssBoxMath) return;
             try
             {
+                // A flex or grid container's children are items, not an inline run (css-flexbox-1 §4,
+                // css-grid-2 §6), so there is no block-inside-inline to split at this level: treating
+                // <span><h4/><p/></span> items as one run hoisted their block children up to become
+                // the items themselves. Each child is still corrected as its own formatting context.
+                if (box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex
+                    or DisplayMode.Grid or DisplayMode.InlineGrid)
+                {
+                    foreach (var item in box.Boxes)
+                    {
+                        CorrectBlockInsideInline(item, item.DerivedStyle.ActualDisplay == Keywords.InlineBlock);
+                    }
+
+                    return;
+                }
+
                 if (DomUtils.ContainsInlinesOnly(box) && !ContainsInlinesOnlyDeep(box, inspectInlineBlockFormattingContext))
                 {
                     var tempRightBox = CorrectBlockInsideInlineImp(box);
