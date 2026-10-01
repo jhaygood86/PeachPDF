@@ -4150,10 +4150,21 @@ namespace PeachPDF.Html.Core.Dom
             CssLineBoxCoordinates coordinates, CssRect word, double rightSpacing, double clonedTrailing, bool isRtl,
             Action<CssRect> growLineToItsExtent)
         {
-            // Inside a column the float that crowds the line may belong to another column, whose lines it does not
-            // narrow (css-multicol-1 §2), so each column would shift its first line past it and the fill would never
-            // settle: the line keeps the room that is left, as it did before.
-            if (blockBox.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } }) return;
+            // Inside a column only a float that reaches into this column crowds the line: one in another column
+            // does not narrow it (css-multicol-1 §2), and heeding it made every column shift its first line past a
+            // float it is not beside, so the fill never settled. A float wider than the column does reach in, and
+            // the lines beside it have no room: they have to move below it rather than sit where no column claims
+            // them (columns are told apart by the inline axis), which loses the words.
+            var inColumn = blockBox.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } };
+            var columnLeft = coordinates.Line.ContentLeft;
+            var columnRight = coordinates.Line.ContentRight;
+
+            CssBox? InThisColumn(CssBox? floated) =>
+                !inColumn || floated is null
+                || (floated.Location.X - floated.ActualMarginLeft < columnRight
+                    && floated.ActualRight + floated.ActualMarginRight > columnLeft)
+                    ? floated
+                    : null;
 
             var arrivedAtX = coordinates.CurrentX;
             var originalY = coordinates.CurrentY;
@@ -4171,7 +4182,7 @@ namespace PeachPDF.Html.Core.Dom
             // Asked from the line's own start: the point-collision lookup for a left float reports nothing
             // once the cursor is already beyond it.
             coordinates.CurrentX = baseX;
-            var firstLeft = LeftFloatAt(coordinates, box);
+            var firstLeft = InThisColumn(LeftFloatAt(coordinates, box));
             var firstEdge = firstLeft is null ? baseX : firstLeft.ActualRight + firstLeft.ActualMarginRight;
             var inset = Math.Max(0, arrivedAtX - Math.Max(firstEdge, baseX));
             coordinates.CurrentX = arrivedAtX;
@@ -4179,8 +4190,8 @@ namespace PeachPDF.Html.Core.Dom
             for (var shifts = 0; ; shifts++)
             {
                 coordinates.CurrentX = baseX;
-                var leftFloat = LeftFloatAt(coordinates, box);
-                var rightFloat = RightFloatAt(coordinates, box);
+                var leftFloat = InThisColumn(LeftFloatAt(coordinates, box));
+                var rightFloat = InThisColumn(RightFloatAt(coordinates, box));
 
                 var startX = (leftFloat is null ? baseX : leftFloat.ActualRight + leftFloat.ActualMarginRight) + inset;
                 var limitRight = rightFloat is null
