@@ -4771,6 +4771,13 @@ namespace PeachPDF.Html.Core
         {
             if (CurrentFragmentainer is not { IsFragmenting: true, HasOwnBand: false } filling) return gridBand;
 
+            // Content that begins in a band above the one the cursor has reached is in that earlier band, whatever
+            // else the pass has done: a child whose own content ran on to later bands (a fixed height it overflows,
+            // a relative offset, a negative margin-bottom) leaves the cursor there, while the siblings after it are
+            // placed at its end (CSS 2.1 §10.5, §9.4.3), back in the band it is in. Asked of the later band, a line
+            // crossing the foot of its own page was never broken and was clipped away (#1480).
+            if (SlotStartingAt(top) < filling.SlotIndex) return gridBand;
+
             // Diagnostic only - never a behavioural fallback. A mismatch here means either a mechanism
             // stage 1 did not close (there should be none left in production), or this word is exactly
             // the tolerance case stage 1 deliberately left for this conversion to turn into a break: its

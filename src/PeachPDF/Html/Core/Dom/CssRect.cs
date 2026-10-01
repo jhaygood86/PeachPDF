@@ -466,7 +466,11 @@ namespace PeachPDF.Html.Core.Dom
             // The band this word's own top falls in, asked of the fragmentainer the pass is actually
             // filling rather than merely of the page grid.
             var gridBand = container.BandStartingAt(Top);
-            var band = container.BandBeingFilled(Top, gridBand);
+
+            // Where the word's line begins, not the word: a word taller than its line box (a heading set tighter than its
+            // font) pokes above it, so a line that starts at a page's top edge has words that start in the page before.
+            var lineTop = Line?.FlowTop is { } flowTop ? System.Math.Max(Top, flowTop) : Top;
+            var band = container.BandBeingFilled(lineTop, gridBand);
 
             return HtmlContainerInt.FallsPast(Bottom + reservedEnd, band);
         }
