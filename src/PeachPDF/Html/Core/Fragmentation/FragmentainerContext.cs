@@ -68,6 +68,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal ColumnAreaKey? ColumnKey { get; set; }
 
         /// <summary>
+        /// For a column whose band was cut short by the page it sits on (its container starts partway down), the
+        /// height a column of this container would have on a fresh page; otherwise null. The "too tall for any
+        /// column, so overflow rather than break" exemption has to be asked against this, not against the cut
+        /// band: a line that does not fit the room left at a page's foot will fit the next page, and treating it
+        /// as unbreakable lets it straddle the foot, where the PDF clips it away.
+        /// </summary>
+        internal double? FreshPageBandHeight { get; set; }
+
+        /// <summary>
         /// The box that owns this fragmentation context. A field rather than the document root so a
         /// nested context (multi-column columns are fragmentainers too, per §2) can be introduced
         /// without reshaping this type.

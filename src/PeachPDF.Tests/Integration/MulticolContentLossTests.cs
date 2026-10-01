@@ -50,6 +50,26 @@ public class MulticolContentLossTests
         Assert.Empty(doubled);
     }
 
+    // #1532: a container starting where less than a line of room is left moves to the next page, as a plain block
+    // does (css-break-3 §4.4). Twelve 16pt fillers leave 8pt of a 200pt band; ten, eleven and thirteen are controls.
+    [Theory]
+    [InlineData(10, 1)]
+    [InlineData(11, 1)]
+    [InlineData(12, 2)]
+    [InlineData(13, 2)]
+    public async Task ContainerStartingTooCloseToThePageFoot_MovesToTheNextPageWithItsText(int fillers, int pages)
+    {
+        var body = string.Concat(Enumerable.Range(1, fillers).Select(i => $"<p>w0_{i}</p>"))
+                   + "<div style=\"columns: 2; column-gap: 8pt\"><p>w1_1 w1_2 w1_3 w1_4 w1_5</p></div>";
+
+        var (painted, pageCount) = await PaintedWords.LayOutAndCollectVisibleAsync(Page(body, "300pt 240pt"));
+        var (lost, doubled) = PaintedWords.Diff(body, painted);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+        Assert.Equal(pages, pageCount);
+    }
+
     // #1486: a float that is the container's only child left after a break made the resumed pass look up a real
     // child that did not exist, and layout threw ArgumentOutOfRangeException.
     [Fact]

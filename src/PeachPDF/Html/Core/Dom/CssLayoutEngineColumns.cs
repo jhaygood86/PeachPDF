@@ -692,6 +692,16 @@ namespace PeachPDF.Html.Core.Dom
 
                 column.ColumnKey = columnKey;
 
+                // A band that ends where the page does, with the page's foot reservations taken off, was cut
+                // by the page rather than chosen by this container: a fresh page would give it more.
+                if (htmlContainer.HasRealPageGrid
+                    && boxTop + target >= htmlContainer.PageBottomOf(startSlot)
+                        - htmlContainer.TotalBandEndReservationFor(startSlot) - 0.01)
+                {
+                    column.FreshPageBandHeight = htmlContainer.PageBandHeightOf(startSlot)
+                                                 - htmlContainer.TotalBandEndReservationFor(startSlot);
+                }
+
                 var previousContext = htmlContainer.EnterNestedFragmentainer(column);
 
                 bool stopped;

@@ -458,7 +458,8 @@ namespace PeachPDF.Html.Core.Dom
             // overflows the one it is in rather than breaking to a fresh column for every column there is.
             if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
             {
-                return MonolithicContent.FitsInBand(Height, clonedTop, reservedEnd, columnBand.BandHeight)
+                return MonolithicContent.FitsInBand(Height, clonedTop, reservedEnd,
+                           columnBand.FreshPageBandHeight ?? columnBand.BandHeight)
                        && HtmlContainerInt.FallsPast(Bottom + reservedEnd, columnBand.Band);
             }
 
@@ -491,7 +492,8 @@ namespace PeachPDF.Html.Core.Dom
             var depth = Bottom - lineTop;
 
             return container.CurrentFragmentainer is { HasOwnBand: true } columnBand
-                ? !MonolithicContent.FitsInBand(depth, clonedTop, reservedEnd, columnBand.BandHeight)
+                ? !MonolithicContent.FitsInBand(depth, clonedTop, reservedEnd,
+                    columnBand.FreshPageBandHeight ?? columnBand.BandHeight)
                 : MonolithicContent.FitsNoFragmentainer(depth, clonedTop, reservedEnd, container);
         }
 
