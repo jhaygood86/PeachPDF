@@ -1079,7 +1079,8 @@ namespace PeachPDF.Html.Core.Utils
                     MarginRight = box.ActualMarginRight,
                     MaxBottom = coordinates.MaxBottom,
                     ReferenceWidth = 0,
-                    Right = coordinates.MaxRight
+                    Right = coordinates.MaxRight,
+                    LeftFloatsOnly = true
                 };
 
                 var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, Floating.Left);
@@ -1781,8 +1782,15 @@ namespace PeachPDF.Html.Core.Utils
 
             switch (floatProp)
             {
-                case Floating.Left when targetRight > currentLeft && targetLeft <= currentLeft:
+                case Floating.Left when targetRight > currentLeft && targetLeft <= currentLeft
+                    && (!coordinates.LeftFloatsOnly || targetBox.EffectiveFloatSide == Floating.Left):
                 case Floating.Right when targetLeft > coordinates.FloatRightStartX + coordinates.ReferenceWidth + coordinates.MarginRight
+                    && !(targetLeft >= coordinates.ContainingRight && targetLeft < coordinates.MulticolRight):
+                // A float beside this one, in the same containing block: CSS 2.1 §9.5.1 rules 1-3 keep the
+                // outer edges of floats from overlapping, so an earlier float whose margin box shares any of
+                // the width this right float would take is a blocker (and a left one pushes it down below it).
+                case Floating.Right when targetLeft < coordinates.Right + coordinates.MarginRight
+                    && targetRight > coordinates.FloatRightStartX - coordinates.MarginLeft
                     && !(targetLeft >= coordinates.ContainingRight && targetLeft < coordinates.MulticolRight):
                     return true;
                 default:

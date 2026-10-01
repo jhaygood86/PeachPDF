@@ -16,6 +16,7 @@ A fix for both was written and measured (place the drop below the margin box, co
 margin cannot re-collide, and start lines to the right of the margin box). It is not bundled because on generated
 corpora it moved a line that cannot fit beside a float in a way that dropped words the current placement keeps:
 the line-placement policy for a first word that does not fit beside a float has to be settled (shift the line below
-the float) in the same change.
+the float) in the same change. That policy is now settled (an empty line that a float leaves no room on is shifted
+below it, see `ShiftEmptyLineBelowCrowdingFloats`), so the margin-box fix can be retried against it.
 
 Tracking issue for the hang: #1512.

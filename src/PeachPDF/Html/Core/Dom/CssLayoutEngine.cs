@@ -3355,23 +3355,29 @@ namespace PeachPDF.Html.Core.Dom
                 switch (intersectingFloat.EffectiveFloatSide)
                 {
                     case Floating.Left:
-                        coordinates.Left = intersectingFloat.ActualRight;
+                        coordinates.Left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
                         break;
                     case Floating.Right:
-                        // A negative margin-right puts the margin edge inside the border box, so the
-                        // border box has to end that far past the blocker for the margin edges to meet;
-                        // otherwise the same blocker is found again and the loop never ends.
-                        coordinates.Right = intersectingFloat.Location.X + Math.Max(0, -box.ActualMarginRight);
+                        // The margin edges meet: this float's border box ends its own margin-right short of
+                        // the blocker's margin box. A negative margin-right puts that edge inside the border
+                        // box, so the border box ends that far past the blocker; otherwise the same blocker is
+                        // found again and the loop never ends.
+                        coordinates.Right = intersectingFloat.Location.X - intersectingFloat.ActualMarginLeft
+                                            - box.ActualMarginRight;
                         break;
                 }
-                if (intersectingFloat.ActualBottom > coordinates.MaxBottom)
+
+                // The next float goes below the blocker's margin box (CSS 2.1 §9.5.1 rule 8 puts it as high as
+                // possible, which is the margin edge, not the border edge).
+                var blockerBottom = intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom;
+                if (blockerBottom > coordinates.MaxBottom)
                 {
-                    coordinates.MaxBottom = intersectingFloat.ActualBottom;
+                    coordinates.MaxBottom = blockerBottom;
                 }
 
-                if (coordinates.Left > coordinates.FloatRightStartX)
+                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft)
                 {
-                    coordinates.Top = coordinates.MaxBottom;
+                    coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
 
                     // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
                     limitRight = ContentRightOf(containingBox, coordinates.Top);
@@ -4112,6 +4118,103 @@ namespace PeachPDF.Html.Core.Dom
             // Register the box in the parent line so its border/background is painted.
             coordinates.Line.Rectangles[b] = new Rect(
                 b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
+        }
+
+        /// <summary>
+        /// Shifts a line that holds nothing yet down past the floats that leave it no room for
+        /// <paramref name="word"/>, until the word fits or no float remains to narrow it.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#floats">CSS 2.1 §9.5</see>: "If a shortened line
+        /// box is too small to contain any content, then the line box is shifted downward (and its width
+        /// recomputed) until either some content fits or there are no more floats present." An empty line has
+        /// nothing to wrap away from, so without this the word was placed in whatever room was left - beside a
+        /// right float's left edge or past the content edge - and a word placed there past the page's
+        /// right edge is clipped away. The cursor arrives already pushed past a left float, so the line's own
+        /// start is rebuilt from the line's content edge and the push re-derived at each new Y.
+        /// </remarks>
+        private static void ShiftEmptyLineBelowCrowdingFloats(CssBox blockBox, CssBox box,
+            CssLineBoxCoordinates coordinates, CssRect word, double rightSpacing, double clonedTrailing, bool isRtl,
+            Action<CssRect> growLineToItsExtent)
+        {
+            // Inside a column the float that crowds the line may belong to another column, whose lines it does not
+            // narrow (css-multicol-1 §2), so each column would shift its first line past it and the fill would never
+            // settle: the line keeps the room that is left, as it did before.
+            if (blockBox.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } }) return;
+
+            var arrivedAtX = coordinates.CurrentX;
+            var originalY = coordinates.CurrentY;
+            var originalMaxBottom = coordinates.MaxBottom;
+            var originalFlowTop = coordinates.Line.FlowTop;
+            var originalContentRight = coordinates.Line.ContentRight;
+            var bandBottom = blockBox.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true } fragmentainer }
+                ? fragmentainer.BandBottom
+                : double.PositiveInfinity;
+            var baseX = coordinates.Line.ContentLeft + (isRtl
+                ? 0
+                : GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]),
+                    coordinates.Line.FollowsForcedBreak));
+
+            // Asked from the line's own start: the point-collision lookup for a left float reports nothing
+            // once the cursor is already beyond it.
+            coordinates.CurrentX = baseX;
+            var firstLeft = LeftFloatAt(coordinates, box);
+            var firstEdge = firstLeft is null ? baseX : firstLeft.ActualRight + firstLeft.ActualMarginRight;
+            var inset = Math.Max(0, arrivedAtX - Math.Max(firstEdge, baseX));
+            coordinates.CurrentX = arrivedAtX;
+
+            for (var shifts = 0; ; shifts++)
+            {
+                coordinates.CurrentX = baseX;
+                var leftFloat = LeftFloatAt(coordinates, box);
+                var rightFloat = RightFloatAt(coordinates, box);
+
+                var startX = (leftFloat is null ? baseX : leftFloat.ActualRight + leftFloat.ActualMarginRight) + inset;
+                var limitRight = rightFloat is null
+                    ? coordinates.Line.ContentRight
+                    : rightFloat.Location.X - rightFloat.ActualMarginLeft - rightSpacing;
+                if (isRtl)
+                {
+                    limitRight -= GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]),
+                        coordinates.Line.FollowsForcedBreak);
+                }
+
+                var fits = startX + word.Width + rightSpacing + clonedTrailing <= limitRight + LineFitTolerance;
+
+                var nextY = double.PositiveInfinity;
+                if (leftFloat is not null)
+                    nextY = Math.Min(nextY, leftFloat.ActualBottom + leftFloat.ActualMarginBottom);
+                if (rightFloat is not null)
+                    nextY = Math.Min(nextY, rightFloat.ActualBottom + rightFloat.ActualMarginBottom);
+
+                // The cursor stays where the first lookup left it unless the line really moves down.
+                if (fits || double.IsPositiveInfinity(nextY) || nextY <= coordinates.CurrentY)
+                {
+                    coordinates.CurrentX = shifts == 0 ? arrivedAtX : startX;
+                    return;
+                }
+
+                // Below the fragmentainer being filled the line would be broken away from the floats and the next
+                // fragmentainer asked the same question, so a shift that long is not taken: the line stays where
+                // it was and keeps the room that is left. The same way out for a document that would keep shifting for
+                // ever (a bound, not an expected path).
+                if (nextY >= bandBottom || shifts >= 1000)
+                {                    coordinates.CurrentY = originalY;
+                    coordinates.MaxBottom = originalMaxBottom;
+                    coordinates.Line.FlowTop = originalFlowTop;
+                    coordinates.Line.ContentRight = originalContentRight;
+                    coordinates.CurrentX = arrivedAtX;
+                    growLineToItsExtent(word);
+                    return;
+                }
+
+                coordinates.CurrentY = nextY;
+                coordinates.MaxBottom = nextY;
+                // The line's top was stated at the Y it was first grown at; it has moved, and the recorded top is a minimum.
+                coordinates.Line.FlowTop = null;
+                coordinates.Line.ContentRight = LineContentRightOf(blockBox, nextY);
+                growLineToItsExtent(word);
+            }
         }
 
         /// <summary>
@@ -5248,6 +5351,13 @@ namespace PeachPDF.Html.Core.Dom
                         var topAlignedAtomicHeightBeforeIncomingWord = coordinates.Line.TopAlignedAtomicHeight;
                         var bottomAlignedAtomicHeightBeforeIncomingWord = coordinates.Line.BottomAlignedAtomicHeight;
                         GrowLineToItsExtent(word);
+
+                        if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre)
+                            && IsAtLineStart(coordinates))
+                        {
+                            ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
+                                clonedTrailing, isRtl, GrowLineToItsExtent);
+                        }
 
                         var actualLimitRight = coordinates.Line.ContentRight;
                         var lastRightIntersectingFloatBox = RightFloatAt(coordinates, box);

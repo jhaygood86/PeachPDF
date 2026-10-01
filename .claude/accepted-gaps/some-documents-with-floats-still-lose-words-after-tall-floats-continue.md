@@ -3,8 +3,8 @@
 A float that runs across pages continues with the text beside it, which recovers most of what was lost, but two
 kinds of residual are known and deliberately left:
 
-- **Documents that were already losing words** still lose some, mostly floats that overlap each other (see
-  [the second right float gap](a-second-right-float-that-does-not-fit-beside-the-first-overlaps-it.md)) and
+- **Documents that were already losing words** still lose some, mostly floats that overlapped each other (a
+  second right float used to be placed over the first, since closed by #1522) and
   layouts the line-placement policy drops a first word from (see
   [the border box gap](text-beside-a-float-is-measured-against-its-border-box-and-a-negative-margin-float-can-hang.md)).
 - **A small share of documents that rendered completely before lose a few words.** They are layouts that combine a
