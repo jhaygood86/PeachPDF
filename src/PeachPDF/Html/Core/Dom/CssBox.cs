@@ -3997,6 +3997,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private async ValueTask PerformLayoutPrologue(Canvas g)
         {
+            ResolveStretchSizes();
+
             if (DerivedStyle.ActualDisplay != Keywords.None)
             {
                 RectanglesReset();

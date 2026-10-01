@@ -491,6 +491,15 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter AutoLengthConverter = LengthConverter.OrAuto();
         public static readonly IValueConverter OptionalLengthOrPercentConverter = LengthOrPercentConverter.OrNone();
         public static readonly IValueConverter AutoLengthOrPercentConverter = LengthOrPercentConverter.OrAuto();
+
+        // CSS Sizing 3's `stretch` size, with the legacy -webkit-fill-available / -moz-available spellings
+        // (the same sizing, kept as written and recognised by CssBox.IsStretchKeyword at layout time).
+        private static IValueConverter OrStretch(this IValueConverter converter) =>
+            converter.Or(Keywords.Stretch).Or(Keywords.WebkitFillAvailable).Or(Keywords.MozAvailable);
+
+        public static readonly IValueConverter AutoLengthOrPercentOrStretchConverter = AutoLengthOrPercentConverter.OrStretch();
+        public static readonly IValueConverter OptionalLengthOrPercentOrStretchConverter = OptionalLengthOrPercentConverter.OrStretch();
+        public static readonly IValueConverter LengthOrPercentOrStretchConverter = LengthOrPercentConverter.OrStretch();
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
         public static readonly IValueConverter OptionalPercentOrNumberConverter = PercentOrNumberConverter.OrDefault(1f);
@@ -510,7 +519,7 @@ namespace PeachPDF.CSS
                                                                         .OrGlobalValue()
                                                                         .OrDefault(0);
 
-        public static readonly IValueConverter FlexBasisConverter = AutoLengthOrPercentConverter
+        public static readonly IValueConverter FlexBasisConverter = AutoLengthOrPercentOrStretchConverter
                                                                    .Or(IntrinsicSizingConverter)
                                                                    .OrGlobalValue()
                                                                    .OrDefault(Keywords.Auto);

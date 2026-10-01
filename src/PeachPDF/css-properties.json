@@ -1364,7 +1364,10 @@
         "keyword"
       ],
       "supportedValues": [
-        "auto"
+        "auto",
+        "stretch",
+        "-webkit-fill-available",
+        "-moz-available"
       ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -1382,7 +1385,10 @@
         "keyword"
       ],
       "supportedValues": [
-        "auto"
+        "auto",
+        "stretch",
+        "-webkit-fill-available",
+        "-moz-available"
       ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -1400,7 +1406,10 @@
         "keyword"
       ],
       "supportedValues": [
-        "auto"
+        "auto",
+        "stretch",
+        "-webkit-fill-available",
+        "-moz-available"
       ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -1418,7 +1427,10 @@
         "keyword"
       ],
       "supportedValues": [
-        "auto"
+        "auto",
+        "stretch",
+        "-webkit-fill-available",
+        "-moz-available"
       ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -1436,7 +1448,10 @@
         "keyword"
       ],
       "supportedValues": [
-        "auto"
+        "auto",
+        "stretch",
+        "-webkit-fill-available",
+        "-moz-available"
       ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
@@ -1454,7 +1469,10 @@
         "keyword"
       ],
       "supportedValues": [
-        "auto"
+        "auto",
+        "stretch",
+        "-webkit-fill-available",
+        "-moz-available"
       ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {

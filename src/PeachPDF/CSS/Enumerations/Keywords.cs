@@ -44,6 +44,8 @@
         public const string Round = "round";
         public const string Space = "space";
         public const string Stretch = "stretch";
+        public const string WebkitFillAvailable = "-webkit-fill-available";
+        public const string MozAvailable = "-moz-available";
         public const string Inline = "inline";
         public const string Block = "block";
         public const string Compact = "compact";

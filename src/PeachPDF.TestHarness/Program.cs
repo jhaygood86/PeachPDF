@@ -3979,6 +3979,21 @@ await SaveShowcaseAsync("flexbox", "Layout", "Flexbox",
     "Flexbox layout: direction, wrapping, justification (including start/right and self-start/self-end), alignment, gaps, auto margins on both axes, flexible item sizing, and replaced elements (img/svg) as flex items.",
     flexHtml, pdfConfig);
 
+// ─── stretch sizing showcase ────────────────────────────────────────────────
+
+await SaveShowcaseAsync("stretch_sizing", "Layout", "Stretch Sizing",
+    "width: stretch (and the legacy -webkit-fill-available): flex items that fill and equally share their container, plus a border-box column flex container that centres its items in the content box.",
+    """
+    <html><body style="font-family: sans-serif; font-size: 10pt;">
+      <div style="display:flex; gap:5mm; justify-content:space-between; width:calc(100% - 24mm); margin-bottom:8mm;">
+        <p style="margin:0; border:1px solid #b6b6b6; border-radius:4px; padding:2mm 4mm; display:flex; flex-direction:column; align-items:center; gap:1mm; width:-webkit-fill-available;">Transfer date<span>12. august 2026</span></p>
+        <p style="margin:0; border:1px solid #b6b6b6; border-radius:4px; padding:2mm 4mm; display:flex; flex-direction:column; align-items:center; gap:1mm; width:-webkit-fill-available;">Distribution ID<span>0023-2146</span></p>
+      </div>
+      <p style="margin:0 0 8mm; box-sizing:border-box; width:300pt; border:1px solid #999; padding:0 20pt; display:flex; flex-direction:column; align-items:center;">Centred<span>in the content box</span></p>
+      <div style="width:300pt; border:1px solid #000; padding:4pt;"><div style="width:stretch; margin:0 10pt; background:#fc9;">width: stretch with 10pt side margins</div></div>
+    </body></html>
+    """, pdfConfig);
+
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
 
 static string VarSwatch(string desc, string boxCss, string valueLabel, string cssLabel) =>

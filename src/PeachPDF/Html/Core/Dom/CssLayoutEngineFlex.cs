@@ -253,7 +253,7 @@ namespace PeachPDF.Html.Core.Dom
             // Container cross-axis size (0 when auto/unknown until content lays out)
             double containerCrossSize = _mainAxisIsPhysicalX
                 ? (hasDefiniteHeight ? _flexBox.ClientBottom - _flexBox.ClientTop : 0)
-                : containerWidth;
+                : _flexBox.ClientRight - _flexBox.ClientLeft;
 
             // Whether the main axis has indefinite size (auto height, with main landing on physical Y = no
             // grow/shrink). A main axis on physical X never is: GetBoxWidth above always resolves Width
@@ -634,6 +634,8 @@ namespace PeachPDF.Html.Core.Dom
 
         private async ValueTask<FlexItem> MeasureItem(Canvas g, CssBox box, double mainSize, bool mainSizeIndefinite)
         {
+            box.ResolveStretchSizes();
+
             // Derive hypothetical main size from CSS properties (don't rely on PerformLayout result,
             // since auto-width block boxes fill the entire containing block instead of their intrinsic size).
             // A percentage flex-basis against an indefinite main axis resolves to nothing per spec
@@ -642,7 +644,15 @@ namespace PeachPDF.Html.Core.Dom
             var isIndefinitePercentageBasis = mainSizeIndefinite &&
                 flexBasis.Value is { IsCalc: false, Length: { Type: Length.Unit.Percent } };
             double hypothetical;
-            if (flexBasis.IsValue && !isIndefinitePercentageBasis)
+            if (flexBasis.Keyword is FlexBasisKeyword.Stretch && !mainSizeIndefinite)
+            {
+                // flex-basis: stretch fills the container's main size (CSS Sizing 3 stretch-fit): the margin box
+                // fits exactly, auto margins counting as zero, so the border box is what remains of the container.
+                hypothetical = Math.Max(0, mainSize
+                    - (IsMainMarginBeforeAuto(box) ? 0 : MainMarginBefore(box))
+                    - (IsMainMarginAfterAuto(box) ? 0 : MainMarginAfter(box)));
+            }
+            else if (flexBasis.IsValue && !isIndefinitePercentageBasis)
             {
                 // flex-basis's <length>/<percentage> resolves the same way width/height would
                 // (https://www.w3.org/TR/css-flexbox-1/#flex-basis-property), so it respects box-sizing
@@ -2171,11 +2181,18 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private async ValueTask<FlexItem> RederiveItem(Canvas g, CssBox box, double mainSize)
         {
+            box.ResolveStretchSizes();
             var authoredWidth = box.ItemContentSizeEverPinned ? box.WidthBeforeItemPin : box.Width;
             var flexBasis = box.FlexBasis.Value;
             double hypothetical;
 
-            if (flexBasis.IsValue)
+            if (flexBasis.Keyword is FlexBasisKeyword.Stretch)
+            {
+                hypothetical = Math.Max(0, mainSize
+                    - (IsMainMarginBeforeAuto(box) ? 0 : MainMarginBefore(box))
+                    - (IsMainMarginAfterAuto(box) ? 0 : MainMarginAfter(box)));
+            }
+            else if (flexBasis.IsValue)
             {
                 hypothetical = CssValueParser.ParseLength(flexBasis.Value!.Value, mainSize, box) + MainBoxSizeIncluded(box);
             }
