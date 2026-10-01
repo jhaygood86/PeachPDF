@@ -77,7 +77,7 @@ public class FloatPlacementTests
                         "w1_67 w1_68 w1_69 w1_70 w1_71 w1_72</div>");
 
         var layout = Task.Run(() => PaintedWords.LayOutAndCollectVisibleAsync(html));
-        var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30))) == layout;
+        var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)) == layout;
 
         Assert.True(finished, "layout did not finish within 30 seconds");
         Assert.True((await layout).Pages >= 1);
