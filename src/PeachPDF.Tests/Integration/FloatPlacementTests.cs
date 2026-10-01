@@ -83,6 +83,24 @@ public class FloatPlacementTests
         Assert.True((await layout).Pages >= 1);
     }
 
+    // #1535: an empty block with `clear` (the clearfix div) is given clearance (CSS 2.1 §9.5.2), so what follows it is
+    // below the float, not beside it. With text, a height or overflow: hidden it already was.
+    [Theory]
+    [InlineData("<div style='clear: both'></div>", 132)]
+    [InlineData("<div style='clear: both'>clr</div>", 144)]
+    [InlineData("<div style='clear: both; height: 1pt'></div>", 133)]
+    [InlineData("<div style='clear: both; overflow: hidden'></div>", 132)]
+    public async Task EmptyBlockWithClear_ClearsTheFloatAboveIt(string clearing, double afterY)
+    {
+        var html = Page("<div>top</div><div style='float: right; width: 50pt; height: 100pt'>f</div>" +
+                        clearing + "<p style='margin: 0'>after</p>");
+        var positions = await PaintedWords.PositionsAsync(html);
+
+        // The word's top is its line's top plus half-leading, so compare against the line box rather than exactly.
+        Assert.True(Math.Abs(positions["after"].Y - afterY) < 1.5,
+            $"'after' at y={positions["after"].Y}, expected about {afterY}");
+    }
+
     // The case that fits: the second right float sits beside the first, to its left, at the same height.
     [Fact]
     public async Task SecondRightFloatThatFitsBesideTheFirst_SitsToItsLeft()
