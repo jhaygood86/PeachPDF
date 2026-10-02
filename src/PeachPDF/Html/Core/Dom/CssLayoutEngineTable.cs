@@ -6019,6 +6019,11 @@ namespace PeachPDF.Html.Core.Dom
                     // one place logical and physical coordinates actually meet. See the axis-mapping
                     // fields' own remarks for why this assumes forward growth even for vertical-rl.
                     cell.Location = _isVertical ? new PaintPoint(currentY, currentX) : new PaintPoint(currentX, currentY);
+                    // A row laid out again over cells an earlier run placed - a §4.3 relocation of the whole table after a
+                    // cell's own break - starts from no height of its own: ActualBottom is the location plus a stored height,
+                    // so moving the location alone leaves the cell as tall as it was where it first broke, and the row, the
+                    // table and everything after it carry the gap that run's break left inside the cell.
+                    if (!_isVertical) cell.ActualBottom = cell.Location.Y;
                 }
 
                 // width is the cell's column-axis extent (from _columnWidths[], physical Y for a vertical
