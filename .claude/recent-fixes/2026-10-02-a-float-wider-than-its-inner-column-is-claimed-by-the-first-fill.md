@@ -18,7 +18,7 @@ verdict. Three details that each cost a failure when they were left out:
   the next one (`t1`: 'w2_66' twice);
 - the open-right region and the same vetoes are applied to every instance asked, as in the walk.
 
-Evidence: corpus (300 documents, page-edge visibility): lost 4 to 3 and doubled 6 to 0 together with #1586 (seed 112 to 0;
+- the box must lie wholly in the band, not merely overlap it. A line across a band's edge is given to one band or the other by the\n  ordinary straddle rule, and a fallback that saw only 'nobody here claims it' claimed it for the band that had just refused it. On\n  Windows the one-pixel metric difference hid it; on Linux CI ABreakBelowTheContainersOwnChild_ClaimsEveryWordExactlyOnce failed\n  (a row at y=199.7 on a 200pt band, claimed by both pages). Reproduced with the suite in Release under WSL.\n\nEvidence: corpus (300 documents, page-edge visibility): lost 4 to 3 and doubled 6 to 0 together with #1586 (seed 112 to 0;
 the 3 left are seed 27's words that now lie past the page edge); net8.0 suite green; the lost-word test fails on main.
 
 Not done: two other reductions of seed 112 (`d1b`, `d2`: a float in two columns at different positions) double a word on

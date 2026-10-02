@@ -4333,9 +4333,10 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 if (instance.DetachedSourceRoot is not null || instance.Region.Left is null || !HoldsOrDescendsFromAHeld(instance.Geometry, box)
                     || !TryGetWordRect(box, wordIndex, instance.Geometry, out var rect)
-                    || Math.Min(rect.Bottom, instance.Region.Bottom) - Math.Max(rect.Top, instance.Region.Top) <= BandOverlapEpsilon)
+                    || rect.Bottom > instance.Region.Bottom + BandOverlapEpsilon || rect.Top < instance.Region.Top - BandOverlapEpsilon)
                 {
-                    // Not placed in this column's band: it is another's, or another fragmentainer's.
+                    // Not wholly in this column's band: it is another's, or another fragmentainer's. A line across the band's edge is
+                    // placed by the straddle rule the ordinary claim applies, which may give it to the next band; it is no overflow.
                     continue;
                 }
 
