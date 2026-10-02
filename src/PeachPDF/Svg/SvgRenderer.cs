@@ -1690,10 +1690,13 @@ namespace PeachPDF.Svg
             var spacedWidth = size.Width + (letterSpacing != 0 ? g.CountShapedGlyphs(text, font, features) * letterSpacing : 0);
             var textBounds = new Rect(drawX, drawY, spacedWidth, size.Height);
 
-            // Fill then stroke, matching SVG paint order. A gradient/pattern that came through context-fill/context-stroke is measured
-            // against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
-            if (fill.Kind != SvgPaintKind.None)
+            // Fill then stroke unless paint-order says otherwise (SVG 2 §13.6). A gradient/pattern that came through context-fill/context-stroke is
+            // measured against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
+            void PaintFill()
             {
+                if (fill.Kind == SvgPaintKind.None)
+                    return;
+
                 var fillBounds = ContextBounds(g, fill) ?? textBounds;
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
@@ -1707,12 +1710,26 @@ namespace PeachPDF.Svg
                 }
             }
 
-            if (hasStroke)
+            void PaintStroke()
             {
+                if (!hasStroke)
+                    return;
+
                 var strokeBounds = ContextBounds(g, stroke) ?? textBounds;
                 var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (pen is not null)
                     g.DrawPath(pen, outline);
+            }
+
+            if (run.StrokeFirst)
+            {
+                PaintStroke();
+                PaintFill();
+            }
+            else
+            {
+                PaintFill();
+                PaintStroke();
             }
 
             outline.Dispose();
@@ -1828,8 +1845,11 @@ namespace PeachPDF.Svg
             // A gradient/pattern that came through context-fill/context-stroke instead measures against the context element.
             var bounds = new Rect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
 
-            if (fill.Kind != SvgPaintKind.None)
+            void PaintFill()
             {
+                if (fill.Kind == SvgPaintKind.None)
+                    return;
+
                 var fillBounds = ContextBounds(g, fill) ?? bounds;
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
@@ -1843,12 +1863,26 @@ namespace PeachPDF.Svg
                 }
             }
 
-            if (hasStroke)
+            void PaintStroke()
             {
+                if (!hasStroke)
+                    return;
+
                 var strokeBounds = ContextBounds(g, stroke) ?? bounds;
                 var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (strokePen is not null)
                     g.DrawPath(strokePen, outline);
+            }
+
+            if (run.StrokeFirst)
+            {
+                PaintStroke();
+                PaintFill();
+            }
+            else
+            {
+                PaintFill();
+                PaintStroke();
             }
 
             outline.Dispose();

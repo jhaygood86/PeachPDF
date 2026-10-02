@@ -226,7 +226,8 @@ namespace PeachPDF.Svg
             string? UnderlineOffset = null,
             string UnderlinePosition = "auto",
             string SkipInk = "auto",
-            string? TextShadow = null)
+            string? TextShadow = null,
+            string? PaintOrder = null)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1562,6 +1563,11 @@ namespace PeachPDF.Svg
                 ? inherited.TextShadow
                 : textShadowAttr.Trim();
 
+            var paintOrderAttr = ResolveStyledAttr(node, "paint-order");
+            var paintOrder = string.IsNullOrWhiteSpace(paintOrderAttr) || paintOrderAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.PaintOrder
+                : paintOrderAttr.Trim().ToLowerInvariant();
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1575,7 +1581,7 @@ namespace PeachPDF.Svg
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
-                underlineOffset, underlinePosition, skipInk, textShadow);
+                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder);
         }
 
         /// <summary>
@@ -1706,6 +1712,28 @@ namespace PeachPDF.Svg
                 return double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
 
             return SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
+        }
+
+        /// <summary>
+        /// Whether a <c>paint-order</c> value paints the stroke before the fill: the listed keywords come first, in order, then the
+        /// ones left out in the default order fill, stroke, markers (SVG 2 §13.6). <c>normal</c>, nothing, or an invalid value is fill first.
+        /// </summary>
+        private static bool StrokesBeforeFill(string? paintOrder)
+        {
+            if (string.IsNullOrWhiteSpace(paintOrder))
+                return false;
+
+            var listed = paintOrder.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (listed.Length == 0 || listed.Any(k => k is not ("fill" or "stroke" or "markers")) || listed.Distinct().Count() != listed.Length)
+                return false;
+
+            var fill = Array.IndexOf(listed, "fill");
+            var stroke = Array.IndexOf(listed, "stroke");
+            if (stroke < 0)
+                return false;
+
+            // A keyword left out sorts after every listed one, with fill ahead of stroke.
+            return fill < 0 || stroke < fill;
         }
 
         /// <summary>Parses a <c>text-shadow</c> value into its layers with lengths resolved against <paramref name="font"/>; an invalid value or <c>none</c> is no shadow.</summary>
@@ -1968,6 +1996,7 @@ namespace PeachPDF.Svg
             run.TextDecorationSkipInk = runFont.SkipInk;
 
             run.TextShadows = ParseTextShadows(runFont.TextShadow, runFont);
+            run.StrokeFirst = StrokesBeforeFill(runFont.PaintOrder);
 
             var childFontContext = runFont;
 

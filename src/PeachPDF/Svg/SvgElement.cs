@@ -246,6 +246,9 @@ namespace PeachPDF.Svg
         /// <summary>The <c>text-shadow</c> layers (first listed on top); inherited. Empty for <c>none</c>.</summary>
         public IReadOnlyList<SvgTextShadow> TextShadows { get; set; } = [];
 
+        /// <summary><c>paint-order</c> puts the stroke beneath the fill (SVG 2 §13.6): <c>stroke</c>, <c>stroke fill</c>, <c>markers stroke</c> ...; inherited.</summary>
+        public bool StrokeFirst { get; set; }
+
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
         /// Decoration 3), unlike every other font/paint property this element carries.</summary>
