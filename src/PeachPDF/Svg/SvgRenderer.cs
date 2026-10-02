@@ -15,6 +15,7 @@ using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -430,6 +431,9 @@ namespace PeachPDF.Svg
         /// </summary>
         private sealed class GlyphInfo
         {
+            /// <summary>Set when <c>textLength</c> moved this glyph away from its natural pen position, so it must be painted on its own rather than batched with its neighbours.</summary>
+            public bool SpacingAdjusted;
+
             /// <summary>Settable (not <c>init</c>) so bidi L4 mirroring can rewrite an RTL glyph's
             /// character to its mirror-image codepoint in place (see <c>ApplyBidiReordering</c>).</summary>
             public required string Glyph { get; set; }
@@ -793,7 +797,12 @@ namespace PeachPDF.Svg
                 {
                     case SvgTextFragment fragment when run.Font is { } font:
                         foreach (var rune in fragment.Text.EnumerateRunes())
-                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = font, Opacity = opacityFactor });
+                        {
+                            // A combining mark, joiner or variation selector stays in its base character's font so the cluster still shapes together.
+                            var continuesCluster = glyphs.Count > 0 && ReferenceEquals(glyphs[^1].Run, run) && IsClusterContinuation(rune);
+                            var glyphFont = continuesCluster ? glyphs[^1].Font : run.FontFor?.Invoke(rune) ?? font;
+                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = glyphFont, Opacity = opacityFactor });
+                        }
                         break;
 
                     case SvgTextSpan span when span.Run.PathData is not null:
@@ -923,6 +932,7 @@ namespace PeachPDF.Svg
                 var end = pos + 1;
                 while (end < count
                        && ReferenceEquals(glyphs[end].Run, first.Run)
+                       && ReferenceEquals(glyphs[end].Font, first.Font)
                        && first.Run.LetterSpacing == 0
                        && (glyphs[end].Rotate ?? 0) == 0
                        && glyphs[end].X is null && glyphs[end].Y is null
@@ -983,6 +993,129 @@ namespace PeachPDF.Svg
                     UseCategories = first.RunUseCategories,
                     ReverseForDisplay = first.RunReverseForDisplay,
                 };
+
+        /// <summary>
+        /// How far below the text position a run's alphabetic baseline sits (horizontal writing only). The run's dominant baseline - or, for a nested element with an
+        /// <c>alignment-baseline</c> of its own, that baseline - is put on the position; otherwise the run's alphabetic baseline aligns with its parent's. A
+        /// <c>baseline-shift</c> then raises the run. The pen does not move: only where the glyphs are drawn does.
+        /// </summary>
+        private static double BaselineOffset(SvgTextElement run)
+        {
+            var offset = AlphabeticBaselineBelowPosition(run);
+            return offset - run.BaselineShift;
+
+            static double AlphabeticBaselineBelowPosition(SvgTextElement r)
+            {
+                if (r.Font is not { } font)
+                    return 0;
+
+                if (r.AlignmentBaseline is not ("auto" or "baseline" or "use-script" or "no-change" or "reset-size"))
+                    return HeightAboveAlphabetic(r.AlignmentBaseline, font);
+
+                return r.ParentRun is { } parent ? AlphabeticBaselineBelowPosition(parent) : HeightAboveAlphabetic(r.DominantBaseline, font);
+            }
+        }
+
+        /// <summary>The height of a named baseline above the alphabetic baseline of <paramref name="font"/>, approximated from its metrics (no <c>BASE</c> table is read).</summary>
+        private static double HeightAboveAlphabetic(string baseline, Font font)
+        {
+            var descent = font.Height - font.Ascent;
+            return baseline switch
+            {
+                "ideographic" => -0.12 * font.Size,
+                "hanging" => 0.8 * font.Size,
+                "mathematical" => (font.XHeightEm ?? 0.5) * font.Size,
+                "middle" => (font.XHeightEm ?? 0.5) * font.Size / 2,
+                "central" => (font.Ascent - descent) / 2,
+                "text-top" or "text-before-edge" or "before-edge" => font.Ascent,
+                "text-bottom" or "text-after-edge" or "after-edge" => -descent,
+                _ => 0,
+            };
+        }
+
+        private static bool IsClusterContinuation(System.Text.Rune rune)
+        {
+            if (rune.Value is 0x200C or 0x200D or (>= 0xFE00 and <= 0xFE0F) or (>= 0xE0100 and <= 0xE01EF))
+                return true;
+
+            return System.Text.Rune.GetUnicodeCategory(rune) is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.EnclosingMark;
+        }
+
+        private static bool IsWithin(SvgTextElement? candidate, SvgTextElement container)
+        {
+            for (var r = candidate; r is not null; r = r.ParentRun)
+            {
+                if (ReferenceEquals(r, container))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Applies <c>textLength</c> with <c>lengthAdjust="spacing"</c> (SVG 2 §11.4): the characters a text content element holds are spread (or squeezed) by
+        /// adding the same extra space after each addressable character but the last, so the element spans exactly its <c>textLength</c>. Inner elements are
+        /// adjusted before the ones containing them, and the text after an adjusted element - up to the next absolutely positioned chunk - moves with it.
+        /// <c>spacingAndGlyphs</c> (which also stretches the glyphs) is not applied.
+        /// </summary>
+        private static void ApplyTextLength(List<GlyphInfo> glyphs)
+        {
+            var adjusted = new List<SvgTextElement>();
+            foreach (var gi in glyphs)
+            {
+                for (var r = gi.Run; r is not null; r = r.ParentRun)
+                {
+                    if (r.TextLength is not null && r.LengthAdjust != "spacingAndGlyphs" && !adjusted.Contains(r))
+                        adjusted.Add(r);
+                }
+            }
+
+            // Innermost first: a run nested deeper has a longer ancestor chain.
+            static int Depth(SvgTextElement r) { var d = 0; for (var p = r.ParentRun; p is not null; p = p.ParentRun) d++; return d; }
+            foreach (var run in adjusted.OrderByDescending(Depth))
+            {
+                var first = glyphs.FindIndex(gi => IsWithin(gi.Run, run));
+                var last = glyphs.FindLastIndex(gi => IsWithin(gi.Run, run));
+                if (first < 0 || last < first)
+                    continue;
+
+                // Characters of one complex-script shaping run are one unit: only its first glyph takes a gap.
+                var units = new List<int>();
+                for (var i = first; i <= last; i++)
+                {
+                    if (glyphs[i].ShapingRunFirst is { } runFirst && !ReferenceEquals(runFirst, glyphs[i]))
+                        continue;
+                    units.Add(i);
+                }
+
+                var natural = glyphs[last].Px + glyphs[last].Advance - glyphs[first].Px;
+                var delta = run.TextLength!.Value - natural;
+                if (units.Count < 2 || delta == 0)
+                    continue;
+
+                var perGap = delta / (units.Count - 1);
+                var shiftAfter = 0.0;
+                for (var u = 0; u < units.Count; u++)
+                {
+                    var index = units[u];
+                    var shift = u * perGap;
+                    glyphs[index].Px += shift;
+                    glyphs[index].SpacingAdjusted = true;
+                    if (u < units.Count - 1)
+                    {
+                        glyphs[index].Advance += perGap;
+                        shiftAfter = (u + 1) * perGap;
+                    }
+
+                    // The members of a shaping run follow its first glyph.
+                    for (var m = index + 1; m <= last && glyphs[m].ShapingRunFirst is { } f && ReferenceEquals(f, glyphs[index]); m++)
+                        glyphs[m].Px += shift;
+                }
+
+                for (var i = last + 1; i < glyphs.Count && glyphs[i].X is null; i++)
+                    glyphs[i].Px += shiftAfter;
+            }
+        }
 
         /// <summary>
         /// Lays out the flattened character stream: advances a pen along the writing mode's own inline
@@ -1081,7 +1214,7 @@ namespace PeachPDF.Svg
                     penY += gi.Dy ?? 0;
 
                     gi.Px = penX;
-                    gi.Py = penY;
+                    gi.Py = penY + BaselineOffset(gi.Run);
 
                     if (gi.ShapingRunFirst is { } shapingFirst)
                     {
@@ -1114,6 +1247,9 @@ namespace PeachPDF.Svg
                     penX += gi.Advance;
                 }
             }
+
+            if (!isVertical)
+                ApplyTextLength(glyphs);
 
             for (var c = 0; c < chunkStarts.Count; c++)
             {
@@ -1234,7 +1370,7 @@ namespace PeachPDF.Svg
                 // This also has to apply when `start` itself is the word-spaced glyph (e.g. a run
                 // boundary lands exactly on a space) - otherwise the gap silently never renders,
                 // since nothing downstream re-checks the batch's own first character.
-                var startIsWordSpacedWhitespace = start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph);
+                var startIsWordSpacedWhitespace = (start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph)) || (start.SpacingAdjusted && start.ShapingRunFirst is null);
                 while (!startIsWordSpacedWhitespace && i < glyphs.Count)
                 {
                     var gc = glyphs[i];
@@ -1244,7 +1380,7 @@ namespace PeachPDF.Svg
                     // between a run and plain text, always breaks the batch - each needs its own
                     // ShapeSettings (see ResolveShapingFeatures), so merging them would apply one
                     // run's joining forms/USE categories to the other's text.
-                    if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
+                    if (!ReferenceEquals(gc.Run, start.Run) || !ReferenceEquals(gc.Font, start.Font) || (gc.SpacingAdjusted && gc.ShapingRunFirst is null) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
                         || !ReferenceEquals(gc.ShapingRunFirst, start.ShapingRunFirst))
                         break;
@@ -1361,11 +1497,11 @@ namespace PeachPDF.Svg
                     continue;
 
                 foreach (var (start, end) in decoratorSpans)
-                    DrawDecorationSpan(g, decorator, font, start, end, opacity);
+                    DrawDecorationSpan(g, decorator, font, start, end, opacity, glyphs);
             }
         }
 
-        private static void DrawDecorationSpan(Canvas g, SvgTextElement decorator, Font font, GlyphInfo start, GlyphInfo end, double opacity)
+        private static void DrawDecorationSpan(Canvas g, SvgTextElement decorator, Font font, GlyphInfo start, GlyphInfo end, double opacity, List<GlyphInfo> glyphs)
         {
             var x1 = start.Px;
             var x2 = end.Px + end.Advance;
@@ -1383,18 +1519,25 @@ namespace PeachPDF.Svg
             var color = decorator.TextDecorationColor
                 ?? (resolvedFill.Kind == SvgPaintKind.Solid ? resolvedFill.PaintColor : PaintColor.Black);
             var actualColor = ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity);
-            const double thickness = 1;
-            var isWavy = decorator.TextDecorationStyle == Keywords.Wavy;
+
+            // `auto` keeps the fixed one-unit line this renderer always drew.
+            var thickness = decorator.TextDecorationThicknessFromFont ? font.UnderlineThickness : decorator.TextDecorationThickness ?? 1;
+            if (thickness <= 0)
+                return;
+
+            var style = Map.TextDecorationStyleModes.GetValueOrDefault(decorator.TextDecorationStyle, TextDecorationStyleMode.Solid);
             var pen = g.GetPen(actualColor);
             pen.Width = thickness;
-            pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(decorator.TextDecorationStyle);
+            pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(style);
+
+            var span = new DecorationInterval(x1, x2);
+            var top = start.Py - font.Ascent;
 
             foreach (var line in decorator.TextDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
-                var top = start.Py - font.Ascent;
                 double y = line switch
                 {
-                    "underline" => Math.Round(top + font.UnderlineOffset),
+                    "underline" => ResolveUnderlineY(decorator, font, start.Py, top),
                     "line-through" => top + font.Height / 2,
                     "overline" => top,
                     _ => double.NaN,
@@ -1403,11 +1546,130 @@ namespace PeachPDF.Svg
                 if (double.IsNaN(y))
                     continue;
 
-                if (isWavy)
-                    WavyDecorationRenderer.StrokeWavyLine(g, actualColor, line, x1, x2, y, thickness);
-                else
-                    g.DrawLine(pen, x1, y, x2, y);
+                // css-text-decor-4 §2.5: only underlines and overlines skip ink - a line-through is meant to cross the glyphs.
+                IReadOnlyList<DecorationInterval> exclusions = [];
+                if (line is "underline" or "overline" && decorator.TextDecorationSkipInk != "none")
+                {
+                    var found = new List<DecorationInterval>();
+                    AddInkExclusions(g, glyphs, start, end, y, thickness, decorator.TextDecorationSkipInk == "auto", found);
+                    exclusions = found;
+                }
+
+                foreach (var segment in DecorationSegments.Subtract(span, exclusions))
+                    FragmentPainter.StrokeDecorationSegment(g, pen, thickness, actualColor, style, line, segment.Start, segment.End, y,
+                        isVertical: false, underSign: 1, atBlockStart: line == "overline");
             }
+        }
+
+        /// <summary>The underline's vertical position: <c>auto</c> hangs from the decorator's font as it always has; <c>from-font</c> uses the font's own underline position; <c>under</c> sits at the bottom of the line box. <c>text-underline-offset</c> then moves it further from the text.</summary>
+        private static double ResolveUnderlineY(SvgTextElement decorator, Font font, double baseline, double top)
+        {
+            var position = decorator.TextUnderlinePosition;
+            var basePosition = position.Contains("from-font", StringComparison.Ordinal) ? baseline - font.UnderlinePosition
+                : position.Contains("under", StringComparison.Ordinal) ? top + font.Height
+                : Math.Round(top + font.UnderlineOffset);
+            return basePosition + decorator.TextUnderlineOffset;
+        }
+
+        /// <summary>
+        /// Collects, for the glyphs from <paramref name="start"/> to <paramref name="end"/>, the horizontal stretches where their ink crosses the band a
+        /// decoration line at <paramref name="y"/> would cover, each dilated by the clearance the line keeps from the ink (capped as HTML's is).
+        /// Under <c>auto</c> (UA discretion) CJK characters are left unskipped, as css-text-decor-4 §2.5 suggests.
+        /// </summary>
+        private static void AddInkExclusions(Canvas g, List<GlyphInfo> glyphs, GlyphInfo start, GlyphInfo end, double y, double thickness, bool isAuto, List<DecorationInterval> into)
+        {
+            var from = glyphs.IndexOf(start);
+            var to = glyphs.IndexOf(end);
+            if (from < 0 || to < from)
+                return;
+
+            var half = thickness / 2;
+            var clearance = Math.Min(thickness, FragmentPainter.MaximumInkSkipClearanceCssPixels * PeachPDF.CSS.Length.PointsPerPx * g.PixelsPerPoint);
+
+            for (var i = from; i <= to; i++)
+            {
+                var gi = glyphs[i];
+
+                // A complex-script shaping run is measured once, as the whole run, from its first glyph; its other members add nothing.
+                if (gi.ShapingRunFirst is not null && !ReferenceEquals(gi.ShapingRunFirst, gi))
+                    continue;
+
+                var text = gi.ShapingRunFirst is not null ? gi.RunText ?? gi.Glyph : gi.Glyph;
+                if (string.IsNullOrWhiteSpace(text) || (isAuto && IsCjk(text)))
+                    continue;
+
+                var font = gi.Font;
+                var crossings = g.GetInkCrossings(text, font, new PaintPoint(gi.Px, gi.Py - font.Ascent), y - half, y + half, gi.Run.LetterSpacing, ResolveShapingFeatures(gi));
+                if (crossings is null)
+                    continue;
+
+                foreach (var crossing in crossings)
+                    into.Add(new DecorationInterval(crossing.Start, crossing.End).Dilated(clearance));
+            }
+        }
+
+        /// <summary>
+        /// Paints <paramref name="run"/>'s <c>text-shadow</c> layers underneath the text (CSS Text Decoration 3 §4.1: the first shadow is on top, so they
+        /// paint last to first), the way <c>FragmentPainter.PaintTextShadows</c> does for HTML: a shadow with no blur is the text drawn again at an offset
+        /// in the shadow colour and stays vector; a blurred one is drawn into a layer that is Gaussian-blurred (radius = twice the standard deviation).
+        /// A glyph painted under <paramref name="glyphTransform"/> gets its offset applied after that transform, and is not blurred.
+        /// </summary>
+        private static void PaintTextShadows(Canvas g, SvgTextElement run, string text, Font font, double drawX, double drawY, Size size, double opacity,
+            double letterSpacing, ShapeSettings? features, string? logicalText, Matrix3x2? glyphTransform = null)
+        {
+            if (run.TextShadows.Count == 0 || g.InvisibleText)
+                return;
+
+            var fill = ResolveInMarker(run.Fill);
+            var textColor = fill.Kind == SvgPaintKind.Solid ? fill.PaintColor : PaintColor.Black;
+
+            for (var i = run.TextShadows.Count - 1; i >= 0; i--)
+            {
+                var shadow = run.TextShadows[i];
+                var color = ApplyOpacity(shadow.Color ?? textColor, opacity * run.FillOpacity);
+                if (color.A == 0)
+                    continue;
+
+                if (glyphTransform is { } transform)
+                {
+                    g.PushTransform(MultiplyMatrix(transform, Matrix3x2.CreateTranslation((float)shadow.Dx, (float)shadow.Dy)));
+                    g.DrawString(text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
+                    g.PopTransform();
+                    continue;
+                }
+
+                var point = new PaintPoint(drawX + shadow.Dx, drawY + shadow.Dy);
+                if (shadow.Blur <= 0)
+                {
+                    g.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+                    continue;
+                }
+
+                // Glyph ink can overhang the run's own box a little; the padding keeps it.
+                var margin = 1.5 * shadow.Blur + size.Height * 0.25;
+                var clip = g.GetClip();
+                var left = Math.Max(point.X - margin, clip.X - margin);
+                var top = Math.Max(point.Y - margin, clip.Y - margin);
+                var right = Math.Min(point.X + size.Width + margin, clip.Right + margin);
+                var bottom = Math.Min(point.Y + size.Height + margin, clip.Bottom + margin);
+                if (right <= left || bottom <= top)
+                    continue;
+
+                using var layer = g.BeginLayer(new LayerOptions(Bounds: new Rect(left, top, right - left, bottom - top), Effects: [new BlurEffect(shadow.Blur / 2)]));
+                layer?.Canvas.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+            }
+        }
+
+        private static bool IsCjk(string text)
+        {
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var v = rune.Value;
+                if (v is >= 0x3040 and <= 0x30FF or >= 0x3400 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF or >= 0x20000 and <= 0x2FFFF)
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1429,9 +1691,13 @@ namespace PeachPDF.Svg
             var toOrigin = new Matrix3x2(1, 0, 0, 1, (float)-start.Px, (float)-start.Py);
             var rotate = new Matrix3x2((float)cos, (float)sin, (float)-sin, (float)cos, 0, 0);
             var fromOrigin = new Matrix3x2(1, 0, 0, 1, (float)start.Px, (float)start.Py);
-            g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
+            var glyphTransform = MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin);
+            // A shadow's offset is in user space, so it is applied after the glyph's rotation rather than inside it.
+            PaintTextShadows(g, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity,
+                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph, glyphTransform);
+            g.PushTransform(glyphTransform);
             PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity,
-                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
+                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph, paintShadows: false);
             g.PopTransform();
         }
 
@@ -1510,8 +1776,11 @@ namespace PeachPDF.Svg
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
         private static void PaintTextGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, double drawX, double drawY, Size size, double opacity,
-            double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null)
+            double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null, bool paintShadows = true)
         {
+            if (paintShadows)
+                PaintTextShadows(g, run, text, font, drawX, drawY, size, opacity, letterSpacing, features, logicalText);
+
             // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - same as a shape's own
             // fill/stroke (PaintShape). Outside a marker this is a no-op (the tree builder already resolved these through `use`).
             var fill = ResolveInMarker(run.Fill);
@@ -1555,10 +1824,13 @@ namespace PeachPDF.Svg
             var spacedWidth = size.Width + (letterSpacing != 0 ? g.CountShapedGlyphs(text, font, features) * letterSpacing : 0);
             var textBounds = new Rect(drawX, drawY, spacedWidth, size.Height);
 
-            // Fill then stroke, matching SVG paint order. A gradient/pattern that came through context-fill/context-stroke is measured
-            // against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
-            if (fill.Kind != SvgPaintKind.None)
+            // Fill then stroke unless paint-order says otherwise (SVG 2 §13.6). A gradient/pattern that came through context-fill/context-stroke is
+            // measured against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
+            void PaintFill()
             {
+                if (fill.Kind == SvgPaintKind.None)
+                    return;
+
                 var fillBounds = ContextBounds(g, fill) ?? textBounds;
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
@@ -1572,12 +1844,26 @@ namespace PeachPDF.Svg
                 }
             }
 
-            if (hasStroke)
+            void PaintStroke()
             {
+                if (!hasStroke)
+                    return;
+
                 var strokeBounds = ContextBounds(g, stroke) ?? textBounds;
                 var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (pen is not null)
                     g.DrawPath(pen, outline);
+            }
+
+            if (run.StrokeFirst)
+            {
+                PaintStroke();
+                PaintFill();
+            }
+            else
+            {
+                PaintFill();
+                PaintStroke();
             }
 
             outline.Dispose();
@@ -1693,8 +1979,11 @@ namespace PeachPDF.Svg
             // A gradient/pattern that came through context-fill/context-stroke instead measures against the context element.
             var bounds = new Rect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
 
-            if (fill.Kind != SvgPaintKind.None)
+            void PaintFill()
             {
+                if (fill.Kind == SvgPaintKind.None)
+                    return;
+
                 var fillBounds = ContextBounds(g, fill) ?? bounds;
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
@@ -1708,12 +1997,26 @@ namespace PeachPDF.Svg
                 }
             }
 
-            if (hasStroke)
+            void PaintStroke()
             {
+                if (!hasStroke)
+                    return;
+
                 var strokeBounds = ContextBounds(g, stroke) ?? bounds;
                 var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (strokePen is not null)
                     g.DrawPath(strokePen, outline);
+            }
+
+            if (run.StrokeFirst)
+            {
+                PaintStroke();
+                PaintFill();
+            }
+            else
+            {
+                PaintFill();
+                PaintStroke();
             }
 
             outline.Dispose();
@@ -1967,6 +2270,17 @@ namespace PeachPDF.Svg
 
                     result = result is { } r ? UnionRects(r, box) : box;
                 }
+
+                // A shadow paints outside the glyph boxes by its offset plus the reach of its blur.
+                var reach = 0.0;
+                foreach (var gi in glyphs)
+                {
+                    foreach (var shadow in gi.Run.TextShadows)
+                        reach = Math.Max(reach, Math.Max(Math.Abs(shadow.Dx), Math.Abs(shadow.Dy)) + 1.5 * shadow.Blur + gi.Size.Height * 0.25);
+                }
+
+                if (reach > 0 && result is { } measured)
+                    result = new Rect(measured.X - reach, measured.Y - reach, measured.Width + 2 * reach, measured.Height + 2 * reach);
             }
 
             foreach (var (run, _) in textPaths)

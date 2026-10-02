@@ -1,15 +1,21 @@
-# SVG text: remaining CSS text/font properties
+# SVG text: CSS text/font properties that still do not apply
 
-Tracked in [issue #1572](https://github.com/jhaygood86/PeachPDF/issues/1572).
+Tracked in [issue #1579](https://github.com/jhaygood86/PeachPDF/issues/1579) (the earlier tracker, #1572, wired everything else).
 
-SVG text now honours the font-variant/palette group (`font-palette`, `font-variant-alternates`,
-`font-variant-emoji`, `font-variation-settings`, `font-optical-sizing`, numeric `font-weight`,
-`oblique <angle>`). Still not wired in `SvgTreeBuilder.ComputeFontContext`/`BuildTextRunCore`:
-`font-synthesis*`, `font-size-adjust`, `font-language-override`, the `font`/`font-variant` shorthands,
-`font-family` fallbacks past the first family, and the layout-model/painting properties listed in the
-issue (`white-space`, `tab-size`, `text-indent`, `text-shadow`, `paint-order`, `dominant-baseline`, ...).
-They were left out because each needs SVG-specific layout or paint machinery rather than the
-registry/resolver plumbing this change added.
+Not applied to SVG `<text>`/`<tspan>`:
 
-Also: text painted as outlines (gradient/pattern fill, stroke) is drawn in the font's default palette,
-since `Canvas.GetTextOutline` has no palette parameter.
+- **Wrapped-text properties** — `text-indent`, `line-height`, `hyphens`, `text-align`, the wrapping `white-space` modes and hard line
+  breaks under `pre`. SVG 2 defines them only for text laid out with `inline-size`/`shape-inside`; this repo has neither and plain SVG
+  text has no line boxes, so there is nothing for them to act on. A newline in preserved text is a space.
+- **`font-synthesis*`** — there is no switch to suppress faux bold/italic anywhere (HTML either): the decision is made inside the font
+  match (`TypefaceMatch.Synthesis`) and reaches the renderers through `Font.SyntheticStyle`, so honouring it needs a public
+  `PeachDrawing.Core` API change and a new font-cache-key dimension. SVG has no small-caps or sub/superscript synthesis either (see
+  [font-variant-position-synthesis-scope](font-variant-position-synthesis-scope.md)).
+- **`font-size-adjust`**, **`font-language-override`**, **`-webkit-text-stroke`**, **`text-rendering`** — not implemented for HTML text
+  either; no rendering hook exists.
+- **`textLength` with `lengthAdjust="spacingAndGlyphs"`**, and `textLength` on `<textPath>` or under a vertical `writing-mode`.
+- **`text-shadow`** on `<textPath>` glyphs; a glyph with an explicit `rotate=""` gets an unblurred shadow (a blur layer's bounds are
+  not computed through the glyph's rotation).
+- **Baselines** are approximated from font metrics (no `BASE` table), only under horizontal writing, and not on `<textPath>`.
+- Text painted as outlines (gradient/pattern fill, stroke) is drawn in the font's default palette, since `Canvas.GetTextOutline` has no
+  palette parameter.

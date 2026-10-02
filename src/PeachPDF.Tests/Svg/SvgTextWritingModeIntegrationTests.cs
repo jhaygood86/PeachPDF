@@ -1,3 +1,4 @@
+using System.Linq;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -136,8 +137,9 @@ namespace PeachPDF.Tests.Svg
             var g = Render($"""<text x="10" y="50" font-size="20" writing-mode="horizontal-tb">{Upright}{Latin}</text>""");
 
             // Default writing-mode: horizontal-tb - batches into one call exactly as before this feature.
-            var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(Upright + Latin, draw.Text);
+            // The upright (CJK) characters may come from a fallback font and so paint as their own call; what this guards is that
+            // horizontal-tb never rotates or transforms them.
+            Assert.Equal(Upright + Latin, string.Concat(g.DrawStringCalls.Select(c => c.Text)));
             Assert.Equal(0, GlyphTransformPushes(g));
         }
 
@@ -236,7 +238,10 @@ namespace PeachPDF.Tests.Svg
             // file's own remarks on GlyphTransformPushes/Pops for the analogous baseline transform case),
             // so a font without real vertical metrics is verified by the draw call itself not being
             // freshly bracketed - not by the total clip count being zero.
-            var fallback = Render($"""<text x="10" y="50" font-size="20" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
+            // The default font has no glyph for the CJK character, so a host with a system CJK font (every Windows) would now fall back to
+            // one that does carry vertical metrics; a registered Latin font that covers its text pins the case this half is about.
+            await BundledFonts.RegisterFont(Adapter, BundledFonts.LiberationSans, "NoVerticalMetricsTest");
+            var fallback = Render("""<text x="10" y="50" font-size="20" font-family="NoVerticalMetricsTest" writing-mode="vertical-rl" text-orientation="upright">A</text>""");
             var fallbackDraw = Assert.Single(fallback.DrawStringCalls);
             Assert.False(fallbackDraw.Font.HasVerticalMetrics);
 

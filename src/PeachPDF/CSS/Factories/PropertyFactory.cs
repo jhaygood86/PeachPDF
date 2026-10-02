@@ -461,7 +461,8 @@ namespace PeachPDF.CSS
             AddShorthand(PropertyNames.TextDecoration, () => new TextDecorationProperty(),
                 PropertyNames.TextDecorationLine,
                 PropertyNames.TextDecorationStyle,
-                PropertyNames.TextDecorationColor);
+                PropertyNames.TextDecorationColor,
+                PropertyNames.TextDecorationThickness);
             AddLonghand(PropertyNames.TextDecorationStyle, () => new TextDecorationStyleProperty());
             AddLonghand(PropertyNames.TextDecorationLine, () => new TextDecorationLineProperty());
             AddLonghand(PropertyNames.TextDecorationColor, () => new TextDecorationColorProperty(), true);

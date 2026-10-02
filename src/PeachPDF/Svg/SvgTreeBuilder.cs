@@ -222,7 +222,16 @@ namespace PeachPDF.Svg
             string VariationSettings = "normal",
             bool OpticalSizingNone = false,
             double Weight = 400,
-            double? ObliqueSkewSinus = null)
+            double? ObliqueSkewSinus = null,
+            string? UnderlineOffset = null,
+            string UnderlinePosition = "auto",
+            string SkipInk = "auto",
+            string? TextShadow = null,
+            string? PaintOrder = null,
+            int PreservedTabSpaces = 0,
+            int TabSize = 8,
+            string DominantBaseline = "auto",
+            double BaselineShift = 0)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1384,7 +1393,31 @@ namespace PeachPDF.Svg
             if (matched is not null && matched.TryGetValue(name, out var matchedValue))
                 return matchedValue; // present (incl. null = invalid at computed-value time) → authoritative
 
-            return node.GetAttribute(name);
+            var attribute = node.GetAttribute(name);
+
+            // A text shorthand (font / font-variant / text-decoration) in style="" or as a presentation attribute sets this longhand
+            // too (the matched-rule tier above is already expanded by the CSS-OM). Shorthands only matter when nothing more specific
+            // declared the longhand, and the longhand's own presentation attribute sits below a style="" shorthand.
+            foreach (var shorthand in SvgTextShorthands.ShorthandsOf(name))
+            {
+                if (styleDeclarations.TryGetValue(shorthand, out var shorthandStyle))
+                {
+                    var resolved = node.ResolveVar(shorthandStyle);
+                    return resolved is null ? null : SvgTextShorthands.Expand(shorthand, resolved, name) ?? attribute;
+                }
+            }
+
+            if (attribute is not null)
+                return attribute;
+
+            foreach (var shorthand in SvgTextShorthands.ShorthandsOf(name))
+            {
+                var shorthandAttribute = node.GetAttribute(shorthand);
+                if (shorthandAttribute is not null && SvgTextShorthands.Expand(shorthand, shorthandAttribute, name) is { } expanded)
+                    return expanded;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -1399,7 +1432,7 @@ namespace PeachPDF.Svg
             var familyAttr = ResolveStyledAttr(node, "font-family");
             var family = string.IsNullOrWhiteSpace(familyAttr) || familyAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Family
-                : familyAttr.Split(',')[0].Trim().Trim('\'', '"');
+                : NormalizeFamilyList(familyAttr);
 
             var declaredSize = ResolveFontSize(ResolveStyledAttr(node, "font-size"), inherited);
             var size = declaredSize ?? inherited.Size;
@@ -1516,6 +1549,59 @@ namespace PeachPDF.Svg
                 _ => false,
             };
 
+            var underlineOffsetAttr = ResolveStyledAttr(node, "text-underline-offset");
+            var underlineOffset = string.IsNullOrWhiteSpace(underlineOffsetAttr) || underlineOffsetAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.UnderlineOffset
+                : underlineOffsetAttr.Trim();
+
+            var underlinePositionAttr = ResolveStyledAttr(node, "text-underline-position")?.Trim().ToLowerInvariant();
+            var underlinePosition = string.IsNullOrEmpty(underlinePositionAttr) || underlinePositionAttr == "inherit"
+                ? inherited.UnderlinePosition
+                : underlinePositionAttr;
+
+            var skipInkAttr = ResolveStyledAttr(node, "text-decoration-skip-ink")?.Trim().ToLowerInvariant();
+            var skipInk = skipInkAttr is "auto" or "none" or "all" ? skipInkAttr : inherited.SkipInk;
+
+            var textShadowAttr = ResolveStyledAttr(node, "text-shadow");
+            var textShadow = string.IsNullOrWhiteSpace(textShadowAttr) || textShadowAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.TextShadow
+                : textShadowAttr.Trim();
+
+            var paintOrderAttr = ResolveStyledAttr(node, "paint-order");
+            var paintOrder = string.IsNullOrWhiteSpace(paintOrderAttr) || paintOrderAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.PaintOrder
+                : paintOrderAttr.Trim().ToLowerInvariant();
+
+            // Whitespace handling. SVG 1.1's xml:space="preserve" and the CSS white-space values that preserve spaces (pre, pre-wrap, break-spaces)
+            // keep every space; newlines and tabs become spaces, since SVG text does not wrap or break lines of its own accord (a tab becomes
+            // tab-size spaces under white-space, one under xml:space). PreservedTabSpaces is 0 when whitespace collapses.
+            var tabSizeAttr = ResolveStyledAttr(node, "tab-size")?.Trim();
+            var tabSize = int.TryParse(tabSizeAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTabSize) && parsedTabSize >= 0
+                ? parsedTabSize
+                : tabSizeAttr is null or "inherit" ? inherited.TabSize : 8;
+
+            var whiteSpaceAttr = ResolveStyledAttr(node, "white-space")?.Trim().ToLowerInvariant();
+            var preservedTabSpaces = whiteSpaceAttr switch
+            {
+                "pre" or "pre-wrap" or "break-spaces" => Math.Max(tabSize, 1),
+                "normal" or "nowrap" or "pre-line" => 0,
+                _ => node.GetAttribute("xml:space")?.Trim() switch
+                {
+                    "preserve" => 1,
+                    "default" => 0,
+                    _ => inherited.PreservedTabSpaces,
+                },
+            };
+
+            // dominant-baseline inherits; alignment-baseline does not (read per run in BuildTextRunCore). baseline-shift does not inherit
+            // either, but it is relative to the parent's baseline, so a text content element's shift adds to its parent's total.
+            var dominantAttr = ResolveStyledAttr(node, "dominant-baseline")?.Trim().ToLowerInvariant();
+            var dominantBaseline = string.IsNullOrEmpty(dominantAttr) || dominantAttr == "inherit" ? inherited.DominantBaseline : dominantAttr;
+
+            var baselineShift = inherited.BaselineShift;
+            if (node.Name is "text" or "tspan" or "tref" or "textPath")
+                baselineShift += ResolveBaselineShift(ResolveStyledAttr(node, "baseline-shift"), ownFont);
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1528,7 +1614,8 @@ namespace PeachPDF.Svg
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
-                fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew);
+                fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
+                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift);
         }
 
         /// <summary>
@@ -1558,7 +1645,7 @@ namespace PeachPDF.Svg
             if (font.Bold) fontStyle |= PaintFontStyle.Bold;
             if (font.Italic) fontStyle |= PaintFontStyle.Italic;
 
-            return _adapter.GetFont(family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
+            return FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
         }
 
         /// <summary>
@@ -1644,6 +1731,146 @@ namespace PeachPDF.Svg
                 var pixelsPerPoint = (_builder._adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
                 return (_ratios[(int)metric] = FontMetricMeasurement.Ratio(font, metric, pixelsPerPoint)).Value;
             }
+        }
+
+        /// <summary>
+        /// A <c>text-decoration-thickness</c>/<c>text-underline-offset</c> length: a percentage is of the element's font size (CSS Text
+        /// Decoration 4 §2.8/§3.3), anything else an ordinary SVG length. Null for <c>auto</c>, an absent value, or one that does not parse.
+        /// </summary>
+        private double? ResolveFontRelativeLength(string? value, FontContext font)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value is "auto" or "from-font" or "inherit")
+                return null;
+
+            double? resolved;
+            if (value.EndsWith('%'))
+                resolved = double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
+            else
+                resolved = SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
+
+            // NaN and infinity are not lengths.
+            return resolved is { } length && double.IsFinite(length) ? length : null;
+        }
+
+        /// <summary>
+        /// Whether a <c>paint-order</c> value paints the stroke before the fill: the listed keywords come first, in order, then the
+        /// ones left out in the default order fill, stroke, markers (SVG 2 §13.6). <c>normal</c>, nothing, or an invalid value is fill first.
+        /// </summary>
+        private static bool StrokesBeforeFill(string? paintOrder)
+        {
+            if (string.IsNullOrWhiteSpace(paintOrder))
+                return false;
+
+            var listed = paintOrder.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (listed.Length == 0 || listed.Any(k => k is not ("fill" or "stroke" or "markers")) || listed.Distinct().Count() != listed.Length)
+                return false;
+
+            var fill = Array.IndexOf(listed, "fill");
+            var stroke = Array.IndexOf(listed, "stroke");
+            if (stroke < 0)
+                return false;
+
+            // A keyword left out sorts after every listed one, with fill ahead of stroke.
+            return fill < 0 || stroke < fill;
+        }
+
+        /// <summary>
+        /// A <c>baseline-shift</c> in user units, positive raising the text: <c>sub</c> and <c>super</c> by a fraction of the font size, a length as given,
+        /// a percentage of the font size. <c>baseline</c>, absent or invalid is no shift.
+        /// </summary>
+        private double ResolveBaselineShift(string? value, FontContext font)
+        {
+            var t = value?.Trim().ToLowerInvariant();
+            return t switch
+            {
+                null or "" or "baseline" or "inherit" => 0,
+                "super" => font.Size * 0.33,
+                "sub" => -font.Size * 0.2,
+                _ when t.EndsWith('%') && double.TryParse(t[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) => percent / 100 * font.Size,
+                _ => SvgValueParsers.ParseLength(t, null, new LengthBasis(this, font)) ?? 0,
+            };
+        }
+
+        /// <summary>Parses a <c>text-shadow</c> value into its layers with lengths resolved against <paramref name="font"/>; an invalid value or <c>none</c> is no shadow.</summary>
+        private IReadOnlyList<SvgTextShadow> ParseTextShadows(string? value, FontContext font)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return [];
+
+            List<TextShadowGrammar.ShadowLayer>? layers;
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                layers = TextShadowGrammar.TryParse(tokens);
+            }
+
+            if (layers is not { Count: > 0 })
+                return [];
+
+            var basis = new LengthBasis(this, font);
+            var parser = new CssValueParser(_adapter);
+            var result = new List<SvgTextShadow>(layers.Count);
+            foreach (var layer in layers)
+            {
+                var color = string.IsNullOrEmpty(layer.Color) || layer.Color.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                    ? (PaintColor?)null
+                    : parser.GetActualColor(layer.Color);
+                result.Add(new SvgTextShadow(
+                    SvgValueParsers.ParseLength(layer.OffsetX, null, basis) ?? 0,
+                    SvgValueParsers.ParseLength(layer.OffsetY, null, basis) ?? 0,
+                    Math.Max(0, SvgValueParsers.ParseLength(layer.Blur, null, basis) ?? 0),
+                    color));
+            }
+
+            return result;
+        }
+
+        /// <summary>The authored <c>font-family</c> list with each family's whitespace and quotes removed, rejoined with <c>, </c>.</summary>
+        private static string NormalizeFamilyList(string value)
+        {
+            var families = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            for (var i = 0; i < families.Length; i++)
+                families[i] = families[i].Trim('\'', '"').Trim();
+            return string.Join(", ", families.Where(f => f.Length > 0));
+        }
+
+        /// <summary>The first family of a normalized <c>font-family</c> list - the one a <c>@font-palette-values</c>/<c>@font-feature-values</c> rule is matched against.</summary>
+        private static string FirstFamily(string familyList)
+        {
+            var comma = familyList.IndexOf(',');
+            return comma < 0 ? familyList : familyList[..comma];
+        }
+
+        /// <summary>
+        /// The per-character font choice for a run: <paramref name="primary"/> when it has a glyph for the character, else the first
+        /// family of the authored list that covers it, else a system fallback - the same "first available font that can render this
+        /// character" rule HTML text uses (<see cref="FontFamilyResolver"/>). Whitespace and control characters never leave the primary
+        /// font. Results are memoised per character.
+        /// </summary>
+        private Func<System.Text.Rune, Font> CreateFontFallback(FontContext font, Font primary)
+        {
+            var cache = new Dictionary<int, Font>();
+            // The resolver may hand back a distinct Font instance for the same face per character; one instance per face keeps the
+            // renderer's reference comparison ("same font as the previous glyph") meaningful, so a run in one fallback font stays one batch.
+            var faces = new Dictionary<string, Font> { [primary.FaceKey] = primary };
+            var fontStyle = PaintFontStyle.Regular;
+            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
+            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+
+            return rune =>
+            {
+                if (System.Text.Rune.IsWhiteSpace(rune) || System.Text.Rune.IsControl(rune) || primary.HasGlyph(rune))
+                    return primary;
+
+                if (cache.TryGetValue(rune.Value, out var cached))
+                    return cached;
+
+                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, Math.Max(font.Size, 1), fontStyle, rune, font.Weight, font.Stretch,
+                    font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, EncodeVariations(font)) ?? primary;
+                if (!faces.TryGetValue(fallback.FaceKey, out var canonical))
+                    faces[fallback.FaceKey] = canonical = fallback;
+                return cache[rune.Value] = canonical;
+            };
         }
 
         /// <summary>Realizes <paramref name="font"/> the way a text run does, so a measurement is taken from the very face the run would use.</summary>
@@ -1773,6 +2000,8 @@ namespace PeachPDF.Svg
 
             run.Font = GetFontFor(runFont, runFont.Family, runFont.Size)
                        ?? GetFontFor(runFont, Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size);
+            if (run.Font is { } primaryFont)
+                run.FontFor = CreateFontFallback(runFont, primaryFont);
 
             // font-variant-caps is gated by the resolved font's own GSUB support (same rule
             // DerivedStyle.ActualFontVariantCaps applies for HTML) - real substitution only, no
@@ -1794,24 +2023,48 @@ namespace PeachPDF.Svg
             run.ShapingFeatures = new ShapeSettings(
                 runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
                 TextShapingFeatureResolver.ToFeatureSettings(DerivedStyle.MergeExplicitFeatures(runFont.FeatureSettings,
-                    FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, runFont.Family, _fontFeatureValues))),
+                    FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, FirstFamily(runFont.Family), _fontFeatureValues))),
                 Kerning: runFont.Kerning, Language: runFont.Language,
                 Position: resolvedPosition, EmojiMode: runFont.Emoji);
 
             // font-palette selects among the font's CPAL palettes (a no-op for a font without any).
             run.Palette = run.Font is { } paletteFont
-                ? FontPaletteResolver.Resolve(runFont.FontPalette, paletteFont, runFont.Family, _fontPaletteValues)
+                ? FontPaletteResolver.Resolve(runFont.FontPalette, paletteFont, FirstFamily(runFont.Family), _fontPaletteValues)
                 : null;
 
             // text-decoration is this run's own value only - CSS Text Decoration 3 §2 explicitly makes
             // it non-inherited (a descendant's decoration "flows across" via painting every glyph whose
             // ancestor chain requested one, not via the property inheriting).
             run.TextDecorationLine = ResolveStyledAttr(node, "text-decoration-line")?.Trim().ToLowerInvariant() ?? "none";
-            run.TextDecorationStyle = ResolveStyledAttr(node, "text-decoration-style")?.Trim().ToLowerInvariant() ?? "solid";
+            run.TextDecorationStyle = ResolveStyledAttr(node, "text-decoration-style")?.Trim().ToLowerInvariant() is { } decorationStyle and not ("initial" or "inherit") ? decorationStyle : "solid";
             var decorationColorAttr = ResolveStyledAttr(node, "text-decoration-color")?.Trim();
+            // A shorthand that omits the colour leaves it at its initial value: currentcolor, like an unset longhand.
             run.TextDecorationColor = !string.IsNullOrEmpty(decorationColorAttr) && !decorationColorAttr.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                && !decorationColorAttr.Equals("initial", StringComparison.OrdinalIgnoreCase) && !decorationColorAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? new CssValueParser(_adapter).GetActualColor(decorationColorAttr)
                 : null;
+
+            // Decoration geometry: thickness is the decorating element's own value (not inherited); offset, position and skip-ink inherit.
+            var thicknessAttr = ResolveStyledAttr(node, "text-decoration-thickness")?.Trim().ToLowerInvariant();
+            run.TextDecorationThicknessFromFont = thicknessAttr == "from-font";
+            // A negative thickness is invalid and falls back to auto.
+            run.TextDecorationThickness = run.TextDecorationThicknessFromFont ? null : ResolveFontRelativeLength(thicknessAttr, runFont) is >= 0 and var thicknessValue ? thicknessValue : null;
+            run.TextUnderlineOffset = ResolveFontRelativeLength(runFont.UnderlineOffset?.ToLowerInvariant(), runFont) ?? 0;
+            run.TextUnderlinePosition = runFont.UnderlinePosition;
+            run.TextDecorationSkipInk = runFont.SkipInk;
+
+            run.TextShadows = ParseTextShadows(runFont.TextShadow, runFont);
+            run.StrokeFirst = StrokesBeforeFill(runFont.PaintOrder);
+            if (node.GetAttribute("textLength") is { } textLengthAttr
+                && SvgValueParsers.ParseLength(textLengthAttr, _viewportWidth, new LengthBasis(this, runFont)) is { } textLength && textLength >= 0)
+            {
+                run.TextLength = textLength;
+                run.LengthAdjust = node.GetAttribute("lengthAdjust")?.Trim() ?? "spacing";
+            }
+
+            run.DominantBaseline = runFont.DominantBaseline;
+            run.BaselineShift = runFont.BaselineShift;
+            run.AlignmentBaseline = ResolveStyledAttr(node, "alignment-baseline")?.Trim().ToLowerInvariant() is { Length: > 0 } alignment && alignment != "inherit" ? alignment : "auto";
 
             var childFontContext = runFont;
 
@@ -1822,7 +2075,7 @@ namespace PeachPDF.Svg
                 if (content.IsText)
                 {
                     var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state);
-                    var text = state.Collapse(transformed);
+                    var text = state.Collapse(transformed, runFont.PreservedTabSpaces);
                     if (text.Length > 0)
                         run.Content.Add(new SvgTextFragment { Text = text });
                     continue;
@@ -1832,8 +2085,12 @@ namespace PeachPDF.Svg
                 switch (child.Name)
                 {
                     case "tspan":
-                        run.Content.Add(new SvgTextSpan { Run = BuildTextRun(child, resolved, childFontContext, state) });
+                    {
+                        var tspanRun = BuildTextRun(child, resolved, childFontContext, state);
+                        tspanRun.ParentRun = run;
+                        run.Content.Add(new SvgTextSpan { Run = tspanRun });
                         break;
+                    }
 
                     case "tref":
                     {
@@ -1855,10 +2112,11 @@ namespace PeachPDF.Svg
                             trefRun.Content.Clear();
                             var trefFont = ComputeFontContext(child, childFontContext);
                             var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state);
-                            var text = state.Collapse(transformed);
+                            var text = state.Collapse(transformed, trefFont.PreservedTabSpaces);
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
                         }
+                        trefRun.ParentRun = run;
                         run.Content.Add(new SvgTextSpan { Run = trefRun });
                         break;
                     }
@@ -1950,12 +2208,37 @@ namespace PeachPDF.Svg
             public bool CapitalizeAtWordStart = true;
 
             /// <summary>Collapses one text fragment, advancing the shared cross-run state.</summary>
-            public string Collapse(string raw)
+            public string Collapse(string raw, int preservedTabSpaces = 0)
             {
                 if (string.IsNullOrEmpty(raw))
                     return "";
 
                 var sb = new StringBuilder(raw.Length);
+
+                if (preservedTabSpaces > 0)
+                {
+                    // Preserved whitespace: nothing is trimmed or collapsed; a line break is a space (a CRLF one space) and a tab is tab-size spaces.
+                    for (var i = 0; i < raw.Length; i++)
+                    {
+                        var ch = raw[i];
+                        if (ch == '\r' && i + 1 < raw.Length && raw[i + 1] == '\n')
+                            continue;
+
+                        if (ch == '\t')
+                            sb.Append(' ', preservedTabSpaces);
+                        else
+                            sb.Append(ch is '\n' or '\r' ? ' ' : ch);
+                    }
+
+                    if (sb.Length > 0)
+                    {
+                        _atStart = false;
+                        _pendingSpace = false;
+                    }
+
+                    return sb.ToString();
+                }
+
                 foreach (var ch in raw)
                 {
                     if (char.IsWhiteSpace(ch))

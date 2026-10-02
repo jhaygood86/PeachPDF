@@ -133,6 +133,9 @@ namespace PeachPDF.Svg
         public required SvgTextElement Run { get; init; }
     }
 
+    /// <summary>One <c>text-shadow</c> layer of SVG text: offsets and blur radius in user units, and its colour (null: the text's own fill, <c>currentColor</c>).</summary>
+    internal readonly record struct SvgTextShadow(double Dx, double Dy, double Blur, PaintColor? Color);
+
     /// <summary>
     /// A positioned text run - built from a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, <c>&lt;tref&gt;</c>,
     /// or <c>&lt;textPath&gt;</c> element (all share this shape; only the root of a subtree is ever an
@@ -148,6 +151,7 @@ namespace PeachPDF.Svg
     /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
     /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
+
     internal sealed class SvgTextElement : SvgElement
     {
         public bool HasOwnX { get; set; }
@@ -218,6 +222,51 @@ namespace PeachPDF.Svg
         /// against the document's <c>@font-palette-values</c> the way HTML text's <c>DerivedStyle.ActualFontPalette</c> is.
         /// </summary>
         public FontPalette? Palette { get; set; }
+
+        /// <summary>
+        /// The font for one character of this run: <see cref="Font"/> when it covers the character, else the font-family list's next
+        /// covering family or a system fallback. Null when the run has no font.
+        /// </summary>
+        public System.Func<System.Text.Rune, Font>? FontFor { get; set; }
+
+        /// <summary>The resolved <c>text-decoration-thickness</c> in user units; null for <c>auto</c> (the fixed 1-unit line).</summary>
+        public double? TextDecorationThickness { get; set; }
+
+        /// <summary><c>text-decoration-thickness: from-font</c> - the decorator's font supplies the thickness.</summary>
+        public bool TextDecorationThicknessFromFont { get; set; }
+
+        /// <summary>The resolved <c>text-underline-offset</c> in user units (0 for <c>auto</c>); positive moves the underline away from the text.</summary>
+        public double TextUnderlineOffset { get; set; }
+
+        /// <summary><c>text-underline-position</c> keywords (<c>auto</c>, <c>from-font</c>, <c>under</c>); inherited.</summary>
+        public string TextUnderlinePosition { get; set; } = "auto";
+
+        /// <summary><c>text-decoration-skip-ink</c> (<c>auto</c>, <c>none</c>, <c>all</c>); inherited.</summary>
+        public string TextDecorationSkipInk { get; set; } = "auto";
+
+        /// <summary>The <c>text-shadow</c> layers (first listed on top); inherited. Empty for <c>none</c>.</summary>
+        public IReadOnlyList<SvgTextShadow> TextShadows { get; set; } = [];
+
+        /// <summary><c>paint-order</c> puts the stroke beneath the fill (SVG 2 §13.6): <c>stroke</c>, <c>stroke fill</c>, <c>markers stroke</c> ...; inherited.</summary>
+        public bool StrokeFirst { get; set; }
+
+        /// <summary><c>dominant-baseline</c> keyword in effect for this run (inherited): which baseline of its font sits at the text position.</summary>
+        public string DominantBaseline { get; set; } = "auto";
+
+        /// <summary><c>alignment-baseline</c> keyword (not inherited): which baseline of this run aligns to its parent's dominant baseline; <c>auto</c> aligns alphabetic baselines.</summary>
+        public string AlignmentBaseline { get; set; } = "auto";
+
+        /// <summary>The cumulative <c>baseline-shift</c> in user units (positive raises the run): this run's own shift plus its ancestors'.</summary>
+        public double BaselineShift { get; set; }
+
+        /// <summary>The enclosing text content element this run is nested in, or null for a <c>&lt;text&gt;</c> root.</summary>
+        public SvgTextElement? ParentRun { get; set; }
+
+        /// <summary>The <c>textLength</c> the run's characters are laid out to span, in user units; null when absent.</summary>
+        public double? TextLength { get; set; }
+
+        /// <summary><c>lengthAdjust</c>: <c>spacing</c> (the default) adjusts only the gaps between characters; <c>spacingAndGlyphs</c> is accepted but not applied.</summary>
+        public string LengthAdjust { get; set; } = "spacing";
 
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
