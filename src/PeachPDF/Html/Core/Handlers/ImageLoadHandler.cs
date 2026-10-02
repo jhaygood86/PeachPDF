@@ -227,7 +227,11 @@ namespace PeachPDF.Html.Core.Handlers
                     // location — the same rule fetched stylesheets use for their own relative references.
                     var prefetchedImages = await SvgTreeBuilder.PrefetchImageResourcesAsync(sourceNode, _htmlContainer, source);
 
-                    SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.Adapter, prefetchedImages: prefetchedImages);
+                    var paletteValues = cssData is null ? null : RegisteredFontPalette.BuildRegistry(cssData, new CssValueParser(_htmlContainer.Adapter));
+                    var featureValues = cssData is null ? null : RegisteredFontFeatureValues.BuildRegistry(cssData);
+
+                    SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.Adapter, prefetchedImages: prefetchedImages,
+                        fontPaletteValues: paletteValues, fontFeatureValues: featureValues);
                 }
             }
             catch (XmlException ex)

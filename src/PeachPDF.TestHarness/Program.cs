@@ -11426,6 +11426,37 @@ await SaveShowcaseAsync("font_palette", "Typography & Text", "CSS font-palette",
     "Rendered against a subset of Nabla, a real 7-palette COLR v1 font.",
     fontPaletteHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// The same font-palette / font-variant-alternates controls, applied to SVG <text> (inline <svg>).
+var svgTextRecursiveB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "RecursiveSubset.ttf")));
+var svgTextFontsHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'Nabla'; src: url('data:font/truetype;base64,{nablaB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Recursive'; src: url('data:font/truetype;base64,{svgTextRecursiveB64}') format('truetype'); }}" +
+    "@font-palette-values --blue { font-family: 'Nabla'; base-palette: 2; }" +
+    "@font-palette-values --custom { font-family: 'Nabla'; base-palette: 0; override-colors: 0 #1db954, 1 #0a7d34, 2 #14532d, 3 #86efac; }" +
+    "@font-feature-values Recursive { @styleset { simple-a: 1; simple-g: 2; } }" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em } p { color: #555; margin: 0 0 0.6em }" +
+    "svg { display: block; margin-bottom: 8px }" +
+    "</style></head><body>" +
+    "<h1>SVG text: <code>font-palette</code> and <code>font-variant-alternates</code></h1>" +
+    "<p>The page's <code>@font-palette-values</code> and <code>@font-feature-values</code> rules apply to SVG text.</p>" +
+    "<svg width=\"520\" height=\"90\" viewBox=\"0 0 520 90\">" +
+    "<text x=\"5\" y=\"70\" font-family=\"Nabla\" font-size=\"64\">PA</text>" +
+    "<text x=\"140\" y=\"70\" font-family=\"Nabla\" font-size=\"64\" font-palette=\"--blue\">PA</text>" +
+    "<text x=\"275\" y=\"70\" font-family=\"Nabla\" font-size=\"64\" font-palette=\"--custom\">PA</text>" +
+    "</svg>" +
+    "<svg width=\"520\" height=\"70\" viewBox=\"0 0 520 70\">" +
+    "<text x=\"5\" y=\"50\" font-family=\"Recursive\" font-size=\"44\">gagag</text>" +
+    "<text x=\"200\" y=\"50\" font-family=\"Recursive\" font-size=\"44\" font-variant-alternates=\"styleset(simple-a, simple-g)\">gagag</text>" +
+    "</svg>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_text_font_palette_alternates", "Typography & Text", "SVG text: font-palette and font-variant-alternates",
+    "SVG <text> selecting a color font's CPAL palette with font-palette / @font-palette-values and a font's " +
+    "stylistic sets with font-variant-alternates / @font-feature-values, exactly as HTML text does.",
+    svgTextFontsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Variable fonts: font-weight, font-stretch and font-variation-settings choose a location in one variable font's design space, and each
 // distinct location is embedded as its own static instance. Uses a small synthetic variable font (weight 100-900, width 75-125).
 var variableFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")));

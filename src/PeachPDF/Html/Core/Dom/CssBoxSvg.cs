@@ -83,7 +83,8 @@ namespace PeachPDF.Html.Core.Dom
             if (_document is not null)
                 return;
 
-            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.Adapter, ActualColor, _prefetchedImages);
+            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.Adapter, ActualColor, _prefetchedImages,
+                fontPaletteValues: HtmlContainer.FontPaletteValues, fontFeatureValues: HtmlContainer.FontFeatureValues);
 
             // The parser builds a real (generic) CssBox for every SVG child element so
             // SvgTreeBuilder can read tag names/attributes off them - but once the scene graph above

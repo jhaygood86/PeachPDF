@@ -11,11 +11,13 @@
 // "The Art of War"
 
 using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Unicode;
 using MimeKit;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using System;
@@ -119,6 +121,12 @@ namespace PeachPDF.Svg
             _prefetchedImages = prefetchedImages;
         }
 
+        /// <summary>The document's <c>@font-palette-values</c> registry, consulted for <c>font-palette</c> on SVG text (null: none declared).</summary>
+        private IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? _fontPaletteValues;
+
+        /// <summary>The document's <c>@font-feature-values</c> registry, consulted for <c>font-variant-alternates</c> on SVG text (null: none declared).</summary>
+        private IReadOnlyDictionary<(string Family, FontFeatureValueBlockKind Kind, string Name), RegisteredFontFeatureValues>? _fontFeatureValues;
+
         /// <summary>Guards against a pathological/malicious nesting of <c>&lt;image&gt;</c>-referenced SVG documents.</summary>
         private const int MaxImageNestingDepth = 8;
 
@@ -207,7 +215,14 @@ namespace PeachPDF.Svg
             NumeralSet Numeric, EastAsianSet EastAsian,
             IReadOnlyList<(string Tag, int Value)> FeatureSettings, bool Kerning, string? Language = null,
             SubSuperMode PositionRequested = SubSuperMode.None,
-            bool SizeDeclared = false)
+            bool SizeDeclared = false,
+            string? FontPalette = null,
+            string? FontVariantAlternates = null,
+            EmojiMode Emoji = EmojiMode.Normal,
+            string VariationSettings = "normal",
+            bool OpticalSizingNone = false,
+            double Weight = 400,
+            double? ObliqueSkewSinus = null)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -235,11 +250,17 @@ namespace PeachPDF.Svg
         /// glyph document). Omitted, there is no context element and the keyword paints nothing (SVG 2, painting).
         /// </param>
         /// <param name="contextStroke">What <c>context-stroke</c> stands for there; see <paramref name="contextFill"/>.</param>
+        /// <param name="fontPaletteValues">The document's <c>@font-palette-values</c> registry (<c>font-palette</c> on SVG text); null when it declares none.</param>
+        /// <param name="fontFeatureValues">The document's <c>@font-feature-values</c> registry (<c>font-variant-alternates</c> on SVG text); null when it declares none.</param>
         public static SvgDocument Build(ISvgSourceNode root, RenderContext adapter, PaintColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null,
-            SvgPaint? contextFill = null, SvgPaint? contextStroke = null)
+            SvgPaint? contextFill = null, SvgPaint? contextStroke = null,
+            IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? fontPaletteValues = null,
+            IReadOnlyDictionary<(string Family, FontFeatureValueBlockKind Kind, string Name), RegisteredFontFeatureValues>? fontFeatureValues = null)
         {
             var builder = new SvgTreeBuilder(adapter, contextColor ?? PaintColor.Black, prefetchedImages)
             {
+                _fontPaletteValues = fontPaletteValues,
+                _fontFeatureValues = fontFeatureValues,
                 _seed = InheritedPaint.Initial with { ContextFill = contextFill ?? SvgPaint.None, ContextStroke = contextStroke ?? SvgPaint.None },
             };
             return builder.BuildDocument(root);
@@ -1046,7 +1067,9 @@ namespace PeachPDF.Svg
 
             var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print", nestedVarContext);
             // Thread the recursively-prefetched child map so the nested document's own <image>s resolve.
-            return Build(nestedSource, _adapter, _contextColor, nestedImages);
+            return Build(nestedSource, _adapter, _contextColor, nestedImages,
+                fontPaletteValues: nestedCssData is null ? null : RegisteredFontPalette.BuildRegistry(nestedCssData, valueParser),
+                fontFeatureValues: nestedCssData is null ? null : RegisteredFontFeatureValues.BuildRegistry(nestedCssData));
         }
 
         /// <summary>The recursively-prefetched nested-image map for <paramref name="href"/>, if any (issue #251).</summary>
@@ -1382,6 +1405,7 @@ namespace PeachPDF.Svg
             var size = declaredSize ?? inherited.Size;
 
             var weightAttr = ResolveStyledAttr(node, "font-weight");
+            var weight = ResolveNumericWeight(weightAttr, inherited.Weight);
             var bold = weightAttr switch
             {
                 null => inherited.Bold,
@@ -1394,7 +1418,10 @@ namespace PeachPDF.Svg
             var styleAttr = ResolveStyledAttr(node, "font-style");
             var italic = styleAttr is null || styleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Italic
-                : styleAttr.Equals("italic", StringComparison.OrdinalIgnoreCase) || styleAttr.Equals("oblique", StringComparison.OrdinalIgnoreCase);
+                : styleAttr.Trim().StartsWith("italic", StringComparison.OrdinalIgnoreCase) || styleAttr.Trim().StartsWith("oblique", StringComparison.OrdinalIgnoreCase);
+            var obliqueSkew = styleAttr is null || styleAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.ObliqueSkewSinus
+                : FontObliqueAngleResolver.ResolveSkewSinus(styleAttr.Trim().ToLowerInvariant());
 
             var stretchAttr = ResolveStyledAttr(node, "font-stretch");
             var stretch = stretchAttr is null || stretchAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
@@ -1453,6 +1480,42 @@ namespace PeachPDF.Svg
                 ? inherited.Kerning
                 : TextShapingFeatureResolver.ResolveKerning(kerningAttr.Trim().ToLowerInvariant());
 
+            // The remaining font properties are all inherited keyword/string grammars that the HTML resolvers
+            // (FontVariantAlternatesResolver, FontPaletteResolver, FontVariationSettingsResolver) interpret
+            // later, once the run's used font is known - so only the raw cascaded text travels in the context.
+            var paletteAttr = ResolveStyledAttr(node, "font-palette");
+            var fontPalette = string.IsNullOrWhiteSpace(paletteAttr) || paletteAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.FontPalette
+                : paletteAttr.Trim();
+
+            var alternatesAttr = ResolveStyledAttr(node, "font-variant-alternates");
+            var alternates = string.IsNullOrWhiteSpace(alternatesAttr) || alternatesAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.FontVariantAlternates
+                : alternatesAttr.Trim();
+
+            var emojiAttr = ResolveStyledAttr(node, "font-variant-emoji")?.Trim().ToLowerInvariant();
+            var emoji = emojiAttr switch
+            {
+                null or "inherit" or "" => inherited.Emoji,
+                "text" => EmojiMode.Text,
+                "emoji" => EmojiMode.Emoji,
+                "unicode" => EmojiMode.Unicode,
+                _ => EmojiMode.Normal,
+            };
+
+            var variationAttr = ResolveStyledAttr(node, "font-variation-settings");
+            var variationSettings = string.IsNullOrWhiteSpace(variationAttr) || variationAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.VariationSettings
+                : variationAttr.Trim();
+
+            var opticalAttr = ResolveStyledAttr(node, "font-optical-sizing")?.Trim().ToLowerInvariant();
+            var opticalNone = opticalAttr switch
+            {
+                null or "inherit" or "" => inherited.OpticalSizingNone,
+                "none" => true,
+                _ => false,
+            };
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1464,7 +1527,38 @@ namespace PeachPDF.Svg
 
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
-                positionRequested, ownFont.SizeDeclared);
+                positionRequested, ownFont.SizeDeclared,
+                fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew);
+        }
+
+        /// <summary>
+        /// The CSS Fonts numeric weight (1-1000) a <c>font-weight</c> value resolves to: a number, or a keyword
+        /// (<c>bolder</c>/<c>lighter</c> stepping from <paramref name="inheritedWeight"/>). Unset, <c>inherit</c> and anything
+        /// unparseable keep the inherited weight.
+        /// </summary>
+        private static double ResolveNumericWeight(string? value, double inheritedWeight)
+        {
+            var t = value?.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(t) || t == "inherit")
+                return inheritedWeight;
+
+            return CssValueParser.TryParseNumber(t, out _) || Map.FontWeightKeywords.ContainsKey(t)
+                ? FontWeightResolver.Resolve(t, inheritedWeight)
+                : inheritedWeight;
+        }
+
+        /// <summary>The encoded <c>font-variation-settings</c>/<c>font-optical-sizing</c> a font request carries (null for the initial values).</summary>
+        private static string? EncodeVariations(FontContext font) =>
+            FontVariationSettingsResolver.Encode(font.OpticalSizingNone ? FontOpticalSizingMode.None : FontOpticalSizingMode.Auto, font.VariationSettings);
+
+        /// <summary>The font for <paramref name="font"/> at <paramref name="size"/>: every face-selecting property this builder tracks, in one request.</summary>
+        private Font? GetFontFor(FontContext font, string family, double size)
+        {
+            var fontStyle = PaintFontStyle.Regular;
+            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
+            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+
+            return _adapter.GetFont(family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
         }
 
         /// <summary>
@@ -1555,13 +1649,9 @@ namespace PeachPDF.Svg
         /// <summary>Realizes <paramref name="font"/> the way a text run does, so a measurement is taken from the very face the run would use.</summary>
         private Font? RealizeFont(FontContext font)
         {
-            var fontStyle = PaintFontStyle.Regular;
-            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
-            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
-
             var size = Math.Max(font.Size, 1);
-            return _adapter.GetFont(font.Family, size, fontStyle, stretch: font.Stretch)
-                   ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, size, fontStyle, stretch: font.Stretch);
+            return GetFontFor(font, font.Family, size)
+                   ?? GetFontFor(font, Html.Core.Utils.DefaultFontResolver.DefaultFont, size);
         }
 
         /// <summary>
@@ -1681,12 +1771,8 @@ namespace PeachPDF.Svg
 
             var runFont = ComputeFontContext(node, fontContext);
 
-            var fontStyle = PaintFontStyle.Regular;
-            if (runFont.Bold) fontStyle |= PaintFontStyle.Bold;
-            if (runFont.Italic) fontStyle |= PaintFontStyle.Italic;
-
-            run.Font = _adapter.GetFont(runFont.Family, runFont.Size, fontStyle, stretch: runFont.Stretch)
-                       ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size, fontStyle, stretch: runFont.Stretch);
+            run.Font = GetFontFor(runFont, runFont.Family, runFont.Size)
+                       ?? GetFontFor(runFont, Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size);
 
             // font-variant-caps is gated by the resolved font's own GSUB support (same rule
             // DerivedStyle.ActualFontVariantCaps applies for HTML) - real substitution only, no
@@ -1707,8 +1793,15 @@ namespace PeachPDF.Svg
             run.WordSpacing = runFont.WordSpacing;
             run.ShapingFeatures = new ShapeSettings(
                 runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
-                TextShapingFeatureResolver.ToFeatureSettings(runFont.FeatureSettings), Kerning: runFont.Kerning, Language: runFont.Language,
-                Position: resolvedPosition);
+                TextShapingFeatureResolver.ToFeatureSettings(DerivedStyle.MergeExplicitFeatures(runFont.FeatureSettings,
+                    FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, runFont.Family, _fontFeatureValues))),
+                Kerning: runFont.Kerning, Language: runFont.Language,
+                Position: resolvedPosition, EmojiMode: runFont.Emoji);
+
+            // font-palette selects among the font's CPAL palettes (a no-op for a font without any).
+            run.Palette = run.Font is { } paletteFont
+                ? FontPaletteResolver.Resolve(runFont.FontPalette, paletteFont, runFont.Family, _fontPaletteValues)
+                : null;
 
             // text-decoration is this run's own value only - CSS Text Decoration 3 §2 explicitly makes
             // it non-inherited (a descendant's decoration "flows across" via painting every glyph whose

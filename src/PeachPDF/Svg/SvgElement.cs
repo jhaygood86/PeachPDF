@@ -213,6 +213,12 @@ namespace PeachPDF.Svg
         /// <see cref="Html.Core.Utils.TextShapingFeatureResolver"/>.</summary>
         public ShapeSettings ShapingFeatures { get; set; } = ShapeSettings.Default;
 
+        /// <summary>
+        /// The CPAL palette <c>font-palette</c> selects for this run's color font (null: the font's default palette), resolved
+        /// against the document's <c>@font-palette-values</c> the way HTML text's <c>DerivedStyle.ActualFontPalette</c> is.
+        /// </summary>
+        public FontPalette? Palette { get; set; }
+
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
         /// Decoration 3), unlike every other font/paint property this element carries.</summary>

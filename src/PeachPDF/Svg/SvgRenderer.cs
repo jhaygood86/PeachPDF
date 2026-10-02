@@ -1527,7 +1527,7 @@ namespace PeachPDF.Svg
                     return;
 
                 var solid = ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity);
-                g.DrawString(text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
+                g.DrawString(text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -1543,7 +1543,7 @@ namespace PeachPDF.Svg
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
                 if (fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
+                    g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -1676,7 +1676,7 @@ namespace PeachPDF.Svg
                 if (fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 
@@ -1684,7 +1684,7 @@ namespace PeachPDF.Svg
             if (outline is null)
             {
                 if (fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                    g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 

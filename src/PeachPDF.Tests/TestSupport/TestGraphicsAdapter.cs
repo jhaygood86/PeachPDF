@@ -197,7 +197,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal class TestRecordingGraphics : Canvas
     {
-        public sealed record DrawStringCall(string Text, Font Font, PaintColor PaintColor, PaintPoint PaintPoint, Size Size, double LetterSpacing = 0, ShapeSettings? Features = null, string? LogicalText = null);
+        public sealed record DrawStringCall(string Text, Font Font, PaintColor PaintColor, PaintPoint PaintPoint, Size Size, double LetterSpacing = 0, ShapeSettings? Features = null, string? LogicalText = null, FontPalette? FontPalette = null);
         public sealed record DrawRectCall(PaintColor PaintColor, double X, double Y, double Width, double Height);
         /// <summary>
         /// A filled or stroked path. <see cref="Points"/> is the path's recorded geometry, which is the only
@@ -311,7 +311,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null)
         {
-            var call = new DrawStringCall(str, font, color, point, size, letterSpacing, features);
+            var call = new DrawStringCall(str, font, color, point, size, letterSpacing, features, FontPalette: fontPalette);
             DrawStringCalls.Add(call);
             Log.Add(call);
         }
