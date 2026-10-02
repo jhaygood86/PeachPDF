@@ -78,13 +78,23 @@ so there is no migration note.
   ancestor's unconfined border and padding boxes plus the fragmentainer band, because `OverflowClip` itself is
   the intersection with that band for a displaced fragment, and the band is a page/column cut that must not move.
   A clip with no basis (band only, no clipping ancestor) is left as layout gave it. The hoisted path does the
-  same from `ancestor.Rect` and feeds the snapped border rect to `ComputeInnerRadii`.
+  same from `ancestor.Rect` and feeds the snapped border rect to `ComputeInnerRadii`. Both go through
+  `DecorationPixelSnapping.SnapPaddingBox`, which also falls back to the unsnapped padding box when the snapped
+  border box is narrower than its own borders (the derived one would be inverted).
 - `text-overflow: ellipsis` measures its end boundary against the snapped padding edge (the clip that cuts the
   text); the start boundary stays on the raw edge, where the unsnapped text begins. Measured on a width
   sweep: the ellipsis ended 0.3pt past the snapped clip before the change.
 - The table page-break check compares against the *unsnapped* bottom (`unsnappedBottom`), since whether a table
-  is cut at a break is a fact about layout; the replacement Y is still snapped.
-- Reviewed and declined: a collapsed segment thinner than a pixel keeps its fractional rect, and a 1.5px one can
+  is cut at a break is a fact about layout, and the replacement Y is **not** snapped either: it is a page cut,
+  not an edge of the table, and snapping it would let the page clip cut part of the closed bottom border off
+  (an earlier version snapped it; a review caught that it contradicted the cut-edges-stay-put rule).
+- Visibility culling gets half a CSS pixel of slack when snapping is on (`CullingBounds`): a hairline that only
+  just misses the clip can have its snapped edge inside it.
+- Reviewed and declined: the grid is anchored at the page's top-left corner (fragmentainer-local coordinates
+  include the page margins) and is 0.75pt on the page whatever `PixelsPerInch` is, since the grid pitch is
+  `PointsPerPx * PixelsPerPoint` layout units; a `DecorationRect`/`ClipRect` pair collapsing independently needs a
+  sub-pixel sliced fragment and cannot reach a visible mismatch; the ellipsis start boundary stays on the raw
+  edge on purpose (see above). A collapsed segment thinner than a pixel keeps its fractional rect, and a 1.5px one can
   be 1px or 2px depending on where it falls (a browser floors the width at layout; that is a separate
   decision); an inline box's underline is positioned against the raw rect, up to 0.375pt from the snapped
   border edge (it follows the text, which is not snapped); a bordered `<img>` keeps its own unsnapped rect

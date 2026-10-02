@@ -43,6 +43,52 @@ namespace PeachPDF.Html.Core.Paint
             return CollapseGuarded(rect, snappedLeft, snappedTop, snappedRight, snappedBottom);
         }
 
+        /// <summary>
+        /// Snaps <paramref name="borderBox"/> and derives the padding box a clip uses from it: the snapped
+        /// border box inset by the border's own widths, which is where the border's inner edge is drawn (the
+        /// border is drawn at its true width inside the snapped outer edge), not a snapping of the padding
+        /// box on its own, which sits up to half a pixel off that edge whenever the border is not a whole
+        /// number of pixels wide.
+        /// </summary>
+        /// <param name="g">the canvas the box is painted on, which decides whether snapping applies at all</param>
+        /// <param name="borderBox">the unsnapped border box</param>
+        /// <param name="paddingBox">the unsnapped padding box of the same box; the difference is the border widths</param>
+        /// <param name="left">whether the left edge is the box's own, and so snapped, rather than a cut</param>
+        /// <param name="top">whether the top edge is the box's own, and so snapped, rather than a cut</param>
+        /// <param name="right">whether the right edge is the box's own, and so snapped, rather than a cut</param>
+        /// <param name="bottom">whether the bottom edge is the box's own, and so snapped, rather than a cut</param>
+        /// <returns>
+        /// the snapped border box and the padding box derived from it - or <paramref name="paddingBox"/> as
+        /// it was when the snapped border box is narrower than its own borders, where the derived one would
+        /// be inverted
+        /// </returns>
+        internal static (Rect Border, Rect Padding) SnapPaddingBox(Canvas g, Rect borderBox, Rect paddingBox,
+            bool left = true, bool top = true, bool right = true, bool bottom = true)
+        {
+            var border = Snap(g, borderBox, left, top, right, bottom);
+            var padding = Rect.FromLTRB(
+                border.Left + (paddingBox.Left - borderBox.Left),
+                border.Top + (paddingBox.Top - borderBox.Top),
+                border.Right - (borderBox.Right - paddingBox.Right),
+                border.Bottom - (borderBox.Bottom - paddingBox.Bottom));
+
+            return padding.Right < padding.Left || padding.Bottom < padding.Top
+                ? (border, paddingBox)
+                : (border, padding);
+        }
+
+        /// <summary>
+        /// <paramref name="rect"/> widened by half a CSS pixel on every side, for deciding whether a box is
+        /// visible: snapping moves each of its edges by up to that much, so a box just outside a clip can
+        /// have its snapped edge inside it.
+        /// </summary>
+        internal static Rect CullingBounds(Canvas g, Rect rect)
+        {
+            var half = Length.PointsPerPx * g.PixelsPerPoint / 2;
+            rect.Inflate(half, half);
+            return rect;
+        }
+
         private static Rect CollapseGuarded(Rect rect, double left, double top, double right, double bottom)
         {
             // A box thinner than a pixel can round both edges onto the same line; keep it visible.

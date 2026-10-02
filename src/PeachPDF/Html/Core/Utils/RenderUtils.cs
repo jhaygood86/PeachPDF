@@ -86,16 +86,15 @@ namespace PeachPDF.Html.Core.Utils
             // where an ordinary child would be. The padding box is taken from the snapped border box, which
             // is where the border's inner edge is drawn.
             var borderRect = ancestor.Rect;
+            var paddingRect = PaddingEdgeOf(overflowBox, borderRect);
             if (snapToCssPixels)
             {
                 var owned = ancestor.Lines is [var firstLine, ..]
                     ? Paint.BoxDecorationGeometry.For(overflowBox, firstLine)
                     : Paint.BoxDecorationGeometry.Unbroken(ancestor.Rect);
-                borderRect = Paint.DecorationPixelSnapping.Snap(g, borderRect,
+                (borderRect, paddingRect) = Paint.DecorationPixelSnapping.SnapPaddingBox(g, borderRect, paddingRect,
                     owned.HasLeftEdge, owned.HasTopEdge, owned.HasRightEdge, owned.HasBottomEdge);
             }
-
-            var paddingRect = PaddingEdgeOf(overflowBox, borderRect);
 
             var rect = paddingRect;
             rect.Intersect(prevClip);

@@ -666,7 +666,12 @@ namespace PeachPDF.Html.Core.Paint
             {
                 var actualRect = lines[i].Rect;
 
-                if (!IsRectVisible(actualRect, clip)) continue;
+                // Snapping moves each edge by up to half a CSS pixel, so a box that only just misses the
+                // clip can have a snapped edge inside it.
+                var cullRect = container.SnapBoxDecorationsToCssPixels
+                    ? DecorationPixelSnapping.CullingBounds(g, actualRect)
+                    : actualRect;
+                if (!IsRectVisible(cullRect, clip)) continue;
 
                 // Where this rectangle's decorations resolve, per box-decoration-break (css-break-3 §6.2).
                 // Culling above stays on the rectangle itself: the decoration area may be the whole
@@ -737,18 +742,14 @@ namespace PeachPDF.Html.Core.Paint
                         // here is a fact about layout, which snapping must not change.
                         if (pageBreakBottomVisual < unsnappedBottom)
                         {
+                            // The cut is a page break, not an edge of the table: it stays at the Y layout
+                            // gave, which is also where the page clip cuts, so the closed bottom border is
+                            // never clipped short by it or left short of it.
                             rectForBorders = new Rect(
                                 rectForBorders.Left,
                                 rectForBorders.Top,
                                 rectForBorders.Width,
                                 pageBreakBottomVisual - rectForBorders.Top);
-
-                            // The page-break Y is a layout coordinate, so with snapping on it is
-                            // snapped like the edges it replaces; the other three are already snapped
-                            // and stay where they are.
-                            if (container.SnapBoxDecorationsToCssPixels)
-                                rectForBorders = DecorationPixelSnapping.Snap(g, rectForBorders,
-                                    left: false, top: false, right: false);
                         }
                     }
                 }
@@ -1010,12 +1011,7 @@ namespace PeachPDF.Html.Core.Paint
             if (!container.SnapBoxDecorationsToCssPixels || fragment.OverflowClipBasis is not { } basis)
                 return (fragment.OverflowClip, fragment.OverflowClipCurve);
 
-            var border = DecorationPixelSnapping.Snap(g, basis.BorderBox);
-            var padding = Rect.FromLTRB(
-                border.Left + (basis.PaddingBox.Left - basis.BorderBox.Left),
-                border.Top + (basis.PaddingBox.Top - basis.BorderBox.Top),
-                border.Right - (basis.BorderBox.Right - basis.PaddingBox.Right),
-                border.Bottom - (basis.BorderBox.Bottom - basis.PaddingBox.Bottom));
+            var (_, padding) = DecorationPixelSnapping.SnapPaddingBox(g, basis.BorderBox, basis.PaddingBox);
 
             Rect? clip = basis.Band is { } band ? Rect.Intersect(padding, band) : padding;
             var curve = fragment.OverflowClipCurve is { } c ? c with { Rect = padding } : null;

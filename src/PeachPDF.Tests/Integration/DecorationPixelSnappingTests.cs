@@ -312,37 +312,68 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(snap, onGrid);
         }
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task TableBorder_AtAPageBreak_SharesTheSnappedBottomWithTheBackground(bool snap)
+        [Fact]
+        public async Task TableBorder_AtAPageBreak_IsCutWhereLayoutCutsItEvenWhenSnapping()
         {
-            var rows = string.Concat(Enumerable.Range(0, 8).Select(i => $"<tr><td style='height:37.3pt'>{i}</td></tr>"));
-            var table =
-                "<table id='t' style='border-collapse:separate; border-spacing:0; margin-left:10.3pt; width:200.2pt; " +
-                $"background:rgb(200,220,250); border:1px solid rgb(10,20,30)'>{rows}</table>";
-            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(table), pageHeight: 150);
-            container.SnapBoxDecorationsToCssPixels = snap;
-            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
+            // The bottom border of a table split across pages is drawn at the cut, which is a page break and
+            // not an edge of the table: snapping must leave it where the page clip cuts, or the closed bottom
+            // border is clipped short of its width or left short of the page.
+            async Task<double> BorderBottomAsync(bool snap)
+            {
+                var rows = string.Concat(Enumerable.Range(0, 8).Select(i => $"<tr><td style='height:37.3pt'>{i}</td></tr>"));
+                var table =
+                    "<table id='t' style='border-collapse:separate; border-spacing:0; margin-left:10.3pt; width:200.2pt; " +
+                    $"background:rgb(200,220,250); border:1px solid rgb(10,20,30)'>{rows}</table>";
+                var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(table), pageHeight: 150);
+                container.SnapBoxDecorationsToCssPixels = snap;
+                Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
 
-            var g = new TestRecordingGraphics();
-            FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "t")!, g);
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "t")!, g);
 
-            var background = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                call => call.PaintColor == PaintColor.FromArgb(200, 220, 250));
-            var borderBottom = g.Log
-                .SelectMany(entry => entry switch
-                {
-                    TestRecordingGraphics.DrawPathCall path when path.PaintColor == PaintColor.FromArgb(10, 20, 30) => path.Points,
-                    TestRecordingGraphics.DrawPolygonCall polygon when polygon.PaintColor == PaintColor.FromArgb(10, 20, 30) => polygon.Points,
-                    _ => [],
-                })
-                .Max(p => p.Y);
+                return g.Log
+                    .SelectMany(entry => entry switch
+                    {
+                        TestRecordingGraphics.DrawPathCall path when path.PaintColor == PaintColor.FromArgb(10, 20, 30) => path.Points,
+                        TestRecordingGraphics.DrawPolygonCall polygon when polygon.PaintColor == PaintColor.FromArgb(10, 20, 30) => polygon.Points,
+                        _ => [],
+                    })
+                    .Max(p => p.Y);
+            }
 
-            // The page-break Y the border is cut at is a layout coordinate; snapped like the other edges,
-            // it lands on the grid.
-            var onGrid = System.Math.Abs(borderBottom / Px - System.Math.Round(borderBottom / Px)) < 1e-6;
-            Assert.Equal(snap, onGrid);
+            var exact = await BorderBottomAsync(snap: false);
+            var snapped = await BorderBottomAsync(snap: true);
+
+            Assert.Equal(exact, snapped, 9);
+            Assert.False(OnGrid(exact), "the fixture's cut should not already sit on the pixel grid");
+        }
+
+        [Fact]
+        public void SnapPaddingBox_FallsBackWhenTheSnappedBorderBoxIsNarrowerThanItsBorders()
+        {
+            // 2.8px wide with 1.2px borders (a 0.4px-wide padding box): the border box snaps to 11px..13px, 2px
+            // wide, which is narrower than the borders' 2.4px, so the padding box derived from it would be
+            // inverted. The unsnapped one is kept.
+            var border = Rect.FromLTRB(10.6 * Px, 10.6 * Px, 13.4 * Px, 30.6 * Px);
+            var padding = Rect.FromLTRB(border.Left + 1.2 * Px, border.Top + 1.2 * Px, border.Right - 1.2 * Px, border.Bottom - 1.2 * Px);
+
+            var (snappedBorder, snappedPadding) = DecorationPixelSnapping.SnapPaddingBox(new Surface(), border, padding);
+
+            Assert.Equal(DecorationPixelSnapping.Snap(new Surface(), border), snappedBorder);
+            Assert.Equal(padding, snappedPadding);
+        }
+
+        [Fact]
+        public void CullingBounds_WidensARectByHalfACssPixelOnEverySide()
+        {
+            var rect = Rect.FromLTRB(10, 20, 30, 40);
+
+            var bounds = DecorationPixelSnapping.CullingBounds(new Surface(), rect);
+
+            Assert.Equal(10 - Px / 2, bounds.Left, 9);
+            Assert.Equal(20 - Px / 2, bounds.Top, 9);
+            Assert.Equal(30 + Px / 2, bounds.Right, 9);
+            Assert.Equal(40 + Px / 2, bounds.Bottom, 9);
         }
 
         [Fact]
