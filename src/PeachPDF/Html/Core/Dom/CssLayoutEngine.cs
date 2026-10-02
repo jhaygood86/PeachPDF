@@ -4241,7 +4241,8 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer asked the same question, so a shift that long is not taken: the line stays where
                 // it was and keeps the room that is left. The same way out for a document that would keep shifting for
                 // ever (a bound, not an expected path).
-                if (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000)
+                if (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000
+                    || CannotFitBelowTheFloatsEvenOnAFreshPage(blockBox, originalY, nextY, word.Height))
                 {                    coordinates.CurrentY = originalY;
                     coordinates.MaxBottom = originalMaxBottom;
                     coordinates.Line.FlowTop = originalFlowTop;
@@ -4260,6 +4261,24 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// Whether a line at the top of its page, moved down to <paramref name="nextY"/> to clear the floats, would still not fit on the page.
+        /// </summary>
+        /// <remarks>
+        /// A line that does not fit below the floats goes, with them, to the next fragmentainer, which is right while that
+        /// one has room for it. A float nearly as tall as the page leaves none even there: the line is again at the top,
+        /// moves below the float again, and does not fit again, page after page for ever. Such a line stays where it is,
+        /// beside the float, which is where a fresh page would put it too.
+        /// </remarks>
+        private static bool CannotFitBelowTheFloatsEvenOnAFreshPage(CssBox blockBox, double lineTop, double nextY, double lineHeight)
+        {
+            if (blockBox.HtmlContainer is not { HasRealPageGrid: true, CurrentFragmentainer: { } fragmentainer } container) return false;
+
+            var slot = fragmentainer.SlotIndex;
+
+            return lineTop - container.PageTopOf(slot) <= LineFitTolerance
+                   && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot);
+        }
         /// <summary>The nearest multi-column container at or above <paramref name="box"/>.</summary>
         private static CssBox? ColumnsContainerOf(CssBox box)
         {
