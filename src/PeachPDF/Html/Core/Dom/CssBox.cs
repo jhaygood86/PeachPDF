@@ -3463,8 +3463,10 @@ namespace PeachPDF.Html.Core.Dom
                 // is resumed page by page, the way a browser fragments an out-of-flow box. A float starts in the
                 // slot being filled; an absolutely positioned box in the slot its offsets place it in, usually an
                 // earlier one, which the emitter re-opens to draw it (InvalidateEmittedFragmentainersReceiving).
-                if ((child.IsFloated || child.Position.Value is PositionMode.Absolute)
-                    && child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true, HasOwnBand: false } } floatContainer)
+                // An absolutely positioned box's containing block is the multi-column container, never one of its columns
+                // (css-multicol-1 §2), so it breaks against the page grid wherever it is laid out from. A float stays in its column.
+                if (child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true } currentContext } floatContainer
+                    && (child.Position.Value is PositionMode.Absolute || (child.IsFloated && !currentContext.HasOwnBand)))
                 {
                     var previous = floatContainer.CurrentFragmentainer;
                     var slot = child.IsFloated
