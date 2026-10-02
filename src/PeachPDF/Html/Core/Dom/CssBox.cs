@@ -2578,6 +2578,15 @@ namespace PeachPDF.Html.Core.Dom
         internal List<CssBox>? FloatsOfTheDiscardedLine { get; set; }
 
         /// <summary>
+        /// Whether <c>clear</c> moved this box below a float it would otherwise have sat beside (CSS 2.1 §9.5.2
+        /// "clearance"), set each time the box is placed. A box with clearance does not collapse through: its
+        /// position is a constraint rather than a margin, so what follows it is measured from it. Without this an
+        /// empty clearing <c>div</c> (the clearfix) was treated as if it were not there, and the next sibling was
+        /// placed against the box before it, beside the float the div had just cleared.
+        /// </summary>
+        internal bool HasClearance { get; set; }
+
+        /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
         /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
         /// turn, so the record unwinds to the fragmentation-context root.
@@ -9522,6 +9531,7 @@ namespace PeachPDF.Html.Core.Dom
             // judged using physical top/bottom border/padding/height on a box whose own children are
             // actually stacked along its physical left/right block axis - meaningless.
             if (HasDifferentWritingModeFromParent) return false;
+            if (HasClearance) return false;
             // A percentage height against an indefinite (not-yet-height-calculated) containing block
             // resolves to auto (CSS2.1 §10.5, the same rule ApplyHeight already applies) - Acid2's own
             // ".empty { margin: 6.25em; height: 10%; }" is written to exercise exactly this: its own

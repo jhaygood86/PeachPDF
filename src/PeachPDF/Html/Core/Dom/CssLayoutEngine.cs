@@ -3207,13 +3207,19 @@ namespace PeachPDF.Html.Core.Dom
         {
             var clearance = Math.Max(containingBox.ClientTop, box.Location.Y);
 
+            // The lowest float edge the box clears, apart from the containing block's own content top that
+            // `clearance` is seeded with: only a float's edge is clearance (§9.5.2).
+            var floatEdge = double.NegativeInfinity;
+
             for (var i = 0; i < currentBoxIdx; i++)
             {
                 var siblingBox = containingBox.Boxes[i];
 
                 var clears = box.EffectiveClear;
 
-                clearance = Math.Max(clearance, GetClearance(siblingBox, clears));
+                var nestedClearance = GetClearance(siblingBox, clears);
+                if (nestedClearance > 0) floatEdge = Math.Max(floatEdge, nestedClearance);
+                clearance = Math.Max(clearance, nestedClearance);
 
                 if (!siblingBox.IsFloated) continue;
 
@@ -3229,9 +3235,16 @@ namespace PeachPDF.Html.Core.Dom
                 // bottom margin (Acid2's ".nose { margin: -2em 2em -1em }") is cleared 1em higher
                 // than its visible bottom. StaticBottom so a float that is ALSO position:relative
                 // clears at its static position, not its visual offset (CSS 2.1 §9.4.3).
+                floatEdge = Math.Max(floatEdge, siblingBox.StaticBottom + siblingBox.ActualMarginBottom);
                 clearance = Math.Max(clearance, siblingBox.StaticBottom + siblingBox.ActualMarginBottom);
 
             }
+
+            // Clearance exists only when a float's margin edge is below where the box would have been (§9.5.2).
+            // Not when the box merely sits above its containing block's content top, which `clearance` also
+            // folds in: a multi-column child does, and the empty clearing div in it then stopped being
+            // collapsed through although no float had cleared it.
+            box.HasClearance = floatEdge > box.Location.Y + 0.01;
 
             box.Location = new PaintPoint(box.ClientLeft, clearance);
         }
