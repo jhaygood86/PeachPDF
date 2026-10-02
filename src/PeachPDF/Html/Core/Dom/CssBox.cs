@@ -3080,6 +3080,14 @@ namespace PeachPDF.Html.Core.Dom
         private bool _earlyBreakTaken;
 
         /// <summary>
+        /// Set when this box's <c>break-inside: avoid</c> was found unsatisfiable (it fits no fragmentainer) and relaxed by laying
+        /// the box out again at the top of the next one. Unlike <see cref="_earlyBreakTaken"/> it lasts for the layout generation,
+        /// because the box completes on a later pass than the one that relaxed it, and that pass's epilogue would otherwise ask
+        /// the same question of the same geometry and move it again.
+        /// </summary>
+        private bool _avoidRelaxed;
+
+        /// <summary>
         /// Whether the break before this box has already been moved once for <c>orphans</c> in this layout.
         /// </summary>
         /// <remarks>
@@ -3956,6 +3964,7 @@ namespace PeachPDF.Html.Core.Dom
                 _escapedForcedBreakPending = false;
                 _escapedForcedBreakBlankSlot = null;
                 _orphansBreakTaken = false;
+                _avoidRelaxed = false;
                 _widowsRewindTaken = false;
 
                 // A box can end one layout generation sitting in "reset, not yet re-entered" state (e.g.
@@ -7230,7 +7239,7 @@ namespace PeachPDF.Html.Core.Dom
             // whole) reaches the same mover, because "is not broken" and "asks not to be broken" want the same relocation. So
             // does a table that did not break between any two of its own rows: it did not fragment, which
             // is what the other two say about themselves in advance rather than after the fact.
-            var avoidsBreak = BreakValues.AvoidsBreak(BreakInside.Value, FragmentationContext.Page);
+            var avoidsBreak = !_avoidRelaxed && BreakValues.AvoidsBreak(BreakInside.Value, FragmentationContext.Page);
             var monolithic = IsMonolithicBoxThisMoverMayMove() || PaginatedItsOwnContentWithoutBreaking();
 
             // One correction per box per pass (_earlyBreakTaken). Where the box was laid out again
@@ -9846,6 +9855,19 @@ namespace PeachPDF.Html.Core.Dom
 
             if (decision.BeforeBox == this && CanBeLaidOutAgain(decision))
             {
+                _earlyBreakRetryTop = decision.Top;
+                _earlyBreakTaken = true;
+                return true;
+            }
+
+            // An avoid that fits no fragmentainer is still relaxed by moving the box, but by laying it out again there rather than
+            // translating what was laid out here: a translated box keeps its unbroken extent, so the lines it carries past the foot of
+            // its new page are clipped instead of continuing on the next one (css-break-3 §4.4). Laid out again, it fragments from its
+            // new top like any box, and its own avoid is spent (_avoidRelaxed) so the pass that completes it does not move it again.
+            if (decision.BeforeBox == this && decision.Reason is EarlyBreakReason.AvoidBreakInside && decision.KeepWithNextRun.Count == 0
+                && PlacesItselfAsBlockBox && HtmlContainer is { IsFragmenting: true })
+            {
+                _avoidRelaxed = true;
                 _earlyBreakRetryTop = decision.Top;
                 _earlyBreakTaken = true;
                 return true;
