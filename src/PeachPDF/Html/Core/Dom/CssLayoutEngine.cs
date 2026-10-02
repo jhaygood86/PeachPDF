@@ -411,7 +411,9 @@ namespace PeachPDF.Html.Core.Dom
                 ConsecutiveHyphenatedLines = resume?.ConsecutiveHyphenatedLines ?? 0
             };
 
+            coordinates.FloatsAlreadyPlacedAtTheResumePoint = resume is not null ? blockBox.FloatsKeptAtTheStop : null;
             blockBox.FloatsOfTheDiscardedLine = null;
+            blockBox.FloatsKeptAtTheStop = null;
 
             //Flow words and boxes
             var activeFlows = blockBox.HtmlContainer?.ActiveInlineFlows;
@@ -455,6 +457,7 @@ namespace PeachPDF.Html.Core.Dom
                 // The floats placed while building it go with it: the resumed pass places them again, in the next
                 // fragmentainer, and the one this pass is leaving must not still claim them.
                 blockBox.FloatsOfTheDiscardedLine = coordinates.FloatsPlacedOnThisLine;
+                blockBox.FloatsKeptAtTheStop = coordinates.FloatsOnTheLastClosedLine;
 
                 // hyphenate-limit-last (CSS Text 4 §6.3.5): the line CreateLineBoxes just kept - now the
                 // last one before this break - may not end in a hyphen the property forbids. Unlike
@@ -4285,6 +4288,7 @@ namespace PeachPDF.Html.Core.Dom
             coordinates.Line.PrecedesForcedBreak = followsForcedBreak;
             coordinates.CurrentX = lineStartX;
             coordinates.CurrentY = coordinates.MaxBottom + lineSpacing;
+            coordinates.FloatsOnTheLastClosedLine = coordinates.FloatsPlacedOnThisLine;
             coordinates.FloatsPlacedOnThisLine = null;
             coordinates.Line = new CssLineBox(blockBox)
             {
@@ -5403,7 +5407,10 @@ namespace PeachPDF.Html.Core.Dom
                     // to re-enter CssLineBoxCoordinates.InlineFloats here, though, since that list starts
                     // empty on every fresh pass - its real, already-committed geometry from the earlier
                     // pass is what lets a later line on THIS pass keep narrowing around it correctly.
-                    if (!childOpensHere)
+                    // A float after the last word of the line the previous pass kept has the ordinal of the next word, and was placed
+                    // there: it is not the resumed line's.
+                    if (!childOpensHere
+                        || (childStartOrdinal == coordinates.ResumeOrdinal && coordinates.FloatsAlreadyPlacedAtTheResumePoint?.Contains(b) == true))
                     {
                         (coordinates.InlineFloats ??= []).Add(b);
                     }
