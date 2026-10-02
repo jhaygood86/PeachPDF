@@ -411,7 +411,9 @@ namespace PeachPDF.Html.Core.Dom
                 ConsecutiveHyphenatedLines = resume?.ConsecutiveHyphenatedLines ?? 0
             };
 
+            coordinates.FloatsAlreadyPlacedAtTheResumePoint = resume is not null ? blockBox.FloatsKeptAtTheStop : null;
             blockBox.FloatsOfTheDiscardedLine = null;
+            blockBox.FloatsKeptAtTheStop = null;
 
             //Flow words and boxes
             var activeFlows = blockBox.HtmlContainer?.ActiveInlineFlows;
@@ -455,6 +457,7 @@ namespace PeachPDF.Html.Core.Dom
                 // The floats placed while building it go with it: the resumed pass places them again, in the next
                 // fragmentainer, and the one this pass is leaving must not still claim them.
                 blockBox.FloatsOfTheDiscardedLine = coordinates.FloatsPlacedOnThisLine;
+                blockBox.FloatsKeptAtTheStop = coordinates.FloatsOnTheLastClosedLine;
 
                 // hyphenate-limit-last (CSS Text 4 §6.3.5): the line CreateLineBoxes just kept - now the
                 // last one before this break - may not end in a hyphen the property forbids. Unlike
@@ -546,12 +549,12 @@ namespace PeachPDF.Html.Core.Dom
                 var box = setAside.Box;
                 var emptyInline = EmptyInlineContainingBlockFor(setAside);
 
-                // Outside a column the box is left to run as passes of its own: LayoutBlockChild resumes the record
-                // its break leaves, which is what detaching here was written to avoid depending on, and unbroken the
-                // box's last line crossed the page foot and was clipped away. Inside a column the box still cannot
-                // be fragmented against the page (its containing block is placed per column), so it keeps the
-                // detached, whole layout.
-                var detach = box.HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: false };
+                // The box is left to run as passes of its own: LayoutBlockChild resumes the record its break leaves,
+                // which is what detaching here was written to avoid depending on, and unbroken the box's last line
+                // crossed the page foot and was clipped away. That holds inside a column as well: the box's containing
+                // block is the multi-column container, not a column (css-multicol-1 §2). Only a measurement pass, which
+                // has no fragmentainer, has nothing to break against.
+                var detach = box.HtmlContainer?.CurrentFragmentainer is null;
                 var previous = detach ? box.HtmlContainer?.DetachFragmentainer() : null;
 
                 try
@@ -4241,7 +4244,8 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer asked the same question, so a shift that long is not taken: the line stays where
                 // it was and keeps the room that is left. The same way out for a document that would keep shifting for
                 // ever (a bound, not an expected path).
-                if (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000)
+                if (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000
+                    || CannotFitBelowTheFloatsEvenOnAFreshPage(blockBox, originalY, nextY, word.Height))
                 {                    coordinates.CurrentY = originalY;
                     coordinates.MaxBottom = originalMaxBottom;
                     coordinates.Line.FlowTop = originalFlowTop;
@@ -4260,6 +4264,24 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// Whether a line at the top of its page, moved down to <paramref name="nextY"/> to clear the floats, would still not fit on the page.
+        /// </summary>
+        /// <remarks>
+        /// A line that does not fit below the floats goes, with them, to the next fragmentainer, which is right while that
+        /// one has room for it. A float nearly as tall as the page leaves none even there: the line is again at the top,
+        /// moves below the float again, and does not fit again, page after page for ever. Such a line stays where it is,
+        /// beside the float, which is where a fresh page would put it too.
+        /// </remarks>
+        private static bool CannotFitBelowTheFloatsEvenOnAFreshPage(CssBox blockBox, double lineTop, double nextY, double lineHeight)
+        {
+            if (blockBox.HtmlContainer is not { HasRealPageGrid: true, CurrentFragmentainer: { } fragmentainer } container) return false;
+
+            var slot = fragmentainer.SlotIndex;
+
+            return lineTop - container.PageTopOf(slot) <= LineFitTolerance
+                   && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot);
+        }
         /// <summary>The nearest multi-column container at or above <paramref name="box"/>.</summary>
         private static CssBox? ColumnsContainerOf(CssBox box)
         {
@@ -4285,6 +4307,7 @@ namespace PeachPDF.Html.Core.Dom
             coordinates.Line.PrecedesForcedBreak = followsForcedBreak;
             coordinates.CurrentX = lineStartX;
             coordinates.CurrentY = coordinates.MaxBottom + lineSpacing;
+            coordinates.FloatsOnTheLastClosedLine = coordinates.FloatsPlacedOnThisLine;
             coordinates.FloatsPlacedOnThisLine = null;
             coordinates.Line = new CssLineBox(blockBox)
             {
@@ -5403,7 +5426,10 @@ namespace PeachPDF.Html.Core.Dom
                     // to re-enter CssLineBoxCoordinates.InlineFloats here, though, since that list starts
                     // empty on every fresh pass - its real, already-committed geometry from the earlier
                     // pass is what lets a later line on THIS pass keep narrowing around it correctly.
-                    if (!childOpensHere)
+                    // A float after the last word of the line the previous pass kept has the ordinal of the next word, and was placed
+                    // there: it is not the resumed line's.
+                    if (!childOpensHere
+                        || (childStartOrdinal == coordinates.ResumeOrdinal && coordinates.FloatsAlreadyPlacedAtTheResumePoint?.Contains(b) == true))
                     {
                         (coordinates.InlineFloats ??= []).Add(b);
                     }

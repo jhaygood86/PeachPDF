@@ -448,6 +448,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 PlaceColumn(columnsBox, columnLeft, columnWidth);
 
+                // Inside an outer column the float's own lines would break at that column's band, and a float is never
+                // resumed there: the lines past it were laid out for no fragmentainer and drawn nowhere. It is laid out
+                // whole instead and overflows the column foot, as a float that does not fit in its column does.
+                var htmlContainer = columnsBox.HtmlContainer;
+                var nestedInAColumn = htmlContainer?.CurrentFragmentainer is { HasOwnBand: true };
+                var outerColumn = nestedInAColumn ? htmlContainer!.DetachFragmentainer() : null;
+
                 try
                 {
                     foreach (var childBox in columnsBox.Boxes.Where(IsLaidOutHere))
@@ -457,6 +464,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 finally
                 {
+                    if (nestedInAColumn) htmlContainer!.RestoreFragmentainer(outerColumn);
+
                     PlaceColumn(columnsBox, columnLeft, containerWidth);
                 }
             }
@@ -621,11 +630,15 @@ namespace PeachPDF.Html.Core.Dom
             // mid-document rather than as balancing. Where that happens the target is grown and the fill
             // run again, up to the page's own budget, which is the point at which balancing has given up
             // and the content genuinely does not fit this fragment.
+            var finishedAtTheFullBudget = false;
+
             for (var attempt = 0; ; attempt++)
             {
                 (carry, contentBottom, filledColumns) =
                     await FillColumns(g, columnsBox, children, startAt, boxTop, target, columnLeft, pitch,
                         columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
+
+                if (carry is null && target >= pageBudget) finishedAtTheFullBudget = true;
 
                 // The run ended because the next child spans, not because it ran out of room - there is
                 // nothing to balance a target against that was never trying to include the span anyway,
@@ -692,6 +705,21 @@ namespace PeachPDF.Html.Core.Dom
                 // run sharing this (columnsBox, startSlot) slot already finished and must not be erased
                 // by this run's retry.
                 htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
+            }
+
+            // The even share the fill was balanced to can be shorter than content that does not divide (a table row whose
+            // cell holds a float): every trial then carried something over, and the budget fill that had just finished
+            // the flow was thrown away. The container was then deferred to the next page, where the same sequence
+            // repeated for ever. A fill that finished is the better answer, so it is made again.
+            if (carry is not null && !IsColumnSpanBoundary(carry) && finishedAtTheFullBudget && target < pageBudget
+                && resume is not null)
+            {
+                PassRewind.RollBackTo(resume, children);
+                htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
+
+                (carry, contentBottom, filledColumns) =
+                    await FillColumns(g, columnsBox, children, startAt, boxTop, pageBudget, columnLeft, pitch,
+                        columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
             }
 
             // What the last column left for the next one may have been placed in an earlier column first: a break that
@@ -1031,7 +1059,20 @@ namespace PeachPDF.Html.Core.Dom
                     // before its first child has put nothing here, so what it holds is the next column's. Laid out
                     // here first and moved on, it was drawn by both.
                     case TableBreakToken table:
-                        foreach (var cell in table.UnfinishedCells) AddBoxesBeyond(cell.Token, beyond);
+                        foreach (var cell in table.UnfinishedCells)
+                        {
+                            // A cell whose own flow resumes at its first word has put nothing here either, and it is the cell
+                            // that holds the content (no child of it is named): it moves on whole.
+                            if (cell.Token is InlineBreakToken { ResumeWordIndex: 0, CompletedLineCount: 0 })
+                            {
+                                beyond.Add(cell.Cell);
+                            }
+                            else
+                            {
+                                AddBoxesBeyond(cell.Token, beyond);
+                            }
+                        }
+
                         return;
 
                     default:

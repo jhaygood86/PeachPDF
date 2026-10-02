@@ -1287,7 +1287,7 @@ namespace PeachPDF.Html.Core.Paint
         /// pin an underline there instead, or move an overline off it to avoid colliding with a pinned
         /// underline (<c>PaintDecoration</c>'s own <c>overlineSwitchesSides</c>) - see its remarks.
         /// </param>
-        private static void StrokeDecorationSegment(Canvas g, Pen pen, double thickness, PaintColor color, TextDecorationStyleMode style, string line,
+        internal static void StrokeDecorationSegment(Canvas g, Pen pen, double thickness, PaintColor color, TextDecorationStyleMode style, string line,
             double x1, double x2, double cross, bool isVertical, int underSign, bool atBlockStart)
         {
             void Draw(double at)
@@ -1403,7 +1403,7 @@ namespace PeachPDF.Html.Core.Paint
         /// CSS pixels. Chromium dilates each ink crossing by the resolved decoration thickness, capped at
         /// this value so extremely thick lines do not create unbounded horizontal gaps.
         /// </summary>
-        private const double MaximumInkSkipClearanceCssPixels = 13;
+        internal const double MaximumInkSkipClearanceCssPixels = 13;
 
         /// <summary>
         /// Whether <paramref name="styleSource"/> asks for <c>text-decoration-skip-ink</c>

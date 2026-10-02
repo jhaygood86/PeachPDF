@@ -149,6 +149,19 @@ namespace PeachPDF.Html.Core.Entities
         internal List<CssBox>? FloatsPlacedOnThisLine { get; set; }
 
         /// <summary>
+        /// The floats this pass placed on the line it last closed. When the flow stops right after that line they are the floats
+        /// that follow its last word: placed in the fragmentainer being left, though their position in the flow is that of the
+        /// first word of the next one.
+        /// </summary>
+        internal List<CssBox>? FloatsOnTheLastClosedLine { get; set; }
+
+        /// <summary>
+        /// The floats an earlier pass placed on the line before the one this pass resumes at, which sit at the resume ordinal
+        /// and are not placed again.
+        /// </summary>
+        internal List<CssBox>? FloatsAlreadyPlacedAtTheResumePoint { get; set; }
+
+        /// <summary>
         /// Absolutely positioned boxes <see cref="CssLayoutEngine.FlowBox"/> passed among the block's
         /// inline content, each with where the walk had reached there. They take no part in the line
         /// boxes, so they are laid out once the lines are final, which is also when an inline containing

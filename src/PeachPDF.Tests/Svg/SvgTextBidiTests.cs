@@ -71,8 +71,9 @@ namespace PeachPDF.Tests.Svg
             const string text = "AB\U0001F600CD";
             var g = Render($"""<text x="10" y="50" font-size="20" direction="rtl">{text}</text>""");
 
-            var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(text, draw.Text);
+            // The emoji may come from a different (fallback) font than the Latin text and so paint as its own call; the
+            // logical order across the calls is what this regression is about.
+            Assert.Equal(text, string.Concat(g.DrawStringCalls.Select(c => c.Text)));
         }
 
         [Fact]

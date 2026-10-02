@@ -63,6 +63,9 @@ namespace PeachPDF.Svg
             if (name == "xml:lang")
                 return _element.Attribute(XNamespace.Xml + "lang")?.Value;
 
+            if (name == "xml:space")
+                return _element.Attribute(XNamespace.Xml + "space")?.Value;
+
             return _element.Attribute(name)?.Value;
         }
 
