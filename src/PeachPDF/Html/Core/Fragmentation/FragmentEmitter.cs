@@ -2798,6 +2798,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                         claims = ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed);
                     }
 
+                    claims |= !isFixed && capture is { } holder && IsOverflowNoColumnClaims(box, i, holder, slot.Index);
+
                     if (claims && !region.YieldsToEarlierColumn(box, Displaced(shiftedRect, shift))
                         && !(capture is { } own && StartsInAnotherInstance(box, i, own, slot.Index)))
                         words.Add(new TextFragment(Localize(shiftedRect, originY), word));
@@ -3215,6 +3217,34 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// The instance at <paramref name="index"/>, with its region open on the right when no column of the same row
+        /// lies beyond it.
+        /// </summary>
+        /// <remarks>
+        /// A box wider than its column (a table, a long unbreakable word) overflows into whatever lies to its right. Where
+        /// that is another column, the column it starts in holds it; where it is past the last column that was filled,
+        /// nothing does, and a region bounded at the column's own edge left the overflow in no fragment at all: laid out,
+        /// and drawn nowhere. The last column of a row is the one such content belongs to.
+        /// </remarks>
+        private static CapturedInstance OpenAtTheRightIfLastInItsRow(List<CapturedInstance> instances, int index)
+        {
+            var instance = instances[index];
+
+            if (instance.Region is not { Left: { } left, Right: { } } region) return instance;
+
+            for (var next = index + 1; next < instances.Count; next++)
+            {
+                if (instances[next].Region is { Left: { } nextLeft } nextRegion
+                    && nextRegion.Top == region.Top && nextLeft > left)
+                {
+                    return instance;
+                }
+            }
+
+            return instance with { Region = region with { Right = double.PositiveInfinity } };
+        }
+
+        /// <summary>
         /// A box's children for fragment-building purposes. This is <see cref="CssBox.Boxes"/> for an
         /// ordinary box, filtered to skip any <see cref="CssBox.IsFragmentWalkPlaceholder"/> entry - a
         /// layout-internal marker (e.g. the <see cref="CssProxyBox"/> a repeating table header/footer
@@ -3267,7 +3297,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 {
                     for (var i = 0; i < fragmentainers.Count; i++)
                     {
-                        var fragmentainer = fragmentainers[i];
+                        var fragmentainer = OpenAtTheRightIfLastInItsRow(fragmentainers, i);
                         if (fragmentainer.DetachedSourceRoot is not null) continue;
 
                         foreach (var childBox in box.Boxes)
@@ -4278,6 +4308,72 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private static IReadOnlyDictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.Rectangles;
+
+        /// <summary>
+        /// Whether a word that lies in no column's extent that holds its box is this column's: <paramref name="own"/> is
+        /// the first column of its row to hold the box.
+        /// </summary>
+        /// <remarks>
+        /// A box wider than the column it is in (a table, a row of cells) puts its content past that column's edge, where it
+        /// can lie inside the extent of a column that does not hold the box at all, or past the last column. Each column
+        /// claims what its region contains, so nothing claimed it and it was drawn nowhere. The columns that hold the box
+        /// are the only ones that can draw it, so when none of them has the word in its region the first of them does.
+        /// </remarks>
+        private bool IsOverflowNoColumnClaims(CssBox box, int wordIndex, CapturedInstance own, int slotIndex)
+        {
+            if (own.ContextRoot is not { } root || own.Region is not { Left: not null, Right: not null } region) return false;
+            if (!_capturedInstances.TryGetValue((root, slotIndex), out var all)) return false;
+
+            var row = all.FindAll(i => ReferenceEquals(i.ParentContext, own.ParentContext)
+                                       && i.DetachedSourceRoot is null && i.Region.Top == region.Top);
+
+            // A box another outer column's fill holds as well has been laid out twice, and what it holds there is the
+            // earlier fill's geometry: not a word that has no column, but the same word seen again.
+            foreach (var other in all)
+            {
+                if (!row.Contains(other) && other.DetachedSourceRoot is null && other.Geometry.Holds(box)) return false;
+            }
+
+            CapturedInstance? first = null;
+
+            for (var index = 0; index < row.Count; index++)
+            {
+                var instance = row[index];
+                if (!instance.Geometry.Holds(box)
+                    || !TryGetWordRect(box, wordIndex, instance.Geometry, out var rect)
+                    || Math.Min(rect.Bottom, instance.Region.Bottom) - Math.Max(rect.Top, instance.Region.Top) <= BandOverlapEpsilon)
+                {
+                    // Not placed in this column's band: it is another's, or another fragmentainer's.
+                    continue;
+                }
+
+                first ??= instance;
+
+                if (ClaimsWordIn(box, wordIndex, instance, OpenAtTheRightIfLastInItsRow(row, index).Region, slotIndex)) return false;
+            }
+
+            return first is { } holder && ReferenceEquals(holder.Self, own.Self);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="instance"/> claims the word by the test the emitter applies to it: its line's, as one
+        /// verdict per line box, or its own rectangle for a word that has no line.
+        /// </summary>
+        private bool ClaimsWordIn(CssBox box, int wordIndex, CapturedInstance instance, FragmentRegion region, int slotIndex)
+        {
+            var word = box.Words[wordIndex];
+
+            if (word.AwaitsTheNextFragmentainer || !TryGetWordRect(box, wordIndex, instance.Geometry, out var rect)) return false;
+
+            if (word.Line is { } line && RectanglesOf(box, instance.Geometry).TryGetValue(line, out var lineRect))
+            {
+                var lineTop = lineRect.Top + InkRiseAboveLineTop(line, lineRect, instance.Geometry);
+
+                return ClaimsLine(lineRect, AggregateLineRect(line, instance.Geometry, lineRect), slotIndex, region, false, lineTop);
+            }
+
+            return ClaimsWord(rect, slotIndex, region, false);
+        }
 
         /// <summary>
         /// Whether a word that spills out of <paramref name="own"/>'s column starts in another column of the same
