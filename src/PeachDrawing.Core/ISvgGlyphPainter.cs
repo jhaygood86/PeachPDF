@@ -7,7 +7,7 @@ namespace PeachDrawing.Core
     /// <summary>
     /// Draws the SVG document a font gives for a glyph (OpenType SVG) into the graphics it is set on. A
     /// text-painting backend knows how to place a glyph but not how to render SVG, which needs a real SVG
-    /// engine (e.g. PeachPDF's own <c>SvgRenderer</c>) it may not have - this is the seam between the two,
+    /// engine (for example an SVG renderer the host supplies) it may not have - this is the seam between the two,
     /// obtained through <see cref="RenderContext.CreateSvgGlyphPainter"/> so a backend with no SVG engine
     /// (a standalone raster canvas) can supply none.
     /// </summary>

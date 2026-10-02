@@ -4,7 +4,7 @@ using System;
 namespace PeachDrawing.Core
 {
     /// <summary>
-    /// Wraps <see cref="System.Uri"/> for use throughout PeachPDF's resource-loading pipeline, adding
+    /// Wraps <see cref="System.Uri"/> for use throughout resource loading, adding
     /// special-case handling for <c>data:</c> URIs and helpers for resolving a relative URI against a
     /// base URI.
     /// </summary>

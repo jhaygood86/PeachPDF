@@ -21,9 +21,7 @@ namespace PeachDrawing;
 /// <remarks>
 /// Font creation goes through <see cref="TypefaceFont"/> and image decoding through
 /// <see cref="DecodedImage"/> - both PeachDrawing.Core/PeachDrawing's own types, no PDF backend
-/// involved anywhere in the chain. PeachPDF drives this same class as its own raster fallback (the effects
-/// PDF cannot express in vector form - filters, shadows, backdrop effects); this is not a copy built for
-/// PeachPDF's benefit, it is the one implementation both uses.
+/// involved anywhere in the chain.
 /// </remarks>
 public sealed class RasterRenderContext : RenderContext
 {

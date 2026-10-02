@@ -14,9 +14,7 @@ namespace PeachDrawing.Core
     /// scaled by <see cref="Size"/>. This is what a <see cref="Canvas"/> backend with no host-specific font
     /// representation of its own (a standalone raster canvas; any future backend in the same position) uses
     /// directly, and it is also the shape every backend's own metric computation reduces to once its
-    /// host-specific extras (PDF font-resource identity, a platform handle, ...) are set aside - see
-    /// <c>PeachPDF.Adapters.FontAdapter</c>'s own remarks for how the PDF backend's version relates to this
-    /// one.
+    /// host-specific extras (PDF font-resource identity, a platform handle, ...) are set aside.
     /// </summary>
     /// <remarks>
     /// Every metric here is the *unscaled* value in the same unit as <see cref="Size"/> itself - no

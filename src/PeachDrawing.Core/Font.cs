@@ -119,8 +119,8 @@ namespace PeachDrawing.Core
         /// Whether this font's GSUB table defines an active lookup for every OpenType feature tag
         /// <paramref name="feature"/> needs (e.g. both <c>smcp</c> and <c>c2sc</c> for
         /// <see cref="CapsMode.AllSmallCaps"/> - see <see cref="Shaper.GetFeatureTags(CapsMode)"/>).
-        /// Called from <c>CssBox.AddWord</c>'s synthesis gate, which runs during DOM/box-tree
-        /// parsing - before any <see cref="Canvas"/> exists - so this lives on <see cref="Font"/>
+        /// A host calls this when deciding whether to synthesize the feature, which can happen
+        /// during document parsing - before any <see cref="Canvas"/> exists - so this lives on <see cref="Font"/>
         /// itself rather than the graphics abstraction, mirroring <see cref="HasGlyph"/>.
         /// </summary>
         public abstract bool SupportsFontVariantCaps(CapsMode feature);
@@ -214,9 +214,8 @@ namespace PeachDrawing.Core
         /// the flat 1.2×-font-size approximation used before real per-font metrics were available (issue
         /// #956), so only the OpenType-descriptor-backed adapter overrides it - mirroring the vertical-
         /// metrics section above. Note this default is only faithful to that unit contract for an
-        /// <see cref="Font"/> whose own <see cref="Size"/> is already in that same space;
-        /// <c>PeachPDF.Adapters.FontAdapter</c>'s <see cref="Size"/> is not (it's a true, unscaled
-        /// point size - see its own remarks), which is exactly why it can't just inherit this default and
+        /// <see cref="Font"/> whose own <see cref="Size"/> is already in that same space; a font whose
+        /// <see cref="Size"/> is a true, unscaled point size cannot just inherit this default and
         /// overrides the property instead.
         /// </summary>
         public virtual double NormalLineHeight => 1.2 * Size;

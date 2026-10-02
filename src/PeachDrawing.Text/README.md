@@ -1,11 +1,9 @@
 # PeachDrawing.Text
 
 Font loading, OpenType shaping, bidirectional text and Unicode text primitives for .NET, with no package
-dependencies. It is the text engine [PeachPDF](https://peachpdf.net/) renders HTML with, published as its own package
-so other applications can use it too.
+dependencies. It is a standalone package, usable on its own in any application.
 
-**Status:** pre-1.0. The engine is complete and in production use inside PeachPDF, and its public API is being published area by area. Font loading and matching (`FontSet`, `TypefaceFamily`, `Typeface`), what a typeface says about itself (`TypefaceMetrics`, glyph mapping, advances), shaping (`Shaper`, `ShapeSettings`, `GlyphRun`), glyph outlines and colour glyphs (`GlyphOutline`, `ColorPalette`, the COLR paint graph, bitmap glyphs) and the `PeachDrawing.Text.Unicode` namespace (bidirectional text, script itemization, OpenType tags, vertical orientation, hyphenation, emoji presentation) the MATH table (`Typeface.MathData`) and font subsetting for embedding (`TypefaceExporter`) and variable fonts (`Typeface.WithAxes`) are public today; paragraph layout is still internal and will follow. It is versioned in lockstep with PeachPDF (the same number for every release) and is a dependency of it.
-
+**Status:** pre-1.0. The engine is complete and in production use, and its public API is being published area by area. Font loading and matching (`FontSet`, `TypefaceFamily`, `Typeface`), what a typeface says about itself (`TypefaceMetrics`, glyph mapping, advances), shaping (`Shaper`, `ShapeSettings`, `GlyphRun`), glyph outlines and colour glyphs (`GlyphOutline`, `ColorPalette`, the COLR paint graph, bitmap glyphs) and the `PeachDrawing.Text.Unicode` namespace (bidirectional text, script itemization, OpenType tags, vertical orientation, hyphenation, emoji presentation) the MATH table (`Typeface.MathData`) and font subsetting for embedding (`TypefaceExporter`) and variable fonts (`Typeface.WithAxes`) are public today; paragraph layout is still internal and will follow.
 What is in it:
 
 - **Fonts:** TrueType, OpenType (`glyf` and CFF), WOFF and WOFF2 loading; TrueType/OpenType collections; installed-font

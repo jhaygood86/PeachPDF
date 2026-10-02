@@ -10,10 +10,8 @@ namespace PeachDrawing;
 
 /// <summary>
 /// Encodes a finished <see cref="RasterSurface"/>'s pixels into bytes a PDF (or any other) embedder can
-/// wrap - the "pixels in, encoded bytes out" half of what used to be <c>RasterEmbedder</c>. Deliberately
-/// has no PdfSharpCore dependency: this is the half of raster-surface embedding that belongs with the
-/// raster backend itself (see <c>PeachPDF.Adapters.RasterEmbedding</c> for the PDF-specific half - the
-/// <c>XImage</c> wrapping - that consumes this).
+/// wrap - the "pixels in, encoded bytes out" half of embedding a raster surface in a document. Deliberately
+/// has no PDF library dependency: the document-specific wrapping is left to the embedder.
 /// </summary>
 public static class RasterSurfaceEncoding
 {

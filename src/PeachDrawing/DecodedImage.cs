@@ -5,13 +5,11 @@ using System;
 namespace PeachDrawing;
 
 /// <summary>
-/// A <see cref="PeachDrawing.Core.Image"/> decoded directly through <c>PeachImage</c> - the portable decode library
-/// PeachPDF's own <c>PeachImageSource</c> already builds on - with no PdfSharpCore type (no
-/// <c>PeachPDF.PdfSharpCore.Drawing.XImage</c>) anywhere in the chain. This is what
-/// <see cref="RasterRenderContext.ImageFromStreamInt"/> uses: unlike <c>XImage</c>, which conflates
-/// decoding with PDF-embedding concerns (lazy JPEG/CMYK pass-through for direct PDF stream embedding,
-/// <c>IsRasterOutput</c> flagging, ...), a standalone raster canvas only ever wants this image's pixels to
-/// sample, so it decodes eagerly and keeps nothing PDF-specific. This type lives in this package rather
+/// A <see cref="PeachDrawing.Core.Image"/> decoded directly through <c>PeachImage</c> - the portable decode library,
+/// with no PDF type anywhere in the chain. This is what
+/// <see cref="RasterRenderContext.ImageFromStreamInt"/> uses: a standalone raster canvas only ever wants an
+/// image's pixels to sample, so it decodes eagerly and keeps nothing PDF-specific (no lazy JPEG/CMYK
+/// pass-through for direct stream embedding, for example). This type lives in this package rather
 /// than <c>PeachDrawing.Core</c> because it depends on <c>PeachImage</c> for the decode itself, a
 /// dependency the abstraction layer deliberately does not take (a different <c>Canvas</c> backend may
 /// decode images an entirely different way).

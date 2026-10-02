@@ -2,12 +2,12 @@ namespace PeachDrawing.Core
 {
     /// <summary>
     /// Whether text drawn into a bitmap is fitted to the bitmap's pixel grid by the font's own hinting, which makes small
-    /// text sharper. See <c>PeachPDF.PdfGenerateConfig.TextHinting</c>.
+    /// text sharper.
     /// </summary>
     /// <remarks>
     /// Hinting means something only where there are pixels: the text of a PDF page itself is always the embedded font, drawn by the
-    /// viewer, and is never hinted. It applies to the text inside the regions a <see cref="Canvas"/> rasterizes (see
-    /// <c>PeachPDF.PdfGenerateConfig.RasterizationDpi</c>), such as under a <c>filter</c> or when flattening transparency.
+    /// viewer, and is never hinted. It applies to the text inside the regions a <see cref="Canvas"/> rasterizes, such as under a
+    /// <c>filter</c> or when flattening transparency.
     /// </remarks>
     public enum TextHinting
     {

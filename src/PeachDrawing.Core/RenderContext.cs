@@ -70,7 +70,7 @@ namespace PeachDrawing.Core
         /// The document's base URI resource loading resolves relative references against, or
         /// <c>null</c> when this adapter has none (the default - resource loading is entirely optional
         /// for a render context that doesn't need it, e.g. one driving a standalone raster surface with
-        /// no document/network concept at all). PeachPDF's own <c>PdfSharpAdapter</c> overrides this.
+        /// no document/network concept at all). A backend that renders a document overrides this.
         /// </summary>
         public virtual RUri? BaseUri => null;
 
@@ -89,7 +89,7 @@ namespace PeachDrawing.Core
         /// <summary>
         /// An <see cref="ISvgGlyphPainter"/> for <paramref name="host"/> to draw a glyph's OpenType SVG
         /// document with, or null when this backend has no SVG engine to render one with (a standalone
-        /// raster canvas has none; a backend built on top of one, e.g. PeachPDF's own PDF/raster canvases,
+        /// raster canvas has none; a backend that layers an SVG engine on top of one
         /// overrides this). A caller that gets a real instance back typically caches it (it is reused for
         /// every SVG glyph the host draws); a caller that gets null may ask again next time - an override
         /// with nothing to offer should stay cheap to call repeatedly.
@@ -249,7 +249,7 @@ namespace PeachDrawing.Core
         /// <param name="format">the <c>@font-face</c> <c>format()</c> hint, if any</param>
         /// <param name="baseUri">
         /// The location <paramref name="url"/> should be resolved against when it's relative — normally
-        /// the <c>@font-face</c> rule's own stylesheet location (see <c>PeachPDF.CSS.Stylesheet.BaseUri</c>),
+        /// the <c>@font-face</c> rule's own stylesheet location,
         /// not the document's base, matching how relative <c>url()</c> references in fetched CSS resolve
         /// against the CSS file's own location. Null falls back to treating <paramref name="url"/> as
         /// already-absolute, which fails gracefully (font simply doesn't load) instead of throwing when
@@ -409,7 +409,7 @@ namespace PeachDrawing.Core
         /// Gets the given resource using the provided network loader, or <c>null</c> by default (a
         /// render context with no resource-loading concept, e.g. a standalone raster surface, simply
         /// never resolves a URL-based resource - <see cref="AddFontFamilyFromUrl"/> then reports the
-        /// load as failed rather than throwing). PeachPDF's own <c>PdfSharpAdapter</c> overrides this.
+        /// load as failed rather than throwing). A backend that loads resources overrides this.
         /// </summary>
         /// <param name="uri">Uri to load</param>
         /// <returns>The stream of the contents</returns>
