@@ -10,11 +10,17 @@ never fired, and the render ran to the 100,000-pass cap (minutes of CPU, 100,000
 235; the reduction is `columns:3` > table > a cell with a right float and one word.
 
 Fix: remember that a fill at the full budget finished, and when the balance trials end carrying something over,
-make that fill again. Only on a continuation (`resume` non-null): a first fill balances from an estimate, and
-applying this to a nested container as well doubled words in seeds 170, 252 and 272, whose cause is that this exposes
-what #1575 and #1577 fixed.
+make that fill again. Only on a continuation (`resume` non-null): applying it to every fill doubled words in
+seeds 170, 252 and 272 (nested containers). Seed 252's were the spilled word #1575 fixes, which this ordering exposes
+again on a build without it; 170 and 272 were not reduced, and stay out by the `resume` condition.
 
-Not done: the same row in a container beside a left float (`x1`, an anonymous `<tr>` written without a table) still
-loses its word at a different place; and the lost words of seed 235 itself are table cell text at the right page edge.
+The same change moves content: a continuation whose flow fits the page in an unbalanced fill is no longer deferred to
+the next page because the balanced trials did not fit. `NestedMulticolContentTests` needed 50pt more content above its
+columns to still run onto a second page.
+
+Not done: seed 235's own lost words (`w235_42`-`52`, absent from the fragment tree altogether) are not fixed by this.
+The reducer's smallest document for them is a bare `<tr>` with a right float and a `<td>` in a `columns:3` container
+(`<div style='columns:3'><tr><div style='float:right;width:72pt;height:69pt'></div><td>word </td></tr></div>`), which
+loses its word on main with and without this change.
 
 Evidence: corpus (300 documents) unchanged at 68 lost and 6 doubled; net8.0 suite green.
