@@ -1179,6 +1179,13 @@ namespace PeachPDF.Html.Core
         internal bool IgnoreAuthorStyleSheets { get; set; }
 
         /// <summary>
+        /// When true, <c>FragmentPainter</c> snaps the rectangle a box's decorations are painted on to whole CSS
+        /// pixels (see <see cref="PdfGenerateConfig.SnapBoxDecorationsToCssPixels"/>). Set by
+        /// <c>PdfGenerator.SetContent</c>; false (the default) paints the exact fractional geometry.
+        /// </summary>
+        internal bool SnapBoxDecorationsToCssPixels { get; set; }
+
+        /// <summary>
         /// Orchestrates tagged-PDF structure-tree/MCID bookkeeping during painting. Set by
         /// <c>PdfGenerator</c> before the page-render loop only when
         /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is

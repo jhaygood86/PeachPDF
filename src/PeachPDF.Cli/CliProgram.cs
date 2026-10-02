@@ -99,6 +99,9 @@ internal static class CliProgram
                                      the XML: minimum, basic-wl, basic, en16931,
                                      extended or xrechnung.
               --tagged-pdf           Emit a tagged (PDF/UA) structure tree.
+              --snap-box-decorations-to-css-pixels
+                                     Snap box backgrounds and borders to whole CSS pixels,
+                                     like a browser.
               --interactive-pdf-forms
                                      Emit fillable AcroForm fields for form elements.
               --no-compress          Do not compress PDF content streams.

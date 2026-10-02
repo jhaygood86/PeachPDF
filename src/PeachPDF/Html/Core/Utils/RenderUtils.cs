@@ -75,13 +75,27 @@ namespace PeachPDF.Html.Core.Utils
         /// live box only ever carries whichever page positioned it last.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        private static int TryPushOverflowClip(Canvas g, BoxFragment ancestor)
+        private static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
         {
             var overflowBox = ancestor.Box;
             if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;
 
             var prevClip = g.GetClip();
-            var paddingRect = PaddingEdgeOf(overflowBox, ancestor.Rect);
+            // Snapped like the ancestor's own decorations, on the edges they snap (the fragment may be a cut
+            // of it, and box-decoration-break decides which edges count), so a hoisted descendant is clipped
+            // where an ordinary child would be. The padding box is taken from the snapped border box, which
+            // is where the border's inner edge is drawn.
+            var borderRect = ancestor.Rect;
+            if (snapToCssPixels)
+            {
+                var owned = ancestor.Lines is [var firstLine, ..]
+                    ? Paint.BoxDecorationGeometry.For(overflowBox, firstLine)
+                    : Paint.BoxDecorationGeometry.Unbroken(ancestor.Rect);
+                borderRect = Paint.DecorationPixelSnapping.Snap(g, borderRect,
+                    owned.HasLeftEdge, owned.HasTopEdge, owned.HasRightEdge, owned.HasBottomEdge);
+            }
+
+            var paddingRect = PaddingEdgeOf(overflowBox, borderRect);
 
             var rect = paddingRect;
             rect.Intersect(prevClip);
@@ -90,7 +104,7 @@ namespace PeachPDF.Html.Core.Utils
 
             if (overflowBox.IsRounded)
             {
-                var radii = overflowBox.ComputeInnerRadii(ancestor.Rect, paddingRect,
+                var radii = overflowBox.ComputeInnerRadii(borderRect, paddingRect,
                     overflowBox.ActualBorderLeftWidth, overflowBox.ActualBorderTopWidth,
                     overflowBox.ActualBorderRightWidth, overflowBox.ActualBorderBottomWidth);
                 pushed += PushRoundedClipIfRounded(g, paddingRect, radii);
@@ -157,8 +171,13 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="g">the graphics to clip</param>
         /// <param name="box">the hoisted box being painted</param>
         /// <param name="ancestors">the ancestor fragments it was hoisted past, outer to inner</param>
+        /// <param name="snapToCssPixels">
+        /// whether each clip is snapped to whole CSS pixels, like the ancestor's own decorations
+        /// (<c>PdfGenerateConfig.SnapBoxDecorationsToCssPixels</c>)
+        /// </param>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int PushAncestorOverflowClips(Canvas g, CssBox box, IReadOnlyList<BoxFragment> ancestors)
+        public static int PushAncestorOverflowClips(Canvas g, CssBox box, IReadOnlyList<BoxFragment> ancestors,
+            bool snapToCssPixels = false)
         {
             var pushed = 0;
             foreach (var ancestor in ancestors)
@@ -166,7 +185,7 @@ namespace PeachPDF.Html.Core.Utils
                 if (!DomUtils.ClipsItsOverflow(ancestor.Box) || !DomUtils.IsOnClippingChainOf(box, ancestor.Box))
                     continue;
 
-                pushed += TryPushOverflowClip(g, ancestor);
+                pushed += TryPushOverflowClip(g, ancestor, snapToCssPixels);
             }
             return pushed;
         }

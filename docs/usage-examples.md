@@ -20,6 +20,7 @@ using PeachPDF.Network;
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
+- [Crisp 1px borders at 100% zoom](#crisp-1px-borders-at-100-zoom)
 - [Fonts](#fonts)
 - [Rendering MathML formulas](#rendering-mathml-formulas)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
@@ -320,6 +321,21 @@ Two things are deliberately **not** reported:
 - **Whitespace.** A clipped space is not something anyone can see or act on.
 
 **The report under-reports, and that is the safe direction rather than completeness.** It measures against the renderer's tracked clip-rect stack, and two clips never reach it: a `border-radius` or `clip-path` clip, and the page-level clip applied outside that stack. An empty report is therefore a weaker statement than "nothing was clipped". A word that fell *entirely* outside its clip is not reported here either — it is never drawn at all, so reading the output back detects it as missing text.
+
+## Crisp 1px borders at 100% zoom
+
+A box's background and border are painted on its exact layout position, which is rarely a whole CSS pixel (1px = 0.75pt). A `1px` border (0.75pt) at a fractional position straddles two device pixels of a viewer showing the page at 100% zoom, each about half covered, so it reads as a wider, paler line than the same border in a browser. Browsers avoid this by rounding each edge of the box to a whole CSS pixel before painting. PeachPDF writes the exact geometry by default, which is what the PDF format can express and what other CSS print engines write; to get the browser behaviour instead, opt in:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    SnapBoxDecorationsToCssPixels = true
+};
+```
+
+The background, border, outline and shadows of a box all move to the same snapped edges, so they still meet exactly. Layout is unaffected; only what is painted moves, by at most half a CSS pixel (0.375pt), so a box's text can sit up to that far from its snapped edge. The `overflow` clip of a box moves with it, so clipped content does not cover part of the snapped border, and the collapsed borders of a `border-collapse: collapse` table are snapped with its cell backgrounds. Form-field chrome, replaced elements, multi-column rules, `@page` margin boxes and page borders, text decorations such as underlines, list markers and anything under a `transform` are not snapped, and an edge where a box is cut across a page, column or line break stays where it is. A box inside an `opacity`, blend-mode or filter group is snapped like any other.
+
+Snapping fixes where the box sits on the CSS pixel grid; it cannot fix where a viewer puts its own pixel grid. A viewer that rounds the page to a whole number of pixels (A4 is 793.7px wide at 100% zoom) shifts the grid by a fraction of a pixel across the page, and one that fills rectangles without anti-aliasing (PDFium) can then show a faint one-pixel edge of background beside a border on some right-hand edges. A page whose size is a whole number of CSS pixels does not have this. The command-line equivalent is `--snap-box-decorations-to-css-pixels`.
 
 ## Fonts
 

@@ -15,6 +15,7 @@ public class CliConfigTranslationTests
         Assert.Equal("print", config.Media);
         Assert.True(config.CompressContentStreams);
         Assert.False(config.EnableTaggedPdf);
+        Assert.False(config.SnapBoxDecorationsToCssPixels);
         Assert.False(config.EnableInteractivePdfForms);
         Assert.False(config.IgnoreAuthorStyleSheets);
         Assert.Null(config.Metadata);
@@ -51,9 +52,10 @@ public class CliConfigTranslationTests
     public void Toggles_MapToConfig()
     {
         var config = CliRunner.BuildConfig(ArgumentParser.Parse(
-            ["--tagged-pdf", "--interactive-pdf-forms", "--no-compress", "--media", "screen", "--no-author-style", "doc.html"]));
+            ["--tagged-pdf", "--snap-box-decorations-to-css-pixels", "--interactive-pdf-forms", "--no-compress", "--media", "screen", "--no-author-style", "doc.html"]));
 
         Assert.True(config.EnableTaggedPdf);
+        Assert.True(config.SnapBoxDecorationsToCssPixels);
         Assert.True(config.EnableInteractivePdfForms);
         Assert.False(config.CompressContentStreams);
         Assert.Equal("screen", config.Media);

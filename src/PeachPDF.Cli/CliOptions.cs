@@ -95,6 +95,9 @@ internal sealed class CliOptions
     /// <summary>Disables anti-aliasing of bitmaps PeachPDF renders itself (<c>--no-raster-antialiasing</c>).</summary>
     public bool NoRasterAntiAliasing { get; set; }
     public bool TaggedPdf { get; set; }
+
+    /// <summary>Snap box decorations to whole CSS pixels, like a browser (<c>--snap-box-decorations-to-css-pixels</c>).</summary>
+    public bool SnapBoxDecorationsToCssPixels { get; set; }
     public bool InteractivePdfForms { get; set; }
     public string? PdfTitle { get; set; }
     public string? PdfAuthor { get; set; }

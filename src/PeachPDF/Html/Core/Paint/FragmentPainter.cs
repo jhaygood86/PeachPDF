@@ -644,8 +644,9 @@ namespace PeachPDF.Html.Core.Paint
             if (box.DerivedStyle.ActualDisplay == Keywords.None ||
                 (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells.Value == EmptyCellsMode.Hide && box.IsSpaceOrEmpty)) return;
 
-            var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
-            var overflowClipRecorded = PushOverflowClip(fragment);
+            var (overflowClip, overflowClipCurve) = OverflowClipOf(g, fragment);
+            var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve);
+            var overflowClipRecorded = PushOverflowClip(overflowClip, overflowClipCurve);
 
             // This fragment's own decoration rectangles - one per line box it spans on this page, or a
             // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.
@@ -671,6 +672,13 @@ namespace PeachPDF.Html.Core.Paint
                 // Culling above stays on the rectangle itself: the decoration area may be the whole
                 // unbroken box, which is far wider than what is visible here.
                 var geometry = BoxDecorationGeometry.For(box, lines[i]);
+                var unsnappedBottom = geometry.DecorationRect.Bottom;
+
+                // Opt-in (PdfGenerateConfig.SnapBoxDecorationsToCssPixels): snapped once here so the
+                // background, border, outline and shadows below all share the same edges, rather than
+                // each snapping on its own and drifting apart (see DecorationPixelSnapping).
+                if (container.SnapBoxDecorationsToCssPixels)
+                    geometry = DecorationPixelSnapping.Snap(g, geometry);
 
                 // Outset (drop) shadows paint BEFORE the background so they sit behind the box
                 // (CSS Backgrounds & Borders 3 §5). box-shadow lives in the same style area
@@ -725,13 +733,22 @@ namespace PeachPDF.Html.Core.Paint
                     if (box.PageBreakBottoms.TryGetValue(fragment.FragmentainerIndex, out var pageBreakBottom))
                     {
                         var pageBreakBottomVisual = pageBreakBottom - fragment.OriginY;
-                        if (pageBreakBottomVisual < rectForBorders.Bottom)
+                        // Against the bottom layout gave, not the snapped one: whether the table is cut
+                        // here is a fact about layout, which snapping must not change.
+                        if (pageBreakBottomVisual < unsnappedBottom)
                         {
                             rectForBorders = new Rect(
                                 rectForBorders.Left,
                                 rectForBorders.Top,
                                 rectForBorders.Width,
                                 pageBreakBottomVisual - rectForBorders.Top);
+
+                            // The page-break Y is a layout coordinate, so with snapping on it is
+                            // snapped like the edges it replaces; the other three are already snapped
+                            // and stay where they are.
+                            if (container.SnapBoxDecorationsToCssPixels)
+                                rectForBorders = DecorationPixelSnapping.Snap(g, rectForBorders,
+                                    left: false, top: false, right: false);
                         }
                     }
                 }
@@ -856,7 +873,7 @@ namespace PeachPDF.Html.Core.Paint
             // always on top (CSS UI 4 §3.1).
             if (!_textOnly && !_stopped && box.CollapsedBorderSegments is { Count: > 0 })
             {
-                PaintCollapsedTableBorders(g, box, fragment.OriginY, clip);
+                PaintCollapsedTableBorders(g, box, fragment.OriginY, clip, container.SnapBoxDecorationsToCssPixels);
             }
 
             // Before this box's own overflow clip is popped: a deferred outline records it for replay.
@@ -887,7 +904,8 @@ namespace PeachPDF.Html.Core.Paint
             if (OwnsOutlineScope(fragment))
                 DrawScopeOutlinesSoFar(g, box.HtmlContainer?.StructureTagBuilder);
 
-            var raisedClipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
+            var (raisedClip, raisedClipCurve) = OverflowClipOf(g, fragment);
+            var raisedClipsPushed = RenderUtils.ClipGraphicsByOverflow(g, raisedClip, raisedClipCurve);
 
             foreach (var layerBoxes in raisedLayers)
                 PaintLayer(g, layerBoxes);
@@ -964,12 +982,44 @@ namespace PeachPDF.Html.Core.Paint
         private void PaintStackingParticipant(Canvas g, StackingOrder.StackingParticipant participant)
         {
             var fragment = participant.Fragment;
-            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.Box, participant.ClipAncestors);
+            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.Box, participant.ClipAncestors,
+                container.SnapBoxDecorationsToCssPixels);
 
             PaintFragment(g, fragment);
 
             for (var i = 0; i < pushedClips; i++)
                 g.PopClip();
+        }
+
+        /// <summary>
+        /// The <c>overflow</c> clip to push for <paramref name="fragment"/>: the clipping ancestor's padding
+        /// box (and its rounded curve, if any), moved with the ancestor's decorations when
+        /// <see cref="HtmlContainerInt.SnapBoxDecorationsToCssPixels"/> is on, so content clipped by it does
+        /// not cover part of the snapped border or leave a sliver of the background.
+        /// </summary>
+        /// <remarks>
+        /// The padding box is the <i>snapped border box</i> inset by the border's own widths, not a snapping
+        /// of the padding box: the border is drawn at its true width inside the snapped outer edge, so
+        /// that is where its inner edge is, and the two agree for any border width, not only whole pixels.
+        /// The fragmentainer band the clip may also have been intersected with is a page or column cut,
+        /// not an edge of the ancestor, and is applied afterwards, unsnapped. A clip with no recorded
+        /// basis is left as layout gave it.
+        /// </remarks>
+        internal (Rect? Clip, OverflowClipCurve? Curve) OverflowClipOf(Canvas g, BoxFragment fragment)
+        {
+            if (!container.SnapBoxDecorationsToCssPixels || fragment.OverflowClipBasis is not { } basis)
+                return (fragment.OverflowClip, fragment.OverflowClipCurve);
+
+            var border = DecorationPixelSnapping.Snap(g, basis.BorderBox);
+            var padding = Rect.FromLTRB(
+                border.Left + (basis.PaddingBox.Left - basis.BorderBox.Left),
+                border.Top + (basis.PaddingBox.Top - basis.BorderBox.Top),
+                border.Right - (basis.BorderBox.Right - basis.PaddingBox.Right),
+                border.Bottom - (basis.BorderBox.Bottom - basis.PaddingBox.Bottom));
+
+            Rect? clip = basis.Band is { } band ? Rect.Intersect(padding, band) : padding;
+            var curve = fragment.OverflowClipCurve is { } c ? c with { Rect = padding } : null;
+            return (clip, curve);
         }
 
         /// <summary>

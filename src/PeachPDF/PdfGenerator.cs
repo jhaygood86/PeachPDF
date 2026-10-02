@@ -620,6 +620,7 @@ namespace PeachPDF
                 sizeIsExplicit: pageDescriptor.PageSizeOverride is not null);
 
             container.PageSize = orgPageSize;
+            container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
             await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage, stylesheet, properties.DisplayContentsShells);
 
             if (stylesheet is not null)
@@ -1315,6 +1316,7 @@ namespace PeachPDF
             container.HtmlContainerInt.Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media;
             container.HtmlContainerInt.PreferredColorScheme = config.PreferredColorScheme;
             container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
+            container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the
             // language-dependent line-break tailorings need the language then, not after SetHtml returns.
