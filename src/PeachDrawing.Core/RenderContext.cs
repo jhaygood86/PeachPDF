@@ -438,6 +438,21 @@ namespace PeachDrawing.Core
             return new RadialGradientBrush(center, focalCenter ?? center, radiusX, radiusY, ToStops(stops), isRepeating ? GradientSpread.Repeat : GradientSpread.Pad, transform);
         }
 
+        /// <summary>Gets a brush that paints the two-circle (conical) gradient from the circle of radius <paramref name="focalRadius"/> around <paramref name="focalCenter"/> to the circle of radius <paramref name="radiusX"/> around <paramref name="center"/>.</summary>
+        /// <param name="center">the center of the outer circle the gradient's last stop reaches</param>
+        /// <param name="radiusX">the outer circle's horizontal radius</param>
+        /// <param name="radiusY">the outer circle's vertical radius (equal to <paramref name="radiusX"/> for a circle)</param>
+        /// <param name="stops">the gradient's colour/position stops, in ascending position order</param>
+        /// <param name="isRepeating">whether the gradient repeats past its own outer circle instead of padding</param>
+        /// <param name="focalCenter">the center of the circle the first stop fills</param>
+        /// <param name="focalRadius">the radius of the circle the first stop fills, in the units of <paramref name="radiusX"/></param>
+        /// <param name="transform">an optional matrix carrying the geometry above into paint coordinates</param>
+        public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating, PaintPoint? focalCenter, double focalRadius, Matrix3x2? transform = null)
+        {
+            RejectMixedColorSpaceGradientStops(stops);
+            return new RadialGradientBrush(center, focalCenter ?? center, radiusX, radiusY, ToStops(stops), isRepeating ? GradientSpread.Repeat : GradientSpread.Pad, transform) { FocusRadius = focalRadius };
+        }
+
         /// <summary>Gets a brush that paints a conic gradient sweeping around <paramref name="center"/>.</summary>
         /// <param name="center">the point the gradient sweeps around</param>
         /// <param name="outerRadius">the radius of the circle the gradient is painted over</param>

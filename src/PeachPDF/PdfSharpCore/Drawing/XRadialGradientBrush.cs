@@ -90,5 +90,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal XColor[]? _colors;
         internal double[]? _positions;
         internal bool IsRepeating;
+        /// <summary>The radius of the circle around the focal point the first stop fills (0 is a point), in the units of the radii above.</summary>
+        internal double FocalRadius;
     }
 }

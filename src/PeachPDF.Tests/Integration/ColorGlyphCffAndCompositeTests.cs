@@ -25,6 +25,11 @@ namespace PeachPDF.Tests.Integration
 
             public void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color) => Log.Add("fill");
             public void PushOutlineClip(GlyphOutline outline, Affine2x3 transform) => Log.Add("clip");
+            public bool PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds)
+            {
+                Log.Add("cclip");
+                return true;
+            }
             public void PopClip() => Log.Add("pop");
             public void FillRegion(Rect region, ColorGlyphPaint paint)
             {
@@ -81,8 +86,51 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(["clip", Yellow, "pop", "clip", "clip", Blue, "pop", "pop"], Paint('5').Log);
 
         [Fact]
-        public void SrcOut_HasNoVectorEquivalent_AndFallsBackToSourceOver() =>
-            Assert.Equal(["clip", Yellow, "pop", "clip", Blue, "pop"], Paint('A').Log);
+        public void SrcOut_ClipsTheSourceToOutsideTheBackdrop() =>
+            Assert.Equal(["cclip", "clip", Blue, "pop", "pop"], Paint('A').Log);
+
+        [Fact]
+        public void DestOut_ClipsTheBackdropToOutsideTheSource() =>
+            Assert.Equal(["cclip", "clip", Yellow, "pop", "pop"], Paint('B').Log);
+
+        [Fact]
+        public void Xor_PaintsEachOperandOutsideTheOther() =>
+            Assert.Equal(["cclip", "clip", Blue, "pop", "pop", "cclip", "clip", Yellow, "pop", "pop"], Paint('C').Log);
+
+        [Fact]
+        public void ComplementModes_FallBackToSourceOver_WhenTheTargetCannotClipToAComplement()
+        {
+            Typeface face = TypefaceFixtures.Shared(BundledFonts.ColorCff);
+            var painter = new ColorGlyphPainter(face, 100, PaintColor.FromArgb(255, 0, 0, 0));
+            var target = new NoComplementRecording();
+            painter.Paint((ushort)face.GlyphOf(new Rune('A')), painter.Placement(0, 100), target);
+            Assert.Equal(["clip", Yellow, "pop", "clip", Blue, "pop"], target.Log);
+        }
+
+        [Fact]
+        public void Plus_HasNoVectorEquivalent_AndFallsBackToSourceOver() =>
+            Assert.Equal(["clip", Yellow, "pop", "clip", Blue, "pop"], Paint('D').Log);
+
+        [Fact]
+        public void RadialWithDifferentCenters_KeepsItsInnerRadius()
+        {
+            var radial = Assert.IsType<RadialColorGlyphPaint>(Assert.Single(Paint('E').Paints));
+            Assert.Equal(10.0, radial.FocalRadius, 6); // 100 design units at 100px / 1000 upem
+            Assert.Equal(30.0, radial.Radius, 6);
+            Assert.NotEqual(radial.Center, radial.Focal);
+        }
+
+        private sealed class NoComplementRecording : IColorGlyphTarget
+        {
+            public readonly List<string> Log = [];
+            public void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color) { }
+            public void PushOutlineClip(GlyphOutline outline, Affine2x3 transform) => Log.Add("clip");
+            public void PopClip() => Log.Add("pop");
+            public void FillRegion(Rect region, ColorGlyphPaint paint) =>
+                Log.Add(paint is SolidColorGlyphPaint s ? $"solid{s.Color.R:X2}{s.Color.G:X2}{s.Color.B:X2}" : paint.GetType().Name);
+            public void PushBlendMode(PaintBlendMode mode) { }
+            public void PopBlendMode() { }
+        }
 
         [Fact]
         public void RadialInnerRadius_PadsTheFirstColorInsideIt()

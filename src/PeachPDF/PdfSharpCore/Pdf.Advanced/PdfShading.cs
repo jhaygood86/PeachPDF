@@ -171,6 +171,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // position, size and orientation ride in this matrix; shared with the alpha soft mask below.
             XMatrix? unitMatrix = null;
             double unitFocalX = 0, unitFocalY = 0;
+            // The first stop's circle: its radius in the coordinate space the /Coords below are written in.
+            double focalR = 0;
+            XPoint focal_v = renderer.WorldToView(brush._focalCenter);
 
             if (brush._transform is { } gradientTransform && brush._radiusX > 0 && brush._radiusY > 0)
             {
@@ -191,8 +194,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     unitFocalY *= 0.9999 / focalLen;
                 }
 
+                focalR = brush.FocalRadius > 0 ? Math.Min(brush.FocalRadius / brush._radiusX, 0.9999) : 0;
                 Elements[Keys.Coords] = new PdfLiteral(
-                    "[{0:" + fmt + "} {1:" + fmt + "} 0 0 0 1]", unitFocalX, unitFocalY);
+                    "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} 0 0 1]", unitFocalX, unitFocalY, focalR);
                 EllipsePatternMatrix = unitMatrix;
             }
             else if (!isEllipse)
@@ -201,10 +205,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 // point (defaults to center_v, i.e. identical to every pre-existing caller's output,
                 // when no distinct focal point was supplied) - this is what lets a gradient's brightest
                 // point be offset from its outer circle's center (e.g. SVG radialGradient's fx/fy).
-                XPoint focal_v = renderer.WorldToView(brush._focalCenter);
+                focalR = brush.FocalRadius > 0 && brush._radiusX > 0 ? brush.FocalRadius * rx_v / brush._radiusX : 0;
                 Elements[Keys.Coords] = new PdfLiteral(
-                    "[{0:" + fmt + "} {1:" + fmt + "} 0 {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
-                    focal_v.X, focal_v.Y, center_v.X, center_v.Y, rx_v);
+                    "[{0:" + fmt + "} {1:" + fmt + "} {5:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
+                    focal_v.X, focal_v.Y, center_v.X, center_v.Y, rx_v, focalR);
             }
             else
             {
@@ -232,12 +236,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
 
             BuildRadialAlphaExtGStateIfNeeded(colors, positions,
-                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, brush.IsRepeating, unitMatrix, unitFocalX, unitFocalY);
+                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, brush.IsRepeating, unitMatrix, unitFocalX, unitFocalY,
+                focal_v.X, focal_v.Y, focalR);
         }
 
         private void BuildRadialAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions,
             double cx, double cy, double rx, double ry, bool isEllipse, bool isRepeating = false,
-            XMatrix? unitMatrix = null, double unitFocalX = 0, double unitFocalY = 0)
+            XMatrix? unitMatrix = null, double unitFocalX = 0, double unitFocalY = 0,
+            double focalViewX = double.NaN, double focalViewY = double.NaN, double focalRadius = 0)
         {
             bool hasVaryingAlpha = false;
             for (int i = 0; i < colors.Length; i++)
@@ -270,14 +276,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 grayShading.Elements["/Coords"] = new PdfLiteral(string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "[{0:" + fmt + "} {1:" + fmt + "} 0 0 0 1]", unitFocalX, unitFocalY));
+                    "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} 0 0 1]", unitFocalX, unitFocalY, focalRadius));
             }
             else if (!isEllipse)
             {
                 grayShading.Elements["/Coords"] = new PdfLiteral(string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "[{0:" + fmt + "} {1:" + fmt + "} 0 {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
-                    cx, cy, cx, cy, rx));
+                    "[{0:" + fmt + "} {1:" + fmt + "} {5:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
+                    double.IsNaN(focalViewX) ? cx : focalViewX, double.IsNaN(focalViewY) ? cy : focalViewY, cx, cy, rx, focalRadius));
             }
             else
             {

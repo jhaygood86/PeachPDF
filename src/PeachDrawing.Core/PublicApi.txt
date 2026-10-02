@@ -17,6 +17,7 @@ PeachDrawing.Core.Canvas : abstract class
   method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
   method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)
   method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
+  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating, PaintPoint? focalCenter, Double focalRadius, Matrix3x2? transform = null)
   method Brush GetSolidBrush(PaintColor color)
   method Pen GetPen(Brush brush)
   method Pen GetPen(PaintColor color)
@@ -87,6 +88,7 @@ PeachDrawing.Core.CanvasParagraphExtensions : static class
   method static Void DrawParagraph(Canvas canvas, ParagraphLayout layout, PaintPoint origin, PaintColor color)
 PeachDrawing.Core.ColorGlyphs.CanvasColorGlyphTarget : sealed class
   ctor(Canvas canvas)
+  method virtual Boolean PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds)
   method virtual Void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
   method virtual Void FillRegion(Rect region, ColorGlyphPaint paint)
   method virtual Void PopBlendMode()
@@ -110,6 +112,7 @@ PeachDrawing.Core.ColorGlyphs.IColorGlyphTarget : interface
   method abstract Void PopClip()
   method abstract Void PushBlendMode(PaintBlendMode mode)
   method abstract Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+  method virtual Boolean PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds)
 PeachDrawing.Core.ColorGlyphs.LinearColorGlyphPaint : sealed class
   ctor(PaintPoint Start, PaintPoint End, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> Positions)
   method Void Deconstruct(out PaintPoint Start, out PaintPoint End, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> Positions)
@@ -132,6 +135,7 @@ PeachDrawing.Core.ColorGlyphs.RadialColorGlyphPaint : sealed class
   method virtual Int32 GetHashCode()
   method virtual RadialColorGlyphPaint <Clone>$()
   method virtual String ToString()
+  property Double FocalRadius { get; init; }
   property Double Radius { get; init; }
   property IReadOnlyList<Double> Positions { get; init; }
   property IReadOnlyList<PaintColor> Colors { get; init; }
@@ -641,6 +645,7 @@ PeachDrawing.Core.RUri : class
   property Uri Uri { get; }
 PeachDrawing.Core.RadialGradientBrush : sealed class
   ctor(PaintPoint center, PaintPoint focus, Double radiusX, Double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread, Matrix3x2? transform = null)
+  property Double FocusRadius { get; init; }
   property Double RadiusX { get; }
   property Double RadiusY { get; }
   property GradientSpread Spread { get; }
@@ -707,6 +712,7 @@ PeachDrawing.Core.RenderContext : abstract class
   method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
   method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)
   method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
+  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating, PaintPoint? focalCenter, Double focalRadius, Matrix3x2? transform = null)
   method Brush GetSolidBrush(PaintColor color)
   method Font GetFont(String family, Double size, PaintFontStyle style, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, String variations = null)
   method Font GetFontForCodepoint(String family, Double size, PaintFontStyle style, Rune codepoint, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, String variations = null)

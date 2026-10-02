@@ -38,6 +38,21 @@ namespace PeachDrawing.Core.ColorGlyphs
         }
 
         /// <inheritdoc/>
+        public bool PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds)
+        {
+            GraphicsPath path = BuildPath(outline, transform);
+            path.FillMode = FillMode.EvenOdd;
+            path.AddMove(bounds.X, bounds.Y);
+            path.LineTo(bounds.X + bounds.Width, bounds.Y);
+            path.LineTo(bounds.X + bounds.Width, bounds.Y + bounds.Height);
+            path.LineTo(bounds.X, bounds.Y + bounds.Height);
+            path.CloseFigure();
+            _clips.Push(path);
+            _canvas.PushClip(path);
+            return true;
+        }
+
+        /// <inheritdoc/>
         public void PopClip()
         {
             _canvas.PopClip();
@@ -51,7 +66,9 @@ namespace PeachDrawing.Core.ColorGlyphs
             {
                 SolidColorGlyphPaint solid => _canvas.GetSolidBrush(solid.Color),
                 LinearColorGlyphPaint linear => _canvas.GetLinearGradientBrush(linear.Start, linear.End, Stops(linear.Colors, linear.Positions)),
-                RadialColorGlyphPaint radial => _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), false, radial.Focal),
+                RadialColorGlyphPaint radial => radial.FocalRadius > 0
+                    ? _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), false, radial.Focal, radial.FocalRadius)
+                    : _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), false, radial.Focal),
                 SweepColorGlyphPaint sweep => SweepBrush(sweep),
                 _ => null,
             };

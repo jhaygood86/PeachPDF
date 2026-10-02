@@ -146,8 +146,9 @@ namespace PeachDrawing.Core.ColorGlyphs
 
         // Compositing. A separable/HSL blend mode is applied to the source. The Porter-Duff modes are built from the two
         // things a vector target can do: paint order and clipping to a glyph shape (SRC_IN, DEST_IN, SRC_ATOP, DEST_ATOP
-        // clip one operand to the other's glyph outlines). The modes that need a clip's complement (SRC_OUT, DEST_OUT, XOR)
-        // or an additive blend (PLUS) have no vector equivalent and fall back to source-over.
+        // clip one operand to the other's glyph outlines, SRC_OUT/DEST_OUT/XOR clip to its complement with an even-odd clip).
+        // PLUS needs an additive blend no vector target has, and falls back to source-over, as do the complement modes on a
+        // target that cannot clip to a complement.
         private void PaintCompositeNode(PaintComposite composite, Affine2x3 t, bool hasClip, Rect clip, int depth, IColorGlyphTarget target)
         {
             void Paint(ColorPaint? p, bool c, Rect r) => PaintV1(p, t, c, r, depth + 1, target);
@@ -171,8 +172,67 @@ namespace PeachDrawing.Core.ColorGlyphs
                 }
             }
 
+            // Runs `action` restricted to what lies outside the glyph shapes of `shape`: a complement clip per shape, so the
+            // restrictions intersect to the complement of their union. False, with nothing drawn, when the target cannot clip that way.
+            bool Outside(ColorPaint? shape, Action<bool, Rect> action)
+            {
+                var shapes = new List<(GlyphOutline Outline, Affine2x3 Transform)>();
+                if (!CollectShapes(shape, t, shapes, 0))
+                    return true; // a shape-less paint fills the whole clip, so nothing is outside it
+
+                // Everything drawn under the clip lies within the glyph shapes of the two operands (or the enclosing clip), so a
+                // rectangle around all of those is as good as the page.
+                var all = new List<(GlyphOutline Outline, Affine2x3 Transform)>();
+                CollectShapes(composite.Backdrop, t, all, 0);
+                CollectShapes(composite.Source, t, all, 0);
+                double minX = hasClip ? clip.X : double.MaxValue, minY = hasClip ? clip.Y : double.MaxValue;
+                double maxX = hasClip ? clip.X + clip.Width : double.MinValue, maxY = hasClip ? clip.Y + clip.Height : double.MinValue;
+                foreach (var (outline, transform) in all)
+                {
+                    Rect b = WorldBounds(outline, transform);
+                    minX = Math.Min(minX, b.X);
+                    minY = Math.Min(minY, b.Y);
+                    maxX = Math.Max(maxX, b.X + b.Width);
+                    maxY = Math.Max(maxY, b.Y + b.Height);
+                }
+
+                var bounds = new Rect(minX - 2, minY - 2, maxX - minX + 4, maxY - minY + 4);
+                int pushed = 0;
+                foreach (var (outline, transform) in shapes)
+                {
+                    if (!target.PushOutlineComplementClip(outline, transform, bounds))
+                    {
+                        while (pushed-- > 0)
+                            target.PopClip();
+                        return false;
+                    }
+
+                    pushed++;
+                }
+
+                action(hasClip, clip);
+                while (pushed-- > 0)
+                    target.PopClip();
+                return true;
+            }
+
             switch (composite.Mode)
             {
+                case 7: // SRC_OUT
+                    if (Outside(composite.Backdrop, (c, r) => Paint(composite.Source, c, r)))
+                        return;
+                    break;
+                case 8: // DEST_OUT
+                    if (Outside(composite.Source, (c, r) => Paint(composite.Backdrop, c, r)))
+                        return;
+                    break;
+                case 11: // XOR
+                    if (Outside(composite.Backdrop, (c, r) => Paint(composite.Source, c, r)))
+                    {
+                        Outside(composite.Source, (c, r) => Paint(composite.Backdrop, c, r));
+                        return;
+                    }
+                    break;
                 case 0: // CLEAR
                     return;
                 case 1: // SRC
@@ -329,7 +389,12 @@ namespace PeachDrawing.Core.ColorGlyphs
                 return new RadialColorGlyphPaint(center, center, outer * radiusScale, colors, positions);
             }
 
-            return new RadialColorGlyphPaint(Map(t, g.X1, g.Y1), Map(t, g.X0, g.Y0), g.R1 * radiusScale, colors, positions);
+            // Circles with different centers: the two-circle gradient itself, padded beyond both circles (repeat/reflect is
+            // not modeled for it).
+            return new RadialColorGlyphPaint(Map(t, g.X1, g.Y1), Map(t, g.X0, g.Y0), g.R1 * radiusScale, colors, positions)
+            {
+                FocalRadius = g.R0 * radiusScale,
+            };
         }
 
         private static double FarthestCorner(PaintPoint center, Rect r)

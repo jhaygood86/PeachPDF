@@ -32,7 +32,12 @@ namespace PeachDrawing.Core.ColorGlyphs
     /// <param name="Radius">the outer circle's radius, in target units</param>
     /// <param name="Colors">the stop colors, in ascending <paramref name="Positions"/> order</param>
     /// <param name="Positions">each stop's position, 0 at <paramref name="Focal"/> and 1 on the circle</param>
-    public sealed record RadialColorGlyphPaint(PaintPoint Center, PaintPoint Focal, double Radius, IReadOnlyList<PaintColor> Colors, IReadOnlyList<double> Positions) : ColorGlyphPaint;
+    public sealed record RadialColorGlyphPaint(PaintPoint Center, PaintPoint Focal, double Radius, IReadOnlyList<PaintColor> Colors, IReadOnlyList<double> Positions) : ColorGlyphPaint
+    {
+        /// <summary>The radius of the circle around <c>Focal</c> that the first stop fills, in target units (0 is a point). With a nonzero value
+        /// the gradient is the two-circle gradient from that circle to the outer one.</summary>
+        public double FocalRadius { get; init; }
+    }
 
     /// <summary>A gradient that sweeps around a center, like a conic gradient.</summary>
     /// <param name="Center">the sweep's center, in target space</param>

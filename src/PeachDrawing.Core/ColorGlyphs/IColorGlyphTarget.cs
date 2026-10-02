@@ -21,7 +21,19 @@ namespace PeachDrawing.Core.ColorGlyphs
         /// <param name="transform">design units to target space</param>
         void PushOutlineClip(GlyphOutline outline, Affine2x3 transform);
 
-        /// <summary>Ends the clip begun by the last unmatched <see cref="PushOutlineClip"/>.</summary>
+        /// <summary>
+        /// Restricts everything drawn until the matching <see cref="PopClip"/> to the part of <paramref name="bounds"/> <em>outside</em> the outline of one
+        /// glyph, mapped through <paramref name="transform"/> (an even-odd clip of the rectangle and the outline). The painter uses it for the
+        /// Porter-Duff modes that keep what is not covered (<c>SRC_OUT</c>, <c>DEST_OUT</c>, <c>XOR</c>).
+        /// </summary>
+        /// <param name="outline">the glyph outline, in design units</param>
+        /// <param name="transform">design units to target space</param>
+        /// <param name="bounds">a rectangle in target space covering everything that will be drawn under the clip</param>
+        /// <returns><see langword="false"/> when the target cannot clip that way, in which case nothing was pushed and no <see cref="PopClip"/> follows;
+        /// the default declines</returns>
+        bool PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds) => false;
+
+        /// <summary>Ends the clip begun by the last unmatched <see cref="PushOutlineClip"/> or accepted <see cref="PushOutlineComplementClip"/>.</summary>
         void PopClip();
 
         /// <summary>Fills <paramref name="region"/>, within the current clip, with <paramref name="paint"/>.</summary>

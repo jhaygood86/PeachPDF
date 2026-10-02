@@ -11299,6 +11299,10 @@ var colorEmojiHtml =
     ColorGlyph("<span class=\"cff\">0</span>", "Radial inner radius", "r0 = 150: flat color inside it") +
     ColorGlyph("<span class=\"cff\">1</span>", "Radial repeat", "EXTEND_REPEAT, concentric") +
     ColorGlyph("<span class=\"cff\">2</span>", "Linear p2 rotation", "color lines parallel to p0→p2") +
+    "</tr><tr>" +
+    ColorGlyph("<span class=\"cff\">A</span>", "SRC_OUT", "the triangle outside the box: nothing") +
+    ColorGlyph("<span class=\"cff\">B</span>", "DEST_OUT", "the box outside the triangle") +
+    ColorGlyph("<span class=\"cff\">E</span>", "Two-circle radial", "different centers, r0 = 100") +
     "</tr></table>" +
     "<h2>Emoji sequences</h2>" +
     "<p class=\"intro\">A multi-codepoint emoji sequence composes into the single glyph the font " +

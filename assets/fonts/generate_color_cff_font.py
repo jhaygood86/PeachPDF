@@ -35,10 +35,10 @@ def empty():
 
 def main():
     names = [".notdef", "space", "box", "circ", "tri", "inner", "radialR0", "radialRepeat", "linearP2",
-             "srcIn", "destIn", "srcAtop", "destOver", "clear", "src", "dest", "srcOut"]
+             "srcIn", "destIn", "srcAtop", "destOver", "clear", "src", "dest", "srcOut", "destOut", "xor", "plus", "radialCone"]
     cmap = {0x20: "space", 0x58: "box", 0x59: "tri", 0x5A: "circ", 0x49: "inner",
             0x30: "radialR0", 0x31: "radialRepeat", 0x32: "linearP2", 0x33: "srcIn", 0x34: "destIn", 0x35: "srcAtop",
-            0x36: "destOver", 0x37: "clear", 0x38: "src", 0x39: "dest", 0x41: "srcOut"}
+            0x36: "destOver", 0x37: "clear", 0x38: "src", 0x39: "dest", 0x41: "srcOut", 0x42: "destOut", 0x43: "xor", 0x44: "plus", 0x45: "radialCone"}
     chars = {n: empty() for n in names}
     chars["box"] = rect(100, 0, 900, 800)
     chars["circ"] = rect(200, 100, 800, 700)
@@ -85,6 +85,13 @@ def main():
         "src": composite(ot.CompositeMode.SRC),
         "dest": composite(ot.CompositeMode.DEST),
         "srcOut": composite(ot.CompositeMode.SRC_OUT),
+        "destOut": composite(ot.CompositeMode.DEST_OUT),
+        "xor": composite(ot.CompositeMode.XOR),
+        "plus": composite(ot.CompositeMode.PLUS),
+        # circles with different centers: the two-circle gradient from a small circle at the left to a large one at the right
+        "radialCone": glyph("box", {"Format": ot.PaintFormat.PaintRadialGradient,
+                                    "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": ot.ExtendMode.PAD},
+                                    "x0": 300, "y0": 400, "r0": 100, "x1": 600, "y1": 400, "r1": 300}),
     }
     del colr["box"]
     fb.setupCOLR(colr, version=1)
