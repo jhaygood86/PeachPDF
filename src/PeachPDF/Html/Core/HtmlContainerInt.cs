@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -3170,9 +3170,9 @@ namespace PeachPDF.Html.Core
         /// Discards what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> — or, with no
         /// slot, in every slot — for a fill being attempted afresh.
         /// </summary>
-        internal void ClearCapturedInstances(CssBox contextRoot, int? slot = null)
+        internal void ClearCapturedInstances(CssBox contextRoot, int? slot = null, bool keepEmitterInstances = false)
         {
-            _emitter?.ClearCapturedInstances(contextRoot, slot);
+            if (!keepEmitterInstances) _emitter?.ClearCapturedInstances(contextRoot, slot);
             ColumnFragmentainers.RemoveAll(r => ReferenceEquals(r.ColumnsBox, contextRoot) && (slot is null || r.Slot == slot));
         }
 
@@ -3191,6 +3191,12 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal double ColumnFootnoteInsetFor(Fragmentation.ColumnAreaKey key) =>
             FootnoteAreaHeightsByColumn.GetValueOrDefault(key, 0);
+
+        /// <summary>
+        /// How many nested fragmentainers <paramref name="contextRoot"/> has recorded in <paramref name="slot"/>.
+        /// </summary>
+        internal int CapturedInstanceCount(CssBox contextRoot, int slot) =>
+            _emitter?.CapturedInstanceCount(contextRoot, slot) ?? 0;
 
         /// <summary>
         /// Discards only what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from
