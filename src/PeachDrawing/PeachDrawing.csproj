@@ -7,6 +7,7 @@
 		<Description>A standalone software raster Canvas for PeachDrawing.Core - draw shapes, text and images onto a bitmap and save it in any PeachImage-supported format, with no PDF, HTML or CSS involved. This is also the raster fallback PeachPDF itself uses for effects PDF cannot express in vector form (filters, shadows, backdrop effects).</Description>
 		<PackageTags>drawing;graphics;canvas;raster;rendering</PackageTags>
 		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
 		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
@@ -41,5 +42,6 @@
 	<ItemGroup>
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 </Project>
