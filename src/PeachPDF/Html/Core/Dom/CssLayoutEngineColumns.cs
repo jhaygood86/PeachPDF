@@ -448,6 +448,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 PlaceColumn(columnsBox, columnLeft, columnWidth);
 
+                // Inside an outer column the float's own lines would break at that column's band, and a float is never
+                // resumed there: the lines past it were laid out for no fragmentainer and drawn nowhere. It is laid out
+                // whole instead and overflows the column foot, as a float that does not fit in its column does.
+                var htmlContainer = columnsBox.HtmlContainer;
+                var nestedInAColumn = htmlContainer?.CurrentFragmentainer is { HasOwnBand: true };
+                var outerColumn = nestedInAColumn ? htmlContainer!.DetachFragmentainer() : null;
+
                 try
                 {
                     foreach (var childBox in columnsBox.Boxes.Where(IsLaidOutHere))
@@ -457,6 +464,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 finally
                 {
+                    if (nestedInAColumn) htmlContainer!.RestoreFragmentainer(outerColumn);
+
                     PlaceColumn(columnsBox, columnLeft, containerWidth);
                 }
             }
