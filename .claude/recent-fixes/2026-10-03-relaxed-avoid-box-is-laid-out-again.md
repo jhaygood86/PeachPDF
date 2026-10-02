@@ -1,0 +1,9 @@
+# A relaxed break-inside: avoid is taken by laying the box out again, not by translating it
+
+`break-inside: avoid` on a block that fits no fragmentainer is relaxed (css-break-3 section 4.3) by moving the block to the top of the next page so as much as possible lands on one page. `CanBeLaidOutAgain` refuses a box that does not fit its destination (laying it out again there breaks again, opens another pass, and is asked again: 100,000 pages measured), so the move was a translation. A translated box keeps its unbroken extent, so lines it carries past the foot of the new page were never fragmented and were clipped (section 4.4: content must continue on the next fragmentainer).
+
+`TakeEarlyBreak` now lays such a box out again too, with `_avoidRelaxed` set. Unlike `_earlyBreakTaken`, which is reset on every pass, `_avoidRelaxed` lasts for the layout generation (reset in `BeginLayoutPass`'s new-generation block), because the box completes on a later pass than the one that relaxed it and that pass's epilogue would ask the same question of the same geometry. Only the plain avoid case (no keep-with-next run, `PlacesItselfAsBlockBox`, fragmenting) takes it; monolithic content and runs keep the translation.
+
+Found by experiment: dropping the fit test in `CanBeLaidOutAgain` instead (without the persistent flag) fixed the reduction, lost a different word in the full document, and made a multicol-in-avoid test run 2.5 minutes. The flag is what ends the walk.
+
+Evidence: `RelaxedAvoidLaidOutAgainTests` (two fail on main: 251 words drawn of 240, lines past the foot); the #1487 document loses no word; corpus 1-300 ordinary and tall unchanged; `KeepWithNextIntegrationTests` unchanged.
