@@ -4299,13 +4299,15 @@ namespace PeachPDF.Html.Core.Fragmentation
             foreach (var other in instances)
             {
                 if (other.Region is not { Left: { } otherLeft, Right: { } otherRight } otherRegion
-                    || otherRegion.Top != region.Top
                     || ReferenceEquals(other.Self, own.Self))
                 {
                     continue;
                 }
 
+                // Another column of the same row, or the same container's fill under another outer column, whose
+                // band the word lies in: a different band is a different place the word could be drawn.
                 if (TryGetWordRect(box, wordIndex, other.Geometry, out var otherRect)
+                    && Math.Min(otherRect.Bottom, otherRegion.Bottom) - Math.Max(otherRect.Top, otherRegion.Top) > BandOverlapEpsilon
                     && otherRect.Left >= otherLeft - EdgeEpsilon && otherRect.Left < otherRight
                     && other.Geometry.Holds(box))
                 {
