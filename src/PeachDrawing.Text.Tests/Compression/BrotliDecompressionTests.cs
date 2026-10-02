@@ -10,8 +10,11 @@ namespace PeachDrawing.Text.Tests.Compression
     /// <see cref="TextDataResources.OpenBrotli"/> (every Unicode/hyphenation/dictionary resource reader's entry point)
     /// actually does with it. Every test resets the registered decompressor to <see langword="null"/> in a
     /// <c>finally</c>, since it is process-wide static state other tests (and, under xUnit's parallel execution,
-    /// concurrently running ones) also read.
+    /// concurrently running ones) also read. Resetting afterwards is not enough on its own: while a test has a substituting
+    /// decompressor registered, a test class running in parallel that loads a resource (the Arabic joining table, say) reads
+    /// the substituted text and fails to parse it, so this class runs in a collection that is never run in parallel with another.
     /// </summary>
+    [Collection(BrotliDecompressionCollection.Name)]
     public class BrotliDecompressionTests
     {
         [Fact]
@@ -91,5 +94,12 @@ namespace PeachDrawing.Text.Tests.Compression
         {
             Assert.Null(TextDataResources.OpenBrotli("ThisResourceDoesNotExist.txt.br"));
         }
+    }
+
+    /// <summary>Holds every test that swaps the process-wide Brotli decompressor; the collection runs on its own, never alongside other test classes.</summary>
+    [CollectionDefinition(Name, DisableParallelization = true)]
+    public sealed class BrotliDecompressionCollection
+    {
+        public const string Name = "Brotli decompressor (process-wide state)";
     }
 }
