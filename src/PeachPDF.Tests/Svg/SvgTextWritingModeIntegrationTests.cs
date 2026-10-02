@@ -1,3 +1,4 @@
+using System.Linq;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -136,8 +137,9 @@ namespace PeachPDF.Tests.Svg
             var g = Render($"""<text x="10" y="50" font-size="20" writing-mode="horizontal-tb">{Upright}{Latin}</text>""");
 
             // Default writing-mode: horizontal-tb - batches into one call exactly as before this feature.
-            var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(Upright + Latin, draw.Text);
+            // The upright (CJK) characters may come from a fallback font and so paint as their own call; what this guards is that
+            // horizontal-tb never rotates or transforms them.
+            Assert.Equal(Upright + Latin, string.Concat(g.DrawStringCalls.Select(c => c.Text)));
             Assert.Equal(0, GlyphTransformPushes(g));
         }
 

@@ -1423,7 +1423,7 @@ namespace PeachPDF.Svg
             var familyAttr = ResolveStyledAttr(node, "font-family");
             var family = string.IsNullOrWhiteSpace(familyAttr) || familyAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Family
-                : familyAttr.Split(',')[0].Trim().Trim('\'', '"');
+                : NormalizeFamilyList(familyAttr);
 
             var declaredSize = ResolveFontSize(ResolveStyledAttr(node, "font-size"), inherited);
             var size = declaredSize ?? inherited.Size;
@@ -1582,7 +1582,7 @@ namespace PeachPDF.Svg
             if (font.Bold) fontStyle |= PaintFontStyle.Bold;
             if (font.Italic) fontStyle |= PaintFontStyle.Italic;
 
-            return _adapter.GetFont(family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
+            return FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
         }
 
         /// <summary>
@@ -1668,6 +1668,54 @@ namespace PeachPDF.Svg
                 var pixelsPerPoint = (_builder._adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
                 return (_ratios[(int)metric] = FontMetricMeasurement.Ratio(font, metric, pixelsPerPoint)).Value;
             }
+        }
+
+        /// <summary>The authored <c>font-family</c> list with each family's whitespace and quotes removed, rejoined with <c>, </c>.</summary>
+        private static string NormalizeFamilyList(string value)
+        {
+            var families = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            for (var i = 0; i < families.Length; i++)
+                families[i] = families[i].Trim('\'', '"').Trim();
+            return string.Join(", ", families.Where(f => f.Length > 0));
+        }
+
+        /// <summary>The first family of a normalized <c>font-family</c> list - the one a <c>@font-palette-values</c>/<c>@font-feature-values</c> rule is matched against.</summary>
+        private static string FirstFamily(string familyList)
+        {
+            var comma = familyList.IndexOf(',');
+            return comma < 0 ? familyList : familyList[..comma];
+        }
+
+        /// <summary>
+        /// The per-character font choice for a run: <paramref name="primary"/> when it has a glyph for the character, else the first
+        /// family of the authored list that covers it, else a system fallback - the same "first available font that can render this
+        /// character" rule HTML text uses (<see cref="FontFamilyResolver"/>). Whitespace and control characters never leave the primary
+        /// font. Results are memoised per character.
+        /// </summary>
+        private Func<System.Text.Rune, Font> CreateFontFallback(FontContext font, Font primary)
+        {
+            var cache = new Dictionary<int, Font>();
+            // The resolver may hand back a distinct Font instance for the same face per character; one instance per face keeps the
+            // renderer's reference comparison ("same font as the previous glyph") meaningful, so a run in one fallback font stays one batch.
+            var faces = new Dictionary<string, Font> { [primary.FaceKey] = primary };
+            var fontStyle = PaintFontStyle.Regular;
+            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
+            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+
+            return rune =>
+            {
+                if (System.Text.Rune.IsWhiteSpace(rune) || System.Text.Rune.IsControl(rune) || primary.HasGlyph(rune))
+                    return primary;
+
+                if (cache.TryGetValue(rune.Value, out var cached))
+                    return cached;
+
+                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, Math.Max(font.Size, 1), fontStyle, rune, font.Weight, font.Stretch,
+                    font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, EncodeVariations(font)) ?? primary;
+                if (!faces.TryGetValue(fallback.FaceKey, out var canonical))
+                    faces[fallback.FaceKey] = canonical = fallback;
+                return cache[rune.Value] = canonical;
+            };
         }
 
         /// <summary>Realizes <paramref name="font"/> the way a text run does, so a measurement is taken from the very face the run would use.</summary>
@@ -1797,6 +1845,8 @@ namespace PeachPDF.Svg
 
             run.Font = GetFontFor(runFont, runFont.Family, runFont.Size)
                        ?? GetFontFor(runFont, Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size);
+            if (run.Font is { } primaryFont)
+                run.FontFor = CreateFontFallback(runFont, primaryFont);
 
             // font-variant-caps is gated by the resolved font's own GSUB support (same rule
             // DerivedStyle.ActualFontVariantCaps applies for HTML) - real substitution only, no
@@ -1818,13 +1868,13 @@ namespace PeachPDF.Svg
             run.ShapingFeatures = new ShapeSettings(
                 runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
                 TextShapingFeatureResolver.ToFeatureSettings(DerivedStyle.MergeExplicitFeatures(runFont.FeatureSettings,
-                    FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, runFont.Family, _fontFeatureValues))),
+                    FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, FirstFamily(runFont.Family), _fontFeatureValues))),
                 Kerning: runFont.Kerning, Language: runFont.Language,
                 Position: resolvedPosition, EmojiMode: runFont.Emoji);
 
             // font-palette selects among the font's CPAL palettes (a no-op for a font without any).
             run.Palette = run.Font is { } paletteFont
-                ? FontPaletteResolver.Resolve(runFont.FontPalette, paletteFont, runFont.Family, _fontPaletteValues)
+                ? FontPaletteResolver.Resolve(runFont.FontPalette, paletteFont, FirstFamily(runFont.Family), _fontPaletteValues)
                 : null;
 
             // text-decoration is this run's own value only - CSS Text Decoration 3 §2 explicitly makes

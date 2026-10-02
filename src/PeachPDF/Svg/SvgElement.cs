@@ -219,6 +219,12 @@ namespace PeachPDF.Svg
         /// </summary>
         public FontPalette? Palette { get; set; }
 
+        /// <summary>
+        /// The font for one character of this run: <see cref="Font"/> when it covers the character, else the font-family list's next
+        /// covering family or a system fallback. Null when the run has no font.
+        /// </summary>
+        public System.Func<System.Text.Rune, Font>? FontFor { get; set; }
+
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
         /// Decoration 3), unlike every other font/paint property this element carries.</summary>

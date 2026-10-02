@@ -793,7 +793,7 @@ namespace PeachPDF.Svg
                 {
                     case SvgTextFragment fragment when run.Font is { } font:
                         foreach (var rune in fragment.Text.EnumerateRunes())
-                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = font, Opacity = opacityFactor });
+                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = run.FontFor?.Invoke(rune) ?? font, Opacity = opacityFactor });
                         break;
 
                     case SvgTextSpan span when span.Run.PathData is not null:
@@ -923,6 +923,7 @@ namespace PeachPDF.Svg
                 var end = pos + 1;
                 while (end < count
                        && ReferenceEquals(glyphs[end].Run, first.Run)
+                       && ReferenceEquals(glyphs[end].Font, first.Font)
                        && first.Run.LetterSpacing == 0
                        && (glyphs[end].Rotate ?? 0) == 0
                        && glyphs[end].X is null && glyphs[end].Y is null
@@ -1244,7 +1245,7 @@ namespace PeachPDF.Svg
                     // between a run and plain text, always breaks the batch - each needs its own
                     // ShapeSettings (see ResolveShapingFeatures), so merging them would apply one
                     // run's joining forms/USE categories to the other's text.
-                    if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
+                    if (!ReferenceEquals(gc.Run, start.Run) || !ReferenceEquals(gc.Font, start.Font) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
                         || !ReferenceEquals(gc.ShapingRunFirst, start.ShapingRunFirst))
                         break;
