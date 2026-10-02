@@ -1059,7 +1059,20 @@ namespace PeachPDF.Html.Core.Dom
                     // before its first child has put nothing here, so what it holds is the next column's. Laid out
                     // here first and moved on, it was drawn by both.
                     case TableBreakToken table:
-                        foreach (var cell in table.UnfinishedCells) AddBoxesBeyond(cell.Token, beyond);
+                        foreach (var cell in table.UnfinishedCells)
+                        {
+                            // A cell whose own flow resumes at its first word has put nothing here either, and it is the cell
+                            // that holds the content (no child of it is named): it moves on whole.
+                            if (cell.Token is InlineBreakToken { ResumeWordIndex: 0, CompletedLineCount: 0 })
+                            {
+                                beyond.Add(cell.Cell);
+                            }
+                            else
+                            {
+                                AddBoxesBeyond(cell.Token, beyond);
+                            }
+                        }
+
                         return;
 
                     default:
