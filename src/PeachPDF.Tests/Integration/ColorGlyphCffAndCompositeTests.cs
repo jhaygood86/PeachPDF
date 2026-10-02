@@ -120,6 +120,43 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(radial.Center, radial.Focal);
         }
 
+        [Fact]
+        public void DestAtop_PaintsSourceThenBackdropWithinIt() =>
+            Assert.Equal(["clip", Blue, "pop", "clip", "clip", Yellow, "pop", "pop"], Paint('K').Log);
+
+        [Fact]
+        public void ShapeOfLayersUnderATranslate_ClipsOncePerLayerGlyph() =>
+            Assert.Equal(["clip", "clip", Blue, "pop", "pop", "clip", "clip", Blue, "pop", "pop"], Paint('F').Log);
+
+        [Fact]
+        public void ShapeOfAColorGlyphReference_IsTheShapesOfItsOperands()
+        {
+            // srcAtop is a composite of the box and the triangle, so the triangle is clipped to both, once each.
+            var log = Paint('G').Log;
+            Assert.Equal(4, log.Count(e => e == "clip"));
+            Assert.Equal(2, log.Count(e => e == Blue));
+        }
+
+        [Fact]
+        public void BareGradientOperand_HasNoShape_SoInPaintsUnclipped_AndOutPaintsNothing()
+        {
+            Assert.Equal(["clip", Blue, "pop"], Paint('H').Log);
+            Assert.Empty(Paint('J').Log);
+        }
+
+        [Theory]
+        [InlineData('L')]
+        [InlineData('M')]
+        public void RadialWithInnerRadiusTiledOutward_StartsAtTheCenterWithAnInterpolatedColor(char glyph)
+        {
+            var radial = Assert.IsType<RadialColorGlyphPaint>(Assert.Single(Paint(glyph).Paints));
+            Assert.Equal(0.0, radial.Positions[0]);
+            Assert.Equal(1.0, radial.Positions[^1], 6);
+            Assert.True(radial.Colors.Count > 3);
+            for (int i = 1; i < radial.Positions.Count; i++)
+                Assert.True(radial.Positions[i] > radial.Positions[i - 1]);
+        }
+
         private sealed class NoComplementRecording : IColorGlyphTarget
         {
             public readonly List<string> Log = [];
@@ -181,7 +218,7 @@ namespace PeachPDF.Tests.Integration
                 await generator.AddFontFromStream(stream);
 
             string family = TypefaceFixtures.FamilyNameOf(BundledFonts.ColorCff);
-            string html = $"<!DOCTYPE html><html><head><style>body {{ font-family: '{family}'; font-size: 100pt; }}</style></head><body>0 3</body></html>";
+            string html = $"<!DOCTYPE html><html><head><style>body {{ font-family: '{family}'; font-size: 100pt; }}</style></head><body>0 3 B E</body></html>";
             var doc = await generator.GeneratePdf(html, new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false });
             var ms = new MemoryStream();
             doc.Save(ms);
@@ -190,6 +227,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/ShadingType 3", pdf); // the radial gradient
             Assert.Matches(@"\b0 0 1 rg", pdf);   // SRC_IN paints only the blue source
             Assert.True(pdf.Split("W n").Length > 3, "glyph clips");
+            Assert.Contains("W* n", pdf);           // DEST_OUT: an even-odd clip to the outside of the triangle
         }
     }
 }

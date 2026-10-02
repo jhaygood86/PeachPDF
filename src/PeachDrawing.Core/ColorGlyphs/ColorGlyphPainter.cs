@@ -197,15 +197,12 @@ namespace PeachDrawing.Core.ColorGlyphs
                 }
 
                 var bounds = new Rect(minX - 2, minY - 2, maxX - minX + 4, maxY - minY + 4);
+                // Whether a target can clip to a complement is a property of the target, so only the first push can decline.
                 int pushed = 0;
                 foreach (var (outline, transform) in shapes)
                 {
                     if (!target.PushOutlineComplementClip(outline, transform, bounds))
-                    {
-                        while (pushed-- > 0)
-                            target.PopClip();
                         return false;
-                    }
 
                     pushed++;
                 }

@@ -35,10 +35,10 @@ def empty():
 
 def main():
     names = [".notdef", "space", "box", "circ", "tri", "inner", "radialR0", "radialRepeat", "linearP2",
-             "srcIn", "destIn", "srcAtop", "destOver", "clear", "src", "dest", "srcOut", "destOut", "xor", "plus", "radialCone"]
+             "srcIn", "destIn", "srcAtop", "destOver", "clear", "src", "dest", "srcOut", "destOut", "xor", "plus", "radialCone", "complexIn", "colrRefIn", "unboundedIn", "unboundedOut", "destAtop", "reflectInner", "repeatInner"]
     cmap = {0x20: "space", 0x58: "box", 0x59: "tri", 0x5A: "circ", 0x49: "inner",
             0x30: "radialR0", 0x31: "radialRepeat", 0x32: "linearP2", 0x33: "srcIn", 0x34: "destIn", 0x35: "srcAtop",
-            0x36: "destOver", 0x37: "clear", 0x38: "src", 0x39: "dest", 0x41: "srcOut", 0x42: "destOut", 0x43: "xor", 0x44: "plus", 0x45: "radialCone"}
+            0x36: "destOver", 0x37: "clear", 0x38: "src", 0x39: "dest", 0x41: "srcOut", 0x42: "destOut", 0x43: "xor", 0x44: "plus", 0x45: "radialCone", 0x46: "complexIn", 0x47: "colrRefIn", 0x48: "unboundedIn", 0x4A: "unboundedOut", 0x4B: "destAtop", 0x4C: "reflectInner", 0x4D: "repeatInner"}
     chars = {n: empty() for n in names}
     chars["box"] = rect(100, 0, 900, 800)
     chars["circ"] = rect(200, 100, 800, 700)
@@ -93,6 +93,29 @@ def main():
                                     "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": ot.ExtendMode.PAD},
                                     "x0": 300, "y0": 400, "r0": 100, "x1": 600, "y1": 400, "r1": 300}),
     }
+    gradient = {"Format": ot.PaintFormat.PaintLinearGradient,
+                "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": ot.ExtendMode.PAD},
+                "x0": 100, "y0": 0, "x1": 900, "y1": 0, "x2": 100, "y2": 800}
+    layers = {"Format": ot.PaintFormat.PaintColrLayers, "Layers": [glyph("box", solid(3)), glyph("circ", solid(1))]}
+    colr.update({
+        # backdrop: layers under a translate (several shapes, a transform); source: the blue triangle
+        "complexIn": {"Format": ot.PaintFormat.PaintComposite, "SourcePaint": glyph("tri", solid(2)),
+                      "CompositeMode": ot.CompositeMode.SRC_IN,
+                      "BackdropPaint": {"Format": ot.PaintFormat.PaintTranslate, "dx": 20, "dy": 0, "Paint": layers}},
+        # backdrop: a reference to another color glyph (itself a composite)
+        "colrRefIn": {"Format": ot.PaintFormat.PaintComposite, "SourcePaint": glyph("tri", solid(2)),
+                      "CompositeMode": ot.CompositeMode.SRC_IN,
+                      "BackdropPaint": {"Format": ot.PaintFormat.PaintColrGlyph, "Glyph": "srcAtop"}},
+        # a backdrop that is a bare gradient has no shape of its own
+        "unboundedIn": {"Format": ot.PaintFormat.PaintComposite, "SourcePaint": glyph("tri", solid(2)),
+                        "CompositeMode": ot.CompositeMode.SRC_IN, "BackdropPaint": gradient},
+        "unboundedOut": {"Format": ot.PaintFormat.PaintComposite, "SourcePaint": glyph("tri", solid(2)),
+                         "CompositeMode": ot.CompositeMode.SRC_OUT, "BackdropPaint": gradient},
+        "destAtop": composite(ot.CompositeMode.DEST_ATOP),
+        # concentric radial gradients whose first circle has a radius, tiled out past the glyph
+        "reflectInner": radial(ot.ExtendMode.REFLECT, 100, 250),
+        "repeatInner": radial(ot.ExtendMode.REPEAT, 100, 250),
+    })
     del colr["box"]
     fb.setupCOLR(colr, version=1)
     fb.font.save(os.path.join(HERE, "ColorTestCff.otf"))

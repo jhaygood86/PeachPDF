@@ -40,4 +40,18 @@ public class RadialFocusRadiusTests
         Assert.True(At(canvas, 50, 50).R > 240);
         Assert.True(At(canvas, 95, 50).B > 240);
     }
+
+    [Fact]
+    public void FocalCircleTangentInsideTheOuterOne_SolvesTheLinearCase()
+    {
+        using var canvas = new RasterRenderContext().CreateCanvas(100, 100);
+
+        // |f| equals the radius difference, so the conical equation degenerates to a line.
+        var brush = canvas.GetRadialGradientBrush(new PaintPoint(60, 50), 40, 40,
+            [(Red, 0.0), (Blue, 1.0)], false, new PaintPoint(40, 50), 20);
+        canvas.DrawRectangle(brush, 0, 0, 100, 100);
+
+        Assert.True(At(canvas, 60, 50).A > 0);
+        Assert.True(At(canvas, 95, 50).B > 200);
+    }
 }
