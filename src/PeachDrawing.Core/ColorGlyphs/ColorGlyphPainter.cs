@@ -131,7 +131,7 @@ namespace PeachDrawing.Core.ColorGlyphs
                     break;
 
                 case PaintRadialGradient radial:
-                    FillClip(hasClip, clip, BuildRadial(radial, t), target);
+                    FillClip(hasClip, clip, BuildRadial(radial, t, hasClip, clip), target);
                     break;
 
                 case PaintSweepGradient sweep:
@@ -144,24 +144,110 @@ namespace PeachDrawing.Core.ColorGlyphs
             }
         }
 
-        // Compositing: paint the backdrop, then the source on top. A separable/HSL blend mode is applied to the
-        // source; Porter-Duff-only modes the targets cannot express degrade to source-over.
+        // Compositing. A separable/HSL blend mode is applied to the source. The Porter-Duff modes are built from the two
+        // things a vector target can do: paint order and clipping to a glyph shape (SRC_IN, DEST_IN, SRC_ATOP, DEST_ATOP
+        // clip one operand to the other's glyph outlines). The modes that need a clip's complement (SRC_OUT, DEST_OUT, XOR)
+        // or an additive blend (PLUS) have no vector equivalent and fall back to source-over.
         private void PaintCompositeNode(PaintComposite composite, Affine2x3 t, bool hasClip, Rect clip, int depth, IColorGlyphTarget target)
         {
-            PaintV1(composite.Backdrop, t, hasClip, clip, depth + 1, target);
+            void Paint(ColorPaint? p, bool c, Rect r) => PaintV1(p, t, c, r, depth + 1, target);
+
+            // Runs `action` with everything it draws restricted to the glyph shapes of `shape` (unrestricted if `shape` has none).
+            void Within(ColorPaint? shape, Action<bool, Rect> action)
+            {
+                var shapes = new List<(GlyphOutline Outline, Affine2x3 Transform)>();
+                if (!CollectShapes(shape, t, shapes, 0))
+                {
+                    action(hasClip, clip);
+                    return;
+                }
+
+                foreach (var (outline, transform) in shapes)
+                {
+                    Rect bounds = WorldBounds(outline, transform);
+                    target.PushOutlineClip(outline, transform);
+                    action(true, hasClip ? Rect.Intersect(clip, bounds) : bounds);
+                    target.PopClip();
+                }
+            }
+
+            switch (composite.Mode)
+            {
+                case 0: // CLEAR
+                    return;
+                case 1: // SRC
+                    Paint(composite.Source, hasClip, clip);
+                    return;
+                case 2: // DEST
+                    Paint(composite.Backdrop, hasClip, clip);
+                    return;
+                case 4: // DEST_OVER
+                    Paint(composite.Source, hasClip, clip);
+                    Paint(composite.Backdrop, hasClip, clip);
+                    return;
+                case 5: // SRC_IN
+                    Within(composite.Backdrop, (c, r) => Paint(composite.Source, c, r));
+                    return;
+                case 6: // DEST_IN
+                    Within(composite.Source, (c, r) => Paint(composite.Backdrop, c, r));
+                    return;
+                case 9: // SRC_ATOP
+                    Paint(composite.Backdrop, hasClip, clip);
+                    Within(composite.Backdrop, (c, r) => Paint(composite.Source, c, r));
+                    return;
+                case 10: // DEST_ATOP
+                    Paint(composite.Source, hasClip, clip);
+                    Within(composite.Source, (c, r) => Paint(composite.Backdrop, c, r));
+                    return;
+            }
+
+            Paint(composite.Backdrop, hasClip, clip);
 
             if (BlendModeFor(composite.Mode) is not { } mode)
             {
-                PaintV1(composite.Source, t, hasClip, clip, depth + 1, target); // source-over
+                Paint(composite.Source, hasClip, clip); // source-over
                 return;
             }
 
             target.PushBlendMode(mode);
-            PaintV1(composite.Source, t, hasClip, clip, depth + 1, target);
+            Paint(composite.Source, hasClip, clip);
             target.PopBlendMode();
         }
 
-        /// <summary>A COLR CompositeMode as a blend mode, or null for source-over (SRC_OVER, and the Porter-Duff modes nothing expresses).</summary>
+        /// <summary>
+        /// Gathers the glyph outlines (with their placements) a paint draws within. Returns false when the paint reaches a leaf
+        /// (a solid or gradient) that is bounded only by an enclosing clip, so it has no shape of its own.
+        /// </summary>
+        private bool CollectShapes(ColorPaint? paint, Affine2x3 t, List<(GlyphOutline, Affine2x3)> shapes, int depth)
+        {
+            if (paint is null || depth > MaxPaintDepth)
+                return true;
+
+            switch (paint)
+            {
+                case PaintGlyph glyph:
+                    if (_typeface.TryGetOutline((ushort)glyph.GlyphId, out GlyphOutline outline) && !outline.IsEmpty)
+                        shapes.Add((outline, t));
+                    return true;
+                case PaintColrLayers layers:
+                    for (int i = 0; i < layers.NumLayers; i++)
+                    {
+                        if (!CollectShapes(_typeface.GetColorLayerPaint(layers.FirstLayerIndex + i), t, shapes, depth + 1))
+                            return false;
+                    }
+                    return true;
+                case PaintColrGlyph colrGlyph:
+                    return CollectShapes(_typeface.GetColorPaint((ushort)colrGlyph.GlyphId), t, shapes, depth + 1);
+                case PaintTransform transform:
+                    return CollectShapes(transform.Paint, Affine2x3.Multiply(t, transform.Affine), shapes, depth + 1);
+                case PaintComposite composite:
+                    return CollectShapes(composite.Backdrop, t, shapes, depth + 1) && CollectShapes(composite.Source, t, shapes, depth + 1);
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>A COLR CompositeMode as a blend mode, or null for source-over (SRC_OVER, and the Porter-Duff modes with no vector equivalent).</summary>
         private static PaintBlendMode? BlendModeFor(int compositeMode) => compositeMode switch
         {
             13 => PaintBlendMode.Screen,
@@ -198,9 +284,21 @@ namespace PeachDrawing.Core.ColorGlyphs
             if (!TryBuildStops(g.Line, out PaintColor[] colors, out double[] positions))
                 return null;
 
-            // p2 rotates the gradient; the common (perpendicular) case reduces to the p0->p1 axis.
+            // p2 rotates the gradient: the axis is p0->p1 with its component along p0->p2 removed (so the color lines run
+            // parallel to p0->p2). When p2 is perpendicular to p0->p1, the common case, that is p0->p1 itself.
+            double ax = g.X1 - g.X0, ay = g.Y1 - g.Y0;
+            double ex = g.X2 - g.X0, ey = g.Y2 - g.Y0;
+            double eLen2 = ex * ex + ey * ey;
+            if (eLen2 > 0)
+            {
+                double along = (ax * ex + ay * ey) / eLen2;
+                double px = ax - along * ex, py = ay - along * ey;
+                if (px * px + py * py > 0)
+                    (ax, ay) = (px, py);
+            }
+
             PaintPoint p0 = Map(t, g.X0, g.Y0);
-            PaintPoint p1 = Map(t, g.X1, g.Y1);
+            PaintPoint p1 = Map(t, g.X0 + ax, g.Y0 + ay);
 
             // repeat/reflect: an axial gradient only pads, so tile (or mirror) the stops over a few periods and extend
             // the gradient axis to cover them.
@@ -210,15 +308,109 @@ namespace PeachDrawing.Core.ColorGlyphs
             return new LinearColorGlyphPaint(p0, p1, colors, positions);
         }
 
-        private RadialColorGlyphPaint? BuildRadial(PaintRadialGradient g, Affine2x3 t)
+        private RadialColorGlyphPaint? BuildRadial(PaintRadialGradient g, Affine2x3 t, bool hasClip, Rect clip)
         {
             if (!TryBuildStops(g.Line, out PaintColor[] colors, out double[] positions))
                 return null;
 
             double radiusScale = Math.Sqrt(Math.Abs(t.XX * t.YY - t.XY * t.YX));
-            // Radial repeat/reflect extend is not modeled (pad only).
+            double span = g.R1 - g.R0;
+            double centerShift = Math.Abs(g.X1 - g.X0) + Math.Abs(g.Y1 - g.Y0);
+            bool concentric = centerShift <= 1e-6 * Math.Max(1.0, g.R1);
+
+            // Two concentric circles (the common shape) are exact: the gradient parameter maps linearly to the radius, so an
+            // inner radius, or a repeat/reflect extend, is a re-spacing of the stops over a larger outer circle. Circles with
+            // different centers (a cone) keep the focal-point approximation: the first stop at the start circle's center, pad only.
+            if (concentric && span > 0 && (g.R0 > 0 || g.Line.Extend is ColorExtend.Repeat or ColorExtend.Reflect))
+            {
+                PaintPoint center = Map(t, g.X1, g.Y1);
+                double reach = hasClip && clip.Width > 0 && clip.Height > 0 ? FarthestCorner(center, clip) / radiusScale : g.R1;
+                double outer = ExpandRadialStops(g, span, reach, ref colors, ref positions);
+                return new RadialColorGlyphPaint(center, center, outer * radiusScale, colors, positions);
+            }
+
             return new RadialColorGlyphPaint(Map(t, g.X1, g.Y1), Map(t, g.X0, g.Y0), g.R1 * radiusScale, colors, positions);
         }
+
+        private static double FarthestCorner(PaintPoint center, Rect r)
+        {
+            double dx = Math.Max(Math.Abs(r.X - center.X), Math.Abs(r.X + r.Width - center.X));
+            double dy = Math.Max(Math.Abs(r.Y - center.Y), Math.Abs(r.Y + r.Height - center.Y));
+            return Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        /// <summary>
+        /// Re-spaces the stops of a concentric radial gradient (inner radius <c>R0</c>, outer <c>R1</c>) as positions along one circle
+        /// from the center out: the area inside <c>R0</c> takes the first stop's color, and a repeat/reflect extend tiles the stops
+        /// outward until <paramref name="reach"/> (design units from the center) is covered. Returns the radius, in design units,
+        /// that positions of 1 stand for.
+        /// </summary>
+        private static double ExpandRadialStops(PaintRadialGradient g, double span, double reach, ref PaintColor[] colors, ref double[] positions)
+        {
+            const int MaxTiles = 24;
+            bool tiled = g.Line.Extend is ColorExtend.Repeat or ColorExtend.Reflect;
+
+            int firstTile = 0, lastTile = 0; // tiles are [k, k+1] in the gradient parameter
+            if (tiled)
+            {
+                firstTile = (int)Math.Floor(-g.R0 / span);
+                lastTile = Math.Clamp((int)Math.Ceiling((reach - g.R0) / span) - 1, 0, firstTile + MaxTiles);
+            }
+
+            var samples = new List<(double Radius, PaintColor Color)>();
+            for (int k = firstTile; k <= lastTile; k++)
+            {
+                bool mirror = g.Line.Extend == ColorExtend.Reflect && ((k % 2 + 2) % 2 == 1);
+                for (int j = 0; j < positions.Length; j++)
+                {
+                    int idx = mirror ? positions.Length - 1 - j : j;
+                    double local = mirror ? 1.0 - positions[idx] : positions[idx];
+                    samples.Add((g.R0 + (k + local) * span, colors[idx]));
+                }
+            }
+
+            samples.Sort((a, b) => a.Radius.CompareTo(b.Radius));
+
+            // Anything left of the center is cut off, with the color at the center worked out by interpolation.
+            if (samples[0].Radius > 0)
+            {
+                samples.Insert(0, (0, samples[0].Color));
+            }
+            else if (samples[0].Radius < 0)
+            {
+                int i = 0;
+                while (i + 1 < samples.Count && samples[i + 1].Radius <= 0)
+                    i++;
+
+                PaintColor atCenter = i + 1 < samples.Count
+                    ? Lerp(samples[i].Color, samples[i + 1].Color, (0 - samples[i].Radius) / (samples[i + 1].Radius - samples[i].Radius))
+                    : samples[i].Color;
+                samples.RemoveRange(0, i + 1);
+                samples.Insert(0, (0, atCenter));
+            }
+
+            double outer = Math.Max(samples[^1].Radius, 1e-6);
+            var newColors = new PaintColor[samples.Count];
+            var newPositions = new double[samples.Count];
+            double last = -1;
+            for (int i = 0; i < samples.Count; i++)
+            {
+                double pos = samples[i].Radius / outer;
+                if (pos <= last)
+                    pos = last + 1e-6; // keep strictly increasing for the stitching function
+                last = pos;
+                newColors[i] = samples[i].Color;
+                newPositions[i] = pos;
+            }
+
+            colors = newColors;
+            positions = newPositions;
+            return outer;
+        }
+
+        private static PaintColor Lerp(PaintColor a, PaintColor b, double f) => PaintColor.FromArgb(
+            (int)Math.Round(a.A + (b.A - a.A) * f), (int)Math.Round(a.R + (b.R - a.R) * f),
+            (int)Math.Round(a.G + (b.G - a.G) * f), (int)Math.Round(a.B + (b.B - a.B) * f));
 
         private SweepColorGlyphPaint? BuildSweep(PaintSweepGradient g, Affine2x3 t)
         {
