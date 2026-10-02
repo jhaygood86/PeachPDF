@@ -53,6 +53,7 @@
         public const string InlineBlock = "inline-block";
         public const string Contents = "contents";
         public const string ListItem = "list-item";
+        public const string FlowRoot = "flow-root";
         public const string InlineTable = "inline-table";
         public const string Table = "table";
         public const string TableCaption = "table-caption";

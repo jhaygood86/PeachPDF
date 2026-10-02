@@ -21,6 +21,13 @@ namespace PeachPDF.CSS
         InlineFlex,
         Grid,
         InlineGrid,
-        Contents
+        Contents,
+
+        /// <summary>
+        /// <c>flow-root</c> (css-display-3 §2.4): a block-level box that establishes an independent block formatting
+        /// context. Laid out as a block everywhere (<see cref="PeachPDF.Html.Core.Dom.DerivedStyle.ActualDisplay"/>
+        /// reads <c>block</c>); only the formatting-context predicates tell it apart.
+        /// </summary>
+        FlowRoot
     }
 }

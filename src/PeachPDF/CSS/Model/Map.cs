@@ -879,6 +879,7 @@ namespace PeachPDF.CSS
                 {Keywords.Contents, DisplayMode.Contents},
                 {Keywords.Inline, DisplayMode.Inline},
                 {Keywords.Block, DisplayMode.Block},
+                {Keywords.FlowRoot, DisplayMode.FlowRoot},
                 {Keywords.InlineBlock, DisplayMode.InlineBlock},
                 {Keywords.ListItem, DisplayMode.ListItem},
                 {Keywords.InlineTable, DisplayMode.InlineTable},
