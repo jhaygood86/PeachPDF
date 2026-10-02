@@ -35,7 +35,7 @@ jobs:
 
       - name: Read package version into site data
         run: |
-          VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/Version.props)
+          VERSION=$(grep -oP '(?<=<PackageVersion>)[0-9][^<]*' src/Version.props | head -n 1)
           printf 'current: "%s"\n' "$VERSION" > docs/_data/version.yml
           echo "Version: $VERSION"
 

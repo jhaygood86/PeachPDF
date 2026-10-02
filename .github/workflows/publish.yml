@@ -39,7 +39,7 @@ jobs:
     - name: Read package version
       id: version
       run: |
-        VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/Version.props)
+        VERSION=$(grep -oP '(?<=<PackageVersion>)[0-9][^<]*' src/Version.props | head -n 1)
         echo "value=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
         if [[ "$VERSION" == *"preview"* ]]; then
