@@ -621,11 +621,15 @@ namespace PeachPDF.Html.Core.Dom
             // mid-document rather than as balancing. Where that happens the target is grown and the fill
             // run again, up to the page's own budget, which is the point at which balancing has given up
             // and the content genuinely does not fit this fragment.
+            var finishedAtTheFullBudget = false;
+
             for (var attempt = 0; ; attempt++)
             {
                 (carry, contentBottom, filledColumns) =
                     await FillColumns(g, columnsBox, children, startAt, boxTop, target, columnLeft, pitch,
                         columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
+
+                if (carry is null && target >= pageBudget) finishedAtTheFullBudget = true;
 
                 // The run ended because the next child spans, not because it ran out of room - there is
                 // nothing to balance a target against that was never trying to include the span anyway,
@@ -692,6 +696,21 @@ namespace PeachPDF.Html.Core.Dom
                 // run sharing this (columnsBox, startSlot) slot already finished and must not be erased
                 // by this run's retry.
                 htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
+            }
+
+            // The even share the fill was balanced to can be shorter than content that does not divide (a table row whose
+            // cell holds a float): every trial then carried something over, and the budget fill that had just finished
+            // the flow was thrown away. The container was then deferred to the next page, where the same sequence
+            // repeated for ever. A fill that finished is the better answer, so it is made again.
+            if (carry is not null && !IsColumnSpanBoundary(carry) && finishedAtTheFullBudget && target < pageBudget
+                && resume is not null)
+            {
+                PassRewind.RollBackTo(resume, children);
+                htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
+
+                (carry, contentBottom, filledColumns) =
+                    await FillColumns(g, columnsBox, children, startAt, boxTop, pageBudget, columnLeft, pitch,
+                        columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
             }
 
             // What the last column left for the next one may have been placed in an earlier column first: a break that
