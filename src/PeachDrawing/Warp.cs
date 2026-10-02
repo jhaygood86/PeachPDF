@@ -47,7 +47,7 @@ public static class Warp
     /// <b>Why the depth is affine in screen coordinates.</b> A destination point maps back through the inverse to <c>(u, v, w) = (u', v', 1) / W'</c>,
     /// where <c>W'</c> is the divisor the forward map divided by. The plane's depth there is <c>z' / W'</c>, and <c>z'</c> is affine in
     /// <c>(u', v')</c>, so it is <c>Za * u + Zb * v + Zc * w</c> of the inverse's raw output: an affine function of the screen position, whose
-    /// per-row slope is one subtraction. That is what lets the depth test run a row at a time in <see cref="PixelKernels.DepthTestRow"/>.
+    /// per-row slope is one subtraction. That is what lets the depth test run a row at a time in the depth-test row kernel.
     /// </para>
     /// <para>Works in place row by row: one stack (or one rented) buffer per call, nothing else is allocated.</para>
     /// </remarks>

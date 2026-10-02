@@ -52,7 +52,7 @@ namespace PeachPDF
 
         /// <summary>
         /// Genuinely zero-copy counterpart of <see cref="AddStyleSheet(string)"/> - see
-        /// <see cref="CSS.StylesheetParser.Parse(ReadOnlyMemory{char})"/>'s own remarks for why
+        /// the stylesheet parser's own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/> (a ref struct that cannot cross
         /// this method's own <see langword="await"/>), is what makes this possible.
         /// </summary>

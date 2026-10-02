@@ -67,7 +67,7 @@ namespace PeachDrawing.Core
         public PaintPoint Start { get; } = start;
         /// <summary>The point the gradient line ends at.</summary>
         public PaintPoint End { get; } = end;
-        /// <summary>The gradient's colour stops, in ascending <see cref="GradientStop.Position"/> order.</summary>
+        /// <summary>The gradient's colour stops, in ascending <see cref="GradientStop"/> <c>Position</c> order.</summary>
         public IReadOnlyList<GradientStop> Stops { get; } = stops;
         /// <summary>How the gradient behaves past its own two ends.</summary>
         public GradientSpread Spread { get; } = spread;
@@ -95,7 +95,7 @@ namespace PeachDrawing.Core
         public double RadiusX { get; } = radiusX;
         /// <summary>The outer ellipse's vertical radius.</summary>
         public double RadiusY { get; } = radiusY;
-        /// <summary>The gradient's colour stops, in ascending <see cref="GradientStop.Position"/> order.</summary>
+        /// <summary>The gradient's colour stops, in ascending <see cref="GradientStop"/> <c>Position</c> order.</summary>
         public IReadOnlyList<GradientStop> Stops { get; } = stops;
         /// <summary>How the gradient behaves past its own outer ellipse.</summary>
         public GradientSpread Spread { get; } = spread;

@@ -21,20 +21,16 @@ namespace PeachDrawing.Core
     {
         /// <summary>
         ///     Gets a <see cref="Size" /> structure that has a
-        ///     <see
-        ///         cref="Size.Height" />
+        ///     <c>Height</c>
         ///     and
-        ///     <see
-        ///         cref="Size.Width" />
+        ///     <c>Width</c>
         ///     value of 0.
         /// </summary>
         /// <returns>
         ///     A <see cref="Size" /> structure that has a
-        ///     <see
-        ///         cref="Size.Height" />
+        ///     <c>Height</c>
         ///     and
-        ///     <see
-        ///         cref="Size.Width" />
+        ///     <c>Width</c>
         ///     value of 0.
         /// </returns>
         /// <filterpriority>1</filterpriority>

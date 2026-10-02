@@ -18,10 +18,19 @@ External links (e.g. to learn.microsoft.com) are left alone since they never mat
 
 .PARAMETER ApiDocsPath
 Path to the directory containing the generated Markdown files (e.g. docs/api).
+
+.PARAMETER UnlinkLearnPrefix
+Namespace prefix (e.g. PeachImage) whose cross-references that DefaultDocumentation sent to learn.microsoft.com, because it found no
+page for the target, are turned back into plain text. Such a link can never be right - Microsoft does not document the package - and
+the cause is a reference from a public member's documentation to something that is not public (so has no page). Used for a package
+whose source is not in this repository and so cannot be corrected; for the packages here the fix is in the source, and
+Test-ApiDocLinks.ps1 fails the build until it is made.
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [string]$ApiDocsPath
+    [string]$ApiDocsPath,
+
+    [string]$UnlinkLearnPrefix
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +56,18 @@ foreach ($filePath in $files) {
             param($m)
             "]($htmlName$($m.Groups[1].Value)$($m.Groups[2].Value))"
         })
+    }
+
+    # A link into another package's pages comes from the links file DefaultDocumentation read (src/ApiReferenceLinks.props), which
+    # names its pages as .md; the site serves them as .html. Root-relative, so no known-file list is needed to recognise one.
+    $content = [System.Text.RegularExpressions.Regex]::Replace($content, "\]\((/api/[^\s']*?)\.md(#[^\s']*)?(\s+'[^']*')?\)", {
+        param($m)
+        "]($($m.Groups[1].Value).html$($m.Groups[2].Value)$($m.Groups[3].Value))"
+    })
+
+    if ($UnlinkLearnPrefix) {
+        $unlink = "\[([^\]]+)\]\(https://learn\.microsoft\.com/en-us/dotnet/api/$($UnlinkLearnPrefix.ToLowerInvariant())[^\s']*\s+'[^']*'\)"
+        $content = [System.Text.RegularExpressions.Regex]::Replace($content, $unlink, '$1')
     }
 
     if ($content -ne $original) {

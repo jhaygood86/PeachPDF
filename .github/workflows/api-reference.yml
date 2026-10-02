@@ -1,0 +1,42 @@
+name: API reference
+
+# The pages workflow generates the API reference when a release is published, so a documentation comment that
+# links to nothing, or a cross-package link that stops resolving, would otherwise first show up at release time.
+# This runs the same generation, which fails on any link that does not resolve, on the changes that could cause one.
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**/*.cs'
+      - 'src/**/*.csproj'
+      - 'src/ApiReference*.props'
+      - 'src/Version.props'
+      - '.github/scripts/*ApiRef*'
+      - '.github/scripts/*ApiDoc*'
+      - '.github/workflows/api-reference.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: api-reference-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Generate the API reference and check its links
+        shell: pwsh
+        run: ./.github/scripts/Build-ApiReference.ps1
