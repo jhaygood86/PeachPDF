@@ -48,10 +48,10 @@ public class FloatPlacementTests
         Assert.True(positions["w299_469"].X >= 20 + 131 - 0.5, $"first word at x={positions["w299_469"].X}, inside the left float");
     }
 
-    // When shifting a crowded line below the floats would leave the page's band (both floats are taller than the page), the
-    // line is not moved: the next page would be asked the same question. It keeps the place it had.
+    // A line with no room beside floats that are taller than the page is shifted below them (CSS 2.1 §9.5), which is in a later
+    // fragmentainer: the floats were placed before the line and every page leaves less of them to clear.
     [Fact]
-    public async Task CrowdedLine_BelowFloatsTallerThanThePage_StaysWhereItWas()
+    public async Task CrowdedLine_BelowFloatsTallerThanThePage_GoesBelowThem()
     {
         var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page { size: 300pt 160pt; margin: 20pt } " +
                    "body { margin:0; font: 10pt/12pt Arial }</style></head><body>" +
@@ -61,8 +61,9 @@ public class FloatPlacementTests
 
         var positions = await PaintedWords.PositionsAsync(html);
 
-        Assert.True(positions["w2_1"].Page == 0 && positions["w2_1"].Y < 40,
-            $"the first word moved to page {positions["w2_1"].Page} at y={positions["w2_1"].Y}");
+        // The floats end at y=320 of the flow, and the pages hold 120pt of it each: the line is in the band that point falls in, 60pt below its top.
+        Assert.True(positions["w2_1"].Page > 0, $"the first word is still on the page where the floats start, at y={positions["w2_1"].Y}");
+        Assert.InRange(positions["w2_1"].Y, 78, 82);
     }
 
     // A tall right float inside a column of a container that starts partway down the page narrows the lines of the

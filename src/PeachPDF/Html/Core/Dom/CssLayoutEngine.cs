@@ -4244,8 +4244,22 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer asked the same question, so a shift that long is not taken: the line stays where
                 // it was and keeps the room that is left. The same way out for a document that would keep shifting for
                 // ever (a bound, not an expected path).
-                if (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000
-                    || CannotFitBelowTheFloatsEvenOnAFreshPage(blockBox, originalY, nextY, word.Height))
+                // A float placed before this line is where it is whichever fragmentainer the line goes to, and it ends in a later one when it is taller
+                // than what is left: a line shifted below it is a line of that later fragmentainer (CSS 2.1 §9.5 moves it down until content fits,
+                // and css-break-3 §4.4 does not drop it), and every fragmentainer asked leaves less of the float to clear. The refusals below are
+                // for floats on the line itself, which move with it.
+                //
+                // Only for a line of the page-level flow, and a float outside every multi-column container: fragments of a page-level float are told
+                // apart by the page they are on, but the columns of a container share one band, so a float continuing from one column into the next
+                // has no geometry of its own there, and a line deferred out of a column fill takes the container's carry with it.
+                var floatsEndInALaterFragmentainer = !inColumn && (leftFloat is not null || rightFloat is not null)
+                    && (leftFloat is null || ColumnsContainerOf(leftFloat) is null)
+                    && (rightFloat is null || ColumnsContainerOf(rightFloat) is null)
+                    && !(coordinates.FloatsPlacedOnThisLine?.Contains(leftFloat!) == true || coordinates.FloatsPlacedOnThisLine?.Contains(rightFloat!) == true);
+
+                if (!floatsEndInALaterFragmentainer
+                    && (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000
+                        || CannotFitBelowTheFloatsEvenOnAFreshPage(blockBox, originalY, nextY, word.Height)))
                 {                    coordinates.CurrentY = originalY;
                     coordinates.MaxBottom = originalMaxBottom;
                     coordinates.Line.FlowTop = originalFlowTop;
@@ -4282,6 +4296,7 @@ namespace PeachPDF.Html.Core.Dom
             return lineTop - container.PageTopOf(slot) <= LineFitTolerance
                    && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot);
         }
+
         /// <summary>The nearest multi-column container at or above <paramref name="box"/>.</summary>
         private static CssBox? ColumnsContainerOf(CssBox box)
         {
