@@ -1321,7 +1321,7 @@ namespace PeachPDF.Html.Core.Dom
         // feature-settings entry with value >= 2 (routed through its own customAltIndexByTag pass, which
         // always overwrites last) silently outlast a same-tag alternates entry with value 1 (routed through
         // defaultTags), regardless of which one was actually appended later.
-        private static IReadOnlyList<(string Tag, int Value)> MergeExplicitFeatures(
+        internal static IReadOnlyList<(string Tag, int Value)> MergeExplicitFeatures(
             IReadOnlyList<(string Tag, int Value)> featureSettings, IReadOnlyList<(string Tag, int Value)> alternates)
         {
             if (alternates.Count == 0) return featureSettings;
