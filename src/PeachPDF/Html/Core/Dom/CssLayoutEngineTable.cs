@@ -5947,6 +5947,12 @@ namespace PeachPDF.Html.Core.Dom
 
                 var colSpan = GetColSpan(cell);
                 var width = GetCellWidth(columnIndex, cell);
+                // A column with `visibility: collapse` is removed from the table (CSS 2.1 §17.5.5): its cells take no room, and they
+                // paint nothing either. A cell does not inherit from its column, so without this the text of a cell that has been
+                // given no width was still drawn, over the cell that closed the gap.
+                if (IsColumnCollapsed(columnIndex) && cell.Visibility.Value != Visibility.Collapse)
+                    cell.Visibility = CssProperty<Visibility>.FromValue("collapse", Visibility.Collapse);
+
 
                 // A rowspan cell opened by an earlier row of this same row-group can occupy a column this
                 // row's own Boxes list has no entry for at all - no CssSpacingBox placeholder stands in
