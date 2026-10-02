@@ -113,7 +113,12 @@ namespace PeachPDF.Html.Core.Dom
             // continuation's top is the page's, where the float is no longer, and the frame does not place the box
             // again, so its Location.X is the one the previous page's layout left and cannot be asked again.
             var floatInset = 0d;
-            if (resume is not null && columnsBox.ColumnsBesideFloats is { } kept)
+            //
+            // Only while the box is still where that layout left it. One continuing in another outer column was placed at
+            // that column's own x, where the float is not beside it either, so it is laid out afresh: the kept left edge is
+            // the other column's, and applying it put the container back over the earlier column.
+            if (resume is not null && columnsBox.ColumnsBesideFloats is { } kept
+                && Math.Abs(kept.Left - columnsBox.ClientLeft) < 0.5)
             {
                 floatInset = kept.Left - columnsBox.ClientLeft;
                 containerWidth = kept.Width;
