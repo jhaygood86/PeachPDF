@@ -1051,6 +1051,13 @@ namespace PeachPDF.Html.Core.Dom
                             foreach (var floated in floats) beyond.Add(floated);
                         }
 
+                        // And the floats the flow has not reached: it stopped before them, so they still hold the measurement
+                        // pass's geometry (a float wider than the column puts that over this column), and the next column places them.
+                        if (link.ChildToken is InlineBreakToken stoppedFlow)
+                        {
+                            AddFloatsAfter(stoppedFlow.Box, stoppedFlow.ResumeWordIndex, beyond);
+                        }
+
                         token = link.ChildToken;
                         break;
                     }
@@ -1081,6 +1088,35 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// Adds the floats of <paramref name="flowBox"/>'s inline flow that come after its <paramref name="resumeOrdinal"/>th word.
+        /// </summary>
+        /// <remarks>
+        /// Ordinals count words only: a float has the ordinal of the word that follows it. One at the resume ordinal itself is not
+        /// added: the flow placed it, on the line it kept or on the one it discarded (<c>FloatsOfTheDiscardedLine</c>).
+        /// </remarks>
+        private static void AddFloatsAfter(CssBox flowBox, int resumeOrdinal, HashSet<CssBox> beyond)
+        {
+            var ordinal = 0;
+            Walk(flowBox);
+
+            void Walk(CssBox box)
+            {
+                foreach (var child in box.Boxes)
+                {
+                    if (child.IsFloated)
+                    {
+                        if (ordinal > resumeOrdinal) beyond.Add(child);
+                        continue;
+                    }
+
+                    if (child.IsExcludedFromFlow || child.IsBlock) continue;
+
+                    ordinal += child.Words.Count;
+                    Walk(child);
+                }
+            }
+        }
         private static double MaxBottomOf(List<CssBox> children, int limit, IReadOnlySet<CssBox> beyond)
         {
             var bottom = double.MinValue;

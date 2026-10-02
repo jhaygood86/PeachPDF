@@ -3520,6 +3520,10 @@ namespace PeachPDF.Html.Core.Fragmentation
                     continue;
                 }
 
+                // A float the column's fill did not place - it stopped before reaching it, so it is in the next column's flow - is
+                // not in the column's snapshot, and what the box holds now is where a later column put it.
+                if (capture is not null && snapshot is not null && childBox.IsFloated && !snapshot.Holds(childBox)) continue;
+
                 yield return (childBox, snapshot, capture, instance);
             }
         }
@@ -4361,13 +4365,16 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Whether <paramref name="geometry"/> holds <paramref name="box"/> or a box it lies in: the walk reaches a box through a
-        /// held ancestor and reads its live geometry when the snapshot does not hold it, so such an instance asks the question too.
+        /// held ancestor and reads its live geometry when the snapshot does not hold it, so such an instance asks the question too (a float\n        /// it does not hold is the exception: the walk skips it).
         /// </summary>
         private static bool HoldsOrDescendsFromAHeld(BoxGeometrySnapshot geometry, CssBox box)
         {
             for (var up = box; up is not null; up = up.ParentBox)
             {
                 if (geometry.Holds(up)) return true;
+
+                // The walk skips a float the snapshot does not hold, and so everything inside it.
+                if (up.IsFloated) return false;
             }
 
             return false;
