@@ -4324,22 +4324,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (own.ContextRoot is not { } root || own.Region is not { Left: not null, Right: not null } region) return false;
             if (!_capturedInstances.TryGetValue((root, slotIndex), out var all)) return false;
 
-            var row = all.FindAll(i => ReferenceEquals(i.ParentContext, own.ParentContext)
-                                       && i.DetachedSourceRoot is null && i.Region.Top == region.Top);
-
-            // A box another outer column's fill holds as well has been laid out twice, and what it holds there is the
-            // earlier fill's geometry: not a word that has no column, but the same word seen again.
-            foreach (var other in all)
-            {
-                if (!row.Contains(other) && other.DetachedSourceRoot is null && other.Geometry.Holds(box)) return false;
-            }
-
+            // Every fill of the container this slot holds, the first first: a container nested in an outer column is filled once
+            // under each outer column it reaches, and a box the later fills hold as well has the earlier fill's geometry in
+            // them, the same word seen again. Only the first holder is asked, so the word is drawn once.
             CapturedInstance? first = null;
 
-            for (var index = 0; index < row.Count; index++)
+            foreach (var instance in all)
             {
-                var instance = row[index];
-                if (!instance.Geometry.Holds(box)
+                if (instance.DetachedSourceRoot is not null || instance.Region.Left is null || !HoldsOrDescendsFromAHeld(instance.Geometry, box)
                     || !TryGetWordRect(box, wordIndex, instance.Geometry, out var rect)
                     || Math.Min(rect.Bottom, instance.Region.Bottom) - Math.Max(rect.Top, instance.Region.Top) <= BandOverlapEpsilon)
                 {
@@ -4349,10 +4341,35 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                 first ??= instance;
 
-                if (ClaimsWordIn(box, wordIndex, instance, OpenAtTheRightIfLastInItsRow(row, index).Region, slotIndex)) return false;
+                var row = all.FindAll(i => ReferenceEquals(i.ParentContext, instance.ParentContext)
+                                           && i.DetachedSourceRoot is null && i.Region.Top == instance.Region.Top);
+
+                var effective = OpenAtTheRightIfLastInItsRow(row, row.FindIndex(i => ReferenceEquals(i.Self, instance.Self)));
+
+                // The verdicts the walk applies after the claim, so a holder whose claim they would withdraw is not counted.
+                if (ClaimsWordIn(box, wordIndex, instance, effective.Region, slotIndex)
+                    && !effective.Region.YieldsToEarlierColumn(box, rect)
+                    && !StartsInAnotherInstance(box, wordIndex, effective, slotIndex))
+                {
+                    return false;
+                }
             }
 
             return first is { } holder && ReferenceEquals(holder.Self, own.Self);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="geometry"/> holds <paramref name="box"/> or a box it lies in: the walk reaches a box through a
+        /// held ancestor and reads its live geometry when the snapshot does not hold it, so such an instance asks the question too.
+        /// </summary>
+        private static bool HoldsOrDescendsFromAHeld(BoxGeometrySnapshot geometry, CssBox box)
+        {
+            for (var up = box; up is not null; up = up.ParentBox)
+            {
+                if (geometry.Holds(up)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
