@@ -1,4 +1,4 @@
-using PeachDrawing.Core;
+﻿using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -415,7 +415,11 @@ public sealed partial class RasterCanvas : Canvas
         if (UserToDevice.Invert() is not { } deviceToUser)
             return null;
 
-        return PaintSource.From(brush, deviceToUser);
+        // A brush is expressed in this canvas's own units (layout units, `PixelsPerPoint` of them per point), like every
+        // other coordinate handed to it; the device-to-user matrix maps to points, so scale it up to the brush's units.
+        // Without this a gradient or tile is positioned as if the page were never scaled (`ShrinkToFit`).
+        var deviceToBrush = Affine.Then(deviceToUser, new Affine(_pixelsPerPoint, 0, 0, _pixelsPerPoint, 0, 0));
+        return PaintSource.From(brush, deviceToBrush);
     }
 
     private void StrokeFlat(FlatPath flat, Pen pen)
