@@ -57,19 +57,17 @@ namespace PeachDrawing.Core
         }
 
         /// <summary>
-        /// The scale between this graphics context's own coordinate space (matching
-        /// <c>Core.Dom.CssBox</c> geometry - <c>PdfGenerateConfig.PixelsPerInch / 72</c>-inflated
-        /// relative to a true PDF point, see <c>HtmlContainer.PageSize</c>) and true PDF points.
-        /// <c>1.0</c> (the base, no-op default) is correct for every test-only <see cref="Canvas"/>
-        /// mock, which never inflates its own coordinate space this way; <c>PeachPDF.Adapters.
-        /// GraphicsAdapter</c> - the only implementation that actually paints a PDF - overrides this with
-        /// its real, adapter-driven value. A caller that needs to compute a transform matrix whose
-        /// *linear* (scale/rotation) part won't itself be divided by this factor before use -
-        /// <c>GraphicsAdapter.PushTransform</c> only divides a matrix's translation, not
-        /// <c>M11</c>/<c>M12</c>/<c>M21</c>/<c>M22</c> - reads this to pre-divide that part itself (issue
-        /// #814's SVG viewBox-to-viewport transform is the first such case: its "scale" is a ratio of an
-        /// inflated length to a never-inflated, dimensionless SVG user unit, so it is not already
-        /// scale-neutral the way an ordinary CSS <c>transform: scale()</c> is).
+        /// The scale between this graphics context's own coordinate space and true points (1/72 inch):
+        /// a backend whose coordinates are inflated relative to a point (for example a layout space
+        /// running at a higher pixels-per-inch than 72) reports that inflation here.
+        /// <c>1.0</c> (the base, no-op default) is correct for any <see cref="Canvas"/> whose
+        /// coordinate space is not inflated this way; a backend whose space is overrides this with its
+        /// real value. A caller that needs to compute a transform matrix whose
+        /// *linear* (scale/rotation) part won't itself be divided by this factor before use - a backend
+        /// may divide only a matrix's translation, not <c>M11</c>/<c>M12</c>/<c>M21</c>/<c>M22</c> -
+        /// reads this to pre-divide that part itself (an SVG viewBox-to-viewport transform is such a
+        /// case: its "scale" is a ratio of an inflated length to a never-inflated, dimensionless user
+        /// unit, so it is not already scale-neutral the way an ordinary <c>scale()</c> transform is).
         /// </summary>
         public virtual double PixelsPerPoint => 1.0;
 
@@ -470,7 +468,7 @@ namespace PeachDrawing.Core
 
         /// <summary>
         /// Whether this instance paints into an offscreen tile (e.g. one returned by
-        /// <see cref="CreateTile"/>, used by <c>CssBox.PaintWithOpacity</c> and SVG pattern/mask
+        /// <see cref="CreateTile"/>, used for group opacity and SVG pattern/mask
         /// content) rather than directly into the real page's own content stream. Tagged-PDF output
         /// does not emit marked-content sequences into tile content streams in the current
         /// implementation (doing so correctly needs <c>/MCR</c> with <c>/Stm</c>/<c>/StmOwn</c>
@@ -536,7 +534,7 @@ namespace PeachDrawing.Core
         /// use case is SVG's <c>SourceAlpha</c> filter input and <c>feComposite</c>, both of which are
         /// defined in terms of a source's alpha channel specifically, not a luminosity conversion of it.
         /// When <paramref name="invert"/> is true, the mask's <c>/TR</c> is set to <c>1 - x</c>
-        /// (<c>PdfSharpCore.Pdf.Advanced.PdfType4Function.BuildInvertFunction</c>), for a
+        /// (a PDF Type 4 function), for a
         /// complemented alpha mask without needing a second tile painted with inverted alpha. A no-op if
         /// either image wasn't created via <see cref="CreateTile"/> on this same <see cref="Canvas"/>.
         /// </summary>
@@ -669,7 +667,7 @@ namespace PeachDrawing.Core
         ///
         /// A default (non-abstract) implementation forwarding to the other overload - ignoring
         /// <paramref name="logicalText"/> - is deliberate: only a real PDF-writing backend
-        /// (<c>PeachPDF.Adapters.GraphicsAdapter</c>) needs to act on it; every other
+        /// needs to act on it; every other
         /// implementation (test mocks recording draw calls, measuring-only contexts) is unaffected by
         /// this overload's mere existence and needs no changes to keep compiling/behaving identically.
         /// </summary>

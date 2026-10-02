@@ -13,7 +13,7 @@ namespace PeachDrawing.Core
     /// <para>
     /// <b>Why this is a math-only type with no PDF-writing method on it.</b> The obvious next step -
     /// "apply this to whatever a Form XObject tile already painted" - does not have a general,
-    /// spec-conformant PDF answer, and that finding shapes how <c>PdfSharpCore.Pdf.Advanced.PdfType4Function</c>
+    /// spec-conformant PDF answer, and that finding shapes how a PDF Type 4 function
     /// and <c>Canvas.DrawImageWithColorMatrix</c> are actually built. Two real PDF mechanisms exist
     /// that are shaped like "run every color through a function", and neither does what a first read of
     /// "just make a Type 4 function and hang it off the graphics state" suggests:
@@ -40,8 +40,8 @@ namespace PeachDrawing.Core
     /// n-in, m-out function applied to every sample" - but it is a mechanism for *specifying what a
     /// colour value or an image's raw sample data means*, not for *re-processing something already
     /// painted*. It can turn a raster image's stored (r,g,b,a) sample bytes into displayed colour through
-    /// an arbitrary <see cref="ColorMatrix"/>-shaped function (a future phase's legitimate use of
-    /// <c>PdfSharpCore.Pdf.Advanced.PdfType4Function.BuildColorMatrixFunction</c>, wiring it in as
+    /// an arbitrary <see cref="ColorMatrix"/>-shaped function (a legitimate use of
+    /// a PDF Type 4 function, wiring it in as
     /// an image's colour space rather than a graphics-state transfer function). It cannot retroactively
     /// recolor an already-composited transparency group's result the way an ExtGState parameter does -
     /// there is no PDF graphics-state entry that takes "the RGBA this group already produced" as input.

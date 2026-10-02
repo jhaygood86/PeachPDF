@@ -51,7 +51,7 @@ namespace PeachDrawing.Core
         /// The size level is keyed by (size, <see cref="RenderContext.LayoutUnitsPerPoint"/>), not size alone. A size here
         /// is in layout units (points × pixels-per-point) while the font behind it is built at
         /// <c>size / pixelsPerPoint</c> points, so the same numeric size is a different physical font
-        /// under a different scale. Keyed by size alone, a <c>PeachPDF.PdfGenerator</c> reused across
+        /// under a different scale. Keyed by size alone, a handler reused across
         /// renders served a font built at the previous render's scale (a <c>ShrinkToFit</c> render leaves
         /// its rescaled fonts behind): 10pt text came out as 9.819pt Tf, which re-wrapped and re-sized
         /// whatever was laid out next.

@@ -5,7 +5,7 @@
 		<AssemblyName>PeachDrawing.Core</AssemblyName>
 		<RootNamespace>PeachDrawing.Core</RootNamespace>
 		<PackageId>PeachDrawing.Core</PackageId>
-		<Description>The drawing-surface abstraction (Canvas, RenderContext, Brush, Pen, Font, Image, GraphicsPath and the paint-ready value types) PeachPDF targets to write PDF. A user of PeachDrawing.Core can build their own render target the same way PeachPDF targets it to PDF, or take PeachDrawing's own raster Canvas implementation.</Description>
+		<Description>The drawing-surface abstraction (Canvas, RenderContext, Brush, Pen, Font, Image, GraphicsPath and the paint-ready value types) that rendering code draws against. Implement it to build your own render target (a PDF writer, for example), or take PeachDrawing's own raster Canvas implementation.</Description>
 		<PackageTags>drawing;graphics;canvas;rendering-abstraction</PackageTags>
 		<PackageIcon>peach.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>

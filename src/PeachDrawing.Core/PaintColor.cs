@@ -125,9 +125,8 @@ namespace PeachDrawing.Core
         /// <summary>
         /// True if this color was authored via CSS <c>device-cmyk()</c> and is carried in its native
         /// CMYK components (<see cref="C"/>/<see cref="M"/>/<see cref="Y"/>/<see cref="K"/>) rather than
-        /// RGB - <see cref="R"/>/<see cref="G"/>/<see cref="B"/> are meaningless when this is true. See
-        /// <c>PeachPDF.Utilities.Utils.Convert(PaintColor)</c>, the one choke point that branches on
-        /// this before building the PDF backend's color.
+        /// RGB - <see cref="R"/>/<see cref="G"/>/<see cref="B"/> are meaningless when this is true. A
+        /// colour-managed backend branches on this to keep the CMYK components.
         /// </summary>
         public bool IsCmyk => _isCmyk;
 
@@ -147,8 +146,7 @@ namespace PeachDrawing.Core
         /// color is already RGB, or a naive CMYK-to-RGB approximation when <see cref="IsCmyk"/> - a backend
         /// with no color management (a screen-oriented raster canvas; a preview) has no better answer than
         /// this. A colour-managed PDF writer needs the CMYK components preserved instead (a `/DeviceCMYK`
-        /// operand, not this conversion) - see <c>PeachPDF.Utilities.Utils.Convert(PaintColor)</c>, which
-        /// branches on <see cref="IsCmyk"/> for exactly that reason.
+        /// operand, not this conversion), so it branches on <see cref="IsCmyk"/> instead.
         /// </summary>
         public (byte R, byte G, byte B) ToRgb()
         {
