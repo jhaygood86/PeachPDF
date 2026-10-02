@@ -50,6 +50,28 @@ public class MulticolContentLossTests
         Assert.Empty(doubled);
     }
 
+    // #1554: a float wider than its column, in a multi-column container inside another one. The lines beside it have
+    // no room, were pushed past every column's inline extent and so claimed by none of them, and were lost. They move
+    // below the float instead (CSS 2.1 §9.5), inside the column the float is in.
+    [Theory]
+    [InlineData(146, true)]
+    [InlineData(146, false)]
+    [InlineData(40, true)]
+    public async Task FloatWiderThanItsColumn_InNestedColumns_KeepsEveryWord(int floatWidth, bool nested)
+    {
+        var inner = $"<div style=\"float: left; width: {floatWidth}pt; height: 37pt\">w1_1 w1_2 w1_3 w1_4</div>" +
+                    "<p>" + string.Join(' ', Enumerable.Range(1, 24).Select(i => $"w2_{i}")) + "</p>";
+        var body = nested
+            ? $"<div style=\"columns: 2; column-gap: 8pt\"><div style=\"columns: 2; column-gap: 8pt\">{inner}</div></div>"
+            : $"<div style=\"columns: 2; column-gap: 8pt\">{inner}</div>";
+
+        var (painted, _) = await PaintedWords.LayOutAndCollectVisibleAsync(Page(body));
+        var (lost, doubled) = PaintedWords.Diff(body, painted);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+    }
+
     // #1532: a container starting where less than a line of room is left moves to the next page, as a plain block
     // does (css-break-3 §4.4). Twelve 16pt fillers leave 8pt of a 200pt band; ten, eleven and thirteen are controls.
     [Theory]

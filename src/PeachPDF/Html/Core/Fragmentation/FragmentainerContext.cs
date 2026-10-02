@@ -77,6 +77,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal double? FreshPageBandHeight { get; set; }
 
         /// <summary>
+        /// Whether this column belongs to a container that is itself inside another container's column, whose band
+        /// (not the page's foot) is what bounds it.
+        /// </summary>
+        internal bool NestedInAColumn { get; set; }
+
+        /// <summary>
         /// The box that owns this fragmentation context. A field rather than the document root so a
         /// nested context (multi-column columns are fragmentainers too, per §2) can be introduced
         /// without reshaping this type.

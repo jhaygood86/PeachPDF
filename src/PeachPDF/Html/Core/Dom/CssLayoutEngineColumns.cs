@@ -582,6 +582,8 @@ namespace PeachPDF.Html.Core.Dom
             // tall everything is) and a continuation starts from the full budget and is re-balanced below
             // once the fill has shown that the remainder ends here.
             var balances = columnsBox.ColumnFill.Value != ColumnFillMode.Auto;
+            var holdsAFloat = columnsBox.Boxes.Any(b => (b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None)
+                                                        || (b.HtmlTag is null && b.Boxes.Any(c => c.IsFloated)));
 
             var target = balances && resume is null
                 ? EstimateBalancedColumnHeight(children, 0, columnCount, pageBudget)
@@ -645,7 +647,11 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (target >= pageBudget) break;
 
-                    target = Math.Min(pageBudget, target * TargetGrowthPerAttempt + 1);
+                    // At least as far as the content reached: a float taller than the trial band (nothing in the content
+                    // divides it) is carried over until the band covers it, and growing by a fifth of the band each time
+                    // ran out of attempts first, deferring the container from page to page for ever. Only for a container
+                    // that holds a float itself: any other content divides, and its trials are the estimate's to grow.
+                    target = Math.Min(pageBudget, Math.Max(target * TargetGrowthPerAttempt + 1, holdsAFloat ? contentBottom - boxTop : 0));
                 }
                 // Only a fill that used the whole budget - it was not balanced, so this is the fragment
                 // that holds the end of the flow and now knows its real height. A fill made at the
@@ -754,6 +760,8 @@ namespace PeachPDF.Html.Core.Dom
                     column.FreshPageBandHeight = htmlContainer.PageBandHeightOf(startSlot)
                                                  - htmlContainer.TotalBandEndReservationFor(startSlot);
                 }
+
+                column.NestedInAColumn = htmlContainer.CurrentFragmentainer is { HasOwnBand: true };
 
                 var previousContext = htmlContainer.EnterNestedFragmentainer(column);
 
