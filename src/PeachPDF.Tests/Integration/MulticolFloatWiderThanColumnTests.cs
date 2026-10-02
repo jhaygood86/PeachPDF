@@ -63,4 +63,20 @@ public class MulticolFloatWiderThanColumnTests
         Assert.Empty(lost);
         Assert.Empty(doubled);
     }
+
+    // A float on the line a column break discards is laid out in that column, and again by the next: the first column's
+    // snapshot kept it, and its text was drawn in both.
+    [Fact]
+    public async Task FloatOnTheLineThatBreaksToTheNextColumn_IsDrawnInOneColumnOnly()
+    {
+        var long15 = string.Join(' ', Enumerable.Range(1, 15).Select(i => $"w9_{i}"));
+        var body = $"<div style='columns:3;column-gap:8pt'><p>{long15}</p>" +
+                   "<div style='float:left;width:92pt;height:32pt'>w9_87 </div>w9_92 w9_93 </div>";
+
+        var (visible, _) = await PaintedWords.LayOutAndCollectVisibleAsync(Page(body));
+        var (lost, doubled) = PaintedWords.Diff(body, visible);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+    }
 }

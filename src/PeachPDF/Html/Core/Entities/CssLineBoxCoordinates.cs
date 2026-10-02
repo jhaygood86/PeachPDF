@@ -143,6 +143,12 @@ namespace PeachPDF.Html.Core.Entities
         public List<CssBox>? InlineFloats { get; set; }
 
         /// <summary>
+        /// The floats this pass placed (rather than found already placed) while building the line in progress. They
+        /// belong to that line, so when a break discards it they are left behind with its words.
+        /// </summary>
+        internal List<CssBox>? FloatsPlacedOnThisLine { get; set; }
+
+        /// <summary>
         /// Absolutely positioned boxes <see cref="CssLayoutEngine.FlowBox"/> passed among the block's
         /// inline content, each with where the walk had reached there. They take no part in the line
         /// boxes, so they are laid out once the lines are final, which is also when an inline containing

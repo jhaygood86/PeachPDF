@@ -2572,6 +2572,12 @@ namespace PeachPDF.Html.Core.Dom
         internal (double Left, double Width)? ColumnsBesideFloats { get; set; }
 
         /// <summary>
+        /// The floats placed while building the line this box's inline flow discarded at its last break. The resumed
+        /// pass places them again, so the fragmentainer the flow stopped in must not claim them.
+        /// </summary>
+        internal List<CssBox>? FloatsOfTheDiscardedLine { get; set; }
+
+        /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
         /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
         /// turn, so the record unwinds to the fragmentation-context root.

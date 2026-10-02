@@ -582,8 +582,12 @@ namespace PeachPDF.Html.Core.Dom
             // tall everything is) and a continuation starts from the full budget and is re-balanced below
             // once the fill has shown that the remainder ends here.
             var balances = columnsBox.ColumnFill.Value != ColumnFillMode.Auto;
-            var holdsAFloat = columnsBox.Boxes.Any(b => (b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None)
-                                                        || (b.HtmlTag is null && b.Boxes.Any(c => c.IsFloated)));
+            // The container's own floats, and those of an anonymous block wrapping its bare text: what makes a column
+            // taller than an even share of the content.
+            var floats = columnsBox.Boxes
+                .SelectMany(b => b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None ? [b]
+                    : b.HtmlTag is null ? b.Boxes.Where(c => c.IsFloated) : [])
+                .ToList();
 
             var target = balances && resume is null
                 ? EstimateBalancedColumnHeight(children, 0, columnCount, pageBudget)
@@ -651,7 +655,8 @@ namespace PeachPDF.Html.Core.Dom
                     // divides it) is carried over until the band covers it, and growing by a fifth of the band each time
                     // ran out of attempts first, deferring the container from page to page for ever. Only for a container
                     // that holds a float itself: any other content divides, and its trials are the estimate's to grow.
-                    target = Math.Min(pageBudget, Math.Max(target * TargetGrowthPerAttempt + 1, holdsAFloat ? contentBottom - boxTop : 0));
+                    target = Math.Min(pageBudget, Math.Max(target * TargetGrowthPerAttempt + 1,
+                        floats.Count > 0 ? Math.Max(contentBottom, FloatReach(floats)) - boxTop : 0));
                 }
                 // Only a fill that used the whole budget - it was not balanced, so this is the fragment
                 // that holds the end of the flow and now knows its real height. A fill made at the
@@ -789,6 +794,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     columnBottom = MaxBottomOf(children, placedBelow, beyond);
 
+
                     // This column's geometry, handed over while the boxes still hold it. A child
                     // continuing into the next column is laid out again there, at that column's own
                     // inline position, so nothing read afterwards could tell the two fragments apart -
@@ -915,6 +921,12 @@ namespace PeachPDF.Html.Core.Dom
                 yield return children[i];
             }
         }
+        /// <summary>
+        /// How far down the lowest of <paramref name="floats"/> reaches as last laid out, margin included.
+        /// </summary>
+        private static double FloatReach(List<CssBox> floats) =>
+            floats.Count == 0 ? double.MinValue : floats.Max(f => f.ActualBottom + f.ActualMarginBottom);
+
 
         /// <summary>
         /// Narrows the container's own inline extent to one column, so children lay out at that column's
@@ -973,6 +985,13 @@ namespace PeachPDF.Html.Core.Dom
                 for (var i = from; i < link.Box.Boxes.Count; i++)
                 {
                     beyond.Add(link.Box.Boxes[i]);
+                }
+
+                // A floated child of the flow that stopped, placed on the line it discarded: laid out here, and again
+                // by the next column, which is the only one that holds it.
+                if (link.ChildToken is InlineBreakToken { Box.FloatsOfTheDiscardedLine: { } floats })
+                {
+                    foreach (var floated in floats) beyond.Add(floated);
                 }
             }
 

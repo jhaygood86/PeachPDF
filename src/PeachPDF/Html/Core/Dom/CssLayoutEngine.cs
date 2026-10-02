@@ -411,6 +411,8 @@ namespace PeachPDF.Html.Core.Dom
                 ConsecutiveHyphenatedLines = resume?.ConsecutiveHyphenatedLines ?? 0
             };
 
+            blockBox.FloatsOfTheDiscardedLine = null;
+
             //Flow words and boxes
             var activeFlows = blockBox.HtmlContainer?.ActiveInlineFlows;
             activeFlows?.Add(coordinates);
@@ -449,6 +451,10 @@ namespace PeachPDF.Html.Core.Dom
                 // straddles a fragmentainer (css-break-3 §4.1). Everything still in the list is
                 // complete, which is what the resumed pass must not re-finalize.
                 blockBox.LineBoxes.Remove(coordinates.Line);
+
+                // The floats placed while building it go with it: the resumed pass places them again, in the next
+                // fragmentainer, and the one this pass is leaving must not still claim them.
+                blockBox.FloatsOfTheDiscardedLine = coordinates.FloatsPlacedOnThisLine;
 
                 // hyphenate-limit-last (CSS Text 4 §6.3.5): the line CreateLineBoxes just kept - now the
                 // last one before this break - may not end in a hyphen the property forbids. Unlike
@@ -4250,6 +4256,7 @@ namespace PeachPDF.Html.Core.Dom
             coordinates.Line.PrecedesForcedBreak = followsForcedBreak;
             coordinates.CurrentX = lineStartX;
             coordinates.CurrentY = coordinates.MaxBottom + lineSpacing;
+            coordinates.FloatsPlacedOnThisLine = null;
             coordinates.Line = new CssLineBox(blockBox)
             {
                 FollowsForcedBreak = followsForcedBreak,
@@ -5336,6 +5343,7 @@ namespace PeachPDF.Html.Core.Dom
                     else
                     {
                         await FlowFloatChild(g, blockBox, b, coordinates);
+                        (coordinates.FloatsPlacedOnThisLine ??= []).Add(b);
                     }
 
                     // A float never sits on the line - it contributes no content width to the cursor at
