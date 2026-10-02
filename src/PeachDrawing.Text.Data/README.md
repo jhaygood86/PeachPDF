@@ -12,6 +12,11 @@ directly - add a package reference to `PeachDrawing.Text` (or `PeachPDF`) instea
 See [PeachDrawing.Text's own README](https://www.nuget.org/packages/PeachDrawing.Text/) and
 [peachpdf.net](https://peachpdf.net/) for what the engine and PeachPDF itself do.
 
+## Sponsorship
+
+PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
+sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
+
 ## Licenses
 
 The data in this package carries real license obligations of its own (the Unicode Character Database, ICU's break-iterator

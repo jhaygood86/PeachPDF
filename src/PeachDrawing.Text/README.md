@@ -18,6 +18,11 @@ What is in it:
 - **Unicode:** the Unicode Bidirectional Algorithm (UAX #9, checked against `BidiCharacterTest`), script itemization,
   vertical orientation, and TeX/Liang hyphenation for 73 languages.
 
+## Sponsorship
+
+PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
+sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
+
 ## Licence
 
 BSD 3-Clause (see `LICENSE`). Parts of the font readers derive from PDFsharp (MIT), the TrueType bytecode interpreter

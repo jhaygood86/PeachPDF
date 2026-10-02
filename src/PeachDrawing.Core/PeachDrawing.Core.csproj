@@ -7,6 +7,7 @@
 		<Description>The drawing-surface abstraction (Canvas, RenderContext, Brush, Pen, Font, Image, GraphicsPath and the paint-ready value types) PeachPDF targets to write PDF. A user of PeachDrawing.Core can build their own render target the same way PeachPDF targets it to PDF, or take PeachDrawing's own raster Canvas implementation.</Description>
 		<PackageTags>drawing;graphics;canvas;rendering-abstraction</PackageTags>
 		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
 		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
@@ -43,5 +44,6 @@
 	<ItemGroup>
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 </Project>
