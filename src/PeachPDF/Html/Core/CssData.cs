@@ -512,7 +512,7 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// Genuinely zero-copy counterpart of <see cref="Parse(RenderContext, string, bool)"/> - see
-        /// <see cref="CssParser.ParseStyleSheet(ReadOnlyMemory{char}, bool)"/>'s own remarks for why
+        /// the parser's own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
         /// </summary>
         /// <param name="adapter">Platform adapter</param>

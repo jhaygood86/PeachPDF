@@ -19,7 +19,7 @@ namespace PeachPDF
     /// (PDF 1.3-based). PeachPDF sets the document's PDF version header and its
     /// <c>GTS_PDFXVersion</c>/<c>GTS_PDFXConformance</c> identification (both the document information
     /// dictionary and, for X4, its XMP metadata) accordingly - see
-    /// <see cref="PdfSharpCore.Pdf.Advanced.PdfMetadataStream.PdfXIdentifiers"/> for the exact identifier
+    /// <c>PdfMetadataStream.PdfXIdentifiers</c> for the exact identifier
     /// strings and how they were verified.
     /// </para>
     /// <para>

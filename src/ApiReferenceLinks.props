@@ -1,0 +1,25 @@
+<Project>
+	<!--
+		Cross-package links for the generated API reference (see ApiReference.props). Every package with a reference writes a
+		links file naming each of its pages and where the site serves them, and reads the links files of the packages built
+		before it, so a type from another package - PeachDrawing.Text.Typeface in a PeachDrawing.Core signature, PeachImage.Image
+		in a PeachDrawing one - links to that package's own page rather than to a learn.microsoft.com URL that does not exist.
+		The order the packages are built in (which pages.yml and Build-ApiReference.ps1 both fix) is therefore the order of the
+		references between them: a file that does not exist yet simply contributes nothing.
+		$(MSBuildProjectName) rather than $(AssemblyName) for the same reason as in ApiReference.props: this file is imported
+		before the project's own properties are evaluated.
+	-->
+	<PropertyGroup>
+		<ApiLinksFolder>$(MSBuildThisFileDirectory)../artifacts/api-links/</ApiLinksFolder>
+		<DefaultDocumentationLinksOutputFile>$(ApiLinksFolder)$(MSBuildProjectName).links</DefaultDocumentationLinksOutputFile>
+		<!-- Root-relative, so the same pages serve a local preview and the published site. PeachPDF's own pages sit at the root of /api/. -->
+		<DefaultDocumentationLinksBaseUrl Condition="'$(MSBuildProjectName)' == 'PeachPDF'">/api/</DefaultDocumentationLinksBaseUrl>
+		<DefaultDocumentationLinksBaseUrl Condition="'$(MSBuildProjectName)' != 'PeachPDF'">/api/$(MSBuildProjectName)/</DefaultDocumentationLinksBaseUrl>
+	</PropertyGroup>
+	<ItemGroup>
+		<_ApiLinksFile Include="$(ApiLinksFolder)*.links" Exclude="$(DefaultDocumentationLinksOutputFile)" />
+	</ItemGroup>
+	<PropertyGroup>
+		<DefaultDocumentationExternLinksFiles>@(_ApiLinksFile->'%(FullPath)', '|')</DefaultDocumentationExternLinksFiles>
+	</PropertyGroup>
+</Project>

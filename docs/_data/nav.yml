@@ -24,6 +24,8 @@
       url: /peachdrawing-core.html
     - title: PeachDrawing
       url: /peachdrawing.html
+    - title: PeachImage
+      url: /peachimage.html
     - title: Testing
       url: /testing.html
 - title: Showcase
@@ -44,5 +46,8 @@
     - title: PeachDrawing.Text
       url: /api/PeachDrawing.Text/
       prefix: /api/PeachDrawing.Text/
+    - title: PeachImage
+      url: /api/PeachImage/
+      prefix: /api/PeachImage/
 - title: Support
   url: /support.html

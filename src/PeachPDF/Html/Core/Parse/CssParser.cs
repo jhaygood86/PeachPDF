@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Parse
 
         /// <summary>
         /// Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(string, bool)"/> - see
-        /// <see cref="StylesheetParser.Parse(ReadOnlyMemory{char})"/>'s own remarks for why
+        /// <c>StylesheetParser.Parse</c>'s own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
         /// </summary>
         public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)

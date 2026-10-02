@@ -12,6 +12,7 @@
 		<DefaultDocumentationGeneratedAccessModifiers>Public</DefaultDocumentationGeneratedAccessModifiers>
 		<DefaultDocumentationFileNameFactory>Name</DefaultDocumentationFileNameFactory>
 	</PropertyGroup>
+	<Import Project="ApiReferenceLinks.props" />
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
 	</ItemGroup>

@@ -81,7 +81,7 @@ namespace PeachDrawing.Core
         /// The factor between the layout units font sizes are requested in and the points the font behind
         /// them is built at (<c>points = size / LayoutUnitsPerPoint</c>). It is part of a cached font's identity:
         /// the same requested size under a different scale is a different physical font, so
-        /// <see cref="FontsHandler"/> keys every font cache by it. 1 for an adapter whose layout unit is
+        /// the font handler keys every font cache by it. 1 for an adapter whose layout unit is
         /// the point.
         /// </summary>
         public virtual double LayoutUnitsPerPoint => 1.0;

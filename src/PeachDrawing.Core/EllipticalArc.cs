@@ -16,7 +16,7 @@ namespace PeachDrawing.Core
 {
     /// <summary>
     /// The center parameterization of an <see cref="GraphicsPath.AddArc"/>-style endpoint-parameterized
-    /// elliptical arc - <see cref="StartAngle"/>/<see cref="EndAngle"/> are in the ellipse's own (rotated)
+    /// elliptical arc - <c>StartAngle</c>/<c>EndAngle</c> are in the ellipse's own (rotated)
     /// local parameter space, so a caller samples a point at angle <c>t</c> as
     /// <c>(CenterX + RadiusX*cos(t)*cos(RotationRadians) - RadiusY*sin(t)*sin(RotationRadians), CenterY + RadiusX*cos(t)*sin(RotationRadians) + RadiusY*sin(t)*cos(RotationRadians))</c>.
     /// </summary>

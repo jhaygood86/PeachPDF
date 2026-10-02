@@ -20,7 +20,7 @@ namespace PeachDrawing;
 /// </summary>
 /// <remarks>
 /// Font creation goes through <see cref="TypefaceFont"/> and image decoding through
-/// <see cref="DecodedImage"/> - both PeachDrawing.Core/PeachDrawing's own types, no PDF backend
+/// <c>DecodedImage</c> - both PeachDrawing.Core/PeachDrawing's own types, no PDF backend
 /// involved anywhere in the chain.
 /// </remarks>
 public sealed class RasterRenderContext : RenderContext

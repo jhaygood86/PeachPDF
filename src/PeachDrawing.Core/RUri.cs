@@ -153,8 +153,8 @@ namespace PeachDrawing.Core
         /// The URI scheme (e.g. <c>https</c>, <c>file</c>, <c>data</c>).
         /// </summary>
         /// <remarks>
-        /// A held <see cref="_originalUri"/> is only ever a <c>data:</c> URI —
-        /// <see cref="MustBypassSystemUri"/> is what put it there.
+        /// A held original string is only ever a <c>data:</c> URI —
+        /// the bypass check in the constructors is what put it there.
         /// </remarks>
         public string Scheme => _uri is not null ? _uri.Scheme : "data";
 

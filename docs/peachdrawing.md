@@ -3,7 +3,7 @@
 `PeachDrawing` is a standalone CPU software rasterizer: a concrete `Canvas`/`RenderContext` implementation
 of [PeachDrawing.Core](peachdrawing-core.md), usable with **no PeachPDF reference at all**.
 Draw shapes, text and images onto a `RasterCanvas` and save the result as a PNG or any other
-[PeachImage](https://www.nuget.org/packages/PeachImage)-supported format - no HTML, no CSS, no PDF involved
+[PeachImage](peachimage.md)-supported format - no HTML, no CSS, no PDF involved
 anywhere. It depends only on `PeachDrawing.Core` and `PeachImage`, is trimmable and Native AOT
 compatible, and is versioned in lockstep with PeachPDF: the same version number for every release.
 
