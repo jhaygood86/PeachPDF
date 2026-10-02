@@ -33,7 +33,7 @@ namespace PeachPDF.Tests.Html.Core
         public void CcmpLigature_AppliesWithoutAnyLigatureFeatureRequested()
         {
             // The font declares no liga/rlig/clig whatsoever - if ccmp is treated as opt-in, "AB" stays
-            // two glyphs. This is the exact shape of the real defect: Noto PaintColor Emoji keeps every
+            // two glyphs. This is the exact shape of the real defect: Noto Color Emoji keeps every
             // emoji-sequence ligature in ccmp, so country-flag pairs rendered as bare letters.
             var glyphs = Shape("AB");
 

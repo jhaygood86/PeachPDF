@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task RealNotoColorEmoji_RendersAsVectorFillsWithGradients_AndInvisibleSelectableText()
         {
-            // End-to-end against the real COLR v1 Noto PaintColor Emoji subset: an emoji run must paint as
+            // End-to-end against the real COLR v1 Noto Color Emoji subset: an emoji run must paint as
             // vector content (fills + gradient shadings), while invisible CID text supplies selection.
             string pdf = await RenderWithColorFont(BundledFonts.ColorEmoji, "\U0001F600\U0001F308"); // grin, rainbow
 
