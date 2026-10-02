@@ -8525,7 +8525,19 @@ namespace PeachPDF.Html.Core.Dom
             // found this is a logo beside a five-line address, and the row measured as "logo + the address's
             // FIRST line" (140pt against the 164pt it needs) -- the outer row then handed it 140pt, and
             // the address wrapped to one word per line with the logo painted over it.
-            if (IsFlexRow(box) && box.Boxes.Count > 0)
+            // An orthogonal flow root with a definite width is one opaque box to the line it sits in (css-writing-modes-4 §4.3,
+            // css-sizing-3 §5.1): its contribution is that declared width, and its words run along the other axis, so summing them
+            // here as if they were horizontal text made a vertical box 15 characters tall ask for 15 characters of width.
+            var isolatedOrthogonalFlow = includeExplicitWidth
+                && box.HasDifferentWritingModeFromParent
+                && CssValueParser.IsValidLength(box.Width)
+                && !box.Width.EndsWith('%');
+
+            if (isolatedOrthogonalFlow)
+            {
+                // Nothing of its content: the declared width is folded in below.
+            }
+            else if (IsFlexRow(box) && box.Boxes.Count > 0)
             {
                 double rowMax = 0, rowMin = 0;
                 var wraps = box.FlexWrap.Value is not CSS.FlexWrap.NoWrap;
