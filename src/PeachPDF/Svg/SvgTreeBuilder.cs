@@ -227,7 +227,9 @@ namespace PeachPDF.Svg
             string UnderlinePosition = "auto",
             string SkipInk = "auto",
             string? TextShadow = null,
-            string? PaintOrder = null)
+            string? PaintOrder = null,
+            int PreservedTabSpaces = 0,
+            int TabSize = 8)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1568,6 +1570,27 @@ namespace PeachPDF.Svg
                 ? inherited.PaintOrder
                 : paintOrderAttr.Trim().ToLowerInvariant();
 
+            // Whitespace handling. SVG 1.1's xml:space="preserve" and the CSS white-space values that preserve spaces (pre, pre-wrap, break-spaces)
+            // keep every space; newlines and tabs become spaces, since SVG text does not wrap or break lines of its own accord (a tab becomes
+            // tab-size spaces under white-space, one under xml:space). PreservedTabSpaces is 0 when whitespace collapses.
+            var tabSizeAttr = ResolveStyledAttr(node, "tab-size")?.Trim();
+            var tabSize = int.TryParse(tabSizeAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTabSize) && parsedTabSize >= 0
+                ? parsedTabSize
+                : tabSizeAttr is null or "inherit" ? inherited.TabSize : 8;
+
+            var whiteSpaceAttr = ResolveStyledAttr(node, "white-space")?.Trim().ToLowerInvariant();
+            var preservedTabSpaces = whiteSpaceAttr switch
+            {
+                "pre" or "pre-wrap" or "break-spaces" => Math.Max(tabSize, 1),
+                "normal" or "nowrap" or "pre-line" => 0,
+                _ => node.GetAttribute("xml:space")?.Trim() switch
+                {
+                    "preserve" => 1,
+                    "default" => 0,
+                    _ => inherited.PreservedTabSpaces,
+                },
+            };
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1581,7 +1604,7 @@ namespace PeachPDF.Svg
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
-                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder);
+                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize);
         }
 
         /// <summary>
@@ -2007,7 +2030,7 @@ namespace PeachPDF.Svg
                 if (content.IsText)
                 {
                     var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state);
-                    var text = state.Collapse(transformed);
+                    var text = state.Collapse(transformed, runFont.PreservedTabSpaces);
                     if (text.Length > 0)
                         run.Content.Add(new SvgTextFragment { Text = text });
                     continue;
@@ -2040,7 +2063,7 @@ namespace PeachPDF.Svg
                             trefRun.Content.Clear();
                             var trefFont = ComputeFontContext(child, childFontContext);
                             var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state);
-                            var text = state.Collapse(transformed);
+                            var text = state.Collapse(transformed, trefFont.PreservedTabSpaces);
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
                         }
@@ -2135,12 +2158,37 @@ namespace PeachPDF.Svg
             public bool CapitalizeAtWordStart = true;
 
             /// <summary>Collapses one text fragment, advancing the shared cross-run state.</summary>
-            public string Collapse(string raw)
+            public string Collapse(string raw, int preservedTabSpaces = 0)
             {
                 if (string.IsNullOrEmpty(raw))
                     return "";
 
                 var sb = new StringBuilder(raw.Length);
+
+                if (preservedTabSpaces > 0)
+                {
+                    // Preserved whitespace: nothing is trimmed or collapsed; a line break is a space (a CRLF one space) and a tab is tab-size spaces.
+                    for (var i = 0; i < raw.Length; i++)
+                    {
+                        var ch = raw[i];
+                        if (ch == '\r' && i + 1 < raw.Length && raw[i + 1] == '\n')
+                            continue;
+
+                        if (ch == '\t')
+                            sb.Append(' ', preservedTabSpaces);
+                        else
+                            sb.Append(ch is '\n' or '\r' ? ' ' : ch);
+                    }
+
+                    if (sb.Length > 0)
+                    {
+                        _atStart = false;
+                        _pendingSpace = false;
+                    }
+
+                    return sb.ToString();
+                }
+
                 foreach (var ch in raw)
                 {
                     if (char.IsWhiteSpace(ch))
