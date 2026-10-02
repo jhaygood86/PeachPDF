@@ -3207,6 +3207,14 @@ namespace PeachPDF.Html.Core
             _emitter?.CapturedInstanceCount(contextRoot, slot) ?? 0;
 
         /// <summary>
+        /// Removes <paramref name="boxes"/> (and their descendants) from the geometry of what
+        /// <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from index <paramref name="fromIndex"/> on:
+        /// content a later column of the same fill moved on whole.
+        /// </summary>
+        internal void ForgetInCapturedInstancesFrom(CssBox contextRoot, int slot, int fromIndex, IEnumerable<CssBox> boxes) =>
+            _emitter?.ForgetInCapturedInstancesFrom(contextRoot, slot, fromIndex, boxes);
+
+        /// <summary>
         /// Discards only what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from
         /// index <paramref name="keepFirst"/> onward, leaving an earlier <c>column-span: all</c> run's
         /// already-finished columns in the same slot untouched.

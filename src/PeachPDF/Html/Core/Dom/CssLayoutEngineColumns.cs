@@ -689,6 +689,14 @@ namespace PeachPDF.Html.Core.Dom
                 htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
             }
 
+            // What the last column left for the next one may have been placed in an earlier column first: a break that
+            // falls before a box (a widows or orphans correction that could not be met, a table row that did not fit)
+            // moves the whole box on, and the earlier columns still held what they had laid out of it, so it was drawn
+            // in both.
+            if (carry is not null && !IsColumnSpanBoundary(carry))
+            {
+                htmlContainer.ForgetInCapturedInstancesFrom(columnsBox, startSlot, recordedBefore, BeyondThisColumn(carry));
+            }
             // One rule per gap between the columns actually used in this run, spanning the content they
             // hold - never through a spanning box, which is never part of a run.
             var gap = pitch - columnWidth;
@@ -980,28 +988,51 @@ namespace PeachPDF.Html.Core.Dom
             // The last column of every container reaches here with no record at all, and so does every
             // column of one whose content fits - so the empty answer is the common one, and it needs no
             // set of its own.
-            if (token is not BlockBreakToken outermost) return NoBoxes;
+            if (token is not BlockBreakToken) return NoBoxes;
 
             var beyond = new HashSet<CssBox>();
-
-            for (var link = outermost; link is not null; link = link.ChildToken as BlockBreakToken)
-            {
-                var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
-
-                for (var i = from; i < link.Box.Boxes.Count; i++)
-                {
-                    beyond.Add(link.Box.Boxes[i]);
-                }
-
-                // A floated child of the flow that stopped, placed on the line it discarded: laid out here, and again
-                // by the next column, which is the only one that holds it.
-                if (link.ChildToken is InlineBreakToken { Box.FloatsOfTheDiscardedLine: { } floats })
-                {
-                    foreach (var floated in floats) beyond.Add(floated);
-                }
-            }
+            AddBoxesBeyond(token, beyond);
 
             return beyond;
+        }
+
+        private static void AddBoxesBeyond(BreakToken? token, HashSet<CssBox> beyond)
+        {
+            while (token is not null)
+            {
+                switch (token)
+                {
+                    case BlockBreakToken link:
+                    {
+                        var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
+
+                        for (var i = from; i < link.Box.Boxes.Count; i++)
+                        {
+                            beyond.Add(link.Box.Boxes[i]);
+                        }
+
+                        // A floated child of the flow that stopped, placed on the line it discarded: laid out here, and
+                        // again by the next column, which is the only one that holds it.
+                        if (link.ChildToken is InlineBreakToken { Box.FloatsOfTheDiscardedLine: { } floats })
+                        {
+                            foreach (var floated in floats) beyond.Add(floated);
+                        }
+
+                        token = link.ChildToken;
+                        break;
+                    }
+
+                    // A table's cells are parallel flows, and the ones that stopped each say where: a cell that breaks
+                    // before its first child has put nothing here, so what it holds is the next column's. Laid out
+                    // here first and moved on, it was drawn by both.
+                    case TableBreakToken table:
+                        foreach (var cell in table.UnfinishedCells) AddBoxesBeyond(cell.Token, beyond);
+                        return;
+
+                    default:
+                        return;
+                }
+            }
         }
 
         private static double MaxBottomOf(List<CssBox> children, int limit, IReadOnlySet<CssBox> beyond)

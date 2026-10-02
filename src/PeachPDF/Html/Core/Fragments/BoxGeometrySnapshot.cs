@@ -178,6 +178,20 @@ namespace PeachPDF.Html.Core.Fragments
         internal bool Holds(CssBox box) => _geometry.ContainsKey(box);
 
         /// <summary>
+        /// Forgets <paramref name="subtreeRoot"/> and its descendants, for content that was captured here and has since
+        /// been moved on whole to a later fragmentainer.
+        /// </summary>
+        internal void Forget(CssBox subtreeRoot)
+        {
+            _geometry.Remove(subtreeRoot);
+
+            foreach (var childBox in subtreeRoot.Boxes)
+            {
+                Forget(childBox);
+            }
+        }
+
+        /// <summary>
         /// Shifts every captured box's geometry by <paramref name="dx"/>/<paramref name="dy"/>.
         /// </summary>
         /// <remarks>
