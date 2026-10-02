@@ -67,9 +67,9 @@ since there is no CSS cascade here to resolve a generic keyword against.
 `RasterCanvas` has no built-in notion of a PDF point or a CSS layout unit. A canvas from `CreateCanvas` has
 the simplest possible contract: **one user-space unit is one device pixel.** `new Rect(0, 0, 100, 50)` and a
 font `size` of `24` both mean exactly that many pixels, regardless of `dpi`. This is deliberately different
-from how PeachPDF's own vector PDF output interprets a `Canvas`'s coordinates (points, `1/72` inch each) -
-see [`.claude/invariants/peachdrawing-canvas-unit-convention-is-plain-device-pixels.md`](../.claude/invariants/peachdrawing-canvas-unit-convention-is-plain-device-pixels.md)
-for the internal reasoning, if you're implementing your own `Canvas` and comparing conventions.
+from how PeachPDF's own vector PDF output interprets a `Canvas`'s coordinates (points, `1/72` inch each);
+a `Canvas` implementation chooses its own unit convention, and `Canvas.PixelsPerPoint` reports the scale between its units and true
+PDF points, which is worth checking if you are implementing your own `Canvas` and comparing conventions.
 
 Everything else `RasterCanvas` draws with - `DrawRectangle`, `DrawPolygon`, `DrawPath`, `DrawLine`,
 `DrawString`, `DrawGlyphs`, `DrawImage` and its blended/masked/color-matrix variants, `PushClip`/

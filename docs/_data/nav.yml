@@ -27,6 +27,18 @@
 - title: Try it
   url: /demo/
 - title: API Reference
-  url: /api/
+  children:
+    - title: PeachPDF
+      url: /api/
+      fallback: true
+    - title: PeachDrawing.Core
+      url: /api/PeachDrawing.Core/
+      prefix: /api/PeachDrawing.Core/
+    - title: PeachDrawing
+      url: /api/PeachDrawing/
+      prefix: /api/PeachDrawing/
+    - title: PeachDrawing.Text
+      url: /api/PeachDrawing.Text/
+      prefix: /api/PeachDrawing.Text/
 - title: Support
   url: /support.html

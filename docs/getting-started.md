@@ -54,4 +54,4 @@ PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft
 - **[PeachDrawing.Core](peachdrawing-core.md)** — the drawing-surface abstraction PeachPDF targets to write PDF (`Canvas`, `RenderContext`, `Brush`/`Pen`/`GraphicsPath`), as its own NuGet package — implement it yourself to target a different backend entirely.
 - **[PeachDrawing](peachdrawing.md)** — a standalone CPU software rasterizer implementing `PeachDrawing.Core`, usable with no PeachPDF reference at all: draw shapes, text and images onto a bitmap and save it in any PeachImage-supported format.
 - **[Feature Showcase](showcase.html)** — real PDFs rendered by the current release at site build time, each paired with the exact HTML (or, for the declarative API, C#) source it was generated from.
-- **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.
+- **[API Reference](api/index.md)** — generated reference for every public type and member of PeachPDF, always in sync with the latest source, with a reference for each of the `PeachDrawing.Core`, `PeachDrawing` and `PeachDrawing.Text` packages beside it.

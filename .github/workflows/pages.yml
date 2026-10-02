@@ -51,12 +51,23 @@ jobs:
           printf 'total: "%s"\n' "$FORMATTED" > docs/_data/tests.yml
           echo "Test count: $FORMATTED"
 
+      # PeachPDF's pages go at the root of docs/api/ (so existing links to them keep working) and each PeachDrawing
+      # package gets a folder of its own, because the generated page names are not qualified by assembly. Each project is
+      # built explicitly rather than relying on the global property reaching the others through PeachPDF's references.
+      # PeachDrawing.Text.Data has no public API, so it has no reference.
       - name: Generate API reference
-        run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
+        run: |
+          dotnet build src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
+          dotnet build src/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
+          dotnet build src/PeachDrawing/PeachDrawing.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
+          dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
 
       - name: Fix API reference cross-links
         shell: pwsh
-        run: ./.github/scripts/Fix-ApiDocLinks.ps1 -ApiDocsPath ./docs/api
+        run: |
+          foreach ($path in './docs/api', './docs/api/PeachDrawing.Text', './docs/api/PeachDrawing.Core', './docs/api/PeachDrawing') {
+            ./.github/scripts/Fix-ApiDocLinks.ps1 -ApiDocsPath $path
+          }
 
       - name: Install fonts
         run: |
