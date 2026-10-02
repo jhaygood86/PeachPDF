@@ -3181,6 +3181,12 @@ namespace PeachPDF.Html.Core
             FragmentainerContext? parentContext) =>
             _emitter?.RecordCapturedInstance(contextRoot, slot, band, inline, geometry, continuing, self, parentContext);
 
+        /// <summary>Whether <paramref name="contextRoot"/> has recorded columns in any slot.</summary>
+        internal bool HoldsCapturedInstances(CssBox contextRoot) => _emitter?.OwnsCapturedInstances(contextRoot) ?? false;
+
+        /// <summary>Whether every column <paramref name="contextRoot"/> recorded is in one slot.</summary>
+        internal bool RecordedInOneSlotOnly(CssBox contextRoot) => _emitter?.RecordedInOneSlotOnly(contextRoot) ?? false;
+
         /// <summary>
         /// Discards what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> — or, with no
         /// slot, in every slot — for a fill being attempted afresh.
