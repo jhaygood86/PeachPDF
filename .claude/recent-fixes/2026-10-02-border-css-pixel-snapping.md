@@ -27,14 +27,23 @@ so there is no migration note.
   outline drifted off the border the same way. Snapping the geometry once, rather than each painter on its
   own, is what fixes both. (Snapping at the same point in an always-on version broke ~48 tests, which is
   one more reason it stays opt-in.)
-- A viewer can still show a faint edge: PDFium rounds A4 (793.7px at 96 dpi) up to 794px and fills plain rects without anti-aliasing, so a snapped right edge landing ~0.05px past a boundary paints the whole neighbouring pixel. On an 800x600px page every edge was crisp in PDFium, so this is the viewer grid, not the snapping; documented in usage-examples.md.
-- Text, replaced-element content and form-field chrome are not snapped, so text can sit up to 0.375pt off
-  its snapped box.
-- Other `DrawBoxBorders` callers (form-field chrome, replaced elements, collapsed table segments) are not snapped.
+- **In PDFium the page size decides the result, not the option.** PDFium rounds A4 (793.7px at 96 dpi) up to 794px
+  and fills plain rects without anti-aliasing, so a rect landing ~0.05px past a boundary paints the whole next
+  pixel. Thirteen 1px `border-top` rules at fractional offsets, rasterized at 96 dpi: A4 + PDFium is 13/13 two-row
+  rules with the option off **and on**; A4 + MuPDF goes 13/13 two-row -> 13/13 one-row; a 794x1123px page is 13/13
+  one-row in PDFium even with the option off. So for the issue's own scenario (a single `border-top: 1px` on A4)
+  the option does nothing in a PDFium-based viewer (Chrome, Edge). It is documented in usage-examples.md and the
+  XML doc, and the PR says `Refs`, not `Fixes`, #1530.
+- Text and replaced-element content are not snapped, so text can sit up to 0.375pt off its snapped box.
+- Measured (one element per 200x100px page at a 10.3px offset, off vs on, MuPDF): text `<input>`, `<select>`,
+  checkbox, radio, `<object>` with no usable data, `<video>` with no source and plain/inline-block boxes **are**
+  snapped; `<button>` and `<textarea>` are snapped once the author sets a border or background but not in their
+  default appearance; `<img>`, inline `<svg>`, `<iframe>`, `<math>` and an `<object>` showing an image are not.
+  `<progress>` and `<meter>` paint nothing at all here, so they say nothing either way. "Form-field chrome" in
+  earlier versions of this note meant the internal glyphs of a control, not controls in general.
 - A cut is not a box edge: only edges the box owns (`HasLeft/Top/Right/BottomEdge`) are snapped, so a block
   cut across a page keeps its page-top/page-bottom edge where it is. The table page-break Y that replaces
-  the border rect's bottom is a layout coordinate and is snapped separately, or the border would end on a
-  different line than the background.
+  the border rect's bottom is a cut across a page, not an edge of the table, so it stays at the Y layout gave.
 - The `overflow` clip is snapped with the box (`FragmentPainter.OverflowClipOf`, also the recorded step the
   deferred outlines replay), or a child's background covers part of the snapped border. The rectangle and the
   rounded curve's own rect are snapped together so they keep agreeing, and the clips re-pushed for a hoisted
@@ -58,8 +67,8 @@ so there is no migration note.
   snapped); `CurrentTransform.IsIdentity` is exact on purpose, since `GraphicsAdapter.Pop` restores the saved
   matrix rather than recomputing it, so no float residue; a box thinner than a pixel keeps its fractional edges
   rather than growing to a pixel, because growing it would let it overlap its neighbours, which the monotonic
-  rounding otherwise rules out. Culling (`IsRectVisible`) still uses the unsnapped rect: it is an optimization, and a
-  box starting just outside the clip belongs to the neighbouring fragmentainer.
+  rounding otherwise rules out. (Culling used to be listed here; it later got half a pixel of slack, see
+  `CullingBounds` below.)
 - The config-flow test blanks the PDF's comment lines, subset tags and trailer ID before comparing; without
   that, a plain `NotEqual` passes on the creation-time comment alone.
 - **Offscreen canvases are not skipped.** The first version returned early on `Canvas.IsOffscreenTile`, which
@@ -100,6 +109,8 @@ so there is no migration note.
   border edge (it follows the text, which is not snapped); a bordered `<img>` keeps its own unsnapped rect
   (replaced elements are documented as not snapped); `ComputeInnerRadii` for a hoisted rounded clip still takes
   the unsnapped border rect (the radii differ by far less than a pixel).
+- A sub-pixel box keeps its fractional edges (Chromium would make it 1px wide), so it can overlap a neighbour by
+  under 0.2px: a small exception to "never overlaps more than layout already had".
 - Per-fragment snapping of the overflow clip is cheap (four floors) and only runs when the option is on, so
   it is recomputed for every descendant rather than memoised.
 - The tests that compare border output with outline output needed no change only because snapping is off

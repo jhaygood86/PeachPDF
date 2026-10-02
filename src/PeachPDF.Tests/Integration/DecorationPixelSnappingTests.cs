@@ -33,6 +33,18 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public void Snap_RoundsAHalfPixelUp()
+        {
+            // Half rounds up, as Chromium's LayoutUnit.Round() does: 10.5px is 11px, 20.5px is 21px.
+            var snapped = DecorationPixelSnapping.Snap(new Surface(), Rect.FromLTRB(10.5 * Px, 20.5 * Px, 30.5 * Px, 40.5 * Px));
+
+            Assert.Equal(11 * Px, snapped.Left, 9);
+            Assert.Equal(21 * Px, snapped.Top, 9);
+            Assert.Equal(31 * Px, snapped.Right, 9);
+            Assert.Equal(41 * Px, snapped.Bottom, 9);
+        }
+
+        [Fact]
         public void Snap_LeavesAnAlreadySnappedRectAlone()
         {
             var rect = Rect.FromLTRB(12 * Px, 8 * Px, 100 * Px, 60 * Px);

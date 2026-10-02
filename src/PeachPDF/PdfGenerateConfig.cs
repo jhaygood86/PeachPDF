@@ -242,9 +242,16 @@ namespace PeachPDF
         /// of a table are snapped with it.
         /// </para>
         /// <para>
-        /// Not snapped: form-field chrome, replaced elements, multi-column rules, <c>@page</c> margin boxes
-        /// and page borders, text decorations, list markers and anything under a transform. An edge where a
-        /// box is cut across a page or line break stays where it is.
+        /// Not snapped: replaced elements (<c>&lt;img&gt;</c>, inline <c>&lt;svg&gt;</c>, <c>&lt;iframe&gt;</c>,
+        /// <c>&lt;math&gt;</c>), a <c>&lt;button&gt;</c> or <c>&lt;textarea&gt;</c> in its default appearance,
+        /// multi-column rules, <c>@page</c> margin boxes and page borders, text decorations, list markers and
+        /// anything under a transform. An edge where a box is cut across a page or line break stays where it is.
+        /// </para>
+        /// <para>
+        /// In PDFium the page size decides the result, not this option: it rounds the page up to a whole number
+        /// of pixels and fills plain rectangles without anti-aliasing, so on A4 it draws a 1px rule as two rows
+        /// with the option on or off. A page whose size is a whole number of CSS pixels (such as
+        /// <c>794px 1123px</c>) is crisp there either way. The option helps viewers that anti-alias fills.
         /// </para>
         /// <para>
         /// Defaults to <c>false</c>: the exact fractional geometry is what a PDF can express, and
