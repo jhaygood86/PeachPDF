@@ -4161,6 +4161,14 @@ namespace PeachPDF.Html.Core.Dom
             var bandBottom = blockBox.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true } fragmentainer }
                 ? fragmentainer.BandBottom
                 : double.PositiveInfinity;
+
+            // A column's own band is a poor bound when a float leaves the column no room at all: a balanced container's
+            // starts as an even share of its content, shorter than the float, and grows only while a fill carries
+            // something over. Then the page's foot is the bound, so the line is shifted as long as it still ends there.
+            var pageFoot = blockBox.HtmlContainer is
+                { HasRealPageGrid: true, CurrentFragmentainer: { HasOwnBand: true, NestedInAColumn: false } columnContext } pageContainer
+                ? pageContainer.PageBottomOf(columnContext.SlotIndex) - pageContainer.TotalBandEndReservationFor(columnContext.SlotIndex)
+                : bandBottom;
             var baseX = coordinates.Line.ContentLeft + (isRtl
                 ? 0
                 : GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]),
@@ -4209,7 +4217,7 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer asked the same question, so a shift that long is not taken: the line stays where
                 // it was and keeps the room that is left. The same way out for a document that would keep shifting for
                 // ever (a bound, not an expected path).
-                if (nextY >= bandBottom || shifts >= 1000)
+                if (nextY >= (startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000)
                 {                    coordinates.CurrentY = originalY;
                     coordinates.MaxBottom = originalMaxBottom;
                     coordinates.Line.FlowTop = originalFlowTop;
