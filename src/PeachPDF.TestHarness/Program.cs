@@ -578,7 +578,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("narrow slice", "repeating-conic-gradient(red 0 5deg, blue 5deg 10deg)")
     ) +
 
-    "<h2>13 — PaintColor Space Interpolation: in oklab</h2>" +
+    "<h2>13 — Color Space Interpolation: in oklab</h2>" +
     Row(
         Swatch("sRGB red→blue", "linear-gradient(to right, red, blue)"),
         Swatch("oklab red→blue", "linear-gradient(in oklab to right, red, blue)"),
@@ -586,7 +586,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("oklab red→yellow→blue", "linear-gradient(in oklab to right, red, yellow, blue)")
     ) +
 
-    "<h2>14 — PaintColor Space Interpolation: Polar (HSL, OKLch)</h2>" +
+    "<h2>14 — Color Space Interpolation: Polar (HSL, OKLch)</h2>" +
     Row(
         Swatch("hsl shorter red→blue", "linear-gradient(in hsl, red, blue)"),
         Swatch("hsl longer red→blue", "linear-gradient(in hsl longer hue, red, blue)"),
@@ -594,7 +594,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("oklch longer red→blue", "linear-gradient(in oklch longer hue, red, blue)")
     ) +
 
-    "<h2>15 — PaintColor Space Interpolation: Lab, LCH, sRGB-linear</h2>" +
+    "<h2>15 — Color Space Interpolation: Lab, LCH, sRGB-linear</h2>" +
     Row(
         Swatch("lab red→blue", "linear-gradient(in lab to right, red, blue)"),
         Swatch("lch red→blue", "linear-gradient(in lch to right, red, blue)"),
@@ -602,7 +602,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("display-p3 red→blue", "linear-gradient(in display-p3 to right, red, blue)")
     ) +
 
-    "<h2>16 — PaintColor Space: Radial &amp; Conic</h2>" +
+    "<h2>16 — Color Space: Radial &amp; Conic</h2>" +
     Row(
         Swatch("radial oklab", "radial-gradient(in oklab circle, red, blue)"),
         Swatch("radial oklch", "radial-gradient(in oklch circle, red, blue)"),
@@ -613,7 +613,7 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
     "</body></html>";
 
 await SaveShowcaseAsync("gradients", "Backgrounds & Borders", "CSS Gradients",
-    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, and CSS PaintColor Level 4 interpolation spaces.",
+    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, and CSS Color Level 4 interpolation spaces.",
     html, pdfConfig);
 
 // --- Border-radius showcase ---
@@ -1076,7 +1076,7 @@ var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
     "<h1>CSS background-origin &amp; background-clip Test Page</h1>" +
     "<p class=\"intro\">Each box has border: 8px solid #333 and padding: 12px. Three regions: border-box (full), padding-box (inside border), content-box (inside padding).</p>" +
 
-    "<h2>1 — background-origin: Solid PaintColor</h2>" +
+    "<h2>1 — background-origin: Solid Color</h2>" +
     "<p class=\"intro\">Solid colors fill the clip area regardless of origin — this verifies no rendering errors.</p>" +
     Row(
         OriginSwatch("default (padding-box)", "background-color: steelblue"),
@@ -1103,7 +1103,7 @@ var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
         OriginSwatch("content-box", "background: radial-gradient(circle, yellow, navy); background-origin: content-box", "background-origin: content-box")
     ) +
 
-    "<h2>4 — background-clip: Solid PaintColor</h2>" +
+    "<h2>4 — background-clip: Solid Color</h2>" +
     "<p class=\"intro\">background-clip controls where the background is painted. padding-box: no color behind border. content-box: color only in content area.</p>" +
     Row(
         OriginSwatch("default (border-box)", "background-color: coral"),
@@ -4430,7 +4430,7 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
         TransformSwatch("translate then scale", "translate(15px, 0) scale(1.3)")
     ) +
 
-    "<h2>3 — transform-origin Pivot PaintPoint</h2>" +
+    "<h2>3 — transform-origin Pivot Point</h2>" +
     "<p class=\"intro\">The same rotate(45deg) pivoting around different origins.</p>" +
     Row(
         TransformSwatch("origin: center (default)", "rotate(45deg)"),
@@ -9616,7 +9616,7 @@ var emojiHtml = $$"""
         <p class="demo">{{emojiRow}}</p>
         <p class="note">Every glyph above U+FFFF (e.g. {{grinning}} = U+1F600) is resolved through the
         font's cmap format-12 subtable and rendered from this font's monochrome outline. The separate
-        PaintColor Fonts showcase demonstrates COLR/CPAL color emoji.</p>
+        Color Fonts showcase demonstrates COLR/CPAL color emoji.</p>
         <h1>Grapheme-aware wrapping</h1>
         <div class="wrap">Northline Office B.V. <span class="emoji-run">{{wrappedEmojiRow}}</span> following-unbreakable-token</div>
         <p class="note">Adjacent emoji wrap between complete grapheme clusters without requiring spaces.
@@ -9627,7 +9627,7 @@ var emojiHtml = $$"""
     """;
 
 await SaveShowcaseAsync("emoji", "Typography & Text", "Emoji (astral codepoints)",
-    "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate PaintColor Fonts showcase covers COLR/CPAL.",
+    "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate Color Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
 // clip-path with CSS basic shapes (polygon/inset/circle/ellipse/path/url), a <geometry-box>
@@ -10323,7 +10323,7 @@ static byte[] BuildTrnsStarIconPngBytes(int size, (byte R, byte G, byte B) backg
     double cx = size / 2.0, cy = size / 2.0;
     double outerR = size * 0.48, innerR = outerR * 0.42;
 
-    // PaintPoint-in-polygon test against a 10-vertex star (5 outer points, 5 inner points).
+    // Point-in-polygon test against a 10-vertex star (5 outer points, 5 inner points).
     var star = new (double X, double Y)[10];
     for (int i = 0; i < 10; i++)
     {
@@ -10461,10 +10461,10 @@ var modernColorHtml =
     "</div>" +
     "</body></html>";
 
-await SaveShowcaseAsync("modern_colors", "PaintColor", "Modern CSS Colors (oklch, color-mix)",
+await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, color-mix)",
     "A wide-gamut palette authored in oklch() with oklab()/lab()/lch()/hsl()/hwb() companions, plus " +
     "color-mix() opacity modifiers (including hex operands of either form) and blends composited over a " +
-    "checkerboard — the CSS PaintColor 4/5 function set modern utility frameworks emit, resolved to real PDF colors.",
+    "checkerboard — the CSS Color 4/5 function set modern utility frameworks emit, resolved to real PDF colors.",
     modernColorHtml, pdfConfig);
 
 // ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
@@ -11230,13 +11230,13 @@ await SaveShowcaseAsync("viewport_units", "Responsive Design", "Viewport units (
     "zero-width box, and a `ch`-sized box (the `0.5em` approximation).",
     viewportUnitsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
-// PaintColor fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
-// build of Noto PaintColor Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
+// Color fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
+// build of Noto Color Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
 // fixture whose glyphs isolate each paint feature.
 var notoColorB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf")));
 var colorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf")));
 var colorCffB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestCff.otf")));
-// A separate Noto PaintColor Emoji subset that keeps the font's `ccmp` feature and the glyphs the
+// A separate Noto Color Emoji subset that keeps the font's `ccmp` feature and the glyphs the
 // multi-codepoint sequences need - NotoColorEmoji-Subset.ttf above carries no GSUB at all.
 var notoSeqB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmojiSequences-Subset.ttf")));
 string ColorGlyph(string ch, string title, string detail) =>
@@ -11271,11 +11271,11 @@ var colorEmojiHtml =
     ".desc { font-size: 8pt; font-weight: bold; color: #444; margin-top: 4px }" +
     ".css { font-size: 7pt; color: #666 }" +
     "</style></head><body>" +
-    "<h1>PaintColor fonts (COLR / CPAL)</h1>" +
+    "<h1>Color fonts (COLR / CPAL)</h1>" +
     "<p class=\"intro\">COLR/CPAL color-glyph fonts render their visible artwork as native PDF vector " +
     "content. An embedded subset supplies invisible selectable/searchable text, while per-glyph " +
     "<code>/ActualText</code> preserves exact emoji sequences when copied. The row below is the real " +
-    "COLR&nbsp;v1 build of Noto PaintColor Emoji (gradients, transforms, compositing all handled).</p>" +
+    "COLR&nbsp;v1 build of Noto Color Emoji (gradients, transforms, compositing all handled).</p>" +
     "<div class=\"emoji\">\U0001F600 ❤ \U0001F44D \U0001F680 \U0001F308 ⭐ \U0001F525 \U0001F642</div>" +
     "<h2>COLR paint features</h2>" +
     "<p class=\"intro\">The same pipeline, broken down by paint type (hand-authored COLR&nbsp;v1 fixture):</p>" +
@@ -11306,7 +11306,7 @@ var colorEmojiHtml =
     "</tr></table>" +
     "<h2>Emoji sequences</h2>" +
     "<p class=\"intro\">A multi-codepoint emoji sequence composes into the single glyph the font " +
-    "defines for it, via the font's <code>ccmp</code> feature — which is where Noto PaintColor Emoji keeps " +
+    "defines for it, via the font's <code>ccmp</code> feature — which is where Noto Color Emoji keeps " +
     "every one of these (it declares no <code>liga</code>/<code>rlig</code> at all). A " +
     "<code>U+FE0F</code> variation selector inside a sequence draws nothing of its own and does not " +
     "stop the ligature forming.</p>" +
@@ -11327,14 +11327,14 @@ var colorEmojiHtml =
     "<div class=\"cg seq\">\U0001F44D \U0001F44D\U0001F3FB \U0001F44D\U0001F3FC \U0001F44D\U0001F3FD " +
     "\U0001F44D\U0001F3FE \U0001F44D\U0001F3FF</div>" +
     "</body></html>";
-await SaveShowcaseAsync("color_emoji", "Typography & Text", "PaintColor Fonts (COLR/CPAL)",
-    "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto PaintColor Emoji — rendered as " +
+await SaveShowcaseAsync("color_emoji", "Typography & Text", "Color Fonts (COLR/CPAL)",
+    "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto Color Emoji — rendered as " +
     "native PDF vector content: layered palette colors, gradients, transforms, and blend-mode " +
     "compositing, with an invisible embedded subset for searchable, selectable, exact-copy text.",
     colorEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // font-variant-emoji and the U+FE0E/U+FE0F presentation selectors: two fonts that both cover U+2764 -
-// a colour one (Noto PaintColor Emoji) and an outline one (Source Sans 3) - so only the requested
+// a colour one (Noto Color Emoji) and an outline one (Source Sans 3) - so only the requested
 // presentation can tell which one draws it. Each cell is the same character three ways: bare, followed
 // by U+FE0E (text), and followed by U+FE0F (emoji).
 var textFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
@@ -12953,7 +12953,7 @@ const string FilterCss = """
 
 var cssFilterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><body>" +
 
-    "<h1>CSS filter: Native PDF PaintColor Math</h1>" +
+    "<h1>CSS filter: Native PDF Color Math</h1>" +
     "<p class=\"intro\">opacity(), brightness(), contrast(), and invert() apply as real PDF color math - opacity() reuses the same isolated transparency group as the opacity property, the other three compose into one ExtGState /TR transfer function - not a rasterized approximation. (docs/html-css-support.md#filters-and-blend-modes)</p>" +
 
     "<h2>1 — Individual functions</h2>" +
@@ -14135,7 +14135,7 @@ var iccPreservationHtml =
     $"<img src=\"data:image/png;base64,{iccPngBase64}\" width=\"160\" height=\"160\">" +
     "</body></html>";
 
-await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content", "ICC PaintColor Profile Preservation",
+await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content", "ICC Color Profile Preservation",
     "A PNG, WebP, or AVIF source's embedded ICC color profile is now extracted and embedded as an " +
     "/ICCBased color space (/N + /Alternate + the raw profile bytes) instead of being silently dropped " +
     "in favor of a bare /DeviceRGB or /DeviceGray - preserving the source's actual color intent for " +

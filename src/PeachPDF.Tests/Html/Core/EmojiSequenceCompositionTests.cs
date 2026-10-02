@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Html.Core
     /// Multi-codepoint emoji sequence composition against a <b>real</b> production color font
     /// (<see cref="BundledFonts.ColorEmojiSequences"/>), complementing
     /// <see cref="DefaultIgnorableShapingTests"/>'s hand-authored fixture. Every sequence here composes
-    /// through the font's <c>ccmp</c> feature — Noto PaintColor Emoji declares no <c>liga</c>/<c>rlig</c>/
+    /// through the font's <c>ccmp</c> feature — Noto Color Emoji declares no <c>liga</c>/<c>rlig</c>/
     /// <c>clig</c> whatsoever — so a shaper that treats <c>ccmp</c> as opt-in fails all of them.
     /// </summary>
     public class EmojiSequenceCompositionTests
