@@ -94,12 +94,14 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
-        public void UnderlinePosition_FromFont_DiffersFromAuto()
+        public void UnderlinePosition_FromFont_UsesTheFontsUnderlinePosition()
         {
-            var auto = Assert.Single(Lines(Render(new TestRecordingGraphics(), """text-decoration-line="underline" """)));
-            var fromFont = Assert.Single(Lines(Render(new TestRecordingGraphics(), """text-decoration-line="underline" text-underline-position="from-font" """)));
+            var g = Render(new TestRecordingGraphics(), """text-decoration-line="underline" text-underline-position="from-font" """);
 
-            Assert.NotEqual(auto.Y1, fromFont.Y1);
+            // The baseline is the drawn cell's top plus the ascent; from-font hangs the line from it by the font's own (negative) underline position.
+            var draw = g.DrawStringCalls[0];
+            var baseline = draw.PaintPoint.Y + draw.Font.Ascent;
+            Assert.Equal(baseline - draw.Font.UnderlinePosition, Assert.Single(Lines(g)).Y1, 3);
         }
 
         [Fact]
