@@ -431,6 +431,9 @@ namespace PeachPDF.Svg
         /// </summary>
         private sealed class GlyphInfo
         {
+            /// <summary>Set when <c>textLength</c> moved this glyph away from its natural pen position, so it must be painted on its own rather than batched with its neighbours.</summary>
+            public bool SpacingAdjusted;
+
             /// <summary>Settable (not <c>init</c>) so bidi L4 mirroring can rewrite an RTL glyph's
             /// character to its mirror-image codepoint in place (see <c>ApplyBidiReordering</c>).</summary>
             public required string Glyph { get; set; }
@@ -1035,6 +1038,82 @@ namespace PeachPDF.Svg
             };
         }
 
+        private static bool IsWithin(SvgTextElement? candidate, SvgTextElement container)
+        {
+            for (var r = candidate; r is not null; r = r.ParentRun)
+            {
+                if (ReferenceEquals(r, container))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Applies <c>textLength</c> with <c>lengthAdjust="spacing"</c> (SVG 2 §11.4): the characters a text content element holds are spread (or squeezed) by
+        /// adding the same extra space after each addressable character but the last, so the element spans exactly its <c>textLength</c>. Inner elements are
+        /// adjusted before the ones containing them, and the text after an adjusted element - up to the next absolutely positioned chunk - moves with it.
+        /// <c>spacingAndGlyphs</c> (which also stretches the glyphs) is not applied.
+        /// </summary>
+        private static void ApplyTextLength(List<GlyphInfo> glyphs)
+        {
+            var adjusted = new List<SvgTextElement>();
+            foreach (var gi in glyphs)
+            {
+                for (var r = gi.Run; r is not null; r = r.ParentRun)
+                {
+                    if (r.TextLength is not null && r.LengthAdjust != "spacingAndGlyphs" && !adjusted.Contains(r))
+                        adjusted.Add(r);
+                }
+            }
+
+            // Innermost first: a run nested deeper has a longer ancestor chain.
+            static int Depth(SvgTextElement r) { var d = 0; for (var p = r.ParentRun; p is not null; p = p.ParentRun) d++; return d; }
+            foreach (var run in adjusted.OrderByDescending(Depth))
+            {
+                var first = glyphs.FindIndex(gi => IsWithin(gi.Run, run));
+                var last = glyphs.FindLastIndex(gi => IsWithin(gi.Run, run));
+                if (first < 0 || last < first)
+                    continue;
+
+                // Characters of one complex-script shaping run are one unit: only its first glyph takes a gap.
+                var units = new List<int>();
+                for (var i = first; i <= last; i++)
+                {
+                    if (glyphs[i].ShapingRunFirst is { } runFirst && !ReferenceEquals(runFirst, glyphs[i]))
+                        continue;
+                    units.Add(i);
+                }
+
+                var natural = glyphs[last].Px + glyphs[last].Advance - glyphs[first].Px;
+                var delta = run.TextLength!.Value - natural;
+                if (units.Count < 2 || delta == 0)
+                    continue;
+
+                var perGap = delta / (units.Count - 1);
+                var shiftAfter = 0.0;
+                for (var u = 0; u < units.Count; u++)
+                {
+                    var index = units[u];
+                    var shift = u * perGap;
+                    glyphs[index].Px += shift;
+                    glyphs[index].SpacingAdjusted = true;
+                    if (u < units.Count - 1)
+                    {
+                        glyphs[index].Advance += perGap;
+                        shiftAfter = (u + 1) * perGap;
+                    }
+
+                    // The members of a shaping run follow its first glyph.
+                    for (var m = index + 1; m <= last && glyphs[m].ShapingRunFirst is { } f && ReferenceEquals(f, glyphs[index]); m++)
+                        glyphs[m].Px += shift;
+                }
+
+                for (var i = last + 1; i < glyphs.Count && glyphs[i].X is null; i++)
+                    glyphs[i].Px += shiftAfter;
+            }
+        }
+
         private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical)
         {
             double penX = 0, penY = 0;
@@ -1156,6 +1235,9 @@ namespace PeachPDF.Svg
                 }
             }
 
+            if (!isVertical)
+                ApplyTextLength(glyphs);
+
             for (var c = 0; c < chunkStarts.Count; c++)
             {
                 var start = chunkStarts[c];
@@ -1275,7 +1357,7 @@ namespace PeachPDF.Svg
                 // This also has to apply when `start` itself is the word-spaced glyph (e.g. a run
                 // boundary lands exactly on a space) - otherwise the gap silently never renders,
                 // since nothing downstream re-checks the batch's own first character.
-                var startIsWordSpacedWhitespace = start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph);
+                var startIsWordSpacedWhitespace = (start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph)) || start.SpacingAdjusted;
                 while (!startIsWordSpacedWhitespace && i < glyphs.Count)
                 {
                     var gc = glyphs[i];

@@ -261,6 +261,12 @@ namespace PeachPDF.Svg
         /// <summary>The enclosing text content element this run is nested in, or null for a <c>&lt;text&gt;</c> root.</summary>
         public SvgTextElement? ParentRun { get; set; }
 
+        /// <summary>The <c>textLength</c> the run's characters are laid out to span, in user units; null when absent.</summary>
+        public double? TextLength { get; set; }
+
+        /// <summary><c>lengthAdjust</c>: <c>spacing</c> (the default) adjusts only the gaps between characters; <c>spacingAndGlyphs</c> is accepted but not applied.</summary>
+        public string LengthAdjust { get; set; } = "spacing";
+
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
         /// Decoration 3), unlike every other font/paint property this element carries.</summary>

@@ -2048,6 +2048,13 @@ namespace PeachPDF.Svg
 
             run.TextShadows = ParseTextShadows(runFont.TextShadow, runFont);
             run.StrokeFirst = StrokesBeforeFill(runFont.PaintOrder);
+            if (node.GetAttribute("textLength") is { } textLengthAttr
+                && SvgValueParsers.ParseLength(textLengthAttr, _viewportWidth, new LengthBasis(this, runFont)) is { } textLength && textLength >= 0)
+            {
+                run.TextLength = textLength;
+                run.LengthAdjust = node.GetAttribute("lengthAdjust")?.Trim() ?? "spacing";
+            }
+
             run.DominantBaseline = runFont.DominantBaseline;
             run.BaselineShift = runFont.BaselineShift;
             run.AlignmentBaseline = ResolveStyledAttr(node, "alignment-baseline")?.Trim().ToLowerInvariant() is { Length: > 0 } alignment && alignment != "inherit" ? alignment : "auto";
