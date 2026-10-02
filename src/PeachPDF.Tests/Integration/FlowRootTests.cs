@@ -47,6 +47,18 @@ public class FlowRootTests
         Assert.InRange(positions["w9_1"].Y, expectedY - 0.5, expectedY + 1);
     }
 
+    // A floated flow-root is blockified like any float, and still contains its own float.
+    [Fact]
+    public async Task FloatedFlowRoot_IsABlockThatContainsItsFloat()
+    {
+        var body = "<div style='float:left;display:flow-root;width:150pt'><div style='float:left;width:60pt;height:40pt'></div>w9_1 </div>w9_2 ";
+
+        var positions = await PaintedWords.PositionsAsync(Page(body));
+
+        Assert.InRange(positions["w9_1"].X, 20 + 60 - 0.5, 20 + 150);
+        Assert.InRange(positions["w9_2"].X, 20 + 150 - 0.5, 300);
+    }
+
     [Fact]
     public async Task FlowRoot_WithNoContent_IsEmptyBlockThatDoesNotCollapseThrough()
     {
