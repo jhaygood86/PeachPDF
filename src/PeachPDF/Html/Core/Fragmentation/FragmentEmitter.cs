@@ -2017,6 +2017,20 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
         }
 
+        /// <summary>The words of floats drawn from live geometry during the walk of the slot in progress: each is drawn once.</summary>
+        private readonly HashSet<(CssBox Box, int Word)> _liveFloatWordsThisWalk = [];
+
+        /// <summary>Whether <paramref name="box"/> is a float or lies inside one.</summary>
+        private static bool IsInAFloat(CssBox box)
+        {
+            for (var up = box; up is not null; up = up.ParentBox)
+            {
+                if (up.IsFloated) return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Fill order: pagination slot first, then which nested fragmentainer of it.</summary>
         private static bool IsBefore((int Slot, int Instance) a, (int Slot, int Instance) b) =>
             a.Slot != b.Slot ? a.Slot < b.Slot : a.Instance < b.Instance;
@@ -2066,6 +2080,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             _pruningSuspended = wasSuspended || !mayWrite;
+
+            _liveFloatWordsThisWalk.Clear();
 
             var hasPrintableContent = false;
             var prunable = true;
@@ -2160,6 +2176,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             try
             {
+                _liveFloatWordsThisWalk.Clear();
                 full = BuildDraft(root, snapshot: null, slot,
                     capture: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
             }
@@ -2801,7 +2818,10 @@ namespace PeachPDF.Html.Core.Fragmentation
                     claims |= !isFixed && capture is { } holder && IsOverflowNoColumnClaims(box, i, holder, slot.Index);
 
                     if (claims && !region.YieldsToEarlierColumn(box, Displaced(shiftedRect, shift))
-                        && !(capture is { } own && StartsInAnotherInstance(box, i, own, slot.Index)))
+                        && !(capture is { } own && StartsInAnotherInstance(box, i, own, slot.Index))
+                        // A float no column holds is read live, and a container with a fragment in each of several outer columns is walked
+                        // once per fragment: the box has one position, so a word of it is drawn by the first fragment that claims it.
+                        && !(capture is null && IsInAFloat(box) && !_liveFloatWordsThisWalk.Add((box, i))))
                         words.Add(new TextFragment(Localize(shiftedRect, originY), word));
                 }
             }
