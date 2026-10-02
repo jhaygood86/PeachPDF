@@ -1376,6 +1376,22 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal int CapturedInstanceCount(CssBox contextRoot, int slot) =>
             _capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers) ? fragmentainers.Count : 0;
 
+        /// <summary>Drops the geometry of <paramref name="boxes"/> (and their descendants) from the fragmentainers <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from index <paramref name="fromIndex"/> onward, for content a later column moved on whole.</summary>
+        internal void ForgetInCapturedInstancesFrom(CssBox contextRoot, int slot, int fromIndex, IEnumerable<CssBox> boxes)
+        {
+            if (!_capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers)) return;
+
+            var moved = new List<CssBox>(boxes);
+            if (moved.Count == 0) return;
+
+            for (var i = fromIndex; i < fragmentainers.Count; i++)
+            {
+                foreach (var box in moved) fragmentainers[i].Geometry.Forget(box);
+            }
+
+            contextRoot.DiscardEmittedNothing();
+        }
+
         /// <summary>
         /// Discards only the nested fragmentainers <paramref name="contextRoot"/> recorded in
         /// <paramref name="slot"/> from index <paramref name="keepFirst"/> onward, leaving the ones
