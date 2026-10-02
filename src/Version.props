@@ -2,7 +2,8 @@
   <!--
     The one version every package this repository publishes carries. PeachDrawing.Text is released in lockstep
     with PeachPDF (the same tag, the same number), so both projects import this file instead of each keeping a
-    literal. Release automation reads <PackageVersion> from here (publish.yml, pages.yml, the browser demo).
+    literal. Release automation reads the PackageVersion element below (publish.yml, pages.yml, the browser demo), so this comment
+    must not spell the element out: the workflows grep for its opening tag and would match the comment too.
   -->
   <PropertyGroup>
     <PackageVersion>0.9.21</PackageVersion>
