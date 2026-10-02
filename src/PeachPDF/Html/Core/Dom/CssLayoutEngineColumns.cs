@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+﻿using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -711,8 +711,7 @@ namespace PeachPDF.Html.Core.Dom
             // cell holds a float): every trial then carried something over, and the budget fill that had just finished
             // the flow was thrown away. The container was then deferred to the next page, where the same sequence
             // repeated for ever. A fill that finished is the better answer, so it is made again.
-            if (carry is not null && !IsColumnSpanBoundary(carry) && finishedAtTheFullBudget && target < pageBudget
-                && resume is not null)
+            if (carry is not null && !IsColumnSpanBoundary(carry) && finishedAtTheFullBudget && target < pageBudget)
             {
                 PassRewind.RollBackTo(resume, children);
                 htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);

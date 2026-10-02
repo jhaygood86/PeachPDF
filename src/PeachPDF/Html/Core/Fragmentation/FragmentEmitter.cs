@@ -1335,6 +1335,24 @@ namespace PeachPDF.Html.Core.Fragmentation
             MarkCapturedInstanceOwnerAncestors(tableBox);
         }
 
+        /// <summary>Whether <paramref name="contextRoot"/> has recorded nested fragmentainers (columns) in any slot.</summary>
+        internal bool OwnsCapturedInstances(CssBox contextRoot) => _capturedInstanceOwners.Contains(contextRoot);
+
+        /// <summary>Whether everything <paramref name="contextRoot"/> recorded sits in one slot.</summary>
+        internal bool RecordedInOneSlotOnly(CssBox contextRoot)
+        {
+            int? slot = null;
+
+            foreach (var key in _capturedInstances.Keys)
+            {
+                if (!ReferenceEquals(key.Root, contextRoot)) continue;
+                if (slot is not null && slot != key.Slot) return false;
+                slot = key.Slot;
+            }
+
+            return slot is not null;
+        }
+
         /// <summary>
         /// Discards the nested fragmentainers <paramref name="contextRoot"/> recorded in
         /// <paramref name="slot"/>, or — with no slot — in every slot, for a fill that is being attempted

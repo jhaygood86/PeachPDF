@@ -10049,8 +10049,22 @@ namespace PeachPDF.Html.Core.Dom
             return left;
         }
 
-        private void OnBlockAxisRelocated(double fromY, double toY) =>
+        private void OnBlockAxisRelocated(double fromY, double toY)
+        {
+            // A multi-column container moved onto another page (a §4.3 mover relocating it whole) leaves behind
+            // the columns it recorded where it used to be: they would be emitted there, and the box drawn again
+            // on the page it moved to. Only when the columns sit in one slot: a container spanning several keeps what it
+            // recorded, since the boxes' live geometry holds only the last fill.
+            if (HtmlContainer is { HasRealPageGrid: true } container
+                && container.HoldsCapturedInstances(this)
+                && container.RecordedInOneSlotOnly(this)
+                && container.PageIndexOf(fromY) != container.PageIndexOf(toY))
+            {
+                container.ClearCapturedInstances(this);
+            }
+
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
+        }
 
         internal Font? GetCachedFont(string fontFamily, double fsize, PaintFontStyle st, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
