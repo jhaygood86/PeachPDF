@@ -4297,6 +4297,56 @@ namespace PeachPDF.Html.Core.Dom
                    && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot);
         }
 
+        /// <summary>
+        /// Takes a break before the line <paramref name="atomic"/> sits on when the box, now placed, crosses the foot of the page being
+        /// filled and would fit a fresh one. Returns whether it did. Only for an inline-block or inline-table, which css-break-3 §4.1 names as
+        /// boxes that may be treated as monolithic.
+        /// </summary>
+        /// <remarks>
+        /// The break is at the start of the line, as for a word that straddles: a line box is unbreakable (css-break-3 §4.1), so the box
+        /// goes with whatever else is on it. A box too deep for any fragmentainer is left to be sliced, since moving it would repeat the
+        /// question on every page; and the box's own words are marked as awaiting the next fragmentainer, as the discarded line's are,
+        /// because they are not on the line and would otherwise stay claimed by the page the break leaves.
+        /// </remarks>
+        private static bool BreaksBeforeAnAtomicInlineThatStraddles(
+            CssBox blockBox, CssBox box, CssBox atomic, CssLineBoxCoordinates coordinates)
+        {
+            if (box.IsFixed || coordinates.Fragmentainer is null
+                || atomic.DerivedStyle.ActualDisplay is not (Keywords.InlineBlock or Keywords.InlineTable)
+                || blockBox.HtmlContainer is not { HasRealPageGrid: true, SuppressWordPageBreaks: false, CurrentFragmentainer: { HasOwnBand: false } } container)
+            {
+                return false;
+            }
+
+            var lineTop = coordinates.Line.FlowTop ?? atomic.Location.Y - atomic.ActualMarginTop;
+            var bottom = atomic.Location.Y + atomic.ActualBoxSizingHeight + atomic.ActualMarginBottom;
+            var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(blockBox, container);
+            var slot = container.SlotStartingAt(lineTop);
+            var reservedEnd = clonedBottom + (container.CurrentFragmentainer?.BandEndInsetOf(slot) ?? 0);
+
+            if (MonolithicContent.FitsNoFragmentainer(bottom - lineTop, clonedTop, reservedEnd, container)) return false;
+
+            if (!HtmlContainerInt.FallsPast(bottom + reservedEnd, container.BandBeingFilled(lineTop, container.BandStartingAt(lineTop)))) return false;
+
+            var resumeSlot = HtmlContainerInt.FallsPast(bottom + reservedEnd, container.BandOfSlot(slot)) ? slot + 1 : slot;
+
+            MarkAwaitingTheNextFragmentainer(atomic);
+
+            coordinates.Break = new InlineBreakToken(
+                blockBox, resumeSlot, [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
+                FollowsForcedBreak: coordinates.Line.FollowsForcedBreak,
+                ConsecutiveHyphenatedLines: coordinates.ConsecutiveHyphenatedLines);
+
+            return true;
+        }
+
+        private static void MarkAwaitingTheNextFragmentainer(CssBox box)
+        {
+            foreach (var word in box.Words) word.AwaitsTheNextFragmentainer = true;
+
+            foreach (var child in box.Boxes) MarkAwaitingTheNextFragmentainer(child);
+        }
+
         /// <summary>The nearest multi-column container at or above <paramref name="box"/>.</summary>
         private static CssBox? ColumnsContainerOf(CssBox box)
         {
@@ -6125,6 +6175,12 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
+
+                    // An atomic inline's content is laid out whole and sliced where it crosses a fragmentainer's foot, which
+                    // clips a line there. css-break-3 §4.1 lets it be monolithic, and §4.4 breaks before a monolithic box that
+                    // fits a fresh fragmentainer rather than slicing it.
+                    if (BreaksBeforeAnAtomicInlineThatStraddles(blockBox, box, b, coordinates)) return;
+
                     if (FoldHeldEmptyInlinesIntoAtomicInlinesLine(blockBox, coordinates)) return;
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
