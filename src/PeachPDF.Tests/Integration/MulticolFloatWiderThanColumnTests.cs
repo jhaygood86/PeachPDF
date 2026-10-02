@@ -91,4 +91,19 @@ public class MulticolFloatWiderThanColumnTests
 
         Assert.True(positions["w9_1"].Y >= 20 + 86 - 0.5, $"the text started at y={positions["w9_1"].Y}, beside the float");
     }
+
+    // A float that leaves a few points of room beside it, in a column that is not the first: a word that does not fit in
+    // them goes below the float too. The words were left at the column's right edge, drawn on no page.
+    [Fact]
+    public async Task TextWithAFewPointsOfRoomBesideAFloat_MovesBelowIt()
+    {
+        var body = "<div style='columns:3;column-gap:8pt'><p>w9_1 w9_2 w9_3 w9_4 w9_5 w9_6 w9_7 w9_8</p>" +
+                   "<div style='float:left;width:80pt;height:40pt'></div>w9_20 w9_21 </div>";
+
+        var (visible, _) = await PaintedWords.LayOutAndCollectVisibleAsync(Page(body));
+        var (lost, doubled) = PaintedWords.Diff(body, visible);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+    }
 }

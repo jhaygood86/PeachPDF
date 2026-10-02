@@ -4139,6 +4139,7 @@ namespace PeachPDF.Html.Core.Dom
         /// right edge is clipped away. The cursor arrives already pushed past a left float, so the line's own
         /// start is rebuilt from the line's content edge and the push re-derived at each new Y.
         /// </remarks>
+
         private static void ShiftEmptyLineBelowCrowdingFloats(CssBox blockBox, CssBox box,
             CssLineBoxCoordinates coordinates, CssRect word, double rightSpacing, double clonedTrailing, bool isRtl,
             Action<CssRect> growLineToItsExtent)
@@ -4205,6 +4206,10 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 var fits = startX + word.Width + rightSpacing + clonedTrailing <= limitRight + LineFitTolerance;
+                // Only floats of this container's own columns make the page's foot the bound: one from a container nested
+                // in a column of it is that container's to place, and shifting the lines past it doubled words there.
+                var ownFloatsOnly = (leftFloat is null || ColumnsContainerOf(leftFloat) == ColumnsContainerOf(blockBox))
+                    && (rightFloat is null || ColumnsContainerOf(rightFloat) == ColumnsContainerOf(blockBox));
 
                 var nextY = double.PositiveInfinity;
                 if (leftFloat is not null)
@@ -4223,7 +4228,7 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer asked the same question, so a shift that long is not taken: the line stays where
                 // it was and keeps the room that is left. The same way out for a document that would keep shifting for
                 // ever (a bound, not an expected path).
-                if (nextY >= (startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000)
+                if (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000)
                 {                    coordinates.CurrentY = originalY;
                     coordinates.MaxBottom = originalMaxBottom;
                     coordinates.Line.FlowTop = originalFlowTop;
@@ -4240,6 +4245,17 @@ namespace PeachPDF.Html.Core.Dom
                 coordinates.Line.ContentRight = LineContentRightOf(blockBox, nextY);
                 growLineToItsExtent(word);
             }
+        }
+
+        /// <summary>The nearest multi-column container at or above <paramref name="box"/>.</summary>
+        private static CssBox? ColumnsContainerOf(CssBox box)
+        {
+            for (var up = box; up is not null; up = up.ParentBox)
+            {
+                if (up.EstablishesMultiColumnContext) return up;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -8741,7 +8757,6 @@ namespace PeachPDF.Html.Core.Dom
 
             return currentSize;
         }
-
 
         #endregion
     }
