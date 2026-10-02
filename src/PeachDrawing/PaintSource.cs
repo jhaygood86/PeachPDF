@@ -330,9 +330,10 @@ internal abstract class PaintSource
         private readonly double _cx, _cy, _rx, _ry, _fx, _fy, _a;
         private readonly bool _repeating;
         private readonly double _innerRatio;
+        private readonly double _focalRadius, _fxu, _fyu;
 
         private RadialPaint(in Affine deviceToUser, Stops stops, double cx, double cy, double rx, double ry,
-            double fx, double fy, bool repeating, double innerRatio)
+            double fx, double fy, bool repeating, double innerRatio, double focalRadius = 0)
         {
             _deviceToUser = deviceToUser;
             _stops = stops;
@@ -347,7 +348,10 @@ internal abstract class PaintSource
             var nx = (fx - cx) / _rx;
             var ny = (fy - cy) / _ry;
             var len = Math.Sqrt(nx * nx + ny * ny);
-            if (len > 0.9999)
+            _focalRadius = focalRadius > 0 ? focalRadius / _rx : 0;
+            _fxu = nx;
+            _fyu = ny;
+            if (_focalRadius == 0 && len > 0.9999)
             {
                 nx *= 0.9999 / len;
                 ny *= 0.9999 / len;
@@ -377,7 +381,7 @@ internal abstract class PaintSource
             }
 
             return new RadialPaint(toLocal, new Stops(brush.Stops), brush.Center.X, brush.Center.Y,
-                brush.RadiusX, brush.RadiusY, brush.Focus.X, brush.Focus.Y, brush.Spread == GradientSpread.Repeat, innerRatio: 0);
+                brush.RadiusX, brush.RadiusY, brush.Focus.X, brush.Focus.Y, brush.Spread == GradientSpread.Repeat, innerRatio: 0, brush.FocusRadius);
         }
 
         public override void FillSpan(int x0, int y, int count, Span<byte> destination)
@@ -394,7 +398,28 @@ internal abstract class PaintSource
                 var qy = py - _fy;
                 var qf = qx * _fx + qy * _fy;
                 var q2 = qx * qx + qy * qy;
-                var t = (float)((qf + Math.Sqrt(qf * qf + _a * q2)) / _a);
+                float t;
+                if (_focalRadius > 0)
+                {
+                    // Two circles, the first (radius r0) around the focal point f, the second the unit circle: the circle at t has
+                    // center f (1 - t) and radius r0 + t (1 - r0). Of the t whose circle passes through the point, the largest
+                    // with a non-negative radius wins; a point no circle reaches stays unpainted.
+                    var dr = 1 - _focalRadius;
+                    var a2 = _fxu * _fxu + _fyu * _fyu - dr * dr;
+                    var b2 = qx * _fxu + qy * _fyu - _focalRadius * dr;
+                    var c2 = q2 - _focalRadius * _focalRadius;
+                    if (!TrySolveConical(a2, b2, c2, _focalRadius, dr, out var root))
+                    {
+                        destination.Slice(i * 4, 4).Clear();
+                        continue;
+                    }
+
+                    t = (float)root;
+                }
+                else
+                {
+                    t = (float)((qf + Math.Sqrt(qf * qf + _a * q2)) / _a);
+                }
 
                 if (_innerRatio > 0)
                     t = (float)((t - _innerRatio) / (1 - _innerRatio));
@@ -405,6 +430,43 @@ internal abstract class PaintSource
                 Write(destination, i, _stops.At(t));
             }
         }
+    }
+
+    /// <summary>Solves <c>a t^2 + 2 b t + c = 0</c> for the largest root whose radius <c>r0 + t dr</c> is not negative.</summary>
+    private static bool TrySolveConical(double a, double b, double c, double r0, double dr, out double root)
+    {
+        root = 0;
+        if (Math.Abs(a) < 1e-12)
+        {
+            if (Math.Abs(b) < 1e-12)
+                return false;
+
+            root = -c / (2 * b);
+            return r0 + root * dr >= 0;
+        }
+
+        var disc = b * b - a * c;
+        if (disc < 0)
+            return false;
+
+        var sq = Math.Sqrt(disc);
+        var t1 = (-b + sq) / a;
+        var t2 = (-b - sq) / a;
+        var hi = Math.Max(t1, t2);
+        var lo = Math.Min(t1, t2);
+        if (r0 + hi * dr >= 0)
+        {
+            root = hi;
+            return true;
+        }
+
+        if (r0 + lo * dr >= 0)
+        {
+            root = lo;
+            return true;
+        }
+
+        return false;
     }
 
     private sealed class ConicPaint : PaintSource

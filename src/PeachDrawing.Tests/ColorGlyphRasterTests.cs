@@ -170,5 +170,18 @@ namespace PeachDrawing.Tests
             Assert.True(Count(canvas, IsBlue) > 200);
             Assert.Equal(0, Count(canvas, IsBlack));
         }
+
+        [Fact]
+        public async Task CffColorFont_DestOutLeavesAHoleWhereTheSourceIs_AndRadialConeIsDrawn()
+        {
+            // 'B': a yellow box with the blue triangle cut out of it (the complement clip of the shared walker's canvas target).
+            var canvas = await DrawAsync(BundledFonts.ColorCff, "B");
+            Assert.True(Count(canvas, IsYellow) > 100, "the box outside the triangle");
+            Assert.Equal(0, Count(canvas, IsBlue));
+
+            // 'E': a gradient between circles with different centers, so the two-circle brush runs.
+            var cone = await DrawAsync(BundledFonts.ColorCff, "E");
+            Assert.True(Count(cone, IsBlue) > 100);
+        }
     }
 }

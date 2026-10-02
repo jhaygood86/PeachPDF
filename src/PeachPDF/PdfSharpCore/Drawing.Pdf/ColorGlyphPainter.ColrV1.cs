@@ -78,6 +78,22 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 owner._gfx.IntersectClip(clipPath);
             }
 
+            public bool PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds)
+            {
+                if (owner._measuring)
+                {
+                    _clips.Push(null);
+                    return true;
+                }
+
+                XGraphicsPath clipPath = BuildPath(outline, transform);
+                clipPath.FillMode = XFillMode.Alternate;
+                clipPath.AddRectangle(new XRect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+                _clips.Push(owner._gfx.Save());
+                owner._gfx.IntersectClip(clipPath);
+                return true;
+            }
+
             public void PopClip()
             {
                 if (_clips.Pop() is { } state)
@@ -132,7 +148,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
                     case RadialColorGlyphPaint radial:
                         return new XRadialGradientBrush(new XPoint(radial.Center.X, radial.Center.Y), radial.Radius, radial.Radius,
-                            ToXColors(radial.Colors), [.. radial.Positions], new XPoint(radial.Focal.X, radial.Focal.Y));
+                            ToXColors(radial.Colors), [.. radial.Positions], new XPoint(radial.Focal.X, radial.Focal.Y))
+                        { FocalRadius = radial.FocalRadius };
 
                     case SweepColorGlyphPaint sweep:
                         return new XConicGradientBrush(new XPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,

@@ -143,10 +143,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         internal SvgGlyphSource? svg;
 
         /// <summary>
-        /// True when this font draws colour glyphs: COLR + CPAL layers over glyf outlines, or CBDT/CBLC/sbix
-        /// bitmaps. (A COLR font over CFF outlines is not one this renderer can paint, so it is not counted.)
+        /// True when this font draws colour glyphs: COLR + CPAL layers over glyf or CFF outlines, or CBDT/CBLC/sbix
+        /// bitmaps, or SVG documents.
         /// </summary>
-        internal bool IsColorFont => (colr != null && cpal != null && glyf != null) || bitmap != null || svg != null;
+        internal bool IsColorFont => (colr != null && cpal != null && (glyf != null || cff is { IsSupported: true } || cff2 is { IsSupported: true })) || bitmap != null || svg != null;
         internal GlyphMathTable math = null!; // optional - only dedicated math fonts carry one
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
         internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts

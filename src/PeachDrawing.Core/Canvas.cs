@@ -127,10 +127,16 @@ namespace PeachDrawing.Core
             return _adapter.GetLinearGradientBrush(p1, p2, stops, isRepeating);
         }
 
-        /// <summary>Convenience wrapper for <see cref="RenderContext.GetRadialGradientBrush"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>
+        /// <summary>Convenience wrapper for <see cref="RenderContext.GetRadialGradientBrush(PaintPoint, double, double, ValueTuple{PaintColor, double}[], bool, PaintPoint?, Matrix3x2?)"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>
         public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating = false, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
         {
             return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter, transform);
+        }
+
+        /// <summary>Convenience wrapper for the two-circle <see cref="RenderContext.GetRadialGradientBrush(PaintPoint, double, double, ValueTuple{PaintColor, double}[], bool, PaintPoint?, double, Matrix3x2?)"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>
+        public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating, PaintPoint? focalCenter, double focalRadius, Matrix3x2? transform = null)
+        {
+            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter, focalRadius, transform);
         }
 
         /// <summary>Convenience wrapper for <see cref="RenderContext.GetConicGradientBrush"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>

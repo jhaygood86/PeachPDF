@@ -82,6 +82,11 @@ namespace PeachDrawing.Core
         /// express. <see langword="null"/> when the geometry is already in paint coordinates.</summary>
         public Matrix3x2? Transform { get; } = transform;
 
+        /// <summary>The radius of the circle around <see cref="Focus"/> the gradient's first stop fills, in the units of
+        /// <see cref="RadiusX"/> (0, the default, is a point). Meaningful for a circular gradient; with a nonzero value
+        /// the gradient is the two-circle (conical) gradient from this circle to the outer one.</summary>
+        public double FocusRadius { get; init; }
+
         /// <summary>The center of the outer ellipse the gradient's last stop reaches.</summary>
         public PaintPoint Center { get; } = center;
         /// <summary>The point the gradient's first stop starts at - equal to <see cref="Center"/> for a concentric radial gradient.</summary>

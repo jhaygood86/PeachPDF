@@ -11235,6 +11235,7 @@ await SaveShowcaseAsync("viewport_units", "Responsive Design", "Viewport units (
 // fixture whose glyphs isolate each paint feature.
 var notoColorB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf")));
 var colorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf")));
+var colorCffB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestCff.otf")));
 // A separate Noto PaintColor Emoji subset that keeps the font's `ccmp` feature and the glyphs the
 // multi-codepoint sequences need - NotoColorEmoji-Subset.ttf above carries no GSUB at all.
 var notoSeqB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmojiSequences-Subset.ttf")));
@@ -11256,6 +11257,7 @@ var colorEmojiHtml =
     $"@font-face {{ font-family: 'NotoColor'; src: url('data:font/truetype;base64,{notoColorB64}') format('truetype'); }}" +
     $"@font-face {{ font-family: 'ColorTest'; src: url('data:font/truetype;base64,{colorFontB64}') format('truetype'); }}" +
     $"@font-face {{ font-family: 'NotoSeq'; src: url('data:font/truetype;base64,{notoSeqB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'ColorCff'; src: url('data:font/opentype;base64,{colorCffB64}') format('opentype'); }}" +
     "body { font: 9pt Arial, sans-serif; margin: 0 }" +
     "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
     "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
@@ -11265,6 +11267,7 @@ var colorEmojiHtml =
     "table.sw td { padding: 6px; vertical-align: top; width: 33%; text-align: center }" +
     ".cg { font-family: 'ColorTest'; font-size: 52pt; line-height: 1; height: 70px }" +
     ".cg.seq { font-family: 'NotoSeq'; font-size: 34pt; height: 56px }" +
+    ".cff { font-family: 'ColorCff' }" +
     ".desc { font-size: 8pt; font-weight: bold; color: #444; margin-top: 4px }" +
     ".css { font-size: 7pt; color: #666 }" +
     "</style></head><body>" +
@@ -11284,6 +11287,22 @@ var colorEmojiHtml =
     ColorGlyph("T", "Transform", "PaintTranslate over a yellow triangle") +
     ColorGlyph("M", "Blend compositing", "PaintComposite MULTIPLY (blue × yellow → black)") +
     ColorGlyph("F", "Reflect gradient", "PaintLinearGradient, EXTEND_REFLECT") +
+    "</tr></table>" +
+    "<h2>CFF outlines, Porter-Duff compositing and gradient geometry</h2>" +
+    "<p class=\"intro\">A COLR&nbsp;v1 font over CFF (OpenType) outlines paints like one over TrueType outlines. " +
+    "Composite modes (a blue triangle <i>source</i> over a yellow box <i>backdrop</i>) and radial/linear gradient geometry:</p>" +
+    "<table class=\"sw\"><tr>" +
+    ColorGlyph("<span class=\"cff\">3</span>", "SRC_IN", "the triangle, only where the box is") +
+    ColorGlyph("<span class=\"cff\">5</span>", "SRC_ATOP", "box, with the triangle inside it") +
+    ColorGlyph("<span class=\"cff\">6</span>", "DEST_OVER", "triangle beneath the box") +
+    "</tr><tr>" +
+    ColorGlyph("<span class=\"cff\">0</span>", "Radial inner radius", "r0 = 150: flat color inside it") +
+    ColorGlyph("<span class=\"cff\">1</span>", "Radial repeat", "EXTEND_REPEAT, concentric") +
+    ColorGlyph("<span class=\"cff\">2</span>", "Linear p2 rotation", "color lines parallel to p0→p2") +
+    "</tr><tr>" +
+    ColorGlyph("<span class=\"cff\">A</span>", "SRC_OUT", "the triangle outside the box: nothing") +
+    ColorGlyph("<span class=\"cff\">B</span>", "DEST_OUT", "the box outside the triangle") +
+    ColorGlyph("<span class=\"cff\">E</span>", "Two-circle radial", "different centers, r0 = 100") +
     "</tr></table>" +
     "<h2>Emoji sequences</h2>" +
     "<p class=\"intro\">A multi-codepoint emoji sequence composes into the single glyph the font " +
