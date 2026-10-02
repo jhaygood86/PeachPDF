@@ -110,4 +110,34 @@ public class MulticolContentLossTests
         Assert.Empty(lost);
         Assert.Empty(doubled);
     }
-}
+
+    // #1561: a balanced container's column band starts as an even share of its content, shorter than one line, so a
+    // line that crossed the page's foot was "too tall for any column" and overflowed it, clipped. A container whose
+    // first line does not fit what is left of the page moves to the next one, whatever follows the spacer.
+    [Theory]
+    [InlineData(185, "<p>w9_71 w9_72</p>")]
+    [InlineData(199, "<div>w9_71 w9_72</div>")]
+    [InlineData(200, "<div>w9_71 w9_72</div>")]
+    [InlineData(190, "<p>w9_71 w9_72</p>")]
+    [InlineData(185, "<h3>w9_71</h3>")]
+    public async Task SingleLineContainerCrossingThePageFoot_MovesToTheNextPage(int spacer, string content)
+    {
+        var body = $"<div style='height:{spacer}pt'></div><div style='columns:3;column-gap:8pt'>{content}</div>";
+
+        var (visible, pages) = await PaintedWords.LayOutAndCollectVisibleAsync(Page(body));
+        var (lost, doubled) = PaintedWords.Diff(body, visible);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+    }
+
+    // The same container with room for the line keeps it where it is: only a line that crosses the foot moves.
+    [Fact]
+    public async Task SingleLineContainerWithRoom_StaysOnItsPage()
+    {
+        var body = "<div style='height:150pt'></div><div style='columns:3;column-gap:8pt'><div>w9_71 w9_72</div></div>";
+
+        var positions = await PaintedWords.PositionsAsync(Page(body));
+
+        Assert.InRange(positions["w9_71"].Y, 170, 175);
+    }}

@@ -458,9 +458,10 @@ namespace PeachPDF.Html.Core.Dom
             // overflows the one it is in rather than breaking to a fresh column for every column there is.
             if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
             {
-                return MonolithicContent.FitsInBand(Height, clonedTop, reservedEnd,
-                           columnBand.FreshPageBandHeight ?? columnBand.BandHeight)
-                       && HtmlContainerInt.FallsPast(Bottom + reservedEnd, columnBand.Band);
+                return CrossesThePageFootButFitsAFreshPage(container, columnBand, Height, clonedTop, reservedEnd)
+                       || (MonolithicContent.FitsInBand(Height, clonedTop, reservedEnd,
+                               columnBand.FreshPageBandHeight ?? columnBand.BandHeight)
+                           && HtmlContainerInt.FallsPast(Bottom + reservedEnd, columnBand.Band));
             }
 
             // The band this word's own top falls in, asked of the fragmentainer the pass is actually
@@ -496,9 +497,35 @@ namespace PeachPDF.Html.Core.Dom
             var depth = Bottom - lineTop;
 
             return container.CurrentFragmentainer is { HasOwnBand: true } columnBand
-                ? !MonolithicContent.FitsInBand(depth, clonedTop, reservedEnd,
-                    columnBand.FreshPageBandHeight ?? columnBand.BandHeight)
+                ? !CrossesThePageFootButFitsAFreshPage(container, columnBand, depth, clonedTop, reservedEnd)
+                  && !MonolithicContent.FitsInBand(depth, clonedTop, reservedEnd,
+                      columnBand.FreshPageBandHeight ?? columnBand.BandHeight)
                 : MonolithicContent.FitsNoFragmentainer(depth, clonedTop, reservedEnd, container);
+        }
+
+        /// <summary>
+        /// Whether this word's bottom is past the foot of the page the column sits on while <paramref name="depth"/>
+        /// would fit a fresh page, which makes it a break rather than an overflow.
+        /// </summary>
+        /// <remarks>
+        /// A balanced container's column band starts as an even share of its content, shorter than one line, and only
+        /// grows while a fill carries something over. Judged against that share alone a line is "too tall for any
+        /// column" and overflows, even across the page's foot, where the PDF clips it. Only a line that crosses the
+        /// page's foot counts, so a short trial band inside the page still overflows rather than breaking for every
+        /// attempt there is.
+        /// </remarks>
+        private bool CrossesThePageFootButFitsAFreshPage(
+            HtmlContainerInt container, Fragmentation.FragmentainerContext columnBand, double depth,
+            double clonedTop, double reservedEnd)
+        {
+            if (!container.HasRealPageGrid) return false;
+
+            var pageSlot = columnBand.SlotIndex;
+            var footReservation = container.TotalBandEndReservationFor(pageSlot);
+
+            return HtmlContainerInt.FallsPast(Bottom + reservedEnd + footReservation, container.BandOfSlot(pageSlot))
+                   && MonolithicContent.FitsInBand(depth, clonedTop, reservedEnd,
+                       container.PageBandHeightOf(pageSlot) - footReservation);
         }
 
         /// <summary>
