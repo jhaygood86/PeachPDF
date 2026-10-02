@@ -2578,6 +2578,12 @@ namespace PeachPDF.Html.Core.Dom
         internal List<CssBox>? FloatsOfTheDiscardedLine { get; set; }
 
         /// <summary>
+        /// The floats the flow's last kept line holds when it stopped, kept for the pass that resumes it: a float after that line's
+        /// last word has the ordinal of the next word, and would be placed again by a resumed flow that took it for the next line's.
+        /// </summary>
+        internal List<CssBox>? FloatsKeptAtTheStop { get; set; }
+
+        /// <summary>
         /// Whether <c>clear</c> moved this box below a float it would otherwise have sat beside (CSS 2.1 §9.5.2
         /// "clearance"), set each time the box is placed. A box with clearance does not collapse through: its
         /// position is a constraint rather than a margin, so what follows it is measured from it. Without this an
