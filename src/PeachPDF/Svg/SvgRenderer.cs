@@ -996,6 +996,45 @@ namespace PeachPDF.Svg
         /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
         /// defined meaning changing mid-text.
         /// </summary>
+        /// <summary>
+        /// How far below the text position a run's alphabetic baseline sits (horizontal writing only). The run's dominant baseline - or, for a nested element with an
+        /// <c>alignment-baseline</c> of its own, that baseline - is put on the position; otherwise the run's alphabetic baseline aligns with its parent's. A
+        /// <c>baseline-shift</c> then raises the run. The pen does not move: only where the glyphs are drawn does.
+        /// </summary>
+        private static double BaselineOffset(SvgTextElement run)
+        {
+            var offset = AlphabeticBaselineBelowPosition(run);
+            return offset - run.BaselineShift;
+
+            static double AlphabeticBaselineBelowPosition(SvgTextElement r)
+            {
+                if (r.Font is not { } font)
+                    return 0;
+
+                if (r.AlignmentBaseline is not ("auto" or "baseline" or "use-script" or "no-change" or "reset-size"))
+                    return HeightAboveAlphabetic(r.AlignmentBaseline, font);
+
+                return r.ParentRun is { } parent ? AlphabeticBaselineBelowPosition(parent) : HeightAboveAlphabetic(r.DominantBaseline, font);
+            }
+        }
+
+        /// <summary>The height of a named baseline above the alphabetic baseline of <paramref name="font"/>, approximated from its metrics (no <c>BASE</c> table is read).</summary>
+        private static double HeightAboveAlphabetic(string baseline, Font font)
+        {
+            var descent = font.Height - font.Ascent;
+            return baseline switch
+            {
+                "ideographic" => -0.12 * font.Size,
+                "hanging" => 0.8 * font.Size,
+                "mathematical" => (font.XHeightEm ?? 0.5) * font.Size,
+                "middle" => (font.XHeightEm ?? 0.5) * font.Size / 2,
+                "central" => (font.Ascent - descent) / 2,
+                "text-top" or "text-before-edge" or "before-edge" => font.Ascent,
+                "text-bottom" or "text-after-edge" or "after-edge" => -descent,
+                _ => 0,
+            };
+        }
+
         private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical)
         {
             double penX = 0, penY = 0;
@@ -1083,7 +1122,7 @@ namespace PeachPDF.Svg
                     penY += gi.Dy ?? 0;
 
                     gi.Px = penX;
-                    gi.Py = penY;
+                    gi.Py = penY + BaselineOffset(gi.Run);
 
                     if (gi.ShapingRunFirst is { } shapingFirst)
                     {

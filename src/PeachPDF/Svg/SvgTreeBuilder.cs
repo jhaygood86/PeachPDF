@@ -229,7 +229,9 @@ namespace PeachPDF.Svg
             string? TextShadow = null,
             string? PaintOrder = null,
             int PreservedTabSpaces = 0,
-            int TabSize = 8)
+            int TabSize = 8,
+            string DominantBaseline = "auto",
+            double BaselineShift = 0)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1591,6 +1593,15 @@ namespace PeachPDF.Svg
                 },
             };
 
+            // dominant-baseline inherits; alignment-baseline does not (read per run in BuildTextRunCore). baseline-shift does not inherit
+            // either, but it is relative to the parent's baseline, so a text content element's shift adds to its parent's total.
+            var dominantAttr = ResolveStyledAttr(node, "dominant-baseline")?.Trim().ToLowerInvariant();
+            var dominantBaseline = string.IsNullOrEmpty(dominantAttr) || dominantAttr == "inherit" ? inherited.DominantBaseline : dominantAttr;
+
+            var baselineShift = inherited.BaselineShift;
+            if (node.Name is "text" or "tspan" or "tref" or "textPath")
+                baselineShift += ResolveBaselineShift(ResolveStyledAttr(node, "baseline-shift"), ownFont);
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1604,7 +1615,7 @@ namespace PeachPDF.Svg
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
-                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize);
+                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift);
         }
 
         /// <summary>
@@ -1757,6 +1768,23 @@ namespace PeachPDF.Svg
 
             // A keyword left out sorts after every listed one, with fill ahead of stroke.
             return fill < 0 || stroke < fill;
+        }
+
+        /// <summary>
+        /// A <c>baseline-shift</c> in user units, positive raising the text: <c>sub</c> and <c>super</c> by a fraction of the font size, a length as given,
+        /// a percentage of the font size. <c>baseline</c>, absent or invalid is no shift.
+        /// </summary>
+        private double ResolveBaselineShift(string? value, FontContext font)
+        {
+            var t = value?.Trim().ToLowerInvariant();
+            return t switch
+            {
+                null or "" or "baseline" or "inherit" => 0,
+                "super" => font.Size * 0.33,
+                "sub" => -font.Size * 0.2,
+                _ when t.EndsWith('%') && double.TryParse(t[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) => percent / 100 * font.Size,
+                _ => SvgValueParsers.ParseLength(t, null, new LengthBasis(this, font)) ?? 0,
+            };
         }
 
         /// <summary>Parses a <c>text-shadow</c> value into its layers with lengths resolved against <paramref name="font"/>; an invalid value or <c>none</c> is no shadow.</summary>
@@ -2020,6 +2048,9 @@ namespace PeachPDF.Svg
 
             run.TextShadows = ParseTextShadows(runFont.TextShadow, runFont);
             run.StrokeFirst = StrokesBeforeFill(runFont.PaintOrder);
+            run.DominantBaseline = runFont.DominantBaseline;
+            run.BaselineShift = runFont.BaselineShift;
+            run.AlignmentBaseline = ResolveStyledAttr(node, "alignment-baseline")?.Trim().ToLowerInvariant() is { Length: > 0 } alignment && alignment != "inherit" ? alignment : "auto";
 
             var childFontContext = runFont;
 
@@ -2040,8 +2071,12 @@ namespace PeachPDF.Svg
                 switch (child.Name)
                 {
                     case "tspan":
-                        run.Content.Add(new SvgTextSpan { Run = BuildTextRun(child, resolved, childFontContext, state) });
+                    {
+                        var tspanRun = BuildTextRun(child, resolved, childFontContext, state);
+                        tspanRun.ParentRun = run;
+                        run.Content.Add(new SvgTextSpan { Run = tspanRun });
                         break;
+                    }
 
                     case "tref":
                     {
@@ -2067,6 +2102,7 @@ namespace PeachPDF.Svg
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
                         }
+                        trefRun.ParentRun = run;
                         run.Content.Add(new SvgTextSpan { Run = trefRun });
                         break;
                     }

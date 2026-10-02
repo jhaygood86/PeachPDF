@@ -249,6 +249,18 @@ namespace PeachPDF.Svg
         /// <summary><c>paint-order</c> puts the stroke beneath the fill (SVG 2 §13.6): <c>stroke</c>, <c>stroke fill</c>, <c>markers stroke</c> ...; inherited.</summary>
         public bool StrokeFirst { get; set; }
 
+        /// <summary><c>dominant-baseline</c> keyword in effect for this run (inherited): which baseline of its font sits at the text position.</summary>
+        public string DominantBaseline { get; set; } = "auto";
+
+        /// <summary><c>alignment-baseline</c> keyword (not inherited): which baseline of this run aligns to its parent's dominant baseline; <c>auto</c> aligns alphabetic baselines.</summary>
+        public string AlignmentBaseline { get; set; } = "auto";
+
+        /// <summary>The cumulative <c>baseline-shift</c> in user units (positive raises the run): this run's own shift plus its ancestors'.</summary>
+        public double BaselineShift { get; set; }
+
+        /// <summary>The enclosing text content element this run is nested in, or null for a <c>&lt;text&gt;</c> root.</summary>
+        public SvgTextElement? ParentRun { get; set; }
+
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
         /// Decoration 3), unlike every other font/paint property this element carries.</summary>
