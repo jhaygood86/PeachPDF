@@ -11457,6 +11457,44 @@ await SaveShowcaseAsync("svg_text_font_palette_alternates", "Typography & Text",
     "stylistic sets with font-variant-alternates / @font-feature-values, exactly as HTML text does.",
     svgTextFontsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// More CSS text properties on SVG <text>: font-family fallback, decoration geometry + skip-ink, text-shadow, paint-order, baselines, textLength.
+var svgTextCssHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'Recursive'; src: url('data:font/truetype;base64,{svgTextRecursiveB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Nabla'; src: url('data:font/truetype;base64,{nablaB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 } h1 { font-size: 15pt; margin: 0 0 0.3em } p { color: #555; margin: 0 0 0.4em }" +
+    "svg { display: block; margin-bottom: 6px; border-bottom: 1px solid #ddd } text { font-family: Recursive }" +
+    "</style></head><body>" +
+    "<h1>SVG text: more CSS text properties</h1>" +
+    "<p>Fallback (Nabla lacks lowercase), decoration thickness/offset/skip-ink, <code>text-shadow</code>, <code>paint-order</code>, baselines, <code>textLength</code>.</p>" +
+    "<svg width=\"560\" height=\"60\" viewBox=\"0 0 560 60\">" +
+    "<text x=\"5\" y=\"45\" font-size=\"44\" style=\"font-family: Nabla, Recursive\">PAL gap</text>" +
+    "<text x=\"300\" y=\"45\" font-size=\"44\" style=\"font: bold 44px Recursive\">Shorthand</text></svg>" +
+    "<svg width=\"560\" height=\"60\" viewBox=\"0 0 560 60\">" +
+    "<text x=\"5\" y=\"40\" font-size=\"34\" text-decoration=\"underline\">gypsy jug</text>" +
+    "<text x=\"215\" y=\"40\" font-size=\"34\" style=\"text-decoration: underline wavy red 3px\">gypsy jug</text>" +
+    "<text x=\"425\" y=\"40\" font-size=\"34\" style=\"text-decoration: underline double; text-decoration-skip-ink: none\">gypsy</text></svg>" +
+    "<svg width=\"560\" height=\"70\" viewBox=\"0 0 560 70\">" +
+    "<text x=\"8\" y=\"50\" font-size=\"48\" fill=\"#d33\" style=\"text-shadow: 3px 3px 0 #999, 6px 6px 4px rgba(0,0,0,.4)\">Shadow</text>" +
+    "<text x=\"250\" y=\"52\" font-size=\"56\" font-weight=\"700\" fill=\"#fc0\" stroke=\"#222\" stroke-width=\"8\" stroke-linejoin=\"round\" style=\"paint-order: stroke\">Halo</text>" +
+    "<text x=\"400\" y=\"52\" font-size=\"56\" font-weight=\"700\" fill=\"#fc0\" stroke=\"#222\" stroke-width=\"8\" stroke-linejoin=\"round\">Over</text></svg>" +
+    "<svg width=\"560\" height=\"80\" viewBox=\"0 0 560 80\">" +
+    "<line x1=\"0\" y1=\"40\" x2=\"560\" y2=\"40\" stroke=\"#c33\"/>" +
+    "<text x=\"5\" y=\"40\" font-size=\"22\">alphabetic</text>" +
+    "<text x=\"150\" y=\"40\" font-size=\"22\" dominant-baseline=\"middle\">middle</text>" +
+    "<text x=\"250\" y=\"40\" font-size=\"22\" dominant-baseline=\"hanging\">hanging</text>" +
+    "<text x=\"370\" y=\"40\" font-size=\"22\">x<tspan baseline-shift=\"super\" font-size=\"14\">2</tspan> + y<tspan baseline-shift=\"sub\" font-size=\"14\">i</tspan></text>" +
+    "<text x=\"490\" y=\"40\" font-size=\"22\" dominant-baseline=\"text-top\">top</text></svg>" +
+    "<svg width=\"560\" height=\"50\" viewBox=\"0 0 560 50\">" +
+    "<text x=\"5\" y=\"30\" font-size=\"20\" textLength=\"260\">textLength spread</text>" +
+    "<text x=\"300\" y=\"30\" font-size=\"20\" xml:space=\"preserve\">a   b      c</text></svg>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_text_css_parity", "Typography & Text", "SVG text: CSS text properties",
+    "SVG <text> with a font-family fallback list, the font and text-decoration shorthands, decoration thickness and skip-ink, text-shadow, " +
+    "paint-order, dominant-baseline and baseline-shift, textLength and xml:space.",
+    svgTextCssHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Variable fonts: font-weight, font-stretch and font-variation-settings choose a location in one variable font's design space, and each
 // distinct location is embedded as its own static instance. Uses a small synthetic variable font (weight 100-900, width 75-125).
 var variableFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")));

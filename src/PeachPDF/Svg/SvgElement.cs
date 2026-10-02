@@ -133,6 +133,9 @@ namespace PeachPDF.Svg
         public required SvgTextElement Run { get; init; }
     }
 
+    /// <summary>One <c>text-shadow</c> layer of SVG text: offsets and blur radius in user units, and its colour (null: the text's own fill, <c>currentColor</c>).</summary>
+    internal readonly record struct SvgTextShadow(double Dx, double Dy, double Blur, PaintColor? Color);
+
     /// <summary>
     /// A positioned text run - built from a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, <c>&lt;tref&gt;</c>,
     /// or <c>&lt;textPath&gt;</c> element (all share this shape; only the root of a subtree is ever an
@@ -148,8 +151,6 @@ namespace PeachPDF.Svg
     /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
     /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
-    /// <summary>One <c>text-shadow</c> layer of SVG text: offsets and blur radius in user units, and its colour (null: the text's own fill, <c>currentColor</c>).</summary>
-    internal readonly record struct SvgTextShadow(double Dx, double Dy, double Blur, PaintColor? Color);
 
     internal sealed class SvgTextElement : SvgElement
     {

@@ -990,16 +990,6 @@ namespace PeachPDF.Svg
                 };
 
         /// <summary>
-        /// Lays out the flattened character stream: advances a pen along the writing mode's own inline
-        /// (pen-advance) axis - X for <c>horizontal-tb</c>, Y for <c>vertical-rl</c>/<c>vertical-lr</c> -
-        /// applying each character's absolute x/y on that axis (starting a new text chunk) and relative
-        /// dx/dy on both axes, then shifts each chunk by its start run's <c>text-anchor</c> over the
-        /// chunk's own extent along that same axis. <paramref name="isVertical"/> is resolved once from
-        /// the <c>&lt;text&gt;</c> root (see <see cref="RenderText"/>), not per glyph: unlike
-        /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
-        /// defined meaning changing mid-text.
-        /// </summary>
-        /// <summary>
         /// How far below the text position a run's alphabetic baseline sits (horizontal writing only). The run's dominant baseline - or, for a nested element with an
         /// <c>alignment-baseline</c> of its own, that baseline - is put on the position; otherwise the run's alphabetic baseline aligns with its parent's. A
         /// <c>baseline-shift</c> then raises the run. The pen does not move: only where the glyphs are drawn does.
@@ -1114,6 +1104,16 @@ namespace PeachPDF.Svg
             }
         }
 
+        /// <summary>
+        /// Lays out the flattened character stream: advances a pen along the writing mode's own inline
+        /// (pen-advance) axis - X for <c>horizontal-tb</c>, Y for <c>vertical-rl</c>/<c>vertical-lr</c> -
+        /// applying each character's absolute x/y on that axis (starting a new text chunk) and relative
+        /// dx/dy on both axes, then shifts each chunk by its start run's <c>text-anchor</c> over the
+        /// chunk's own extent along that same axis. <paramref name="isVertical"/> is resolved once from
+        /// the <c>&lt;text&gt;</c> root (see <see cref="RenderText"/>), not per glyph: unlike
+        /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
+        /// defined meaning changing mid-text.
+        /// </summary>
         private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical)
         {
             double penX = 0, penY = 0;
