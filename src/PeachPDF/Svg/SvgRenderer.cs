@@ -1474,6 +1474,58 @@ namespace PeachPDF.Svg
             }
         }
 
+        /// <summary>
+        /// Paints <paramref name="run"/>'s <c>text-shadow</c> layers underneath the text (CSS Text Decoration 3 §4.1: the first shadow is on top, so they
+        /// paint last to first), the way <c>FragmentPainter.PaintTextShadows</c> does for HTML: a shadow with no blur is the text drawn again at an offset
+        /// in the shadow colour and stays vector; a blurred one is drawn into a layer that is Gaussian-blurred (radius = twice the standard deviation).
+        /// A glyph painted under <paramref name="glyphTransform"/> gets its offset applied after that transform, and is not blurred.
+        /// </summary>
+        private static void PaintTextShadows(Canvas g, SvgTextElement run, string text, Font font, double drawX, double drawY, Size size, double opacity,
+            double letterSpacing, ShapeSettings? features, string? logicalText, Matrix3x2? glyphTransform = null)
+        {
+            if (run.TextShadows.Count == 0 || g.InvisibleText)
+                return;
+
+            var fill = ResolveInMarker(run.Fill);
+            var textColor = fill.Kind == SvgPaintKind.Solid ? fill.PaintColor : PaintColor.Black;
+
+            for (var i = run.TextShadows.Count - 1; i >= 0; i--)
+            {
+                var shadow = run.TextShadows[i];
+                var color = ApplyOpacity(shadow.Color ?? textColor, opacity * run.FillOpacity);
+                if (color.A == 0)
+                    continue;
+
+                if (glyphTransform is { } transform)
+                {
+                    g.PushTransform(MultiplyMatrix(transform, Matrix3x2.CreateTranslation((float)shadow.Dx, (float)shadow.Dy)));
+                    g.DrawString(text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
+                    g.PopTransform();
+                    continue;
+                }
+
+                var point = new PaintPoint(drawX + shadow.Dx, drawY + shadow.Dy);
+                if (shadow.Blur <= 0)
+                {
+                    g.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+                    continue;
+                }
+
+                // Glyph ink can overhang the run's own box a little; the padding keeps it.
+                var margin = 1.5 * shadow.Blur + size.Height * 0.25;
+                var clip = g.GetClip();
+                var left = Math.Max(point.X - margin, clip.X - margin);
+                var top = Math.Max(point.Y - margin, clip.Y - margin);
+                var right = Math.Min(point.X + size.Width + margin, clip.Right + margin);
+                var bottom = Math.Min(point.Y + size.Height + margin, clip.Bottom + margin);
+                if (right <= left || bottom <= top)
+                    continue;
+
+                using var layer = g.BeginLayer(new LayerOptions(Bounds: new Rect(left, top, right - left, bottom - top), Effects: [new BlurEffect(shadow.Blur / 2)]));
+                layer?.Canvas.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+            }
+        }
+
         private static bool IsCjk(string text)
         {
             foreach (var rune in text.EnumerateRunes())
@@ -1505,9 +1557,13 @@ namespace PeachPDF.Svg
             var toOrigin = new Matrix3x2(1, 0, 0, 1, (float)-start.Px, (float)-start.Py);
             var rotate = new Matrix3x2((float)cos, (float)sin, (float)-sin, (float)cos, 0, 0);
             var fromOrigin = new Matrix3x2(1, 0, 0, 1, (float)start.Px, (float)start.Py);
-            g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
+            var glyphTransform = MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin);
+            // A shadow's offset is in user space, so it is applied after the glyph's rotation rather than inside it.
+            PaintTextShadows(g, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity,
+                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph, glyphTransform);
+            g.PushTransform(glyphTransform);
             PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity,
-                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
+                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph, paintShadows: false);
             g.PopTransform();
         }
 
@@ -1586,8 +1642,11 @@ namespace PeachPDF.Svg
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
         private static void PaintTextGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, double drawX, double drawY, Size size, double opacity,
-            double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null)
+            double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null, bool paintShadows = true)
         {
+            if (paintShadows)
+                PaintTextShadows(g, run, text, font, drawX, drawY, size, opacity, letterSpacing, features, logicalText);
+
             // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - same as a shape's own
             // fill/stroke (PaintShape). Outside a marker this is a no-op (the tree builder already resolved these through `use`).
             var fill = ResolveInMarker(run.Fill);
@@ -2043,6 +2102,17 @@ namespace PeachPDF.Svg
 
                     result = result is { } r ? UnionRects(r, box) : box;
                 }
+
+                // A shadow paints outside the glyph boxes by its offset plus the reach of its blur.
+                var reach = 0.0;
+                foreach (var gi in glyphs)
+                {
+                    foreach (var shadow in gi.Run.TextShadows)
+                        reach = Math.Max(reach, Math.Max(Math.Abs(shadow.Dx), Math.Abs(shadow.Dy)) + 1.5 * shadow.Blur + gi.Size.Height * 0.25);
+                }
+
+                if (reach > 0 && result is { } measured)
+                    result = new Rect(measured.X - reach, measured.Y - reach, measured.Width + 2 * reach, measured.Height + 2 * reach);
             }
 
             foreach (var (run, _) in textPaths)

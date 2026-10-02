@@ -148,6 +148,9 @@ namespace PeachPDF.Svg
     /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
     /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
+    /// <summary>One <c>text-shadow</c> layer of SVG text: offsets and blur radius in user units, and its colour (null: the text's own fill, <c>currentColor</c>).</summary>
+    internal readonly record struct SvgTextShadow(double Dx, double Dy, double Blur, PaintColor? Color);
+
     internal sealed class SvgTextElement : SvgElement
     {
         public bool HasOwnX { get; set; }
@@ -239,6 +242,9 @@ namespace PeachPDF.Svg
 
         /// <summary><c>text-decoration-skip-ink</c> (<c>auto</c>, <c>none</c>, <c>all</c>); inherited.</summary>
         public string TextDecorationSkipInk { get; set; } = "auto";
+
+        /// <summary>The <c>text-shadow</c> layers (first listed on top); inherited. Empty for <c>none</c>.</summary>
+        public IReadOnlyList<SvgTextShadow> TextShadows { get; set; } = [];
 
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text

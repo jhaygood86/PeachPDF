@@ -225,7 +225,8 @@ namespace PeachPDF.Svg
             double? ObliqueSkewSinus = null,
             string? UnderlineOffset = null,
             string UnderlinePosition = "auto",
-            string SkipInk = "auto")
+            string SkipInk = "auto",
+            string? TextShadow = null)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1556,6 +1557,11 @@ namespace PeachPDF.Svg
             var skipInkAttr = ResolveStyledAttr(node, "text-decoration-skip-ink")?.Trim().ToLowerInvariant();
             var skipInk = skipInkAttr is "auto" or "none" or "all" ? skipInkAttr : inherited.SkipInk;
 
+            var textShadowAttr = ResolveStyledAttr(node, "text-shadow");
+            var textShadow = string.IsNullOrWhiteSpace(textShadowAttr) || textShadowAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.TextShadow
+                : textShadowAttr.Trim();
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1569,7 +1575,7 @@ namespace PeachPDF.Svg
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
-                underlineOffset, underlinePosition, skipInk);
+                underlineOffset, underlinePosition, skipInk, textShadow);
         }
 
         /// <summary>
@@ -1700,6 +1706,40 @@ namespace PeachPDF.Svg
                 return double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
 
             return SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
+        }
+
+        /// <summary>Parses a <c>text-shadow</c> value into its layers with lengths resolved against <paramref name="font"/>; an invalid value or <c>none</c> is no shadow.</summary>
+        private IReadOnlyList<SvgTextShadow> ParseTextShadows(string? value, FontContext font)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return [];
+
+            List<TextShadowGrammar.ShadowLayer>? layers;
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                layers = TextShadowGrammar.TryParse(tokens);
+            }
+
+            if (layers is not { Count: > 0 })
+                return [];
+
+            var basis = new LengthBasis(this, font);
+            var parser = new CssValueParser(_adapter);
+            var result = new List<SvgTextShadow>(layers.Count);
+            foreach (var layer in layers)
+            {
+                var color = string.IsNullOrEmpty(layer.Color) || layer.Color.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                    ? (PaintColor?)null
+                    : parser.GetActualColor(layer.Color);
+                result.Add(new SvgTextShadow(
+                    SvgValueParsers.ParseLength(layer.OffsetX, null, basis) ?? 0,
+                    SvgValueParsers.ParseLength(layer.OffsetY, null, basis) ?? 0,
+                    Math.Max(0, SvgValueParsers.ParseLength(layer.Blur, null, basis) ?? 0),
+                    color));
+            }
+
+            return result;
         }
 
         /// <summary>The authored <c>font-family</c> list with each family's whitespace and quotes removed, rejoined with <c>, </c>.</summary>
@@ -1926,6 +1966,8 @@ namespace PeachPDF.Svg
             run.TextUnderlineOffset = ResolveFontRelativeLength(runFont.UnderlineOffset?.ToLowerInvariant(), runFont) ?? 0;
             run.TextUnderlinePosition = runFont.UnderlinePosition;
             run.TextDecorationSkipInk = runFont.SkipInk;
+
+            run.TextShadows = ParseTextShadows(runFont.TextShadow, runFont);
 
             var childFontContext = runFont;
 
