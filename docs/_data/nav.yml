@@ -20,6 +20,10 @@
       url: /cli.html
     - title: PeachDrawing.Text
       url: /peachdrawing-text.html
+    - title: PeachDrawing.Core
+      url: /peachdrawing-core.html
+    - title: PeachDrawing
+      url: /peachdrawing.html
     - title: Testing
       url: /testing.html
 - title: Showcase
