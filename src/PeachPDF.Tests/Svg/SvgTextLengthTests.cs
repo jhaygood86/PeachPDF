@@ -112,5 +112,16 @@ namespace PeachPDF.Tests.Svg
             // Anchored on the final extent: centred on x=10.
             Assert.Equal(10, g.DrawStringCalls[0].PaintPoint.X + Span(g) / 2, 3);
         }
+
+        [Fact]
+        public void TextLength_KeepsAComplexScriptRunTogether()
+        {
+            // An Arabic word is one shaping unit: spreading the run must not paint its first letter alone.
+            var plain = Render("", "\u0628\u064A\u062A");
+            var g = Render("""textLength="200" """, "\u0628\u064A\u062A");
+
+            Assert.Equal(plain.DrawStringCalls.Count, g.DrawStringCalls.Count);
+            Assert.Equal(plain.DrawStringCalls.Select(c => c.Text).ToArray(), g.DrawStringCalls.Select(c => c.Text).ToArray());
+        }
     }
 }

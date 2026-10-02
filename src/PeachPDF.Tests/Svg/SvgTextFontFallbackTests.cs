@@ -65,5 +65,15 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal("abc", Assert.Single(g.DrawStringCalls).Text);
         }
+
+        [Fact]
+        public async Task CombiningMarkAndVariationSelector_StayWithTheirBase()
+        {
+            // Nabla has no U+0301 or U+FE0F; they must not be sent to another font on their own, which would split the cluster.
+            var (g, _, _) = await Render("NABLA, RECURSIVE", "A\u0301P\uFE0F");
+
+            Assert.Equal("A\u0301P\uFE0F", string.Concat(g.DrawStringCalls.Select(c => c.Text)));
+            Assert.Single(g.DrawStringCalls.Select(c => c.Font).Distinct());
+        }
     }
 }

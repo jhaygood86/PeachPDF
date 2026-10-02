@@ -1742,10 +1742,14 @@ namespace PeachPDF.Svg
             if (string.IsNullOrWhiteSpace(value) || value is "auto" or "from-font" or "inherit")
                 return null;
 
+            double? resolved;
             if (value.EndsWith('%'))
-                return double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
+                resolved = double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
+            else
+                resolved = SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
 
-            return SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
+            // NaN and infinity are not lengths.
+            return resolved is { } length && double.IsFinite(length) ? length : null;
         }
 
         /// <summary>
@@ -2032,16 +2036,19 @@ namespace PeachPDF.Svg
             // it non-inherited (a descendant's decoration "flows across" via painting every glyph whose
             // ancestor chain requested one, not via the property inheriting).
             run.TextDecorationLine = ResolveStyledAttr(node, "text-decoration-line")?.Trim().ToLowerInvariant() ?? "none";
-            run.TextDecorationStyle = ResolveStyledAttr(node, "text-decoration-style")?.Trim().ToLowerInvariant() ?? "solid";
+            run.TextDecorationStyle = ResolveStyledAttr(node, "text-decoration-style")?.Trim().ToLowerInvariant() is { } decorationStyle and not ("initial" or "inherit") ? decorationStyle : "solid";
             var decorationColorAttr = ResolveStyledAttr(node, "text-decoration-color")?.Trim();
+            // A shorthand that omits the colour leaves it at its initial value: currentcolor, like an unset longhand.
             run.TextDecorationColor = !string.IsNullOrEmpty(decorationColorAttr) && !decorationColorAttr.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                && !decorationColorAttr.Equals("initial", StringComparison.OrdinalIgnoreCase) && !decorationColorAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? new CssValueParser(_adapter).GetActualColor(decorationColorAttr)
                 : null;
 
             // Decoration geometry: thickness is the decorating element's own value (not inherited); offset, position and skip-ink inherit.
             var thicknessAttr = ResolveStyledAttr(node, "text-decoration-thickness")?.Trim().ToLowerInvariant();
             run.TextDecorationThicknessFromFont = thicknessAttr == "from-font";
-            run.TextDecorationThickness = run.TextDecorationThicknessFromFont ? null : ResolveFontRelativeLength(thicknessAttr, runFont);
+            // A negative thickness is invalid and falls back to auto.
+            run.TextDecorationThickness = run.TextDecorationThicknessFromFont ? null : ResolveFontRelativeLength(thicknessAttr, runFont) is >= 0 and var thicknessValue ? thicknessValue : null;
             run.TextUnderlineOffset = ResolveFontRelativeLength(runFont.UnderlineOffset?.ToLowerInvariant(), runFont) ?? 0;
             run.TextUnderlinePosition = runFont.UnderlinePosition;
             run.TextDecorationSkipInk = runFont.SkipInk;

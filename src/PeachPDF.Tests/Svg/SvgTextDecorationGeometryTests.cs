@@ -149,5 +149,35 @@ namespace PeachPDF.Tests.Svg
             var all = Render(new InkCanvas([new InkSpan(14, 18)]), """text-decoration-line="underline" text-decoration-skip-ink="all" """, cjk);
             Assert.True(Lines(all).Length > 1);
         }
+
+        [Fact]
+        public void ShorthandWithoutColor_FollowsTheFill()
+        {
+            var g = Render(new TestRecordingGraphics(), """fill="rgb(255,0,0)" style="text-decoration: underline" """);
+
+            var line = Assert.Single(Lines(g));
+            Assert.Equal(255, line.PaintColor.R);
+            Assert.Equal(0, line.PaintColor.G);
+        }
+
+        [Theory]
+        [InlineData("-2")]
+        [InlineData("NaN%")]
+        [InlineData("Infinity%")]
+        public void InvalidThickness_FallsBackToAuto(string value)
+        {
+            var g = Render(new TestRecordingGraphics(), $"text-decoration-line=\"underline\" text-decoration-thickness=\"{value}\" ");
+
+            Assert.Equal(1, Assert.Single(Lines(g)).Width);
+        }
+
+        [Fact]
+        public void InvalidOffset_IsIgnored()
+        {
+            var plain = Assert.Single(Lines(Render(new TestRecordingGraphics(), """text-decoration-line="underline" """)));
+            var bad = Assert.Single(Lines(Render(new TestRecordingGraphics(), """text-decoration-line="underline" text-underline-offset="NaN%" """)));
+
+            Assert.Equal(plain.Y1, bad.Y1, 3);
+        }
     }
 }

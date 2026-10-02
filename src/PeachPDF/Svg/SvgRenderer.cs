@@ -797,7 +797,12 @@ namespace PeachPDF.Svg
                 {
                     case SvgTextFragment fragment when run.Font is { } font:
                         foreach (var rune in fragment.Text.EnumerateRunes())
-                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = run.FontFor?.Invoke(rune) ?? font, Opacity = opacityFactor });
+                        {
+                            // A combining mark, joiner or variation selector stays in its base character's font so the cluster still shapes together.
+                            var continuesCluster = glyphs.Count > 0 && ReferenceEquals(glyphs[^1].Run, run) && IsClusterContinuation(rune);
+                            var glyphFont = continuesCluster ? glyphs[^1].Font : run.FontFor?.Invoke(rune) ?? font;
+                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = glyphFont, Opacity = opacityFactor });
+                        }
                         break;
 
                     case SvgTextSpan span when span.Run.PathData is not null:
@@ -1026,6 +1031,14 @@ namespace PeachPDF.Svg
                 "text-bottom" or "text-after-edge" or "after-edge" => -descent,
                 _ => 0,
             };
+        }
+
+        private static bool IsClusterContinuation(System.Text.Rune rune)
+        {
+            if (rune.Value is 0x200C or 0x200D or (>= 0xFE00 and <= 0xFE0F) or (>= 0xE0100 and <= 0xE01EF))
+                return true;
+
+            return System.Text.Rune.GetUnicodeCategory(rune) is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.EnclosingMark;
         }
 
         private static bool IsWithin(SvgTextElement? candidate, SvgTextElement container)
@@ -1357,7 +1370,7 @@ namespace PeachPDF.Svg
                 // This also has to apply when `start` itself is the word-spaced glyph (e.g. a run
                 // boundary lands exactly on a space) - otherwise the gap silently never renders,
                 // since nothing downstream re-checks the batch's own first character.
-                var startIsWordSpacedWhitespace = (start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph)) || start.SpacingAdjusted;
+                var startIsWordSpacedWhitespace = (start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph)) || (start.SpacingAdjusted && start.ShapingRunFirst is null);
                 while (!startIsWordSpacedWhitespace && i < glyphs.Count)
                 {
                     var gc = glyphs[i];
@@ -1367,7 +1380,7 @@ namespace PeachPDF.Svg
                     // between a run and plain text, always breaks the batch - each needs its own
                     // ShapeSettings (see ResolveShapingFeatures), so merging them would apply one
                     // run's joining forms/USE categories to the other's text.
-                    if (!ReferenceEquals(gc.Run, start.Run) || !ReferenceEquals(gc.Font, start.Font) || (gc.Rotate ?? 0) != 0
+                    if (!ReferenceEquals(gc.Run, start.Run) || !ReferenceEquals(gc.Font, start.Font) || (gc.SpacingAdjusted && gc.ShapingRunFirst is null) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
                         || !ReferenceEquals(gc.ShapingRunFirst, start.ShapingRunFirst))
                         break;

@@ -1,6 +1,7 @@
 using PeachPDF.CSS;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachPDF.Svg
 {
@@ -22,15 +23,29 @@ namespace PeachPDF.Svg
             ("text-decoration", ["text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness"]),
         ];
 
-        /// <summary>The shorthands that set <paramref name="longhand"/>, widest first (<c>font</c> before <c>font-variant</c>).</summary>
-        public static IEnumerable<string> ShorthandsOf(string longhand)
+        private static readonly string[] None = [];
+
+        /// <summary>Longhand → the shorthands that set it, widest first (<c>font</c> before <c>font-variant</c>).</summary>
+        private static readonly Dictionary<string, string[]> ByLonghand = BuildIndex();
+
+        private static Dictionary<string, string[]> BuildIndex()
         {
+            var index = new Dictionary<string, List<string>>();
             foreach (var (shorthand, longhands) in Shorthands)
             {
-                if (Array.IndexOf(longhands, longhand) >= 0)
-                    yield return shorthand;
+                foreach (var longhand in longhands)
+                {
+                    if (!index.TryGetValue(longhand, out var list))
+                        index[longhand] = list = [];
+                    list.Add(shorthand);
+                }
             }
+
+            return index.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
         }
+
+        /// <summary>The shorthands that set <paramref name="longhand"/>, widest first (<c>font</c> before <c>font-variant</c>); empty for most properties.</summary>
+        public static string[] ShorthandsOf(string longhand) => ByLonghand.GetValueOrDefault(longhand, None);
 
         /// <summary>
         /// The value <paramref name="shorthandValue"/> gives <paramref name="longhand"/>, or null when the value does not parse as that
