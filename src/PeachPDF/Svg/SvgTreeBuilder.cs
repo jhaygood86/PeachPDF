@@ -1384,7 +1384,31 @@ namespace PeachPDF.Svg
             if (matched is not null && matched.TryGetValue(name, out var matchedValue))
                 return matchedValue; // present (incl. null = invalid at computed-value time) → authoritative
 
-            return node.GetAttribute(name);
+            var attribute = node.GetAttribute(name);
+
+            // A text shorthand (font / font-variant / text-decoration) in style="" or as a presentation attribute sets this longhand
+            // too (the matched-rule tier above is already expanded by the CSS-OM). Shorthands only matter when nothing more specific
+            // declared the longhand, and the longhand's own presentation attribute sits below a style="" shorthand.
+            foreach (var shorthand in SvgTextShorthands.ShorthandsOf(name))
+            {
+                if (styleDeclarations.TryGetValue(shorthand, out var shorthandStyle))
+                {
+                    var resolved = node.ResolveVar(shorthandStyle);
+                    return resolved is null ? null : SvgTextShorthands.Expand(shorthand, resolved, name) ?? attribute;
+                }
+            }
+
+            if (attribute is not null)
+                return attribute;
+
+            foreach (var shorthand in SvgTextShorthands.ShorthandsOf(name))
+            {
+                var shorthandAttribute = node.GetAttribute(shorthand);
+                if (shorthandAttribute is not null && SvgTextShorthands.Expand(shorthand, shorthandAttribute, name) is { } expanded)
+                    return expanded;
+            }
+
+            return null;
         }
 
         /// <summary>
