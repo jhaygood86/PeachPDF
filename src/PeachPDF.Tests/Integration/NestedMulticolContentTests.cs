@@ -47,7 +47,7 @@ public class NestedMulticolContentTests
     public async Task InnerContainerContinuingOntoTheNextPage_KeepsEveryWord()
     {
         var body = $"{Words("43", 16, 24)}<p>{Words("43", 29, 38)}</p><p>{Words("43", 39, 73)}</p>" +
-                   $"<div style='columns:3;column-gap:8pt'><div style='columns:2;column-gap:8pt'><p>{Words("43", 74, 109)}</p></div></div>";
+                   $"<div style='height:50pt'></div><div style='columns:3;column-gap:8pt'><div style='columns:2;column-gap:8pt'><p>{Words("43", 74, 109)}</p></div></div>";
 
         var (visible, pages) = await PaintedWords.LayOutAndCollectVisibleAsync(Page(body));
         var (lost, doubled) = PaintedWords.Diff(body, visible);
