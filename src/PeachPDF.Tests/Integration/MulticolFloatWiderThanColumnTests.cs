@@ -79,4 +79,16 @@ public class MulticolFloatWiderThanColumnTests
         Assert.Empty(lost);
         Assert.Empty(doubled);
     }
+
+    // A multi-column container is a formatting context root whose height covers its floats, so it is not an empty box
+    // whose margins collapse through it: what follows it goes below the float, not beside it at the container's top.
+    [Theory]
+    [InlineData("<div style='columns:2;column-gap:8pt'><div style='float:left;width:120pt;height:86pt'></div></div>w9_1 w9_2 ")]
+    [InlineData("<div style='columns:2;column-gap:8pt'><div style='position:relative'><div style='float:left;width:120pt;height:86pt'></div></div></div>w9_1 w9_2 ")]
+    public async Task TextAfterAContainerHoldingOnlyAFloat_GoesBelowTheFloat(string body)
+    {
+        var positions = await PaintedWords.PositionsAsync(Page(body));
+
+        Assert.True(positions["w9_1"].Y >= 20 + 86 - 0.5, $"the text started at y={positions["w9_1"].Y}, beside the float");
+    }
 }

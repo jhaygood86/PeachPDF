@@ -9530,6 +9530,9 @@ namespace PeachPDF.Html.Core.Dom
                 (CssValueParser.DependsOnPercentage(Height) && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
             if (!heightIsAuto) return false;
             if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
+            // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
+            // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
+            if (EstablishesMultiColumnContext) return false;
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it
