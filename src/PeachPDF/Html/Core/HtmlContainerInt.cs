@@ -600,6 +600,14 @@ namespace PeachPDF.Html.Core
         internal bool SuppressWordPageBreaks { get; set; }
 
         /// <summary>
+        /// Whether lines laid out unbroken (<see cref="SuppressWordPageBreaks"/>) are still moved to the next page
+        /// when one would cross a page's foot. Set for a float's content: it runs on past the foot and each page shows
+        /// the slice that falls in it, and a line straddling the foot belongs to neither slice, so it was drawn on no
+        /// page.
+        /// </summary>
+        internal bool PushUnbrokenLinesPastThePageFoot { get; set; }
+
+        /// <summary>
         /// The fragmentainer the current layout pass is filling, or null outside
         /// <see cref="LayoutDocument"/> (and for the unpaginated/measurement pass, which has no grid to
         /// break against). Layout reads this rather than the page grid directly wherever it needs to

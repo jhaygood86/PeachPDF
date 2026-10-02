@@ -4368,7 +4368,7 @@ namespace PeachPDF.Html.Core.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
 
-            await LayoutContentUnbroken(g, b);
+            await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
         }
 
         /// <summary>
@@ -4384,12 +4384,17 @@ namespace PeachPDF.Html.Core.Dom
         /// foot and each page's fragment shows the slice that falls in it, as an unbreakable box's does
         /// (css-break-3 §2: content that cannot be broken may be sliced to avoid losing it, §4.4).
         /// </remarks>
-        private static async ValueTask LayoutContentUnbroken(Canvas g, CssBox b)
+        private static async ValueTask LayoutContentUnbroken(Canvas g, CssBox b, bool pushLinesPastThePageFoot = false)
         {
             var container = b.HtmlContainer;
             var previousFragmentainer = container?.DetachFragmentainer();
             var previousSuppress = container?.SuppressWordPageBreaks ?? false;
-            if (container is not null) container.SuppressWordPageBreaks = true;
+            var previousPush = container?.PushUnbrokenLinesPastThePageFoot ?? false;
+            if (container is not null)
+            {
+                container.SuppressWordPageBreaks = true;
+                container.PushUnbrokenLinesPastThePageFoot = previousPush || pushLinesPastThePageFoot;
+            }
 
             try
             {
@@ -4401,8 +4406,41 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     container.RestoreFragmentainer(previousFragmentainer);
                     container.SuppressWordPageBreaks = previousSuppress;
+                    container.PushUnbrokenLinesPastThePageFoot = previousPush;
                 }
             }
+        }
+
+        /// <summary>
+        /// Moves the line being opened to the top of the next page when, laid out where it is, it would cross the foot of
+        /// the page it is on and would fit one: a line box is monolithic (css-break-3 §4.1), and in content laid out
+        /// unbroken nothing else keeps one from straddling the foot, which left it on neither page's slice.
+        /// </summary>
+        private static void PushLineBelowThePageFoot(CssBox blockBox, CssLineBoxCoordinates coordinates, CssRect word,
+            Action<CssRect> growLineToItsExtent)
+        {
+            if (blockBox.HtmlContainer is not { PushUnbrokenLinesPastThePageFoot: true, HasRealPageGrid: true } container
+                || blockBox.IsFixed || word.IsLineBreak)
+            {
+                return;
+            }
+
+            var lineTop = coordinates.Line.FlowTop ?? coordinates.CurrentY;
+            var band = container.BandStartingAt(lineTop);
+
+            if (!HtmlContainerInt.FallsPast(coordinates.MaxBottom, band)
+                || coordinates.MaxBottom - lineTop > band.Bottom - band.Top)
+            {
+                return;
+            }
+
+            var nextTop = container.PageTopOf(container.SlotStartingAt(lineTop) + 1);
+
+            coordinates.CurrentY = nextTop;
+            coordinates.MaxBottom = nextTop;
+            coordinates.Line.FlowTop = null;
+            coordinates.Line.ContentRight = LineContentRightOf(blockBox, nextTop);
+            growLineToItsExtent(word);
         }
 
         /// <summary>
@@ -5773,6 +5811,12 @@ namespace PeachPDF.Html.Core.Dom
                         // call before the wrap decision never saw. Grow that line now, against the cursor's
                         // post-wrap CurrentY.
                         GrowLineToItsExtent(word);
+
+                        if (wordOpensTheLine)
+                        {
+                            PushLineBelowThePageFoot(blockBox, coordinates, word, GrowLineToItsExtent);
+                            word.Top = coordinates.CurrentY;
+                        }
 
                         // Its line now holds the empty inlines passed before it.
                         var tookEmptyInlines = coordinates.PendingEmptyInlineExtent is not null;
