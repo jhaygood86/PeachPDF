@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<Import Project="..\Version.props" />
+	<Import Project="..\ApiReference.props" />
 	<PropertyGroup>
 		<AssemblyName>PeachDrawing</AssemblyName>
 		<RootNamespace>PeachDrawing</RootNamespace>

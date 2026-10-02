@@ -136,9 +136,8 @@ require an entirely separate semantic-to-visual layout layer.
 
 ## Accepted Gaps
 
-Each gap noted above with "an accepted gap" is tracked in this repository's internal engineering notes
-(`.claude/accepted-gaps/`) alongside the reasoning for leaving it out of v1 and, where it's a genuine
-spec deviation, a tracked issue for closing it later. In summary:
+Each gap noted above with "an accepted gap" is deliberately left out of v1 and, where it is a genuine
+spec deviation, is tracked as an issue for closing it later. In summary:
 
 - `mfrac[bevelled]` and `menclose`'s notation marks are parsed but not drawn — neither is part of MathML
   Core at all (Chromium/WebKit don't render them either; Firefox's support for them is a pre-Core legacy

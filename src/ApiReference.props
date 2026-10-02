@@ -1,0 +1,18 @@
+<Project>
+	<!--
+		Generates a package's API reference with DefaultDocumentation, for the docs site (pages.yml) at /api/<package>/.
+		Imported by every package that has a public API except PeachPDF itself, which keeps its pages at the root of
+		docs/api/ so links to them stay valid. $(MSBuildProjectName) rather than $(AssemblyName): this file is imported
+		before the project's own properties are evaluated, and the two are the same for these projects.
+	-->
+	<PropertyGroup>
+		<!-- Off by default so ordinary local `dotnet build` runs stay fast; CI passes -p:DisableDefaultDocumentation=false to regenerate docs/api/. -->
+		<DisableDefaultDocumentation Condition="'$(DisableDefaultDocumentation)' == ''">true</DisableDefaultDocumentation>
+		<DefaultDocumentationFolder>$(MSBuildThisFileDirectory)../docs/api/$(MSBuildProjectName)</DefaultDocumentationFolder>
+		<DefaultDocumentationGeneratedAccessModifiers>Public</DefaultDocumentationGeneratedAccessModifiers>
+		<DefaultDocumentationFileNameFactory>Name</DefaultDocumentationFileNameFactory>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
+	</ItemGroup>
+</Project>

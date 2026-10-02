@@ -27,22 +27,35 @@
       <nav class="site-nav" aria-label="Site">
         {%- for item in site.data.nav -%}
           {%- if item.children -%}
+            {%- comment -%}
+              A child with a `prefix` owns every page under it (a package's generated API reference); one marked `fallback`
+              owns the rest of /api/, which is where PeachPDF's own pages sit, so it is only chosen when no prefix matched.
+            {%- endcomment -%}
+            {%- assign active_url = page.url -%}
+            {%- assign prefix_matched = false -%}
+            {%- for child in item.children -%}
+              {%- if child.prefix and prefix_matched == false and page.url contains child.prefix -%}{%- assign active_url = child.url -%}{%- assign prefix_matched = true -%}{%- endif -%}
+            {%- endfor -%}
+            {%- if prefix_matched == false and page.url contains '/api/' -%}
+              {%- for child in item.children -%}
+                {%- if child.fallback -%}{%- assign active_url = child.url -%}{%- endif -%}
+              {%- endfor -%}
+            {%- endif -%}
             {%- assign group_active = false -%}
             {%- for child in item.children -%}
-              {%- if page.url == child.url -%}{%- assign group_active = true -%}{%- endif -%}
+              {%- if active_url == child.url -%}{%- assign group_active = true -%}{%- endif -%}
             {%- endfor -%}
             <details class="nav-menu{% if group_active %} active{% endif %}">
               <summary>{{ item.title | escape }}</summary>
               <div class="nav-menu-panel">
                 {%- for child in item.children -%}
-                <a href="{{ child.url | relative_url }}"{% if page.url == child.url %} class="active" aria-current="page"{% endif %}>{{ child.title | escape }}</a>
+                <a href="{{ child.url | relative_url }}"{% if active_url == child.url %} class="active" aria-current="page"{% endif %}>{{ child.title | escape }}</a>
                 {%- endfor -%}
               </div>
             </details>
           {%- else -%}
             {%- assign active = false -%}
             {%- if page.url == item.url -%}{%- assign active = true -%}{%- endif -%}
-            {%- if item.url == '/api/' and page.url contains '/api/' -%}{%- assign active = true -%}{%- endif -%}
             <a href="{{ item.url | relative_url }}"{% if active %} class="active" aria-current="page"{% endif %}>{{ item.title | escape }}</a>
           {%- endif -%}
         {%- endfor -%}
