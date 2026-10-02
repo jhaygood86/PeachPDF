@@ -243,7 +243,13 @@ namespace PeachPDF.Html.Core.Dom
             // recorded its columns in, so what it recorded anywhere describes geometry that no longer
             // exists. A resumed one is the opposite case: the columns it filled on earlier pages are
             // still there.
-            htmlContainer.ClearCapturedInstances(columnsBox, resume is null ? null : startSlot);
+            //
+            // The one exception is a container resumed inside one of its parent's columns: what it recorded in the
+            // parent's earlier columns on this very page is what the emitter draws them from, under that column's own
+            // parent context (a retry has a context of its own, so nothing here is reused by one). Cleared, those
+            // columns read the container's live geometry, and its content was drawn a second time.
+            var keptEarlierColumns = resume is not null && htmlContainer.CurrentFragmentainer is { HasOwnBand: true };
+            htmlContainer.ClearCapturedInstances(columnsBox, resume is null ? null : startSlot, keepEmitterInstances: keptEarlierColumns);
 
             // A resumed pass continues only the segment the earlier fragment stopped inside - the ones
             // before it already finished on an earlier page, and the ones after it were never reached.
@@ -286,7 +292,7 @@ namespace PeachPDF.Html.Core.Dom
             // How many entries this pass has already appended to _nested[(columnsBox, startSlot)] - a
             // later segment's own balance retry must discard only what it itself just recorded there, not
             // an earlier segment's already-finished columns sharing the same slot key.
-            var recordedSoFar = 0;
+            var recordedSoFar = keptEarlierColumns ? htmlContainer.CapturedInstanceCount(columnsBox, startSlot) : 0;
             BreakToken? carry = null;
 
             // Where the *next* segment's own fill should tell CssBox.FillFragmentainerWithBlockChildren

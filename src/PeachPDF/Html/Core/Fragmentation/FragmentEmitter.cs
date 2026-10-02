@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -1245,14 +1245,19 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _capturedInstances[(contextRoot, slot)] = fragmentainers = [];
             }
 
+            // The column to its left is the previous one of the same fill: one recorded under another parent context is
+            // another outer column's (or an abandoned attempt's), and a word is not handed to it.
+            var leftNeighbour = fragmentainers.Count > 0 && ReferenceEquals(fragmentainers[^1].ParentContext, parentContext)
+                ? fragmentainers[^1]
+                : (CapturedInstance?)null;
+
             fragmentainers.Add(new CapturedInstance(
                 new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right,
-                    EarlierColumnRight: fragmentainers.Count > 0
-                                        && fragmentainers[^1].Region is { Right: { } previousRight } previous
+                    EarlierColumnRight: leftNeighbour is { Region: { Right: { } previousRight } previous }
                                         && previous.Top == band.Top
                         ? previousRight
                         : null,
-                    EarlierGeometry: fragmentainers.Count > 0 ? fragmentainers[^1].Geometry : null),
+                    EarlierGeometry: leftNeighbour?.Geometry),
                 geometry,
                 continuing,
                 fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes,
@@ -1364,6 +1369,12 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (removedAny) contextRoot.DiscardEmittedNothing();
         }
+
+        /// <summary>
+        /// How many nested fragmentainers <paramref name="contextRoot"/> has recorded in <paramref name="slot"/>.
+        /// </summary>
+        internal int CapturedInstanceCount(CssBox contextRoot, int slot) =>
+            _capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers) ? fragmentainers.Count : 0;
 
         /// <summary>
         /// Discards only the nested fragmentainers <paramref name="contextRoot"/> recorded in
@@ -2771,7 +2782,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                         claims = ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed);
                     }
 
-                    if (claims && !region.YieldsToEarlierColumn(box, Displaced(shiftedRect, shift)))
+                    if (claims && !region.YieldsToEarlierColumn(box, Displaced(shiftedRect, shift))
+                        && !(capture is { } own && StartsInAnotherInstance(box, i, own, slot.Index)))
                         words.Add(new TextFragment(Localize(shiftedRect, originY), word));
                 }
             }
@@ -3305,7 +3317,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                         // engine lays out once at the end. It is read live and belongs to the page, exactly as it
                         // did before captured instances existed.
                         if (!HeldByAny(fragmentainers, childBox))
+                        {
+                            // Inside an outer column the same container is walked once per outer column, and an in-flow
+                            // child its inner columns here do not hold is in another outer column's: read live, it was
+                            // drawn again at its final position over the page's whole region.
+                            if (capture is not null && !childBox.IsExcludedFromFlow) continue;
+
                             yield return (childBox, snapshot, null, instance);
+                        }
                     }
 
                     // A detached-source-root capture the walk above never reached - no matching proxy left
@@ -4243,6 +4262,43 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private static IReadOnlyDictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.Rectangles;
+
+        /// <summary>
+        /// Whether a word that spills out of <paramref name="own"/>'s column starts in another column of the same
+        /// container in the same row, which holds it and is the one that draws it.
+        /// </summary>
+        /// <remarks>
+        /// A word wider than its column overflows into whatever lies beside it, and a container nested in a column has a
+        /// narrow column next to the next outer column's: the word's rectangle then overlaps a region it does not start
+        /// in, and both draw it. Only a word that does not start inside <paramref name="own"/>'s own region yields, and
+        /// only to a column that has it at a position inside its own region.
+        /// </remarks>
+        private bool StartsInAnotherInstance(CssBox box, int wordIndex, CapturedInstance own, int slotIndex)
+        {
+            if (own.ContextRoot is not { } root || own.Region is not { Left: { } left, Right: { } right } region) return false;
+            if (!TryGetWordRect(box, wordIndex, own.Geometry, out var ownRect)) return false;
+            if (ownRect.Left >= left - EdgeEpsilon && ownRect.Left < right) return false;
+            if (!_capturedInstances.TryGetValue((root, slotIndex), out var instances)) return false;
+
+            foreach (var other in instances)
+            {
+                if (other.Region is not { Left: { } otherLeft, Right: { } otherRight } otherRegion
+                    || otherRegion.Top != region.Top
+                    || ReferenceEquals(other.Self, own.Self))
+                {
+                    continue;
+                }
+
+                if (TryGetWordRect(box, wordIndex, other.Geometry, out var otherRect)
+                    && otherRect.Left >= otherLeft - EdgeEpsilon && otherRect.Left < otherRight
+                    && other.Geometry.Holds(box))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Where a word sits in this fragmentainer, or false when it belongs to a later one.
