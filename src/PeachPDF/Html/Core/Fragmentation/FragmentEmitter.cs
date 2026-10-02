@@ -2339,7 +2339,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var span = _spans[draft.Key];
             var bounds = ExtentOf(draft);
             var lines = LinesOf(draft, bounds);
-            var (overflowClip, overflowClipCurve) = ClipOf(draft);
+            var (overflowClip, overflowClipCurve, overflowClipBasis) = ClipOf(draft);
 
             return new BoxFragment(
                 RectOf(draft),
@@ -2357,7 +2357,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 draft.Words,
                 children,
                 overflowClip,
-                overflowClipCurve);
+                overflowClipCurve,
+                overflowClipBasis);
         }
 
         /// <summary>
@@ -2366,7 +2367,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// is confined to, or the tighter of the rectangular two where a displaced run also sits inside a
         /// clipping ancestor.
         /// </summary>
-        private static (Rect? Clip, OverflowClipCurve? Curve) ClipOf(Draft draft)
+        private static (Rect? Clip, OverflowClipCurve? Curve, OverflowClipBasis? Basis) ClipOf(Draft draft)
         {
             // Which origin the ancestor's clip is localized against depends on whether that ancestor moves
             // with this fragment. One inside the displaced run does, so it is already in the box's own
@@ -2386,13 +2387,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             Rect? overflowRect = null;
             OverflowClipCurve? curve = null;
+            OverflowClipBasis? basis = null;
             if (overflow is { } o)
             {
                 overflowRect = o.Rect;
                 if (o.Radii is { } radii) curve = new OverflowClipCurve(o.Rect, radii);
+                basis = new OverflowClipBasis(o.BorderBox, o.Rect, Band: null);
             }
 
-            if (draft.ConfinedTo is not { } band) return (overflowRect, curve);
+            if (draft.ConfinedTo is not { } band) return (overflowRect, curve, basis);
 
             // The band is stated in document space and, unlike everything else on a displaced draft, is a
             // fact about the *fragmentainer* rather than about the box - so it is localized against the
@@ -2402,7 +2405,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var confinement = Localize(band, draft.Slot.LocalOriginY);
 
             var clip = overflowRect is { } r ? Rect.Intersect(r, confinement) : confinement;
-            return (clip, curve);
+            return (clip, curve, basis is null ? null : basis with { Band = confinement });
         }
 
         /// <summary>
@@ -3210,7 +3213,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// its own containing block outside the table, which is not proxied and so is read live correctly.
         /// </para>
         /// </remarks>
-        private static (Rect Rect, BorderRadii? Radii)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
+        private static (Rect Rect, BorderRadii? Radii, Rect BorderBox)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
         {
             var containingBlock = DomUtils.ClippingContainingBlockOf(box);
 
@@ -3225,7 +3228,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                             containingBlock.ActualBorderLeftWidth, containingBlock.ActualBorderTopWidth,
                             containingBlock.ActualBorderRightWidth, containingBlock.ActualBorderBottomWidth)
                         : (BorderRadii?)null;
-                    return (Localize(paddingRect, originY), radii);
+                    return (Localize(paddingRect, originY), radii, Localize(borderBoxRect, originY));
                 }
 
                 var next = DomUtils.ClippingContainingBlockOf(containingBlock);

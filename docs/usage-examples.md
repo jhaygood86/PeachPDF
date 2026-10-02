@@ -20,6 +20,7 @@ using PeachPDF.Network;
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
+- [Crisp 1px borders at 100% zoom](#crisp-1px-borders-at-100-zoom)
 - [Fonts](#fonts)
 - [Rendering MathML formulas](#rendering-mathml-formulas)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
@@ -320,6 +321,21 @@ Two things are deliberately **not** reported:
 - **Whitespace.** A clipped space is not something anyone can see or act on.
 
 **The report under-reports, and that is the safe direction rather than completeness.** It measures against the renderer's tracked clip-rect stack, and two clips never reach it: a `border-radius` or `clip-path` clip, and the page-level clip applied outside that stack. An empty report is therefore a weaker statement than "nothing was clipped". A word that fell *entirely* outside its clip is not reported here either — it is never drawn at all, so reading the output back detects it as missing text.
+
+## Crisp 1px borders at 100% zoom
+
+A box's background and border are painted on its exact layout position, which is rarely a whole CSS pixel (1px = 0.75pt). A `1px` border (0.75pt) at a fractional position straddles two device pixels of a viewer showing the page at 100% zoom, each about half covered, so it reads as a wider, paler line than the same border in a browser. Browsers avoid this by rounding each edge of the box to a whole CSS pixel before painting. PeachPDF writes the exact geometry by default, which is what the PDF format can express and what other CSS print engines write; to get the browser behaviour instead, opt in:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    SnapBoxDecorationsToCssPixels = true
+};
+```
+
+The grid is one pixel (0.75pt) wide on the page, anchored at its top-left corner, and the background, border, outline and shadows of a box all move to the same snapped edges, so they still meet exactly. Layout is unaffected; only what is painted moves, by at most half a CSS pixel (0.375pt), so a box's text can sit up to that far from its snapped edge. The `overflow` clip of a box moves with it, so clipped content does not cover part of the snapped border, and the collapsed borders of a `border-collapse: collapse` table are snapped with its cell backgrounds. Text inputs, `<select>`, checkboxes, radio buttons, and a `<button>` or `<textarea>` with an author-set border or background are snapped like any other box. Replaced elements (`<img>`, inline `<svg>`, `<iframe>`, `<math>`, an `<object>` showing an image), a `<button>` or `<textarea>` in its default appearance, multi-column rules, `@page` margin boxes and page borders, text decorations such as underlines, list markers and anything under a `transform` are not snapped, and an edge where a box is cut across a page, column or line break stays where it is. A box inside an `opacity`, blend-mode or filter group is snapped like any other.
+
+**In PDFium the page size decides the result, not this option.** Snapping fixes where the box sits on the CSS pixel grid; it cannot fix where a viewer puts its own pixel grid. PDFium (the engine of Chrome and Edge's PDF viewers) rounds the page up to a whole number of pixels (A4 is 793.7px wide at 96 dpi, so 794px), which stretches the page by a fraction of a pixel, and it fills a plain rectangle without anti-aliasing, so a rectangle that lands a hair past a pixel boundary paints the whole next pixel. On an A4 page it therefore draws a 1px rule as two solid rows whether or not the option is on, and it can show a faint one-pixel edge of background beside a border. Measured on A4 at 96 dpi with thirteen 1px rules at fractional offsets: PDFium draws all thirteen as two rows with the option off and still with it on, while MuPDF draws all thirteen as one row with the option on. On a page whose size is a whole number of CSS pixels (for example `@page { size: 794px 1123px }`), PDFium draws every rule as one row even without the option. For output that will be read in a PDFium-based viewer, use a whole-pixel page size; the option helps viewers that anti-alias fills. The command-line equivalent is `--snap-box-decorations-to-css-pixels`.
 
 ## Fonts
 

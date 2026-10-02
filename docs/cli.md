@@ -117,6 +117,7 @@ the default media type is **print**.
 | `--facturx-xml=FILE` | Make a ZUGFeRD / Factur-X e-invoice by embedding this Cross Industry Invoice XML file. Requires `--pdfa=3a`, `3b` or `3u`. The XML is embedded as it is - it is neither generated nor validated. See [ZUGFeRD / Factur-X e-invoices](usage-examples.md#zugferd--factur-x-e-invoices). |
 | `--facturx-profile=NAME` | State the e-invoice profile (`minimum`, `basic-wl`, `basic`, `en16931`, `extended` or `xrechnung`) instead of reading it from the XML; it must agree with the XML. Only with `--facturx-xml`. |
 | `--tagged-pdf` | Emit a tagged (PDF/UA) structure tree. |
+| `--snap-box-decorations-to-css-pixels` | Snap box backgrounds, borders and outlines to whole CSS pixels, like a browser, so a 1px border covers one device pixel at 100% zoom. |
 | `--interactive-pdf-forms` | Emit fillable AcroForm fields for `<input>`/`<select>` elements. |
 | `--no-compress` | Do not compress PDF content streams. |
 | `--raster-dpi=DPI` | Resolution, in pixels per inch of paper (72 to 1200, default 300), of effects PeachPDF renders as bitmaps, such as CSS `filter: blur()`. Higher is sharper and larger; the printed size never changes. See [Rasterized effects](usage-examples.md#rasterized-effects-and-resolution). |

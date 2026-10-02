@@ -1673,7 +1673,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <see cref="CssBox.CollapsedBorderSegments"/> and the call site's own remarks for why this runs
         /// where it does.
         /// </summary>
-        private static void PaintCollapsedTableBorders(Canvas g, CssBox box, double originY, Rect clip)
+        private static void PaintCollapsedTableBorders(Canvas g, CssBox box, double originY, Rect clip, bool snap)
         {
             // Segments are recorded in document space, same as ColumnRuleSegments - see PaintColumnRules.
             foreach (var segment in box.CollapsedBorderSegments!)
@@ -1682,10 +1682,21 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (!IsRectVisible(visualRect, clip)) continue;
 
+                // Snapped like the cell backgrounds they sit between (SnapBoxDecorationsToCssPixels), or a
+                // background would show beside a line on its exact fractional position.
+                // The stroke width follows the snapped rectangle, or a dashed or banded segment would be
+                // drawn off-centre in it.
+                var width = segment.Width;
+                if (snap)
+                {
+                    visualRect = DecorationPixelSnapping.Snap(g, visualRect);
+                    width = segment.IsHorizontal ? visualRect.Height : visualRect.Width;
+                }
+
                 // side: null - a grid line is shared by the boxes on both sides of it and so is not any
                 // one box's edge; that is what gives a bevelled segment both of its faces.
                 BordersDrawHandler.DrawCollapsedSegment(
-                    g, segment.IsHorizontal, visualRect, segment.Style, segment.PaintColor, segment.Width, side: null);
+                    g, segment.IsHorizontal, visualRect, segment.Style, segment.PaintColor, width, side: null);
             }
         }
 

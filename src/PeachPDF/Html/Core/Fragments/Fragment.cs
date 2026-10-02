@@ -184,6 +184,14 @@ namespace PeachPDF.Html.Core.Fragments
     /// unconfined padding rect, since the rounded shape it describes is always a subset of that rect and
     /// so composes correctly with the (possibly narrower) rectangular clip regardless.
     /// </param>
+    /// <param name="OverflowClipBasis">
+    /// what <paramref name="OverflowClip"/> was built from, for a paint that snaps it to the CSS pixel grid
+    /// (<c>PdfGenerateConfig.SnapBoxDecorationsToCssPixels</c>): the clipping ancestor's whole border box
+    /// and padding box, and the fragmentainer band the clip was intersected with, if any. Snapping the
+    /// intersection itself would move the band's edge, which is a page or column cut and not the
+    /// ancestor's; snapping the padding box on its own would put it off the border's inner edge whenever
+    /// the border is not a whole number of pixels wide. Null when no ancestor clips.
+    /// </param>
     internal sealed record BoxFragment(
         Rect Rect,
         CssBox Box,
@@ -198,7 +206,8 @@ namespace PeachPDF.Html.Core.Fragments
         IReadOnlyList<TextFragment> Words,
         IReadOnlyList<BoxFragment> Children,
         Rect? OverflowClip,
-        OverflowClipCurve? OverflowClipCurve = null) : Fragment(Rect)
+        OverflowClipCurve? OverflowClipCurve = null,
+        OverflowClipBasis? OverflowClipBasis = null) : Fragment(Rect)
     {
         /// <summary>
         /// This fragment's principal decoration rectangle — the one a replaced element (an image, an
@@ -238,6 +247,15 @@ namespace PeachPDF.Html.Core.Fragments
     /// <param name="Rect">the clipping ancestor's own (unconfined) padding-edge rectangle, in this fragment's local space</param>
     /// <param name="Radii">that ancestor's overlap-reduced corner radii for <paramref name="Rect"/>, from <see cref="CssBox.ComputeRadii"/></param>
     internal sealed record OverflowClipCurve(Rect Rect, BorderRadii Radii);
+
+    /// <summary>
+    /// The geometry a clipping ancestor's <see cref="BoxFragment.OverflowClip"/> comes from - see
+    /// <see cref="BoxFragment.OverflowClipBasis"/>.
+    /// </summary>
+    /// <param name="BorderBox">the ancestor's whole (unconfined) border box, in this fragment's local space</param>
+    /// <param name="PaddingBox">the same ancestor's padding-edge rectangle, in the same space</param>
+    /// <param name="Band">the fragmentainer band the clip was intersected with, or null when it was not</param>
+    internal sealed record OverflowClipBasis(Rect BorderBox, Rect PaddingBox, Rect? Band);
 
     /// <summary>
     /// One fragmentainer — for PeachPDF, one materialized PDF page. Per

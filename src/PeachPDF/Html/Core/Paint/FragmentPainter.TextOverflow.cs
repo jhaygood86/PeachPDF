@@ -46,7 +46,10 @@ namespace PeachPDF.Html.Core.Paint
         {
             var isVertical = containingBlock.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
             var isRtl = containingBlock.Direction.Value == DirectionMode.Rtl;
-            var boundary = ResolveInlineEndBoundary(containingBlock, fragment, isVertical, isRtl);
+            // The end boundary is where the clip cuts the text, so it follows the clip when that is snapped;
+            // the start boundary is where the (unsnapped) text begins, so it does not.
+            var boundary = ResolveInlineEndBoundary(
+                containingBlock, OverflowClipOf(g, fragment).Clip!.Value, isVertical, isRtl);
             var lineStart = ResolveInlineStartBoundary(containingBlock, fragment, isVertical, isRtl);
 
             var consumed = new HashSet<CssRect>(ReferenceEqualityComparer.Instance);
@@ -83,14 +86,13 @@ namespace PeachPDF.Html.Core.Paint
         /// horizontal-LTR, physical left for horizontal-RTL, physical bottom for
         /// vertical-rl/vertical-lr under LTR direction, physical top under RTL direction - they differ
         /// only in which side lines stack toward, never in their own top-to-bottom inline axis.
-        /// <see cref="Fragments.BoxFragment.OverflowClip"/> is already exactly
+        /// <paramref name="paddingEdge"/> is <see cref="Fragments.BoxFragment.OverflowClip"/> - already exactly
         /// <paramref name="containingBlock"/>'s own padding-edge rectangle, fragment-local
-        /// (<see cref="FragmentPainter.PaintWords"/>'s own remarks) - only the further padding inset
-        /// (padding edge to content edge) is computed here.
+        /// (<see cref="FragmentPainter.PaintWords"/>'s own remarks), snapped when the box's decorations are -
+        /// so only the further padding inset (padding edge to content edge) is computed here.
         /// </summary>
-        private static double ResolveInlineEndBoundary(CssBox containingBlock, BoxFragment fragment, bool isVertical, bool isRtl)
+        private static double ResolveInlineEndBoundary(CssBox containingBlock, Rect paddingEdge, bool isVertical, bool isRtl)
         {
-            var paddingEdge = fragment.OverflowClip!.Value;
             if (!isVertical)
                 return isRtl ? paddingEdge.Left + containingBlock.ActualPaddingLeft : paddingEdge.Right - containingBlock.ActualPaddingRight;
             return isRtl ? paddingEdge.Top + containingBlock.ActualPaddingTop : paddingEdge.Bottom - containingBlock.ActualPaddingBottom;

@@ -80,6 +80,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     Media = source.Media,
     PreferredColorScheme = source.PreferredColorScheme,
     IgnoreAuthorStyleSheets = source.IgnoreAuthorStyleSheets,
+    SnapBoxDecorationsToCssPixels = source.SnapBoxDecorationsToCssPixels,
     PageSize = source.PageSize,
     ManualPageWidth = source.ManualPageWidth,
     ManualPageHeight = source.ManualPageHeight,
@@ -750,6 +751,80 @@ PdfGenerateConfig pdfConfig96 = new()
 await SaveShowcaseAsync("border_radius_96dpi", "Backgrounds & Borders", "Border Radius (96 DPI)",
     "The same border-radius coverage as the Border Radius showcase, rendered at PixelsPerInch=96 instead of the library's default 72 — confirms rounded borders, backgrounds, and overflow-clip curves render identically regardless of PixelsPerInch.",
     radiusHtml, pdfConfig96);
+
+// --- Border pixel snapping showcases ---
+//
+// One document rendered twice at PixelsPerInch=96 (so one device pixel at 100% zoom is one CSS pixel):
+// once with the exact fractional border geometry that is the default, once with
+// PdfGenerateConfig.SnapBoxDecorationsToCssPixels. Everything sits at a deliberately fractional position (mm
+// margins, percentage widths, a fractional-px offset ladder) so the difference is visible at 100% zoom:
+// the exact render spreads a 1px border over two half-covered device columns, the snapped one covers
+// exactly one, and the background and outline sit on the same snapped edges as the border. The
+// sections that combine them with a border exist to show that they still meet.
+
+const string BorderSnapHtml = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0; color: #333 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 1.1em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555 }
+    .ladder { display: flex; gap: 0; margin: 0 0 2mm }
+    .ladder div { width: 70px; height: 22px; border: 1px solid #b6b6b6; margin-left: 10px; font-size: 6pt;
+                  text-align: center; line-height: 22px }
+    .bgl div { background: #dbe7fb; border-color: #1f4e9c; height: 30px; line-height: 30px }
+    .oll div { outline: 1px solid #c0392b; height: 30px; line-height: 30px }
+    .specs { display: flex; gap: 3mm; margin: 0 0 2mm }
+    .specs p { flex: 1 1 0; min-width: 0; margin: 0; padding: 2.2mm 1.7mm; border: 1px solid #b6b6b6; border-radius: 4px;
+               text-align: center }
+    .line { border-top: 1px solid #b6b6b6; margin: 5.3mm 0 }
+    .styles { display: flex; gap: 3.3mm; margin: 0 0 2mm }
+    .styles div { flex: 1; height: 24px; margin-left: 0.4mm; border: 2px solid #444; text-align: center; line-height: 24px;
+                  font-size: 6pt }
+    table.grid { border-collapse: separate; border-spacing: 2mm; margin-left: 0.4mm }
+    table.grid td { border: 1px solid #b6b6b6; padding: 1.3mm 3.3mm; font-size: 7pt }
+    table.collapsed { border-collapse: collapse; margin-left: 0.4mm }
+    table.collapsed td { border: 1px solid #1f4e9c; background: #dbe7fb; padding: 1.3mm 3.3mm; font-size: 7pt }
+    </style>
+    <h1>Border pixel snapping</h1>
+    <p class="intro">View at 100% zoom. Every box sits at a fractional position (the 15mm page margin is 56.69px itself), so a 1px border either covers one
+    device column (snapped) or two half-covered ones (exact).</p>
+
+    <h2>1px borders at different fractional offsets</h2>
+    <div class="ladder"><div style="margin-left:0.25px">margin 0.25px</div><div style="margin-left:10.5px">margin 10.5px</div><div style="margin-left:10.75px">margin 10.75px</div><div style="margin-left:10px">margin 10px</div></div>
+
+    <h2>Cards in a row (the original report)</h2>
+    <div class="specs"><p>Transfer date</p><p>Amount</p><p>Reference</p></div>
+
+    <h2>Horizontal rules (border-top: 1px)</h2>
+    <div class="line"></div>
+    <div class="line"></div>
+
+    <h2>Border on a background</h2>
+    <p class="intro">The background is snapped with the border, so no background shows outside it.</p>
+    <div class="ladder bgl"><div style="margin-left:0.25px">margin 0.25px</div><div style="margin-left:10.5px">margin 10.5px</div><div style="margin-left:10.75px">margin 10.75px</div><div style="margin-left:10px">margin 10px</div></div>
+
+    <h2>Border with an outline</h2>
+    <p class="intro">The outline follows the snapped border.</p>
+    <div class="ladder oll"><div style="margin-left:0.25px">margin 0.25px</div><div style="margin-left:10.5px">margin 10.5px</div><div style="margin-left:10.75px">margin 10.75px</div><div style="margin-left:10px">margin 10px</div></div>
+
+    <h2>Other border styles, 2px</h2>
+    <div class="styles"><div style="border-style:solid">solid</div><div style="border-style:dashed">dashed</div><div style="border-style:dotted">dotted</div><div style="border-style:double;border-width:4px">double</div></div>
+
+    <h2>Table cells (separate borders)</h2>
+    <table class="grid"><tr><td>Date</td><td>Amount</td><td>Reference</td></tr><tr><td>2026-10-01</td><td>12.50</td><td>INV-1530</td></tr></table>
+
+    <h2>Table cells (collapsed borders, with backgrounds)</h2>
+    <table class="collapsed"><tr><td>Date</td><td>Amount</td><td>Reference</td></tr><tr><td>2026-10-01</td><td>12.50</td><td>INV-1530</td></tr></table>
+    """;
+
+await SaveShowcaseAsync("border_pixel_snapping_exact", "Backgrounds & Borders", "Border Pixel Snapping: Exact (default)",
+    "A 1px border at a fractional position drawn on its exact geometry, the default: at 100% zoom it straddles two device columns, each about half covered, so it reads wider and paler than in a browser. Compare with the snapped showcase.",
+    BorderSnapHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, PixelsPerInch = 96 });
+
+await SaveShowcaseAsync("border_pixel_snapping_snapped", "Backgrounds & Borders", "Border Pixel Snapping: SnapBoxDecorationsToCssPixels",
+    "The same document with SnapBoxDecorationsToCssPixels on: each border edge is rounded to a whole CSS pixel like a browser does, so a 1px border covers exactly one device column at 100% zoom. Backgrounds, outlines and shadows move to the same snapped edges, so they still meet the border.",
+    BorderSnapHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, PixelsPerInch = 96, SnapBoxDecorationsToCssPixels = true });
 
 // --- Box-shadow showcase ---
 

@@ -231,6 +231,36 @@ namespace PeachPDF
         public bool EnableTaggedPdf { get; set; } = false;
 
         /// <summary>
+        /// When set to <c>true</c>, the rectangle each box's decorations are painted on is snapped to
+        /// whole CSS pixels (1px = 0.75pt), the way a browser does before it paints a box: every edge is
+        /// rounded to the nearest pixel on its own, so a <c>1px</c> border covers exactly one device pixel
+        /// of a viewer showing the page at 100% zoom instead of two half-covered ones (which reads as a
+        /// wider, paler line), and the background, outline and shadows meet it on the same edges.
+        /// <para>
+        /// Layout is unaffected; only what is painted moves, by at most half a CSS pixel (0.375pt), so
+        /// text can sit that far off its box. The <c>overflow</c> clip of a box and the collapsed borders
+        /// of a table are snapped with it.
+        /// </para>
+        /// <para>
+        /// Not snapped: replaced elements (<c>&lt;img&gt;</c>, inline <c>&lt;svg&gt;</c>, <c>&lt;iframe&gt;</c>,
+        /// <c>&lt;math&gt;</c>), a <c>&lt;button&gt;</c> or <c>&lt;textarea&gt;</c> in its default appearance,
+        /// multi-column rules, <c>@page</c> margin boxes and page borders, text decorations, list markers and
+        /// anything under a transform. An edge where a box is cut across a page or line break stays where it is.
+        /// </para>
+        /// <para>
+        /// In PDFium the page size decides the result, not this option: it rounds the page up to a whole number
+        /// of pixels and fills plain rectangles without anti-aliasing, so on A4 it draws a 1px rule as two rows
+        /// with the option on or off. A page whose size is a whole number of CSS pixels (such as
+        /// <c>794px 1123px</c>) is crisp there either way. The option helps viewers that anti-alias fills.
+        /// </para>
+        /// <para>
+        /// Defaults to <c>false</c>: the exact fractional geometry is what a PDF can express, and
+        /// what other CSS print engines write.
+        /// </para>
+        /// </summary>
+        public bool SnapBoxDecorationsToCssPixels { get; set; } = false;
+
+        /// <summary>
         /// When set to <c>true</c>, PeachPDF emits real, fillable AcroForm fields (text, checkbox,
         /// radio, select) for form elements whose resolved <c>-peachpdf-pdf-form-field</c> value
         /// requests one, instead of the default static box rendering. Defaults to <c>false</c> - an

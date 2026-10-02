@@ -186,17 +186,19 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
-        /// Records the <c>overflow</c> clip <paramref name="fragment"/>'s paint just pushed, so outlines
-        /// deferred beneath it can replay it.
+        /// Records the <c>overflow</c> clip the current fragment's paint just pushed (already snapped, when
+        /// snapping is on), so outlines deferred beneath it can replay it.
         /// </summary>
+        /// <param name="overflowClip">the rectangular clip pushed, or null when none was</param>
+        /// <param name="curve">the rounded curve pushed with it, if any</param>
         /// <returns>whether anything was recorded, for <see cref="PopOverflowClip"/></returns>
-        private bool PushOverflowClip(BoxFragment fragment)
+        private bool PushOverflowClip(Rect? overflowClip, OverflowClipCurve? curve)
         {
-            if (fragment.OverflowClip is not { } rect) return false;
+            if (overflowClip is not { } rect) return false;
 
             // Every box under one clipping ancestor carries that same ancestor's clip, so a nested run of
             // them would otherwise replay it once per level.
-            var step = new OverflowClipStep(rect, fragment.OverflowClipCurve);
+            var step = new OverflowClipStep(rect, curve);
             if (_overflowClips.Count > 0 && _overflowClips[^1] == step) return false;
 
             _overflowClips.Add(step);
