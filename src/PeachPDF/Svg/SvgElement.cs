@@ -225,6 +225,21 @@ namespace PeachPDF.Svg
         /// </summary>
         public System.Func<System.Text.Rune, Font>? FontFor { get; set; }
 
+        /// <summary>The resolved <c>text-decoration-thickness</c> in user units; null for <c>auto</c> (the fixed 1-unit line).</summary>
+        public double? TextDecorationThickness { get; set; }
+
+        /// <summary><c>text-decoration-thickness: from-font</c> - the decorator's font supplies the thickness.</summary>
+        public bool TextDecorationThicknessFromFont { get; set; }
+
+        /// <summary>The resolved <c>text-underline-offset</c> in user units (0 for <c>auto</c>); positive moves the underline away from the text.</summary>
+        public double TextUnderlineOffset { get; set; }
+
+        /// <summary><c>text-underline-position</c> keywords (<c>auto</c>, <c>from-font</c>, <c>under</c>); inherited.</summary>
+        public string TextUnderlinePosition { get; set; } = "auto";
+
+        /// <summary><c>text-decoration-skip-ink</c> (<c>auto</c>, <c>none</c>, <c>all</c>); inherited.</summary>
+        public string TextDecorationSkipInk { get; set; } = "auto";
+
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
         /// Decoration 3), unlike every other font/paint property this element carries.</summary>

@@ -222,7 +222,10 @@ namespace PeachPDF.Svg
             string VariationSettings = "normal",
             bool OpticalSizingNone = false,
             double Weight = 400,
-            double? ObliqueSkewSinus = null)
+            double? ObliqueSkewSinus = null,
+            string? UnderlineOffset = null,
+            string UnderlinePosition = "auto",
+            string SkipInk = "auto")
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1540,6 +1543,19 @@ namespace PeachPDF.Svg
                 _ => false,
             };
 
+            var underlineOffsetAttr = ResolveStyledAttr(node, "text-underline-offset");
+            var underlineOffset = string.IsNullOrWhiteSpace(underlineOffsetAttr) || underlineOffsetAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.UnderlineOffset
+                : underlineOffsetAttr.Trim();
+
+            var underlinePositionAttr = ResolveStyledAttr(node, "text-underline-position")?.Trim().ToLowerInvariant();
+            var underlinePosition = string.IsNullOrEmpty(underlinePositionAttr) || underlinePositionAttr == "inherit"
+                ? inherited.UnderlinePosition
+                : underlinePositionAttr;
+
+            var skipInkAttr = ResolveStyledAttr(node, "text-decoration-skip-ink")?.Trim().ToLowerInvariant();
+            var skipInk = skipInkAttr is "auto" or "none" or "all" ? skipInkAttr : inherited.SkipInk;
+
             // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
             // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
             // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
@@ -1552,7 +1568,8 @@ namespace PeachPDF.Svg
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
-                fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew);
+                fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
+                underlineOffset, underlinePosition, skipInk);
         }
 
         /// <summary>
@@ -1668,6 +1685,21 @@ namespace PeachPDF.Svg
                 var pixelsPerPoint = (_builder._adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
                 return (_ratios[(int)metric] = FontMetricMeasurement.Ratio(font, metric, pixelsPerPoint)).Value;
             }
+        }
+
+        /// <summary>
+        /// A <c>text-decoration-thickness</c>/<c>text-underline-offset</c> length: a percentage is of the element's font size (CSS Text
+        /// Decoration 4 §2.8/§3.3), anything else an ordinary SVG length. Null for <c>auto</c>, an absent value, or one that does not parse.
+        /// </summary>
+        private double? ResolveFontRelativeLength(string? value, FontContext font)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value is "auto" or "from-font" or "inherit")
+                return null;
+
+            if (value.EndsWith('%'))
+                return double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
+
+            return SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
         }
 
         /// <summary>The authored <c>font-family</c> list with each family's whitespace and quotes removed, rejoined with <c>, </c>.</summary>
@@ -1886,6 +1918,14 @@ namespace PeachPDF.Svg
             run.TextDecorationColor = !string.IsNullOrEmpty(decorationColorAttr) && !decorationColorAttr.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                 ? new CssValueParser(_adapter).GetActualColor(decorationColorAttr)
                 : null;
+
+            // Decoration geometry: thickness is the decorating element's own value (not inherited); offset, position and skip-ink inherit.
+            var thicknessAttr = ResolveStyledAttr(node, "text-decoration-thickness")?.Trim().ToLowerInvariant();
+            run.TextDecorationThicknessFromFont = thicknessAttr == "from-font";
+            run.TextDecorationThickness = run.TextDecorationThicknessFromFont ? null : ResolveFontRelativeLength(thicknessAttr, runFont);
+            run.TextUnderlineOffset = ResolveFontRelativeLength(runFont.UnderlineOffset?.ToLowerInvariant(), runFont) ?? 0;
+            run.TextUnderlinePosition = runFont.UnderlinePosition;
+            run.TextDecorationSkipInk = runFont.SkipInk;
 
             var childFontContext = runFont;
 

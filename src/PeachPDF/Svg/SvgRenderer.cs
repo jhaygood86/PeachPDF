@@ -15,6 +15,7 @@ using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -1362,11 +1363,11 @@ namespace PeachPDF.Svg
                     continue;
 
                 foreach (var (start, end) in decoratorSpans)
-                    DrawDecorationSpan(g, decorator, font, start, end, opacity);
+                    DrawDecorationSpan(g, decorator, font, start, end, opacity, glyphs);
             }
         }
 
-        private static void DrawDecorationSpan(Canvas g, SvgTextElement decorator, Font font, GlyphInfo start, GlyphInfo end, double opacity)
+        private static void DrawDecorationSpan(Canvas g, SvgTextElement decorator, Font font, GlyphInfo start, GlyphInfo end, double opacity, List<GlyphInfo> glyphs)
         {
             var x1 = start.Px;
             var x2 = end.Px + end.Advance;
@@ -1384,18 +1385,25 @@ namespace PeachPDF.Svg
             var color = decorator.TextDecorationColor
                 ?? (resolvedFill.Kind == SvgPaintKind.Solid ? resolvedFill.PaintColor : PaintColor.Black);
             var actualColor = ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity);
-            const double thickness = 1;
-            var isWavy = decorator.TextDecorationStyle == Keywords.Wavy;
+
+            // `auto` keeps the fixed one-unit line this renderer always drew.
+            var thickness = decorator.TextDecorationThicknessFromFont ? font.UnderlineThickness : decorator.TextDecorationThickness ?? 1;
+            if (thickness <= 0)
+                return;
+
+            var style = Map.TextDecorationStyleModes.GetValueOrDefault(decorator.TextDecorationStyle, TextDecorationStyleMode.Solid);
             var pen = g.GetPen(actualColor);
             pen.Width = thickness;
-            pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(decorator.TextDecorationStyle);
+            pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(style);
+
+            var span = new DecorationInterval(x1, x2);
+            var top = start.Py - font.Ascent;
 
             foreach (var line in decorator.TextDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
-                var top = start.Py - font.Ascent;
                 double y = line switch
                 {
-                    "underline" => Math.Round(top + font.UnderlineOffset),
+                    "underline" => ResolveUnderlineY(decorator, font, start.Py, top),
                     "line-through" => top + font.Height / 2,
                     "overline" => top,
                     _ => double.NaN,
@@ -1404,11 +1412,78 @@ namespace PeachPDF.Svg
                 if (double.IsNaN(y))
                     continue;
 
-                if (isWavy)
-                    WavyDecorationRenderer.StrokeWavyLine(g, actualColor, line, x1, x2, y, thickness);
-                else
-                    g.DrawLine(pen, x1, y, x2, y);
+                // css-text-decor-4 §2.5: only underlines and overlines skip ink - a line-through is meant to cross the glyphs.
+                IReadOnlyList<DecorationInterval> exclusions = [];
+                if (line is "underline" or "overline" && decorator.TextDecorationSkipInk != "none")
+                {
+                    var found = new List<DecorationInterval>();
+                    AddInkExclusions(g, glyphs, start, end, y, thickness, decorator.TextDecorationSkipInk == "auto", found);
+                    exclusions = found;
+                }
+
+                foreach (var segment in DecorationSegments.Subtract(span, exclusions))
+                    FragmentPainter.StrokeDecorationSegment(g, pen, thickness, actualColor, style, line, segment.Start, segment.End, y,
+                        isVertical: false, underSign: 1, atBlockStart: line == "overline");
             }
+        }
+
+        /// <summary>The underline's vertical position: <c>auto</c> hangs from the decorator's font as it always has; <c>from-font</c> uses the font's own underline position; <c>under</c> sits at the bottom of the line box. <c>text-underline-offset</c> then moves it further from the text.</summary>
+        private static double ResolveUnderlineY(SvgTextElement decorator, Font font, double baseline, double top)
+        {
+            var position = decorator.TextUnderlinePosition;
+            var basePosition = position.Contains("from-font", StringComparison.Ordinal) ? baseline - font.UnderlinePosition
+                : position.Contains("under", StringComparison.Ordinal) ? top + font.Height
+                : Math.Round(top + font.UnderlineOffset);
+            return basePosition + decorator.TextUnderlineOffset;
+        }
+
+        /// <summary>
+        /// Collects, for the glyphs from <paramref name="start"/> to <paramref name="end"/>, the horizontal stretches where their ink crosses the band a
+        /// decoration line at <paramref name="y"/> would cover, each dilated by the clearance the line keeps from the ink (capped as HTML's is).
+        /// Under <c>auto</c> (UA discretion) CJK characters are left unskipped, as css-text-decor-4 §2.5 suggests.
+        /// </summary>
+        private static void AddInkExclusions(Canvas g, List<GlyphInfo> glyphs, GlyphInfo start, GlyphInfo end, double y, double thickness, bool isAuto, List<DecorationInterval> into)
+        {
+            var from = glyphs.IndexOf(start);
+            var to = glyphs.IndexOf(end);
+            if (from < 0 || to < from)
+                return;
+
+            var half = thickness / 2;
+            var clearance = Math.Min(thickness, FragmentPainter.MaximumInkSkipClearanceCssPixels * PeachPDF.CSS.Length.PointsPerPx * g.PixelsPerPoint);
+
+            for (var i = from; i <= to; i++)
+            {
+                var gi = glyphs[i];
+
+                // A complex-script shaping run is measured once, as the whole run, from its first glyph; its other members add nothing.
+                if (gi.ShapingRunFirst is not null && !ReferenceEquals(gi.ShapingRunFirst, gi))
+                    continue;
+
+                var text = gi.ShapingRunFirst is not null ? gi.RunText ?? gi.Glyph : gi.Glyph;
+                if (string.IsNullOrWhiteSpace(text) || (isAuto && IsCjk(text)))
+                    continue;
+
+                var font = gi.Font;
+                var crossings = g.GetInkCrossings(text, font, new PaintPoint(gi.Px, gi.Py - font.Ascent), y - half, y + half, gi.Run.LetterSpacing, ResolveShapingFeatures(gi));
+                if (crossings is null)
+                    continue;
+
+                foreach (var crossing in crossings)
+                    into.Add(new DecorationInterval(crossing.Start, crossing.End).Dilated(clearance));
+            }
+        }
+
+        private static bool IsCjk(string text)
+        {
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var v = rune.Value;
+                if (v is >= 0x3040 and <= 0x30FF or >= 0x3400 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF or >= 0x20000 and <= 0x2FFFF)
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>

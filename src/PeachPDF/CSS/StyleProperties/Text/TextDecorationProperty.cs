@@ -7,7 +7,8 @@
         private static readonly IValueConverter StyleConverter = WithAny(
             ColorConverter.Option().For(PropertyNames.TextDecorationColor),
             TextDecorationStyleConverter.Option().For(PropertyNames.TextDecorationStyle),
-            TextDecorationLinesConverter.Option().For(PropertyNames.TextDecorationLine)).OrDefault();
+            TextDecorationLinesConverter.Option().For(PropertyNames.TextDecorationLine),
+            TextDecorationThicknessConverter.Option().For(PropertyNames.TextDecorationThickness)).OrDefault();
 
         internal TextDecorationProperty()
             : base(PropertyNames.TextDecoration, PropertyFlags.Animatable)
