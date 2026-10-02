@@ -7781,6 +7781,49 @@ await SaveShowcaseAsync("display_contents", "Layout", "display: contents",
     "CSS Display 3 §2.5: an element with display: contents generates no box — its children become flex items, table cells and inline content of its parent — while its id, string-set, links and the body's canvas background still work.",
     displayContentsHtml, pdfConfig);
 
+// --- display: flow-root showcase (CSS Display 3, section 2.4) ---
+
+const string FlowRootCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { color: #444; margin: 0 0 1em; max-width: 480pt }
+    .label { font-size: 8pt; font-weight: bold; color: #444; margin: 12pt 0 3pt }
+    .box { border: 2pt solid #36c; background: #e8f0fe; padding: 4pt }
+    .float { float: left; width: 90pt; height: 50pt; margin-right: 8pt; background: #c33; color: white; padding: 4pt; box-sizing: border-box }
+    .after { background: #fde8e8; padding: 4pt; margin-top: 4pt }
+    .gap { background: #eee; margin-top: 5pt }
+    .gap p { margin: 20pt 0 0; background: #cfc }
+    </style>
+    """;
+
+var flowRootHtml = "<!DOCTYPE html><html><head>" + FlowRootCss + "</head><body>" +
+
+    "<h1>display: flow-root</h1>" +
+    "<p class=\"intro\">A <code>flow-root</code> is a plain block that establishes its own formatting context: " +
+    "it contains its floats and its margins do not collapse with its children's, without clipping anything " +
+    "the way <code>overflow: hidden</code> does.</p>" +
+
+    "<div class=\"label\">A plain block does not contain its float: the box below is only as tall as its text.</div>" +
+    "<div class=\"box\"><div class=\"float\">float</div>text beside the float</div>" +
+    "<div class=\"after\">the next block starts beside the float's overhang</div>" +
+
+    "<div class=\"label\" style=\"margin-top: 70pt\">display: flow-root: the same box now grows to cover the float.</div>" +
+    "<div class=\"box\" style=\"display: flow-root\"><div class=\"float\">float</div>text beside the float</div>" +
+    "<div class=\"after\">the next block starts below the float</div>" +
+
+    "<div class=\"label\">Margins: the 5pt margin and the child's 20pt margin add inside a flow-root (35pt), " +
+    "and collapse to the larger (20pt) in a plain block.</div>" +
+    "<div class=\"gap\" style=\"display: flow-root\"><p>flow-root</p></div>" +
+    "<div class=\"gap\"><p>plain block</p></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("flow_root", "Layout", "display: flow-root",
+    "CSS Display 3 section 2.4: display: flow-root is a block that establishes its own formatting context - it contains its floats and its margins do not collapse with its children's.",
+    flowRootHtml, pdfConfig);
+
 // --- line-height: normal showcase (CSS 2.1 §10.8.1) ---
 
 const string NormalLineHeightCss = """

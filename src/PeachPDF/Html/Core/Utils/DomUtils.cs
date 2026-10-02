@@ -1114,6 +1114,7 @@ namespace PeachPDF.Html.Core.Utils
             if (box.IsFloated || box.IsPageFloated) return true;
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
             if (box.Overflow.Value is not Overflow.Visible) return true;
+            if (box.DerivedStyle.IsFlowRoot) return true;
 
             if (box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.TableCell
                 or Keywords.TableCaption or Keywords.Flex or Keywords.InlineFlex

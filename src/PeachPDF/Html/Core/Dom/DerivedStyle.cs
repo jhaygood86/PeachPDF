@@ -1838,10 +1838,12 @@ namespace PeachPDF.Html.Core.Dom
                 // of detachment - CorrectAnonymousTables and friends, which run before detachment, would
                 // otherwise see it as an ordinary block-level float and correct the tree around that
                 // false premise.
-                if (area.Float.Value is Floating.None or Floating.Footnote) return area.Display.ToString();
+                if (area.Float.Value is Floating.None or Floating.Footnote)
+                    return area.Display.Value is DisplayMode.FlowRoot ? Keywords.Block : area.Display.ToString();
 
                 return area.Display.Value switch
                 {
+                    DisplayMode.FlowRoot => Keywords.Block,
                     DisplayMode.Inline => Keywords.Block,
                     DisplayMode.InlineBlock => Keywords.Block,
                     DisplayMode.InlineTable => Keywords.Table,
@@ -1859,6 +1861,9 @@ namespace PeachPDF.Html.Core.Dom
                 };
             }
         }
+
+        /// <summary>Whether this box's <c>display</c> is <c>flow-root</c>: a block that establishes its own block formatting context.</summary>
+        public bool IsFlowRoot => Style.DisplayPositioning.Display.Value is DisplayMode.FlowRoot;
 
         #endregion
 

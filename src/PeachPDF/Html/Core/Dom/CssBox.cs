@@ -9239,6 +9239,7 @@ namespace PeachPDF.Html.Core.Dom
             // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
             // degrades to "stop extending the group" instead of hanging or overflowing the stack.
             while (chainMembers.Count < 1000 && current.Overflow.Value == PeachPDF.CSS.Overflow.Visible &&
+                   !current.DerivedStyle.IsFlowRoot &&
                    current.PhysicalBorderWidth(side) < 0.1 && current.PhysicalPadding(side) < 0.1)
             {
                 // A captioned table's grid decoration box (TableGridDecorationBox, issue #721) is a
@@ -9542,7 +9543,7 @@ namespace PeachPDF.Html.Core.Dom
             if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
-            if (EstablishesMultiColumnContext) return false;
+            if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it
