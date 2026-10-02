@@ -43,7 +43,11 @@ jobs:
       with:
         filters: |
           src:
-            - 'src/**'
+            # Everything under src/ except Version.props: a version bump changes no code, so it should not pay for the full
+            # test suite, the same as a docs change. `src/**` minus one file is written as the two globs below because a
+            # negated pattern in a `some` filter would instead match every file that is not that one (a docs file included).
+            - 'src/*/**'
+            - 'src/!(Version.props)'
             - '.github/actions/**'
             - '.github/workflows/test.yml'
 
