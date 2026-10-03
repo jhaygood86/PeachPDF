@@ -1,6 +1,6 @@
 # SVG text: CSS text/font properties that still do not apply
 
-Tracked in [issue #1579](https://github.com/jhaygood86/PeachPDF/issues/1579) (the earlier tracker, #1572, wired everything else).
+Residuals tracked in [issue #1613](https://github.com/jhaygood86/PeachPDF/issues/1613) (follow-up to #1579 and #1572).
 
 Not applied to SVG `<text>`/`<tspan>`:
 
