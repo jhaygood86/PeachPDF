@@ -800,12 +800,22 @@ namespace PeachPDF.Html.Core.Paint
             // §2.4 propagates a block container's decoration to the anonymous inline box wrapping its
             // in-flow inline content, so the line spans that content, not the box's full width. The
             // per-line rectangles a line-hosted box carries already are that content, so only the
-            // one-rectangle (Line: null) case needs the content found for it.
+            // one-rectangle (Line: null) case needs the content found for it. An atomic inline
+            // (inline-block, inline-table, inline-flex, inline-grid) is a block container too, though: its
+            // one rectangle is its border box on the *parent's* line, so it carries a line box and would
+            // otherwise be underlined across its whole content box, text or no text - an icon-only
+            // `a { display: inline-block }` drew a stray line over its own background. Its own text still
+            // gets §2.4's propagated decoration, which is why it takes the same path; an empty one finds
+            // no content and draws nothing. A form control stays on the per-line path: its text is its own
+            // word, not an inline child, so the propagated path would find nothing and draw nothing where
+            // it drew a (too wide) line before. The other replaced kinds (<img>, <svg>, <math>...) never
+            // reach this code, so they need no say here.
             if (_textOnly)
             {
                 // Text decorations (underline, line-through) are drawn shapes, not text.
             }
-            else if (lines is [{ Line: null }])
+            else if (lines is [{ Line: null }]
+                || (DecorationsWorthCollecting(box) && DomUtils.IsAtomicInline(box) && box is not CssBoxFormField))
             {
                 PaintPropagatedDecoration(g, box, fragment, clip);
             }
