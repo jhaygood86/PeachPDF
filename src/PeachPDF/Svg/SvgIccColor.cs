@@ -73,29 +73,22 @@ namespace PeachPDF.Svg
             if (components.Length != _profile.ChannelCount)
                 return false;
 
-            Span<byte> device = stackalloc byte[_profile.ChannelCount];
+            Span<float> device = stackalloc float[_profile.ChannelCount];
             for (var i = 0; i < device.Length; i++)
             {
-                if (!double.TryParse(components[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var component)
-                    || double.IsNaN(component))
+                if (!float.TryParse(components[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var component)
+                    || float.IsNaN(component))
                     return false;
 
-                device[i] = (byte)Math.Round(Math.Clamp(component, 0.0, 1.0) * 255.0);
+                device[i] = Math.Clamp(component, 0f, 1f);
             }
 
-            Span<byte> srgb = stackalloc byte[4];
-            try
-            {
-                _profile.ConvertToSrgb(device, srgb, 1, _intent);
-            }
-            catch (Exception e) when (e is NotSupportedException or ArgumentException or IccProfileException)
-            {
+            if (!_profile.TryConvertToSrgb(device, out var red, out var green, out var blue, _intent))
                 return false;
-            }
 
-            r = srgb[0];
-            g = srgb[1];
-            b = srgb[2];
+            r = (int)Math.Round(red * 255f);
+            g = (int)Math.Round(green * 255f);
+            b = (int)Math.Round(blue * 255f);
             return true;
         }
     }

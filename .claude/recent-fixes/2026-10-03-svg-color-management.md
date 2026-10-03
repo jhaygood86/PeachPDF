@@ -9,8 +9,8 @@
 - **Profiles**: `CollectColorProfiles` runs *before* `CollectDefinitions` because filters are built eagerly during that walk and
   their `flood-color` may name a profile defined later. `<color-profile href>` is a `data:` URI, or a resource fetched by
   `PrefetchImageResourcesAsync` (`CollectImageHrefs` now also lists color-profile hrefs).
-- **Conversion** goes through `PeachImage.IccColorProfile.ConvertToSrgb` with a one-pixel byte buffer (8-bit quantization at
-  both ends). A float single-color API in PeachImage would remove that; not required for correctness.
+- **Conversion** goes through `PeachImage.IccColorProfile.TryConvertToSrgb` (float components in, float sRGB out, PeachImage 0.4.7+;
+  the first cut used the 8-bit `ConvertToSrgb` with a one-pixel buffer).
 - **`color-interpolation: linearRGB`** on gradients: extra stops (15 per segment, `ColorSpaceConverter` `SrgbLinear`) are
   inserted in `BuildStops`, the same technique as CSS `in srgb-linear`, so the renderer and PDF shading writers are untouched.
   Inheritance walks the definition's ancestors (`_definitionAncestors`, set by `BuildDeferredDefinitions`).
