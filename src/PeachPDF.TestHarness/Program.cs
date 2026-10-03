@@ -1745,6 +1745,30 @@ await SaveShowcaseAsync("list_style_type", "Lists & Generated Content", "List St
     "The full CSS Counter Styles Level 3 predefined-style coverage list-style-type now supports - numeric, fixed, symbolic, and additive systems, plus a literal <string> marker.",
     listStyleTypeHtml, pdfConfig);
 
+const string counterStyleHtml = """
+<!DOCTYPE html>
+<html><head><style>
+  @counter-style tally { system: additive; additive-symbols: 5 "V", 1 "I"; suffix: ") "; }
+  @counter-style padded { system: numeric; symbols: "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"; pad: 3 "0"; prefix: "#"; suffix: " "; }
+  @counter-style stars { system: cyclic; symbols: "★" "☆"; suffix: " "; }
+  @counter-style roman-bracket { system: extends lower-roman; prefix: "["; suffix: "] "; }
+  body { font-family: sans-serif; font-size: 13pt; }
+  div { display: inline-block; vertical-align: top; width: 30%; }
+  li::before { content: none; }
+</style></head><body>
+  <div><b>symbols(cyclic)</b><ol style="list-style-type: symbols(cyclic '*' '†' '‡')"><li>one</li><li>two</li><li>three</li><li>four</li></ol></div>
+  <div><b>symbols(alphabetic)</b><ol style="list-style-type: symbols(alphabetic 'a' 'b')"><li>one</li><li>two</li><li>three</li><li>four</li></ol></div>
+  <div><b>@counter-style additive</b><ol style="list-style-type: tally"><li>one</li><li>two</li><li>three</li><li>four</li><li>five</li><li>six</li></ol></div>
+  <div><b>numeric + pad</b><ol style="list-style-type: padded"><li>one</li><li>two</li><li>three</li></ol></div>
+  <div><b>cyclic symbols</b><ol style="list-style-type: stars"><li>one</li><li>two</li><li>three</li></ol></div>
+  <div><b>extends lower-roman</b><ol style="list-style-type: roman-bracket"><li>one</li><li>two</li><li>three</li><li>four</li></ol></div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("counter_styles", "Lists & Generated Content", "symbols() and @counter-style",
+    "Inline symbols() counter styles and author-defined @counter-style rules (cyclic, alphabetic, additive, numeric with pad, extends) driving list markers.",
+    counterStyleHtml, pdfConfig);
+
 // --- content image showcase ---
 
 static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before", string width = "40px", string height = "28px", string? cssLabel = null) =>

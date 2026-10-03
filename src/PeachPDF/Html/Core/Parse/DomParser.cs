@@ -113,6 +113,9 @@ namespace PeachPDF.Html.Core.Parse
             // Collect @font-palette-values registrations (consulted when resolving font-palette:<dashed-ident>).
             htmlContainer.FontPaletteValues = RegisteredFontPalette.BuildRegistry(cssData, cssValueParser);
 
+            // Collect @counter-style rules (consulted when formatting a counter()/list marker).
+            htmlContainer.CounterStyles = CounterStyles.CounterStyleRegistry.BuildRegistry(cssData);
+
             // Collect @font-feature-values registrations (consulted when resolving font-variant-alternates
             // functions like styleset(<ident>)).
             htmlContainer.FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(cssData);

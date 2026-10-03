@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
+using PeachPDF.Html.Core.CounterStyles;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -98,6 +99,18 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (listStyleType == Keywords.None) return; // no marker at all
+
+            // An author-defined counter style (an @counter-style name, which may also override a predefined
+            // one, or an inline symbols()) formats the item's list-item counter and brings its own
+            // prefix/suffix; checked before the predefined styles below so an override wins.
+            var registry = HtmlContainer?.CounterStyles;
+            if (CounterStyleRegistry.Find(listStyleType, registry) is { } customStyle)
+            {
+                var customIndex = CssCounterEngine.GetCounter(this, Keywords.ListItem)?.Value ?? 1;
+                var (prefix, suffix) = CounterStyleFormatter.GetAffixes(customStyle, registry);
+                Text = prefix + CounterStyleFormatter.Format(customIndex, customStyle, registry) + suffix;
+                return;
+            }
 
             if (listStyleType.Equals(Keywords.DisclosureOpen, System.StringComparison.OrdinalIgnoreCase) ||
                 listStyleType.Equals(Keywords.DisclosureClosed, System.StringComparison.OrdinalIgnoreCase))

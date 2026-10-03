@@ -1,4 +1,5 @@
 using PeachPDF.CSS;
+using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -24,6 +25,20 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="CssContentEngine"/>) and the list-item marker (<see cref="CssBoxMarker"/>).
         /// Per <see href="https://www.w3.org/TR/css-counter-styles-3/">CSS Counter Styles Level 3 §2</see>,
         /// an unknown or invalid style falls back to <c>decimal</c> rather than rendering nothing.
+        /// </summary>
+        public static string FormatCounterValue(int number, string style, CssBox? context)
+        {
+            var registry = context?.HtmlContainer?.CounterStyles;
+            var custom = CounterStyleRegistry.Find(style, registry);
+
+            return custom is not null
+                ? CounterStyleFormatter.Format(number, custom, registry)
+                : FormatCounterValue(number, style);
+        }
+
+        /// <summary>
+        /// Formats with the predefined counter styles only; <see cref="FormatCounterValue(int, string, CssBox?)"/>
+        /// is the document-aware entry point that also resolves <c>@counter-style</c> and <c>symbols()</c>.
         /// </summary>
         public static string FormatCounterValue(int number, string style)
         {

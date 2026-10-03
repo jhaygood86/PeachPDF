@@ -30,6 +30,7 @@ namespace PeachPDF.CSS
         public const string Image = "image";
         public const string Counter = "counter";
         public const string Counters = "counters";
+        public const string Symbols = "symbols";
         public const string Content = "content";
         public const string Calc = "calc";
         public const string Min = "min";

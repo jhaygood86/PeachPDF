@@ -22,6 +22,7 @@ namespace PeachPDF.CSS
         private static readonly Func<string, Property> CreateFontProperty = PropertyFactory.Instance.CreateFont;
         private static readonly Func<string, Property> CreatePropertyDescriptorProperty = PropertyFactory.Instance.CreatePropertyDescriptor;
         private static readonly Func<string, Property> CreateFontPaletteDescriptorProperty = PropertyFactory.Instance.CreateFontPaletteDescriptor;
+        private static readonly Func<string, Property> CreateCounterStyleDescriptorProperty = PropertyFactory.Instance.CreateCounterStyleDescriptor;
         private static readonly Func<string, Property> CreateFontFeatureValueDescriptorProperty = PropertyFactory.Instance.CreateFontFeatureValueDescriptor;
 
         // The source index (raw, into _lexer.Source) immediately before the most recently read token.
@@ -62,6 +63,8 @@ namespace PeachPDF.CSS
             if (token.Data.Is(RuleNames.Property)) return CreateProperty(token);
 
             if (token.Data.Is(RuleNames.FontPaletteValues)) return CreateFontPaletteValues(token);
+
+            if (token.Data.Is(RuleNames.CounterStyle)) return CreateCounterStyle(token);
 
             if (token.Data.Is(RuleNames.FontFeatureValues)) return CreateFontFeatureValues(token);
 
@@ -210,6 +213,28 @@ namespace PeachPDF.CSS
             if (token.Type == TokenType.CurlyBracketOpen)
             {
                 var end = FillDeclarations(rule, CreateFontPaletteDescriptorProperty);
+                rule.StylesheetText = CreateView(start, end);
+                _nodes.Pop();
+                return rule;
+            }
+
+            _nodes.Pop();
+            return SkipDeclarations(token);
+        }
+
+        public Rule CreateCounterStyle(Token current)
+        {
+            var rule = new CounterStyleRule(_parser);
+            var start = current.Position;
+            var token = NextToken();
+            _nodes.Push(rule);
+            ParseComments(ref token);
+            rule.Name = GetRuleName(ref token);
+            ParseComments(ref token);
+
+            if (token.Type == TokenType.CurlyBracketOpen)
+            {
+                var end = FillDeclarations(rule, CreateCounterStyleDescriptorProperty);
                 rule.StylesheetText = CreateView(start, end);
                 _nodes.Pop();
                 return rule;
