@@ -14,5 +14,10 @@
 - **`color-interpolation: linearRGB`** on gradients: extra stops (15 per segment, `ColorSpaceConverter` `SrgbLinear`) are
   inserted in `BuildStops`, the same technique as CSS `in srgb-linear`, so the renderer and PDF shading writers are untouched.
   Inheritance walks the definition's ancestors (`_definitionAncestors`, set by `BuildDeferredDefinitions`).
-- **Not done**: mask luminance (see accepted gap, #1618).
+- **Mask luminance (#1618)**: a mask tile is a vector form on the PDF backend, so its pixels cannot be re-encoded before
+  `DrawImageMasked` takes the luminosity. Instead `LinearizeMaskContent` converts the mask content's *colors* (solid
+  fill/stroke, and a copy of each referenced gradient with converted stops, since the original may paint elsewhere) to
+  linear light at build time, after every gradient exists (`_linearMasks`, drained at the end of `BuildDeferredDefinitions`).
+  Luminosity of the converted colors equals luminosity of the linear-light ones for opaque content. Patterns, raster
+  `<image>`s and `<use>` targets in mask content keep sRGB values; alpha compositing inside the mask still happens in sRGB.
 - Evidence: `SvgColorManagementTests` (22 tests).

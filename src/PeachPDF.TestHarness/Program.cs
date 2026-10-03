@@ -14260,6 +14260,11 @@ var svgColorManagementHtml =
     $"<color-profile name=\"linear\" xlink:href=\"{svgIccProfileUri}\"/>" +
     "<rect x=\"0\" y=\"0\" width=\"170\" height=\"80\" fill=\"#808080\"/>" +
     "<rect x=\"190\" y=\"0\" width=\"170\" height=\"80\" fill=\"#808080 icc-color(linear, 0.5, 0.5, 0.5)\"/></svg>" +
+    "<p>color-interpolation on a mask: the same 50% gray mask over a red bar - sRGB (top) vs linearRGB (bottom, more transparent).</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"360\" height=\"80\" viewBox=\"0 0 360 80\">" +
+    "<defs><mask id=\"ms\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"360\" height=\"36\"><rect width=\"360\" height=\"36\" fill=\"#808080\"/></mask>" +
+    "<mask id=\"ml\" color-interpolation=\"linearRGB\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"44\" width=\"360\" height=\"36\"><rect y=\"44\" width=\"360\" height=\"36\" fill=\"#808080\"/></mask></defs>" +
+    "<rect width=\"360\" height=\"36\" fill=\"#d00\" mask=\"url(#ms)\"/><rect y=\"44\" width=\"360\" height=\"36\" fill=\"#d00\" mask=\"url(#ml)\"/></svg>" +
     "</body></html>";
 
 await SaveShowcaseAsync("svg_color_management", "Graphics & Effects", "SVG Color Management",

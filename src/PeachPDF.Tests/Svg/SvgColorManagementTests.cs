@@ -207,5 +207,64 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal(2, stops.Count);
         }
+
+        private const string MaskedRect = "<rect width='8' height='8' fill='red' mask='url(#m)'/>";
+
+        private static SvgMask MaskOf(SvgDocument document) => document.Masks["m"];
+
+        [Fact]
+        public void MaskColorInterpolation_Default_KeepsTheContentColors()
+        {
+            var document = BuildFrom(Svg($"<mask id='m'><rect width='8' height='8' fill='#808080'/></mask>{MaskedRect}"));
+
+            Assert.Equal(128, MaskOf(document).Children.Single().Fill.PaintColor.R);
+        }
+
+        [Fact]
+        public void MaskColorInterpolation_LinearRgb_ConvertsContentToLinearLight()
+        {
+            var document = BuildFrom(Svg($"<mask id='m' color-interpolation='linearRGB'><rect width='8' height='8' fill='#808080' stroke='#ffffff'/></mask>{MaskedRect}"));
+
+            var rect = MaskOf(document).Children.Single();
+            Assert.Equal(55, rect.Fill.PaintColor.R);      // sRGB 128 is 0.2158 in linear light
+            Assert.Equal(255, rect.Stroke.PaintColor.R);   // white stays white
+        }
+
+        [Fact]
+        public void MaskColorInterpolation_LinearRgb_ReachesNestedContentAndKeepsAlpha()
+        {
+            var document = BuildFrom(Svg($"<mask id='m' color-interpolation='linearRGB'><g><rect width='8' height='8' fill='rgba(128,128,128,0.5)'/></g></mask>{MaskedRect}"));
+
+            var nested = Assert.IsType<SvgGroupElement>(MaskOf(document).Children.Single()).Children.Single();
+            Assert.Equal(55, nested.Fill.PaintColor.R);
+            Assert.InRange(nested.Fill.PaintColor.A, 126, 129);
+        }
+
+        [Fact]
+        public void MaskColorInterpolation_LinearRgb_CopiesTheReferencedGradientAndLeavesTheOriginal()
+        {
+            var document = BuildFrom(Svg(
+                "<linearGradient id='g'><stop offset='0' stop-color='#808080'/><stop offset='1' stop-color='#fff'/></linearGradient>" +
+                "<mask id='m' color-interpolation='linearRGB'><rect width='8' height='8' fill='url(#g)'/></mask>" +
+                "<rect width='8' height='8' fill='url(#g)' mask='url(#m)'/>"));
+
+            var paint = MaskOf(document).Children.Single().Fill;
+            Assert.NotEqual("g", paint.ReferenceId);
+            Assert.Equal(55, document.Gradients[paint.ReferenceId!].Stops[0].PaintColor.R);
+            Assert.Equal(128, document.Gradients["g"].Stops[0].PaintColor.R);
+        }
+
+        [Fact]
+        public void MaskColorInterpolation_LinearRgb_CopiesARadialGradient()
+        {
+            var document = BuildFrom(Svg(
+                "<mask id='m' color-interpolation='linearRGB'><rect width='8' height='8' fill='url(#r)'/></mask>" +
+                "<radialGradient id='r' cx='0.3' cy='0.4' r='0.6' fx='0.2' fy='0.1'><stop offset='0' stop-color='#808080'/><stop offset='1' stop-color='#000'/></radialGradient>" +
+                MaskedRect));
+
+            var clone = Assert.IsType<SvgRadialGradient>(document.Gradients[MaskOf(document).Children.Single().Fill.ReferenceId!]);
+            Assert.Equal((0.3, 0.4, 0.6, 0.2, 0.1), (clone.Cx, clone.Cy, clone.R, clone.Fx, clone.Fy));
+            Assert.Equal(55, clone.Stops[0].PaintColor.R);
+        }
     }
 }

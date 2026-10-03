@@ -647,6 +647,12 @@ namespace PeachPDF.Svg
             }
 
             _definitionAncestors = [];
+
+            // Every gradient exists now, so a linearRGB mask can copy the ones its content references.
+            var clonedGradients = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var mask in _linearMasks)
+                LinearizeMaskContent(mask.Children, clonedGradients);
+            _linearMasks.Clear();
         }
 
         /// <summary>The ancestor chain (root excluded) of the definition <see cref="BuildDeferredDefinitions"/> is building, for properties inherited into it.</summary>
@@ -2682,7 +2688,97 @@ namespace PeachPDF.Svg
                 Children = BuildDefinitionChildren(node, paint, font),
             };
 
+            if (IsLinearColorInterpolation(node))
+                _linearMasks.Add(mask);
+
             return mask;
+        }
+
+        /// <summary>Masks whose <c>color-interpolation</c> is <c>linearRGB</c>, re-colored once every gradient exists (see <see cref="LinearizeMaskContent"/>).</summary>
+        private readonly List<SvgMask> _linearMasks = [];
+
+        /// <summary>
+        /// A mask's luminance is read from the content's color values (SVG 1.1 §14.4), and with <c>color-interpolation: linearRGB</c> from
+        /// those values converted to linear light first. Both backends take a mask tile's luminosity from the tile's own pixels (a PDF
+        /// <c>/Luminosity</c> soft mask, a raster canvas' luma weights), which a vector tile gives no chance to re-encode, so the content's
+        /// colors are converted instead: a solid fill/stroke, and the stops of the gradient it references (a copy, since the original
+        /// may paint elsewhere). Luminosity of the converted colors is the luminosity of the linear-light ones. A pattern or raster
+        /// <c>&lt;image&gt;</c> in mask content keeps its sRGB values.
+        /// </summary>
+        private void LinearizeMaskContent(IEnumerable<SvgElement> elements, Dictionary<string, string> clonedGradients)
+        {
+            foreach (var element in elements)
+            {
+                element.Fill = LinearizePaint(element.Fill, clonedGradients);
+                element.Stroke = LinearizePaint(element.Stroke, clonedGradients);
+
+                switch (element)
+                {
+                    case SvgGroupElement group:
+                        LinearizeMaskContent(group.Children, clonedGradients);
+                        break;
+                    case SvgNestedSvgElement nested:
+                        LinearizeMaskContent(nested.Children, clonedGradients);
+                        break;
+                    case SvgSymbolElement symbol:
+                        LinearizeMaskContent(symbol.Children, clonedGradients);
+                        break;
+                }
+            }
+        }
+
+        private SvgPaint LinearizePaint(SvgPaint paint, Dictionary<string, string> clonedGradients)
+        {
+            switch (paint.Kind)
+            {
+                case SvgPaintKind.Solid:
+                    return SvgPaint.Solid(ToLinearLight(paint.PaintColor));
+
+                case SvgPaintKind.GradientRef when paint.ReferenceId is { } id && _document.Gradients.TryGetValue(id, out var gradient):
+                    if (!clonedGradients.TryGetValue(id, out var cloneId))
+                    {
+                        cloneId = id + "linear-mask";
+                        clonedGradients[id] = cloneId;
+                        _document.Gradients[cloneId] = CloneWithLinearStops(gradient, cloneId);
+                    }
+
+                    return SvgPaint.GradientRef(cloneId);
+
+                default:
+                    return paint;
+            }
+        }
+
+        private static PaintColor ToLinearLight(PaintColor color)
+        {
+            static int Channel(byte value)
+            {
+                var c = value / 255.0;
+                var linear = c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+                return (int)Math.Round(linear * 255.0);
+            }
+
+            return PaintColor.FromArgb(color.A, Channel(color.R), Channel(color.G), Channel(color.B));
+        }
+
+        private static SvgGradient CloneWithLinearStops(SvgGradient gradient, string id)
+        {
+            var stops = gradient.Stops.Select(s => new SvgGradientStop { Offset = s.Offset, PaintColor = ToLinearLight(s.PaintColor) }).ToList();
+
+            return gradient switch
+            {
+                SvgLinearGradient l => new SvgLinearGradient
+                {
+                    Id = id, GradientUnitsUserSpaceOnUse = l.GradientUnitsUserSpaceOnUse, GradientTransform = l.GradientTransform,
+                    SpreadMethod = l.SpreadMethod, Stops = stops, X1 = l.X1, Y1 = l.Y1, X2 = l.X2, Y2 = l.Y2,
+                },
+                SvgRadialGradient r => new SvgRadialGradient
+                {
+                    Id = id, GradientUnitsUserSpaceOnUse = r.GradientUnitsUserSpaceOnUse, GradientTransform = r.GradientTransform,
+                    SpreadMethod = r.SpreadMethod, Stops = stops, Cx = r.Cx, Cy = r.Cy, R = r.R, Fx = r.Fx, Fy = r.Fy,
+                },
+                _ => gradient,
+            };
         }
 
         private SvgPattern BuildPattern(ISvgSourceNode node, InheritedPaint parentPaint, FontContext parentFont)
