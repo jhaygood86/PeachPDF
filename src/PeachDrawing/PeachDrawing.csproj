@@ -31,7 +31,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
-		<PackageReference Include="PeachImage" Version="0.4.6" />
+		<PackageReference Include="PeachImage" Version="0.4.7" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachDrawing.Tests" />
