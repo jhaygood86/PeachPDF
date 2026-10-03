@@ -266,9 +266,7 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var style = arguments.Length > 2 && arguments[2] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
-                ? styleToken.Data.ToString()
-                : Keywords.Decimal;
+            var style = CounterStyleArgument(arguments, 2);
 
             if (counterNameToken.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
             {
@@ -285,7 +283,7 @@ namespace PeachPDF.Html.Core.Dom
                     var targetRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
                     var pageIndex = PageAnchorResolver.ResolvePixelYToPage(
                         container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, targetRect.Top);
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1, style));
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1, style, cssBox));
                 }
                 else
                 {
@@ -293,14 +291,14 @@ namespace PeachPDF.Html.Core.Dom
                     // convergence loop's first iteration has run) - the same placeholder counter(page)
                     // already silently produces outside margin boxes today; the convergence loop revisits
                     // this box once a real map exists.
-                    sb.Append(CssCounterEngine.FormatCounterValue(1, style));
+                    sb.Append(CssCounterEngine.FormatCounterValue(1, style, cssBox));
                 }
 
                 return;
             }
 
             var counterValue = CssCounterEngine.GetCounter(DomUtils.ResolveCounterAnchor(targetBox), counterNameToken.Data.ToString())?.Value ?? 1;
-            sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
+            sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style, cssBox));
         }
 
         /// <summary>
@@ -434,12 +432,29 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The counter-style argument at <paramref name="index"/> of a <c>counter()</c>-family function as
+        /// text for <see cref="CssCounterEngine.FormatCounterValue(int, string, CssBox?)"/>: a name, or a
+        /// <c>symbols()</c> function's source text. <c>decimal</c> when absent or anything else.
+        /// </summary>
+        private static string CounterStyleArgument(Token[] arguments, int index)
+        {
+            if (arguments.Length <= index) return Keywords.Decimal;
+
+            return arguments[index] switch
+            {
+                { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } name => name.Data.ToString(),
+                { Type: TokenType.Function } function when function.Data.Isi(FunctionNames.Symbols) => function.ToValue(),
+                _ => Keywords.Decimal,
+            };
+        }
+
+        /// <summary>
         /// Appends the value of a <c>counter(&lt;name&gt; [, &lt;style&gt;])</c> function to
         /// <paramref name="sb"/>, resolved against <paramref name="counterBox"/>. The optional second
         /// argument selects a counter style (<c>decimal</c>, <c>decimal-leading-zero</c>,
         /// <c>lower-roman</c>, ...); when omitted it defaults to <c>decimal</c>, and an unknown style
         /// falls back to <c>decimal</c> per CSS Counter Styles Level 3 §2 (both handled by
-        /// <see cref="CssCounterEngine.FormatCounterValue"/>).
+        /// <see cref="CssCounterEngine.FormatCounterValue(int, string, CssBox?)"/>).
         /// </summary>
         private static void AppendCounter(StringBuilder sb, CssBox counterBox, Token functionToken)
         {
@@ -452,9 +467,7 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var style = arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
-                ? styleToken.Data.ToString()
-                : Keywords.Decimal;
+            var style = CounterStyleArgument(arguments, 1);
 
             // The page and pages counters are UA magic, not document counters -
             // CssCounterEngine has no notion of pagination and answers 1 for both. MarginBoxRenderer
@@ -466,13 +479,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (counterName.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
                 {
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Page, style));
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Page, style, counterBox));
                     return;
                 }
 
                 if (counterName.Data.Equals("pages", StringComparison.OrdinalIgnoreCase))
                 {
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Pages, style));
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Pages, style, counterBox));
                     return;
                 }
             }
@@ -485,13 +498,13 @@ namespace PeachPDF.Html.Core.Dom
             if (counterBox.HtmlContainer?.FootnoteNumberContext is { } footnoteNumber
                 && counterName.Data.Equals(Keywords.Footnote, StringComparison.OrdinalIgnoreCase))
             {
-                sb.Append(CssCounterEngine.FormatCounterValue(footnoteNumber, style));
+                sb.Append(CssCounterEngine.FormatCounterValue(footnoteNumber, style, counterBox));
                 return;
             }
 
             var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data.ToString())?.Value ?? 1;
 
-            sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
+            sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style, counterBox));
         }
 
         /// <summary>
@@ -514,9 +527,7 @@ namespace PeachPDF.Html.Core.Dom
                 ? separatorToken.Data.ToString()
                 : ".";
 
-            var style = arguments.Length > 2 && arguments[2] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
-                ? styleToken.Data.ToString()
-                : Keywords.Decimal;
+            var style = CounterStyleArgument(arguments, 2);
 
             // Same ambient-context rule as counter() above. A footnote counter has exactly one scope -
             // it is reset by @page, not by a DOM ancestor - so counters(footnote, ...) is just
@@ -524,7 +535,7 @@ namespace PeachPDF.Html.Core.Dom
             if (counterBox.HtmlContainer?.FootnoteNumberContext is { } footnoteNumber
                 && counterName.Data.Equals(Keywords.Footnote, StringComparison.OrdinalIgnoreCase))
             {
-                return CssCounterEngine.FormatCounterValue(footnoteNumber, style);
+                return CssCounterEngine.FormatCounterValue(footnoteNumber, style, counterBox);
             }
 
             List<int> values = [];
@@ -537,8 +548,8 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return values.Count > 0
-                ? string.Join(separator, values.Select(v => CssCounterEngine.FormatCounterValue(v, style)))
-                : CssCounterEngine.FormatCounterValue(0, style);
+                ? string.Join(separator, values.Select(v => CssCounterEngine.FormatCounterValue(v, style, counterBox)))
+                : CssCounterEngine.FormatCounterValue(0, style, counterBox);
         }
 
         /// <summary>UA default quote pair (guillemets), matching <c>QuotesProperty</c>'s own fallback.</summary>

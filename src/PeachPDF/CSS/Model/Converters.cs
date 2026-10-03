@@ -123,7 +123,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter CounterConverter = Construct(() =>
         {
             var name = IdentifierConverter.Required();
-            var kind = IdentifierConverter.Option(Keywords.Decimal);
+            var kind = new CounterStyleValueConverter().Option(Keywords.Decimal);
             var def = StringConverter.Required();
             // The .Or is between the two FUNCTIONS, not between counter()'s own argument forms: written
             // the other way (the closing paren one place further right) it says "a counter() whose
@@ -365,7 +365,8 @@ namespace PeachPDF.CSS
             Map.TextDecorationLines.ToConverter().Many().OrNone();
 
         public static readonly IValueConverter ListPositionConverter = Map.ListPositions.ToConverter();
-        public static readonly IValueConverter ListStyleConverter = Map.ListStyles.ToConverter().Or(StringConverter);
+        public static readonly IValueConverter ListStyleConverter =
+            Map.ListStyles.ToConverter().Or(StringConverter).Or(new CounterStyleValueConverter());
         public static readonly IValueConverter BreakModeConverter = Map.BreakModes.ToConverter();
         public static readonly IValueConverter BreakInsideModeConverter = Map.BreakInsideModes.ToConverter();
         public static readonly IValueConverter PageBreakModeConverter = Map.PageBreakModes.ToConverter();
