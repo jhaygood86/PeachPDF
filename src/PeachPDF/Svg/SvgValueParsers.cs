@@ -530,11 +530,14 @@ namespace PeachPDF.Svg
         /// either as plain attributes or from a <c>style="stop-color:...; stop-opacity:..."</c> attribute
         /// (the latter overrides the former, matching CSS precedence over presentation attributes).
         /// </summary>
-        public static PaintColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RenderContext adapter)
+        public static PaintColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RenderContext adapter, Func<string?, string?>? resolveColor = null)
         {
             var declarations = ParseStyleDeclarations(style);
             var colorValue = declarations.TryGetValue("stop-color", out var colorFromStyle) ? colorFromStyle : stopColorAttr;
             var opacityValue = declarations.TryGetValue("stop-opacity", out var opacityFromStyle) ? opacityFromStyle : stopOpacityAttr;
+
+            if (resolveColor is not null)
+                colorValue = resolveColor(colorValue);
 
             var color = string.IsNullOrWhiteSpace(colorValue)
                 ? PaintColor.Black

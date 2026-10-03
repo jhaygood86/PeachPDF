@@ -14244,6 +14244,33 @@ await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content",
     "wide-gamut or non-sRGB-tagged images.",
     iccPreservationHtml, pdfConfig);
 
+// ── SVG color management: icc-color() and color-interpolation ───────────────────────
+var svgIccProfileUri = "data:application/vnd.iccprofile;base64," + Convert.ToBase64String(BuildShowcaseRgbIccProfile());
+var svgColorManagementHtml =
+    "<html><head><style>body { font-family: sans-serif; margin: 24px; } p { font-size: 10pt; margin: 14px 0 4px; }</style></head><body>" +
+    "<h2>SVG color management</h2>" +
+    "<p>color-interpolation: sRGB (default) vs linearRGB - the same black-to-white gradient; linearRGB is lighter at the midpoint.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"360\" height=\"80\" viewBox=\"0 0 360 80\">" +
+    "<defs><linearGradient id=\"s\"><stop offset=\"0\" stop-color=\"#000\"/><stop offset=\"1\" stop-color=\"#fff\"/></linearGradient>" +
+    "<linearGradient id=\"l\" color-interpolation=\"linearRGB\"><stop offset=\"0\" stop-color=\"#000\"/><stop offset=\"1\" stop-color=\"#fff\"/></linearGradient></defs>" +
+    "<rect x=\"0\" y=\"0\" width=\"360\" height=\"36\" fill=\"url(#s)\" stroke=\"#888\"/>" +
+    "<rect x=\"0\" y=\"44\" width=\"360\" height=\"36\" fill=\"url(#l)\" stroke=\"#888\"/></svg>" +
+    "<p>icc-color(): top swatch is the sRGB fallback alone; bottom swatch names a linear-light RGB color-profile (0.5, 0.5, 0.5), so it converts to a lighter gray.</p>" +
+    $"<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"360\" height=\"80\" viewBox=\"0 0 360 80\">" +
+    $"<color-profile name=\"linear\" xlink:href=\"{svgIccProfileUri}\"/>" +
+    "<rect x=\"0\" y=\"0\" width=\"170\" height=\"80\" fill=\"#808080\"/>" +
+    "<rect x=\"190\" y=\"0\" width=\"170\" height=\"80\" fill=\"#808080 icc-color(linear, 0.5, 0.5, 0.5)\"/></svg>" +
+    "<p>color-interpolation on a mask: the same 50% gray mask over a red bar - sRGB (top) vs linearRGB (bottom, more transparent).</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"360\" height=\"80\" viewBox=\"0 0 360 80\">" +
+    "<defs><mask id=\"ms\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"360\" height=\"36\"><rect width=\"360\" height=\"36\" fill=\"#808080\"/></mask>" +
+    "<mask id=\"ml\" color-interpolation=\"linearRGB\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"44\" width=\"360\" height=\"36\"><rect y=\"44\" width=\"360\" height=\"36\" fill=\"#808080\"/></mask></defs>" +
+    "<rect width=\"360\" height=\"36\" fill=\"#d00\" mask=\"url(#ms)\"/><rect y=\"44\" width=\"360\" height=\"36\" fill=\"#d00\" mask=\"url(#ml)\"/></svg>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_color_management", "Graphics & Effects", "SVG Color Management",
+    "SVG icc-color() resolved through a <color-profile>, and color-interpolation: linearRGB blending gradient stops in linear light.",
+    svgColorManagementHtml, pdfConfig);
+
 // ── text-underline-offset / text-underline-position ─────────────────────────────────
 var textUnderlineOffsetPositionHtml =
     "<html><head><style>" +
