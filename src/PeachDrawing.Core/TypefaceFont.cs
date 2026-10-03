@@ -179,5 +179,9 @@ namespace PeachDrawing.Core
 
         /// <inheritdoc/>
         public override double? CapHeightEm => Metrics is { UnitsPerEm: > 0, CapHeight: > 0 } ? (double)Metrics.CapHeight / Metrics.UnitsPerEm : null;
+
+        /// <inheritdoc/>
+        public override double? GetBaselineHeightEm(string baselineTag, bool vertical) =>
+            Typeface.TryGetBaselineHeight(vertical, null, baselineTag, out var ems) ? ems : null;
     }
 }

@@ -298,6 +298,9 @@ PeachDrawing.Text.Layout.VerticalAlign : enum Int32
 PeachDrawing.Text.NamedVariation : sealed class
   property IReadOnlyList<AxisSetting> Settings { get; }
   property String Name { get; }
+PeachDrawing.Text.OpenType.BaselineTable : sealed class
+  method Boolean HasAxis(Boolean vertical)
+  method Boolean TryGetBaseline(Boolean vertical, String scriptTag, String baselineTag, out Double designUnits)
 PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
   property Double AccentBaseHeight { get; }
   property Double AxisHeight { get; }
@@ -650,13 +653,13 @@ PeachDrawing.Text.Shaping.PlacedGlyph : struct
   property Nullable<Int32> AttachedToIndex { get; init; }
 PeachDrawing.Text.Shaping.ShapeSettings : struct
   ctor()
-  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal, IReadOnlyList<KhmerCategory> KhmerCategories = null)
+  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal, IReadOnlyList<KhmerCategory> KhmerCategories = null, String LanguageSystemTag = null)
   field static ShapeSettings Default
   method Boolean Equals(Object obj)
   method Boolean Equals(ShapeSettings other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode, out IReadOnlyList<KhmerCategory> KhmerCategories)
+  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode, out IReadOnlyList<KhmerCategory> KhmerCategories, out String LanguageSystemTag)
   property Boolean Kerning { get; init; }
   property Boolean ReverseForDisplay { get; init; }
   property CapsMode Caps { get; init; }
@@ -669,6 +672,7 @@ PeachDrawing.Text.Shaping.ShapeSettings : struct
   property LigatureSet Ligatures { get; init; }
   property NumeralSet Numeric { get; init; }
   property String Language { get; init; }
+  property String LanguageSystemTag { get; init; }
   property String ScriptTag { get; init; }
   property SubSuperMode Position { get; init; }
 PeachDrawing.Text.Shaping.Shaper : static class
@@ -690,6 +694,7 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean HasGlyph(Rune rune)
   method Boolean MatchesEmojiPresentation(Rune rune, EmojiPresentation presentation)
   method Boolean SupportsFeatures(IReadOnlySet<String> tags)
+  method Boolean TryGetBaselineHeight(Boolean vertical, String scriptTag, String baselineTag, out Double ems)
   method Boolean TryGetBitmap(UInt16 glyph, Double ppem, out EmbeddedBitmap bitmap)
   method Boolean TryGetColorClipBox(UInt16 glyph, out ColorClipBox box)
   method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
@@ -707,6 +712,8 @@ PeachDrawing.Text.Typeface : sealed class
   method Point GetVerticalOrigin(UInt16 glyph)
   method String ToString()
   method Typeface WithAxes(IEnumerable<AxisSetting> settings)
+  property BaselineTable BaselineData { get; }
+  property Boolean HasBaselineData { get; }
   property Boolean HasBitmapGlyphs { get; }
   property Boolean HasColorGlyphs { get; }
   property Boolean HasMathData { get; }

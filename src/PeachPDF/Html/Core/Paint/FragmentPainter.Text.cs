@@ -248,6 +248,7 @@ namespace PeachPDF.Html.Core.Paint
                     g.PushTransform(rotation);
                     g.DrawString(text, font, styleSource.ActualColor, new PaintPoint(0, baselineAdjust), naturalSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
+                    PaintTextStroke(g, styleSource, font, text, new PaintPoint(0, baselineAdjust), wordFeatures);
                     g.PopTransform();
                 }
             }
@@ -256,6 +257,7 @@ namespace PeachPDF.Html.Core.Paint
                 var wordPoint = new PaintPoint(rect.X, rect.Y + baselineAdjust);
                 PaintTextShadows(g, styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
+                PaintTextStroke(g, styleSource, font, text, wordPoint, wordFeatures);
             }
         }
 
@@ -380,12 +382,14 @@ namespace PeachPDF.Html.Core.Paint
                     g.PushClip(new Rect(rect.X, placement.CellTop, rect.Width, placement.Advance));
                     g.DrawString(placement.CharText, font, styleSource.ActualColor, new PaintPoint(placement.X, placement.Y), placement.CharSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
+                    PaintTextStroke(g, styleSource, font, placement.CharText, new PaintPoint(placement.X, placement.Y), wordFeatures);
                     g.PopClip();
                 }
                 else
                 {
                     g.DrawString(placement.CharText, font, styleSource.ActualColor, new PaintPoint(placement.X, placement.Y), placement.CharSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
+                    PaintTextStroke(g, styleSource, font, placement.CharText, new PaintPoint(placement.X, placement.Y), wordFeatures);
                 }
 
                 index++;

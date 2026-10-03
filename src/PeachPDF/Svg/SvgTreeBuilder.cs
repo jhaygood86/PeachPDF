@@ -231,7 +231,22 @@ namespace PeachPDF.Svg
             int PreservedTabSpaces = 0,
             int TabSize = 8,
             string DominantBaseline = "auto",
-            double BaselineShift = 0)
+            double BaselineShift = 0,
+            string? SizeAdjust = null,
+            bool NoSyntheticBold = false,
+            bool NoSyntheticItalic = false,
+            double TextStrokeWidth = 0,
+            string? TextStrokeColor = null,
+            bool OptimizeSpeed = false,
+            bool KerningAuto = true,
+            string? LanguageSystemTag = null,
+            bool LigaturesNormal = true,
+            string WhiteSpace = "normal",
+            string Hyphens = "manual",
+            double LineHeightNumber = double.NaN,
+            double LineHeightLength = double.NaN,
+            string? TextIndent = null,
+            string? TextAlign = null)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1393,7 +1408,8 @@ namespace PeachPDF.Svg
             if (matched is not null && matched.TryGetValue(name, out var matchedValue))
                 return matchedValue; // present (incl. null = invalid at computed-value time) → authoritative
 
-            var attribute = node.GetAttribute(name);
+            // A vendor-prefixed property (-webkit-text-stroke) cannot be written as a presentation attribute - an XML name never starts with '-'.
+            var attribute = name[0] == '-' ? null : node.GetAttribute(name);
 
             // A text shorthand (font / font-variant / text-decoration) in style="" or as a presentation attribute sets this longhand
             // too (the matched-rule tier above is already expanded by the CSS-OM). Shorthands only matter when nothing more specific
@@ -1412,7 +1428,7 @@ namespace PeachPDF.Svg
 
             foreach (var shorthand in SvgTextShorthands.ShorthandsOf(name))
             {
-                var shorthandAttribute = node.GetAttribute(shorthand);
+                var shorthandAttribute = shorthand[0] == '-' ? null : node.GetAttribute(shorthand);
                 if (shorthandAttribute is not null && SvgTextShorthands.Expand(shorthand, shorthandAttribute, name) is { } expanded)
                     return expanded;
             }
@@ -1483,6 +1499,10 @@ namespace PeachPDF.Svg
                 ? inherited.Ligatures
                 : TextShapingFeatureResolver.ResolveLigatures(ligaturesAttr.Trim().ToLowerInvariant());
 
+            var ligaturesNormal = ligaturesAttr is null || ligaturesAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.LigaturesNormal
+                : ligaturesAttr.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase);
+
             var capsAttr = ResolveStyledAttr(node, "font-variant-caps");
             var capsRequested = capsAttr is null || capsAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.CapsRequested
@@ -1512,6 +1532,39 @@ namespace PeachPDF.Svg
             var kerning = kerningAttr is null || kerningAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Kerning
                 : TextShapingFeatureResolver.ResolveKerning(kerningAttr.Trim().ToLowerInvariant());
+            var kerningAuto = kerningAttr is null || kerningAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.KerningAuto
+                : kerningAttr.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
+
+            // text-rendering: optimizeSpeed turns kerning and the optional ligatures off where the font-* properties were left at their initial values
+            // (applied where the run's shaping settings are built); every other keyword changes nothing for PDF output.
+            var textRenderingAttr = ResolveStyledAttr(node, "text-rendering")?.Trim().ToLowerInvariant();
+            var optimizeSpeed = textRenderingAttr switch
+            {
+                null or "" or "inherit" => inherited.OptimizeSpeed,
+                "optimizespeed" => true,
+                "auto" or "optimizelegibility" or "geometricprecision" => false,
+                _ => inherited.OptimizeSpeed,
+            };
+
+            // font-language-override: normal resets, a valid string selects that OpenType language system, an invalid value is ignored.
+            var languageOverrideAttr = ResolveStyledAttr(node, "font-language-override")?.Trim();
+            var languageSystemTag = inherited.LanguageSystemTag;
+            if (!string.IsNullOrEmpty(languageOverrideAttr) && !languageOverrideAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            {
+                if (languageOverrideAttr.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                    languageSystemTag = null;
+                else if (FontLanguageOverrideGrammar.Resolve(languageOverrideAttr) is { } overrideTag)
+                    languageSystemTag = overrideTag;
+            }
+
+            // -webkit-text-stroke (and its width/colour longhands): inherited; the colour travels as authored text and is parsed as a paint where the run is built.
+            var strokeWidthAttr = ResolveStyledAttr(node, "-webkit-text-stroke-width");
+            var textStrokeWidth = Math.Max(0, ResolveSpacingLength(strokeWidthAttr, ownFont, inherited.TextStrokeWidth));
+            var strokeColorAttr = ResolveStyledAttr(node, "-webkit-text-stroke-color");
+            var textStrokeColor = string.IsNullOrWhiteSpace(strokeColorAttr) || strokeColorAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.TextStrokeColor
+                : strokeColorAttr.Trim();
 
             // The remaining font properties are all inherited keyword/string grammars that the HTML resolvers
             // (FontVariantAlternatesResolver, FontPaletteResolver, FontVariationSettingsResolver) interpret
@@ -1598,6 +1651,22 @@ namespace PeachPDF.Svg
             var dominantAttr = ResolveStyledAttr(node, "dominant-baseline")?.Trim().ToLowerInvariant();
             var dominantBaseline = string.IsNullOrEmpty(dominantAttr) || dominantAttr == "inherit" ? inherited.DominantBaseline : dominantAttr;
 
+            // font-size-adjust is resolved where a glyph font is created (GetFontFor/CreateFontFallback), never into Size: em
+            // resolution keeps the unadjusted size. font-synthesis (its shorthand is expanded by SvgTextShorthands) only
+            // matters for weight and style here; SVG text has no small-caps or sub/superscript synthesis.
+            var sizeAdjustAttr = ResolveStyledAttr(node, "font-size-adjust");
+            var sizeAdjust = string.IsNullOrWhiteSpace(sizeAdjustAttr) || sizeAdjustAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.SizeAdjust
+                : sizeAdjustAttr.Trim();
+
+            var noSyntheticBold = inherited.NoSyntheticBold;
+            var noSyntheticItalic = inherited.NoSyntheticItalic;
+            var synthesisWeightAttr = ResolveStyledAttr(node, "font-synthesis-weight")?.Trim().ToLowerInvariant();
+            if (synthesisWeightAttr is "auto" or "none") noSyntheticBold = synthesisWeightAttr == "none";
+
+            var synthesisStyleAttr = ResolveStyledAttr(node, "font-synthesis-style")?.Trim().ToLowerInvariant();
+            if (synthesisStyleAttr is "auto" or "none") noSyntheticItalic = synthesisStyleAttr == "none";
+
             var baselineShift = inherited.BaselineShift;
             if (node.Name is "text" or "tspan" or "tref" or "textPath")
                 baselineShift += ResolveBaselineShift(ResolveStyledAttr(node, "baseline-shift"), ownFont);
@@ -1611,11 +1680,55 @@ namespace PeachPDF.Svg
             var langAttr = node.GetAttribute("lang") ?? node.GetAttribute("xml:lang");
             var language = string.IsNullOrEmpty(langAttr) ? inherited.Language : langAttr;
 
+            // The wrapped-text properties (SVG 2 §11.7). They only have an effect on a <text> laid out with inline-size/shape-inside, but all inherit.
+            var whiteSpace = whiteSpaceAttr is "normal" or "nowrap" or "pre" or "pre-wrap" or "pre-line" or "break-spaces" ? whiteSpaceAttr : inherited.WhiteSpace;
+
+            var hyphensAttr = ResolveStyledAttr(node, "hyphens")?.Trim().ToLowerInvariant();
+            var hyphens = hyphensAttr is "none" or "manual" or "auto" ? hyphensAttr : inherited.Hyphens;
+
+            var lineHeightNumber = inherited.LineHeightNumber;
+            var lineHeightLength = inherited.LineHeightLength;
+            var lineHeightAttr = ResolveStyledAttr(node, "line-height")?.Trim().ToLowerInvariant();
+            if (lineHeightAttr == "normal")
+            {
+                lineHeightNumber = lineHeightLength = double.NaN;
+            }
+            else if (!string.IsNullOrEmpty(lineHeightAttr) && lineHeightAttr != "inherit")
+            {
+                if (double.TryParse(lineHeightAttr, NumberStyles.Float, CultureInfo.InvariantCulture, out var factor) && factor >= 0 && double.IsFinite(factor))
+                {
+                    lineHeightNumber = factor;
+                    lineHeightLength = double.NaN;
+                }
+                else if (ResolveFontRelativeLength(lineHeightAttr, ownFont) is >= 0 and var absolute)
+                {
+                    lineHeightNumber = double.NaN;
+                    lineHeightLength = absolute;
+                }
+            }
+
+            // text-indent: the first token is the length-percentage (the hanging/each-line keywords are not applied). A length is fixed here against
+            // this element's own font, as an absolute px string; a percentage stays symbolic until the wrapped box's width is known.
+            var textIndent = inherited.TextIndent;
+            var textIndentToken = ResolveStyledAttr(node, "text-indent")?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+            if (!string.IsNullOrEmpty(textIndentToken) && textIndentToken != "inherit")
+            {
+                if (textIndentToken.EndsWith('%') && double.TryParse(textIndentToken[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    textIndent = textIndentToken;
+                else if (ResolveFontRelativeLength(textIndentToken, ownFont) is { } indentLength)
+                    textIndent = indentLength.ToString("R", CultureInfo.InvariantCulture) + "px";
+            }
+
+            var textAlignAttr = ResolveStyledAttr(node, "text-align")?.Trim().ToLowerInvariant();
+            var textAlign = textAlignAttr is "start" or "end" or "left" or "right" or "center" or "justify" or "match-parent" ? textAlignAttr : inherited.TextAlign;
+
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
-                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift);
+                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift,
+                sizeAdjust, noSyntheticBold, noSyntheticItalic, textStrokeWidth, textStrokeColor, optimizeSpeed, kerningAuto, languageSystemTag, ligaturesNormal,
+                whiteSpace, hyphens, lineHeightNumber, lineHeightLength, textIndent, textAlign);
         }
 
         /// <summary>
@@ -1641,11 +1754,42 @@ namespace PeachPDF.Svg
         /// <summary>The font for <paramref name="font"/> at <paramref name="size"/>: every face-selecting property this builder tracks, in one request.</summary>
         private Font? GetFontFor(FontContext font, string family, double size)
         {
+            var fontStyle = StyleFlagsFor(font);
+            var variations = EncodeVariations(font);
+            var resolved = FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations);
+
+            return ApplySizeAdjust(font, resolved, size, null,
+                adjusted => FontFamilyResolver.Resolve(_adapter, family, adjusted, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations));
+        }
+
+        /// <summary>The style bits of a font request: bold/italic as requested, plus <c>font-synthesis-weight</c>/<c>-style: none</c>.</summary>
+        private static PaintFontStyle StyleFlagsFor(FontContext font)
+        {
             var fontStyle = PaintFontStyle.Regular;
             if (font.Bold) fontStyle |= PaintFontStyle.Bold;
             if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+            // Only when the matching style was asked for: a switch with nothing to synthesize must not split the font cache.
+            if (font.NoSyntheticBold && font.Weight >= 600) fontStyle |= PaintFontStyle.NoSyntheticBold;
+            if (font.NoSyntheticItalic && font.Italic) fontStyle |= PaintFontStyle.NoSyntheticItalic;
+            return fontStyle;
+        }
 
-            return FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
+        /// <summary>
+        /// <c>font-size-adjust</c> (CSS Fonts 5 §3.2): re-creates <paramref name="resolved"/> at <c>size * adjust / ratio</c>, where
+        /// <c>ratio</c> is this face's own measurement of the chosen metric, so every face (primary and fallbacks alike) lands on
+        /// the same aspect value. <c>from-font</c> uses <paramref name="fromFontRatio"/> (the primary face's ratio) for a fallback, and is
+        /// the identity for the primary itself. Only the glyph font changes size; em resolution never sees the adjusted size.
+        /// </summary>
+        private Font? ApplySizeAdjust(FontContext font, Font? resolved, double size, double? fromFontRatio, Func<double, Font?> recreate)
+        {
+            if (resolved is null || FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is not { } adjust) return resolved;
+
+            var pixelsPerPoint = (_adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var ratio = FontMetricMeasurement.Ratio(resolved, FontSizeAdjustGrammar.ToFontMetric(adjust.Metric), pixelsPerPoint);
+            var target = double.IsNaN(adjust.Value) ? fromFontRatio ?? ratio : adjust.Value;
+            var adjustedSize = size * target / ratio;
+
+            return adjustedSize > 0 && Math.Abs(adjustedSize - size) > 1e-9 ? recreate(adjustedSize) ?? resolved : resolved;
         }
 
         /// <summary>
@@ -1853,9 +1997,13 @@ namespace PeachPDF.Svg
             // The resolver may hand back a distinct Font instance for the same face per character; one instance per face keeps the
             // renderer's reference comparison ("same font as the previous glyph") meaningful, so a run in one fallback font stays one batch.
             var faces = new Dictionary<string, Font> { [primary.FaceKey] = primary };
-            var fontStyle = PaintFontStyle.Regular;
-            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
-            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+            var fontStyle = StyleFlagsFor(font);
+            var variations = EncodeVariations(font);
+            var baseSize = Math.Max(font.Size, 1);
+            var pixelsPerPoint = (_adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            double? primaryRatio = FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is { } primaryAdjust
+                ? FontMetricMeasurement.Ratio(primary, FontSizeAdjustGrammar.ToFontMetric(primaryAdjust.Metric), pixelsPerPoint)
+                : null;
 
             return rune =>
             {
@@ -1865,8 +2013,12 @@ namespace PeachPDF.Svg
                 if (cache.TryGetValue(rune.Value, out var cached))
                     return cached;
 
-                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, Math.Max(font.Size, 1), fontStyle, rune, font.Weight, font.Stretch,
-                    font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, EncodeVariations(font)) ?? primary;
+                // Each fallback face is adjusted on its own (the per-face ratio), starting from the unadjusted size.
+                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, baseSize, fontStyle, rune, font.Weight, font.Stretch,
+                    font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, variations);
+                fallback = ApplySizeAdjust(font, fallback, baseSize, primaryRatio,
+                    adjusted => FontFamilyResolver.Resolve(_adapter, font.Family, adjusted, fontStyle, rune, font.Weight, font.Stretch,
+                        font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, variations)) ?? primary;
                 if (!faces.TryGetValue(fallback.FaceKey, out var canonical))
                     faces[fallback.FaceKey] = canonical = fallback;
                 return cache[rune.Value] = canonical;
@@ -2021,11 +2173,23 @@ namespace PeachPDF.Svg
             run.LetterSpacing = runFont.LetterSpacing;
             run.WordSpacing = runFont.WordSpacing;
             run.ShapingFeatures = new ShapeSettings(
-                runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
+                runFont.OptimizeSpeed && runFont.LigaturesNormal ? LigatureSet.Required : runFont.Ligatures,
+                resolvedCaps, runFont.Numeric, runFont.EastAsian,
                 TextShapingFeatureResolver.ToFeatureSettings(DerivedStyle.MergeExplicitFeatures(runFont.FeatureSettings,
                     FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, FirstFamily(runFont.Family), _fontFeatureValues))),
-                Kerning: runFont.Kerning, Language: runFont.Language,
-                Position: resolvedPosition, EmojiMode: runFont.Emoji);
+                Kerning: runFont.Kerning && !(runFont.OptimizeSpeed && runFont.KerningAuto), Language: runFont.Language,
+                Position: resolvedPosition, EmojiMode: runFont.Emoji, LanguageSystemTag: runFont.LanguageSystemTag);
+
+            // -webkit-text-stroke takes the place of stroke/stroke-width for this text: a stroke centred on the glyph outlines, painted the same way.
+            if (runFont.TextStrokeWidth > 0)
+            {
+                var strokeContext = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
+                var previousStroke = run.Stroke;
+                if (SvgPropertyRegistry.TrySet(run, "stroke", string.IsNullOrWhiteSpace(runFont.TextStrokeColor) ? "currentColor" : runFont.TextStrokeColor, in strokeContext))
+                    run.StrokeWidth = runFont.TextStrokeWidth;
+                else
+                    run.Stroke = previousStroke;
+            }
 
             // font-palette selects among the font's CPAL palettes (a no-op for a font without any).
             run.Palette = run.Font is { } paletteFont
@@ -2062,6 +2226,18 @@ namespace PeachPDF.Svg
                 run.LengthAdjust = node.GetAttribute("lengthAdjust")?.Trim() ?? "spacing";
             }
 
+            run.WhiteSpace = runFont.WhiteSpace;
+            run.Hyphens = runFont.Hyphens;
+            run.TextAlign = runFont.TextAlign;
+            run.LineHeight = !double.IsNaN(runFont.LineHeightLength) ? runFont.LineHeightLength
+                : !double.IsNaN(runFont.LineHeightNumber) ? runFont.LineHeightNumber * runFont.Size
+                : null;
+            if (node.Name == "text")
+            {
+                ApplyAutoWrapProperties(run, node, runFont);
+                state.Wrapped = run.IsAutoWrapped;
+            }
+
             run.DominantBaseline = runFont.DominantBaseline;
             run.BaselineShift = runFont.BaselineShift;
             run.AlignmentBaseline = ResolveStyledAttr(node, "alignment-baseline")?.Trim().ToLowerInvariant() is { Length: > 0 } alignment && alignment != "inherit" ? alignment : "auto";
@@ -2075,7 +2251,7 @@ namespace PeachPDF.Svg
                 if (content.IsText)
                 {
                     var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state);
-                    var text = state.Collapse(transformed, runFont.PreservedTabSpaces);
+                    var text = state.Collapse(transformed, runFont.PreservedTabSpaces, KeepsLineBreaks(runFont.WhiteSpace));
                     if (text.Length > 0)
                         run.Content.Add(new SvgTextFragment { Text = text });
                     continue;
@@ -2112,7 +2288,7 @@ namespace PeachPDF.Svg
                             trefRun.Content.Clear();
                             var trefFont = ComputeFontContext(child, childFontContext);
                             var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state);
-                            var text = state.Collapse(transformed, trefFont.PreservedTabSpaces);
+                            var text = state.Collapse(transformed, trefFont.PreservedTabSpaces, KeepsLineBreaks(trefFont.WhiteSpace));
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
                         }
@@ -2155,6 +2331,44 @@ namespace PeachPDF.Svg
             }
 
             return run;
+        }
+
+        /// <summary>Whether a <c>white-space</c> value keeps segment (line feed) breaks as hard line breaks.</summary>
+        private static bool KeepsLineBreaks(string whiteSpace) => whiteSpace is "pre" or "pre-wrap" or "pre-line" or "break-spaces";
+
+        /// <summary>
+        /// Reads the properties that turn a <c>&lt;text&gt;</c> into auto-wrapped text (SVG 2 §11.7): <c>inline-size</c> (the width of the line box),
+        /// <c>shape-inside</c> and <c>shape-subtract</c> (basic shapes in user space; a shape that is set takes the place of <c>inline-size</c>), and the
+        /// <c>text-indent</c> that applies to the first line.
+        /// </summary>
+        private void ApplyAutoWrapProperties(SvgTextElement run, ISvgSourceNode node, FontContext font)
+        {
+            var basis = new LengthBasis(this, font);
+
+            var inlineSizeAttr = ResolveStyledAttr(node, "inline-size")?.Trim();
+            if (!string.IsNullOrEmpty(inlineSizeAttr) && !inlineSizeAttr.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                && SvgValueParsers.ParseLength(inlineSizeAttr, _viewportWidth, basis) is { } inlineSize && inlineSize >= 0 && double.IsFinite(inlineSize))
+            {
+                run.InlineSize = inlineSize;
+            }
+
+            var width = _viewportWidth ?? 0;
+            var height = _viewportHeight ?? 0;
+            run.ShapeInside = SvgTextShapes.Parse(ResolveStyledAttr(node, "shape-inside"), width, height, basis) is { Count: 1 } inside ? inside[0] : null;
+            run.ShapeSubtract = SvgTextShapes.Parse(ResolveStyledAttr(node, "shape-subtract"), width, height, basis) ?? [];
+
+            if (font.TextIndent is { } indent)
+            {
+                if (indent.EndsWith('%'))
+                {
+                    var boxWidth = run.ShapeInside is { Length: > 0 } polygon ? polygon.Max(p => p.X) - polygon.Min(p => p.X) : run.InlineSize ?? 0;
+                    run.TextIndent = double.TryParse(indent[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * boxWidth : 0;
+                }
+                else
+                {
+                    run.TextIndent = SvgValueParsers.ParseLength(indent, null, basis) ?? 0;
+                }
+            }
         }
 
         /// <summary>
@@ -2207,17 +2421,30 @@ namespace PeachPDF.Svg
             /// <c>capitalize</c>.</summary>
             public bool CapitalizeAtWordStart = true;
 
-            /// <summary>Collapses one text fragment, advancing the shared cross-run state.</summary>
-            public string Collapse(string raw, int preservedTabSpaces = 0)
+            /// <summary>
+            /// Whether the <c>&lt;text&gt;</c> being built is laid out in auto-wrapped line boxes (<c>inline-size</c>/<c>shape-inside</c>). Only then does a
+            /// preserved line break survive as a hard break; in unwrapped text a line break is a space, as SVG text has no line boxes to break.
+            /// </summary>
+            public bool Wrapped;
+
+            private bool _afterBreak;          // a preserved line break was just emitted (pre-line): spaces after it are removed
+
+            /// <summary>
+            /// Collapses one text fragment, advancing the shared cross-run state. <paramref name="keepLineBreaks"/> is set for the <c>white-space</c> values
+            /// that keep segment breaks (<c>pre</c>, <c>pre-wrap</c>, <c>pre-line</c>, <c>break-spaces</c>); it has an effect only in wrapped text.
+            /// </summary>
+            public string Collapse(string raw, int preservedTabSpaces = 0, bool keepLineBreaks = false)
             {
                 if (string.IsNullOrEmpty(raw))
                     return "";
 
+                keepLineBreaks &= Wrapped;
                 var sb = new StringBuilder(raw.Length);
 
                 if (preservedTabSpaces > 0)
                 {
                     // Preserved whitespace: nothing is trimmed or collapsed; a line break is a space (a CRLF one space) and a tab is tab-size spaces.
+                    // In wrapped text a line break stays one, as a lone line feed.
                     for (var i = 0; i < raw.Length; i++)
                     {
                         var ch = raw[i];
@@ -2226,8 +2453,10 @@ namespace PeachPDF.Svg
 
                         if (ch == '\t')
                             sb.Append(' ', preservedTabSpaces);
+                        else if (ch is '\n' or '\r')
+                            sb.Append(keepLineBreaks ? '\n' : ' ');
                         else
-                            sb.Append(ch is '\n' or '\r' ? ' ' : ch);
+                            sb.Append(ch);
                     }
 
                     if (sb.Length > 0)
@@ -2239,11 +2468,26 @@ namespace PeachPDF.Svg
                     return sb.ToString();
                 }
 
-                foreach (var ch in raw)
+                for (var i = 0; i < raw.Length; i++)
                 {
+                    var ch = raw[i];
+
+                    if (keepLineBreaks && ch is '\n' or '\r')
+                    {
+                        // pre-line: spaces collapse, but a segment break is kept, and the spaces around it are removed.
+                        if (ch == '\r' && i + 1 < raw.Length && raw[i + 1] == '\n')
+                            continue;
+
+                        sb.Append('\n');
+                        _pendingSpace = false;
+                        _afterBreak = true;
+                        _atStart = false;
+                        continue;
+                    }
+
                     if (char.IsWhiteSpace(ch))
                     {
-                        if (!_atStart)
+                        if (!_atStart && !_afterBreak)
                             _pendingSpace = true;
                         continue;
                     }
@@ -2256,6 +2500,7 @@ namespace PeachPDF.Svg
 
                     sb.Append(ch);
                     _atStart = false;
+                    _afterBreak = false;
                 }
 
                 return sb.ToString();
@@ -2265,14 +2510,15 @@ namespace PeachPDF.Svg
             /// (see the <c>&lt;tref&gt;</c> case in <see cref="BuildTextRun"/>, where any content nodes the
             /// tref element itself carries are invalid per SVG's content model and thrown away) can be
             /// undone rather than leaking into whatever text follows in the same subtree.</summary>
-            public (bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart) Snapshot() =>
-                (_atStart, _pendingSpace, CapitalizeAtWordStart);
+            public (bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart, bool AfterBreak) Snapshot() =>
+                (_atStart, _pendingSpace, CapitalizeAtWordStart, _afterBreak);
 
-            public void Restore((bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart) snapshot)
+            public void Restore((bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart, bool AfterBreak) snapshot)
             {
                 _atStart = snapshot.AtStart;
                 _pendingSpace = snapshot.PendingSpace;
                 CapitalizeAtWordStart = snapshot.CapitalizeAtWordStart;
+                _afterBreak = snapshot.AfterBreak;
             }
         }
 

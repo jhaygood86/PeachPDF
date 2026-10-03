@@ -1928,7 +1928,9 @@ namespace PeachPDF.Html.Core.Dom
             // never synthesize at all (real substitution or a silent no-op, never an approximation).
             var isSmallCapsFamily = FontVariantCaps.Value is FontVariantCapsMode.SmallCaps or FontVariantCapsMode.AllSmallCaps;
             var isAllSmallCaps = FontVariantCaps.Value == FontVariantCapsMode.AllSmallCaps;
-            var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == CapsMode.None;
+            // font-synthesis-small-caps: none (CSS Fonts 4 §3.5) forbids this synthesis: the text is then drawn as written.
+            var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == CapsMode.None
+                                 && FontSynthesisSmallCaps.Value == FontSynthesisMode.Auto;
             var synthesisApplies = needsSynthesis && (ContainsLowerLetter(text) || (isAllSmallCaps && ContainsUpperLetter(text)));
 
             // A synthesized font-variant-position: sub/super applies uniformly to the whole word - CSS

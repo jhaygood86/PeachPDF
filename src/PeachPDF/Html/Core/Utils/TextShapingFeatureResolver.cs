@@ -169,6 +169,18 @@ namespace PeachPDF.Html.Core.Utils
         /// <c>normal</c> mean "apply GPOS kerning when the font and script support it."</summary>
         internal static bool ResolveKerning(FontKerningMode value) => value != FontKerningMode.None;
 
+        /// <summary>
+        /// <c>text-rendering: optimizeSpeed</c> turns off the optional ligatures where <c>font-variant-ligatures</c> was left at <c>normal</c>; a value the author
+        /// set is theirs. Every other <c>text-rendering</c> keyword leaves the value alone: PDF output is unhinted vector content, so there is nothing else
+        /// for them to change, and kerning and ligatures are already on.
+        /// </summary>
+        internal static string ApplyTextRendering(string ligaturesValue, TextRenderingMode textRendering) =>
+            textRendering == TextRenderingMode.OptimizeSpeed && ligaturesValue == Keywords.Normal ? Keywords.None : ligaturesValue;
+
+        /// <summary>The same for kerning: <c>optimizeSpeed</c> turns it off where <c>font-kerning</c> is <c>auto</c>.</summary>
+        internal static FontKerningMode ApplyTextRendering(FontKerningMode kerning, TextRenderingMode textRendering) =>
+            textRendering == TextRenderingMode.OptimizeSpeed && kerning == FontKerningMode.Auto ? FontKerningMode.None : kerning;
+
         /// <summary>The same, for the keyword text of an SVG presentation attribute: only a literal <c>none</c> turns kerning off.</summary>
         internal static bool ResolveKerning(string value) => value != Keywords.None;
 

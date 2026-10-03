@@ -128,6 +128,16 @@
         public static readonly string FontPalette = "font-palette";
         public static readonly string FontSize = "font-size";
         public static readonly string FontSizeAdjust = "font-size-adjust";
+        public static readonly string FontLanguageOverride = "font-language-override";
+        public static readonly string TextRendering = "text-rendering";
+        public static readonly string WebkitTextStroke = "-webkit-text-stroke";
+        public static readonly string WebkitTextStrokeWidth = "-webkit-text-stroke-width";
+        public static readonly string WebkitTextStrokeColor = "-webkit-text-stroke-color";
+        public static readonly string FontSynthesis = "font-synthesis";
+        public static readonly string FontSynthesisWeight = "font-synthesis-weight";
+        public static readonly string FontSynthesisStyle = "font-synthesis-style";
+        public static readonly string FontSynthesisSmallCaps = "font-synthesis-small-caps";
+        public static readonly string FontSynthesisPosition = "font-synthesis-position";
         public static readonly string FontStyle = "font-style";
         public static readonly string FontStretch = "font-stretch";
         public static readonly string FontVariant = "font-variant";

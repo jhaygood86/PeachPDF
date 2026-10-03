@@ -278,5 +278,8 @@ namespace PeachPDF.Adapters
         // fallback CSS Values 4 §6.1.1 prescribes for cap.
         public override double? CapHeightEm =>
             Font.Typeface.Metrics is { UnitsPerEm: > 0, CapHeight: > 0 } m ? (double)m.CapHeight / m.UnitsPerEm : null;
+
+        public override double? GetBaselineHeightEm(string baselineTag, bool vertical) =>
+            Font.Typeface.TryGetBaselineHeight(vertical, null, baselineTag, out var ems) ? ems : null;
     }
 }

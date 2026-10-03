@@ -271,6 +271,15 @@ namespace PeachDrawing.Core
         /// <summary>The font's real x-height as a fraction of the em, or null when it doesn't carry one.</summary>
         public virtual double? XHeightEm => null;
 
+        /// <summary>
+        /// How far above the alphabetic baseline the font itself puts a named baseline, as a fraction of the em (negative when below it), read from the
+        /// font's <c>BASE</c> table. Null when the font states nothing for it, in which case a caller approximates the baseline from the font's metrics.
+        /// </summary>
+        /// <param name="baselineTag">The OpenType baseline tag: <c>ideo</c>, <c>hang</c>, <c>math</c>, <c>icfb</c> or <c>icft</c>.</param>
+        /// <param name="vertical">Whether to read the vertical axis (the baselines of vertical text) rather than the horizontal one.</param>
+        public virtual double? GetBaselineHeightEm(string baselineTag, bool vertical) => null;
+
+
         /// <summary>The font's cap height as a fraction of the em, or null when unknown.</summary>
         public virtual double? CapHeightEm => null;
 

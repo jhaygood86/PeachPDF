@@ -1,21 +1,26 @@
 # SVG text: CSS text/font properties that still do not apply
 
-Tracked in [issue #1579](https://github.com/jhaygood86/PeachPDF/issues/1579) (the earlier tracker, #1572, wired everything else).
+Residuals tracked in [issue #1613](https://github.com/jhaygood86/PeachPDF/issues/1613) (follow-up to #1579 and #1572).
 
 Not applied to SVG `<text>`/`<tspan>`:
 
-- **Wrapped-text properties** — `text-indent`, `line-height`, `hyphens`, `text-align`, the wrapping `white-space` modes and hard line
-  breaks under `pre`. SVG 2 defines them only for text laid out with `inline-size`/`shape-inside`; this repo has neither and plain SVG
-  text has no line boxes, so there is nothing for them to act on. A newline in preserved text is a space.
-- **`font-synthesis*`** — there is no switch to suppress faux bold/italic anywhere (HTML either): the decision is made inside the font
-  match (`TypefaceMatch.Synthesis`) and reaches the renderers through `Font.SyntheticStyle`, so honouring it needs a public
-  `PeachDrawing.Core` API change and a new font-cache-key dimension. SVG has no small-caps or sub/superscript synthesis either (see
-  [font-variant-position-synthesis-scope](font-variant-position-synthesis-scope.md)).
-- **`font-size-adjust`**, **`font-language-override`**, **`-webkit-text-stroke`**, **`text-rendering`** — not implemented for HTML text
-  either; no rendering hook exists.
-- **`textLength` with `lengthAdjust="spacingAndGlyphs"`**, and `textLength` on `<textPath>` or under a vertical `writing-mode`.
-- **`text-shadow`** on `<textPath>` glyphs; a glyph with an explicit `rotate=""` gets an unblurred shadow (a blur layer's bounds are
-  not computed through the glyph's rotation).
-- **Baselines** are approximated from font metrics (no `BASE` table), only under horizontal writing, and not on `<textPath>`.
+- **Wrapped text** (`inline-size`/`shape-inside`, with `text-indent`, `line-height`, `hyphens`, `text-align` and the wrapping `white-space` modes) is
+  implemented for horizontal writing modes (`SvgRenderer.WrappedText.cs`). What it leaves out: vertical `writing-mode` (the inline-size is ignored
+  there); `shape-inside`/`shape-subtract` with `url()` references, `path()` or a reference box (only `inset()`/`circle()`/`ellipse()`/`polygon()`
+  resolve, a curve as a 96-sided polygon); `shape-margin`/`shape-padding`; `text-indent: hanging`/`each-line`, `text-align-last`,
+  `text-wrap`/`white-space-collapse`, `hyphenate-limit-chars`; `break-spaces` behaves as `pre-wrap` (no break after preserved spaces); per-character
+  `x`/`y`/`dx`/`dy` and `textLength` are ignored in wrapped text; a word wider than every stretch of a shape is dropped with the text after it.
+  A line's height is the largest `line-height` among the glyphs on it, with leading split evenly (no strut for an empty inline box).
+- **`font-synthesis-small-caps`/`-position`** have nothing to switch off in SVG: it has no small-caps or sub/superscript synthesis (see
+  [font-variant-position-synthesis-scope](font-variant-position-synthesis-scope.md)). `-weight`/`-style` are honoured.
+- **`font-size-adjust`'s `ic-height`** is measured as `ic-width` (the font layer has no vertical ideograph advance).
+- **Baselines** read the `BASE` table for the font's default script only (the text's script is not passed to the lookup), and the
+  per-script `MinMax` extents and the version 1.1 variable-font deltas are not read.
+- **`text-rendering`** has an effect only for `optimizeSpeed` (kerning and optional ligatures off); the other keywords are no-ops
+  because PDF output is unhinted vector content, so there is no hinting or geometry switch for them to flip.
+- **`-webkit-text-stroke`** is always painted over the fill: `paint-order` does not apply to HTML text, and an SVG text stroke follows
+  `paint-order`. A font with no decodable outlines is drawn unstroked.
+- **`font-language-override`** selects the language system for `GSUB` features only; `GPOS` kerning always reads the font's default
+  language system.
 - Text painted as outlines (gradient/pattern fill, stroke) is drawn in the font's default palette, since `Canvas.GetTextOutline` has no
   palette parameter.

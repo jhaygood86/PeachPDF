@@ -200,6 +200,42 @@ namespace PeachPDF.Svg
         /// resolved fresh per run rather than threaded down like <see cref="Direction"/>.</summary>
         public string UnicodeBidi { get; set; } = "normal";
 
+        /// <summary>
+        /// <c>inline-size</c> (SVG 2 §11.7.1) of a <c>&lt;text&gt;</c> root: the width its auto-wrapped lines fill, in user units. Null for <c>auto</c> or
+        /// absent. Only the root carries it; wrapping is horizontal-tb only.
+        /// </summary>
+        public double? InlineSize { get; set; }
+
+        /// <summary>
+        /// The region <c>shape-inside</c> (SVG 2 §11.7.2) fills with wrapped lines, as a flattened polygon in user space; null when the property is
+        /// <c>none</c> or does not hold a basic shape this renderer resolves. Only a <c>&lt;text&gt;</c> root carries it.
+        /// </summary>
+        public PaintPoint[]? ShapeInside { get; set; }
+
+        /// <summary>The <c>shape-subtract</c> regions (flattened polygons) cut out of <see cref="ShapeInside"/> or the <see cref="InlineSize"/> box.</summary>
+        public IReadOnlyList<PaintPoint[]> ShapeSubtract { get; set; } = [];
+
+        /// <summary>Whether this <c>&lt;text&gt;</c> root lays its characters out in auto-wrapped line boxes.</summary>
+        public bool IsAutoWrapped => (InlineSize is not null || ShapeInside is not null) && !IsVerticalWriting;
+
+        /// <summary>Whether <see cref="WritingMode"/> is a vertical one (wrapping does not apply to those).</summary>
+        private bool IsVerticalWriting => WritingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+
+        /// <summary>The resolved <c>white-space</c> keyword (<c>normal</c>, <c>nowrap</c>, <c>pre</c>, <c>pre-wrap</c>, <c>pre-line</c>, <c>break-spaces</c>); inherited.</summary>
+        public string WhiteSpace { get; set; } = "normal";
+
+        /// <summary>The resolved <c>hyphens</c> keyword (<c>none</c>, <c>manual</c>, <c>auto</c>); inherited.</summary>
+        public string Hyphens { get; set; } = "manual";
+
+        /// <summary>The resolved <c>line-height</c> in user units; null for <c>normal</c> (the font's own line height).</summary>
+        public double? LineHeight { get; set; }
+
+        /// <summary>The resolved <c>text-indent</c> of a wrapped <c>&lt;text&gt;</c> root, in user units (a percentage already resolved against the line width).</summary>
+        public double TextIndent { get; set; }
+
+        /// <summary>The <c>text-align</c> keyword, or null when none was specified (the <c>text-anchor</c> then decides the alignment).</summary>
+        public string? TextAlign { get; set; }
+
         /// <summary>The <c>&lt;textPath&gt;</c> <c>side</c> (default <see cref="SvgTextPathSide.Left"/>).</summary>
         public SvgTextPathSide Side { get; set; } = SvgTextPathSide.Left;
 

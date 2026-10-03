@@ -2951,6 +2951,90 @@
       }
     },
     {
+      "name": "font-size-adjust",
+      "comment": "CSS Fonts 5 section 3.2. cssDataType 'cssom-grammar' calls FontSizeAdjustProperty.ValueGrammar.Convert. The authored text is resolved to a metric and factor by FontSizeAdjustGrammar.Resolve where the font is created (DerivedStyle.ActualFont; SvgTreeBuilder.ComputeFontContext). It never changes the computed font-size or em resolution, only the size glyph fonts are created at.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontSizeAdjustProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "FontSizeAdjust",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-synthesis-weight",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops the renderer faking bold when the matched face is lighter than requested.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisWeight",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisWeight.ToString()"
+      }
+    },
+    {
+      "name": "font-synthesis-style",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops the renderer faking italic/oblique when the matched face is upright.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisStyle",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisStyle.ToString()"
+      }
+    },
+    {
+      "name": "font-synthesis-small-caps",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops small-caps being synthesized from reduced-size capitals.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisSmallCaps",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisSmallCaps.ToString()"
+      }
+    },
+    {
+      "name": "font-synthesis-position",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops sub/superscript being synthesized from a reduced-size face and baseline shift.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisPosition",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisPosition.ToString()"
+      }
+    },
+    {
       "name": "font-kerning",
       "comment": "CSS Fonts 3 §7.3, single keyword.",
       "inherited": true,
@@ -2966,6 +3050,62 @@
         "csharpDataType": "CssProperty<FontKerningMode>",
         "area": "FontArea",
         "getterExpression": "{box}.FontKerning.ToString()"
+      }
+    },
+    {
+      "name": "font-language-override",
+      "comment": "CSS Fonts 4 section 6.6, normal | <string>. cssDataType 'cssom-grammar' calls FontLanguageOverrideProperty.ValueGrammar.Convert. The authored text is resolved to an OpenType language-system tag by FontLanguageOverrideGrammar.Resolve where the text is shaped (DerivedStyle.ActualTextShapingFeatures; SvgTreeBuilder), where it becomes ShapeSettings.LanguageSystemTag and wins over the tag derived from lang.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontLanguageOverrideProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "FontLanguageOverride",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "text-rendering",
+      "comment": "SVG 1.1 section 10.15 / the CSS Fonts hint, auto | optimizeSpeed | optimizeLegibility | geometricPrecision. Inherited. The only value with an effect here is optimizeSpeed, which turns off kerning and the optional ligatures where font-kerning and font-variant-ligatures are left at their initial values (TextShapingFeatureResolver.ApplyTextRendering); PDF output is unhinted vector content, so the other values change nothing.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextRenderingMode",
+        "keywordMap": "Map.TextRenderingModes",
+        "fallback": "TextRenderingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "TextRendering",
+        "csharpDataType": "CssProperty<TextRenderingMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.TextRendering.ToString()"
+      }
+    },
+    {
+      "name": "-webkit-text-stroke-width",
+      "comment": "Compatibility Standard, <line-width>. Inherited. thin/medium/thick resolve to literal lengths in the CSS-OM (see outline-width); they are listed for the initial-value defaulting path. Read by DerivedStyle.ActualTextStrokeWidth.",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": ["length", "keyword"],
+      "supportedValues": ["thin", "medium", "thick"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "TextStrokeWidth",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "-webkit-text-stroke-color",
+      "comment": "Compatibility Standard, <color>. Inherited; currentcolor (the initial value) is the element's own colour. Read by DerivedStyle.ActualTextStrokeColor.",
+      "inherited": true,
+      "initialValue": "currentcolor",
+      "cssDataType": ["color", "current-color"],
+      "html": {
+        "propertyPath": "TextStrokeColor",
+        "csharpDataType": "string",
+        "area": "TextArea"
       }
     },
     {

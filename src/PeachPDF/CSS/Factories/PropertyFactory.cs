@@ -310,6 +310,15 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontSize, () => new FontSizeProperty(), true);
             AddLonghand(PropertyNames.FontSizeAdjust, () => new FontSizeAdjustProperty(), true);
             AddLonghand(PropertyNames.FontStyle, () => new FontStyleProperty());
+            AddShorthand(PropertyNames.FontSynthesis, () => new FontSynthesisProperty(),
+                PropertyNames.FontSynthesisWeight,
+                PropertyNames.FontSynthesisStyle,
+                PropertyNames.FontSynthesisSmallCaps,
+                PropertyNames.FontSynthesisPosition);
+            AddLonghand(PropertyNames.FontSynthesisWeight, () => new FontSynthesisWeightProperty());
+            AddLonghand(PropertyNames.FontSynthesisStyle, () => new FontSynthesisStyleProperty());
+            AddLonghand(PropertyNames.FontSynthesisSmallCaps, () => new FontSynthesisSmallCapsProperty());
+            AddLonghand(PropertyNames.FontSynthesisPosition, () => new FontSynthesisPositionProperty());
             // font-variant is a real shorthand (see FontVariantProperty) over the 4 longhands below
             // plus font-feature-settings; the @font-face `font-variant` descriptor is a separate,
             // unrelated, never-cascaded registration (FontFaceVariantProperty, added to _fontsBuilder
@@ -332,6 +341,13 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontVariantAlternates, () => new FontVariantAlternatesProperty());
             AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
             AddLonghand(PropertyNames.FontKerning, () => new FontKerningProperty());
+            AddLonghand(PropertyNames.FontLanguageOverride, () => new FontLanguageOverrideProperty());
+            AddLonghand(PropertyNames.TextRendering, () => new TextRenderingProperty());
+            AddShorthand(PropertyNames.WebkitTextStroke, () => new WebkitTextStrokeProperty(),
+                PropertyNames.WebkitTextStrokeWidth,
+                PropertyNames.WebkitTextStrokeColor);
+            AddLonghand(PropertyNames.WebkitTextStrokeWidth, () => new WebkitTextStrokeWidthProperty(), true);
+            AddLonghand(PropertyNames.WebkitTextStrokeColor, () => new WebkitTextStrokeColorProperty(), true);
             AddLonghand(PropertyNames.FontOpticalSizing, () => new FontOpticalSizingProperty());
             AddLonghand(PropertyNames.FontVariationSettings, () => new FontVariationSettingsProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true);

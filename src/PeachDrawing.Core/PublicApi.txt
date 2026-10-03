@@ -250,6 +250,7 @@ PeachDrawing.Core.Font : abstract class
   method virtual Boolean TryGetPaletteColor(Int32 paletteIndex, Int32 entryIndex, out PaintColor color)
   method virtual Double GetVerticalAdvance(Rune rune)
   method virtual Double GetVerticalOriginY(Rune rune)
+  method virtual Double? GetBaselineHeightEm(String baselineTag, Boolean vertical)
   method virtual Int32 GetGlyphAdvanceWidthDesignUnits(Int32 glyphIndex)
   method virtual Int32 GetGlyphIndex(Rune rune)
   method virtual Int32? FirstDarkPalette()
@@ -514,6 +515,8 @@ PeachDrawing.Core.PaintColor : struct
 PeachDrawing.Core.PaintFontStyle : enum Int32
   Bold = 1
   Italic = 2
+  NoSyntheticBold = 16
+  NoSyntheticItalic = 32
   Regular = 0
   Strikeout = 8
   Underline = 4
@@ -785,6 +788,7 @@ PeachDrawing.Core.TypefaceFont : sealed class
   method virtual Double GetVerticalAdvance(Rune rune)
   method virtual Double GetVerticalOriginY(Rune rune)
   method virtual Double GetWhitespaceWidth(Canvas graphics)
+  method virtual Double? GetBaselineHeightEm(String baselineTag, Boolean vertical)
   method virtual Int32 GetGlyphAdvanceWidthDesignUnits(Int32 glyphIndex)
   method virtual Int32 GetGlyphIndex(Rune rune)
   method virtual Int32? FirstDarkPalette()
