@@ -18,6 +18,7 @@ using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using System;
@@ -51,6 +52,9 @@ namespace PeachPDF.Svg
         private readonly Dictionary<string, ISvgSourceNode> _nodesById = new(StringComparer.Ordinal);
         private readonly List<FeImage> _feImageReferences = [];
         private readonly SvgDocument _document = new();
+
+        /// <summary>The document's <c>&lt;color-profile&gt;</c> elements by lowercased name, what <c>icc-color()</c> resolves against (null until one is found).</summary>
+        private Dictionary<string, SvgIccColor>? _iccProfiles;
         private int _useDepth;
 
         /// <summary>
@@ -457,6 +461,10 @@ namespace PeachPDF.Svg
         {
             foreach (var child in node.Children)
             {
+                if (child.Name == "color-profile"
+                    && (child.GetAttribute("href") ?? child.GetAttribute("xlink:href")) is { Length: > 0 } profileHref)
+                    hrefs.Add(profileHref);
+
                 if (child.Name is "image" or "feImage")
                 {
                     var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
@@ -480,6 +488,8 @@ namespace PeachPDF.Svg
             _viewportWidth = _document.ViewBox?.Width ?? _document.Width;
             _viewportHeight = _document.ViewBox?.Height ?? _document.Height;
 
+            // Before the definitions: a filter is built eagerly while they are collected, and its flood-color may name a profile.
+            CollectColorProfiles(root);
             CollectDefinitions(root);
 
             // The root <svg>'s own font-* seeds inheritance for the whole tree, and its font-size is the
@@ -535,6 +545,36 @@ namespace PeachPDF.Svg
             return _document;
         }
 
+        /// <summary>
+        /// Registers every <c>&lt;color-profile name href rendering-intent&gt;</c> (SVG 1.1 §11.2) that yields a usable
+        /// Gray/RGB/CMYK profile. The href is a <c>data:</c> URI or a resource <see cref="PrefetchImageResourcesAsync"/> fetched.
+        /// </summary>
+        private void CollectColorProfiles(ISvgSourceNode node)
+        {
+            foreach (var child in node.Children)
+            {
+                if (child.Name == "color-profile"
+                    && child.GetAttribute("name") is { Length: > 0 } name
+                    && (child.GetAttribute("href") ?? child.GetAttribute("xlink:href")) is { Length: > 0 } href)
+                {
+                    byte[]? bytes = null;
+                    if (DataUriUtils.TryDecodeDataUri(href, out _, out var dataBytes))
+                        bytes = dataBytes;
+                    else if (_prefetchedImages is not null && _prefetchedImages.TryGetValue(href, out var resource))
+                        bytes = resource.Bytes;
+
+                    if (bytes is not null && PeachImage.IccColorProfile.TryCreate(bytes, out var profile) && profile is not null)
+                        (_iccProfiles ??= new Dictionary<string, SvgIccColor>(StringComparer.Ordinal))[name.Trim().ToLowerInvariant()] =
+                            new SvgIccColor(profile, SvgIccColor.ParseRenderingIntent(child.GetAttribute("rendering-intent")));
+                }
+
+                CollectColorProfiles(child);
+            }
+        }
+
+        /// <summary>Resolves an <c>icc-color()</c> in a color value to sRGB (or its sRGB fallback); see <see cref="SvgIccColor.Rewrite"/>.</summary>
+        private string? ResolveIcc(string? value) => SvgIccColor.Rewrite(value, _iccProfiles);
+
         private void CollectDefinitions(ISvgSourceNode node)
         {
             foreach (var child in node.Children)
@@ -582,6 +622,7 @@ namespace PeachPDF.Svg
         {
             foreach (var (node, id, ancestors) in _deferredDefinitions)
             {
+                _definitionAncestors = ancestors;
                 switch (node.Name)
                 {
                     case "linearGradient":
@@ -604,6 +645,56 @@ namespace PeachPDF.Svg
                         break;
                 }
             }
+
+            _definitionAncestors = [];
+        }
+
+        /// <summary>The ancestor chain (root excluded) of the definition <see cref="BuildDeferredDefinitions"/> is building, for properties inherited into it.</summary>
+        private ISvgSourceNode[] _definitionAncestors = [];
+
+        /// <summary>
+        /// Whether <paramref name="node"/>'s computed <c>color-interpolation</c> is <c>linearRGB</c> (SVG 1.1 §11.9.1; inherited,
+        /// initial <c>sRGB</c>, <c>auto</c> is sRGB for gradients): its own value, else the nearest ancestor's that sets one.
+        /// </summary>
+        private bool IsLinearColorInterpolation(ISvgSourceNode node)
+        {
+            var value = ResolveStyledAttr(node, "color-interpolation")?.Trim();
+            for (var i = _definitionAncestors.Length - 1; i >= 0 && (value is null || value.Equals("inherit", StringComparison.OrdinalIgnoreCase)); i--)
+                value = ResolveStyledAttr(_definitionAncestors[i], "color-interpolation")?.Trim();
+
+            return string.Equals(value, "linearRGB", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// A gradient interpolating in linear light: stops are blended as in sRGB by every shading function downstream, so extra stops
+        /// sampled through <see cref="ColorSpaceConverter"/> keep each segment close enough to the linear-light blend (the same
+        /// approach CSS <c>in srgb-linear</c> gradients take).
+        /// </summary>
+        private static List<SvgGradientStop> ExpandLinearLight(List<SvgGradientStop> stops)
+        {
+            const int samplesPerSegment = 15;
+            var result = new List<SvgGradientStop>(stops.Count * (samplesPerSegment + 1));
+
+            for (var i = 0; i < stops.Count; i++)
+            {
+                if (i > 0 && stops[i].Offset > stops[i - 1].Offset)
+                {
+                    for (var k = 1; k <= samplesPerSegment; k++)
+                    {
+                        var t = (double)k / (samplesPerSegment + 1);
+                        result.Add(new SvgGradientStop
+                        {
+                            Offset = stops[i - 1].Offset + t * (stops[i].Offset - stops[i - 1].Offset),
+                            PaintColor = ColorSpaceConverter.Interpolate(stops[i - 1].PaintColor, stops[i].PaintColor, t,
+                                GradientColorSpace.SrgbLinear, HueInterpolationMethod.Shorter),
+                        });
+                    }
+                }
+
+                result.Add(stops[i]);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -1198,12 +1289,12 @@ namespace PeachPDF.Svg
             // already use. opacity is the one exception (see its own comment below): it is not inherited,
             // so an invalid value simply leaves the field at its hardcoded default.
 
-            var fillAttr = Attr("fill");
+            var fillAttr = ResolveIcc(Attr("fill"));
             if (fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "fill", fillAttr, in ctx))
                 element.Fill = inherited.Fill;
 
-            var strokeAttr = Attr("stroke");
+            var strokeAttr = ResolveIcc(Attr("stroke"));
             if (strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke", strokeAttr, in ctx))
                 element.Stroke = inherited.Stroke;
@@ -2816,7 +2907,7 @@ namespace PeachPDF.Svg
                 ? PaintColor.Black
                 : floodColorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
-                    : new CssValueParser(_adapter).GetActualColor(floodColorAttr);
+                    : new CssValueParser(_adapter).GetActualColor(ResolveIcc(floodColorAttr)!);
 
             return new FeFlood
             {
@@ -3062,7 +3153,7 @@ namespace PeachPDF.Svg
                 ? PaintColor.Black
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
-                    : new CssValueParser(_adapter).GetActualColor(colorAttr);
+                    : new CssValueParser(_adapter).GetActualColor(ResolveIcc(colorAttr)!);
 
             return new FeDropShadow
             {
@@ -3222,7 +3313,7 @@ namespace PeachPDF.Svg
                 ? PaintColor.White
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
-                    : new CssValueParser(_adapter).GetActualColor(colorAttr);
+                    : new CssValueParser(_adapter).GetActualColor(ResolveIcc(colorAttr)!);
 
             return new FeLighting
             {
@@ -3321,13 +3412,15 @@ namespace PeachPDF.Svg
                     child.GetAttribute("stop-color"),
                     child.GetAttribute("stop-opacity"),
                     child.GetAttribute("style"),
-                    _adapter);
+                    _adapter,
+                    ResolveIcc);
 
                 stops.Add(new SvgGradientStop { Offset = offset, PaintColor = color });
             }
 
             // Defensive: stop offsets must be monotonically non-decreasing per spec.
-            return [.. stops.OrderBy(s => s.Offset)];
+            var ordered = stops.OrderBy(s => s.Offset).ToList();
+            return IsLinearColorInterpolation(node) ? ExpandLinearLight(ordered) : ordered;
         }
     }
 }
