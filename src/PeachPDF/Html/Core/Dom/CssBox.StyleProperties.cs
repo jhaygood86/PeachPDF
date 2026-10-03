@@ -397,6 +397,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the actual color for the text.</summary>
         public PaintColor ActualColor => DerivedStyle.ActualColor;
 
+        /// <summary>Gets the width of the stroke around the text (<c>-webkit-text-stroke-width</c>), 0 for none.</summary>
+        public double ActualTextStrokeWidth => DerivedStyle.ActualTextStrokeWidth;
+
+        /// <summary>Gets the colour of the stroke around the text (<c>-webkit-text-stroke-color</c>).</summary>
+        public PaintColor ActualTextStrokeColor => DerivedStyle.ActualTextStrokeColor;
+
         /// <summary>Gets the actual background color of the box.</summary>
         public PaintColor ActualBackgroundColor => DerivedStyle.ActualBackgroundColor;
 

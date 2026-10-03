@@ -3053,6 +3053,62 @@
       }
     },
     {
+      "name": "font-language-override",
+      "comment": "CSS Fonts 4 section 6.6, normal | <string>. cssDataType 'cssom-grammar' calls FontLanguageOverrideProperty.ValueGrammar.Convert. The authored text is resolved to an OpenType language-system tag by FontLanguageOverrideGrammar.Resolve where the text is shaped (DerivedStyle.ActualTextShapingFeatures; SvgTreeBuilder), where it becomes ShapeSettings.LanguageSystemTag and wins over the tag derived from lang.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontLanguageOverrideProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "FontLanguageOverride",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "text-rendering",
+      "comment": "SVG 1.1 section 10.15 / the CSS Fonts hint, auto | optimizeSpeed | optimizeLegibility | geometricPrecision. Inherited. The only value with an effect here is optimizeSpeed, which turns off kerning and the optional ligatures where font-kerning and font-variant-ligatures are left at their initial values (TextShapingFeatureResolver.ApplyTextRendering); PDF output is unhinted vector content, so the other values change nothing.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextRenderingMode",
+        "keywordMap": "Map.TextRenderingModes",
+        "fallback": "TextRenderingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "TextRendering",
+        "csharpDataType": "CssProperty<TextRenderingMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.TextRendering.ToString()"
+      }
+    },
+    {
+      "name": "-webkit-text-stroke-width",
+      "comment": "Compatibility Standard, <line-width>. Inherited. thin/medium/thick resolve to literal lengths in the CSS-OM (see outline-width); they are listed for the initial-value defaulting path. Read by DerivedStyle.ActualTextStrokeWidth.",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": ["length", "keyword"],
+      "supportedValues": ["thin", "medium", "thick"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "TextStrokeWidth",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "-webkit-text-stroke-color",
+      "comment": "Compatibility Standard, <color>. Inherited; currentcolor (the initial value) is the element's own colour. Read by DerivedStyle.ActualTextStrokeColor.",
+      "inherited": true,
+      "initialValue": "currentcolor",
+      "cssDataType": ["color", "current-color"],
+      "html": {
+        "propertyPath": "TextStrokeColor",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "font-variant-numeric",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantNumericConverter.Convert directly - same per-axis-exclusivity shape as font-variant-ligatures, which a naive keyword-set grammar would not enforce.",
       "inherited": true,

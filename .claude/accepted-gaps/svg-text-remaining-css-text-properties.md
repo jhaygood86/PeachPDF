@@ -10,8 +10,13 @@ Not applied to SVG `<text>`/`<tspan>`:
 - **`font-synthesis-small-caps`/`-position`** have nothing to switch off in SVG: it has no small-caps or sub/superscript synthesis (see
   [font-variant-position-synthesis-scope](font-variant-position-synthesis-scope.md)). `-weight`/`-style` are honoured.
 - **`font-size-adjust`'s `ic-height`** is measured as `ic-width` (the font layer has no vertical ideograph advance).
-- **`font-language-override`**, **`-webkit-text-stroke`**, **`text-rendering`** — not implemented for HTML text
-  either; no rendering hook exists.
-- **Baselines** are approximated from font metrics (no `BASE` table), only under horizontal writing, and not on `<textPath>`.
+- **Baselines** read the `BASE` table for the font's default script only (the text's script is not passed to the lookup), and the
+  per-script `MinMax` extents and the version 1.1 variable-font deltas are not read.
+- **`text-rendering`** has an effect only for `optimizeSpeed` (kerning and optional ligatures off); the other keywords are no-ops
+  because PDF output is unhinted vector content, so there is no hinting or geometry switch for them to flip.
+- **`-webkit-text-stroke`** is always painted over the fill: `paint-order` does not apply to HTML text, and an SVG text stroke follows
+  `paint-order`. A font with no decodable outlines is drawn unstroked.
+- **`font-language-override`** selects the language system for `GSUB` features only; `GPOS` kerning always reads the font's default
+  language system.
 - Text painted as outlines (gradient/pattern fill, stroke) is drawn in the font's default palette, since `Canvas.GetTextOutline` has no
   palette parameter.

@@ -330,6 +330,38 @@ namespace PeachDrawing.Text
         public MathTable? MathData => Face.Descriptor.MathTable;
 
         /// <summary>
+        /// Whether the face has a <c>BASE</c> table, which is to say it states where its named baselines (ideographic, hanging, mathematical, ...) sit.
+        /// </summary>
+        public bool HasBaselineData => BaselineData is not null;
+
+        /// <summary>
+        /// The <c>BASE</c> table of a face that has a usable one: the coordinate of each named baseline, per script, for horizontal and vertical text.
+        /// </summary>
+        /// <value>The table, or <see langword="null"/> when the face has none or it cannot be read.</value>
+        public BaselineTable? BaselineData => Face.Descriptor.BaselineTable;
+
+        /// <summary>
+        /// How far above the alphabetic baseline (the <c>romn</c> baseline, or the font's origin when the table does not list one) the <c>BASE</c> table puts
+        /// a named baseline, as a fraction of the em. Negative for a baseline below it.
+        /// </summary>
+        /// <param name="vertical"><see langword="true"/> for the vertical axis, <see langword="false"/> for the horizontal one.</param>
+        /// <param name="scriptTag">The OpenType script tag the text is in, or <see langword="null"/> for the table's default script.</param>
+        /// <param name="baselineTag">The baseline's four-character tag, such as <c>ideo</c>, <c>hang</c>, <c>math</c>, <c>icfb</c> or <c>icft</c>.</param>
+        /// <param name="ems">The height in ems, when this returns <see langword="true"/>.</param>
+        /// <returns><see langword="true"/> when the face has a <c>BASE</c> table that gives the baseline.</returns>
+        public bool TryGetBaselineHeight(bool vertical, string? scriptTag, string baselineTag, out double ems)
+        {
+            ems = 0;
+            var unitsPerEm = Metrics.UnitsPerEm;
+            if (BaselineData is not { } table || unitsPerEm <= 0 || !table.TryGetBaseline(vertical, scriptTag, baselineTag, out var coordinate))
+                return false;
+
+            table.TryGetBaseline(vertical, scriptTag, "romn", out var alphabetic);
+            ems = (coordinate - alphabetic) / unitsPerEm;
+            return true;
+        }
+
+        /// <summary>
         /// The picture of a glyph from the strike best suited to a font size.
         /// </summary>
         /// <param name="glyph">The glyph.</param>

@@ -234,7 +234,13 @@ namespace PeachPDF.Svg
             double BaselineShift = 0,
             string? SizeAdjust = null,
             bool NoSyntheticBold = false,
-            bool NoSyntheticItalic = false)
+            bool NoSyntheticItalic = false,
+            double TextStrokeWidth = 0,
+            string? TextStrokeColor = null,
+            bool OptimizeSpeed = false,
+            bool KerningAuto = true,
+            string? LanguageSystemTag = null,
+            bool LigaturesNormal = true)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1396,7 +1402,8 @@ namespace PeachPDF.Svg
             if (matched is not null && matched.TryGetValue(name, out var matchedValue))
                 return matchedValue; // present (incl. null = invalid at computed-value time) → authoritative
 
-            var attribute = node.GetAttribute(name);
+            // A vendor-prefixed property (-webkit-text-stroke) cannot be written as a presentation attribute - an XML name never starts with '-'.
+            var attribute = name[0] == '-' ? null : node.GetAttribute(name);
 
             // A text shorthand (font / font-variant / text-decoration) in style="" or as a presentation attribute sets this longhand
             // too (the matched-rule tier above is already expanded by the CSS-OM). Shorthands only matter when nothing more specific
@@ -1415,7 +1422,7 @@ namespace PeachPDF.Svg
 
             foreach (var shorthand in SvgTextShorthands.ShorthandsOf(name))
             {
-                var shorthandAttribute = node.GetAttribute(shorthand);
+                var shorthandAttribute = shorthand[0] == '-' ? null : node.GetAttribute(shorthand);
                 if (shorthandAttribute is not null && SvgTextShorthands.Expand(shorthand, shorthandAttribute, name) is { } expanded)
                     return expanded;
             }
@@ -1486,6 +1493,10 @@ namespace PeachPDF.Svg
                 ? inherited.Ligatures
                 : TextShapingFeatureResolver.ResolveLigatures(ligaturesAttr.Trim().ToLowerInvariant());
 
+            var ligaturesNormal = ligaturesAttr is null || ligaturesAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.LigaturesNormal
+                : ligaturesAttr.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase);
+
             var capsAttr = ResolveStyledAttr(node, "font-variant-caps");
             var capsRequested = capsAttr is null || capsAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.CapsRequested
@@ -1515,6 +1526,39 @@ namespace PeachPDF.Svg
             var kerning = kerningAttr is null || kerningAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Kerning
                 : TextShapingFeatureResolver.ResolveKerning(kerningAttr.Trim().ToLowerInvariant());
+            var kerningAuto = kerningAttr is null || kerningAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.KerningAuto
+                : kerningAttr.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
+
+            // text-rendering: optimizeSpeed turns kerning and the optional ligatures off where the font-* properties were left at their initial values
+            // (applied where the run's shaping settings are built); every other keyword changes nothing for PDF output.
+            var textRenderingAttr = ResolveStyledAttr(node, "text-rendering")?.Trim().ToLowerInvariant();
+            var optimizeSpeed = textRenderingAttr switch
+            {
+                null or "" or "inherit" => inherited.OptimizeSpeed,
+                "optimizespeed" => true,
+                "auto" or "optimizelegibility" or "geometricprecision" => false,
+                _ => inherited.OptimizeSpeed,
+            };
+
+            // font-language-override: normal resets, a valid string selects that OpenType language system, an invalid value is ignored.
+            var languageOverrideAttr = ResolveStyledAttr(node, "font-language-override")?.Trim();
+            var languageSystemTag = inherited.LanguageSystemTag;
+            if (!string.IsNullOrEmpty(languageOverrideAttr) && !languageOverrideAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            {
+                if (languageOverrideAttr.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                    languageSystemTag = null;
+                else if (FontLanguageOverrideGrammar.Resolve(languageOverrideAttr) is { } overrideTag)
+                    languageSystemTag = overrideTag;
+            }
+
+            // -webkit-text-stroke (and its width/colour longhands): inherited; the colour travels as authored text and is parsed as a paint where the run is built.
+            var strokeWidthAttr = ResolveStyledAttr(node, "-webkit-text-stroke-width");
+            var textStrokeWidth = Math.Max(0, ResolveSpacingLength(strokeWidthAttr, ownFont, inherited.TextStrokeWidth));
+            var strokeColorAttr = ResolveStyledAttr(node, "-webkit-text-stroke-color");
+            var textStrokeColor = string.IsNullOrWhiteSpace(strokeColorAttr) || strokeColorAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.TextStrokeColor
+                : strokeColorAttr.Trim();
 
             // The remaining font properties are all inherited keyword/string grammars that the HTML resolvers
             // (FontVariantAlternatesResolver, FontPaletteResolver, FontVariationSettingsResolver) interpret
@@ -1635,7 +1679,7 @@ namespace PeachPDF.Svg
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
                 underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift,
-                sizeAdjust, noSyntheticBold, noSyntheticItalic);
+                sizeAdjust, noSyntheticBold, noSyntheticItalic, textStrokeWidth, textStrokeColor, optimizeSpeed, kerningAuto, languageSystemTag, ligaturesNormal);
         }
 
         /// <summary>
@@ -2080,11 +2124,23 @@ namespace PeachPDF.Svg
             run.LetterSpacing = runFont.LetterSpacing;
             run.WordSpacing = runFont.WordSpacing;
             run.ShapingFeatures = new ShapeSettings(
-                runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
+                runFont.OptimizeSpeed && runFont.LigaturesNormal ? LigatureSet.Required : runFont.Ligatures,
+                resolvedCaps, runFont.Numeric, runFont.EastAsian,
                 TextShapingFeatureResolver.ToFeatureSettings(DerivedStyle.MergeExplicitFeatures(runFont.FeatureSettings,
                     FontVariantAlternatesResolver.Resolve(runFont.FontVariantAlternates, FirstFamily(runFont.Family), _fontFeatureValues))),
-                Kerning: runFont.Kerning, Language: runFont.Language,
-                Position: resolvedPosition, EmojiMode: runFont.Emoji);
+                Kerning: runFont.Kerning && !(runFont.OptimizeSpeed && runFont.KerningAuto), Language: runFont.Language,
+                Position: resolvedPosition, EmojiMode: runFont.Emoji, LanguageSystemTag: runFont.LanguageSystemTag);
+
+            // -webkit-text-stroke takes the place of stroke/stroke-width for this text: a stroke centred on the glyph outlines, painted the same way.
+            if (runFont.TextStrokeWidth > 0)
+            {
+                var strokeContext = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
+                var previousStroke = run.Stroke;
+                if (SvgPropertyRegistry.TrySet(run, "stroke", string.IsNullOrWhiteSpace(runFont.TextStrokeColor) ? "currentColor" : runFont.TextStrokeColor, in strokeContext))
+                    run.StrokeWidth = runFont.TextStrokeWidth;
+                else
+                    run.Stroke = previousStroke;
+            }
 
             // font-palette selects among the font's CPAL palettes (a no-op for a font without any).
             run.Palette = run.Font is { } paletteFont

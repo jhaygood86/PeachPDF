@@ -384,6 +384,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter FontVariantEastAsianConverter =
             new FontVariantEastAsianValueConverter().Or(Keywords.Normal);
         public static readonly IValueConverter FontSynthesisModeConverter = Map.FontSynthesisModes.ToConverter();
+        public static readonly IValueConverter TextRenderingModeConverter = Map.TextRenderingModes.ToConverter();
         public static readonly IValueConverter FontKerningModeConverter = Map.FontKerningModes.ToConverter();
         public static readonly IValueConverter FontOpticalSizingModeConverter = Map.FontOpticalSizingModes.ToConverter();
         public static readonly IValueConverter DirectionModeConverter = Map.DirectionModes.ToConverter();

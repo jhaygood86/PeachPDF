@@ -11583,10 +11583,14 @@ var svgTextCssHtml =
     "<svg width=\"560\" height=\"50\" viewBox=\"0 0 560 50\">" +
     "<text x=\"5\" y=\"30\" font-size=\"20\" textLength=\"260\">textLength spread</text>" +
     "<text x=\"300\" y=\"30\" font-size=\"20\" xml:space=\"preserve\">a   b      c</text></svg>" +
+    "<svg width=\"560\" height=\"70\" viewBox=\"0 0 560 70\">" +
+    "<defs><path id=\"strokeArc\" d=\"M300,60 Q400,5 540,60\"/></defs>" +
+    "<text x=\"5\" y=\"52\" font-size=\"54\" font-weight=\"700\" fill=\"#fc0\" style=\"-webkit-text-stroke: 2px #c33\">Stroke</text>" +
+    "<text font-size=\"28\" fill=\"#36c\" dominant-baseline=\"hanging\" style=\"-webkit-text-stroke: 0.8px #123\"><textPath href=\"#strokeArc\">hanging on a path</textPath></text></svg>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_text_css_parity", "Typography & Text", "SVG text: CSS text properties",
     "SVG <text> with a font-family fallback list, the font and text-decoration shorthands, decoration thickness and skip-ink, text-shadow, " +
-    "paint-order, dominant-baseline and baseline-shift, textLength and xml:space.",
+    "paint-order, dominant-baseline and baseline-shift (also on a textPath), -webkit-text-stroke, textLength and xml:space.",
     svgTextCssHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // Variable fonts: font-weight, font-stretch and font-variation-settings choose a location in one variable font's design space, and each

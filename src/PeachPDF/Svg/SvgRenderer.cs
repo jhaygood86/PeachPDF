@@ -1004,30 +1004,58 @@ namespace PeachPDF.Svg
                 };
 
         /// <summary>
-        /// How far below the text position a run's alphabetic baseline sits (horizontal writing only). The run's dominant baseline - or, for a nested element with an
+        /// How far below the text position a run's alphabetic baseline sits along the block axis. The run's dominant baseline - or, for a nested element with an
         /// <c>alignment-baseline</c> of its own, that baseline - is put on the position; otherwise the run's alphabetic baseline aligns with its parent's. A
-        /// <c>baseline-shift</c> then raises the run. The pen does not move: only where the glyphs are drawn does.
+        /// <c>baseline-shift</c> then raises the run. The pen does not move: only where the glyphs are drawn does. Under a vertical writing mode the block axis is
+        /// horizontal and the dominant baseline defaults to <c>central</c>; <paramref name="vertical"/> selects it (and the font's vertical <c>BASE</c> axis).
         /// </summary>
-        private static double BaselineOffset(SvgTextElement run)
+        private static double BaselineOffset(SvgTextElement run, bool vertical = false)
         {
             var offset = AlphabeticBaselineBelowPosition(run);
             return offset - run.BaselineShift;
 
-            static double AlphabeticBaselineBelowPosition(SvgTextElement r)
+            double AlphabeticBaselineBelowPosition(SvgTextElement r)
             {
                 if (r.Font is not { } font)
                     return 0;
 
                 if (r.AlignmentBaseline is not ("auto" or "baseline" or "use-script" or "no-change" or "reset-size"))
-                    return HeightAboveAlphabetic(r.AlignmentBaseline, font);
+                    return HeightAboveAlphabetic(r.AlignmentBaseline, font, vertical);
 
-                return r.ParentRun is { } parent ? AlphabeticBaselineBelowPosition(parent) : HeightAboveAlphabetic(r.DominantBaseline, font);
+                return r.ParentRun is { } parent
+                    ? AlphabeticBaselineBelowPosition(parent)
+                    : HeightAboveAlphabetic(vertical && r.DominantBaseline is "auto" ? "central" : r.DominantBaseline, font, vertical);
             }
         }
 
-        /// <summary>The height of a named baseline above the alphabetic baseline of <paramref name="font"/>, approximated from its metrics (no <c>BASE</c> table is read).</summary>
-        private static double HeightAboveAlphabetic(string baseline, Font font)
+        /// <summary>
+        /// How far a vertical run is moved across the column (towards +x) from where it is centred on the text position. Runs that state no baseline of their own
+        /// stay centred, as they always have; once a dominant baseline, an <c>alignment-baseline</c> or a <c>baseline-shift</c> is in play the run's baseline
+        /// is aligned the way <see cref="BaselineOffset"/> does for horizontal text, relative to the centred default.
+        /// </summary>
+        private static double VerticalCrossShift(SvgTextElement run)
         {
+            var explicitBaseline = false;
+            for (var r = run; r is not null && !explicitBaseline; r = r.ParentRun)
+                explicitBaseline = r.DominantBaseline != "auto" || r.AlignmentBaseline != "auto" || r.BaselineShift != 0;
+
+            if (!explicitBaseline || run.Font is not { } font)
+                return 0;
+
+            // A glyph drawn centred has its central baseline on the position; the alphabetic baseline must instead sit BaselineOffset away from it.
+            return HeightAboveAlphabetic("central", font, vertical: true) - BaselineOffset(run, vertical: true);
+        }
+
+        /// <summary>
+        /// The height of a named baseline above the alphabetic baseline of <paramref name="font"/>: read from the font's <c>BASE</c> table when it states one
+        /// (<c>ideographic</c>, <c>hanging</c>, <c>mathematical</c>, and <c>central</c> as the middle of the ideographic character face), otherwise
+        /// approximated from its metrics.
+        /// </summary>
+        private static double HeightAboveAlphabetic(string baseline, Font font, bool vertical = false)
+        {
+            if (FromBaseTable(baseline, font, vertical) is { } real)
+                return real;
+
             var descent = font.Height - font.Ascent;
             return baseline switch
             {
@@ -1040,6 +1068,24 @@ namespace PeachPDF.Svg
                 "text-bottom" or "text-after-edge" or "after-edge" => -descent,
                 _ => 0,
             };
+        }
+
+        private static double? FromBaseTable(string baseline, Font font, bool vertical)
+        {
+            switch (baseline)
+            {
+                case "ideographic":
+                case "hanging":
+                case "mathematical":
+                    var tag = baseline switch { "ideographic" => "ideo", "hanging" => "hang", _ => "math" };
+                    return font.GetBaselineHeightEm(tag, vertical) * font.Size;
+                case "central":
+                    return font.GetBaselineHeightEm("icfb", vertical) is { } bottom && font.GetBaselineHeightEm("icft", vertical) is { } top
+                        ? (bottom + top) / 2 * font.Size
+                        : null;
+                default:
+                    return null;
+            }
         }
 
         private static bool IsClusterContinuation(System.Text.Rune rune)
@@ -1194,7 +1240,7 @@ namespace PeachPDF.Svg
                     penX += gi.Dx ?? 0;
                     penY += gi.Dy ?? 0;
 
-                    gi.Px = penX;
+                    gi.Px = penX + VerticalCrossShift(gi.Run);
                     gi.Py = penY;
 
                     // Always measured (not just for the rotated branch below): PaintUprightGlyph's own
@@ -2037,7 +2083,8 @@ namespace PeachPDF.Svg
 
             foreach (var gi in glyphs)
             {
-                var extraDy = gi.Dy ?? 0;
+                // The run's baseline alignment and shift move the glyph off the path's own baseline, along the path's normal, like a dy does.
+                var extraDy = (gi.Dy ?? 0) + BaselineOffset(gi.Run);
 
                 // The part of the advance that is the glyph's own (textLength's spacing adds a gap after it), and the glyph's natural advance before any stretch.
                 var slot = gi.Advance - gi.GapAdded;

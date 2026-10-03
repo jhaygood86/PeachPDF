@@ -341,6 +341,13 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontVariantAlternates, () => new FontVariantAlternatesProperty());
             AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
             AddLonghand(PropertyNames.FontKerning, () => new FontKerningProperty());
+            AddLonghand(PropertyNames.FontLanguageOverride, () => new FontLanguageOverrideProperty());
+            AddLonghand(PropertyNames.TextRendering, () => new TextRenderingProperty());
+            AddShorthand(PropertyNames.WebkitTextStroke, () => new WebkitTextStrokeProperty(),
+                PropertyNames.WebkitTextStrokeWidth,
+                PropertyNames.WebkitTextStrokeColor);
+            AddLonghand(PropertyNames.WebkitTextStrokeWidth, () => new WebkitTextStrokeWidthProperty(), true);
+            AddLonghand(PropertyNames.WebkitTextStrokeColor, () => new WebkitTextStrokeColorProperty(), true);
             AddLonghand(PropertyNames.FontOpticalSizing, () => new FontOpticalSizingProperty());
             AddLonghand(PropertyNames.FontVariationSettings, () => new FontVariationSettingsProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true);

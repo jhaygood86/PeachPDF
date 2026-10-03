@@ -668,6 +668,41 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>The font's MATH table, or null if it has none.</summary>
         public MathTable? MathTable => FontFace.math?.Table;
 
+        private BaselineTable? _baselineTable;
+        private bool _baselineTableRead;
+
+        /// <summary>The font's BASE table, or null if it has none (or it cannot be read - a malformed BASE table must never stop the font loading).</summary>
+        public BaselineTable? BaselineTable
+        {
+            get
+            {
+                if (!_baselineTableRead)
+                {
+                    lock (FontFace.SyncRoot)
+                    {
+                        if (!_baselineTableRead)
+                        {
+                            if (FontFace.TableDictionary.TryGetValue(TableTagNames.BASE, out var entry))
+                            {
+                                try
+                                {
+                                    _baselineTable = new BaselineTable(FontFace, entry.Offset);
+                                }
+                                catch (Exception)
+                                {
+                                    _baselineTable = null;
+                                }
+                            }
+
+                            _baselineTableRead = true;
+                        }
+                    }
+                }
+
+                return _baselineTable;
+            }
+        }
+
         /// <summary>
         /// Decodes a glyph's outline into drawable vector segments - `glyf` contours when the font
         /// has them, else a CFF font's own Type 2 charstring (see <see cref="Type2CharstringInterpreter"/>)

@@ -178,6 +178,7 @@ namespace PeachDrawing.Text.Shaping
     /// <param name="Position">The subscript or superscript feature to apply.</param>
     /// <param name="EmojiMode">Which presentation of a character with both a text and an emoji form to choose a glyph for, which is a <c>cmap</c> format 14 lookup and not a feature.</param>
     /// <param name="KhmerCategories">For a Khmer run, HarfBuzz's own (pre-Universal-Shaping-Engine) shaping category of each code point, as <see cref="KhmerShaping.Classify"/> gives them; otherwise <see langword="null"/>.</param>
+    /// <param name="LanguageSystemTag">The four-character OpenType language-system tag to select in the font's layout tables (padded with spaces, as in <c>"SRB "</c>), which wins over the tag derived from <paramref name="Language"/>; <see langword="null"/> to derive it from <paramref name="Language"/>. This is what CSS's <c>font-language-override</c> asks for.</param>
     public readonly record struct ShapeSettings(
         LigatureSet Ligatures = LigatureSet.Default,
         CapsMode Caps = CapsMode.None,
@@ -193,7 +194,8 @@ namespace PeachDrawing.Text.Shaping
         // Appended last so that callers that construct a value with positional arguments keep their meaning.
         SubSuperMode Position = SubSuperMode.None,
         EmojiMode EmojiMode = EmojiMode.Normal,
-        IReadOnlyList<KhmerCategory>? KhmerCategories = null)
+        IReadOnlyList<KhmerCategory>? KhmerCategories = null,
+        string? LanguageSystemTag = null)
     {
         /// <summary>Creates the default settings: common and required ligatures, contextual alternates and kerning, and nothing else.</summary>
         public ShapeSettings()

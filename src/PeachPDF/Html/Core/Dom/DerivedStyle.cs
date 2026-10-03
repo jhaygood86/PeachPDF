@@ -1027,6 +1027,31 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateColor() => _actualColor = PaintColor.Empty;
 
+        /// <summary>
+        /// The width of the stroke <c>-webkit-text-stroke-width</c> draws around this box's text, in layout units; 0 for no stroke. Not cached: the initial
+        /// value is the literal <c>0</c>, which answers without parsing, and a stroked box's words are few next to the cost of drawing their outlines.
+        /// </summary>
+        public double ActualTextStrokeWidth
+        {
+            get
+            {
+                var value = Style.Text.TextStrokeWidth;
+                return string.IsNullOrEmpty(value) || value == "0" ? 0 : CssValueParser.GetActualBorderWidth(value, Owner);
+            }
+        }
+
+        /// <summary>The colour of the stroke <c>-webkit-text-stroke-color</c> draws around this box's text; <c>currentcolor</c> is the box's own text colour. Not cached, as <see cref="ActualTextStrokeWidth"/>.</summary>
+        public PaintColor ActualTextStrokeColor
+        {
+            get
+            {
+                var value = Style.Text.TextStrokeColor;
+                return string.IsNullOrEmpty(value) || value.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
+                    ? ActualColor
+                    : Owner.GetActualColor(value);
+            }
+        }
+
         #endregion
 
         #region Text alignment
@@ -1142,7 +1167,8 @@ namespace PeachPDF.Html.Core.Dom
         /// axis is resolved independently rather than as one all-or-nothing default.
         /// </summary>
         public LigatureSet ActualFontVariantLigatures =>
-            _actualFontVariantLigatures ??= TextShapingFeatureResolver.ResolveLigatures(Style.Font.FontVariantLigatures);
+            _actualFontVariantLigatures ??= TextShapingFeatureResolver.ResolveLigatures(
+                TextShapingFeatureResolver.ApplyTextRendering(Style.Font.FontVariantLigatures, Style.Font.TextRendering.Value));
 
         private CapsMode? _actualFontVariantCaps;
 
@@ -1279,7 +1305,8 @@ namespace PeachPDF.Html.Core.Dom
         /// stylistic opt-out the way kerning is.
         /// </summary>
         public bool ActualFontKerning =>
-            _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(Style.Font.FontKerning.Value);
+            _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(
+                TextShapingFeatureResolver.ApplyTextRendering(Style.Font.FontKerning.Value, Style.Font.TextRendering.Value));
 
         private ShapeSettings? _actualTextShapingFeatures;
 
@@ -1304,7 +1331,8 @@ namespace PeachPDF.Html.Core.Dom
                     Kerning: ActualFontKerning,
                     Language: Owner.Language,
                     Position: ActualFontVariantPosition,
-                    EmojiMode: ActualFontVariantEmoji.ToEmojiMode());
+                    EmojiMode: ActualFontVariantEmoji.ToEmojiMode(),
+                    LanguageSystemTag: FontLanguageOverrideGrammar.Resolve(Style.Font.FontLanguageOverride));
 
                 _actualTextShapingFeatures = resolved;
                 return resolved;
