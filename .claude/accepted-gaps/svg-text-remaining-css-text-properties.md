@@ -4,9 +4,13 @@ Tracked in [issue #1579](https://github.com/jhaygood86/PeachPDF/issues/1579) (th
 
 Not applied to SVG `<text>`/`<tspan>`:
 
-- **Wrapped-text properties** — `text-indent`, `line-height`, `hyphens`, `text-align`, the wrapping `white-space` modes and hard line
-  breaks under `pre`. SVG 2 defines them only for text laid out with `inline-size`/`shape-inside`; this repo has neither and plain SVG
-  text has no line boxes, so there is nothing for them to act on. A newline in preserved text is a space.
+- **Wrapped text** (`inline-size`/`shape-inside`, with `text-indent`, `line-height`, `hyphens`, `text-align` and the wrapping `white-space` modes) is
+  implemented for horizontal writing modes (`SvgRenderer.WrappedText.cs`). What it leaves out: vertical `writing-mode` (the inline-size is ignored
+  there); `shape-inside`/`shape-subtract` with `url()` references, `path()` or a reference box (only `inset()`/`circle()`/`ellipse()`/`polygon()`
+  resolve, a curve as a 96-sided polygon); `shape-margin`/`shape-padding`; `text-indent: hanging`/`each-line`, `text-align-last`,
+  `text-wrap`/`white-space-collapse`, `hyphenate-limit-chars`; `break-spaces` behaves as `pre-wrap` (no break after preserved spaces); per-character
+  `x`/`y`/`dx`/`dy` and `textLength` are ignored in wrapped text; a word wider than every stretch of a shape is dropped with the text after it.
+  A line's height is the largest `line-height` among the glyphs on it, with leading split evenly (no strut for an empty inline box).
 - **`font-synthesis-small-caps`/`-position`** have nothing to switch off in SVG: it has no small-caps or sub/superscript synthesis (see
   [font-variant-position-synthesis-scope](font-variant-position-synthesis-scope.md)). `-weight`/`-style` are honoured.
 - **`font-size-adjust`'s `ic-height`** is measured as `ic-width` (the font layer has no vertical ideograph advance).

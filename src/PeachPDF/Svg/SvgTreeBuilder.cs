@@ -240,7 +240,13 @@ namespace PeachPDF.Svg
             bool OptimizeSpeed = false,
             bool KerningAuto = true,
             string? LanguageSystemTag = null,
-            bool LigaturesNormal = true)
+            bool LigaturesNormal = true,
+            string WhiteSpace = "normal",
+            string Hyphens = "manual",
+            double LineHeightNumber = double.NaN,
+            double LineHeightLength = double.NaN,
+            string? TextIndent = null,
+            string? TextAlign = null)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1674,12 +1680,55 @@ namespace PeachPDF.Svg
             var langAttr = node.GetAttribute("lang") ?? node.GetAttribute("xml:lang");
             var language = string.IsNullOrEmpty(langAttr) ? inherited.Language : langAttr;
 
+            // The wrapped-text properties (SVG 2 §11.7). They only have an effect on a <text> laid out with inline-size/shape-inside, but all inherit.
+            var whiteSpace = whiteSpaceAttr is "normal" or "nowrap" or "pre" or "pre-wrap" or "pre-line" or "break-spaces" ? whiteSpaceAttr : inherited.WhiteSpace;
+
+            var hyphensAttr = ResolveStyledAttr(node, "hyphens")?.Trim().ToLowerInvariant();
+            var hyphens = hyphensAttr is "none" or "manual" or "auto" ? hyphensAttr : inherited.Hyphens;
+
+            var lineHeightNumber = inherited.LineHeightNumber;
+            var lineHeightLength = inherited.LineHeightLength;
+            var lineHeightAttr = ResolveStyledAttr(node, "line-height")?.Trim().ToLowerInvariant();
+            if (lineHeightAttr == "normal")
+            {
+                lineHeightNumber = lineHeightLength = double.NaN;
+            }
+            else if (!string.IsNullOrEmpty(lineHeightAttr) && lineHeightAttr != "inherit")
+            {
+                if (double.TryParse(lineHeightAttr, NumberStyles.Float, CultureInfo.InvariantCulture, out var factor) && factor >= 0 && double.IsFinite(factor))
+                {
+                    lineHeightNumber = factor;
+                    lineHeightLength = double.NaN;
+                }
+                else if (ResolveFontRelativeLength(lineHeightAttr, ownFont) is >= 0 and var absolute)
+                {
+                    lineHeightNumber = double.NaN;
+                    lineHeightLength = absolute;
+                }
+            }
+
+            // text-indent: the first token is the length-percentage (the hanging/each-line keywords are not applied). A length is fixed here against
+            // this element's own font, as an absolute px string; a percentage stays symbolic until the wrapped box's width is known.
+            var textIndent = inherited.TextIndent;
+            var textIndentToken = ResolveStyledAttr(node, "text-indent")?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+            if (!string.IsNullOrEmpty(textIndentToken) && textIndentToken != "inherit")
+            {
+                if (textIndentToken.EndsWith('%') && double.TryParse(textIndentToken[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    textIndent = textIndentToken;
+                else if (ResolveFontRelativeLength(textIndentToken, ownFont) is { } indentLength)
+                    textIndent = indentLength.ToString("R", CultureInfo.InvariantCulture) + "px";
+            }
+
+            var textAlignAttr = ResolveStyledAttr(node, "text-align")?.Trim().ToLowerInvariant();
+            var textAlign = textAlignAttr is "start" or "end" or "left" or "right" or "center" or "justify" or "match-parent" ? textAlignAttr : inherited.TextAlign;
+
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
                 underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift,
-                sizeAdjust, noSyntheticBold, noSyntheticItalic, textStrokeWidth, textStrokeColor, optimizeSpeed, kerningAuto, languageSystemTag, ligaturesNormal);
+                sizeAdjust, noSyntheticBold, noSyntheticItalic, textStrokeWidth, textStrokeColor, optimizeSpeed, kerningAuto, languageSystemTag, ligaturesNormal,
+                whiteSpace, hyphens, lineHeightNumber, lineHeightLength, textIndent, textAlign);
         }
 
         /// <summary>
@@ -2177,6 +2226,18 @@ namespace PeachPDF.Svg
                 run.LengthAdjust = node.GetAttribute("lengthAdjust")?.Trim() ?? "spacing";
             }
 
+            run.WhiteSpace = runFont.WhiteSpace;
+            run.Hyphens = runFont.Hyphens;
+            run.TextAlign = runFont.TextAlign;
+            run.LineHeight = !double.IsNaN(runFont.LineHeightLength) ? runFont.LineHeightLength
+                : !double.IsNaN(runFont.LineHeightNumber) ? runFont.LineHeightNumber * runFont.Size
+                : null;
+            if (node.Name == "text")
+            {
+                ApplyAutoWrapProperties(run, node, runFont);
+                state.Wrapped = run.IsAutoWrapped;
+            }
+
             run.DominantBaseline = runFont.DominantBaseline;
             run.BaselineShift = runFont.BaselineShift;
             run.AlignmentBaseline = ResolveStyledAttr(node, "alignment-baseline")?.Trim().ToLowerInvariant() is { Length: > 0 } alignment && alignment != "inherit" ? alignment : "auto";
@@ -2190,7 +2251,7 @@ namespace PeachPDF.Svg
                 if (content.IsText)
                 {
                     var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state);
-                    var text = state.Collapse(transformed, runFont.PreservedTabSpaces);
+                    var text = state.Collapse(transformed, runFont.PreservedTabSpaces, KeepsLineBreaks(runFont.WhiteSpace));
                     if (text.Length > 0)
                         run.Content.Add(new SvgTextFragment { Text = text });
                     continue;
@@ -2227,7 +2288,7 @@ namespace PeachPDF.Svg
                             trefRun.Content.Clear();
                             var trefFont = ComputeFontContext(child, childFontContext);
                             var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state);
-                            var text = state.Collapse(transformed, trefFont.PreservedTabSpaces);
+                            var text = state.Collapse(transformed, trefFont.PreservedTabSpaces, KeepsLineBreaks(trefFont.WhiteSpace));
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
                         }
@@ -2270,6 +2331,44 @@ namespace PeachPDF.Svg
             }
 
             return run;
+        }
+
+        /// <summary>Whether a <c>white-space</c> value keeps segment (line feed) breaks as hard line breaks.</summary>
+        private static bool KeepsLineBreaks(string whiteSpace) => whiteSpace is "pre" or "pre-wrap" or "pre-line" or "break-spaces";
+
+        /// <summary>
+        /// Reads the properties that turn a <c>&lt;text&gt;</c> into auto-wrapped text (SVG 2 §11.7): <c>inline-size</c> (the width of the line box),
+        /// <c>shape-inside</c> and <c>shape-subtract</c> (basic shapes in user space; a shape that is set takes the place of <c>inline-size</c>), and the
+        /// <c>text-indent</c> that applies to the first line.
+        /// </summary>
+        private void ApplyAutoWrapProperties(SvgTextElement run, ISvgSourceNode node, FontContext font)
+        {
+            var basis = new LengthBasis(this, font);
+
+            var inlineSizeAttr = ResolveStyledAttr(node, "inline-size")?.Trim();
+            if (!string.IsNullOrEmpty(inlineSizeAttr) && !inlineSizeAttr.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                && SvgValueParsers.ParseLength(inlineSizeAttr, _viewportWidth, basis) is { } inlineSize && inlineSize >= 0 && double.IsFinite(inlineSize))
+            {
+                run.InlineSize = inlineSize;
+            }
+
+            var width = _viewportWidth ?? 0;
+            var height = _viewportHeight ?? 0;
+            run.ShapeInside = SvgTextShapes.Parse(ResolveStyledAttr(node, "shape-inside"), width, height, basis) is { Count: 1 } inside ? inside[0] : null;
+            run.ShapeSubtract = SvgTextShapes.Parse(ResolveStyledAttr(node, "shape-subtract"), width, height, basis) ?? [];
+
+            if (font.TextIndent is { } indent)
+            {
+                if (indent.EndsWith('%'))
+                {
+                    var boxWidth = run.ShapeInside is { Length: > 0 } polygon ? polygon.Max(p => p.X) - polygon.Min(p => p.X) : run.InlineSize ?? 0;
+                    run.TextIndent = double.TryParse(indent[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * boxWidth : 0;
+                }
+                else
+                {
+                    run.TextIndent = SvgValueParsers.ParseLength(indent, null, basis) ?? 0;
+                }
+            }
         }
 
         /// <summary>
@@ -2322,17 +2421,30 @@ namespace PeachPDF.Svg
             /// <c>capitalize</c>.</summary>
             public bool CapitalizeAtWordStart = true;
 
-            /// <summary>Collapses one text fragment, advancing the shared cross-run state.</summary>
-            public string Collapse(string raw, int preservedTabSpaces = 0)
+            /// <summary>
+            /// Whether the <c>&lt;text&gt;</c> being built is laid out in auto-wrapped line boxes (<c>inline-size</c>/<c>shape-inside</c>). Only then does a
+            /// preserved line break survive as a hard break; in unwrapped text a line break is a space, as SVG text has no line boxes to break.
+            /// </summary>
+            public bool Wrapped;
+
+            private bool _afterBreak;          // a preserved line break was just emitted (pre-line): spaces after it are removed
+
+            /// <summary>
+            /// Collapses one text fragment, advancing the shared cross-run state. <paramref name="keepLineBreaks"/> is set for the <c>white-space</c> values
+            /// that keep segment breaks (<c>pre</c>, <c>pre-wrap</c>, <c>pre-line</c>, <c>break-spaces</c>); it has an effect only in wrapped text.
+            /// </summary>
+            public string Collapse(string raw, int preservedTabSpaces = 0, bool keepLineBreaks = false)
             {
                 if (string.IsNullOrEmpty(raw))
                     return "";
 
+                keepLineBreaks &= Wrapped;
                 var sb = new StringBuilder(raw.Length);
 
                 if (preservedTabSpaces > 0)
                 {
                     // Preserved whitespace: nothing is trimmed or collapsed; a line break is a space (a CRLF one space) and a tab is tab-size spaces.
+                    // In wrapped text a line break stays one, as a lone line feed.
                     for (var i = 0; i < raw.Length; i++)
                     {
                         var ch = raw[i];
@@ -2341,8 +2453,10 @@ namespace PeachPDF.Svg
 
                         if (ch == '\t')
                             sb.Append(' ', preservedTabSpaces);
+                        else if (ch is '\n' or '\r')
+                            sb.Append(keepLineBreaks ? '\n' : ' ');
                         else
-                            sb.Append(ch is '\n' or '\r' ? ' ' : ch);
+                            sb.Append(ch);
                     }
 
                     if (sb.Length > 0)
@@ -2354,11 +2468,26 @@ namespace PeachPDF.Svg
                     return sb.ToString();
                 }
 
-                foreach (var ch in raw)
+                for (var i = 0; i < raw.Length; i++)
                 {
+                    var ch = raw[i];
+
+                    if (keepLineBreaks && ch is '\n' or '\r')
+                    {
+                        // pre-line: spaces collapse, but a segment break is kept, and the spaces around it are removed.
+                        if (ch == '\r' && i + 1 < raw.Length && raw[i + 1] == '\n')
+                            continue;
+
+                        sb.Append('\n');
+                        _pendingSpace = false;
+                        _afterBreak = true;
+                        _atStart = false;
+                        continue;
+                    }
+
                     if (char.IsWhiteSpace(ch))
                     {
-                        if (!_atStart)
+                        if (!_atStart && !_afterBreak)
                             _pendingSpace = true;
                         continue;
                     }
@@ -2371,6 +2500,7 @@ namespace PeachPDF.Svg
 
                     sb.Append(ch);
                     _atStart = false;
+                    _afterBreak = false;
                 }
 
                 return sb.ToString();
@@ -2380,14 +2510,15 @@ namespace PeachPDF.Svg
             /// (see the <c>&lt;tref&gt;</c> case in <see cref="BuildTextRun"/>, where any content nodes the
             /// tref element itself carries are invalid per SVG's content model and thrown away) can be
             /// undone rather than leaking into whatever text follows in the same subtree.</summary>
-            public (bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart) Snapshot() =>
-                (_atStart, _pendingSpace, CapitalizeAtWordStart);
+            public (bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart, bool AfterBreak) Snapshot() =>
+                (_atStart, _pendingSpace, CapitalizeAtWordStart, _afterBreak);
 
-            public void Restore((bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart) snapshot)
+            public void Restore((bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart, bool AfterBreak) snapshot)
             {
                 _atStart = snapshot.AtStart;
                 _pendingSpace = snapshot.PendingSpace;
                 CapitalizeAtWordStart = snapshot.CapitalizeAtWordStart;
+                _afterBreak = snapshot.AfterBreak;
             }
         }
 

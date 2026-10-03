@@ -11593,6 +11593,29 @@ await SaveShowcaseAsync("svg_text_css_parity", "Typography & Text", "SVG text: C
     "paint-order, dominant-baseline and baseline-shift (also on a textPath), -webkit-text-stroke, textLength and xml:space.",
     svgTextCssHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Auto-wrapped SVG text (SVG 2 section 11.7): inline-size line boxes with text-align (incl. justify), text-indent, line-height, hyphens and white-space,
+// and shape-inside / shape-subtract regions.
+const string wrapLorem = "Auto-wrapped SVG text breaks into lines at the Unicode line breaking opportunities, just as the same words would in HTML.";
+var svgTextWrapHtml = "<!DOCTYPE html><html><body style=\"margin:20px;font-family:sans-serif\">" +
+    "<svg width=\"600\" height=\"330\" viewBox=\"0 0 600 330\">" +
+    "<rect x=\"10\" y=\"10\" width=\"180\" height=\"150\" fill=\"none\" stroke=\"#bbb\"/>" +
+    "<text x=\"10\" y=\"28\" font-size=\"14\" inline-size=\"180\" text-indent=\"16px\" line-height=\"1.3\">" + wrapLorem + "</text>" +
+    "<rect x=\"210\" y=\"10\" width=\"180\" height=\"150\" fill=\"none\" stroke=\"#bbb\"/>" +
+    "<text x=\"210\" y=\"28\" font-size=\"14\" inline-size=\"180\" style=\"text-align: justify\" line-height=\"1.3\">" + wrapLorem + "</text>" +
+    "<rect x=\"410\" y=\"10\" width=\"180\" height=\"150\" fill=\"none\" stroke=\"#bbb\"/>" +
+    "<text x=\"410\" y=\"28\" font-size=\"14\" inline-size=\"180\" text-anchor=\"middle\" lang=\"en\" style=\"hyphens: auto\" line-height=\"1.3\">" + wrapLorem + "</text>" +
+    "<text x=\"10\" y=\"190\" font-size=\"14\" inline-size=\"260\" style=\"white-space: pre-line\">First line" + "\n" + "second line   with  collapsed spaces" + "\n" + "third</text>" +
+    "<polygon points=\"440,180 590,320 290,320\" fill=\"#eef\" stroke=\"#99c\"/>" +
+    "<text x=\"0\" y=\"205\" font-size=\"11\" fill=\"#224\" text-align=\"center\" style=\"shape-inside: polygon(440px 180px, 590px 320px, 290px 320px); text-align: center\">" +
+    "Text flowing inside a triangle shape, wrapping at the width of the shape at each line.</text>" +
+    "<circle cx=\"120\" cy=\"282\" r=\"46\" fill=\"#fed\" stroke=\"#c96\"/>" +
+    "<text x=\"0\" y=\"256\" font-size=\"9\" style=\"shape-inside: circle(46px at 120px 282px)\">A circle region holds this text, with every line clipped to the chord of the circle at its height.</text>" +
+    "</svg></body></html>";
+await SaveShowcaseAsync("svg_text_wrapping", "Typography & Text", "SVG text: auto-wrapping",
+    "SVG <text> laid out with inline-size and shape-inside: text-indent, line-height, text-align (including justify and the text-anchor fallback), " +
+    "hyphens, white-space: pre-line hard breaks, and wrapping inside a triangle and a circle.",
+    svgTextWrapHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Variable fonts: font-weight, font-stretch and font-variation-settings choose a location in one variable font's design space, and each
 // distinct location is embedded as its own static instance. Uses a small synthetic variable font (weight 100-900, width 75-125).
 var variableFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")));

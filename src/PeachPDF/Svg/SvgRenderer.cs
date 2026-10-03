@@ -31,7 +31,7 @@ namespace PeachPDF.Svg
     /// viewBox onto a target viewport rectangle and walking the scene graph. Whole documents can
     /// be stored as reusable forms by <see cref="RenderCachedInto"/>.
     /// </summary>
-    internal static class SvgRenderer
+    internal static partial class SvgRenderer
     {
         // A form belongs to one PDF document. ConditionalWeakTable also lets a finished PDF and all
         // its cached forms be collected, even though each form refers back to its owning document.
@@ -443,6 +443,15 @@ namespace PeachPDF.Svg
             /// <summary>Whether <c>textLength</c> stretched this glyph.</summary>
             public bool IsScaled => GlyphScale != 1;
 
+            /// <summary>The auto-wrapped line box this glyph landed on (SVG 2 §11.7); always 0 for text that is not wrapped. A paint batch never spans two lines.</summary>
+            public int LineIndex;
+
+            /// <summary>Set on the last glyph of a wrapped line that was broken at a hyphenation point: a hyphen is painted after it, and <see cref="Advance"/> includes it.</summary>
+            public bool TrailingHyphen;
+
+            /// <summary>Set on a glyph of wrapped text that did not fit in the shape (or box) the text is laid out in; it is not painted.</summary>
+            public bool Omitted;
+
             /// <summary>Settable (not <c>init</c>) so bidi L4 mirroring can rewrite an RTL glyph's
             /// character to its mirror-image codepoint in place (see <c>ApplyBidiReordering</c>).</summary>
             public required string Glyph { get; set; }
@@ -579,8 +588,7 @@ namespace PeachPDF.Svg
                 if (!isVertical)
                     ResolveComplexScriptRuns(glyphs);
 
-                LayoutGlyphs(g, glyphs, isVertical);
-                ApplyBidiReordering(text, glyphs, overrides, isVertical);
+                LayoutTextBlock(g, text, glyphs, overrides, isVertical);
                 PaintGlyphs(g, document, glyphs, opacity, isVertical);
 
                 // v1 scope: horizontal-tb, straight-baseline text only - see PaintTextDecorations' own
@@ -615,9 +623,12 @@ namespace PeachPDF.Svg
         /// <see cref="GlyphInfo.Py"/> for a vertical writing mode) - the cross axis is never reassigned
         /// by reordering, since it already belongs to its own glyph, not to a list position.
         /// </summary>
-        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<EmbeddingSpan> overrides, bool isVertical)
+        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<EmbeddingSpan> overrides, bool isVertical, IReadOnlyList<(int Start, int Length)>? lines = null)
         {
             var paragraphText = string.Concat(glyphs.Select(gi => gi.Glyph));
+            if (paragraphText.Length == 0)
+                return;
+
             var direction = Map.DirectionModes.GetValueOrDefault(text.Direction, DirectionMode.Ltr) == DirectionMode.Rtl
                 ? BaseDirection.Rtl
                 : BaseDirection.Ltr;
@@ -647,11 +658,12 @@ namespace PeachPDF.Svg
 
             var glyphLevels = new byte[glyphs.Count];
             for (var i = 0; i < glyphs.Count; i++)
-                glyphLevels[i] = result.Levels[utf16Starts[i]];
+                // A glyph with no text of its own (a soft hyphen or line feed in wrapped text) takes the level of the character at its position.
+                glyphLevels[i] = result.Levels[Math.Min(utf16Starts[i], result.Levels.Length - 1)];
 
-            var runs = Bidi.ReorderLine(glyphLevels, 0, glyphs.Count);
-
-            if (runs.Count == 1 && !runs[0].IsRtl) return;
+            // The paragraph's levels are resolved once above; each line of auto-wrapped text (lines) is then reordered on its own, in place within its own
+            // slice of the list. Text that is not wrapped is one line.
+            var lineRanges = lines ?? [(0, glyphs.Count)];
 
             // Reordering operates along whichever axis LayoutGlyphs actually advanced the pen on - Px
             // for horizontal-tb, Py for vertical-rl/vertical-lr (see LayoutGlyphs's own remarks); the
@@ -661,108 +673,124 @@ namespace PeachPDF.Svg
             Action<GlyphInfo, double> setPos = isVertical ? (gi, v) => gi.Py = v : (gi, v) => gi.Px = v;
 
             var originalPos = glyphs.Select(getPos).ToList();
-            var runNewStart = originalPos[0];
 
             var reordered = new List<GlyphInfo>(glyphs.Count);
-            foreach (var run in runs)
+            var anyReordered = false;
+            foreach (var (lineStart, lineLength) in lineRanges)
             {
-                var runOldStart = originalPos[run.Start];
-                var lastIndexInRun = run.Start + run.Length - 1;
-                var runContentWidth = originalPos[lastIndexInRun] + glyphs[lastIndexInRun].Advance - runOldStart;
-
-                if (run.IsRtl)
+                var runs = Bidi.ReorderLine(glyphLevels, lineStart, lineLength);
+                if (runs.Count == 0 || (runs.Count == 1 && !runs[0].IsRtl))
                 {
-                    var k = run.Length - 1;
-                    while (k >= 0)
+                    for (var idx = lineStart; idx < lineStart + lineLength; idx++)
+                        reordered.Add(glyphs[idx]);
+                    continue;
+                }
+
+                anyReordered = true;
+                var runNewStart = originalPos[lineStart];
+                foreach (var run in runs)
+                {
+                    var runOldStart = originalPos[run.Start];
+                    var lastIndexInRun = run.Start + run.Length - 1;
+                    var runContentWidth = originalPos[lastIndexInRun] + glyphs[lastIndexInRun].Advance - runOldStart;
+
+                    if (run.IsRtl)
                     {
-                        var idx = run.Start + k;
-                        var gi = glyphs[idx];
-
-                        if (gi.ShapingRunFirst is { } shapingFirst)
+                        var k = run.Length - 1;
+                        while (k >= 0)
                         {
-                            // A complex-shaping run (Arabic-family joining or Devanagari USE) reorders as
-                            // one atomic block, preserving its own internal logical-order adjacency -
-                            // mirroring CssLayoutEngine.MirrorWordTextIfNeeded's HTML precedent (a
-                            // joining word's text is never itself reversed/mirrored; only the resulting
-                            // shaped glyph list is, via ShapeSettings.ReverseForDisplay - see
-                            // ResolveShapingFeatures). It can never straddle this bidi run's own
-                            // boundary: ResolveComplexScriptRuns never lets a run cross an
-                            // SvgTextElement (tspan) boundary, and every bidi-level change from an
-                            // explicit unicode-bidi push occurs at exactly such a boundary (FlattenRun
-                            // only ever emits one there) - so scanning backward from any of a run's
-                            // member glyphs always finds the whole run still inside this bidi run.
-                            var blockEnd = idx;
-                            var blockStart = idx;
-                            while (blockStart > run.Start && ReferenceEquals(glyphs[blockStart - 1].ShapingRunFirst, shapingFirst))
-                                blockStart--;
+                            var idx = run.Start + k;
+                            var gi = glyphs[idx];
 
-                            var blockOffsetFromRunStart = originalPos[blockStart] - runOldStart;
-                            var blockWidth = shapingFirst.RunMeasuredWidth;
-
-                            // USE (Devanagari) never display-reverses - only Arabic-family joining does,
-                            // matching CssRectWord.DisplayOrderReversed's own EffectiveJoiningForms-only
-                            // gating on the HTML side.
-                            if (shapingFirst.RunJoiningForms is not null)
-                                shapingFirst.RunReverseForDisplay = true;
-
-                            var newLeftEdge = runNewStart + runContentWidth - (blockOffsetFromRunStart + blockWidth);
-                            for (var m = blockStart; m <= blockEnd; m++)
+                            if (gi.ShapingRunFirst is { } shapingFirst)
                             {
-                                var mgi = glyphs[m];
-                                setPos(mgi, ReferenceEquals(mgi, shapingFirst) ? newLeftEdge : newLeftEdge + blockWidth);
-                                reordered.Add(mgi);
+                                // A complex-shaping run (Arabic-family joining or Devanagari USE) reorders as
+                                // one atomic block, preserving its own internal logical-order adjacency -
+                                // mirroring CssLayoutEngine.MirrorWordTextIfNeeded's HTML precedent (a
+                                // joining word's text is never itself reversed/mirrored; only the resulting
+                                // shaped glyph list is, via ShapeSettings.ReverseForDisplay - see
+                                // ResolveShapingFeatures). It can never straddle this bidi run's own
+                                // boundary: ResolveComplexScriptRuns never lets a run cross an
+                                // SvgTextElement (tspan) boundary, and every bidi-level change from an
+                                // explicit unicode-bidi push occurs at exactly such a boundary (FlattenRun
+                                // only ever emits one there) - so scanning backward from any of a run's
+                                // member glyphs always finds the whole run still inside this bidi run.
+                                var blockEnd = idx;
+                                var blockStart = idx;
+                                while (blockStart > run.Start && ReferenceEquals(glyphs[blockStart - 1].ShapingRunFirst, shapingFirst))
+                                    blockStart--;
+
+                                var blockOffsetFromRunStart = originalPos[blockStart] - runOldStart;
+                                var blockWidth = shapingFirst.RunMeasuredWidth;
+
+                                // USE (Devanagari) never display-reverses - only Arabic-family joining does,
+                                // matching CssRectWord.DisplayOrderReversed's own EffectiveJoiningForms-only
+                                // gating on the HTML side.
+                                if (shapingFirst.RunJoiningForms is not null)
+                                    shapingFirst.RunReverseForDisplay = true;
+
+                                var newLeftEdge = runNewStart + runContentWidth - (blockOffsetFromRunStart + blockWidth);
+                                for (var m = blockStart; m <= blockEnd; m++)
+                                {
+                                    var mgi = glyphs[m];
+                                    setPos(mgi, ReferenceEquals(mgi, shapingFirst) ? newLeftEdge : newLeftEdge + blockWidth);
+                                    reordered.Add(mgi);
+                                }
+
+                                k = blockStart - run.Start - 1;
+                                continue;
                             }
 
-                            k = blockStart - run.Start - 1;
-                            continue;
+                            if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
+                                && Bidi.TryGetMirror(rune, out var mirrored))
+                            {
+                                // The pre-mirror value is this glyph's true logical-order source - captured
+                                // before Glyph itself is overwritten below.
+                                gi.LogicalGlyph = gi.Glyph;
+                                gi.Glyph = mirrored.ToString();
+                                // LayoutGlyphs classified IsUpright from the pre-mirror codepoint; a mirror
+                                // pair could in principle have differing Vertical_Orientation classes (most
+                                // real mirror pairs - brackets, parens - don't, but nothing guarantees it),
+                                // so re-classify against what's actually going to be painted.
+                                gi.IsUpright = isVertical && IsUprightGlyph(gi);
+
+                                // Same reasoning for OriginYOffset (issue #775): it was only ever computed
+                                // for a pre-mirror upright glyph against the pre-mirror codepoint, so an
+                                // IsUpright reclassification above needs a fresh VORG lookup against the
+                                // mirrored codepoint too - unlike Advance/Size, which deliberately stay
+                                // stale across mirroring (their own remarks - "a mirror pair's two glyphs
+                                // are practically always the same width"), a newly-upright glyph's offset
+                                // was never computed at all, not just outdated, so leaving it would silently
+                                // drop real VORG positioning for exactly the reordering case this file
+                                // already re-derives IsUpright to handle.
+                                gi.OriginYOffset = gi.IsUpright && gi.Font.HasVerticalOrigin
+                                    ? gi.Font.GetVerticalOriginY(mirrored) - gi.Font.Ascent
+                                    : 0;
+                            }
+
+                            var offsetFromRunStart = originalPos[idx] - runOldStart;
+                            setPos(gi, runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance));
+                            reordered.Add(gi);
+                            k--;
                         }
-
-                        if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
-                            && Bidi.TryGetMirror(rune, out var mirrored))
-                        {
-                            // The pre-mirror value is this glyph's true logical-order source - captured
-                            // before Glyph itself is overwritten below.
-                            gi.LogicalGlyph = gi.Glyph;
-                            gi.Glyph = mirrored.ToString();
-                            // LayoutGlyphs classified IsUpright from the pre-mirror codepoint; a mirror
-                            // pair could in principle have differing Vertical_Orientation classes (most
-                            // real mirror pairs - brackets, parens - don't, but nothing guarantees it),
-                            // so re-classify against what's actually going to be painted.
-                            gi.IsUpright = isVertical && IsUprightGlyph(gi);
-
-                            // Same reasoning for OriginYOffset (issue #775): it was only ever computed
-                            // for a pre-mirror upright glyph against the pre-mirror codepoint, so an
-                            // IsUpright reclassification above needs a fresh VORG lookup against the
-                            // mirrored codepoint too - unlike Advance/Size, which deliberately stay
-                            // stale across mirroring (their own remarks - "a mirror pair's two glyphs
-                            // are practically always the same width"), a newly-upright glyph's offset
-                            // was never computed at all, not just outdated, so leaving it would silently
-                            // drop real VORG positioning for exactly the reordering case this file
-                            // already re-derives IsUpright to handle.
-                            gi.OriginYOffset = gi.IsUpright && gi.Font.HasVerticalOrigin
-                                ? gi.Font.GetVerticalOriginY(mirrored) - gi.Font.Ascent
-                                : 0;
-                        }
-
-                        var offsetFromRunStart = originalPos[idx] - runOldStart;
-                        setPos(gi, runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance));
-                        reordered.Add(gi);
-                        k--;
                     }
-                }
-                else
-                {
-                    for (var k = 0; k < run.Length; k++)
+                    else
                     {
-                        var idx = run.Start + k;
-                        var gi = glyphs[idx];
-                        setPos(gi, runNewStart + (originalPos[idx] - runOldStart));
-                        reordered.Add(gi);
+                        for (var k = 0; k < run.Length; k++)
+                        {
+                            var idx = run.Start + k;
+                            var gi = glyphs[idx];
+                            setPos(gi, runNewStart + (originalPos[idx] - runOldStart));
+                            reordered.Add(gi);
+                        }
                     }
-                }
 
-                runNewStart += runContentWidth;
+                    runNewStart += runContentWidth;
+                }
             }
+
+            if (!anyReordered)
+                return;
 
             foreach (var gi in reordered)
             {
@@ -1213,7 +1241,7 @@ namespace PeachPDF.Svg
         /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
         /// defined meaning changing mid-text.
         /// </summary>
-        private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical)
+        private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical, bool measureOnly = false)
         {
             double penX = 0, penY = 0;
             var chunkStarts = new List<int> { 0 };
@@ -1287,17 +1315,21 @@ namespace PeachPDF.Svg
                 }
                 else
                 {
-                    if (gi.X is { } gx)
+                    // Auto-wrapped text (measureOnly) places its own lines: the glyphs are only measured here, along one unbroken line.
+                    if (!measureOnly)
                     {
-                        penX = gx;
-                        if (i > 0)
-                            chunkStarts.Add(i);
-                    }
-                    if (gi.Y is { } gy)
-                        penY = gy;
+                        if (gi.X is { } gx)
+                        {
+                            penX = gx;
+                            if (i > 0)
+                                chunkStarts.Add(i);
+                        }
+                        if (gi.Y is { } gy)
+                            penY = gy;
 
-                    penX += gi.Dx ?? 0;
-                    penY += gi.Dy ?? 0;
+                        penX += gi.Dx ?? 0;
+                        penY += gi.Dy ?? 0;
+                    }
 
                     gi.Px = penX;
                     gi.Py = penY + BaselineOffset(gi.Run);
@@ -1333,6 +1365,9 @@ namespace PeachPDF.Svg
                     penX += gi.Advance;
                 }
             }
+
+            if (measureOnly)
+                return;
 
             ApplyTextLength(glyphs, isVertical);
 
@@ -1465,7 +1500,7 @@ namespace PeachPDF.Svg
                     // between a run and plain text, always breaks the batch - each needs its own
                     // ShapeSettings (see ResolveShapingFeatures), so merging them would apply one
                     // run's joining forms/USE categories to the other's text.
-                    if (!ReferenceEquals(gc.Run, start.Run) || !ReferenceEquals(gc.Font, start.Font) || ((gc.SpacingAdjusted || gc.IsScaled) && gc.ShapingRunFirst is null) || (gc.Rotate ?? 0) != 0
+                    if (gc.LineIndex != start.LineIndex || start.TrailingHyphen || !ReferenceEquals(gc.Run, start.Run) || !ReferenceEquals(gc.Font, start.Font) || ((gc.SpacingAdjusted || gc.IsScaled) && gc.ShapingRunFirst is null) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
                         || !ReferenceEquals(gc.ShapingRunFirst, start.ShapingRunFirst))
                         break;
@@ -1477,7 +1512,17 @@ namespace PeachPDF.Svg
                         break;
                 }
 
+                // A wrapped line that was broken inside a word ends with the hyphen the break adds.
+                if (glyphs[i - 1].TrailingHyphen)
+                {
+                    builder.Append('-');
+                    logicalBuilder.Append('-');
+                }
+
                 var text = builder.ToString();
+                if (text.Length == 0)
+                    continue;
+
                 var logicalText = logicalBuilder.ToString();
                 if (logicalText == text) logicalText = null;
                 var features = ResolveShapingFeatures(start);
@@ -2413,8 +2458,7 @@ namespace PeachPDF.Svg
                 var isVertical = IsVerticalWritingMode(text.WritingMode);
                 if (!isVertical)
                     ResolveComplexScriptRuns(glyphs);
-                LayoutGlyphs(g, glyphs, isVertical);
-                ApplyBidiReordering(text, glyphs, overrides, isVertical);
+                LayoutTextBlock(g, text, glyphs, overrides, isVertical);
                 foreach (var gi in glyphs)
                 {
                     var size = gi.Size;
