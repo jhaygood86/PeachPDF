@@ -116,7 +116,8 @@ namespace PeachPDF.Html.Core.Paint
                 string? logicalText = null;
                 if (word.FirstLineText is null && word is CssRectWord { } rectWord && rectWord.PreMirrorText != text)
                     logicalText = Bidi.Reverse(rectWord.PreMirrorText);
-                DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new Size(word.Width, word.Height), logicalText: logicalText);
+                DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new Size(word.Width, word.Height), logicalText: logicalText,
+                    precededBySeparator: word.PrecededByWordSeparator);
             }
         }
 
@@ -198,7 +199,12 @@ namespace PeachPDF.Html.Core.Paint
         /// "…" glyph, neither of which is <paramref name="word"/>'s own full text) and for any word with
         /// no distinct logical-order source to recover.
         /// </param>
-        private static void DrawWordGlyphs(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size textSize, Font? fontOverride = null, string? logicalText = null)
+        /// <param name="precededBySeparator">
+        /// whether the flow placed a word separator between this word and the one before it on its line
+        /// (<see cref="CssRect.PrecededByWordSeparator"/>) - when set, a real space glyph is shown in that
+        /// gap ahead of the word itself (see <see cref="PaintWordSeparator"/>).
+        /// </param>
+        private static void DrawWordGlyphs(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size textSize, Font? fontOverride = null, string? logicalText = null, bool precededBySeparator = false)
         {
             // A word on the target's first formatted line, under a ::first-line rule, uses that
             // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
@@ -214,6 +220,7 @@ namespace PeachPDF.Html.Core.Paint
             // word (font == ActualFont), so it is a no-op there.
             var font = fontOverride ?? CssBox.ResolveWordFont(word, styleSource);
             var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
+            var baselineShift = 0.0;
 
             // A synthesized font-variant-position sub/superscript then moves off that shared baseline by
             // the font's own recommended offset (negative = up, for a superscript). Applied here rather
@@ -222,7 +229,8 @@ namespace PeachPDF.Html.Core.Paint
             // whole inline box within its line and does grow the line box.
             if (styleSource.SubSuperscriptSynthesis is { } subSuperscript)
             {
-                baselineAdjust += subSuperscript.BaselineShift;
+                baselineShift = subSuperscript.BaselineShift;
+                baselineAdjust += baselineShift;
             }
             // A word's own resolved script tag/Arabic-family joining forms (CssBox.CharScripts/
             // JoiningForms, sliced per word by AppendWordsFromText) override styleSource's own
@@ -235,6 +243,8 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (isUpright)
                 {
+                    if (precededBySeparator)
+                        PaintWordSeparator(g, styleSource, word, rect, baselineShift, SeparatorPlacement.Upright);
                     PaintUprightVerticalRun(g, text, font, styleSource, rect, baselineAdjust, wordFeatures, logicalText);
                 }
                 else
@@ -246,6 +256,8 @@ namespace PeachPDF.Html.Core.Paint
                     var naturalSize = new Size(rect.Height, rect.Width);
                     var rotation = SidewaysRotation(rect);
                     g.PushTransform(rotation);
+                    if (precededBySeparator)
+                        PaintWordSeparator(g, styleSource, word, new Rect(0, 0, naturalSize.Width, naturalSize.Height), baselineShift, SeparatorPlacement.Inline);
                     g.DrawString(text, font, styleSource.ActualColor, new PaintPoint(0, baselineAdjust), naturalSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                     PaintTextStroke(g, styleSource, font, text, new PaintPoint(0, baselineAdjust), wordFeatures);
@@ -254,11 +266,93 @@ namespace PeachPDF.Html.Core.Paint
             }
             else
             {
+                if (precededBySeparator)
+                    PaintWordSeparator(g, styleSource, word, rect, baselineShift, SeparatorPlacement.Inline);
                 var wordPoint = new PaintPoint(rect.X, rect.Y + baselineAdjust);
                 PaintTextShadows(g, styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                 PaintTextStroke(g, styleSource, font, text, wordPoint, wordFeatures);
             }
+        }
+
+        /// <summary>Which axis <see cref="PaintWordSeparator"/> advances along.</summary>
+        private enum SeparatorPlacement
+        {
+            /// <summary>Along x: a horizontal word, or a sideways word inside its own rotation.</summary>
+            Inline,
+
+            /// <summary>Down the column: an upright vertical run, drawn one character per call.</summary>
+            Upright,
+        }
+
+        /// <summary>
+        /// Shows the word separator in front of <paramref name="word"/> as a real space glyph, so a reader
+        /// taking the text in content-stream order recovers the word break (ISO 32000-1 §14.8.2.5,
+        /// "Identifying Word Breaks"). The separator was laid out as a bare advance between two
+        /// independently drawn words; without a glyph, everything that does not rebuild gaps from glyph
+        /// positions - full-text indexers, copy and paste in simpler viewers - ran the words together.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A space glyph has no ink, so this changes nothing on the page. It is drawn in the gap the
+        /// layout already reserved, flush against the word on the side of the word that logically
+        /// precedes it: the start edge for a left-to-right word, the end edge for a right-to-left one
+        /// (odd <see cref="CssRect.BidiLevel"/>), whose predecessor sits after it on the line. Where the
+        /// direction changes across the gap, the word's own level can pick the wrong side: the glyph
+        /// then sits at the far edge of the word instead of in the visual gap, while the content-stream
+        /// order stays right. It is
+        /// drawn before the word, so the content stream reads <c>word␠word</c> in logical order.
+        /// </para>
+        /// <para>
+        /// Whether to draw it at all is the flow's own record, <see cref="CssRect.PrecededByWordSeparator"/>:
+        /// set exactly where the flow added a separator's advance, never for the word that opens a line
+        /// (css-text-3 phase II removed that space). Preserved white space is a word of its own and paints
+        /// its own glyphs; a collapsible space in front of it still gets its glyph here, because the line
+        /// holds both.
+        /// </para>
+        /// <para>
+        /// The glyph comes from the primary font of the box that measured the gap
+        /// (<see cref="CssRect.WordSeparatorStyle"/>, via <see cref="CssUtils.WhiteSpace"/>) - the
+        /// previous word's box for its own trailing space, the enclosing box for a white-space-only
+        /// inline box - so it fills the gap it was measured for even where the font size changes across
+        /// it. A font without a space glyph gets none, since drawing a missing glyph would show a
+        /// .notdef box (and fail PDF/A outright). With a negative <c>word-spacing</c> the gap is narrower
+        /// than the glyph's advance, and the glyph overlaps the previous word by the difference.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="styleSource">the box (or <c>::first-line</c> shadow box) the word is styled from</param>
+        /// <param name="word">the word the separator precedes</param>
+        /// <param name="rect">
+        /// the word's own extent in the space the separator is drawn in: its physical rectangle, or - for
+        /// a sideways word - its natural rectangle inside the rotation <see cref="SidewaysRotation"/> sets up
+        /// </param>
+        /// <param name="baselineShift">a synthesized sub/superscript's baseline offset, else 0</param>
+        /// <param name="placement">which axis the word advances along</param>
+        private static void PaintWordSeparator(Canvas g, CssBox styleSource, CssRect word, Rect rect, double baselineShift, SeparatorPlacement placement)
+        {
+            var font = (word.WordSeparatorStyle ?? styleSource).ActualFont;
+            if (!font.HasGlyph(new Rune(' '))) return;
+
+            var advance = font.GetWhitespaceWidth(g);
+            var rightToLeft = (word.BidiLevel & 1) == 1;
+
+            var (point, size) = placement switch
+            {
+                SeparatorPlacement.Upright => (
+                    new PaintPoint(rect.X + Math.Max(0, (rect.Width - advance) / 2),
+                        (rightToLeft ? rect.Bottom : rect.Y - advance) + baselineShift),
+                    new Size(advance, advance)),
+                // Placed by baseline, not by top edge: the separator's font is the one that measured
+                // the gap and can be larger or smaller than the word's, whose baseline sits at
+                // rect.Y + its own box font's ascent.
+                _ => (
+                    new PaintPoint(rightToLeft ? rect.Right : rect.X - advance,
+                        rect.Y + styleSource.ActualFont.Ascent - font.Ascent + baselineShift),
+                    new Size(advance, font.Height)),
+            };
+
+            g.DrawString(" ", font, styleSource.ActualColor, point, size);
         }
 
         /// <summary>

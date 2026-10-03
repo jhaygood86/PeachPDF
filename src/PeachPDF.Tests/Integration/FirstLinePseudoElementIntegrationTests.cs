@@ -30,7 +30,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, p, g);
 
-            var calls = g.DrawStringCalls;
+            // One call per word: the space glyphs shown between words are not words of their own.
+            var calls = g.DrawStringCalls.Where(c => c.Text != " ").ToList();
             Assert.True(calls.Count > 1, $"expected multiple draw calls, got {calls.Count}");
 
             var firstLineWordCount = p.LineBoxes[0].Words.Count;
