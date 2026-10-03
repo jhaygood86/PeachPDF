@@ -464,7 +464,8 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<string> PdfContent(string svgTextAttrs)
         {
-            var html = $"""<!DOCTYPE html><html><body style="margin:0"><svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><text x="10" y="30" font-size="20" {svgTextAttrs}>aa bb cc dd ee ff gg hh</text></svg></body></html>""";
+            var b64 = System.Convert.ToBase64String(File.ReadAllBytes(PeachPDF.Tests.TestSupport.BundledFonts.Ttf));
+            var html = $$"""<!DOCTYPE html><html><head><style>@font-face { font-family: 'WrapTestFont'; src: url('data:font/truetype;base64,{{b64}}'); }</style></head><body style="margin:0;font-family:'WrapTestFont'"><svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><text x="10" y="30" font-size="20" font-family="WrapTestFont" {{svgTextAttrs}}>aa bb cc dd ee ff gg hh</text></svg></body></html>""";
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
             var document = await new PdfGenerator().GeneratePdf(html, config);
             using var stream = new MemoryStream();
@@ -479,9 +480,11 @@ namespace PeachPDF.Tests.Svg
             var wrapped = await PdfContent("""inline-size="60" """);
             var faded = await PdfContent("""inline-size="60" opacity="0.5" """);
 
-            static int Lines(string pdf) => System.Text.RegularExpressions.Regex.Matches(pdf, @"[\s\]>)]T[jJ]\s").Count;
-            Assert.True(Lines(wrapped) > Lines(unwrapped));
-            Assert.True(Lines(faded) >= Lines(wrapped));
+            // Each wrapped line starts a new text line with a downward Td; glyph batching differs per font, so count line advances.
+            static int LineAdvances(string pdf) => System.Text.RegularExpressions.Regex.Matches(pdf, @"\s0 -[\d.]+ Td").Count;
+            Assert.Equal(0, LineAdvances(unwrapped));
+            Assert.True(LineAdvances(wrapped) >= 2);
+            Assert.True(LineAdvances(faded) >= 2);
         }
     }
 }
