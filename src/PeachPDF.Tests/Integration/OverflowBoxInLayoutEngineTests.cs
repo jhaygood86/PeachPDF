@@ -34,7 +34,7 @@ public class OverflowBoxInLayoutEngineTests
         {
             using var graphics = new RecordingGraphics(new PdfSharpAdapter());
             FragmentPaintHarness.PaintPage(container, graphics, page);
-            painted.AddRange(graphics.DrawnStrings.Select(s => s.Text));
+            painted.AddRange(graphics.DrawnStrings.Select(s => s.Text).Where(t => t != " "));
         }
         return (painted, container.ClipReport.Words.Count);
     }

@@ -141,10 +141,12 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, root, g);
 
-            Assert.Equal(8, g.DrawStringCalls.Count);
+            // Eight words; the space glyphs shown between them are not words.
+            var words = g.WordDrawStringCalls;
+            Assert.Equal(8, words.Count);
             var f1 = FindById(root, "f1")!;
             Assert.Equal(ContainerLeft, f1.Location.X, 2);
-            Assert.All(g.DrawStringCalls.Where(w => w.PaintPoint.Y < f1.ActualBottom),
+            Assert.All(words.Where(w => w.PaintPoint.Y < f1.ActualBottom),
                 w => Assert.True(w.PaintPoint.X >= f1.ActualRight - 0.01, $"'{w.Text}' at {w.PaintPoint.X} overlaps the float"));
         }
 

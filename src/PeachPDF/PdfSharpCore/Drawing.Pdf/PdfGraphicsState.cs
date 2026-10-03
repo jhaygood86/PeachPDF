@@ -479,6 +479,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         int _realizedRenderingMode;  // Reference: TABLE 5.2  Text state operators / Page 398
         double _realizedCharSpace;  // Reference: TABLE 5.2  Text state operators / Page 398
 
+        /// <summary>The character spacing (<c>Tc</c>) last written, unrounded.</summary>
+        internal double RealizedCharSpace => _realizedCharSpace;
+
         public void RealizeFont(XFont font, XBrush brush, int renderingMode, double letterSpacing = 0)
         {
             const string format = Config.SignificantFigures3;

@@ -127,6 +127,13 @@ namespace PeachPDF.Html.Core.Entities
         public bool PendingWordSeparator { get; set; }
 
         /// <summary>
+        /// The box whose font measured the pending word separator - see
+        /// <see cref="CssRect.WordSeparatorStyle"/>. Meaningful only while
+        /// <see cref="PendingWordSeparator"/> is set.
+        /// </summary>
+        public CssBox? PendingWordSeparatorStyle { get; set; }
+
+        /// <summary>
         /// Floats <see cref="CssLayoutEngine.FlowBox"/> has itself placed directly among the block's own
         /// inline content (issue #1038) - a float that is a sibling of ordinary inline content in the
         /// same box rather than a separate block-level box that merely precedes one. Not discoverable
