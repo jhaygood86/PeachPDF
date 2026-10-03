@@ -142,7 +142,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             // Eight words; the space glyphs shown between them are not words.
-            var words = g.DrawStringCalls.Where(w => w.Text != " ").ToList();
+            var words = g.WordDrawStringCalls;
             Assert.Equal(8, words.Count);
             var f1 = FindById(root, "f1")!;
             Assert.Equal(ContainerLeft, f1.Location.X, 2);

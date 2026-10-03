@@ -37,7 +37,7 @@ public class FloatBesideTextPaginationTests
         {
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, graphics, page);
-            words.AddRange(graphics.DrawStringCalls.Where(w => w.Text != " ")
+            words.AddRange(graphics.WordDrawStringCalls
                 .Select(w => (page, w.Text.Trim(), w.PaintPoint.X, w.PaintPoint.Y)));
         }
 

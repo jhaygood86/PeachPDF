@@ -1,6 +1,7 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -99,6 +100,99 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(["AA", " ", "BB"], ops.Select(o => o.Text));
             AssertBetween(ops[1].Bounds.Left, ops[1].Bounds.Right, ops[0].Bounds.Right, ops[2].Bounds.Left);
+            // Flush against the word before it, with the widening after it - where a browser's text run
+            // has it. In front of the following word instead, the widening sat ahead of the space and
+            // extractors that rebuild a space from a wide gap read two.
+            Assert.Equal(ops[0].Bounds.Right, ops[1].Bounds.Left, 3);
+            Assert.True(ops[2].Bounds.Left - ops[1].Bounds.Right > 50, "the line must actually be widened");
+        }
+
+        [Fact]
+        public async Task WordSpacing_GoesAfterTheSpace()
+        {
+            var ops = await PaintTextAsync("""<p style="word-spacing:20pt">AA BB</p>""");
+
+            Assert.Equal(ops[0].Bounds.Right, ops[1].Bounds.Left, 3);
+        }
+
+        [Fact]
+        public async Task SpaceAfterAnInlineImage_StartsAtTheImagesEdge()
+        {
+            // The image is the word the space after it follows, even though its content painter draws
+            // it. (An image gets no space in front of it: only a text word paints one.)
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"""<p id="p">AA <img src="{OnePixelPng}" style="width:20pt;height:10pt"> BB</p>"""));
+            using var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintPage(container, recorder);
+            var image = AllWords(LayoutHarness.FindById(root, "p")!).Single(w => w.IsImage);
+
+            var ops = recorder.Log.Where(o => o.Kind == PaintOpKind.DrawString).ToList();
+            Assert.Equal(["AA", " ", "BB"], ops.Select(o => o.Text));
+            Assert.Equal(image.Right, ops[1].Bounds.Left, 3);
+        }
+
+        [Fact]
+        public async Task SpaceAfterAHiddenWord_FallsBackToTheWordItPrecedes()
+        {
+            // "b" is laid out but not drawn, so the last word drawn is not the one the space after it
+            // follows: the space is anchored to "c" instead, still inside the gap.
+            var ops = await PaintTextAsync("""<p>a <span style="visibility:hidden">b</span> c</p>""");
+
+            Assert.Equal(["a", " ", "c"], ops.Select(o => o.Text));
+            Assert.Equal(ops[2].Bounds.Left, ops[1].Bounds.Right, 3);
+        }
+
+        [Fact]
+        public async Task SpaceInFrontOfAClippedInlineBlocksFirstWord_StaysInsideTheClip()
+        {
+            // The separator belongs to the outer line's gap, in front of the box's border, but it is
+            // drawn under the box's own overflow clip; anchored to "before" it would be clipped away.
+            var ops = await PaintAllAsync(
+                """<p>before <span style="display:inline-block; overflow:hidden; padding:0 4pt">inside</span></p>""");
+
+            var texts = ops.Where(o => o.Kind == PaintOpKind.DrawString).ToList();
+            Assert.Equal(["before", " ", "inside"], texts.Select(o => o.Text));
+            Assert.Equal(texts[2].Bounds.Left, texts[1].Bounds.Right, 3);
+        }
+
+        [Fact]
+        public async Task SpaceBeforeATranslucentWord_IsStillShown()
+        {
+            var ops = await PaintTextAsync("""<p>a <span style="opacity:0.5">b</span></p>""");
+
+            Assert.Equal("a b", string.Concat(ops.Select(o => o.Text)));
+        }
+
+        [Fact]
+        public async Task SpaceTakesTheColourAndLetterSpacingOfTheBoxThatMeasuredIt()
+        {
+            // Neither shows on an inkless glyph; matching the word before it keeps the PDF writer from
+            // switching fill colour and character spacing just for the space.
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                """<p><span style="color:red; letter-spacing:2pt">a </span><span style="color:blue">b</span></p>"""));
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, g);
+
+            var calls = g.DrawStringCalls;
+            Assert.Equal(["a", " ", "b"], calls.Select(c => c.Text));
+            Assert.Equal(calls[0].PaintColor, calls[1].PaintColor);
+            Assert.NotEqual(calls[2].PaintColor, calls[1].PaintColor);
+            Assert.Equal(calls[0].LetterSpacing, calls[1].LetterSpacing);
+            Assert.True(calls[1].LetterSpacing > 0);
+        }
+
+        [Fact]
+        public async Task SpaceOnAFirstLine_IsDrawnInTheFirstLineFont()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                """<!DOCTYPE html><html><head><style>p::first-line { font-size: 30pt }</style></head><body style="margin:0"><p style="font-size:10pt">aa bb</p></body></html>""");
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, g);
+
+            var calls = g.DrawStringCalls;
+            Assert.Equal(["aa", " ", "bb"], calls.Select(c => c.Text));
+            Assert.Equal(calls[0].Font.Size, calls[1].Font.Size, 3);
+            Assert.True(calls[1].Font.Size > 20, "the ::first-line font must apply");
         }
 
         [Fact]
@@ -114,6 +208,30 @@ namespace PeachPDF.Tests.Integration
             var left = ops[2].Bounds;
             Assert.True(left.Right <= right.Left, "the logically second word must sit to the left");
             AssertBetween(ops[1].Bounds.Left, ops[1].Bounds.Right, left.Right, right.Left);
+        }
+
+        [Fact]
+        public async Task JustifiedRightToLeftWords_PutTheSpaceAgainstThePrecedingWordsLeftEdge()
+        {
+            // In a widened right-to-left gap the space sits flush against the word it follows - on that
+            // word's left - with the widening after it, on the far side.
+            var ops = await PaintTextAsync(
+                """<p style="width:200pt; text-align:justify; text-align-last:justify"><bdo dir="rtl">AB CD</bdo></p>""");
+
+            Assert.Equal(["BA", " ", "DC"], ops.Select(o => o.Text));
+            Assert.Equal(ops[0].Bounds.Left, ops[1].Bounds.Right, 3);
+            Assert.True(ops[1].Bounds.Left - ops[2].Bounds.Right > 50, "the line must actually be widened");
+        }
+
+        [Fact]
+        public async Task SpaceAtADirectionChange_IsNotAnchoredToTheWordOnTheOtherSide()
+        {
+            // "ab" precedes "cd" logically but sits to its left, not to the right a right-to-left word's
+            // predecessor would; anchored to "ab"'s left edge the space would land in front of "ab".
+            var ops = await PaintTextAsync("""<p>ab <bdo dir="rtl">cd</bdo></p>""");
+
+            Assert.Equal(["ab", " ", "dc"], ops.Select(o => o.Text));
+            Assert.True(ops[1].Bounds.Left >= ops[0].Bounds.Right - Tolerance, "the space must not precede 'ab'");
         }
 
         [Fact]
@@ -251,6 +369,42 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task SynthesizedSuperscriptInUprightVerticalText_ShiftsTheSpaceWithItsWords()
+        {
+            // Upright, each character is drawn on its own; the space above "2" moves with it.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                """<p style="font-family:NoSups; writing-mode:vertical-rl; text-orientation:upright; height:400pt"><span id="s" style="font-variant-position:super">4 2</span></p>"""),
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+            var span = LayoutHarness.FindById(root, "s")!;
+            var shift = span.SubSuperscriptSynthesis!.Value.BaselineShift;
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, g);
+
+            var calls = g.DrawStringCalls;
+            Assert.Equal(["4", " ", "2"], calls.Select(c => c.Text));
+            Assert.NotEqual(0, shift, 3);
+            // Its own advance above the word, moved by the same shift as the word's characters.
+            var two = AllWords(span).Last();
+            Assert.Equal(two.Top - calls[1].Size.Height + shift, calls[1].PaintPoint.Y, 3);
+        }
+
+        [Fact]
+        public async Task SynthesizedSuperscriptInSidewaysVerticalText_ShiftsTheSpaceWithItsWords()
+        {
+            // Sideways, each word is drawn in its own rotated frame, where the space shares its
+            // baseline - shifted by the synthesized superscript - with the word after it.
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                """<p style="font-family:NoSups; writing-mode:vertical-rl; height:400pt"><span style="font-variant-position:super">42 42</span></p>"""),
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, g);
+
+            var calls = g.DrawStringCalls;
+            Assert.Equal(["42", " ", "42"], calls.Select(c => c.Text));
+            Assert.Equal(calls[2].PaintPoint.Y + calls[2].Font.Ascent, calls[1].PaintPoint.Y + calls[1].Font.Ascent, 3);
+        }
+
+        [Fact]
         public async Task UprightVerticalRightToLeftWords_PaintTheSpaceBelowTheFollowingWord()
         {
             // Under bdo rtl the logically second word "CD" is painted above "AB" in the column, so its
@@ -293,6 +447,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        /// <summary>A 1x1 PNG - only that it decodes matters.</summary>
+        private const string OnePixelPng =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+            + "z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+        private static IEnumerable<CssRect> AllWords(CssBox box) =>
+            box.Words.Concat(box.Boxes.SelectMany(AllWords));
 
         private static async Task<List<PaintOp>> PaintAllAsync(
             string body, Func<string, Font, ShapeSettings?, Size>? measureString = null)

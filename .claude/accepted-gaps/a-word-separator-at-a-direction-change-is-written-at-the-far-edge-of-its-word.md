@@ -1,9 +1,10 @@
 # A word separator at a direction change is written at the far edge of its word
 
-`FragmentPainter.PaintWordSeparator` places the space glyph it writes for a word separator against the word
-that follows the separator, on the side the word's own `BidiLevel` names: the start edge of a left-to-right
-word, the end edge of a right-to-left one. Inside a run of one direction that is the visual gap. Where the
-direction changes across the separator it is not: in `hello <span dir=rtl>שלום עולם</span> world` the space
+`FragmentPainter.PaintWordSeparator` anchors the space glyph it writes for a word separator at the edge of
+the word before it - but only when that word sits on the side the following word's own `BidiLevel` expects
+(`FragmentPainter.PrecedingWordEdge`). Otherwise it places the glyph against the word that follows the
+separator, on that side: the start edge of a left-to-right word, the end edge of a right-to-left one. Inside
+a run of one direction that is the visual gap. Where the direction changes across the separator it is not: in `hello <span dir=rtl>שלום עולם</span> world` the space
 after `hello` belongs to the paragraph (level 0) but is placed by `שלום` (level 1), at the right edge of the
 right-to-left run, where the space before `world` also sits. The visual gap between `hello` and `עולם` holds
 no glyph.

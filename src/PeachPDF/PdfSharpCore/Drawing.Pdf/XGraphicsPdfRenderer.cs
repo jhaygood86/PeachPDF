@@ -406,8 +406,97 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
+        /// <summary>
+        /// Where the last plain text-showing operator left a reader's pen, and where layout put the end
+        /// of the run it showed.
+        /// </summary>
+        /// <param name="ContentLength">the content length right after the operator</param>
+        /// <param name="PenX">the world-space x of the pen after its last glyph and that glyph's character spacing</param>
+        /// <param name="LaidOutEndX">the world-space x layout gave the run's end: its measured width plus one <c>letter-spacing</c> per glyph</param>
+        /// <param name="BaselineY">the world-space baseline the pen is on</param>
+        private readonly record struct TextRun(int ContentLength, double PenX, double LaidOutEndX, double BaselineY);
+
+        /// <summary>See <see cref="TextRun"/>; null when the last text written was not a plain run.</summary>
+        private TextRun? _textRun;
+
+        /// <summary>
+        /// Records where the run just written left the pen, for <see cref="TryShowAtPen"/>; forgets it for
+        /// a font shown without shaping (<paramref name="glyphs"/> null), which never continues one.
+        /// </summary>
+        private void RememberTextRun(XFont font, IReadOnlyList<PlacedGlyph>? glyphs, double x, double laidOutEndX, double baselineY) =>
+            _textRun = glyphs is null ? null : new TextRun(_content.Length, x + ReaderAdvance(font, glyphs), laidOutEndX, baselineY);
+
+        /// <summary>
+        /// Shows <paramref name="text"/> - a run of spaces - straight after the text-showing operator
+        /// written last, where that operator left the pen, instead of moving the text line to
+        /// (<paramref name="x"/>, <paramref name="baselineY"/>) with a <c>Td</c> of its own. That is how a
+        /// word separator anchored at the end of the word before it is written, and equally a run of
+        /// preserved white space that starts where the word before it ends. Only when nothing has been
+        /// written since that operator but this call's own text state, when <paramref name="x"/> is
+        /// within a tenth of an em of where layout put that run's end, and
+        /// within a quarter of an em of its baseline. Anywhere else the spaces do not follow that run
+        /// - the last run was on another line, the word in between drew nothing (it is
+        /// <c>visibility: hidden</c>), the separator was anchored to the other side of its word (right to
+        /// left) - and they are positioned on their own.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The point is what this leaves alone: showing text moves the text matrix but not the text line
+        /// matrix a following <c>Td</c> is relative to (ISO 32000-1 §9.4.2), so the next word's
+        /// <c>Td</c> - and every one after it - is byte for byte the one written without the separator.
+        /// Readers keep the line matrix in single precision, and a <c>Td</c> of its own for each
+        /// separator rounds it differently: a few hundred-thousandths of a point, which still moves a
+        /// glyph edge across a pixel boundary in PDFium and MuPDF where it sat exactly on one. Showing
+        /// the space inside the previous word's own operator would keep the line matrix too, but PDFium
+        /// then aligns that word's glyphs to the pixel grid differently, moving whole words by a pixel.
+        /// </para>
+        /// <para>
+        /// The glyphs land at the pen rather than at <paramref name="x"/>. The two differ by the
+        /// rounding of the font's <c>/W</c> widths, or by more after a word drawn glyph by glyph (see
+        /// <see cref="DrawPositionedGlyphs"/>), whose pen does not take <c>letter-spacing</c> and stops
+        /// short of the word's laid-out end. Either way a space has no ink, and the pen is the start of
+        /// the gap a reader sees. Moving it on to <paramref name="x"/> - with a <c>TJ</c> adjustment or
+        /// a <c>Td</c> - left a strip of that gap in front of the space, which pypdf reads as a word
+        /// break of its own and doubles. Whether the spaces follow the run is decided against the
+        /// laid-out end instead, which <paramref name="x"/> is exactly when they do. Nor does it matter
+        /// whether either was meant for the synthetic-italic text matrix: its shear keeps a horizontal
+        /// advance horizontal, and a space has no ink to slant.
+        /// </para>
+        /// </remarks>
+        private bool TryShowAtPen(double x, double baselineY, string text, XFont font, int contentLengthAtEntry)
+        {
+            double em = font.Size;
+            if (_textRun is not { } run || run.ContentLength != contentLengthAtEntry
+                || Math.Abs(run.BaselineY - baselineY) > em / 4
+                || Math.Abs(run.LaidOutEndX - x) > em / 10)
+                return false;
+
+            AppendFormatArgs("{0} Tj\n", text);
+
+            // The pen has moved on, but nothing after a separator continues from it.
+            _textRun = null;
+            return true;
+        }
+
+        /// <summary>
+        /// How far a reader's pen moves while showing <paramref name="glyphs"/> in <paramref name="font"/>:
+        /// the <c>/W</c> width written for each glyph (see <see cref="PdfTypefaceMetrics.GlyphWidth"/>), at
+        /// the font size and character spacing as written.
+        /// </summary>
+        private double ReaderAdvance(XFont font, IReadOnlyList<PlacedGlyph> glyphs)
+        {
+            double fontSize = Math.Round(font.Size, 3, MidpointRounding.AwayFromZero);
+            double charSpace = Math.Round(_gfxState.RealizedCharSpace, 3, MidpointRounding.AwayFromZero);
+            double thousandths = 0;
+            foreach (PlacedGlyph glyph in glyphs)
+                thousandths += PdfTypefaceMetrics.GlyphWidth(font.Typeface, glyph.GlyphIndex);
+            return thousandths * fontSize / 1000 + glyphs.Count * charSpace;
+        }
+
         public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
         {
+            int contentLengthAtEntry = _content.Length;
+            bool isOnlySpaces = s.Length > 0 && !s.AsSpan().ContainsAnyExcept(' ');
             double x = rect.X;
             double y = rect.Y;
 
@@ -553,6 +642,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     //verticalOffset = font.Size * Const.BoldEmphasis / 2;
                 }
 
+                double laidOutEndX = x + width + (shapedGlyphs?.Count ?? 0) * letterSpacing;
+                bool shownAtPen = font.Unicode && isOnlySpaces
+                    && TryShowAtPen(x, y + verticalOffset, text, font, contentLengthAtEntry);
+                if (!shownAtPen)
+                {
 #if ITALIC_SIMULATION
                 // A declared "oblique <angle>" (see XFont.ObliqueSkewSinus) drives the exact shear amount;
                 // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
@@ -565,6 +659,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     {
                         AdjustTdOffset(ref pos, verticalOffset, skewSinus);
                         AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td\n{2} Tj\n", pos.X, pos.Y, text);
+                        RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                     }
                     else
                     {
@@ -574,6 +669,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                             m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
                         _gfxState.ItalicSimulationOn = true;
                         AdjustTdOffset(ref pos, verticalOffset, null);
+                        RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                     }
                 }
                 else
@@ -585,6 +681,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                             m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
                         _gfxState.ItalicSimulationOn = false;
                         AdjustTdOffset(ref pos, verticalOffset, null);
+                        RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                     }
                     else if (hasGposDeltas)
                     {
@@ -594,18 +691,20 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                         // individually positioned Td+Tj instead of one Tj over the whole run - the
                         // common case (no GPOS deltas) never reaches this branch, so existing output is
                         // otherwise byte-for-byte unchanged.
-                        DrawPositionedGlyphs(shapedGlyphs, font, new XPoint(x, y + verticalOffset));
+                        DrawPositionedGlyphs(shapedGlyphs, font, new XPoint(x, y + verticalOffset), laidOutEndX);
                     }
                     else
                     {
                         AdjustTdOffset(ref pos, verticalOffset, null);
                         AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
+                        RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                     }
                 }
 #else
                 AdjustTextMatrix(ref pos);
                 AppendFormat2("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
 #endif
+                }
             }
 
             if (underline && !invisible)
@@ -704,7 +803,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
         /// horizontal text only.
         /// </summary>
-        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, XPoint startPos)
+        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, XPoint startPos, double laidOutEndX)
         {
             const string format2 = Config.SignificantFigures4;
             double scale = font.Size / font.UnitsPerEm;
@@ -712,6 +811,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             double penX = startPos.X;
             double penY = startPos.Y;
+            double lastGlyphX = penX, lastGlyphY = penY;
 
             foreach (PlacedGlyph glyph in glyphs)
             {
@@ -734,7 +834,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 // pen only ever advances by the natural width plus GPOS's own XAdvanceDelta, matching
                 // FontHelper.MeasureString/GraphicsAdapter.GetTextOutline's identical advance math.
                 penX += (font.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
+                (lastGlyphX, lastGlyphY) = (glyphX, glyphY);
             }
+
+            // A reader's pen ends where the last glyph's own Tj leaves it.
+            _textRun = glyphs.Count == 0 ? null
+                : new TextRun(_content.Length, lastGlyphX + ReaderAdvance(font, [glyphs[^1]]), laidOutEndX, lastGlyphY);
         }
 
         /// <summary>

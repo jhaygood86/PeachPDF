@@ -216,7 +216,7 @@ namespace PeachPDF.Html.Core.Paint
                         // word's kept run and the ellipsis glyph go through DrawWordGlyphs directly, not
                         // PaintWordSequence, so they need their own copy of the same guard.
                         if (c.KeptText.Length > 0 && IsVisible(g, c.KeptRect)) DrawWordGlyphs(g, box, wf.Word, c.KeptRect, c.KeptText, c.KeptSize,
-                            precededBySeparator: wf.Word.PrecededByWordSeparator);
+                            precededBySeparator: wf.Word.PrecededByWordSeparator, separatorEdge: PrecedingWordEdge(g, wf.Word, c.KeptRect));
                         DrawEllipsis(g, box, wf.Word, isVertical, isRtl, c.EllipsisAnchor, wf.Rect);
                         return true;
                     }

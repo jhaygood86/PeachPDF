@@ -291,6 +291,13 @@ namespace PeachPDF.Tests.TestSupport
 
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
+
+        /// <summary>
+        /// <see cref="DrawStringCalls"/> without the word separators the painter shows between words - a
+        /// lone space each (see <c>FragmentPainter.PaintWordSeparator</c>) - for a test that counts,
+        /// orders or places the words themselves.
+        /// </summary>
+        public List<DrawStringCall> WordDrawStringCalls => [.. DrawStringCalls.Where(c => c.Text != " ")];
         public List<DrawImageCall> DrawImageCalls { get; } = [];
 
         /// <summary>The path passed to each <see cref="PushClip(GraphicsPath)"/> call, in order, so
