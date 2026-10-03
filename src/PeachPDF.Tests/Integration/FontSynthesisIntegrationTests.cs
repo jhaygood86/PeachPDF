@@ -98,6 +98,57 @@ body {{ font-family: 'TestSynthOblique'; font-size: 14pt; font-style: oblique 10
             Assert.DoesNotContain(defaultSkew, pdfText);
         }
 
+        [Theory]
+        [InlineData("font-synthesis: none")]
+        [InlineData("font-synthesis-weight: none")]
+        [InlineData("font-synthesis: style")]
+        public async Task FontSynthesisWeightNone_RemovesFauxBoldFillAndStroke(string declaration)
+        {
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var b64 = Convert.ToBase64String(ttfBytes);
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestSynthOff'; src: url('data:font/truetype;base64,{b64}'); }}
+body {{ font-family: 'TestSynthOff'; font-size: 14pt; font-weight: bold; {declaration} }}
+</style></head>
+<body>Bold text with synthesis forbidden</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            config.SetMargins(20);
+            var pdfText = GetPdfText(await generator.GeneratePdf(html, config));
+
+            Assert.DoesNotContain("2 Tr", pdfText);
+        }
+
+        [Fact]
+        public async Task FontSynthesisStyleNone_RemovesFauxItalicShear_ButKeepsFauxBold()
+        {
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var b64 = Convert.ToBase64String(ttfBytes);
+
+            string Html(string declaration) => $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestSynthStyle'; src: url('data:font/truetype;base64,{b64}'); }}
+body {{ font-family: 'TestSynthStyle'; font-size: 14pt; font-weight: bold; font-style: oblique 10deg; {declaration} }}
+</style></head>
+<body>Oblique and bold</body>
+</html>";
+
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            config.SetMargins(20);
+            var skew = Math.Sin(10.0 * Math.PI / 180.0).ToString("0.####", CultureInfo.InvariantCulture);
+
+            var withSynthesis = GetPdfText(await new PdfGenerator().GeneratePdf(Html(""), config));
+            var styleOff = GetPdfText(await new PdfGenerator().GeneratePdf(Html("font-synthesis-style: none"), config));
+
+            Assert.Contains(skew, withSynthesis);
+            Assert.DoesNotContain(skew, styleOff);
+            Assert.Contains("2 Tr", styleOff);
+        }
+
         private static string GetPdfText(PeachPdfDocument doc)
         {
             var ms = new MemoryStream();

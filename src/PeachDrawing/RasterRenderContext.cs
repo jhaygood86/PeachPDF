@@ -87,13 +87,21 @@ public sealed class RasterRenderContext : RenderContext
     protected override Font CreateFontInt(FontFamily family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null) =>
         MatchAndCreateFont(family.Name, size, style, weight, stretch, obliqueSkewSinus);
 
+    /// <summary>Drops the synthesis <c>font-synthesis-weight</c>/<c>-style: none</c> forbade.</summary>
+    private static SyntheticStyle Restrict(SyntheticStyle synthesis, PaintFontStyle style)
+    {
+        if ((style & PaintFontStyle.NoSyntheticBold) != 0) synthesis &= ~SyntheticStyle.Bold;
+        if ((style & PaintFontStyle.NoSyntheticItalic) != 0) synthesis &= ~SyntheticStyle.Italic;
+        return synthesis;
+    }
+
     private static bool IsItalic(PaintFontStyle style) => (style & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
     private TypefaceFont MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus)
     {
         var query = TypefaceQuery.From(weight, stretch, IsItalic(style), null, null, obliqueSkewSinus);
         var match = _fontSet.MatchOrFallback(family, query);
-        return new TypefaceFont(match.Typeface, size, match.Synthesis, obliqueSkewSinus);
+        return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc/>
@@ -107,7 +115,7 @@ public sealed class RasterRenderContext : RenderContext
             return null;
         }
 
-        return new TypefaceFont(match.Typeface, size, match.Synthesis, obliqueSkewSinus);
+        return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc/>
@@ -121,7 +129,7 @@ public sealed class RasterRenderContext : RenderContext
             if (!fallbackFamily.TryMatch(TypefaceQuery.From(weight, stretch, IsItalic(style), codepoint, null, obliqueSkewSinus), out var match))
                 return null;
 
-            return new TypefaceFont(match.Typeface, size, match.Synthesis, obliqueSkewSinus);
+            return new TypefaceFont(match.Typeface, size, Restrict(match.Synthesis, style), obliqueSkewSinus);
         }
         catch
         {

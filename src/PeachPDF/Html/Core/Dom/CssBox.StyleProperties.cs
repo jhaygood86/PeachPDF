@@ -665,7 +665,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (matches)
                 {
                     var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-                    var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;
+                    var parentSizePt = parent.GetEmHeight() * pixelsPerPoint;
 
                     var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: parent.DerivedStyle);
                     return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";

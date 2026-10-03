@@ -514,6 +514,8 @@ PeachDrawing.Core.PaintColor : struct
 PeachDrawing.Core.PaintFontStyle : enum Int32
   Bold = 1
   Italic = 2
+  NoSyntheticBold = 16
+  NoSyntheticItalic = 32
   Regular = 0
   Strikeout = 8
   Underline = 4

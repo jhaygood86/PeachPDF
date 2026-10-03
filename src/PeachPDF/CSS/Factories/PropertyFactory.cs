@@ -310,6 +310,15 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontSize, () => new FontSizeProperty(), true);
             AddLonghand(PropertyNames.FontSizeAdjust, () => new FontSizeAdjustProperty(), true);
             AddLonghand(PropertyNames.FontStyle, () => new FontStyleProperty());
+            AddShorthand(PropertyNames.FontSynthesis, () => new FontSynthesisProperty(),
+                PropertyNames.FontSynthesisWeight,
+                PropertyNames.FontSynthesisStyle,
+                PropertyNames.FontSynthesisSmallCaps,
+                PropertyNames.FontSynthesisPosition);
+            AddLonghand(PropertyNames.FontSynthesisWeight, () => new FontSynthesisWeightProperty());
+            AddLonghand(PropertyNames.FontSynthesisStyle, () => new FontSynthesisStyleProperty());
+            AddLonghand(PropertyNames.FontSynthesisSmallCaps, () => new FontSynthesisSmallCapsProperty());
+            AddLonghand(PropertyNames.FontSynthesisPosition, () => new FontSynthesisPositionProperty());
             // font-variant is a real shorthand (see FontVariantProperty) over the 4 longhands below
             // plus font-feature-settings; the @font-face `font-variant` descriptor is a separate,
             // unrelated, never-cascaded registration (FontFaceVariantProperty, added to _fontsBuilder

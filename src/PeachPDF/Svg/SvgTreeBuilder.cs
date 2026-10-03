@@ -231,7 +231,10 @@ namespace PeachPDF.Svg
             int PreservedTabSpaces = 0,
             int TabSize = 8,
             string DominantBaseline = "auto",
-            double BaselineShift = 0)
+            double BaselineShift = 0,
+            string? SizeAdjust = null,
+            bool NoSyntheticBold = false,
+            bool NoSyntheticItalic = false)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1598,6 +1601,22 @@ namespace PeachPDF.Svg
             var dominantAttr = ResolveStyledAttr(node, "dominant-baseline")?.Trim().ToLowerInvariant();
             var dominantBaseline = string.IsNullOrEmpty(dominantAttr) || dominantAttr == "inherit" ? inherited.DominantBaseline : dominantAttr;
 
+            // font-size-adjust is resolved where a glyph font is created (GetFontFor/CreateFontFallback), never into Size: em
+            // resolution keeps the unadjusted size. font-synthesis (its shorthand is expanded by SvgTextShorthands) only
+            // matters for weight and style here; SVG text has no small-caps or sub/superscript synthesis.
+            var sizeAdjustAttr = ResolveStyledAttr(node, "font-size-adjust");
+            var sizeAdjust = string.IsNullOrWhiteSpace(sizeAdjustAttr) || sizeAdjustAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.SizeAdjust
+                : sizeAdjustAttr.Trim();
+
+            var noSyntheticBold = inherited.NoSyntheticBold;
+            var noSyntheticItalic = inherited.NoSyntheticItalic;
+            var synthesisWeightAttr = ResolveStyledAttr(node, "font-synthesis-weight")?.Trim().ToLowerInvariant();
+            if (synthesisWeightAttr is "auto" or "none") noSyntheticBold = synthesisWeightAttr == "none";
+
+            var synthesisStyleAttr = ResolveStyledAttr(node, "font-synthesis-style")?.Trim().ToLowerInvariant();
+            if (synthesisStyleAttr is "auto" or "none") noSyntheticItalic = synthesisStyleAttr == "none";
+
             var baselineShift = inherited.BaselineShift;
             if (node.Name is "text" or "tspan" or "tref" or "textPath")
                 baselineShift += ResolveBaselineShift(ResolveStyledAttr(node, "baseline-shift"), ownFont);
@@ -1615,7 +1634,8 @@ namespace PeachPDF.Svg
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
                 positionRequested, ownFont.SizeDeclared,
                 fontPalette, alternates, emoji, variationSettings, opticalNone, weight, obliqueSkew,
-                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift);
+                underlineOffset, underlinePosition, skipInk, textShadow, paintOrder, preservedTabSpaces, tabSize, dominantBaseline, baselineShift,
+                sizeAdjust, noSyntheticBold, noSyntheticItalic);
         }
 
         /// <summary>
@@ -1641,11 +1661,42 @@ namespace PeachPDF.Svg
         /// <summary>The font for <paramref name="font"/> at <paramref name="size"/>: every face-selecting property this builder tracks, in one request.</summary>
         private Font? GetFontFor(FontContext font, string family, double size)
         {
+            var fontStyle = StyleFlagsFor(font);
+            var variations = EncodeVariations(font);
+            var resolved = FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations);
+
+            return ApplySizeAdjust(font, resolved, size, null,
+                adjusted => FontFamilyResolver.Resolve(_adapter, family, adjusted, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations));
+        }
+
+        /// <summary>The style bits of a font request: bold/italic as requested, plus <c>font-synthesis-weight</c>/<c>-style: none</c>.</summary>
+        private static PaintFontStyle StyleFlagsFor(FontContext font)
+        {
             var fontStyle = PaintFontStyle.Regular;
             if (font.Bold) fontStyle |= PaintFontStyle.Bold;
             if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+            // Only when the matching style was asked for: a switch with nothing to synthesize must not split the font cache.
+            if (font.NoSyntheticBold && font.Weight >= 600) fontStyle |= PaintFontStyle.NoSyntheticBold;
+            if (font.NoSyntheticItalic && font.Italic) fontStyle |= PaintFontStyle.NoSyntheticItalic;
+            return fontStyle;
+        }
 
-            return FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, EncodeVariations(font));
+        /// <summary>
+        /// <c>font-size-adjust</c> (CSS Fonts 5 §3.2): re-creates <paramref name="resolved"/> at <c>size * adjust / ratio</c>, where
+        /// <c>ratio</c> is this face's own measurement of the chosen metric, so every face (primary and fallbacks alike) lands on
+        /// the same aspect value. <c>from-font</c> uses <paramref name="fromFontRatio"/> (the primary face's ratio) for a fallback, and is
+        /// the identity for the primary itself. Only the glyph font changes size; em resolution never sees the adjusted size.
+        /// </summary>
+        private Font? ApplySizeAdjust(FontContext font, Font? resolved, double size, double? fromFontRatio, Func<double, Font?> recreate)
+        {
+            if (resolved is null || FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is not { } adjust) return resolved;
+
+            var pixelsPerPoint = (_adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var ratio = FontMetricMeasurement.Ratio(resolved, FontSizeAdjustGrammar.ToFontMetric(adjust.Metric), pixelsPerPoint);
+            var target = double.IsNaN(adjust.Value) ? fromFontRatio ?? ratio : adjust.Value;
+            var adjustedSize = size * target / ratio;
+
+            return adjustedSize > 0 && Math.Abs(adjustedSize - size) > 1e-9 ? recreate(adjustedSize) ?? resolved : resolved;
         }
 
         /// <summary>
@@ -1853,9 +1904,13 @@ namespace PeachPDF.Svg
             // The resolver may hand back a distinct Font instance for the same face per character; one instance per face keeps the
             // renderer's reference comparison ("same font as the previous glyph") meaningful, so a run in one fallback font stays one batch.
             var faces = new Dictionary<string, Font> { [primary.FaceKey] = primary };
-            var fontStyle = PaintFontStyle.Regular;
-            if (font.Bold) fontStyle |= PaintFontStyle.Bold;
-            if (font.Italic) fontStyle |= PaintFontStyle.Italic;
+            var fontStyle = StyleFlagsFor(font);
+            var variations = EncodeVariations(font);
+            var baseSize = Math.Max(font.Size, 1);
+            var pixelsPerPoint = (_adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            double? primaryRatio = FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is { } primaryAdjust
+                ? FontMetricMeasurement.Ratio(primary, FontSizeAdjustGrammar.ToFontMetric(primaryAdjust.Metric), pixelsPerPoint)
+                : null;
 
             return rune =>
             {
@@ -1865,8 +1920,12 @@ namespace PeachPDF.Svg
                 if (cache.TryGetValue(rune.Value, out var cached))
                     return cached;
 
-                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, Math.Max(font.Size, 1), fontStyle, rune, font.Weight, font.Stretch,
-                    font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, EncodeVariations(font)) ?? primary;
+                // Each fallback face is adjusted on its own (the per-face ratio), starting from the unadjusted size.
+                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, baseSize, fontStyle, rune, font.Weight, font.Stretch,
+                    font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, variations);
+                fallback = ApplySizeAdjust(font, fallback, baseSize, primaryRatio,
+                    adjusted => FontFamilyResolver.Resolve(_adapter, font.Family, adjusted, fontStyle, rune, font.Weight, font.Stretch,
+                        font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, variations)) ?? primary;
                 if (!faces.TryGetValue(fallback.FaceKey, out var canonical))
                     faces[fallback.FaceKey] = canonical = fallback;
                 return cache[rune.Value] = canonical;

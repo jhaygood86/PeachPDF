@@ -6,7 +6,7 @@ using System.Linq;
 namespace PeachPDF.Svg
 {
     /// <summary>
-    /// Expands the text shorthands (<c>font</c>, <c>font-variant</c>, <c>text-decoration</c>) that SVG text reads from an inline
+    /// Expands the text shorthands (<c>font</c>, <c>font-variant</c>, <c>font-synthesis</c>, <c>text-decoration</c>) that SVG text reads from an inline
     /// <c>style=""</c> or a presentation attribute into the longhands the tree builder consumes - through the CSS-OM's own shorthand
     /// grammars, so the expansion (including the reset of every longhand the shorthand does not list) is the HTML cascade's.
     /// </summary>
@@ -20,6 +20,7 @@ namespace PeachPDF.Svg
                 "font-variant-alternates", "font-variant-emoji", "font-feature-settings", "font-kerning", "font-variation-settings"]),
             ("font-variant", ["font-variant-caps", "font-variant-ligatures", "font-variant-position", "font-variant-numeric",
                 "font-variant-east-asian", "font-variant-alternates", "font-variant-emoji"]),
+            ("font-synthesis", ["font-synthesis-weight", "font-synthesis-style", "font-synthesis-small-caps", "font-synthesis-position"]),
             ("text-decoration", ["text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness"]),
         ];
 

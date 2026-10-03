@@ -276,11 +276,11 @@ namespace PeachPDF.Adapters
 
         private FontAdapter MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
-            var fontStyle = (XFontStyle)((int)style);
+            var fontStyle = ToXFontStyle(style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
             var match = _fontSet.MatchOrFallback(family, QueryFor(weight, stretch, isItalic, null, size, obliqueSkewSinus, variations));
-            return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
+            return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
         }
 
         /// <summary>
@@ -297,6 +297,21 @@ namespace PeachPDF.Adapters
                 FontVariationSettingsResolver.ToAxes(variations, size / PixelsPerPoint / PeachPDF.CSS.Length.PointsPerPx),
                 obliqueSkewSinus);
 
+        /// <summary>The style bits <see cref="XFontStyle"/> understands: the synthesis switches are not part of it.</summary>
+        private static XFontStyle ToXFontStyle(PaintFontStyle style) => (XFontStyle)((int)style & 0xF);
+
+        /// <summary>
+        /// Drops from a match's synthesis whatever <c>font-synthesis-weight</c>/<c>-style: none</c> forbade
+        /// (<see cref="PaintFontStyle.NoSyntheticBold"/>/<see cref="PaintFontStyle.NoSyntheticItalic"/>), so the face is used as it is.
+        /// </summary>
+        internal static TypefaceMatch Restrict(TypefaceMatch match, PaintFontStyle style)
+        {
+            var synthesis = match.Synthesis;
+            if ((style & PaintFontStyle.NoSyntheticBold) != 0) synthesis &= ~SyntheticStyle.Bold;
+            if ((style & PaintFontStyle.NoSyntheticItalic) != 0) synthesis &= ~SyntheticStyle.Italic;
+            return synthesis == match.Synthesis ? match : match with { Synthesis = synthesis };
+        }
+
         private FontAdapter CreateFontAdapter(double size, XFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
         {
             // A face with a slant axis draws the oblique itself, so the renderer must not shear it as well.
@@ -311,7 +326,7 @@ namespace PeachPDF.Adapters
 
         protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
-            var fontStyle = (XFontStyle)((int)style);
+            var fontStyle = ToXFontStyle(style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
             // A null here tells the caller to try the next family in the stack: never build an XFont for a family
@@ -322,7 +337,7 @@ namespace PeachPDF.Adapters
                 return null;
             }
 
-            return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
+            return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
         }
 
         protected override Font? CreateSystemFallbackFontForCodepointInt(double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
@@ -330,7 +345,7 @@ namespace PeachPDF.Adapters
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;
 
-            var fontStyle = (XFontStyle)((int)style);
+            var fontStyle = ToXFontStyle(style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
             try
@@ -338,7 +353,7 @@ namespace PeachPDF.Adapters
                 if (!fallbackFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
                     return null;
 
-                return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
+                return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
             }
             catch
             {

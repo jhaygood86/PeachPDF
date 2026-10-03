@@ -1342,6 +1342,36 @@ namespace PeachPDF.Html.Core.Dom
 
         private Font? _actualFont;
 
+        // font-size-adjust bookkeeping, written by ActualFont. _emScale is unadjusted size / adjusted size (1 when
+        // no adjustment applies); _primaryAdjustRatio is the primary face's ratio for the adjusted metric, which
+        // `from-font` hands to fallback faces.
+        private double _emScale = 1.0;
+        private double _primaryAdjustRatio = 1.0;
+
+        private (FontMetric Metric, double Value)? _sizeAdjust;
+        private bool _sizeAdjustResolved;
+
+        /// <summary>
+        /// This box's <c>font-size-adjust</c> as the metric it matches and the factor (<see cref="double.NaN"/> for
+        /// <c>from-font</c>), or null for <c>none</c>. <c>ic-height</c> is measured as <c>ic-width</c>: the font
+        /// layer exposes no vertical advance for the ideograph.
+        /// </summary>
+        private (FontMetric Metric, double Value)? SizeAdjust
+        {
+            get
+            {
+                if (_sizeAdjustResolved) return _sizeAdjust;
+
+                _sizeAdjustResolved = true;
+                if (FontSizeAdjustGrammar.Resolve(Style.Font.FontSizeAdjust) is { } parsed)
+                {
+                    _sizeAdjust = (FontSizeAdjustGrammar.ToFontMetric(parsed.Metric), parsed.Value);
+                }
+
+                return _sizeAdjust;
+            }
+        }
+
         /// <summary>The font that should be actually used to paint the text of the box.</summary>
         public Font ActualFont
         {
@@ -1389,7 +1419,7 @@ namespace PeachPDF.Html.Core.Dom
                     // spec-correct value (see FontSizeInheritanceIntegrationTests.cs, and this fix's own
                     // commit message for the reasoning).
                     var pixelsPerPoint = (Owner.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-                    parentSize = parentBox.ActualFont.Size * pixelsPerPoint;
+                    parentSize = parentBox.DerivedStyle.GetEmHeight() * pixelsPerPoint;
                     remSize = GetRemHeight() * pixelsPerPoint;
                 }
                 else
@@ -1424,6 +1454,29 @@ namespace PeachPDF.Html.Core.Dom
                     throw new HtmlRenderException($"Cannot find font: {Style.Font.FontFamily} and Default Font {DefaultFontResolver.DefaultFont} is not installed", HtmlRenderErrorType.General);
                 }
 
+                // font-size-adjust (CSS Fonts 5 §3.2): the glyph font is created at fsize * adjust / (the face's own
+                // ratio for the chosen metric). Only the font is rescaled - font-size itself, and so em resolution
+                // (GetEmHeight), keeps the unadjusted size, which is what _emScale records.
+                if (SizeAdjust is { } adjust)
+                {
+                    var pixelsPerPoint = (Owner.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                    _primaryAdjustRatio = FontMetricMeasurement.Ratio(_actualFont, adjust.Metric, pixelsPerPoint);
+
+                    var target = double.IsNaN(adjust.Value) ? _primaryAdjustRatio : adjust.Value;
+                    var adjustedSize = fsize * target / _primaryAdjustRatio;
+
+                    if (adjustedSize > 0 && Math.Abs(adjustedSize - fsize) > 1e-9)
+                    {
+                        var adjustedFont = Owner.GetCachedFont(Style.Font.FontFamily!, adjustedSize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
+                                           ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, adjustedSize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings);
+                        if (adjustedFont is not null)
+                        {
+                            _emScale = fsize / adjustedSize;
+                            _actualFont = adjustedFont;
+                        }
+                    }
+                }
+
                 return _actualFont!;
             }
         }
@@ -1451,7 +1504,7 @@ namespace PeachPDF.Html.Core.Dom
         /// parent-relative form is eagerly resolved to an absolute point value in its setter - see that
         /// setter's own doc comment.
         /// </summary>
-        public double ActualFontSize => ActualFont.Size;
+        public double ActualFontSize => GetEmHeight();
 
         private double? _actualNumericWeight;
 
@@ -1526,6 +1579,20 @@ namespace PeachPDF.Html.Core.Dom
                 st |= PaintFontStyle.Bold;
             }
 
+            // font-synthesis-weight/-style: none (CSS Fonts 4 §3.5) travel with the style bits, so they are part of
+            // the font's cache identity and reach the face match in every creation path that uses these flags. Only
+            // set when the matching style was asked for (a synthesis switch with nothing to synthesize is a no-op),
+            // so an unstyled box shares its cached font with one that never declared font-synthesis.
+            if (Style.Font.FontSynthesisWeight.Value == FontSynthesisMode.None && ActualNumericWeight >= 600)
+            {
+                st |= PaintFontStyle.NoSyntheticBold;
+            }
+
+            if (Style.Font.FontSynthesisStyle.Value == FontSynthesisMode.None && (st & PaintFontStyle.Italic) != 0)
+            {
+                st |= PaintFontStyle.NoSyntheticItalic;
+            }
+
             return st;
         }
 
@@ -1579,7 +1646,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 // Never synthesize what real GSUB substitution is already doing - requesting both would
                 // shrink and shift glyphs that are already drawn as proper sub/superscripts.
-                if (requested != SubSuperMode.None && ActualFontVariantPosition == SubSuperMode.None)
+                // font-synthesis-position: none forbids the synthesis, leaving the run at its normal size and baseline.
+                if (requested != SubSuperMode.None && ActualFontVariantPosition == SubSuperMode.None
+                    && Style.Font.FontSynthesisPosition.Value == FontSynthesisMode.Auto)
                 {
                     var isSuper = requested == SubSuperMode.Super;
                     var font = ActualFont;
@@ -1647,18 +1716,39 @@ namespace PeachPDF.Html.Core.Dom
             if (_codepointFontCache is not null && _codepointFontCache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
-            var size = ActualFont.Size * sizeScale;
+            // Fallback faces start from the unadjusted size: font-size-adjust is applied per face below, not inherited
+            // from the primary's already-adjusted size.
+            var size = GetEmHeight() * sizeScale;
             // Resolve against the full authored font-family stack (not the cascade-collapsed single family)
             // so a codepoint the first family can't supply falls back to a later one.
-            var font = Owner.GetCachedFontForCodepoint(Style.Font.FontFamilyList ?? Style.Font.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, presentation, ActualFontVariationSettings)
-                       ?? (sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont);
+            var family = Style.Font.FontFamilyList ?? Style.Font.FontFamily!;
+            var font = Owner.GetCachedFontForCodepoint(family, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, presentation, ActualFontVariationSettings);
+
+            if (font is not null && SizeAdjust is { } adjust)
+            {
+                var pixelsPerPoint = (Owner.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                var ratio = FontMetricMeasurement.Ratio(font, adjust.Metric, pixelsPerPoint);
+                var target = double.IsNaN(adjust.Value) ? _primaryAdjustRatio : adjust.Value;
+                var adjustedSize = size * target / ratio;
+
+                if (adjustedSize > 0 && Math.Abs(adjustedSize - size) > 1e-9)
+                {
+                    font = Owner.GetCachedFontForCodepoint(family, adjustedSize, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, presentation, ActualFontVariationSettings) ?? font;
+                }
+            }
+
+            font ??= sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
 
             (_codepointFontCache ??= [])[cacheKey] = font;
             return font;
         }
 
         /// <summary>Gets the size of 1em, per spec: an element's own computed font-size.</summary>
-        public double GetEmHeight() => ActualFont.Size;
+        public double GetEmHeight()
+        {
+            var font = ActualFont;
+            return font.Size * _emScale;
+        }
 
         /// <summary>
         /// The font size of the ROOT ELEMENT (css-values-3 §5.1.2), which is the outermost box that
@@ -1755,7 +1845,12 @@ namespace PeachPDF.Html.Core.Dom
             // ic is the advance of the ideograph in the font that actually renders it - the primary face
             // only when that one covers it - and 1em when no font does (Ratio's fallback for a missing glyph).
             var font = metric == FontMetric.Ic ? ActualFontForCodepoint(FontMetricMeasurement.WaterIdeograph) : ActualFont;
-            return (cache[(int)metric] = FontMetricMeasurement.Ratio(font, metric)).Value;
+
+            // The ratio is a multiple of the measured font's own em, but the unit multiplies it by the unadjusted
+            // em: under font-size-adjust the two differ, and the used font is the adjusted one.
+            var em = GetEmHeight();
+            var ratio = FontMetricMeasurement.Ratio(font, metric);
+            return (cache[(int)metric] = em > 0 ? ratio * font.Size / em : ratio).Value;
         }
 
         /// <summary>
@@ -1766,7 +1861,7 @@ namespace PeachPDF.Html.Core.Dom
         private double LineHeightRatio(double pixelsPerPoint)
         {
             var font = ActualFont;
-            var em = font.Size * pixelsPerPoint * pixelsPerPoint;
+            var em = GetEmHeight() * pixelsPerPoint * pixelsPerPoint;
             if (em <= 0) return FontMetricRatios.Approximate(FontMetric.Lh);
 
             // CSS Values 4 §6.1.1: in the line-height property itself, lh is the PARENT's line-height (a box's

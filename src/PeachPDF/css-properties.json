@@ -2951,6 +2951,90 @@
       }
     },
     {
+      "name": "font-size-adjust",
+      "comment": "CSS Fonts 5 section 3.2. cssDataType 'cssom-grammar' calls FontSizeAdjustProperty.ValueGrammar.Convert. The authored text is resolved to a metric and factor by FontSizeAdjustGrammar.Resolve where the font is created (DerivedStyle.ActualFont; SvgTreeBuilder.ComputeFontContext). It never changes the computed font-size or em resolution, only the size glyph fonts are created at.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontSizeAdjustProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "FontSizeAdjust",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-synthesis-weight",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops the renderer faking bold when the matched face is lighter than requested.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisWeight",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisWeight.ToString()"
+      }
+    },
+    {
+      "name": "font-synthesis-style",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops the renderer faking italic/oblique when the matched face is upright.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisStyle",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisStyle.ToString()"
+      }
+    },
+    {
+      "name": "font-synthesis-small-caps",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops small-caps being synthesized from reduced-size capitals.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisSmallCaps",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisSmallCaps.ToString()"
+      }
+    },
+    {
+      "name": "font-synthesis-position",
+      "comment": "CSS Fonts 4 section 3.5, auto | none. none stops sub/superscript being synthesized from a reduced-size face and baseline shift.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontSynthesisMode",
+        "keywordMap": "Map.FontSynthesisModes",
+        "fallback": "FontSynthesisMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontSynthesisPosition",
+        "csharpDataType": "CssProperty<FontSynthesisMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontSynthesisPosition.ToString()"
+      }
+    },
+    {
       "name": "font-kerning",
       "comment": "CSS Fonts 3 §7.3, single keyword.",
       "inherited": true,
