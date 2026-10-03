@@ -479,7 +479,7 @@ namespace PeachPDF.Tests.Svg
             var wrapped = await PdfContent("""inline-size="60" """);
             var faded = await PdfContent("""inline-size="60" opacity="0.5" """);
 
-            static int Lines(string pdf) => System.Text.RegularExpressions.Regex.Matches(pdf, @"\sT[jJ]\s").Count;
+            static int Lines(string pdf) => System.Text.RegularExpressions.Regex.Matches(pdf, @"[\s\]>)]T[jJ]\s").Count;
             Assert.True(Lines(wrapped) > Lines(unwrapped));
             Assert.True(Lines(faded) >= Lines(wrapped));
         }
