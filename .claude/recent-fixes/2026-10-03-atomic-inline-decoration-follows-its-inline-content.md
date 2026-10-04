@@ -74,14 +74,16 @@ the per-line path. Mutating the gate (dropping `IsAtomicInline`, keeping the for
 distinguishable only by where a *vertically* padded or bordered inline's underline lands - and that
 placement is itself wrong on the per-line path on `main` (`padding-bottom:12pt` moves the underline up
 into the glyphs; Chrome keeps it below the text). Asserting it would pin a defect, so the gate is covered
-by the form-control and empty/short/wrapped tests, and the placement bug is a separate issue.
+by the form-control and empty/short/wrapped tests, and the placement bug is a separate issue (#1626).
 
 ### Known limits of the clip fix
 
 - **`text-overflow: ellipsis`:** the underline span is built from every word's rectangle, including the
   words the ellipsis replaces, then clipped at the padding edge. Measured in the showcase PDF: the line is
   drawn out to 208.6pt and clipped at the box edge (122.5pt) while the ellipsis text ends at 119.2pt, so
-  the visible line overshoots the ellipsis by ~3pt. A browser stops at the ellipsis.
+  the visible line overshoots the ellipsis glyph by ~3pt. A browser stops before the ellipsis, so against
+  Chrome the overshoot is the ellipsis plus that slack. Identical on `main` for a plain inline link in a
+  truncating block - not specific to this change; tracked in #1625.
 - **Fragmented clipping blocks:** the clip is built from the fragment's own rectangle
   (`RenderUtils.TryPushOverflowClip`, shared with the ancestor-clip hoist path), where the descendants'
   clip comes from the whole box. On a slice with no real top/bottom border it insets by a border that is
