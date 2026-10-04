@@ -1,7 +1,7 @@
 # An underlined form control gets a line across the whole control
 
-`<input>`, `<select>` and `<textarea>` with `text-decoration: underline` draw one line across the control's
-full width; a browser underlines only the control's text (css-text-decor-3 section 2.4 - a decoration lands on
+`<input>` and `<select>` with `text-decoration: underline` draw one line across the control's
+full width (a `<textarea>` is underlined under its text, measured against `main`); a browser underlines only the control's text (css-text-decor-3 section 2.4 - a decoration lands on
 the box's inline content).
 
 A form control is a replaced atomic inline whose text is its own `CssRectFormField` word on the root

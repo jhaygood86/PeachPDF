@@ -8356,6 +8356,7 @@ var decorationInlineBlockHtml = """
     .wide { display: inline-block; width: 220pt; background: #eef6f3 }
     .narrow { display: inline-block; width: 90pt; background: #eef6f3 }
     .tag { display: inline-block; padding: 2pt 6pt; background: #eef6f3; border: 1px solid #b7d6cc }
+    .clip { display: inline-block; width: 80pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: #eef6f3 }
     </style></head><body>
 
     <h1>A decorated inline-block is underlined under its text only</h1>
@@ -8375,6 +8376,10 @@ var decorationInlineBlockHtml = """
     <h2>Padding and a border are not underlined</h2>
     <div class="label">the box's own padding and border sit outside its inline content</div>
     <p><a class="tag" href="#">padded tag</a> <a class="tag" href="#">another</a></p>
+
+    <h2>Truncated link - the line stays inside the clipped box</h2>
+    <div class="label">overflow: hidden, white-space: nowrap on an 80pt box; the line is clipped with the text</div>
+    <p><a class="clip" href="#">A long link title that is truncated</a> and text beside it</p>
 
     <h2>inline-flex</h2>
     <div class="label">an item's text is underlined, the rest of the 220pt container is not</div>

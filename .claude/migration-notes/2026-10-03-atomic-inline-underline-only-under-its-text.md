@@ -10,6 +10,5 @@ content width, even when it contained no text (an icon-only link) or a few chara
 Documents that relied on the stray line, or added `text-decoration: none` to hide it, render the same
 apart from the line itself.
 
-Unchanged: a form control (`<input>`, `<select>`, `<textarea>`) with a decoration still gets one line across the
-whole control. At `v0.9.20` `FragmentPainter` had only the block-level (`Line: null`) propagation branch, so the
+Unchanged: an `<input>` or `<select>` with a decoration still gets one line across the whole control. At `v0.9.21` `FragmentPainter` had only the block-level (`Line: null`) propagation branch, so the
 inline-block behaviour above did differ at the last release.

@@ -55,3 +55,23 @@ inner lines, so the spans are exactly its text. An empty one finds no content an
   underlined `vertical-rl` inline-block used to get a full-height bar down its edge, empty or not; now
   an empty one gets nothing and a text one gets a line along its text. Only one column of a wrapped
   vertical inline-block is underlined - not addressed here.
+
+## Review round: the decoration is drawn inside its own box's overflow clip
+
+The maintainer's review found the fix made one common pattern worse: a truncated link
+(`display:inline-block; overflow:hidden; white-space:nowrap`) now had its underline run along the
+*unclipped* text, hundreds of pixels past the box, where `main` kept it inside. The same bug already
+existed on `main` for a block-level box. Cause: a fragment carries the clip of its clipping *ancestor*
+(`FragmentEmitter.OverflowClipOf` starts at the containing block), so a box's own `overflow` clip is in
+force for its children but not for the decoration drawn at the box's own paint step - which is where the
+propagated path draws it. `PaintPropagatedDecoration` now pushes the decorating box's own padding-edge
+clip (rounded to its radius) around the lines. One place fixes the block-level and atomic-inline cases.
+Tests: `PropagatedUnderline_OfAClippingBox_IsDrawnInsideItsOwnClip` (inline-block and block; fails with
+the push removed) and a no-clip-pushed case.
+
+**Not pinned, deliberately:** the review asked for a test that a padded non-atomic `<span>` still takes
+the per-line path. Mutating the gate (dropping `IsAtomicInline`, keeping the form-control exclusion) is
+distinguishable only by where a *vertically* padded or bordered inline's underline lands - and that
+placement is itself wrong on the per-line path on `main` (`padding-bottom:12pt` moves the underline up
+into the glyphs; Chrome keeps it below the text). Asserting it would pin a defect, so the gate is covered
+by the form-control and empty/short/wrapped tests, and the placement bug is a separate issue.

@@ -4,6 +4,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -561,6 +562,70 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(text.Right, line.X2, 1);
         }
 
+        // ─── The decoration is drawn inside the decorating box's own overflow clip ─────────────────
+
+        [Theory]
+        [InlineData("display:inline-block; width:80pt")]
+        [InlineData("display:block; width:80pt")]
+        public async Task PropagatedUnderline_OfAClippingBox_IsDrawnInsideItsOwnClip(string boxStyle)
+        {
+            // A link truncated with `overflow: hidden; white-space: nowrap`: the text runs far past the box,
+            // and so did the underline - the clip a fragment carries is its clipping *ancestor's*, so the
+            // decorating box's own clip was not in force while its decoration was drawn.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<p><a id='a' style='{boxStyle}; overflow:hidden; white-space:nowrap; text-decoration:underline'>"
+                + "abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var box = a.Rectangles.Count > 0 ? a.Rectangles.Values.Single() : a.Bounds;
+
+            Assert.True(line.X2 > box.Right, "the fixture's text must overflow the box for this test to mean anything");
+
+            var clip = Assert.Single(ClipsAround(g, line));
+            Assert.Equal(box.Left, clip.Left, 1);
+            Assert.Equal(box.Right, clip.Right, 1);
+        }
+
+        [Fact]
+        public async Task PropagatedUnderline_OfARoundedClippingBox_IsAlsoClippedToItsCorners()
+        {
+            // The clip is the box's padding edge rounded to its border-radius, like the one its descendants get.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:80pt; border-radius:12pt; overflow:hidden; "
+                + "white-space:nowrap; text-decoration:underline'>abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var box = a.Rectangles.Values.Single();
+            var clips = ClipsAround(g, line);
+
+            Assert.Equal(2, clips.Count);
+            Assert.Equal(box.Left, clips[0].Left, 1);
+            Assert.Equal(box.Right, clips[0].Right, 1);
+        }
+
+        [Fact]
+        public async Task PropagatedUnderline_OfABoxThatDoesNotClip_PushesNoClip()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:80pt; text-decoration:underline'>ab</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+
+            Assert.Empty(ClipsAround(g, line));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<double> GetDecorationYAsync(string decorationLine)
@@ -573,6 +638,21 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, s, g);
 
             return Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>()).Y1;
+        }
+
+        /// <summary>The clip rectangles in force when <paramref name="line"/> was drawn, outermost first.</summary>
+        private static List<Rect> ClipsAround(TestRecordingGraphics g, TestRecordingGraphics.DrawLineCall line)
+        {
+            var open = new List<Rect>();
+
+            foreach (var call in g.Log)
+            {
+                if (ReferenceEquals(call, line)) return open;
+                if (call is TestRecordingGraphics.PushClipCall push) open.Add(push.Rect);
+                else if (call is TestRecordingGraphics.PopClipCall && open.Count > 0) open.RemoveAt(open.Count - 1);
+            }
+
+            throw new System.InvalidOperationException("the line was not drawn");
         }
 
         private static string Wrap(string body) =>
