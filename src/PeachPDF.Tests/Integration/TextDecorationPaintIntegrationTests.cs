@@ -637,6 +637,7 @@ namespace PeachPDF.Tests.Integration
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, a, g);
+            AssertClipsBalanced(g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var box = a.Rectangles.Count > 0 ? a.Rectangles.Values.Single() : a.Bounds;
@@ -671,6 +672,7 @@ namespace PeachPDF.Tests.Integration
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, a, g);
+            AssertClipsBalanced(g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var box = a.Rectangles.Values.Single();
@@ -690,6 +692,7 @@ namespace PeachPDF.Tests.Integration
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, a, g);
+            AssertClipsBalanced(g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
 
@@ -708,6 +711,26 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, s, g);
 
             return Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>()).Y1;
+        }
+
+        /// <summary>
+        /// Every clip pushed while painting was popped again. A decoration that pushes its box's clip and
+        /// forgets to pop it leaks that clip over everything painted afterwards - every word after a clipped
+        /// link disappears - and nothing else in a recording notices, since each draw call is still logged.
+        /// </summary>
+        private static void AssertClipsBalanced(TestRecordingGraphics g)
+        {
+            var depth = 0;
+
+            foreach (var call in g.Log)
+            {
+                if (call is TestRecordingGraphics.PushClipCall) depth++;
+                else if (call is TestRecordingGraphics.PopClipCall) depth--;
+
+                Assert.True(depth >= 0, "a clip was popped that was never pushed");
+            }
+
+            Assert.Equal(0, depth);
         }
 
         /// <summary>The clip rectangles in force when <paramref name="line"/> was drawn, outermost first.</summary>
