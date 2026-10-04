@@ -147,6 +147,18 @@ namespace PeachPDF.Html.Core.Dom
         internal bool PrecededByWordSeparator { get; set; }
 
         /// <summary>
+        /// The box whose font measured the word separator in front of this word - set alongside
+        /// <see cref="PrecededByWordSeparator"/>, null when that is false. The separator's advance comes
+        /// from whichever source produced it: the previous word's own trailing space (its
+        /// <see cref="ActualWordSpacing"/>, so its own or <c>::first-line</c> style), or the enclosing
+        /// box for a white-space-only inline box or a child's leading space. That is rarely this word's
+        /// own box when the font size changes across the gap (<c>a &lt;big&gt;B&lt;/big&gt;</c>), and
+        /// the painter draws the space glyph in this box's font so it fills the gap it was measured for
+        /// rather than one sized for the word after it.
+        /// </summary>
+        internal CssBox? WordSeparatorStyle { get; set; }
+
+        /// <summary>
         /// Width of the rectangle
         /// </summary>
         public double Width
@@ -169,8 +181,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// Includes one <c>letter-spacing</c> unit alongside <c>word-spacing</c>: a real UA applies
         /// letter-spacing at every adjacent-character transition in a run, including the space
-        /// character's own leading/trailing edges - since this engine never paints the space character
-        /// as its own glyph (it's purely this numeric gap between independently-painted word boxes),
+        /// character's own leading/trailing edges - since the space is not part of either word's glyph
+        /// run here (it's this numeric gap between independently-painted word boxes; the space glyph
+        /// <c>FragmentPainter.PaintWordSeparator</c> shows in it is drawn without letter-spacing),
         /// that extra unit has to be folded in here for the inter-word gap to widen proportionally with
         /// letter-spacing the same way a real browser's does, instead of staying pinned to plain
         /// word-spacing regardless of how large letter-spacing gets.

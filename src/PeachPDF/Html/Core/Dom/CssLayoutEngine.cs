@@ -994,6 +994,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var pendingWordSeparator = false;
+            CssBox? pendingWordSeparatorStyle = null;
 
             for (var i = 0; i < words.Count; i++)
             {
@@ -1175,12 +1176,19 @@ namespace PeachPDF.Html.Core.Dom
                 word.Width = physical.Width;
                 word.Height = physical.Height;
 
-                // The horizontal counterpart of FlowBox's own assignment - see
+                // The vertical counterpart of FlowBox's own assignment - see
                 // CssRect.PrecededByWordSeparator. This flow walks one flat word list rather than
                 // recursing through inline boxes, so it never adds a whitespace-only box's own advance
-                // and the two word-level sources are all there is.
-                word.PrecededByWordSeparator = pendingWordSeparator || word.HasSpaceBefore;
+                // and the two word-level sources are all there is. Like FlowBox, never for the word
+                // that opens a column: the space in front of it was removed (css-text-3 phase II), and
+                // the separator still pending from the column before is not between two words of this one.
+                var wordOpensTheLine = line.Words.TrueForAll(w => w.IsLineBreak);
+                word.PrecededByWordSeparator = !wordOpensTheLine && (pendingWordSeparator || word.HasSpaceBefore);
+                word.WordSeparatorStyle = !word.PrecededByWordSeparator ? null
+                    : pendingWordSeparator ? pendingWordSeparatorStyle
+                    : word.FirstLineStyle ?? word.OwnerBox;
                 pendingWordSeparator = word.HasSpaceAfter;
+                pendingWordSeparatorStyle = word.FirstLineStyle ?? word.OwnerBox;
 
                 line.ReportExistanceOf(word);
                 (trailingRegionalIndicatorCount, trailingGraphemeContext) = UpdateTrailingTextState(
@@ -3749,6 +3757,7 @@ namespace PeachPDF.Html.Core.Dom
                 // contiguous with the previous one. It is a real word separator, and
                 // `<span>AA</span> <span>BB</span>` is exactly the common markup that produces it.
                 coordinates.PendingWordSeparator = true;
+                coordinates.PendingWordSeparatorStyle = box;
             }
 
             // Finalize what was captured at entry, now that this box's content has actually been placed
@@ -5563,6 +5572,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         coordinates.CurrentX += box.ActualWordSpacing;
                         coordinates.PendingWordSeparator = true;
+                        coordinates.PendingWordSeparatorStyle = box;
                     }
 
                     for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
@@ -5952,7 +5962,11 @@ namespace PeachPDF.Html.Core.Dom
                         // expansion point at the head of the line (issue #1087).
                         word.PrecededByWordSeparator = !wordOpensTheLine
                             && (coordinates.PendingWordSeparator || word.HasSpaceBefore);
+                        word.WordSeparatorStyle = !word.PrecededByWordSeparator ? null
+                            : coordinates.PendingWordSeparator ? coordinates.PendingWordSeparatorStyle
+                            : word.FirstLineStyle ?? word.OwnerBox;
                         coordinates.PendingWordSeparator = word.HasSpaceAfter;
+                        coordinates.PendingWordSeparatorStyle = word.FirstLineStyle ?? word.OwnerBox;
 
                         // A fixed box repeats at the same page-box position on every page (CSS 2.1
                         // §13.3.1), so a boundary means nothing to its words. A *table cell* used to be

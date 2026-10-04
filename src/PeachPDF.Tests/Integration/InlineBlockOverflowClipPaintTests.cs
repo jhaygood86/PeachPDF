@@ -61,11 +61,12 @@ namespace PeachPDF.Tests.Integration
         {
             var content = await PageContentAsync(Html);
 
-            // "before", "inside", " after" and "Agy" - four runs. The box painted its border and clipped
-            // its own word away entirely, leaving three.
+            // "before", "inside", "after" and "Agy" - four runs, plus the space glyph shown between each
+            // two of them: seven. The box painted its border and clipped its own word away entirely,
+            // leaving one run (and the space in front of it) fewer.
             var shows = Regex.Matches(content, @"Tj").Count;
 
-            Assert.Equal(4, shows);
+            Assert.Equal(7, shows);
         }
 
         /// <summary>

@@ -57,7 +57,8 @@ namespace PeachPDF.Tests.Integration
 
             var strokes = Strokes(g);
             Assert.Equal(2, strokes.Length);
-            var words = g.DrawStringCalls;
+            // The space glyph between the two words is drawn without a stroke - it has no outline.
+            var words = g.WordDrawStringCalls;
             for (var i = 0; i < 2; i++)
             {
                 // The test canvas's outline starts at the word's own x and rises from the baseline (top of the cell plus the ascent).
