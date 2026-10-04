@@ -63,6 +63,50 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(DisplayMode.Table, box.Display.Value);
         }
 
+        [Theory]
+        [InlineData("table-row")]
+        [InlineData("table-row-group")]
+        [InlineData("table-header-group")]
+        [InlineData("table-footer-group")]
+        [InlineData("table-cell")]
+        [InlineData("table-column")]
+        [InlineData("table-column-group")]
+        public async Task OutOfFlow_TableInternalDisplay_BlockifiesToBlock(string display)
+        {
+            foreach (var position in new[] { "absolute", "fixed" })
+            {
+                var box = await FindByIdAsync(
+                    $"<div id='t' style='position:{position}; display:{display}'></div>", "t");
+                Assert.Equal(DisplayMode.Block, box.Display.Value);
+            }
+        }
+
+        [Fact]
+        public async Task Fixed_TableRow_LaysOutAsABlockInsteadOfThrowing()
+        {
+            // A fixed table-row with no cells reached the table engine and threw out of LayoutBodyRows.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div id='t' style='position:fixed; display:table-row; width:100pt; height:20pt'></div>"));
+            var box = FindById(root, "t")!;
+            Assert.Equal(DisplayMode.Block, box.Display.Value);
+            Assert.Equal(100, box.Size.Width, 1.5);
+            Assert.Equal(20, box.ActualHeight, 1.5);
+        }
+
+        [Theory]
+        [InlineData("<div id='t' style='display:table-row'></div>")]
+        [InlineData("<div style='display:table-header-group'><div id='t' style='display:table-row'></div></div>")]
+        [InlineData("<div style='display:table-footer-group'><div id='t' style='display:table-row'></div></div>")]
+        [InlineData("<div style='display:table-row-group'><div id='t' style='display:table-row'></div><div style='display:table-row'><div style='display:table-cell'>x</div></div></div>")]
+        public async Task Static_CelllessTableRow_IsNotBlockifiedAndLaysOut(string markup)
+        {
+            // A row with no cells took the same unguarded Min/Max over its cells out of the table engine.
+            var (root, _) = await BuildAndLayout(Wrap(markup));
+            // The parser may drop an empty header/footer group's row; laying out without throwing is the point.
+            var box = FindById(root, "t");
+            if (box is not null) Assert.Equal(DisplayMode.TableRow, box.Display.Value);
+        }
+
         [Fact]
         public async Task Static_InlineBlock_IsNotBlockified()
         {
