@@ -8082,7 +8082,11 @@ namespace PeachPDF.Html.Core.Dom
                 return firstLineStyle.VerticalAlign;
             }
 
+            // The owner's own value says how the owner sits in its parent's line, not how its content sits in
+            // its own lines (CSS 2.1 §10.8.1): a table cell's and an inline-block's inner lines are baseline.
             return styledBox.DerivedStyle.ActualDisplay == Keywords.TableCell
+                   || (ReferenceEquals(styledBox, ownerBox)
+                       && styledBox.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
                 ? BaselineVerticalAlign
                 : styledBox.VerticalAlign;
         }
