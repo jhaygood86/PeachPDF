@@ -92,3 +92,13 @@ by the form-control and empty/short/wrapped tests, and the placement bug is a se
 - **Own-step draws in general:** a fragment carries only its clipping *ancestor's* clip, so anything
   drawn at the box's own paint step is outside its own `overflow` clip. Only the propagated decoration is
   clipped here; the per-line path (form controls) is not.
+
+### Pixel snapping (after the rebase onto the snapped-decorations work)
+
+`RenderUtils.TryPushOverflowClip` gained a `snapToCssPixels` parameter on `main`, so a clip lands where
+the box's own snapped decorations are. `PaintPropagatedDecoration` is now an instance method and passes
+`container.SnapBoxDecorationsToCssPixels`, so the decoration's clip matches the clip the box's content
+gets with the option on or off. `PropagatedUnderline_OfAClippingBox_IsDrawnInsideItsOwnClip` runs both
+ways on a fractional box (off: the true edges; on: whole CSS pixels within half a pixel of them) and
+fails when the flag is ignored. The clipped-link repro through the CLI stays inside the box both ways
+(box 24-104px, underline 24-103px off and 24-102px on).

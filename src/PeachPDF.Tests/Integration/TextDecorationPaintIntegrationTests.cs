@@ -618,16 +618,21 @@ namespace PeachPDF.Tests.Integration
         // ─── The decoration is drawn inside the decorating box's own overflow clip ─────────────────
 
         [Theory]
-        [InlineData("display:inline-block; width:80pt")]
-        [InlineData("display:block; width:80pt")]
-        public async Task PropagatedUnderline_OfAClippingBox_IsDrawnInsideItsOwnClip(string boxStyle)
+        [InlineData("display:inline-block", false)]
+        [InlineData("display:block", false)]
+        [InlineData("display:inline-block", true)]
+        [InlineData("display:block", true)]
+        public async Task PropagatedUnderline_OfAClippingBox_IsDrawnInsideItsOwnClip(string display, bool snap)
         {
             // A link truncated with `overflow: hidden; white-space: nowrap`: the text runs far past the box,
             // and so did the underline - the clip a fragment carries is its clipping *ancestor's*, so the
-            // decorating box's own clip was not in force while its decoration was drawn.
+            // decorating box's own clip was not in force while its decoration was drawn. The box is
+            // fractional so SnapBoxDecorationsToCssPixels has something to snap: with it on the clip must sit
+            // on whole CSS pixels, like the clip the box's own content gets, and with it off on the true edges.
             var (root, container) = await BuildAndLayout(Wrap(
-                $"<p><a id='a' style='{boxStyle}; overflow:hidden; white-space:nowrap; text-decoration:underline'>"
-                + "abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz</a></p>"));
+                $"<p><a id='a' style='{display}; width:80.2pt; margin-left:10.3pt; overflow:hidden; white-space:nowrap; "
+                + "text-decoration:underline'>abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz</a></p>"));
+            container.SnapBoxDecorationsToCssPixels = snap;
             var a = FindById(root, "a")!;
 
             var g = new TestRecordingGraphics();
@@ -639,8 +644,20 @@ namespace PeachPDF.Tests.Integration
             Assert.True(line.X2 > box.Right, "the fixture's text must overflow the box for this test to mean anything");
 
             var clip = Assert.Single(ClipsAround(g, line));
-            Assert.Equal(box.Left, clip.Left, 1);
-            Assert.Equal(box.Right, clip.Right, 1);
+            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+
+            if (snap)
+            {
+                Assert.Equal(0, clip.Left / cssPixel - System.Math.Round(clip.Left / cssPixel), 6);
+                Assert.Equal(0, clip.Right / cssPixel - System.Math.Round(clip.Right / cssPixel), 6);
+                Assert.InRange(clip.Left, box.Left - cssPixel / 2 - 1e-6, box.Left + cssPixel / 2 + 1e-6);
+                Assert.InRange(clip.Right, box.Right - cssPixel / 2 - 1e-6, box.Right + cssPixel / 2 + 1e-6);
+            }
+            else
+            {
+                Assert.Equal(box.Left, clip.Left, 6);
+                Assert.Equal(box.Right, clip.Right, 6);
+            }
         }
 
         [Fact]
