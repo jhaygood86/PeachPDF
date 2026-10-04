@@ -45,6 +45,8 @@ namespace PeachPDF.Tests.TestSupport
             const string pinnedFamily = "PinnedSans";
             await RegisterFont(adapter, LiberationSans, pinnedFamily);
             adapter.AddFontFamilyMapping("sans-serif", pinnedFamily);
+            // Fixtures written against `Arial` get the same pinned metrics rather than a host fallback.
+            adapter.AddFontFamilyMapping("Arial", pinnedFamily);
         }
     }
 }
