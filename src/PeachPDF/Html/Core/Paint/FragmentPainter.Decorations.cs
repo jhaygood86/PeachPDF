@@ -875,11 +875,17 @@ namespace PeachPDF.Html.Core.Paint
         /// atomic inline reads as part of the space it occupies on the line.
         /// </para>
         /// </remarks>
-        private static void PaintPropagatedDecoration(Canvas g, CssBox box, BoxFragment fragment, Rect clip)
+        private void PaintPropagatedDecoration(Canvas g, CssBox box, BoxFragment fragment, Rect clip)
         {
             if (!DecorationsWorthCollecting(box)) return;
 
             var content = DecorationContent.Of(fragment, collectSpans: true);
+
+            // The decoration is drawn here, with the decorating box, not with the inline content it
+            // covers - and the clip a fragment carries is its clipping *ancestor's*, so this box's own
+            // `overflow` clip is not in force yet. Without it a line under text the box clips away (a
+            // `white-space: nowrap; overflow: hidden` link) ran on past the box along the unclipped text.
+            var clipsPushed = DomUtils.ClipsItsOverflow(box) ? RenderUtils.TryPushOverflowClip(g, fragment, container.SnapBoxDecorationsToCssPixels) : 0;
 
             foreach (var lineBox in content.Order)
             {
@@ -891,6 +897,9 @@ namespace PeachPDF.Html.Core.Paint
                         GetFirstLineStyleForRect(lineBox), ownDecorationArea: false, content, lineBox);
                 }
             }
+
+            for (var i = 0; i < clipsPushed; i++)
+                g.PopClip();
         }
 
         /// <summary>

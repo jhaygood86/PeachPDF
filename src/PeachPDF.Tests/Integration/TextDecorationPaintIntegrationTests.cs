@@ -4,6 +4,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -367,6 +368,334 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
 
+        // ─── An atomic inline is a block container: only its inline content is decorated ───────────
+
+        [Theory]
+        [InlineData("inline-block")]
+        [InlineData("inline-flex")]
+        [InlineData("inline-grid")]
+        public async Task AtomicInlineUnderline_WithNoText_DrawsNothing(string display)
+        {
+            // An icon-only link (`a { display: inline-block }` with a background image) has no inline
+            // content, so there is nothing for §2.4's propagated decoration to land on. Its rectangle is its
+            // border box on the parent's line, which used to be underlined across the whole content width.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<p>Empty: <a id='a' style='display:{display}; width:44pt; height:44pt; padding:5pt 5pt 0; "
+                + "text-decoration:underline; background:rgb(10,134,114)'> </a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+        }
+
+        [Fact]
+        public async Task AtomicInlineUnderline_WithShortText_SpansTheTextNotTheContentWidth()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p>Short: <a id='a' style='display:inline-block; width:120pt; text-decoration:underline'>ab</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var text = a.Boxes.Single().Rectangles.Values.Single();
+
+            Assert.Equal(text.Left, line.X1, 1);
+            Assert.Equal(text.Right, line.X2, 1);
+            Assert.True(line.X2 - line.X1 < 60,
+                $"the underline ({line.X2 - line.X1}pt) should cover 'ab', not the 120pt content box");
+        }
+
+        [Fact]
+        public async Task AtomicInlineUnderline_WrappedText_FollowsEachTextLine()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:60pt; font-size:10pt; text-decoration:underline'>"
+                + "aaa bbb ccc ddd eee</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ToList();
+            var text = a.Boxes.Single().Rectangles.Values.OrderBy(r => r.Top).ToList();
+
+            Assert.True(text.Count > 1, "the fixture must wrap for this test to mean anything");
+            Assert.Equal(text.Count, lines.Count);
+
+            for (var i = 0; i < lines.Count; i++)
+            {
+                Assert.Equal(text[i].Left, lines[i].X1, 1);
+                Assert.Equal(text[i].Right, lines[i].X2, 1);
+            }
+        }
+
+        [Fact]
+        public async Task AtomicInlineUnderline_WithOnlyANonTextChild_DrawsNothing()
+        {
+            // No inline content that is text: the child is itself an atomic inline, which §2.4 excludes.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:60pt; text-decoration:underline'>"
+                + "<img width='20' height='10' src='data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA='>"
+                + "<span style='display:inline-block; width:10pt; height:10pt'></span></a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+        }
+
+        [Fact]
+        public async Task AtomicInlineUnderline_WithBlockLevelChildren_ReachesTheirInlineContent()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div><span id='a' style='display:inline-block; width:100pt; text-decoration:underline'>"
+                + "<div id='d'>para</div></span></div>"));
+            var a = FindById(root, "a")!;
+            var d = FindById(root, "d")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var text = d.Boxes.Single().Rectangles.Values.Single();
+
+            Assert.Equal(text.Left, line.X1, 1);
+            Assert.Equal(text.Right, line.X2, 1);
+        }
+
+        [Fact]
+        public async Task InlineTableUnderline_ReachesTheTextInItsCellsOnly()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><span id='a' style='display:inline-table; width:200pt; text-decoration:underline'>"
+                + "<span style='display:table-row'><span id='c' style='display:table-cell'>cell</span></span></span></p>"));
+            var a = FindById(root, "a")!;
+            var c = FindById(root, "c")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var text = c.Boxes.Single().Rectangles.Values.Single();
+
+            Assert.Equal(text.Left, line.X1, 1);
+            Assert.Equal(text.Right, line.X2, 1);
+        }
+
+        [Fact]
+        public async Task FormFieldUnderline_KeepsItsControlWideLine()
+        {
+            // A form control is a replaced atomic inline whose text is not an inline child (its value is the
+            // control's own word), so the propagated path finds no content for it. Routing it there would
+            // draw nothing where it used to draw a line - too wide, but a line - so it stays on the
+            // per-own-line path until a control's text can be found as inline content.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><input id='f' type='text' value='Go' style='text-decoration:underline'></p>"));
+            var f = FindById(root, "f")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, f, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var control = f.Rectangles.Values.Single();
+
+            Assert.True(line.X1 >= control.Left && line.X2 <= control.Right,
+                $"the line ({line.X1}-{line.X2}) should stay inside the control ({control.Left}-{control.Right})");
+            Assert.True(line.X2 - line.X1 > control.Width * 0.8,
+                $"the line ({line.X2 - line.X1}pt) should span the control ({control.Width}pt), not just its text");
+        }
+
+        [Fact]
+        public async Task AtomicInlineUnderline_WithAnEmptyPaddedInlineChild_DrawsNothing()
+        {
+            // The icon-in-a-link pattern: `<a><span class=icon></span></a>` where the span only carries
+            // padding and a background. An empty inline is no inline content, so its padding is not underlined.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:80pt; height:30pt; text-decoration:underline'>"
+                + "<span style='padding:0 10pt'></span></a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+        }
+
+        [Fact]
+        public async Task AtomicInlineUnderline_EmptyPaddedInlineBesideText_UnderlinesOnlyTheText()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:80pt; height:30pt; text-decoration:underline'>"
+                + "<span style='padding:0 10pt'></span>ab</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+
+            Assert.True(line.X2 - line.X1 < 20, $"the line ({line.X2 - line.X1}pt) should cover 'ab' only, not the 20pt of padding");
+        }
+
+        [Fact]
+        public async Task InlineFlexUnderline_WithTextInAFlexItem_ReachesTheItemsText()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><span id='a' style='display:inline-flex; width:200pt; text-decoration:underline'>"
+                + "<span id='t'>ab</span></span></p>"));
+            var a = FindById(root, "a")!;
+            var t = FindById(root, "t")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var text = t.Boxes.Single().Rectangles.Values.Single();
+
+            Assert.Equal(text.Left, line.X1, 1);
+            Assert.Equal(text.Right, line.X2, 1);
+        }
+
+        [Fact]
+        public async Task SelectUnderline_KeepsItsControlWideLine()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><select id='f' style='text-decoration:underline'><option>Go</option></select></p>"));
+            var f = FindById(root, "f")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, f, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var control = f.Rectangles.Values.Single();
+
+            Assert.True(line.X2 - line.X1 > control.Width * 0.8,
+                $"the line ({line.X2 - line.X1}pt) should span the control ({control.Width}pt)");
+        }
+
+        [Fact]
+        public async Task TextareaUnderline_IsUnderItsTextNotTheWholeControl()
+        {
+            // A <textarea> is a static inline-block, not a form field, so it takes the propagated path.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><textarea id='f' style='width:200pt; text-decoration:underline'>ab</textarea></p>"));
+            var f = FindById(root, "f")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, f, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var control = f.Rectangles.Values.Single();
+
+            Assert.True(line.X2 - line.X1 < control.Width * 0.3,
+                $"the line ({line.X2 - line.X1}pt) should cover 'ab', not the {control.Width}pt control");
+        }
+
+        [Fact]
+        public async Task InlineGridUnderline_WithTextInAGridItem_ReachesTheItemsText()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><span id='a' style='display:inline-grid; width:200pt; text-decoration:underline'>"
+                + "<span id='t'>ab</span></span></p>"));
+            var a = FindById(root, "a")!;
+            var t = FindById(root, "t")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var text = t.Boxes.Single().Rectangles.Values.Single();
+
+            Assert.Equal(text.Left, line.X1, 1);
+            Assert.Equal(text.Right, line.X2, 1);
+        }
+
+        // ─── The decoration is drawn inside the decorating box's own overflow clip ─────────────────
+
+        [Theory]
+        [InlineData("display:inline-block", false)]
+        [InlineData("display:block", false)]
+        [InlineData("display:inline-block", true)]
+        [InlineData("display:block", true)]
+        public async Task PropagatedUnderline_OfAClippingBox_IsDrawnInsideItsOwnClip(string display, bool snap)
+        {
+            // A link truncated with `overflow: hidden; white-space: nowrap`: the text runs far past the box,
+            // and so did the underline - the clip a fragment carries is its clipping *ancestor's*, so the
+            // decorating box's own clip was not in force while its decoration was drawn. The box is
+            // fractional so SnapBoxDecorationsToCssPixels has something to snap: with it on the clip must sit
+            // on whole CSS pixels, like the clip the box's own content gets, and with it off on the true edges.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<p><a id='a' style='{display}; width:80.2pt; margin-left:10.3pt; overflow:hidden; white-space:nowrap; "
+                + "text-decoration:underline'>abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz</a></p>"));
+            container.SnapBoxDecorationsToCssPixels = snap;
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var box = a.Rectangles.Count > 0 ? a.Rectangles.Values.Single() : a.Bounds;
+
+            Assert.True(line.X2 > box.Right, "the fixture's text must overflow the box for this test to mean anything");
+
+            var clip = Assert.Single(ClipsAround(g, line));
+            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+
+            if (snap)
+            {
+                Assert.Equal(0, clip.Left / cssPixel - System.Math.Round(clip.Left / cssPixel), 6);
+                Assert.Equal(0, clip.Right / cssPixel - System.Math.Round(clip.Right / cssPixel), 6);
+                Assert.InRange(clip.Left, box.Left - cssPixel / 2 - 1e-6, box.Left + cssPixel / 2 + 1e-6);
+                Assert.InRange(clip.Right, box.Right - cssPixel / 2 - 1e-6, box.Right + cssPixel / 2 + 1e-6);
+            }
+            else
+            {
+                Assert.Equal(box.Left, clip.Left, 6);
+                Assert.Equal(box.Right, clip.Right, 6);
+            }
+        }
+
+        [Fact]
+        public async Task PropagatedUnderline_OfARoundedClippingBox_IsAlsoClippedToItsCorners()
+        {
+            // The clip is the box's padding edge rounded to its border-radius, like the one its descendants get.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:80pt; border-radius:12pt; overflow:hidden; "
+                + "white-space:nowrap; text-decoration:underline'>abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var box = a.Rectangles.Values.Single();
+            var clips = ClipsAround(g, line);
+
+            Assert.Equal(2, clips.Count);
+            Assert.Equal(box.Left, clips[0].Left, 1);
+            Assert.Equal(box.Right, clips[0].Right, 1);
+        }
+
+        [Fact]
+        public async Task PropagatedUnderline_OfABoxThatDoesNotClip_PushesNoClip()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><a id='a' style='display:inline-block; width:80pt; text-decoration:underline'>ab</a></p>"));
+            var a = FindById(root, "a")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+
+            Assert.Empty(ClipsAround(g, line));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<double> GetDecorationYAsync(string decorationLine)
@@ -379,6 +708,21 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, s, g);
 
             return Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>()).Y1;
+        }
+
+        /// <summary>The clip rectangles in force when <paramref name="line"/> was drawn, outermost first.</summary>
+        private static List<Rect> ClipsAround(TestRecordingGraphics g, TestRecordingGraphics.DrawLineCall line)
+        {
+            var open = new List<Rect>();
+
+            foreach (var call in g.Log)
+            {
+                if (ReferenceEquals(call, line)) return open;
+                if (call is TestRecordingGraphics.PushClipCall push) open.Add(push.Rect);
+                else if (call is TestRecordingGraphics.PopClipCall && open.Count > 0) open.RemoveAt(open.Count - 1);
+            }
+
+            throw new System.InvalidOperationException("the line was not drawn");
         }
 
         private static string Wrap(string body) =>

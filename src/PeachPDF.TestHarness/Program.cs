@@ -8335,6 +8335,63 @@ await SaveShowcaseAsync("text_decoration_skipping", "Typography & Text", "Decora
     "text-decoration-skip-ink (CSS Text Decoration 4) breaking underlines around descenders, and CSS Text Decoration 3's rule that atomic inlines are not decorated.",
     decorationSkipHtml, pdfConfig);
 
+// --- decorated inline-block showcase (css-text-decor-3 §2.4) ---
+// An inline-block that itself declares a decoration (every <a> does, by default) used to be underlined
+// across its whole content box, text or no text: the stray bar over an icon-only header link.
+
+var decorationInlineBlockHtml = """
+    <!DOCTYPE html><html><head>
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.2em }
+    h2 { font-size: 11pt; color: #444; margin: 1.1em 0 0.4em;
+         border-bottom: 1px solid #ddd; padding-bottom: 2px }
+    .label { font-size: 9pt; color: #666; margin: 0 0 4px }
+    a { color: rgb(0, 115, 89); text-decoration: underline }
+    .bar { background: rgb(10, 134, 114); height: 60pt; padding: 8pt 12pt; color: #fff }
+    .bar a { color: #fff }
+    .icon { display: inline-block; width: 44px; height: 44px; line-height: 44px;
+            padding: 5px 5px 0; background: rgb(30, 60, 90) }
+    .wide { display: inline-block; width: 220pt; background: #eef6f3 }
+    .narrow { display: inline-block; width: 90pt; background: #eef6f3 }
+    .tag { display: inline-block; padding: 2pt 6pt; background: #eef6f3; border: 1px solid #b7d6cc }
+    .clip { display: inline-block; width: 80pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: #eef6f3 }
+    </style></head><body>
+
+    <h1>A decorated inline-block is underlined under its text only</h1>
+
+    <h2>Icon-only link (no text) - no line at all</h2>
+    <div class="label">on a coloured header: the link colour used to be drawn as a bar across the icon</div>
+    <div class="bar">Header <a class="icon" href="#"> </a> <a class="icon" href="#"><span style="padding:0 6px"></span></a></div>
+
+    <h2>Short text in a wide box - the line covers the text, not the box</h2>
+    <div class="label">inline-block, 220pt wide, containing "ab"</div>
+    <p><a class="wide" href="#">ab</a> followed by more text on the same line</p>
+
+    <h2>Wrapped text - one line per text line</h2>
+    <div class="label">inline-block, 90pt wide</div>
+    <p><a class="narrow" href="#">aaa bbb ccc ddd eee fff</a> and text beside it</p>
+
+    <h2>Padding and a border are not underlined</h2>
+    <div class="label">the box's own padding and border sit outside its inline content</div>
+    <p><a class="tag" href="#">padded tag</a> <a class="tag" href="#">another</a></p>
+
+    <h2>Truncated link - the line stays inside the clipped box</h2>
+    <div class="label">overflow: hidden, white-space: nowrap on an 80pt box; the line is clipped with the text</div>
+    <p><a class="clip" href="#">A long link title that is truncated</a> and text beside it</p>
+
+    <h2>inline-flex</h2>
+    <div class="label">an item's text is underlined, the rest of the 220pt container is not</div>
+    <p><a class="wide" style="display:inline-flex" href="#"><span>flex item</span></a></p>
+
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("text_decoration_inline_block", "Typography & Text", "Decorated Inline-Block",
+    "A decorated inline-block (an <a>, say) is underlined only under its own text, per CSS Text Decoration 3 §2.4: an icon-only link has no line, and a wide box is underlined only as far as its text.",
+    decorationInlineBlockHtml, pdfConfig);
+
 // --- tab-size showcase (CSS Text 4 §3.6) ---
 
 const string TabSizeCss = """
