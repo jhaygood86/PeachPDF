@@ -53,10 +53,10 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(["H1", "H2", "H3"], painted.Order(StringComparer.Ordinal));
         }
 
-        // A padded `vertical-align: top` inline-block across a page foot. Its words are drawn over its top
-        // padding, above the line top the flow recorded (a separate, older placement bug), so on the lines near
-        // the foot the ink was on one page and the line top on the next: each page rejected the line, and whole
-        // lines were drawn on no page. The line top is only trusted while the ink reaches the page it names.
+        // A padded `vertical-align: top` inline-block across a page foot. Its own vertical-align once drew
+        // its words over its top padding, above the line top the flow recorded, so near the foot the ink was on
+        // one page and the line top on the next and whole lines were drawn on no page. Now the words sit on the
+        // line top, and a line on the foot is sliced between the two pages.
         [Theory]
         [InlineData(30)]
         [InlineData(12)]
@@ -67,9 +67,14 @@ namespace PeachPDF.Tests.Integration
                        $"vertical-align:top;padding:{padding}pt 6pt 0'>{words}</span>Y</p></body></html>";
 
             var (_, container) = await Layout(html, 300, 160);
-            var painted = PaintedStrings(container).Where(t => t.Length > 1 && t[0] == 'w' && char.IsDigit(t[1])).ToList();
+            var shown = SlicedMonolithLinesTests.VisibleFractions(container);
 
-            Assert.Equal(Enumerable.Range(1, 59).Select(i => $"w{i}").Order(), painted.Order());
+            // A line on a slice boundary is drawn by both pages, each showing its own part: the parts add up
+            // to the one line, never to none or to two.
+            var wrong = Enumerable.Range(1, 59).Select(i => $"w{i}")
+                .Where(w => Math.Abs(shown.GetValueOrDefault(w) - 1) > 0.05).ToList();
+
+            Assert.True(wrong.Count == 0, $"not shown exactly once in total: {string.Join(",", wrong)}");
         }
 
         // The same shape at every page height, through the PdfGenerator pipeline, in 0.5pt steps. The words sit
@@ -94,10 +99,12 @@ namespace PeachPDF.Tests.Integration
                            $"width:100pt;vertical-align:top;padding:{padding}pt 6pt 0'>{words}</span>Y</p></body></html>";
 
                 var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.Letter });
-                var drawn = MostlyVisibleStrings(container).Where(t => t.Length > 1 && t[0] == 'w' && char.IsDigit(t[1])).ToList();
+                var shown = SlicedMonolithLinesTests.VisibleFractions(container);
+                var wrong = Enumerable.Range(1, 59).Select(i => $"w{i}")
+                    .Where(w => Math.Abs(shown.GetValueOrDefault(w) - 1) > 0.05).ToList();
 
-                if (drawn.Count != 59 || drawn.Distinct().Count() != 59)
-                    failures.Add($"{size}pt: {drawn.Distinct().Count()} of 59 drawn, {drawn.Count} draws");
+                if (wrong.Count > 0)
+                    failures.Add($"{size}pt: {string.Join(",", wrong)} not shown exactly once in total");
             }
 
             Assert.Empty(failures);

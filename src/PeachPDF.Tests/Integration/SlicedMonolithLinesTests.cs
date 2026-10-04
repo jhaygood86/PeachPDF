@@ -85,8 +85,25 @@ namespace PeachPDF.Tests.Integration
             Assert.All(PaintedPerPage(container).SelectMany(p => p).GroupBy(t => t), g => Assert.Single(g));
         }
 
+        // #1439's document: a padded, top-aligned inline-block taller than a page. Its text starts below the
+        // padding, and every one of its words is still shown on some page.
+        [Fact]
+        public async Task ATallPaddedTopAlignedInlineBlock_ShowsEveryWord()
+        {
+            var words = string.Concat(Enumerable.Range(1, 59).Select(i => $"w{i}x "));
+            var html = "<!DOCTYPE html><html><head><style>@page{size:300pt 160pt;margin:20pt} body{margin:0;font:10pt/12pt Arial} p{margin:0}</style></head><body>"
+                + "<p>X<span style='display:inline-block;width:100pt;vertical-align:top;padding:30pt 6pt 0'>" + words + "</span>Y</p></body></html>";
+
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.Letter });
+
+            var shown = VisibleFractions(container);
+            var missing = Enumerable.Range(1, 59).Select(i => $"w{i}x").Where(w => shown.GetValueOrDefault(w) < 0.95).ToList();
+
+            Assert.Empty(missing);
+        }
+
         // The visible part of each string, summed over every page that draws it, as a fraction of its height.
-        private static Dictionary<string, double> VisibleFractions(HtmlContainerInt container)
+        internal static Dictionary<string, double> VisibleFractions(HtmlContainerInt container)
         {
             var shown = new Dictionary<string, double>();
 
