@@ -75,7 +75,7 @@ namespace PeachPDF.Html.Core.Utils
         /// live box only ever carries whichever page positioned it last.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        private static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
+        internal static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
         {
             var overflowBox = ancestor.Box;
             if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;

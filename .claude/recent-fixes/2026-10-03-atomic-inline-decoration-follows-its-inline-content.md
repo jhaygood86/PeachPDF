@@ -75,3 +75,18 @@ distinguishable only by where a *vertically* padded or bordered inline's underli
 placement is itself wrong on the per-line path on `main` (`padding-bottom:12pt` moves the underline up
 into the glyphs; Chrome keeps it below the text). Asserting it would pin a defect, so the gate is covered
 by the form-control and empty/short/wrapped tests, and the placement bug is a separate issue.
+
+### Known limits of the clip fix
+
+- **`text-overflow: ellipsis`:** the underline span is built from every word's rectangle, including the
+  words the ellipsis replaces, then clipped at the padding edge. Measured in the showcase PDF: the line is
+  drawn out to 208.6pt and clipped at the box edge (122.5pt) while the ellipsis text ends at 119.2pt, so
+  the visible line overshoots the ellipsis by ~3pt. A browser stops at the ellipsis.
+- **Fragmented clipping blocks:** the clip is built from the fragment's own rectangle
+  (`RenderUtils.TryPushOverflowClip`, shared with the ancestor-clip hoist path), where the descendants'
+  clip comes from the whole box. On a slice with no real top/bottom border it insets by a border that is
+  not there, which can trim an underline within a border-width of that edge. Same limitation the existing
+  helper has; not covered by a test.
+- **Own-step draws in general:** a fragment carries only its clipping *ancestor's* clip, so anything
+  drawn at the box's own paint step is outside its own `overflow` clip. Only the propagated decoration is
+  clipped here; the per-line path (form controls) is not.

@@ -875,7 +875,7 @@ namespace PeachPDF.Html.Core.Paint
         /// atomic inline reads as part of the space it occupies on the line.
         /// </para>
         /// </remarks>
-        private static void PaintPropagatedDecoration(Canvas g, CssBox box, BoxFragment fragment, Rect clip)
+        private void PaintPropagatedDecoration(Canvas g, CssBox box, BoxFragment fragment, Rect clip)
         {
             if (!DecorationsWorthCollecting(box)) return;
 
@@ -885,7 +885,7 @@ namespace PeachPDF.Html.Core.Paint
             // covers - and the clip a fragment carries is its clipping *ancestor's*, so this box's own
             // `overflow` clip is not in force yet. Without it a line under text the box clips away (a
             // `white-space: nowrap; overflow: hidden` link) ran on past the box along the unclipped text.
-            var clipsPushed = DomUtils.ClipsItsOverflow(box) ? PushOwnOverflowClip(g, box, fragment) : 0;
+            var clipsPushed = DomUtils.ClipsItsOverflow(box) ? RenderUtils.TryPushOverflowClip(g, fragment, container.SnapBoxDecorationsToCssPixels) : 0;
 
             foreach (var lineBox in content.Order)
             {
@@ -900,28 +900,6 @@ namespace PeachPDF.Html.Core.Paint
 
             for (var i = 0; i < clipsPushed; i++)
                 g.PopClip();
-        }
-
-        /// <summary>
-        /// Pushes <paramref name="box"/>'s own <c>overflow</c> clip - its padding edge, rounded to its
-        /// <c>border-radius</c> - over <paramref name="fragment"/>'s rectangle, the same shape
-        /// <see cref="Fragmentation.FragmentEmitter"/> resolves for the fragments of its descendants.
-        /// </summary>
-        /// <returns>the number of clips pushed, for the caller to pop</returns>
-        private static int PushOwnOverflowClip(Canvas g, CssBox box, BoxFragment fragment)
-        {
-            var paddingRect = RenderUtils.PaddingEdgeOf(box, fragment.Rect);
-
-            OverflowClipCurve? curve = null;
-            if (box.IsRounded)
-            {
-                var radii = box.ComputeInnerRadii(fragment.Rect, paddingRect,
-                    box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
-                    box.ActualBorderRightWidth, box.ActualBorderBottomWidth);
-                curve = new OverflowClipCurve(paddingRect, radii);
-            }
-
-            return RenderUtils.ClipGraphicsByOverflow(g, paddingRect, curve);
         }
 
         /// <summary>

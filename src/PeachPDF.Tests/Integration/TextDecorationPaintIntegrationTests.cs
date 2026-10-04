@@ -510,7 +510,6 @@ namespace PeachPDF.Tests.Integration
                 $"the line ({line.X2 - line.X1}pt) should span the control ({control.Width}pt), not just its text");
         }
 
-
         [Fact]
         public async Task AtomicInlineUnderline_WithAnEmptyPaddedInlineChild_DrawsNothing()
         {
@@ -548,6 +547,60 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await BuildAndLayout(Wrap(
                 "<p><span id='a' style='display:inline-flex; width:200pt; text-decoration:underline'>"
+                + "<span id='t'>ab</span></span></p>"));
+            var a = FindById(root, "a")!;
+            var t = FindById(root, "t")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, a, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var text = t.Boxes.Single().Rectangles.Values.Single();
+
+            Assert.Equal(text.Left, line.X1, 1);
+            Assert.Equal(text.Right, line.X2, 1);
+        }
+
+        [Fact]
+        public async Task SelectUnderline_KeepsItsControlWideLine()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><select id='f' style='text-decoration:underline'><option>Go</option></select></p>"));
+            var f = FindById(root, "f")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, f, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var control = f.Rectangles.Values.Single();
+
+            Assert.True(line.X2 - line.X1 > control.Width * 0.8,
+                $"the line ({line.X2 - line.X1}pt) should span the control ({control.Width}pt)");
+        }
+
+        [Fact]
+        public async Task TextareaUnderline_IsUnderItsTextNotTheWholeControl()
+        {
+            // A <textarea> is a static inline-block, not a form field, so it takes the propagated path.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><textarea id='f' style='width:200pt; text-decoration:underline'>ab</textarea></p>"));
+            var f = FindById(root, "f")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, f, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var control = f.Rectangles.Values.Single();
+
+            Assert.True(line.X2 - line.X1 < control.Width * 0.3,
+                $"the line ({line.X2 - line.X1}pt) should cover 'ab', not the {control.Width}pt control");
+        }
+
+        [Fact]
+        public async Task InlineGridUnderline_WithTextInAGridItem_ReachesTheItemsText()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<p><span id='a' style='display:inline-grid; width:200pt; text-decoration:underline'>"
                 + "<span id='t'>ab</span></span></p>"));
             var a = FindById(root, "a")!;
             var t = FindById(root, "t")!;
