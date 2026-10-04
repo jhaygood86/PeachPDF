@@ -43,10 +43,15 @@ internal static partial class PaintedWords
     /// the fragment tree places across the page foot (or past its right edge) is painted but clipped away, so a check
     /// on the paint log alone calls it drawn: that is how the #1531 and #1532 reductions passed a recording-only test.
     /// </summary>
-    public static async Task<(IReadOnlyList<string> Visible, int Pages)> LayOutAndCollectVisibleAsync(string html)
+    public static async Task<(IReadOnlyList<string> Visible, int Pages)> LayOutAndCollectVisibleAsync(
+        string html, Func<PdfSharpAdapter, Task>? extraFonts = null)
     {
         var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
-            html, new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
+            html, new PdfGenerateConfig(), async adapter =>
+            {
+                await BundledFonts.PinSansSerifAsync(adapter);
+                if (extraFonts is not null) await extraFonts(adapter);
+            });
 
         List<string> visible = [];
         var fragmentainers = container.FragmentTree!.Fragmentainers;

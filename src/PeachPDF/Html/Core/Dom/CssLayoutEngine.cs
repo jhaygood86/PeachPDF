@@ -942,10 +942,17 @@ namespace PeachPDF.Html.Core.Dom
             // Where the current column's content starts along the inline axis and how far it may run: a float
             // pinned to the line-left or line-right side (physical top or bottom) takes that end of the column
             // (CSS Writing Modes 4 section 7.5), so words start after it and stop before the one on the other side.
+            // The block-axis thickness the column about to start will have at least: the strut's line-height or
+            // the first word's own line-box extent, whichever is larger (CSS 2.1 10.8.1). Float avoidance tests
+            // this whole span, not just the column's leading edge.
+            double ProspectiveColumnExtent(int wordIndex) =>
+                words.Count == 0 ? blockBox.ActualLineHeight
+                    : Math.Max(blockBox.ActualLineHeight, LineBoxExtentOf(words[Math.Min(wordIndex, words.Count - 1)], blockBox));
+
             await PlaceFloatsUpTo(0, 0);
 
             var (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
-                ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, 0, placedFloats);
+                ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, 0, ProspectiveColumnExtent(0), placedFloats);
             inlineOffset = columnStartInset;
             line.VerticalTopInset = columnTopInset;
             line.VerticalBottomInset = columnBottomInset;
@@ -980,7 +987,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 line = new CssLineBox(blockBox);
                 (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
-                    ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
+                    ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, ProspectiveColumnExtent(currentWordIndex), placedFloats);
                 inlineOffset = columnStartInset;
                 line.VerticalTopInset = columnTopInset;
                 line.VerticalBottomInset = columnBottomInset;
@@ -1001,7 +1008,7 @@ namespace PeachPDF.Html.Core.Dom
                     && await PlaceFloatsUpTo(i, blockOffset))
                 {
                     (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
-                        ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
+                        ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, ProspectiveColumnExtent(currentWordIndex), placedFloats);
                     inlineOffset = columnStartInset;
                     line.VerticalTopInset = columnTopInset;
                     line.VerticalBottomInset = columnBottomInset;
@@ -1318,14 +1325,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static (double StartInset, double WrapLimit, double TopInset, double BottomInset) ComputeColumnInlineSpan(
             CssBox blockBox, WritingModeFrame frame,
-            double clientTop, double wrapLimit, double blockOffset, List<CssBox.VerticalFloatPlacement>? ownFloats = null)
+            double clientTop, double wrapLimit, double blockOffset, double columnExtent, List<CssBox.VerticalFloatPlacement>? ownFloats = null)
         {
             var columnBlockAxisPoint = frame.ToPhysical(0, blockOffset).X;
 
             // The same provisional bottom edge frame itself was built from (clientTop + wrapLimit), not
             // blockBox.ClientBottom - which, for an auto-height box, is not yet resolved at this point.
             var (topInset, bottomInset) = DomUtils.GetVerticalFloatInsets(
-                blockBox, columnBlockAxisPoint, frame.BlockStartIsRight, clientTop, clientTop + wrapLimit);
+                blockBox, columnBlockAxisPoint, frame.BlockStartIsRight, clientTop, clientTop + wrapLimit, columnExtent);
 
             // Floats this box's own inline flow placed are its children, which the scan of preceding siblings
             // does not reach.
@@ -1335,7 +1342,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (own.Box.VerticalFloatOccupancy is not { } reach) continue;
 
-                    if (DomUtils.VerticalFloatCoversBlockPoint(own.Box, columnBlockAxisPoint, frame.BlockStartIsRight))
+                    if (DomUtils.VerticalFloatCoversBlockPoint(own.Box, columnBlockAxisPoint, frame.BlockStartIsRight, columnExtent))
                     {
                         reach.GrowInsets(clientTop, clientTop + wrapLimit, ref topInset, ref bottomInset);
                     }
