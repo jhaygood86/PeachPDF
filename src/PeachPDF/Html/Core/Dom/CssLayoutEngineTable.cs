@@ -3742,7 +3742,7 @@ namespace PeachPDF.Html.Core.Dom
                         //
                         // headerCursor.MaxBottom is the row axis - see AssignRowActualBounds for why it (not
                         // Boxes.Max) is the safe source for that field on a vertical table.
-                        row.Location = new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                        row.Location = RowOriginFromCells(row);
                         AssignRowActualBounds(row, headerCursor.MaxBottom);
 
                         CloseRowSpanCellsEndingOnRow(
@@ -3811,7 +3811,7 @@ namespace PeachPDF.Html.Core.Dom
                         footerRowIndex++;
 
                         // See the identical fix in the header-rows loop above for why this is needed.
-                        row.Location = new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                        row.Location = RowOriginFromCells(row);
                         AssignRowActualBounds(row, footerCursor.MaxBottom);
 
                         CloseRowSpanCellsEndingOnRow(
@@ -4357,7 +4357,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 cursor.CurrentY = cursor.MaxBottom + VerticalSpacingAt(HeaderRowCountInGrid + i + 1);
 
-                row.Location = new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                row.Location = RowOriginFromCells(row);
                 AssignRowActualBounds(row, cursor.MaxBottom, slicedRowBottom);
 
                 // A cell of this row ran out of fragmentainer before it ran out of content, so the rows
@@ -4793,7 +4793,9 @@ namespace PeachPDF.Html.Core.Dom
 
             for (var r = 0; r < placedRows; r++)
             {
-                _bodyRows[r].ActualBottom = _bodyRows[r].Boxes.Max(x => x.ActualBottom);
+                _bodyRows[r].ActualBottom = _bodyRows[r].Boxes.Count > 0
+                    ? _bodyRows[r].Boxes.Max(x => x.ActualBottom)
+                    : _bodyRows[r].Location.Y;
             }
 
             SetRowGroupBoxDimensions(placedRows);
@@ -4963,16 +4965,26 @@ namespace PeachPDF.Html.Core.Dom
         // slice) keeps the bottom its own content reaches instead of the cursor's, and slicing is gated off
         // entirely for vertical tables (see LayoutBodyRow's own pagination pre-pass gate), so it never
         // applies on the _isVertical arm.
+        /// <summary>
+        /// The top-left of the cells a row holds, or the row's own location when it holds none: a
+        /// <c>display: table-row</c> element with no children is a row with no cells, and the unguarded
+        /// <c>Min</c> this replaces threw on it.
+        /// </summary>
+        private static PaintPoint RowOriginFromCells(CssBox row) =>
+            row.Boxes.Count == 0
+                ? row.Location
+                : new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+
         private void AssignRowActualBounds(CssBox row, double rowAxisExtent, double? slicedColumnAxisBottom = null)
         {
             if (_isVertical)
             {
                 row.ActualRight = rowAxisExtent;
-                row.ActualBottom = row.Boxes.Max(x => x.ActualBottom);
+                row.ActualBottom = row.Boxes.Count > 0 ? row.Boxes.Max(x => x.ActualBottom) : row.Location.Y;
             }
             else
             {
-                row.ActualRight = row.Boxes.Max(x => x.ActualRight);
+                row.ActualRight = row.Boxes.Count > 0 ? row.Boxes.Max(x => x.ActualRight) : row.Location.X;
                 row.ActualBottom = slicedColumnAxisBottom ?? rowAxisExtent;
             }
         }
