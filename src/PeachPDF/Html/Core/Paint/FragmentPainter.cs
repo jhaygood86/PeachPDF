@@ -61,6 +61,15 @@ namespace PeachPDF.Html.Core.Paint
         private readonly HashSet<CssLineBox> _linesAlreadyTruncated = new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
+        /// Where each <c>text-overflow: ellipsis</c> line is cut (null for one that is not), asked by the
+        /// text decoration painter - see <see cref="EllipsisCutOf"/>. Filled lazily, so a page with no
+        /// decorated text never builds the index below (one walk of the page's fragment tree otherwise).
+        /// </summary>
+        private readonly Dictionary<CssLineBox, EllipsisCut?> _ellipsisCuts = new(ReferenceEqualityComparer.Instance);
+
+        private Dictionary<CssLineBox, List<BoxFragment>>? _ellipsisLineFragments;
+
+        /// <summary>
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
         /// window plus the room an outline on this page needs to spill into the page margin.
         /// </summary>
@@ -860,7 +869,8 @@ namespace PeachPDF.Html.Core.Paint
 
                         PaintDecoration(g, box, actualRect, geometry.HasLeftEdge, geometry.HasRightEdge,
                             GetFirstLineStyleForRect(lines[i].Line), ownDecorationArea: true,
-                            content, lines[i].Line);
+                            content, lines[i].Line,
+                            content is null ? null : EllipsisCutOf(g, lines[i].Line));
                     }
                 }
             }

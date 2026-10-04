@@ -8977,6 +8977,14 @@ var textOverflowHtml = "<!DOCTYPE html><html><head>" + TextOverflowCss +
     "ThisIsOneVeryLongUnbreakableTokenWithNoSpacesAtAllToWrapOn<br>" +
     "and this last line is short again.</div>" +
 
+    "<h2>3b &mdash; a text decoration covers the kept text only, never the ellipsis or the room after it</h2>" +
+    "<div class=\"card truncate w2\" style=\"text-decoration: underline\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w2\"><a href=\"#\" style=\"text-decoration: underline\">The quick brown fox jumps over the lazy dog</a></div>" +
+    "<div class=\"card truncate w2\"><a href=\"#\" style=\"text-decoration: underline\"><span>The quick brown fox jumps over the lazy dog</span></a></div>" +
+    "<div class=\"card truncate w2\" style=\"text-decoration: line-through\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w2\" dir=\"rtl\" style=\"text-decoration: underline; font-family: 'PeachPDF Hebrew Subset', Arial, sans-serif\">" +
+    "זהו משפט ארוך בעברית שאמור להיחתך בקצה הנכון של התיבה</div>" +
+
     "<h2>4 &mdash; vertical-rl/vertical-lr columns: truncation along the inline (top-to-bottom) axis</h2>" +
     "<div class=\"vrow\">" +
     "<div><div class=\"vcol\" style=\"writing-mode: vertical-rl; height: 120px; font-family: 'PeachPDF CJK Subset', Arial, sans-serif\">" +
