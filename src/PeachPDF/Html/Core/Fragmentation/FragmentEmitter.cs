@@ -2817,7 +2817,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                             var ownRect = Displaced(Shifted(lineRect), shift);
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
                             var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
-                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop);
+                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop,
+                                snapshot is null && capture is null ? () => IsInSlicedContent(box) : null);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -3078,7 +3079,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// every slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsLine(Rect rect, Rect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop)
+        private bool ClaimsLine(
+            Rect rect, Rect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop,
+            Func<bool>? slicesStraddlingLines = null)
         {
             // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
             // own Y falls in would name a single page instead of all of them - exempt from every test below,
@@ -3114,6 +3117,16 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (nominalSlot == slotIndex) return true;
 
+            // A line of content layout could not move (§4.4: "the UA may also fragment the contents of monolithic
+            // elements by slicing the element's graphical representation") is drawn by every page it overlaps,
+            // each showing its own part, so the part past the foot of one page is not lost. Layout moves every
+            // other straddling line to the next page, so only a line that still straddles is sliced.
+            if (slotIndex > nominalSlot && slicesStraddlingLines is not null && StraddlesIntoNominalBand(rect, claimTop)
+                && slicesStraddlingLines())
+            {
+                return true;
+            }
+
             // The #1054 rescue only, never a #1047-shaped bonus claim - see this method's own remarks.
             // The nominal slot is genuinely unreachable (rather than merely a slot this same sweep already
             // claimed it at, or will) only when it lies strictly before the sweep's own fromSlot. Outside of
@@ -3123,6 +3136,38 @@ namespace PeachPDF.Html.Core.Fragmentation
             return (_currentPassFromSlot is not { } fromSlot || nominalSlot < fromSlot)
                 && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(claimTop))
                 && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="rect"/> overlaps the band the page of <paramref name="claimTop"/> holds
+        /// by more than the band-overlap tolerance, so that it genuinely runs on from it into a later band
+        /// rather than merely sitting beside the boundary.
+        /// </summary>
+        private bool StraddlesIntoNominalBand(Rect rect, double claimTop)
+        {
+            var band = container.BandStartingAt(claimTop);
+
+            return Math.Min(rect.Bottom, band.Bottom) - Math.Max(rect.Top, band.Top) > HtmlContainerInt.PageBoundaryEpsilon
+                   && rect.Bottom > band.Bottom;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> sits in content layout lays out whole and slices where it crosses a
+        /// page boundary: a scroll container or replaced box kept monolithic (<see cref="MonolithicContent.IsMonolithic"/>)
+        /// or an inline-block or inline-table (css-break-3 §4.1), at or above <paramref name="box"/>.
+        /// </summary>
+        private static bool IsInSlicedContent(CssBox box)
+        {
+            for (var ancestor = box; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (MonolithicContent.IsMonolithic(ancestor)
+                    || ancestor.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
