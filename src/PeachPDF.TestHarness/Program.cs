@@ -7667,6 +7667,14 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
         "<div class=\"css\">outline: 10px solid invert; outline-offset: -14px</div></td>"
     ) +
 
+    "<h2>Replaced elements</h2>" +
+    "<p class=\"intro\">An image, inline SVG, object, MathML formula or form control takes an outline like any other box: a ring around its border box, painted after its own background and content.</p>" +
+    "<div style=\"padding: 16px\">" +
+    "<img style=\"width: 60px; height: 40px; background: #4a90d9; outline: 6px solid #d94a4a; outline-offset: 4px; margin-right: 24px\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\">" +
+    "<svg style=\"width: 60px; height: 40px; outline: 6px dashed #2e7d32; outline-offset: 4px; margin-right: 24px\" viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"4\" fill=\"#f39c12\"/></svg>" +
+    "<input type=\"checkbox\" style=\"outline: 4px solid #8e44ad; outline-offset: 3px\">" +
+    "</div>" +
+
     "<h2>Layout-neutral: outline never shifts surrounding content</h2>" +
     "<p class=\"intro\">This box's outline is wider than its own padding, so it visually overlaps its siblings - but every box below sits exactly where it would if the outline were removed.</p>" +
     "<div style=\"background:#eee\">before</div>" +

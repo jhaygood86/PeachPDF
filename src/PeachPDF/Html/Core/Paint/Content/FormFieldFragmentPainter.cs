@@ -61,6 +61,12 @@ namespace PeachPDF.Html.Core.Paint.Content
                     FormFieldChrome.PaintBorderAndBackground(g, box, rect);
                     break;
             }
+
+            // Like any replaced control, it takes an outline (css-ui-4 §3.1), painted after its chrome.
+            var (overflowClip, overflowClipCurve) = painter.OverflowClipOf(g, fragment);
+            var overflowClipRecorded = painter.PushOverflowClip(overflowClip, overflowClipCurve);
+            painter.PaintReplacedOutline(g, box, rect);
+            painter.PopOverflowClip(overflowClipRecorded);
         }
     }
 }

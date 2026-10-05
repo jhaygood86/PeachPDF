@@ -35,6 +35,7 @@ namespace PeachPDF.Html.Core.Paint.Content
 
             var (overflowClip, overflowClipCurve) = painter.OverflowClipOf(g, fragment);
             var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve);
+            var overflowClipRecorded = painter.PushOverflowClip(overflowClip, overflowClipCurve);
 
             // A replaced element is monolithic (css-break-3 §2 - see MonolithicContent.IsReplaced, which
             // layout decides this from): it is never split, so it always paints its whole box with both of
@@ -45,6 +46,12 @@ namespace PeachPDF.Html.Core.Paint.Content
             // A backdrop repaint stops here: what is behind this element's content includes its background and borders, not the content.
             if (!painter.StopsBeforeContent(fragment))
                 DrawContent(painter, g, fragment, box, ContentRect(box, fragment, rect));
+
+            // An outline applies to a replaced element like any other (css-ui-4 §3.1) and is painted
+            // after its content; a deferred one replays this element's ancestor overflow clip.
+            painter.PaintReplacedOutline(g, box, rect);
+
+            painter.PopOverflowClip(overflowClipRecorded);
 
             for (var i = 0; i < clipsPushed; i++)
                 g.PopClip();

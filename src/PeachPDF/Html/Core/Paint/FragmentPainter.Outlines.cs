@@ -192,7 +192,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="overflowClip">the rectangular clip pushed, or null when none was</param>
         /// <param name="curve">the rounded curve pushed with it, if any</param>
         /// <returns>whether anything was recorded, for <see cref="PopOverflowClip"/></returns>
-        private bool PushOverflowClip(Rect? overflowClip, OverflowClipCurve? curve)
+        internal bool PushOverflowClip(Rect? overflowClip, OverflowClipCurve? curve)
         {
             if (overflowClip is not { } rect) return false;
 
@@ -205,9 +205,24 @@ namespace PeachPDF.Html.Core.Paint
             return true;
         }
 
-        private void PopOverflowClip(bool pushed)
+        internal void PopOverflowClip(bool pushed)
         {
             if (pushed) _overflowClips.RemoveAt(_overflowClips.Count - 1);
+        }
+
+        /// <summary>
+        /// Paints a replaced element's outline over its principal rectangle, after its content and
+        /// through the same scope collection every other box's outline takes. A replaced element is
+        /// monolithic, so all four edges are real and there is only ever the one rectangle.
+        /// </summary>
+        /// <param name="g">the device to draw to</param>
+        /// <param name="box">the replaced element</param>
+        /// <param name="rect">its principal rectangle on this page</param>
+        internal void PaintReplacedOutline(Canvas g, CssBox box, Rect rect)
+        {
+            if (_stopped) return;
+
+            PaintOrDeferOutline(g, box, [new OutlineRect(rect, true, true, true, true)]);
         }
 
         /// <summary>
