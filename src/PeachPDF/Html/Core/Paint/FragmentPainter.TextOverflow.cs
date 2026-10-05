@@ -126,7 +126,8 @@ namespace PeachPDF.Html.Core.Paint
         /// will make - from the same <see cref="PlanLineTruncation"/>, over every box that contributes words
         /// to the line in tree order, the first one that cuts winning exactly as
         /// <see cref="_linesAlreadyTruncated"/> makes it win at paint time - rather than waiting to read it
-        /// back. Cached per line; the page's fragment tree is indexed once, on the first ask.
+        /// back. A box <see cref="PaintFragment"/> skips as outside the clip is skipped here too. Cached per
+        /// line; the page's fragment tree is indexed once, on the first ask.
         /// </remarks>
         private EllipsisCut? EllipsisCutOf(Canvas g, CssLineBox? line)
         {
@@ -141,8 +142,16 @@ namespace PeachPDF.Html.Core.Paint
 
             if (_ellipsisLineFragments.TryGetValue(line, out var fragments))
             {
+                var clip = g.GetClip();
+
                 foreach (var fragment in fragments)
                 {
+                    // A fragment wholly outside the clip is never entered by PaintFragment, so its words never
+                    // get to claim the line. In a right-to-left block a Latin run overflows toward the end
+                    // edge, which puts its first (tree order) box beyond the clip while a later box holds the
+                    // cut that is really drawn.
+                    if (fragment.Lines.Count > 0 && !IsAnyRectVisible(fragment, clip)) continue;
+
                     cut = CutOfFragmentOnLine(g, fragment, line);
                     if (cut is not null) break;
                 }
