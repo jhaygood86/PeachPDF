@@ -48,10 +48,8 @@ namespace PeachPDF.Html.Core.Paint
             if (box.Width is null or { Length: <= 0 }) return;
 
             var containingBlock = box.ContainingBlock;
-            var ellipsisActive = containingBlock.TextOverflow.Value == TextOverflow.Ellipsis
-                                  && containingBlock.Overflow.Value == Overflow.Hidden;
 
-            if (!ellipsisActive || fragment.Lines.Count == 0)
+            if (!EllipsisActive(containingBlock) || fragment.Lines.Count == 0)
             {
                 PaintWordSequence(g, box, fragment.Words);
                 return;

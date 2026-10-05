@@ -894,7 +894,8 @@ namespace PeachPDF.Html.Core.Paint
                 if (IsRectVisible(rect, clip))
                 {
                     PaintDecoration(g, box, rect, hasLeftEdge: false, hasRightEdge: false,
-                        GetFirstLineStyleForRect(lineBox), ownDecorationArea: false, content, lineBox);
+                        GetFirstLineStyleForRect(lineBox), ownDecorationArea: false, content, lineBox,
+                        EllipsisCutOf(g, lineBox));
                 }
             }
 
@@ -948,9 +949,14 @@ namespace PeachPDF.Html.Core.Paint
         /// keyword, exactly as before either rule existed.
         /// </param>
         /// <param name="lineBox">the line box <paramref name="rectangle"/> belongs to; null for a whole-box rectangle</param>
+        /// <param name="ellipsisCut">
+        /// where <c>text-overflow: ellipsis</c> truncated the line, or null when it did not. The decoration
+        /// ends there: it covers the kept text, not the ellipsis or the room left after it (css-text-decor-3
+        /// §2 decorates the box's inline content, and the truncated part is no longer any of it).
+        /// </param>
         private static void PaintDecoration(Canvas g, CssBox box, Rect rectangle, bool hasLeftEdge, bool hasRightEdge,
             CssBox? firstLineStyle = null, bool ownDecorationArea = true,
-            DecorationContent? content = null, CssLineBox? lineBox = null)
+            DecorationContent? content = null, CssLineBox? lineBox = null, EllipsisCut? ellipsisCut = null)
         {
             // The `text-decoration` shorthand is expanded into these longhands by the CSS-OM (Layer A) before
             // it ever reaches the box, so the painter reads the longhands directly. text-decoration-line may
@@ -1011,6 +1017,18 @@ namespace PeachPDF.Html.Core.Paint
                 spanEnd = rectangle.Right;
                 if (ownDecorationArea && hasRightEdge)
                     spanEnd -= box.ActualPaddingRight + box.ActualBorderRightWidth;
+            }
+
+            if (ellipsisCut is { } cut && cut.IsVertical == isVertical)
+            {
+                // A line running toward lower coordinates keeps what lies past the anchor, not before it.
+                if (cut.IsRtl)
+                    spanStart = Math.Max(spanStart, cut.Anchor);
+                else
+                    spanEnd = Math.Min(spanEnd, cut.Anchor);
+
+                // A box wholly past the cut has nothing left to decorate.
+                if (spanEnd <= spanStart) return;
             }
 
             // Captured once, rather than read back from pen.Width for the rest of this method: pen is a
