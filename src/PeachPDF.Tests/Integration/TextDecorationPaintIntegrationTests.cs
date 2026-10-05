@@ -487,27 +487,22 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(text.Right, line.X2, 1);
         }
 
-        [Fact]
-        public async Task FormFieldUnderline_KeepsItsControlWideLine()
+        [Theory]
+        [InlineData("<input id='f' type='text' value='Go' style='text-decoration:underline'>")]
+        [InlineData("<input id='f' type='text' placeholder='Go' style='text-decoration:underline overline line-through'>")]
+        [InlineData("<input id='f' type='text' value='Go' style='width:200pt; text-decoration:underline'>")]
+        public async Task FormFieldDecoration_DrawsNoLineAcrossTheEmptyControl(string control)
         {
-            // A form control is a replaced atomic inline whose text is not an inline child (its value is the
-            // control's own word), so the propagated path finds no content for it. Routing it there would
-            // draw nothing where it used to draw a line - too wide, but a line - so it stays on the
-            // per-own-line path until a control's text can be found as inline content.
-            var (root, container) = await BuildAndLayout(Wrap(
-                "<p><input id='f' type='text' value='Go' style='text-decoration:underline'></p>"));
+            // A form control's value is never page content (its phantom word only gives it a size; the text
+            // a reader shows is the widget's own appearance stream), so there is no text for a decoration
+            // line to sit under. It used to draw one line across the whole control, over an empty box.
+            var (root, container) = await BuildAndLayout(Wrap($"<p>{control}</p>"));
             var f = FindById(root, "f")!;
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, f, g);
 
-            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            var control = f.Rectangles.Values.Single();
-
-            Assert.True(line.X1 >= control.Left && line.X2 <= control.Right,
-                $"the line ({line.X1}-{line.X2}) should stay inside the control ({control.Left}-{control.Right})");
-            Assert.True(line.X2 - line.X1 > control.Width * 0.8,
-                $"the line ({line.X2 - line.X1}pt) should span the control ({control.Width}pt), not just its text");
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
 
         [Fact]
@@ -562,7 +557,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task SelectUnderline_KeepsItsControlWideLine()
+        public async Task SelectUnderline_DrawsNoLineAcrossTheEmptyControl()
         {
             var (root, container) = await BuildAndLayout(Wrap(
                 "<p><select id='f' style='text-decoration:underline'><option>Go</option></select></p>"));
@@ -571,11 +566,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, f, g);
 
-            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            var control = f.Rectangles.Values.Single();
-
-            Assert.True(line.X2 - line.X1 > control.Width * 0.8,
-                $"the line ({line.X2 - line.X1}pt) should span the control ({control.Width}pt)");
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
 
         [Fact]
