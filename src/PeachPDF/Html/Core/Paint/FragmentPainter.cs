@@ -85,7 +85,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="root">the root fragment of the detached tree</param>
         internal void PaintDetached(Canvas g, BoxFragment root)
         {
-            (_detachedRoot, _ellipsisLineFragments) = (root, null);
+            ResetDetachedState(root);
 
             try
             {
@@ -93,8 +93,21 @@ namespace PeachPDF.Html.Core.Paint
             }
             finally
             {
-                _detachedRoot = null;
+                ResetDetachedState(null);
             }
+        }
+
+        /// <summary>
+        /// Per-tree state must not outlive the tree: one painter paints every margin box of a page, and a running
+        /// element shown in two of them is laid out again for each, so a line's cut or its already-truncated mark from
+        /// the first must not decide the second (or a later page walk on the same painter).
+        /// </summary>
+        private void ResetDetachedState(BoxFragment? root)
+        {
+            _detachedRoot = root;
+            _ellipsisLineFragments = null;
+            _ellipsisCuts.Clear();
+            _linesAlreadyTruncated.Clear();
         }
 
         /// <summary>

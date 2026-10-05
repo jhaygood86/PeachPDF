@@ -15,6 +15,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
+using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Utils
@@ -154,6 +155,33 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static bool ClipsOneAxisOnly(CssBox box) =>
             box.ClipsOverflowHorizontally != box.ClipsOverflowVertically;
+
+        /// <summary>
+        /// The border box a clipping box's <c>overflow</c> clip is measured from: its <paramref name="bounds"/>, or for an
+        /// inline-level box the union of its line rectangles when it has any. Such a box is flowed into a line rather than
+        /// laid out as a box and so never has a <c>Location</c>/<c>Size</c> assigned; its bounds read as the unassigned
+        /// <c>(0,0,0,0)</c> and the clip came out with zero area, clipping every word inside it away. Shared by every
+        /// builder of fragments, so a box clips the same wherever it is shown.
+        /// </summary>
+        /// <param name="bounds">the box's own bounds</param>
+        /// <param name="isInline">whether the box is inline-level</param>
+        /// <param name="rectangles">the box's per-line rectangles</param>
+        internal static Rect ClipSourceBoundsOf(Rect bounds, bool isInline, IReadOnlyDictionary<CssLineBox, Rect> rectangles)
+        {
+            if (!isInline || rectangles.Count == 0) return bounds;
+
+            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
+
+            foreach (var rect in rectangles.Values)
+            {
+                left = Math.Min(left, rect.Left);
+                top = Math.Min(top, rect.Top);
+                right = Math.Max(right, rect.Right);
+                bottom = Math.Max(bottom, rect.Bottom);
+            }
+
+            return Rect.FromLTRB(left, top, right, bottom);
+        }
 
         /// <summary>
         /// The clip <paramref name="box"/>'s <c>overflow</c> imposes on its content, given where its border box

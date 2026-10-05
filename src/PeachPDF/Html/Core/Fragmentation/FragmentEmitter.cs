@@ -4367,28 +4367,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// stream, and no <c>Tj</c> for the text). Falling back to the rectangles only when there is no
         /// border box to read leaves every box that has one measured exactly as before.
         /// </remarks>
-        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot)
-        {
-            var bounds = BoundsOf(box, snapshot);
-
-            if (!box.IsInline) return bounds;
-
-            var rectangles = RectanglesOf(box, snapshot);
-
-            if (rectangles.Count == 0) return bounds;
-
-            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
-
-            foreach (var rect in rectangles.Values)
-            {
-                left = Math.Min(left, rect.Left);
-                top = Math.Min(top, rect.Top);
-                right = Math.Max(right, rect.Right);
-                bottom = Math.Max(bottom, rect.Bottom);
-            }
-
-            return Rect.FromLTRB(left, top, right, bottom);
-        }
+        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+            RenderUtils.ClipSourceBoundsOf(BoundsOf(box, snapshot), box.IsInline, RectanglesOf(box, snapshot));
 
         private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;

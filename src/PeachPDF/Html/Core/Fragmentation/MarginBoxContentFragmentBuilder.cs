@@ -40,7 +40,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var words = box.Words.Select(w => new TextFragment(w.Rectangle, w)).ToList();
 
             // What this box passes down: its own clip when it has one, else whatever reached it.
-            var forChildren = DomUtils.ClipsItsOverflow(box) ? ClipSource.Of(box) : clip;
+            var forChildren = box.Boxes.Count > 0 && DomUtils.ClipsItsOverflow(box) ? ClipSource.Of(box) : clip;
 
             var children = box.Boxes
                 .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsOutOfFlow && !b.IsRunningPositioned)
@@ -76,7 +76,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             internal static ClipSource Of(CssBox box)
             {
-                var borderBox = box.Bounds;
+                var borderBox = RenderUtils.ClipSourceBoundsOf(box.Bounds, box.IsInline, box.Rectangles);
                 var (clipRect, radii, axisOpen) = RenderUtils.OverflowClipGeometryOf(box, borderBox);
 
                 return new ClipSource(
