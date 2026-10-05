@@ -172,6 +172,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Rtl_PlainBoxBeyondTheClipBeforeADecoratedBox_UnderlineStillStartsWhereTheEllipsisEnds()
+        {
+            // The Latin run overflows toward the line's end edge, so the plain "x " - first in tree order -
+            // sits beyond the clip and never paints. It must not claim a cut of its own, or the span's
+            // underline is clamped to a point off the box and runs out to the edge past the ellipsis.
+            var (_, container) = await LayoutHarness.LayoutAsync(Page(
+                $"<div style='{Block};direction:rtl'>x <span style='text-decoration:underline'>{Long} {Long}</span></div>"));
+
+            var g = Paint(container);
+
+            var ellipsis = Ellipsis(g);
+            var ellipsisRight = ellipsis.PaintPoint.X + ellipsis.Size.Width;
+            var lines = Lines(g);
+            Assert.NotEmpty(lines);
+            foreach (var line in lines)
+            {
+                Assert.True(line.X1 >= ellipsisRight - 1,
+                    $"the underline ({line.X1}..{line.X2}) should begin at or after the ellipsis' right edge ({ellipsisRight})");
+            }
+        }
+
+        [Fact]
         public async Task TwoDecoratedSiblingsPastTheCut_TheFirstCutDecidesWhereBothEnd()
         {
             // Both spans make a plan of their own: the first is cut part-way through, the second starts past
