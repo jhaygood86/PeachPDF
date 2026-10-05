@@ -3,7 +3,7 @@
 `PaintWordsWithEllipsis` took the containing block's content edge from `OverflowClipOf(g, fragment).Clip!.Value`,
 which is populated for words reached by walking the page. A footnote body is painted on its own by `PdfGenerator`
 (`painter.PaintFragment(g, body)`), and the fragment of its words carries no clip, so the `!` threw
-`NullReferenceException`.
+`InvalidOperationException` ("Nullable object must have a value"), surfaced as `HtmlRenderException: Exception in box paint`.
 
 Cause, found by dumping a painted body's fragment tree and then reading how it is built: the body (`display: block`,
 so `ClipsItsOverflow` is not the cause) has an anonymous child holding the words, with the body as its containing

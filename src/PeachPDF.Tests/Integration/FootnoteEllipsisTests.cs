@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration
     /// A <c>float: footnote</c> body is painted on its own, by a painter that is not walking the page
     /// (<c>PdfGenerator</c> hands each body to <see cref="FragmentPainter.PaintFragment"/>), so the
     /// fragment of its words carries no overflow clip to take a <c>text-overflow: ellipsis</c> boundary from.
-    /// That used to be a <see cref="System.NullReferenceException"/> (#1640); the text now paints untruncated.
+    /// That used to fail the render with an <see cref="System.InvalidOperationException"/> (#1640); the text now paints untruncated.
     /// </summary>
     public class FootnoteEllipsisTests
     {
@@ -45,6 +45,9 @@ namespace PeachPDF.Tests.Integration
         {
             var g = await PaintNoteAsync("");
 
+            // The first assertion is the fix. The ellipsis and clip assertions below pin the current, known-incomplete
+            // behaviour (#1641) on purpose, so closing that gap has to change them deliberately: once the note is
+            // truncated, expect "…" drawn and "points" not, and a clip of the body's width pushed.
             // Untruncated: every word of the note is drawn and no ellipsis glyph is.
             var drawn = g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Select(d => d.Text).ToList();
             Assert.Contains("footnote", drawn);
