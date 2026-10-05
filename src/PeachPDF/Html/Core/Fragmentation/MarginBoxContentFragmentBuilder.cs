@@ -39,7 +39,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             var lines = BuildLines(box);
             var words = box.Words.Select(w => new TextFragment(w.Rectangle, w)).ToList();
 
-            // What this box passes down: its own clip when it has one, else whatever reached it.
+            // What this box passes down: its own clip when it has one, else whatever reached it. Only the nearest
+            // clipper's, as the page emitter does: an outer clipper's is in force because the painter has pushed it
+            // around this whole subtree, and text-overflow measures against the nearest block's own edge anyway.
             // A leaf has nobody to pass a clip to, so it is not derived (it would only allocate a curve and basis).
             var forChildren = box.Boxes.Count > 0 && DomUtils.ClipsItsOverflow(box) ? ClipSource.Of(box) : clip;
 

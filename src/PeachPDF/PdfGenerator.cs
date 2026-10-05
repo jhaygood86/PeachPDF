@@ -1349,8 +1349,9 @@ namespace PeachPDF
         /// Paints one page's css-gcpm-3 <c>content: element()</c> margin-box content - real, laid-out
         /// <see cref="CssBox"/> subtrees (<see cref="FragmentainerFragment.MarginBoxes"/>), unlike the
         /// plain string/counter/image content <see cref="MarginBoxRenderer.Render"/> still draws directly.
-        /// Reuses <see cref="FragmentPainter.PaintFragment"/> completely unmodified - the same call every
-        /// other <see cref="BoxFragment"/> in the document goes through - so real formatting/descendant
+        /// Reuses <see cref="FragmentPainter.PaintFragment"/>'s paint through <see cref="FragmentPainter.PaintDetached"/>
+        /// (the tree is not part of the page's own, so a decoration needs it as the root to find where its
+        /// line was truncated) - the same paint every other <see cref="BoxFragment"/> in the document goes through - so real formatting/descendant
         /// elements (backgrounds, borders, nested inline styling) paint correctly for free, and (per
         /// <c>FragmentPainter.PaintFragment</c>'s own doc comment, "the single choke point all tagging
         /// flows through") so tagged-PDF structure attaches automatically when enabled, keyed to whichever
@@ -1439,7 +1440,7 @@ namespace PeachPDF
         /// same "paint consumes only the fragment tree" division of labor every other paint code in this
         /// file follows. Mirrors <see cref="PaintElementMarginBoxes"/> exactly for the bodies (real,
         /// laid-out <see cref="CssBox"/> subtrees reused unmodified through
-        /// <see cref="FragmentPainter.PaintFragment"/> - backgrounds/borders/nested styling and tagged-PDF
+        /// <see cref="FragmentPainter.PaintDetached"/> - backgrounds/borders/nested styling and tagged-PDF
         /// structure attach for free, same reasoning) - the divider alone is drawn directly, as a simple
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
         /// (which is an ordinary box and paints its rule through the normal border path).

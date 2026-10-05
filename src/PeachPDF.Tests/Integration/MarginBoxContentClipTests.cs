@@ -112,6 +112,23 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task NestedClippers_EachGivesItsOwnContentItsOwnEdge()
+        {
+            // As in the page: a fragment carries its nearest clipper's edge, the outer one stays in force because
+            // the painter has pushed it around the whole subtree.
+            var root = await RunningContentAsync(
+                "<div class='running'><div style='overflow:hidden; width:40pt'>"
+                + "<div id='inner' style='overflow:hidden; width:80pt; white-space:nowrap'>a long line of running header text</div></div></div>");
+
+            var inner = All(root).First(f => f.Box.Overflow.Value == PeachPDF.CSS.Overflow.Hidden
+                                              && f.Children.Any(c => c.Words.Count > 0));
+            var text = All(inner).Where(f => !ReferenceEquals(f, inner) && f.Words.Count > 0).ToList();
+
+            Assert.NotEmpty(text);
+            Assert.All(text, f => Assert.Equal(inner.Rect.Width, f.OverflowClip!.Value.Width, 1));
+        }
+
+        [Fact]
         public async Task TheRunningElementItself_IsNotClippedByAnything()
         {
             // An overflow: hidden running element clips its content, not itself.
