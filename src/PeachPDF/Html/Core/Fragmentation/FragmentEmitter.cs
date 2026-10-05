@@ -3697,18 +3697,26 @@ namespace PeachPDF.Html.Core.Fragmentation
             // left them at.
             var rectangles = RectanglesOf(box, snapshot);
 
+            // Ink a clipped capped scroll container's cap cuts away is not printed, so it cannot make a page
+            // worth building: its lines past the cap run on into later bands, and a band holding nothing but
+            // those would otherwise come out as a blank page. Read off the lines (CappedScrollContainer)
+            // rather than off the container's live bounds, which a box still continuing has not settled.
+            var cappedClip = CappedScrollContainer.ContainerOf(box) is { } capped && DomUtils.ClipsItsOverflow(capped);
+
             if (rectangles.Count > 0)
             {
                 foreach (var rect in rectangles.Values)
                 {
-                    if (rect.Bottom >= slot.BandTop && rect.Top < slot.BandBottom) return true;
+                    if (rect.Bottom >= slot.BandTop && rect.Top < slot.BandBottom
+                        && !(cappedClip && CappedScrollContainer.IsPastCap(box, rect.Top))) return true;
                 }
 
                 return false;
             }
 
             var bounds = BoundsOf(box, snapshot);
-            return bounds.Bottom >= slot.BandTop && bounds.Top < slot.BandBottom;
+            return bounds.Bottom >= slot.BandTop && bounds.Top < slot.BandBottom
+                   && !(cappedClip && CappedScrollContainer.IsPastCap(box, bounds.Top));
         }
 
 
