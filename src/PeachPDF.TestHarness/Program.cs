@@ -5354,6 +5354,44 @@ await SaveShowcaseAsync("svg", "Graphics & Effects", "SVG",
     "Inline and embedded SVG rendered as true vector PDF content: shapes, paths, gradients, patterns, masks, and text.",
     svgHtml, pdfConfig);
 
+// --- SVG display showcase ---
+
+const string svgDisplayHtml = """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; margin: 12px }
+      h2 { font-size: 13pt; margin: 14px 0 4px }
+      .intro { font-size: 9.5pt; color: #444; margin: 0 0 6px }
+      .hide { display: none }
+      .strip { display: contents }
+      svg { border: 1px solid #ccc; background: #fafafa }
+    </style></head><body>
+    <h1>SVG: display</h1>
+    <h2>display: none</h2>
+    <p class="intro">The red square carries display: none (here from a class rule) and so does the red circle's group. Only the blue squares paint; a hidden element renders nothing, and nothing under it does either.</p>
+    <svg width="320" height="70" viewBox="0 0 320 70">
+      <rect x="10" y="10" width="50" height="50" fill="red" class="hide"/>
+      <rect x="80" y="10" width="50" height="50" fill="blue"/>
+      <g style="display: none"><circle cx="175" cy="35" r="25" fill="red"/></g>
+      <rect x="220" y="10" width="50" height="50" fill="blue"/>
+    </svg>
+    <h2>display: contents</h2>
+    <p class="intro">Left: a group with transform, opacity and a fill. Right: the same group with display: contents, which has no box, so it is neither moved nor faded; the green fill it passes down by inheritance still reaches the square.</p>
+    <svg width="320" height="70" viewBox="0 0 320 70">
+      <g transform="translate(40 0)" opacity="0.3" fill="green"><rect x="10" y="10" width="50" height="50"/></g>
+      <g class="strip" transform="translate(160 0)" opacity="0.3" fill="green"><rect x="130" y="10" width="50" height="50"/></g>
+    </svg>
+    <h2>Text content children</h2>
+    <p class="intro">A tspan with display: none leaves the text; a tspan with display: contents keeps its characters, in their own fill, without its own position.</p>
+    <svg width="320" height="40" viewBox="0 0 320 40">
+      <text x="10" y="26" font-size="18">alpha<tspan style="display: none"> hidden </tspan>beta<tspan class="strip" x="250" fill="purple"> kept</tspan></text>
+    </svg>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("svg_display", "Graphics & Effects", "SVG: display",
+    "display on SVG elements: none removes an element and its subtree from rendering, and contents strips a group, use or text content child while keeping its content and what it inherits.",
+    svgDisplayHtml, pdfConfig);
+
 // --- SVG Form XObject reuse showcase ---
 
 // Three pieces of SVG artwork: a `position: fixed` logo and a border-image repeated on every one of
