@@ -44,5 +44,6 @@
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 </Project>
