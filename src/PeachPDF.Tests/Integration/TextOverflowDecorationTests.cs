@@ -172,6 +172,26 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task TwoDecoratedSiblingsPastTheCut_TheFirstCutDecidesWhereBothEnd()
+        {
+            // Both spans make a plan of their own: the first is cut part-way through, the second starts past
+            // the box edge and is dropped whole. The first one in tree order is the cut the word painter
+            // draws (it claims the line), so it is the one the decorations must follow - not the last.
+            var (_, container) = await LayoutHarness.LayoutAsync(Page(
+                $"<div style='{Block}'><span style='text-decoration:underline'>{Long}</span>"
+                + $"<span style='text-decoration:underline'>{Long}</span></div>"));
+
+            var g = Paint(container);
+
+            var ellipsisX = Ellipsis(g).PaintPoint.X;
+            var lines = Lines(g);
+            Assert.NotEmpty(lines);
+            Assert.All(lines, l => Assert.True(l.X2 <= ellipsisX + 0.5,
+                $"a decoration ({l.X1}..{l.X2}) runs past where the ellipsis begins ({ellipsisX})"));
+            Assert.Equal(ellipsisX, lines[0].X2, 1);
+        }
+
+        [Fact]
         public async Task DecorationOnAnAncestorBlock_EndsWhereTheEllipsisBegins()
         {
             // The outer block's propagated decoration descends into the inner block, which is the one that

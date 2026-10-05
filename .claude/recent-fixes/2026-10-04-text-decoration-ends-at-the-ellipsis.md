@@ -37,13 +37,18 @@ matching Chrome.
   edge, wrong when an earlier sibling box was kept; it now anchors at the later of that edge and the
   dropped word's own start. The decoration inherits the anchor, so this would otherwise have erased
   the kept sibling's underline.
-- Known approximation: the clamp side comes from the truncating block's direction, so a mixed-direction
-  (bidi) line is as approximate for the decoration as the existing plan is for the ellipsis.
+- Known gap (#1631): "first cut wins" is tree order, which is not visual order in an RTL block with
+  Latin runs - a plain box first in tree order but at the visual left cuts first and decides where a
+  later decorated box ends. See the accepted-gap file of the same name as the issue.
+- `cut.IsVertical == isVertical` has no test that fails when it is forced true: reaching it needs a box
+  whose writing mode differs from the truncating block's while sharing one of its lines (an
+  orthogonal-flow inline inside a truncating block), which the layout does not produce. It stays as a
+  defensive guard.
 
 ## Evidence
 
 `TextOverflowDecorationTests` covers block, inline, ancestor-of-the-cutting-box and ancestor-block
-decorations, line-through/overline/double, RTL, a vertical column, a fitting line (compared against
+decorations, line-through/overline/double, RTL, two decorated siblings past the cut (first cut wins), a vertical column, a fitting line (compared against
 identical markup without `text-overflow`), no-ellipsis, a decorated box before/after the cut, a dropped
 first word after a kept decorated sibling, nothing kept, and `text-indent`. Without the change the
 block/inline/ancestor/line-through/RTL/double/overline/vertical cases fail. Full `net8.0` suite: 15471
