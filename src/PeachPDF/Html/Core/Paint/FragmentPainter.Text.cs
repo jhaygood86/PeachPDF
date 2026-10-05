@@ -49,7 +49,11 @@ namespace PeachPDF.Html.Core.Paint
 
             var containingBlock = box.ContainingBlock;
 
-            if (!EllipsisActive(containingBlock) || fragment.Lines.Count == 0)
+            // The clip is also the containing block's content edge the truncation is measured against. A
+            // fragment painted on its own, outside the page walk (a float: footnote body), has no clipping
+            // ancestor to carry it, so there is no edge to truncate at and its text paints untruncated.
+            if (!EllipsisActive(containingBlock) || fragment.Lines.Count == 0
+                || OverflowClipOf(g, fragment).Clip is null)
             {
                 PaintWordSequence(g, box, fragment.Words);
                 return;
