@@ -70,6 +70,34 @@ namespace PeachPDF.Html.Core.Paint
         private Dictionary<CssLineBox, List<BoxFragment>>? _ellipsisLineFragments;
 
         /// <summary>
+        /// The root of a fragment tree painted on its own - a footnote body or a margin box's content, neither of
+        /// which is part of the page's tree (<see cref="_pageRoot"/> stays null for them). The cut lookup indexes
+        /// whichever of the two it has.
+        /// </summary>
+        private BoxFragment? _detachedRoot;
+
+        /// <summary>
+        /// Paints a fragment tree that is not part of a page's own - a footnote body or a margin box's content - so
+        /// that what needs the whole tree around a fragment (a decoration finding where its line was truncated) has
+        /// one. Everything else is <see cref="PaintFragment"/>.
+        /// </summary>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="root">the root fragment of the detached tree</param>
+        internal void PaintDetached(Canvas g, BoxFragment root)
+        {
+            (_detachedRoot, _ellipsisLineFragments) = (root, null);
+
+            try
+            {
+                PaintFragment(g, root);
+            }
+            finally
+            {
+                _detachedRoot = null;
+            }
+        }
+
+        /// <summary>
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
         /// window plus the room an outline on this page needs to spill into the page margin.
         /// </summary>

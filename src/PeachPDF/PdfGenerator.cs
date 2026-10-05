@@ -1413,7 +1413,7 @@ namespace PeachPDF
                 if (MarginBoxRenderer.FindMargin(margins, marginBox.BoxName) is { } rule)
                     await PaintRuleOwnBackgroundAndBorder(marginBox.BoxName, rule);
 
-                painter.PaintFragment(graphicsAdapter, marginBox.Content);
+                painter.PaintDetached(graphicsAdapter, marginBox.Content);
             }
 
             foreach (var rule in margins)
@@ -1477,7 +1477,7 @@ namespace PeachPDF
             var painter = new FragmentPainter(htmlContainer);
             foreach (var body in footnoteArea.Bodies)
             {
-                painter.PaintFragment(graphicsAdapter, body);
+                painter.PaintDetached(graphicsAdapter, body);
             }
 
             graphicsAdapter.PopClip();

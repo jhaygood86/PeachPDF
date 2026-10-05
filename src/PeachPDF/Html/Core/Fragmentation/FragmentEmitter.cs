@@ -3287,16 +3287,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 if (DomUtils.ClipsItsOverflow(containingBlock))
                 {
                     var borderBoxRect = ClipSourceBoundsOf(containingBlock, snapshot);
-                    var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
-                    // A box clipping a single axis has that axis's edge only: the other is opened out, and the
-                    // corners no longer bound the clip.
-                    var axisOpen = RenderUtils.ClipsOneAxisOnly(containingBlock);
-                    var radii = containingBlock.IsRounded && !axisOpen
-                        ? containingBlock.ComputeInnerRadii(borderBoxRect, paddingRect,
-                            containingBlock.ActualBorderLeftWidth, containingBlock.ActualBorderTopWidth,
-                            containingBlock.ActualBorderRightWidth, containingBlock.ActualBorderBottomWidth)
-                        : (BorderRadii?)null;
-                    var clipRect = axisOpen ? RenderUtils.OpenUnclippedAxes(containingBlock, paddingRect) : paddingRect;
+                    var (clipRect, radii, axisOpen) = RenderUtils.OverflowClipGeometryOf(containingBlock, borderBoxRect);
                     return (Localize(clipRect, originY), radii, Localize(borderBoxRect, originY), axisOpen);
                 }
 

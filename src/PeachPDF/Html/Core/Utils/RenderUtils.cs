@@ -156,6 +156,27 @@ namespace PeachPDF.Html.Core.Utils
             box.ClipsOverflowHorizontally != box.ClipsOverflowVertically;
 
         /// <summary>
+        /// The clip <paramref name="box"/>'s <c>overflow</c> imposes on its content, given where its border box
+        /// sits: the padding edge (with any axis it does not clip opened out), the corner curve that bounds it,
+        /// and whether an axis was opened. The one place this is derived, shared by every builder of fragments.
+        /// </summary>
+        /// <param name="box">the clipping box, read for its border widths, radii and clipped axes</param>
+        /// <param name="borderBox">its border box, in whatever space the caller's fragments are in</param>
+        internal static (Rect ClipRect, BorderRadii? Radii, bool AxisOpen) OverflowClipGeometryOf(CssBox box, Rect borderBox)
+        {
+            var paddingRect = PaddingEdgeOf(box, borderBox);
+            // A box clipping a single axis has that axis's edge only: the other is opened out, and the
+            // corners no longer bound the clip.
+            var axisOpen = ClipsOneAxisOnly(box);
+            var radii = box.IsRounded && !axisOpen
+                ? box.ComputeInnerRadii(borderBox, paddingRect,
+                    box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
+                    box.ActualBorderRightWidth, box.ActualBorderBottomWidth)
+                : (BorderRadii?)null;
+            return (axisOpen ? OpenUnclippedAxes(box, paddingRect) : paddingRect, radii, axisOpen);
+        }
+
+        /// <summary>
         /// <paramref name="paddingEdge"/> with each axis <paramref name="box"/> does not clip opened out to
         /// the extent of any page, so one clip rectangle serves a box that clips a single axis
         /// (css-overflow-3 §3.2: <c>clip</c> cuts at the overflow clip edge on its own axis only).

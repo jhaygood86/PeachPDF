@@ -17,7 +17,7 @@ because that box is the anonymous child, not the body, and was dropped.
 `ResolveEllipsisGeometry` now returns null when there is no clip, and both callers (the word painter and the
 decoration's `CutOfFragmentOnLine`) fall back to what they did without ellipsis: untruncated words, no cut. One
 guard in one place, rather than a precondition each caller has to remember. Honouring the ellipsis inside a
-footnote body is recorded as an accepted gap (#1641).
+footnote body is closed in [the follow-up](2026-10-05-footnote-body-overflow-clip.md) (#1641).
 
 The test (`FootnoteEllipsisTests`) paints a body the way `PdfGenerator` does. `FragmentPaintHarness.PaintPage`
 never reaches it, which is why the crash was invisible to the suite: paint footnote bodies explicitly.

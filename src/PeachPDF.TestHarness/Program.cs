@@ -2391,6 +2391,17 @@ var footnotesHtml = """
     </div>
 
     <div style="break-before: page;">
+    <h1>overflow: hidden and text-overflow: ellipsis on a footnote body</h1>
+    <p>A footnote body is its own box, so overflow: hidden clips its content at the body's width, and
+    text-overflow: ellipsis ends a one-line note in an ellipsis instead of running on. The first note
+    below is clipped, the second is truncated, and the third is truncated with an underline that stops
+    where the ellipsis begins:</p>
+    <p>A clipped note<span style="float:footnote; width: 90pt; overflow: hidden; white-space: nowrap;">This note is far too long for its ninety point box and is simply cut at its edge.</span>, a truncated
+    note<span style="float:footnote; width: 90pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">This note is far too long for its ninety point box and ends in an ellipsis.</span>, and a truncated
+    underlined note<span style="float:footnote; width: 90pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-decoration: underline;">This note is far too long for its ninety point box and its underline stops at the ellipsis.</span>.</p>
+    </div>
+
+    <div style="break-before: page;">
     <h1>footnote-policy: block and line</h1>
     <p>footnote-policy controls what happens when a page's note area can't hold everything that landed
     on it - here, because the note body itself is long enough that its note area alone would exceed
