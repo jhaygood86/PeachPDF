@@ -7,6 +7,12 @@ namespace PeachDrawing.Filters;
 /// Perlin noise exactly as the SVG specification's reference implementation defines it (Filter Effects 1, <c>feTurbulence</c>),
 /// so a given seed, frequency and octave count yields the same picture every conforming renderer draws.
 /// </summary>
+/// <remarks>
+/// This class is a C# transliteration of the reference implementation published in the W3C Filter Effects Module
+/// Level 1 (https://www.w3.org/TR/filter-effects-1/): its constants, seeding, lattice and gradient set-up, noise function
+/// and stitching logic are the specification's. Specification text copyright (c) 2018 W3C (MIT, ERCIM, Keio, Beihang),
+/// used under the W3C permissive document license (https://www.w3.org/copyright/). See THIRD-PARTY-LICENSES.md.
+/// </remarks>
 public sealed class Turbulence
 {
     private const int BSize = 0x100;
