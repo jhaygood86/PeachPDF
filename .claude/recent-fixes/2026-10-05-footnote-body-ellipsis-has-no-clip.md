@@ -5,12 +5,14 @@ which is populated for words reached by walking the page. A footnote body is pai
 (`painter.PaintFragment(g, body)`), and the fragment of its words carries no clip, so the `!` threw
 `NullReferenceException`.
 
-What was established by dumping the fragment tree of a painted body: the body (`display: block`, so
-`ClipsItsOverflow` is not the cause) has an anonymous child holding the words, whose containing block is the body
-(`TextOverflow == Ellipsis`), and that child's `OverflowClip` is null. Why the emitter records no clip for it was
-not chased down - the child's rectangle is also unplaced (X=0, wide 0), so footnote-body geometry is worth a look
-before anyone tries to honour the ellipsis there. A first attempt to derive the edge from the fragment's own box
-failed for exactly that reason (the words' fragment is the child, not the body), and was dropped.
+Cause, found by dumping a painted body's fragment tree and then reading how it is built: the body (`display: block`,
+so `ClipsItsOverflow` is not the cause) has an anonymous child holding the words, with the body as its containing
+block - and `MarginBoxContentFragmentBuilder.Build`, which `AttachFootnoteAreas` uses for a footnote body (and which
+builds running-element margin-box content), gives every fragment `OverflowClip: null`. So the `overflow: hidden` of a
+footnote body is never recorded for its content: no ellipsis edge, and no clip either. The proper fix is in that
+builder (record the nearest clipping ancestor's padding edge for descendants), which also changes how running-element
+content clips, so it is left to #1641. A first attempt to derive the edge from the words' fragment's own box failed
+because that box is the anonymous child, not the body, and was dropped.
 
 `ResolveEllipsisGeometry` now returns null when there is no clip, and both callers (the word painter and the
 decoration's `CutOfFragmentOnLine`) fall back to what they did without ellipsis: untruncated words, no cut. One

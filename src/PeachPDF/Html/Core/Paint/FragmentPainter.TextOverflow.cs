@@ -46,8 +46,8 @@ namespace PeachPDF.Html.Core.Paint
         {
             if (ResolveEllipsisGeometry(g, containingBlock, fragment) is not { } geometry)
             {
-                // No clip to take the content edge from (the emitter records none for the words of a float:
-                // footnote body, a detached root painted on its own): nothing to truncate at.
+                // No clip to take the content edge from (MarginBoxContentFragmentBuilder, which builds a float:
+                // footnote body's fragments, gives every one a null clip): nothing to truncate at.
                 PaintWordSequence(g, box, fragment.Words);
                 return;
             }
@@ -86,7 +86,8 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// One resolution shared by the word painter and the decoration's cut lookup, so the two cannot place
         /// the cut differently. Null when <paramref name="fragment"/> carries no clip, which is what a
-        /// <c>float: footnote</c> body's words get: with no content edge there is nothing to truncate at.
+        /// <c>float: footnote</c> body's words get (<c>MarginBoxContentFragmentBuilder</c> builds every one of its
+        /// fragments with a null clip): with no content edge there is nothing to truncate at.
         /// </summary>
         private EllipsisGeometry? ResolveEllipsisGeometry(Canvas g, CssBox containingBlock, BoxFragment fragment)
         {
@@ -97,7 +98,7 @@ namespace PeachPDF.Html.Core.Paint
             // The end boundary is where the clip cuts the text, so it follows the clip when that is snapped;
             // the start boundary is where the (unsnapped) text begins, so it does not.
             var boundary = ResolveInlineEndBoundary(containingBlock, paddingEdge, isVertical, isRtl);
-            var lineStart = ResolveInlineStartBoundary(containingBlock, fragment, isVertical, isRtl);
+            var lineStart = ResolveInlineStartBoundary(containingBlock, fragment.OverflowClip ?? paddingEdge, isVertical, isRtl);
             return new EllipsisGeometry(isVertical, isRtl, boundary, lineStart);
         }
 
@@ -227,9 +228,8 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>The content-edge coordinate a line's content naturally starts from - the mirror of <see cref="ResolveInlineEndBoundary"/>, used only to anchor an ellipsis that replaces a line's very first word.</summary>
-        private static double ResolveInlineStartBoundary(CssBox containingBlock, BoxFragment fragment, bool isVertical, bool isRtl)
+        private static double ResolveInlineStartBoundary(CssBox containingBlock, Rect paddingEdge, bool isVertical, bool isRtl)
         {
-            var paddingEdge = fragment.OverflowClip!.Value;
             if (!isVertical)
                 return isRtl ? paddingEdge.Right - containingBlock.ActualPaddingRight : paddingEdge.Left + containingBlock.ActualPaddingLeft;
             return isRtl ? paddingEdge.Bottom - containingBlock.ActualPaddingBottom : paddingEdge.Top + containingBlock.ActualPaddingTop;
