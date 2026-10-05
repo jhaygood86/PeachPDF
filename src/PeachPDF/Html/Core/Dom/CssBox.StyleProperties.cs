@@ -290,6 +290,16 @@ namespace PeachPDF.Html.Core.Dom
         internal bool ClipsWithoutScrolling =>
             Overflow.Value == CSS.Overflow.Visible && (OverflowX.Value == CSS.Overflow.Clip || OverflowY.Value == CSS.Overflow.Clip);
 
+        /// <summary>
+        /// Whether the box clips its horizontal axis. Only a box that clips without scrolling can leave an
+        /// axis open: a <c>visible</c> axis beside a <c>hidden</c>, <c>scroll</c> or <c>auto</c> one is
+        /// <c>auto</c> (css-overflow-3 §3.2), so a scroll container clips both.
+        /// </summary>
+        internal bool ClipsOverflowHorizontally => !ClipsWithoutScrolling || OverflowX.Value == CSS.Overflow.Clip;
+
+        /// <summary>Whether the box clips its vertical axis; see <see cref="ClipsOverflowHorizontally"/>.</summary>
+        internal bool ClipsOverflowVertically => !ClipsWithoutScrolling || OverflowY.Value == CSS.Overflow.Clip;
+
         #endregion
 
         #region Z-index

@@ -2410,7 +2410,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 overflowRect = o.Rect;
                 if (o.Radii is { } radii) curve = new OverflowClipCurve(o.Rect, radii);
-                basis = new OverflowClipBasis(o.BorderBox, o.Rect, Band: null);
+                // An opened-out axis has no padding edge to re-snap, so such a clip carries no basis and is
+                // left as laid out.
+                if (!o.AxisOpen) basis = new OverflowClipBasis(o.BorderBox, o.Rect, Band: null);
             }
 
             if (draft.ConfinedTo is not { } band) return (overflowRect, curve, basis);
@@ -3276,7 +3278,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// its own containing block outside the table, which is not proxied and so is read live correctly.
         /// </para>
         /// </remarks>
-        private static (Rect Rect, BorderRadii? Radii, Rect BorderBox)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
+        private static (Rect Rect, BorderRadii? Radii, Rect BorderBox, bool AxisOpen)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
         {
             var containingBlock = DomUtils.ClippingContainingBlockOf(box);
 
@@ -3286,12 +3288,16 @@ namespace PeachPDF.Html.Core.Fragmentation
                 {
                     var borderBoxRect = ClipSourceBoundsOf(containingBlock, snapshot);
                     var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
-                    var radii = containingBlock.IsRounded
+                    // A box clipping a single axis has that axis's edge only: the other is opened out, and the
+                    // corners no longer bound the clip.
+                    var axisOpen = RenderUtils.ClipsOneAxisOnly(containingBlock);
+                    var radii = containingBlock.IsRounded && !axisOpen
                         ? containingBlock.ComputeInnerRadii(borderBoxRect, paddingRect,
                             containingBlock.ActualBorderLeftWidth, containingBlock.ActualBorderTopWidth,
                             containingBlock.ActualBorderRightWidth, containingBlock.ActualBorderBottomWidth)
                         : (BorderRadii?)null;
-                    return (Localize(paddingRect, originY), radii, Localize(borderBoxRect, originY));
+                    var clipRect = axisOpen ? RenderUtils.OpenUnclippedAxes(containingBlock, paddingRect) : paddingRect;
+                    return (Localize(clipRect, originY), radii, Localize(borderBoxRect, originY), axisOpen);
                 }
 
                 var next = DomUtils.ClippingContainingBlockOf(containingBlock);
