@@ -3191,12 +3191,15 @@ namespace PeachPDF.Html.Core.Dom
             // last, and min-height wins over it on conflict (CSS 2.1 §10.7).
             var isContainingBlockHeightDefinite = IsHeightDefinite(box.ContainingBlock);
 
-            if (CssValueParser.IsValidLength(box.MaxHeight) &&
-                (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(box.MaxHeight)))
+            if (ResolveMaxHeight(box) is { } maxHeight)
             {
-                var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
-                var maxHeight = CssValueParser.ParseLength(box.MaxHeight, maxHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
-                var maxBottom = box.Location.Y + maxHeight;
+                // A capped scroll container that broke across pages reaches its cap where the content it
+                // placed adds up to it, not a cap's distance below its first fragment: the strips the breaks
+                // skipped are not content (css-break-3 §4's consumed block size).
+                var maxBottom = Fragmentation.CappedScrollContainer.IsCapped(box)
+                    && Fragmentation.CappedScrollContainer.CapBottom(box) is { } cappedBottom
+                    ? Math.Max(cappedBottom, box.Location.Y + maxHeight)
+                    : box.Location.Y + maxHeight;
 
                 if (box.ActualBottom > maxBottom)
                 {
@@ -3217,6 +3220,21 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// The used <c>max-height</c> of <paramref name="box"/> as a distance from its top border edge, or null
+        /// when it has none or it cannot be resolved yet (a percentage of an indefinite height).
+        /// </summary>
+        internal static double? ResolveMaxHeight(CssBox box)
+        {
+            if (!CssValueParser.IsValidLength(box.MaxHeight)) return null;
+
+            if (!IsHeightDefinite(box.ContainingBlock) && CssValueParser.DependsOnPercentage(box.MaxHeight)) return null;
+
+            var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
+
+            return CssValueParser.ParseLength(box.MaxHeight, maxHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
         }
 
         #region Private methods
@@ -5982,7 +6000,10 @@ namespace PeachPDF.Html.Core.Dom
                         // back to a relocation - issue #333 retired the last caller of the pre-#321
                         // per-word CssRect.BreakPage mechanism that used to run here.
                         if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
-                            && coordinates.Fragmentainer is not null)
+                            && coordinates.Fragmentainer is not null
+                            // A line past a capped scroll container's cap is clipped away or overflows, and
+                            // is laid out without a break (see CappedScrollContainer).
+                            && !Fragmentation.CappedScrollContainer.IsPastCap(blockBox, coordinates.Line.FlowTop ?? word.Top))
                         {
                             // css-gcpm-3 §2.8's footnote-policy: line: a footnote's own note area didn't
                             // fit its call's landing page (HtmlContainerInt.ResolveFootnotesForThisAttempt,

@@ -2634,9 +2634,10 @@ var scrollContainersAcrossPagesHtml = $$"""
     <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
     </div>
 
-    <p>An overflow: auto box whose own height is capped is different. With a height or a max-height
-    PeachPDF treats it as monolithic content, like an image, and never breaks it between its lines
-    (browsers split such a box instead). Where it would straddle a page boundary, it is carried to the next page whole.</p>
+    <p>An overflow: auto box with a definite height is different. PeachPDF treats it as monolithic content,
+    like an image, and never breaks it between its lines (browsers split such a box instead). Where it would
+    straddle a page boundary, it is carried to the next page whole. A max-height alone does not do that: the
+    box breaks between its lines under its cap, as the next showcase shows.</p>
 
     <p>Everything above uses up most of this page, so the box below is left with less room than its own
     height. A box that scrolls has a fixed extent, so the page edge cannot be allowed to fall through it.</p>
@@ -2659,6 +2660,33 @@ var scrollContainersAcrossPagesHtml = $$"""
 await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
     "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
     scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── Scroll containers with a max-height ──────────────────────────────────────
+// An auto-height scroll container with a max-height breaks between its lines while its content is under the cap,
+// and ends where the lines it placed on the pages it broke over add up to the cap; what lies past the cap is clipped
+// away without a break, so the content after the box is never lost. Each section puts the box a few lines above the foot.
+static string NumberedLines(string prefix, int count) =>
+    string.Join("<br>", Enumerable.Range(1, count).Select(i => $"{prefix} line {i}"));
+
+var cappedScrollContainersHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 200pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/12pt sans-serif }" +
+    "section { break-before: page }" +
+    "section:first-of-type { break-before: auto }" +
+    ".box { background: #e8eefc; border-left: 3pt solid #3a5fcd; padding-left: 6pt }" +
+    ".note { font-size: 8pt; color: #666 }" +
+    "</style></head><body>" +
+    "<section><div class='note' style='height:112pt'>An overflow: auto box with a max-height of 400pt whose six lines fit under the cap: it breaks between its lines.</div>" +
+    "<div class='box' style='overflow:auto;max-height:400pt'>" + NumberedLines("Fits", 6) + "</div><p>After the box.</p></section>" +
+    "<section><div class='note' style='height:112pt'>An overflow: hidden box with a max-height of 96pt and twenty lines: it breaks after the third line, shows five more on the next page, and clips the rest.</div>" +
+    "<div class='box' style='overflow:hidden;max-height:96pt'>" + NumberedLines("Capped", 20) + "</div><p>After the box.</p></section>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("capped_scroll_containers_across_pages", "Paged Media", "Capped Scroll Containers Across Pages",
+    "An auto-height overflow: auto or hidden box with a max-height breaking between its lines across a page boundary, " +
+    "ending where its lines reach the cap, with the content after it kept.",
+    cappedScrollContainersHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── Cards that start just above the page foot ─────────────────────────────
 

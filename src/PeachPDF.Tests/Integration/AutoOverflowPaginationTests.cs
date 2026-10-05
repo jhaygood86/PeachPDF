@@ -55,12 +55,12 @@ public class AutoOverflowPaginationTests
     [InlineData("height:50%", false)]
     [InlineData("max-height:50%", false)]
     [InlineData("height:50pt", true)]
-    [InlineData("max-height:50pt", true)]
+    [InlineData("max-height:50pt", false)]
     [InlineData("height:50pt;max-height:60pt", true)]
     [InlineData("writing-mode:vertical-rl;width:50pt", true)]
     [InlineData("writing-mode:vertical-rl;max-width:50pt", true)]
     [InlineData("writing-mode:vertical-rl;height:50pt", false)]
-    public async Task AutoOverflow_IsMonolithicOnlyWithAConstrainedLogicalHeight(string sizing, bool expected)
+    public async Task AutoOverflow_IsMonolithicOnlyWithADefiniteLogicalHeight(string sizing, bool expected)
     {
         var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
             $"<div><div id='box' style='overflow:auto;{sizing}'>Text</div></div>"));
@@ -69,10 +69,22 @@ public class AutoOverflowPaginationTests
     }
 
     [Fact]
-    public async Task AutoOverflow_WithADefinitePercentageMaximum_StaysMonolithic()
+    public async Task AutoOverflow_WithADefinitePercentageMaximum_BreaksUnderItsCap()
     {
         var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
             "<div style='height:100pt'><div id='box' style='overflow:auto;max-height:50%'>Text</div></div>"));
+
+        Assert.False(MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "box")!));
+    }
+
+    [Theory]
+    [InlineData("<table><tr><td>Text</td></tr></table>")]
+    [InlineData("<div style='display:flex'>Text</div>")]
+    [InlineData("<div><div style='display:grid'>Text</div></div>")]
+    public async Task CappedAutoOverflow_HoldingAnEngineOfItsOwn_StaysMonolithic(string content)
+    {
+        var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+            $"<div><div id='box' style='overflow:auto;max-height:50pt'>{content}</div></div>"));
 
         Assert.True(MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "box")!));
     }

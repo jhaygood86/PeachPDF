@@ -3513,6 +3513,25 @@ namespace PeachPDF.Html.Core.Dom
                         floatContainer.RestoreFragmentainer(previous);
                     }
                 }
+                else if (framePlacesChild && !child.IsOutOfFlow && child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true } } cappedContainer
+                    && Fragmentation.CappedScrollContainer.IsPastCap(this, PredictedTopOf(child)))
+                {
+                    // Past a capped scroll container's cap: clipped away or overflowing, so laid out as one
+                    // continuous run, the way monolithic content is.
+                    var detached = cappedContainer.DetachFragmentainer();
+                    var previousSuppress = cappedContainer.SuppressWordPageBreaks;
+                    cappedContainer.SuppressWordPageBreaks = true;
+
+                    try
+                    {
+                        await child.PerformLayoutImp(g, this, framePlacesChild);
+                    }
+                    finally
+                    {
+                        cappedContainer.RestoreFragmentainer(detached);
+                        cappedContainer.SuppressWordPageBreaks = previousSuppress;
+                    }
+                }
                 else
                 {
                     await child.PerformLayoutImp(g, this, framePlacesChild);
@@ -3523,6 +3542,22 @@ namespace PeachPDF.Html.Core.Dom
                 if (child.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
             }
+        }
+
+        /// <summary>
+        /// Where an in-flow <paramref name="child"/> will start, before the frame places it: the bottom of the
+        /// sibling above it, or this box's content top.
+        /// </summary>
+        private double PredictedTopOf(CssBox child)
+        {
+            var index = Boxes.IndexOf(child);
+
+            for (var i = index - 1; i >= 0; i--)
+            {
+                if (!Boxes[i].IsOutOfFlow && Boxes[i].DerivedStyle.ActualDisplay != Keywords.None) return Boxes[i].StaticBottom;
+            }
+
+            return ClientTop;
         }
 
         /// <summary>
@@ -5102,7 +5137,9 @@ namespace PeachPDF.Html.Core.Dom
                     // cursor stale for whatever follows it.
                     if (!childBox.IsOutOfFlow
                         && childBox.DerivedStyle.ActualDisplay != Keywords.None
-                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: false })
+                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: false }
+                        // Content past a capped scroll container's cap flows on without ending the pass.
+                        && !Fragmentation.CappedScrollContainer.IsPastCap(this, childBox.Location.Y))
                     {
                         HtmlContainer.CurrentFragmentainer.StepOverTo(HtmlContainer.SlotEndingAt(childBox.ActualBottom));
                     }
