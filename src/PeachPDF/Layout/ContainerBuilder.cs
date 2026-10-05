@@ -310,7 +310,8 @@ namespace PeachPDF.Layout
 
         public IContainer ClampLines(int lines, string? ellipsis = null)
         {
-            properties.Set(box, "overflow", "hidden");
+            properties.Set(box, "overflow-x", "hidden");
+            properties.Set(box, "overflow-y", "hidden");
             properties.Set(box, "line-clamp", lines.ToString(CultureInfo.InvariantCulture));
 
             if (ellipsis is not null)

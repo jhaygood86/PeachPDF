@@ -55,7 +55,7 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("text-align-all", "start")]
         [InlineData("vertical-align", "baseline")]
-        [InlineData("overflow", "visible")]
+        [InlineData("overflow-x", "visible")]
         [InlineData("letter-spacing", "normal")]
         [InlineData("word-break", "normal")]
         [InlineData("white-space", "normal")]

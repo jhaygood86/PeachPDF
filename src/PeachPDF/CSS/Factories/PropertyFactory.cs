@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Frozen;
@@ -419,7 +419,11 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.OutlineWidth, () => new OutlineWidthProperty(), true);
             AddLonghand(PropertyNames.OutlineOffset, () => new OutlineOffsetProperty(), true);
 
-            AddLonghand(PropertyNames.Overflow, () => new OverflowProperty());
+            AddShorthand(PropertyNames.Overflow, () => new OverflowProperty(),
+                PropertyNames.OverflowX,
+                PropertyNames.OverflowY);
+            AddLonghand(PropertyNames.OverflowX, () => new OverflowXProperty());
+            AddLonghand(PropertyNames.OverflowY, () => new OverflowYProperty());
             AddLonghand(PropertyNames.OverflowWrap, () => new OverflowWrapProperty());
 
             AddShorthand(PropertyNames.Padding, () => new PaddingProperty(),
