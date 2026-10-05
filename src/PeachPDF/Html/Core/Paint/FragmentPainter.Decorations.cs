@@ -1095,6 +1095,25 @@ namespace PeachPDF.Html.Core.Paint
             // respectively - regardless of writing mode.
             var underSign = blockStartIsRight ? -1 : 1;
 
+            double blockStartInset = 0, blockEndInset = 0;
+            if (ownDecorationArea)
+            {
+                if (isVertical)
+                {
+                    blockStartInset = blockStartIsRight
+                        ? box.ActualPaddingRight - box.ActualBorderRightWidth
+                        : box.ActualPaddingLeft - box.ActualBorderLeftWidth;
+                    blockEndInset = blockStartIsRight
+                        ? box.ActualPaddingLeft - box.ActualBorderLeftWidth
+                        : box.ActualPaddingRight - box.ActualBorderRightWidth;
+                }
+                else
+                {
+                    blockStartInset = box.ActualPaddingTop - box.ActualBorderTopWidth;
+                    blockEndInset = box.ActualPaddingBottom - box.ActualBorderBottomWidth;
+                }
+            }
+
             double overPos, underPos, throughPos;
             if (isVertical)
             {
@@ -1104,9 +1123,15 @@ namespace PeachPDF.Html.Core.Paint
             }
             else
             {
-                overPos = rectangle.Top;
-                underPos = rectangle.Bottom;
-                throughPos = rectangle.Top + rectangle.Height / 2f;
+                // The rectangle of an own decoration area is widened at the block-end by the box's padding and
+                // border; none of the lines hangs from that widening, which is not where the text is. The text
+                // area ends where it did before the widening (css-text-decor-3 §2.5 places the lines from the
+                // text's metrics, not from the decorating box's edge).
+                var textBottom = rectangle.Bottom - blockEndInset;
+                var textTop = rectangle.Top + blockStartInset;
+                overPos = textTop;
+                underPos = textBottom;
+                throughPos = textTop + (textBottom - textTop) / 2f;
             }
 
             var offset = ResolveDecorationOffset(styleSource.TextUnderlineOffset, styleSource, g.PixelsPerPoint);
@@ -1184,24 +1209,6 @@ namespace PeachPDF.Html.Core.Paint
             // one - issue #1146), so the block-start side's own inset is resolved too; horizontal-tb has
             // no such pinning, so it keeps exactly its pre-#1146 single block-end-based inset applied to
             // every keyword uniformly.
-            double blockStartInset = 0, blockEndInset = 0;
-            if (ownDecorationArea)
-            {
-                if (isVertical)
-                {
-                    blockStartInset = blockStartIsRight
-                        ? box.ActualPaddingRight - box.ActualBorderRightWidth
-                        : box.ActualPaddingLeft - box.ActualBorderLeftWidth;
-                    blockEndInset = blockStartIsRight
-                        ? box.ActualPaddingLeft - box.ActualBorderLeftWidth
-                        : box.ActualPaddingRight - box.ActualBorderRightWidth;
-                }
-                else
-                {
-                    blockEndInset = box.ActualPaddingBottom - box.ActualBorderBottomWidth;
-                }
-            }
-
             foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 double cross = line switch
@@ -1232,8 +1239,13 @@ namespace PeachPDF.Html.Core.Paint
                 // block-end-based treatment under horizontal-tb (applied to every keyword uniformly,
                 // overline included) - only a true vertical mode's now-position-dependent keywords need
                 // the block-start side's own value at all.
+                // Under a vertical mode the position is an edge of the widened rectangle, so it is brought back
+                // inside the box's own padding here; horizontal-tb already measured from the text area above.
                 var insetAtBlockStart = isVertical && isAtOverEdge;
-                cross += (insetAtBlockStart ? underSign : -underSign) * (insetAtBlockStart ? blockStartInset : blockEndInset);
+                if (isVertical)
+                {
+                    cross += (insetAtBlockStart ? underSign : -underSign) * (insetAtBlockStart ? blockStartInset : blockEndInset);
+                }
 
                 var exclusions = boxExclusions;
 
