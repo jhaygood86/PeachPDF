@@ -102,6 +102,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(missing);
         }
 
+        // #1371: a scroll container inside a multi-column container is kept whole, and where the column
+        // container lands on the page decides whether its first line sits on a boundary. Every word must
+        // show in full at every position.
+        [Fact]
+        public async Task AScrollContainerInAColumnContainer_ShowsEveryWordWhereverItLands()
+        {
+            List<string> failures = [];
+
+            for (var filler = 0; filler <= 20; filler++)
+            {
+                var html = "<!DOCTYPE html><html><head><style>@page{size:300pt 200pt;margin:20pt} body{margin:0;font:10pt/12pt Arial} p{margin:0}</style></head><body>"
+                    + string.Concat(Enumerable.Range(1, filler).Select(i => $"<p>f{i}</p>"))
+                    + "<div style='columns:2'><div style='overflow:auto'>w250 w251 w252 w253 w254 w255<div>"
+                    + string.Concat(Enumerable.Repeat("<br>", 12)) + "</div></div></div></body></html>";
+
+                var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.Letter });
+                var shown = VisibleFractions(container);
+
+                foreach (var word in Enumerable.Range(250, 6).Select(i => $"w{i}"))
+                {
+                    var fraction = shown.GetValueOrDefault(word);
+                    if (Math.Abs(fraction - 1) > 0.05) failures.Add($"{filler} fillers: {word} shows {fraction:0.00}");
+                }
+            }
+
+            Assert.Empty(failures);
+        }
+
         // The visible part of each string, summed over every page that draws it, as a fraction of its height.
         internal static Dictionary<string, double> VisibleFractions(HtmlContainerInt container)
         {
