@@ -112,10 +112,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// monolithic, where excluding it unconditionally would not.
         /// </para>
         /// <para>
-        /// §2's <c>clip</c> exception is satisfied vacuously rather than deliberately: <c>Map.OverflowModes</c>
-        /// accepts only <c>visible|hidden|scroll|auto</c>, so an authored <c>overflow: clip</c> fails to
-        /// convert and the box keeps <c>visible</c>. Should <c>clip</c> ever be implemented, it has to be
-        /// excluded here explicitly.
+        /// §2's <c>clip</c> exception holds because <see cref="CssBox.Overflow"/> is the used value read off both
+        /// axes and reports <c>visible</c> for a box whose axes are only <c>visible</c> or <c>clip</c>: such a
+        /// box clips (<see cref="CssBox.ClipsWithoutScrolling"/>) but is not a scroll container, so it
+        /// breaks across pages like any other block.
         /// </para>
         /// </remarks>
         internal static bool IsScrollContainer(CssBox box) =>

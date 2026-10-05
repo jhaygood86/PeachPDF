@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -859,7 +859,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="box">the candidate clipping box</param>
         /// <returns>true when <paramref name="box"/> has <c>overflow: hidden</c> and <c>overflow</c> applies to it</returns>
         internal static bool ClipsItsOverflow(CssBox box) =>
-            box.Overflow.Value == Overflow.Hidden
+            (box.Overflow.Value == Overflow.Hidden || box.ClipsWithoutScrolling)
             && !(box.IsInline && !IsAtomicInline(box))
             && !box.IsTableRowGroupBox
             && box.DerivedStyle.ActualDisplay is not (Keywords.TableRow or Keywords.TableColumn or Keywords.TableColumnGroup);

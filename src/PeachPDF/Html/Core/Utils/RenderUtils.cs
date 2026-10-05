@@ -78,7 +78,7 @@ namespace PeachPDF.Html.Core.Utils
         internal static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
         {
             var overflowBox = ancestor.Box;
-            if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;
+            if (overflowBox.Overflow.Value != Overflow.Hidden && !overflowBox.ClipsWithoutScrolling) return 0;
 
             var prevClip = g.GetClip();
             // Snapped like the ancestor's own decorations, on the edges they snap (the fragment may be a cut

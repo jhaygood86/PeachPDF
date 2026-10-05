@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(box.Color, CssUtils.GetPropertyValue(box, "color"));
             Assert.Equal(box.Display.ToString(), CssUtils.GetPropertyValue(box, "display"));
             Assert.Equal(box.Position.ToString(), CssUtils.GetPropertyValue(box, "position"));
-            Assert.Equal(box.Overflow.ToString(), CssUtils.GetPropertyValue(box, "overflow"));
+            Assert.Equal(box.OverflowX.ToString(), CssUtils.GetPropertyValue(box, "overflow-x"));
             Assert.Equal(box.TextAlignAll.ToString(), CssUtils.GetPropertyValue(box, "text-align-all"));
             Assert.Equal(box.FontWeight.ToString(), CssUtils.GetPropertyValue(box, "font-weight"));
             Assert.Equal(box.ZIndex.ToString(), CssUtils.GetPropertyValue(box, "z-index"));
@@ -566,7 +566,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["text-align-all", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
             ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["overflow-wrap", "anywhere"], ["word-wrap", "break-word"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
             ["font-style", "italic"], ["font-variant-caps", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
-            ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
+            ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow-x", "hidden"], ["overflow-y", "scroll"], ["z-index", "5"],
             ["flex-direction", "column"], ["flex-wrap", "wrap"], ["justify-content", "center"], ["align-items", "stretch"], ["align-content", "center"],
             ["flex-grow", "2"], ["flex-shrink", "0"], ["flex-basis", "auto"], ["align-self", "center"], ["order", "3"],
             ["row-gap", "5px"], ["column-gap", "8px"], ["column-count", "3"], ["column-width", "120px"], ["column-fill", "auto"], ["column-span", "all"],
@@ -1058,7 +1058,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("width", "AUTO", "auto")]
         [InlineData("box-sizing", "BORDER-BOX", "border-box")]
         [InlineData("display", "BLOCK", "block")]
-        [InlineData("overflow", "AUTO", "auto")]
+        [InlineData("overflow-x", "AUTO", "auto")]
         [InlineData("text-align-all", "CENTER", "center")]
         [InlineData("border-top-style", "SOLID", "solid")]
         [InlineData("flex-direction", "ROW", "row")]

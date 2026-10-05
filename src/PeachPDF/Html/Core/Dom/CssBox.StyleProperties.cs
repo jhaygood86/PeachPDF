@@ -252,6 +252,44 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Overflow, list-style
 
+        /// <summary>
+        /// The used <c>overflow</c> of the box, read off both axes (css-overflow-3 §3.2): <c>visible</c>
+        /// beside a scroll container computes to <c>auto</c> and <c>clip</c> to <c>hidden</c>, so any
+        /// axis that is hidden, scroll or auto makes the whole box that. A box whose axes are only
+        /// <c>visible</c> or <c>clip</c> is <see cref="Overflow.Visible"/> here: <c>clip</c> establishes
+        /// no scroll container, no formatting context and no monolith, which is what every reader of
+        /// this value asks. Whether the box still clips is <see cref="ClipsWithoutScrolling"/>.
+        /// </summary>
+        internal CssProperty<CSS.Overflow> Overflow
+        {
+            get
+            {
+                var x = OverflowX.Value;
+                var y = OverflowY.Value;
+
+                if (x is CSS.Overflow.Visible or CSS.Overflow.Clip && y is CSS.Overflow.Visible or CSS.Overflow.Clip)
+                {
+                    return CssProperty<CSS.Overflow>.FromValue(Keywords.Visible, CSS.Overflow.Visible);
+                }
+
+                if (x is CSS.Overflow.Hidden or CSS.Overflow.Clip || y is CSS.Overflow.Hidden or CSS.Overflow.Clip)
+                {
+                    return CssProperty<CSS.Overflow>.FromValue(Keywords.Hidden, CSS.Overflow.Hidden);
+                }
+
+                return x is CSS.Overflow.Scroll || y is CSS.Overflow.Scroll
+                    ? CssProperty<CSS.Overflow>.FromValue(Keywords.Scroll, CSS.Overflow.Scroll)
+                    : CssProperty<CSS.Overflow>.FromValue(Keywords.Auto, CSS.Overflow.Auto);
+            }
+        }
+
+        /// <summary>
+        /// Whether either axis is <c>clip</c> while <see cref="Overflow"/> stays <c>visible</c>: the box
+        /// clips its content to the overflow clip edge without becoming a scroll container.
+        /// </summary>
+        internal bool ClipsWithoutScrolling =>
+            Overflow.Value == CSS.Overflow.Visible && (OverflowX.Value == CSS.Overflow.Clip || OverflowY.Value == CSS.Overflow.Clip);
+
         #endregion
 
         #region Z-index
@@ -1064,7 +1102,8 @@ namespace PeachPDF.Html.Core.Dom
             displayPositioning = displayPositioning
                 .SetPropertyValue(displayPositioning.Display, parentStyle.DisplayPositioning.Display, static (a, v) => a with { Display = v })
                 .SetPropertyValue(displayPositioning.Float, parentStyle.DisplayPositioning.Float, static (a, v) => a with { Float = v })
-                .SetPropertyValue(displayPositioning.Overflow, parentStyle.DisplayPositioning.Overflow, static (a, v) => a with { Overflow = v })
+                .SetPropertyValue(displayPositioning.OverflowX, parentStyle.DisplayPositioning.OverflowX, static (a, v) => a with { OverflowX = v })
+                .SetPropertyValue(displayPositioning.OverflowY, parentStyle.DisplayPositioning.OverflowY, static (a, v) => a with { OverflowY = v })
                 .SetPropertyValue(displayPositioning.Position, parentStyle.DisplayPositioning.Position, static (a, v) => a with { Position = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.DisplayPositioning, displayPositioning, static (s, a) => s with { DisplayPositioning = a });
 

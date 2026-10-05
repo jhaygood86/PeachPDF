@@ -5,6 +5,7 @@ namespace PeachPDF.CSS
         Auto,
         Visible,
         Hidden,
-        Scroll
+        Scroll,
+        Clip
     }
 }
