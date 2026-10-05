@@ -833,16 +833,22 @@ namespace PeachPDF.Html.Core.Paint
             // otherwise be underlined across its whole content box, text or no text - an icon-only
             // `a { display: inline-block }` drew a stray line over its own background. Its own text still
             // gets §2.4's propagated decoration, which is why it takes the same path; an empty one finds
-            // no content and draws nothing. A form control stays on the per-line path: its text is its own
-            // word, not an inline child, so the propagated path would find nothing and draw nothing where
-            // it drew a (too wide) line before. The other replaced kinds (<img>, <svg>, <math>...) never
+            // no content and draws nothing. A form control draws no decoration either: a browser underlines
+            // the control's text, but a control's value is never page content here (the phantom word
+            // only gives it a size; the text a reader shows is the widget's own appearance stream), so
+            // there is no text for a line to sit under and a per-own-line one only ran across the empty
+            // box. The other replaced kinds (<img>, <svg>, <math>...) never
             // reach this code, so they need no say here.
             if (_textOnly)
             {
                 // Text decorations (underline, line-through) are drawn shapes, not text.
             }
+            else if (box is CssBoxFormField)
+            {
+                // No text on the page to decorate - see above.
+            }
             else if (lines is [{ Line: null }]
-                || (DecorationsWorthCollecting(box) && DomUtils.IsAtomicInline(box) && box is not CssBoxFormField))
+                || (DecorationsWorthCollecting(box) && DomUtils.IsAtomicInline(box)))
             {
                 PaintPropagatedDecoration(g, box, fragment, clip);
             }
