@@ -821,6 +821,11 @@ namespace PeachPDF.Svg
         /// </summary>
         private SvgElement? BuildElement(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
+            // display: none removes the element and everything under it from rendering, wherever it is reached from -
+            // the tree walk, a <use> instance, a pattern or marker's content.
+            if (IsNotRendered(node))
+                return null;
+
             // Every length parsed while this element is built (its geometry, its stroke-width, ...) resolves its
             // font-relative units against THIS element's font; restored so a parent's later attributes see theirs.
             var outer = _lengthBasis;
@@ -888,6 +893,10 @@ namespace PeachPDF.Svg
                 var element = BuildElement(child, inherited, childFont);
                 if (element is not null)
                     return element;
+
+                // A child with display: none is still the one the switch picks: it renders nothing, and so do the candidates after it.
+                if (IsPaintableName(child.Name) && IsNotRendered(child))
+                    return null;
             }
 
             return null;
@@ -1007,12 +1016,14 @@ namespace PeachPDF.Svg
             if (_useDepth >= MaxUseDepth)
                 return null;
 
+            // display: contents hoists the instance into the use's place, without the x/y offset or the viewport size its box would give it.
+            var stripped = IsDisplayContents(node);
             var use = new SvgUseElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis),
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis),
+                X = stripped ? 0 : SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = stripped ? 0 : SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = stripped ? null : SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis),
+                Height = stripped ? null : SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis),
             };
             // The <use> element's own resolved paint becomes the inherited context for the
             // (otherwise unstyled) referenced content - e.g. <use fill="none" stroke="red"
@@ -1442,6 +1453,17 @@ namespace PeachPDF.Svg
                 ? inherited.TextOrientation
                 : Map.TextOrientations.GetValueOrDefault(textOrientationAttr.Trim(), inherited.TextOrientation);
 
+            // A display: contents element has no box, so what a box does - its own opacity, transform, clip, mask and filter - is
+            // gone; its inherited properties still reach its content through the paint returned below.
+            if (!_contextOnly && IsDisplayContents(node))
+            {
+                element.Opacity = 1;
+                element.Transform = null;
+                element.ClipPathRef = null;
+                element.MaskRef = null;
+                element.FilterRef = null;
+            }
+
             return new InheritedPaint(
                 element.Fill,
                 element.Stroke,
@@ -1476,6 +1498,30 @@ namespace PeachPDF.Svg
             SvgPaintKind.ContextStroke => context.ContextStroke,
             _ => paint,
         };
+
+        /// <summary>The element names that can render something, so can be the one a <c>&lt;switch&gt;</c> picks.</summary>
+        private static bool IsPaintableName(string name) =>
+            name is "g" or "path" or "circle" or "polygon" or "polyline" or "rect" or "ellipse" or "line" or "use" or "svg" or "image" or "text" or "switch" or "a";
+
+        /// <summary>The element names whose <c>display: contents</c> strips the element and hoists its content (CSS Display 3 Appendix B, SVG elements).</summary>
+        private static bool CanBeDisplayContents(string name) => name is "g" or "a" or "switch" or "use" or "tspan" or "textPath";
+
+        private static string? DisplayOf(ISvgSourceNode node) => ResolveStyledAttr(node, "display")?.Trim().ToLowerInvariant();
+
+        /// <summary>
+        /// Whether <paramref name="node"/> generates nothing: <c>display: none</c>, or <c>display: contents</c> on an element that is not one
+        /// of the containers and text content children CSS Display 3 Appendix B lets be stripped (every other SVG element computes to
+        /// <c>none</c> for it).
+        /// </summary>
+        private static bool IsNotRendered(ISvgSourceNode node) => DisplayOf(node) switch
+        {
+            "none" => true,
+            "contents" => !CanBeDisplayContents(node.Name),
+            _ => false,
+        };
+
+        /// <summary>Whether <paramref name="node"/> is stripped from the formatting tree with its content kept, as <c>display: contents</c> does.</summary>
+        private static bool IsDisplayContents(ISvgSourceNode node) => CanBeDisplayContents(node.Name) && DisplayOf(node) == "contents";
 
         /// <summary>
         /// Resolves one presentation-style property for <paramref name="node"/> with the same
@@ -2195,13 +2241,16 @@ namespace PeachPDF.Svg
 
         private SvgTextElement BuildTextRunCore(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext, TextWhitespaceState state)
         {
-            var xAttr = node.GetAttribute("x");
-            var yAttr = node.GetAttribute("y");
+            // A display: contents tspan or textPath adds only its characters to the text it is in: the position and rotation
+            // lists that would restart a chunk or move them are part of the box it no longer has.
+            var stripped = IsDisplayContents(node);
+            var xAttr = stripped ? null : node.GetAttribute("x");
+            var yAttr = stripped ? null : node.GetAttribute("y");
             var xList = SvgValueParsers.ParseLengthList(xAttr, _viewportWidth, _lengthBasis);
             var yList = SvgValueParsers.ParseLengthList(yAttr, _viewportHeight, _lengthBasis);
-            var dxList = SvgValueParsers.ParseLengthList(node.GetAttribute("dx"), _viewportWidth, _lengthBasis);
-            var dyList = SvgValueParsers.ParseLengthList(node.GetAttribute("dy"), _viewportHeight, _lengthBasis);
-            var rotateList = SvgValueParsers.ParseNumberList(node.GetAttribute("rotate"));
+            var dxList = SvgValueParsers.ParseLengthList(stripped ? null : node.GetAttribute("dx"), _viewportWidth, _lengthBasis);
+            var dyList = SvgValueParsers.ParseLengthList(stripped ? null : node.GetAttribute("dy"), _viewportHeight, _lengthBasis);
+            var rotateList = SvgValueParsers.ParseNumberList(stripped ? null : node.GetAttribute("rotate"));
 
             var run = new SvgTextElement
             {
@@ -2355,6 +2404,11 @@ namespace PeachPDF.Svg
                 }
 
                 var child = content.Element!;
+
+                // display: none takes the child's text out of the run - and out of the whitespace collapsing around it.
+                if (IsNotRendered(child))
+                    continue;
+
                 switch (child.Name)
                 {
                     case "tspan":
@@ -2403,7 +2457,7 @@ namespace PeachPDF.Svg
                         // The target may be a <path> (its own d geometry) or a basic shape (converted to
                         // path geometry). A missing/invalid/empty reference leaves PathData null, so the run
                         // just renders on the ordinary straight baseline.
-                        if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target))
+                        if (!IsDisplayContents(child) && !string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target))
                         {
                             var pathData = target.Name == "path"
                                 ? (string.IsNullOrEmpty(target.GetAttribute("d")) ? null : SvgPathDataParser.Parse(target.GetAttribute("d")))
