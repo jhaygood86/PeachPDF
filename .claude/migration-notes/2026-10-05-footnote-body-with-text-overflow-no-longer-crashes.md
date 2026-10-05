@@ -4,4 +4,4 @@
 throw a `NullReferenceException`.
 
 **Now:** the render succeeds and the footnote text is painted in full; the ellipsis is not applied inside a
-footnote body (`text-overflow` has no effect there).
+footnote body (`text-overflow` has no effect there), and a `nowrap` note can run past the body's width.

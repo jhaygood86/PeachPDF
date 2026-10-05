@@ -46,8 +46,8 @@ namespace PeachPDF.Html.Core.Paint
         {
             if (ResolveEllipsisGeometry(g, containingBlock, fragment) is not { } geometry)
             {
-                // No clip to take the content edge from (a float: footnote body is a detached root with no
-                // clipping ancestor, and its words sit on the truncating block itself): nothing to truncate at.
+                // No clip to take the content edge from (the emitter records none for the words of a float:
+                // footnote body, a detached root painted on its own): nothing to truncate at.
                 PaintWordSequence(g, box, fragment.Words);
                 return;
             }
@@ -85,10 +85,8 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// One resolution shared by the word painter and the decoration's cut lookup, so the two cannot place
-        /// the cut differently. Null when <paramref name="fragment"/> carries no clip: a fragment's
-        /// <see cref="BoxFragment.OverflowClip"/> is its clipping <i>ancestor's</i>, so a box that is its own
-        /// truncating block and has no clipping ancestor above it has none, and with no content edge there is
-        /// nothing to truncate at.
+        /// the cut differently. Null when <paramref name="fragment"/> carries no clip, which is what a
+        /// <c>float: footnote</c> body's words get: with no content edge there is nothing to truncate at.
         /// </summary>
         private EllipsisGeometry? ResolveEllipsisGeometry(Canvas g, CssBox containingBlock, BoxFragment fragment)
         {
