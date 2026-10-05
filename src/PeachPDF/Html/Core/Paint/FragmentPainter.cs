@@ -79,7 +79,8 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// Paints a fragment tree that is not part of a page's own - a footnote body or a margin box's content - so
         /// that what needs the whole tree around a fragment (a decoration finding where its line was truncated) has
-        /// one. Everything else is <see cref="PaintFragment"/>.
+        /// one. Everything else is <see cref="PaintFragment"/>. Use a painter that is not in the middle of a page
+        /// walk: the per-tree line state it resets is the painter's own, not the tree's.
         /// </summary>
         /// <param name="g">the device to draw into</param>
         /// <param name="root">the root fragment of the detached tree</param>

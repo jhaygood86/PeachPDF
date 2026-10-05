@@ -1718,6 +1718,8 @@ The `<h1>` no longer appears at its original position in the document; instead, 
 | `element(name, start)` | Last `running(name)` element that started before this page (running header — the element in effect at the top of the page) |
 | `element(name, first-except)` | Empty on the page where `name` is first assigned; otherwise same as `first` |
 
+A box inside a running element that declares `overflow: hidden` (or `clip`) clips its own content to its padding edge, the same as in the page; the running element itself is clipped by nothing outside it. The same holds inside a [footnote](#footnotes-float-footnote) body, where `text-overflow: ellipsis` also applies.
+
 **Limitations:**
 - `position: running()` is honored for elements in normal block flow and for flex/grid/multi-column item children. It is not currently honored on a table row or cell.
 - Content painted via `content: element()` does not currently respect its own internal stacking order (`z-index`) among its descendants — it paints in document order. This only matters for a running element that itself contains absolutely-positioned, `z-index`-stacked content, not for ordinary text/image headers and footers.

@@ -4368,7 +4368,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// border box to read leaves every box that has one measured exactly as before.
         /// </remarks>
         private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
-            RenderUtils.ClipSourceBoundsOf(BoundsOf(box, snapshot), box.IsInline, RectanglesOf(box, snapshot));
+            box.IsInline
+                ? RenderUtils.ClipSourceBoundsOf(BoundsOf(box, snapshot), isInline: true, RectanglesOf(box, snapshot))
+                : BoundsOf(box, snapshot);
 
         private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;

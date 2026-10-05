@@ -130,7 +130,7 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         private EllipsisCut? EllipsisCutOf(Canvas g, CssLineBox? line)
         {
-            var root = _pageRoot ?? _detachedRoot;
+            var root = _detachedRoot ?? _pageRoot;
             if (line is null || root is null) return null;
 
             if (_ellipsisCuts.TryGetValue(line, out var known)) return known;
