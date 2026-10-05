@@ -36,9 +36,11 @@ namespace PeachPDF.Html.Core.Paint
         /// unclipped, see the <c>overflow</c> property's own <c>css-properties.json</c> comment), so an
         /// ellipsis over still-unclipped content would be a confusing half-effect. This also means
         /// <see cref="Fragments.BoxFragment.OverflowClip"/> - resolved by that exact same walk, over that
-        /// exact same starting box and exact same <c>Hidden</c> check - is guaranteed populated whenever
-        /// ellipsis is active, so <see cref="PaintWordsWithEllipsis"/> can use it directly as the
-        /// containing block's own content-edge rectangle instead of needing that box's own fragment.
+        /// exact same starting box and exact same <c>Hidden</c> check - is populated whenever ellipsis is
+        /// active on a page-walked box, so <see cref="PaintWordsWithEllipsis"/> uses it as the containing
+        /// block's own content-edge rectangle instead of needing that box's own fragment. It is not populated
+        /// for the words of a <c>float: footnote</c> body (painted on its own, outside the page walk): there the
+        /// text paints untruncated.
         /// </remarks>
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box whose text style is painted</param>
