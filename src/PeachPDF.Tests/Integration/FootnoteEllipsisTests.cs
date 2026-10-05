@@ -10,7 +10,9 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// A <c>float: footnote</c> body is painted on its own, by a painter that is not walking the page
     /// (<c>PdfGenerator</c> hands each body to <see cref="FragmentPainter.PaintFragment"/>), so the
-    /// fragment of its words has no clipping ancestor to take a <c>text-overflow: ellipsis</c> boundary from.
+    /// fragment of its words has no clipping ancestor to take a <c>text-overflow: ellipsis</c> boundary from
+    /// (a fragment's clip is its clipping ancestor's, and the body is a detached root that is its own
+    /// truncating block).
     /// </summary>
     public class FootnoteEllipsisTests
     {
@@ -37,7 +39,12 @@ namespace PeachPDF.Tests.Integration
             }
 
             Assert.True(bodies > 0, "the footnote should have produced a body");
-            Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawStringCall>(), s => s.Text.Contains("footnote"));
+
+            // Untruncated: every word of the note is drawn and no ellipsis glyph is.
+            var drawn = g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Select(d => d.Text).ToList();
+            Assert.Contains("footnote", drawn);
+            Assert.Contains("points", drawn);
+            Assert.DoesNotContain("…", drawn);
         }
     }
 }

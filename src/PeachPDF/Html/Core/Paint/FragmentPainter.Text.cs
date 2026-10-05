@@ -36,9 +36,11 @@ namespace PeachPDF.Html.Core.Paint
         /// unclipped, see the <c>overflow</c> property's own <c>css-properties.json</c> comment), so an
         /// ellipsis over still-unclipped content would be a confusing half-effect. This also means
         /// <see cref="Fragments.BoxFragment.OverflowClip"/> - resolved by that exact same walk, over that
-        /// exact same starting box and exact same <c>Hidden</c> check - is guaranteed populated whenever
-        /// ellipsis is active, so <see cref="PaintWordsWithEllipsis"/> can use it directly as the
-        /// containing block's own content-edge rectangle instead of needing that box's own fragment.
+        /// exact same starting box and exact same <c>Hidden</c> check - is populated whenever ellipsis is
+        /// active and the words sit under the truncating block, so <see cref="PaintWordsWithEllipsis"/> uses
+        /// it as the containing block's own content-edge rectangle instead of needing that box's own
+        /// fragment. It is not populated for a box that is its own truncating block with no clipping ancestor
+        /// (a <c>float: footnote</c> body, painted on its own): there the text paints untruncated.
         /// </remarks>
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box whose text style is painted</param>
@@ -49,11 +51,7 @@ namespace PeachPDF.Html.Core.Paint
 
             var containingBlock = box.ContainingBlock;
 
-            // The clip is also the containing block's content edge the truncation is measured against. A
-            // fragment painted on its own, outside the page walk (a float: footnote body), has no clipping
-            // ancestor to carry it, so there is no edge to truncate at and its text paints untruncated.
-            if (!EllipsisActive(containingBlock) || fragment.Lines.Count == 0
-                || OverflowClipOf(g, fragment).Clip is null)
+            if (!EllipsisActive(containingBlock) || fragment.Lines.Count == 0)
             {
                 PaintWordSequence(g, box, fragment.Words);
                 return;

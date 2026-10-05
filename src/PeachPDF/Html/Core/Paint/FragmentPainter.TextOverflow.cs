@@ -44,8 +44,15 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         private void PaintWordsWithEllipsis(Canvas g, CssBox box, CssBox containingBlock, BoxFragment fragment)
         {
-            var (isVertical, isRtl, boundary, lineStart) = ResolveEllipsisGeometry(g, containingBlock, fragment);
+            if (ResolveEllipsisGeometry(g, containingBlock, fragment) is not { } geometry)
+            {
+                // No clip to take the content edge from (a float: footnote body is a detached root with no
+                // clipping ancestor, and its words sit on the truncating block itself): nothing to truncate at.
+                PaintWordSequence(g, box, fragment.Words);
+                return;
+            }
 
+            var (isVertical, isRtl, boundary, lineStart) = geometry;
             var consumed = new HashSet<CssRect>(ReferenceEqualityComparer.Instance);
 
             foreach (var lineFragment in fragment.Lines)
@@ -76,15 +83,22 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>The writing mode, direction and content-edge coordinates the ellipsis walk of one fragment's lines is resolved against.</summary>
         private readonly record struct EllipsisGeometry(bool IsVertical, bool IsRtl, double Boundary, double LineStart);
 
-        /// <summary>One resolution shared by the word painter and the decoration's cut lookup, so the two cannot place the cut differently.</summary>
-        private EllipsisGeometry ResolveEllipsisGeometry(Canvas g, CssBox containingBlock, BoxFragment fragment)
+        /// <summary>
+        /// One resolution shared by the word painter and the decoration's cut lookup, so the two cannot place
+        /// the cut differently. Null when <paramref name="fragment"/> carries no clip: a fragment's
+        /// <see cref="BoxFragment.OverflowClip"/> is its clipping <i>ancestor's</i>, so a box that is its own
+        /// truncating block and has no clipping ancestor above it has none, and with no content edge there is
+        /// nothing to truncate at.
+        /// </summary>
+        private EllipsisGeometry? ResolveEllipsisGeometry(Canvas g, CssBox containingBlock, BoxFragment fragment)
         {
+            if (OverflowClipOf(g, fragment).Clip is not { } paddingEdge) return null;
+
             var isVertical = containingBlock.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
             var isRtl = containingBlock.Direction.Value == DirectionMode.Rtl;
             // The end boundary is where the clip cuts the text, so it follows the clip when that is snapped;
             // the start boundary is where the (unsnapped) text begins, so it does not.
-            var boundary = ResolveInlineEndBoundary(
-                containingBlock, OverflowClipOf(g, fragment).Clip!.Value, isVertical, isRtl);
+            var boundary = ResolveInlineEndBoundary(containingBlock, paddingEdge, isVertical, isRtl);
             var lineStart = ResolveInlineStartBoundary(containingBlock, fragment, isVertical, isRtl);
             return new EllipsisGeometry(isVertical, isRtl, boundary, lineStart);
         }
@@ -143,9 +157,10 @@ namespace PeachPDF.Html.Core.Paint
         {
             var box = fragment.Box;
             if (box.Width is null or { Length: <= 0 }) return null;
-            if (OverflowClipOf(g, fragment).Clip is null) return null;
 
-            var (isVertical, isRtl, boundary, lineStart) = ResolveEllipsisGeometry(g, box.ContainingBlock, fragment);
+            if (ResolveEllipsisGeometry(g, box.ContainingBlock, fragment) is not { } geometry) return null;
+
+            var (isVertical, isRtl, boundary, lineStart) = geometry;
 
             foreach (var lineFragment in fragment.Lines)
             {
