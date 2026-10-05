@@ -70,6 +70,48 @@ namespace PeachPDF.Html.Core.Paint
         private Dictionary<CssLineBox, List<BoxFragment>>? _ellipsisLineFragments;
 
         /// <summary>
+        /// The root of a fragment tree painted on its own - a footnote body or a margin box's content, neither of
+        /// which is part of the page's tree (<see cref="_pageRoot"/> stays null for them). The cut lookup indexes
+        /// whichever of the two it has.
+        /// </summary>
+        private BoxFragment? _detachedRoot;
+
+        /// <summary>
+        /// Paints a fragment tree that is not part of a page's own - a footnote body or a margin box's content - so
+        /// that what needs the whole tree around a fragment (a decoration finding where its line was truncated) has
+        /// one. Everything else is <see cref="PaintFragment"/>. Use a painter that is not in the middle of a page
+        /// walk: the per-tree line state it resets is the painter's own, not the tree's.
+        /// </summary>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="root">the root fragment of the detached tree</param>
+        internal void PaintDetached(Canvas g, BoxFragment root)
+        {
+            ResetDetachedState(root);
+
+            try
+            {
+                PaintFragment(g, root);
+            }
+            finally
+            {
+                ResetDetachedState(null);
+            }
+        }
+
+        /// <summary>
+        /// Per-tree state must not outlive the tree: one painter paints every margin box of a page, and a running
+        /// element shown in two of them is laid out again for each, so a line's cut or its already-truncated mark from
+        /// the first must not decide the second (or a later page walk on the same painter).
+        /// </summary>
+        private void ResetDetachedState(BoxFragment? root)
+        {
+            _detachedRoot = root;
+            _ellipsisLineFragments = null;
+            _ellipsisCuts.Clear();
+            _linesAlreadyTruncated.Clear();
+        }
+
+        /// <summary>
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
         /// window plus the room an outline on this page needs to spill into the page margin.
         /// </summary>

@@ -3287,16 +3287,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 if (DomUtils.ClipsItsOverflow(containingBlock))
                 {
                     var borderBoxRect = ClipSourceBoundsOf(containingBlock, snapshot);
-                    var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
-                    // A box clipping a single axis has that axis's edge only: the other is opened out, and the
-                    // corners no longer bound the clip.
-                    var axisOpen = RenderUtils.ClipsOneAxisOnly(containingBlock);
-                    var radii = containingBlock.IsRounded && !axisOpen
-                        ? containingBlock.ComputeInnerRadii(borderBoxRect, paddingRect,
-                            containingBlock.ActualBorderLeftWidth, containingBlock.ActualBorderTopWidth,
-                            containingBlock.ActualBorderRightWidth, containingBlock.ActualBorderBottomWidth)
-                        : (BorderRadii?)null;
-                    var clipRect = axisOpen ? RenderUtils.OpenUnclippedAxes(containingBlock, paddingRect) : paddingRect;
+                    var (clipRect, radii, axisOpen) = RenderUtils.OverflowClipGeometryOf(containingBlock, borderBoxRect);
                     return (Localize(clipRect, originY), radii, Localize(borderBoxRect, originY), axisOpen);
                 }
 
@@ -4384,28 +4375,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// stream, and no <c>Tj</c> for the text). Falling back to the rectangles only when there is no
         /// border box to read leaves every box that has one measured exactly as before.
         /// </remarks>
-        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot)
-        {
-            var bounds = BoundsOf(box, snapshot);
-
-            if (!box.IsInline) return bounds;
-
-            var rectangles = RectanglesOf(box, snapshot);
-
-            if (rectangles.Count == 0) return bounds;
-
-            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
-
-            foreach (var rect in rectangles.Values)
-            {
-                left = Math.Min(left, rect.Left);
-                top = Math.Min(top, rect.Top);
-                right = Math.Max(right, rect.Right);
-                bottom = Math.Max(bottom, rect.Bottom);
-            }
-
-            return Rect.FromLTRB(left, top, right, bottom);
-        }
+        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+            box.IsInline
+                ? RenderUtils.ClipSourceBoundsOf(BoundsOf(box, snapshot), isInline: true, RectanglesOf(box, snapshot))
+                : BoundsOf(box, snapshot);
 
         private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;
