@@ -1929,6 +1929,10 @@ All five CSS-wide keywords are supported on every CSS property. They are resolve
 
 All five keywords can be combined with `!important`.
 
+### The `all` shorthand
+
+[`all`](https://developer.mozilla.org/en-US/docs/Web/CSS/all) takes exactly one of the five keywords and applies it to every property at once — HTML and MathML properties and the SVG presentation properties alike — except `direction`, `unicode-bidi` and custom properties (`--*`), which it never touches. It expands like any other shorthand, so declaration order decides the winner (`all: initial; color: red` keeps the red, `color: red; all: initial` does not), `!important` applies to everything it sets, and `@supports (all: initial)` is true. Any other value, including a `var()` reference, makes the declaration invalid. A typical use is isolating a component from inherited and author styling: `.widget { all: initial; }`, or `all: revert` to return to the browser-default look.
+
 ---
 
 ## CSS Custom Properties

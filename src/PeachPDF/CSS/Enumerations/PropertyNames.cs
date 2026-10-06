@@ -7,6 +7,7 @@
         public static readonly string AlignBaseline = "alignment-baseline";
         public static readonly string AlignSelf = "align-self";
         public static readonly string Accelerator = "accelerator";
+        public static readonly string All = "all";
         public static readonly string Animation = "animation";
         public static readonly string AnimationDelay = "animation-delay";
         public static readonly string AnimationDirection = "animation-direction";
