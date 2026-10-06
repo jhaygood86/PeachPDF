@@ -14636,6 +14636,33 @@ await SaveShowcaseAsync("font_relative_units", "Typography & Text", "Font-relati
     "actually uses instead of a fixed 0.5em, in HTML lengths, SVG geometry/stroke/text and MathML spacing.",
     fontRelativeUnitsHtml, pdfConfig);
 
+const string allShorthandHtml = "<!DOCTYPE html><html><head><style>" +
+    "body { font: 11pt Arial; } .themed { color: #0a4; font-size: 15pt; border: 3px solid #0a4; padding: 8px; margin: 6px 0; background: #dfd; } " +
+    ".themed * { margin: 4px 0; } " +
+    ".reset-initial { all: initial; display: block; font: 11pt Arial; } " +
+    ".reset-unset { all: unset; display: block; font: 11pt Arial; } " +
+    ".reset-inherit { all: inherit; } " +
+    ".reset-revert { all: revert; } " +
+    ".order-before { color: red; all: initial; display: block; } " +
+    ".order-after { all: initial; color: red; display: block; } " +
+    "svg .s { fill: #c33; stroke: #036; stroke-width: 4; } svg .s.reset { all: initial; fill: #c33; }" +
+    "</style></head><body>" +
+    "<div class=\"themed\">Themed container (green text, border, background)" +
+    "<div class=\"reset-initial\">all: initial - back to initial values: black, no border, no background</div>" +
+    "<div class=\"reset-unset\">all: unset - inherits only inherited properties (the green)</div>" +
+    "<div class=\"reset-inherit\">all: inherit - takes the parent's border, padding and background too</div>" +
+    "<div class=\"reset-revert\">all: revert - the user-agent look</div>" +
+    "<span class=\"order-before\">color then all: initial -> black</span>" +
+    "<span class=\"order-after\">all: initial then color -> red</span></div>" +
+    "<svg width=\"200\" height=\"60\" viewBox=\"0 0 200 60\"><rect class=\"s\" x=\"5\" y=\"5\" width=\"80\" height=\"50\"/><rect class=\"s reset\" x=\"110\" y=\"5\" width=\"80\" height=\"50\"/></svg>" +
+    "<math><mi style=\"color: red\">x</mi><mo style=\"all: initial; color: blue\">+</mo><mn>1</mn></math>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("all_shorthand", "Selectors & Cascade", "The all shorthand",
+    "all: initial / inherit / unset / revert reset every property at once (except direction, unicode-bidi and custom properties), " +
+    "in HTML, SVG and MathML, and obey declaration order.",
+    allShorthandHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

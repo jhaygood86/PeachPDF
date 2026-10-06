@@ -683,6 +683,11 @@ namespace PeachPDF.CSS
             };
             _fontPaletteDescriptors = fontPaletteDescriptorsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+            // `all` covers every longhand registered above (so a newly added property is included automatically),
+            // except those the spec exempts (direction, unicode-bidi) and the non-standard legacy flexbox spellings.
+            AddLogicalShorthand(PropertyNames.All, () => new AllProperty(),
+                _longhandsBuilder.Keys.Where(name => !IsExcludedFromAll(name)).ToArray());
+
             // CSS Counter Styles Level 3 §3 descriptors, stored raw (UnknownProperty) and parsed in Layer B
             // (Html/Core/CounterStyles). speak-as is accepted and ignored (no speech output).
             var counterStyleDescriptorsBuilder = new Dictionary<string, LonghandCreator>(StringComparer.OrdinalIgnoreCase);
@@ -700,6 +705,15 @@ namespace PeachPDF.CSS
         }
 
         internal static PropertyFactory Instance => Lazy.Value;
+
+        /// <summary>Longhands the <c>all</c> shorthand leaves alone: <c>direction</c> and <c>unicode-bidi</c> (CSS Cascade 4 §3.2) and the legacy <c>-webkit-box-*</c> spellings.</summary>
+        internal static bool IsExcludedFromAll(string name) =>
+            name.Equals(PropertyNames.Direction, StringComparison.OrdinalIgnoreCase)
+            || name.Equals(PropertyNames.UnicodeBidirectional, StringComparison.OrdinalIgnoreCase)
+            || LegacyBoxProperty.Prefixes.Any(prefix => new[]
+                {
+                    LegacyBoxProperty.Orient, LegacyBoxProperty.Direction, LegacyBoxProperty.Pack, LegacyBoxProperty.Align
+                }.Any(baseName => name.Equals(prefix + baseName, StringComparison.OrdinalIgnoreCase)));
 
         private void AddShorthand(string name, ShorthandCreator creator, params string[] longhands)
         {

@@ -38,6 +38,12 @@ namespace PeachPDF.CSS
 
         public IPropertyValue Construct(Property[] properties)
         {
+            // An unlabeled periodic value (border-image-width / -outset) is one property holding up to four
+            // values, so there are no per-side longhands to gather it back from; PeriodicValue's constructor
+            // indexes into the (here empty) options array. Not reconstructible: the caller falls back to
+            // serializing the longhands.
+            if (_labels.Length == 0) return null;
+
             var options = new IPropertyValue[_labels.Length];
 
             for (var i = 0; i < _labels.Length; i++)

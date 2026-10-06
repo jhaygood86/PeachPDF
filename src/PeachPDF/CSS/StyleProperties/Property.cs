@@ -25,7 +25,7 @@ namespace PeachPDF.CSS
         internal bool TrySetValue(TokenValue newTokenValue)
         {
             var tokenValue = newTokenValue ?? TokenValue.Initial;
-            var converter = tokenValue.ContainsFunction(FunctionNames.Var) ? Converters.Any : Converter;
+            var converter = AllowsVarSubstitution && tokenValue.ContainsFunction(FunctionNames.Var) ? Converters.Any : Converter;
             var value = converter.Convert(tokenValue);
 
             if (value == null) return false;
@@ -82,6 +82,9 @@ namespace PeachPDF.CSS
         public string CssText => this.ToCss();
 
         internal abstract IValueConverter Converter { get; }
+
+        /// <summary>Whether a <c>var()</c> reference is kept raw for cascade-time substitution; false for a property whose grammar is a closed keyword set (<c>all</c>).</summary>
+        internal virtual bool AllowsVarSubstitution => true;
 
         internal IPropertyValue DeclaredValue
         {

@@ -2,7 +2,7 @@
 {
     internal sealed class WordBreakProperty : Property
     {
-        private static readonly IValueConverter StyleConverter = Converters.WordBreakConverter;
+        private static readonly IValueConverter StyleConverter = Converters.WordBreakConverter.OrDefault();
 
         public WordBreakProperty()
             : base(PropertyNames.WordBreak)
