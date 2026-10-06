@@ -42,6 +42,7 @@ namespace PeachPDF.Html.Core
             ol, p, ul, center,
             dir, menu, pre,
             hr               { display: block }
+            foreignObject    { display: block }
             li              { display: list-item }
             /* HTML Standard 15.3.1 "Hidden elements", verbatim except where noted. */
             area, base, basefont, datalist, head, link, meta, noembed,

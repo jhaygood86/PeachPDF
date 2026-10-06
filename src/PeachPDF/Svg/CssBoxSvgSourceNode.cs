@@ -59,6 +59,12 @@ namespace PeachPDF.Svg
                 ? new CssVarResolver.VarContext(registered, new CssValueParser(container.Adapter))
                 : null;
 
+        /// <summary>The laid-out HTML of this node when it is a <c>&lt;foreignObject&gt;</c> of an inline <c>&lt;svg&gt;</c>.</summary>
+        internal ISvgForeignContent? ForeignContent => (_svgRoot as CssBoxSvg)?.GetForeignContent(_box);
+
+        /// <summary>The wrapped box, for the HTML layer's own bookkeeping.</summary>
+        internal CssBox Box => _box;
+
         public string Name => _box.HtmlTag?.Name ?? "";
 
         public string? GetAttribute(string name) => _box.GetAttribute(name, null);

@@ -189,6 +189,8 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectAnonymousTables(root);
 
+            CorrectForeignObjectContent(root);
+
             // Last, deliberately: a float:footnote box must first ride through every correction pass
             // above as an ordinary tree member - an author can put arbitrary HTML (nested inline markup,
             // tables, its own generated content/counters) inside a footnote body, and those passes need
@@ -207,6 +209,38 @@ namespace PeachPDF.Html.Core.Parse
             CollectPageFloats(root, htmlContainer);
 
             return (root, cssData, metadata);
+        }
+
+        /// <summary>
+        /// Runs the box-structure passes <see cref="GenerateCssTree"/> skips inside an inline <c>&lt;svg&gt;</c> over the
+        /// HTML held by each <c>&lt;foreignObject&gt;</c>, which - unlike the rest of the SVG - is laid out by the ordinary
+        /// box pipeline and so needs the anonymous block/inline/table boxes it expects. The foreignObject is the root
+        /// of each run, standing in for the block container it behaves as. A nested <c>&lt;svg&gt;</c> inside that HTML
+        /// is skipped by the passes themselves, as at the document root.
+        /// </summary>
+        private static void CorrectForeignObjectContent(CssBox box)
+        {
+            foreach (var child in box.Boxes.ToArray())
+            {
+                if (child.HtmlTag?.Name == "foreignObject" && box.IsWithinForeignContent)
+                {
+                    CorrectReplacedElementBoxes(child);
+                    CorrectLineBreaksBlocks(child);
+                    CorrectInlineBoxesParent(child);
+                    CorrectAbsolutelyPositionedInlineElements(child);
+                    CorrectBlockInsideInline(child);
+                    CorrectInlineBoxesParent(child);
+                    CollapseWhitespaceAcrossInlineBoundaries(child);
+                    CorrectAnonymousTables(child);
+
+                    // Not just the foreignObject: an <svg> inside its HTML holds foreignObjects of its own.
+                    CorrectForeignObjectContent(child);
+                }
+                else
+                {
+                    CorrectForeignObjectContent(child);
+                }
+            }
         }
 
         /// <summary>

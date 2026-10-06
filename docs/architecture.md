@@ -786,7 +786,7 @@ An `<a>` element becomes a real PDF link annotation, reusing the same annotation
 
 ### Coverage
 
-See [Supported SVG Features](supported-svg-features.md) for the complete element/attribute compatibility matrix, including the reasoning behind each deliberately-excluded SVG feature (SMIL animation, scripting, `filter`, `foreignObject`, legacy SVG fonts, `textPath`, and others).
+See [Supported SVG Features](supported-svg-features.md) for the complete element/attribute compatibility matrix, including the reasoning behind each deliberately-excluded SVG feature (SMIL animation, scripting, `filter`, legacy SVG fonts, `textPath`, and others).
 
 ---
 

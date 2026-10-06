@@ -461,6 +461,10 @@ namespace PeachPDF.Svg
         {
             foreach (var child in node.Children)
             {
+                // HTML, not SVG: its <img> elements are loaded by the HTML pipeline during the foreignObject's own layout.
+                if (child.Name == "foreignObject")
+                    continue;
+
                 if (child.Name == "color-profile"
                     && (child.GetAttribute("href") ?? child.GetAttribute("xlink:href")) is { Length: > 0 } profileHref)
                     hrefs.Add(profileHref);
@@ -553,6 +557,9 @@ namespace PeachPDF.Svg
         {
             foreach (var child in node.Children)
             {
+                if (child.Name == "foreignObject")
+                    continue;
+
                 if (child.Name == "color-profile"
                     && child.GetAttribute("name") is { Length: > 0 } name
                     && (child.GetAttribute("href") ?? child.GetAttribute("xlink:href")) is { Length: > 0 } href)
@@ -583,6 +590,10 @@ namespace PeachPDF.Svg
 
                 if (!string.IsNullOrEmpty(id))
                     _nodesById[id] = child;
+
+                // Its children are HTML: nothing in there defines SVG gradients, clips, filters or the like.
+                if (child.Name == "foreignObject")
+                    continue;
 
                 switch (child.Name)
                 {
@@ -855,6 +866,7 @@ namespace PeachPDF.Svg
                 "use" => BuildUse(node, inherited, fontContext),
                 "svg" => BuildNestedSvg(node, inherited, fontContext),
                 "image" => BuildImage(node, inherited),
+                "foreignObject" => BuildForeignObject(node, inherited),
                 "text" => BuildTextRun(node, inherited, fontContext, new TextWhitespaceState()),
                 "switch" => BuildSwitch(node, inherited, fontContext),
                 "a" => BuildAnchor(node, inherited, fontContext),
@@ -1149,6 +1161,29 @@ namespace PeachPDF.Svg
 
             ResolveImageHref(image, node.GetAttribute("href") ?? node.GetAttribute("xlink:href"));
             return image;
+        }
+
+        /// <summary>
+        /// Builds a <c>&lt;foreignObject&gt;</c>. Its HTML was laid out ahead of the build (see
+        /// <c>CssBoxSvg.MeasureWordsSize</c>) and is attached when the source node can supply it - only an
+        /// inline <c>&lt;svg&gt;</c> in an HTML document can. Anywhere else it is unbuildable, so a surrounding
+        /// <c>&lt;switch&gt;</c> falls through to its next child, as for any element the renderer cannot honor.
+        /// </summary>
+        private SvgForeignObjectElement? BuildForeignObject(ISvgSourceNode node, InheritedPaint inherited)
+        {
+            if ((node as CssBoxSvgSourceNode)?.ForeignContent is not { } content)
+                return null;
+
+            var foreign = new SvgForeignObjectElement
+            {
+                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? 0,
+                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? 0,
+                Content = content,
+            };
+            ApplyCommon(foreign, node, inherited);
+            return foreign;
         }
 
         /// <summary>

@@ -150,7 +150,8 @@ namespace PeachPDF.Html.Core.Dom
             // see DomParser.CascadeApplyStyles), so this is a snapshot, not a re-derivable query. `this
             // is CssBoxSvg or CssBoxMath` is safe in a base constructor - the object's runtime type is
             // already fixed by the time a derived constructor reaches this base call.
-            IsWithinForeignContent = parentBox is { IsWithinForeignContent: true } || this is CssBoxSvg or CssBoxMath;
+            IsWithinForeignContent = parentBox is { IsWithinForeignContent: true } && parentBox.HtmlTag?.Name != "foreignObject"
+                || this is CssBoxSvg or CssBoxMath;
 
             Id = ++IdCounterBox.Value;
             HtmlTag = tag;

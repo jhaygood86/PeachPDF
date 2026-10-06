@@ -14,6 +14,7 @@ using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -32,6 +33,7 @@ namespace PeachPDF.Html.Core.Dom
         private readonly CssRectSvg _svgWord;
         private SvgDocument? _document;
         private IReadOnlyDictionary<string, SvgTreeBuilder.SvgImageResource>? _prefetchedImages;
+        private Dictionary<CssBox, ISvgForeignContent>? _foreignContent;
 
         public CssBoxSvg(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
@@ -54,6 +56,7 @@ namespace PeachPDF.Html.Core.Dom
                 // then reuse the already-built _document. A null base override resolves relative hrefs
                 // against the host document base, correct for inline SVG.
                 _prefetchedImages = await SvgTreeBuilder.PrefetchImageResourcesAsync(new CssBoxSvgSourceNode(this), HtmlContainer!);
+                await LayoutForeignObjectsAsync(g, this);
                 EnsureDocument();
                 MeasureWordSpacing(g);
                 _wordsSizeMeasured = true;
@@ -61,6 +64,46 @@ namespace PeachPDF.Html.Core.Dom
 
             var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(_document);
             CssLayoutEngine.MeasureIntrinsicSize(_svgWord, intrinsicWidth, intrinsicHeight);
+        }
+
+        /// <summary>The laid-out HTML of <paramref name="foreignObject"/>, or null when it has none.</summary>
+        internal ISvgForeignContent? GetForeignContent(CssBox foreignObject) =>
+            _foreignContent is not null && _foreignContent.TryGetValue(foreignObject, out var content) ? content : null;
+
+        /// <summary>
+        /// Lays out the HTML of every <c>&lt;foreignObject&gt;</c> in this SVG (nested <c>&lt;svg&gt;</c>s included),
+        /// ahead of the synchronous scene-graph build and before <see cref="EnsureDocument"/> drops the boxes.
+        /// Not descended into: HTML inside a foreignObject is not SVG, and a nested foreignObject there is
+        /// laid out as part of its parent's content.
+        /// </summary>
+        private async ValueTask LayoutForeignObjectsAsync(Canvas g, CssBox parent)
+        {
+            // Copied: laying a box out temporarily reparents it.
+            foreach (var child in parent.Boxes.ToArray())
+            {
+                var index = parent.Boxes.IndexOf(child);
+
+                if (child.HtmlTag is null)
+                    continue;
+
+                if (child.HtmlTag.Name == "foreignObject")
+                {
+                    var width = SvgValueParsers.ParseLength(child.GetAttribute("width", null)) ?? 0;
+                    var height = SvgValueParsers.ParseLength(child.GetAttribute("height", null)) ?? 0;
+
+                    if (await SvgForeignObjectContent.LayoutAsync(g, child, width, height, HtmlContainer!) is { } content)
+                        (_foreignContent ??= [])[child] = content;
+
+                    // Putting the box back appends it to its parent's children; document order (z-order, and which
+                    // child a <switch> picks) must not change.
+                    parent.Boxes.Remove(child);
+                    parent.Boxes.Insert(index, child);
+                }
+                else
+                {
+                    await LayoutForeignObjectsAsync(g, child);
+                }
+            }
         }
 
         /// <summary>
