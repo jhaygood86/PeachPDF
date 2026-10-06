@@ -424,6 +424,23 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// Renders a <c>&lt;foreignObject&gt;</c>: paints (clipped to its viewport by the content) its already laid-out HTML
+        /// with the box's top-left at (x, y). Does nothing without content (a standalone SVG).
+        /// </summary>
+        private static void RenderForeignObject(Canvas g, SvgForeignObjectElement foreign)
+        {
+            if (foreign.Width <= 0 || foreign.Height <= 0)
+                return;
+
+            // Canvas.PushTransform takes layout units and divides by PixelsPerPoint, while everything drawn inside the
+            // SVG's own transform is in user units - hence the factor, so the box lands at (x, y) user units.
+            var ppp = g.PixelsPerPoint;
+            g.PushTransform(Matrix3x2.CreateTranslation((float)(foreign.X * ppp), (float)(foreign.Y * ppp)));
+            foreign.Content.Paint(g);
+            g.PopTransform();
+        }
+
+        /// <summary>
         /// One addressable character of a <c>&lt;text&gt;</c> subtree during flatten/layout: the glyph, its
         /// owning run (font/paint/anchor) and accumulated opacity, its assigned per-character position/
         /// rotation (null = unset ⇒ flow/inherit), and the layout results (<see cref="Px"/>/<see cref="Py"/>/
@@ -2396,6 +2413,7 @@ namespace PeachPDF.Svg
         {
             SvgTextElement text => MeasureTextBounds(g, text),
             SvgImageElement { Width: > 0, Height: > 0 } image => new Rect(image.X, image.Y, image.Width, image.Height),
+            SvgForeignObjectElement { Width: > 0, Height: > 0 } foreign => new Rect(foreign.X, foreign.Y, foreign.Width, foreign.Height),
             SvgNestedSvgElement { Width: > 0, Height: > 0 } nestedSvg => new Rect(nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height),
             SvgUseElement { Target: SvgSymbolElement } use => new Rect(use.X, use.Y, use.Width ?? viewport.Width, use.Height ?? viewport.Height),
             SvgUseElement { Target: SvgNestedSvgElement nestedTarget } use => new Rect(use.X, use.Y, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height),
@@ -2840,6 +2858,10 @@ namespace PeachPDF.Svg
 
                 case SvgImageElement image:
                     RenderImage(g, image, opacity);
+                    break;
+
+                case SvgForeignObjectElement foreign:
+                    RenderForeignObject(g, foreign);
                     break;
 
                 case SvgTextElement text:

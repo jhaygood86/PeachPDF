@@ -417,6 +417,33 @@ namespace PeachPDF.Svg
     }
 
     /// <summary>
+    /// HTML content already laid out for a <c>&lt;foreignObject&gt;</c>, painted into SVG user space.
+    /// Implemented by the HTML layer so the SVG layer never references it.
+    /// </summary>
+    internal interface ISvgForeignContent
+    {
+        /// <summary>
+        /// Paints the content, clipped to its viewport, with its top-left corner at the current transform's
+        /// origin and one user unit being one CSS pixel. Synchronous: all layout and resource loading already happened.
+        /// </summary>
+        void Paint(Canvas g);
+    }
+
+    /// <summary>
+    /// A <c>&lt;foreignObject&gt;</c>: a (<see cref="X"/>, <see cref="Y"/>, <see cref="Width"/>,
+    /// <see cref="Height"/>) viewport (it clips to it) holding laid-out HTML. Only built for an inline
+    /// <c>&lt;svg&gt;</c> in an HTML document; elsewhere <see cref="SvgTreeBuilder"/> builds nothing for it.
+    /// </summary>
+    internal sealed class SvgForeignObjectElement : SvgElement
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public required ISvgForeignContent Content { get; init; }
+    }
+
+    /// <summary>
     /// A resolved <c>&lt;use&gt;</c> reference - <see cref="Target"/> holds the referenced element for
     /// the renderer to paint at this node's own position/attributes. <see cref="Width"/>/<see cref="Height"/>
     /// only have an effect when <see cref="Target"/> is a <see cref="SvgSymbolElement"/> or

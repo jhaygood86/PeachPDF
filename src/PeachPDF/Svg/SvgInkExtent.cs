@@ -63,6 +63,9 @@ namespace PeachPDF.Svg
                     // A nested viewport clips what it draws to itself.
                     return nested is { Width: > 0, Height: > 0 } ? new Rect(nested.X, nested.Y, nested.Width, nested.Height) : null;
 
+                case SvgForeignObjectElement { Width: > 0, Height: > 0 } foreign:
+                    return new Rect(foreign.X, foreign.Y, foreign.Width, foreign.Height);
+
                 case SvgImageElement image:
                     return image is { Width: > 0, Height: > 0 } ? new Rect(image.X, image.Y, image.Width, image.Height) : null;
 

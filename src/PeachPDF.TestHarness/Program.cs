@@ -5521,6 +5521,40 @@ await SaveShowcaseAsync("svg_text_advanced", "Graphics & Effects", "SVG Text: Gr
     "SVG text with gradient/pattern fill, stroke, and glyphs laid along a path (textPath) - all rendered as real vector PDF content.",
     svgTextAdvancedHtml, pdfConfig);
 
+// --- SVG foreignObject showcase ---
+var svgForeignObjectHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 20px; font-family: sans-serif; }
+.card { font-size: 13px; padding: 8px; background: #fff7e0; border: 2px solid #e0a000; border-radius: 8px; }
+.card h4 { margin: 0 0 4px; color: #a05000; }
+.card ul { margin: 4px 0 0 16px; padding: 0; }
+</style></head><body>
+<h2>SVG foreignObject</h2>
+<svg width="480" height="300" viewBox="0 0 480 300" style="display:block;background:#eef3ff">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#3b6fd8"/><stop offset="1" stop-color="#9b4fd8"/></linearGradient>
+  </defs>
+  <rect x="10" y="10" width="460" height="40" fill="url(#g)"/>
+  <text x="20" y="38" font-size="22" fill="white">Vector SVG with live HTML inside</text>
+  <foreignObject x="20" y="70" width="200" height="140">
+    <div class="card"><h4>Rich text</h4>Wrapped <b>HTML</b> text with <i>inline</i> markup, laid out by the normal engine.
+      <ul><li>lists</li><li>borders</li><li>backgrounds</li></ul></div>
+  </foreignObject>
+  <foreignObject x="250" y="70" width="200" height="140" transform="rotate(8 350 140)" opacity="0.85">
+    <div class="card" style="background:#e6f7ea;border-color:#2a9d4a"><h4 style="color:#1b6b32">Transformed</h4>This box carries the foreignObject's own rotation and opacity.</div>
+  </foreignObject>
+  <foreignObject x="20" y="225" width="440" height="60">
+    <table style="width:100%;border-collapse:collapse;font-size:12px"><tr><td style="border:1px solid #888;padding:3px">A table</td><td style="border:1px solid #888;padding:3px">clipped to its viewport</td><td style="border:1px solid #888;padding:3px">inside SVG</td></tr></table>
+  </foreignObject>
+</svg>
+</body></html>
+""";
+
+await SaveShowcaseAsync("svg_foreign_object", "Graphics & Effects", "SVG foreignObject",
+    "HTML embedded in an inline SVG with foreignObject: wrapped text, lists, a table, and a rotated, translucent box, laid out by the HTML engine and painted in SVG user space.",
+    svgForeignObjectHtml, pdfConfig);
+
 // --- Unicode line breaking showcase ---
 // The kana are from the Noto Sans JP subset the SVG vertical text showcase below also embeds.
 var lineBreakingCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));

@@ -1,0 +1,11 @@
+# SVG `<foreignObject>` (#185)
+
+HTML inside an inline `<svg>` now lays out and paints. Load-bearing ideas and traps:
+
+- **Layout reuses `RunningElementLayout.LayoutRunningElementFor`** with the foreignObject box as the "running box" and a `width×height` rect in layout units (`px × PointsPerPx × PixelsPerPoint`). It runs from `CssBoxSvg.MeasureWordsSize` *before* `EnsureDocument` (which `Boxes.Clear()`s the children), because the build is sync and resource loading async. The result is frozen via `MarginBoxContentFragmentBuilder.Build` into `SvgForeignObjectContent`, painted by a fresh `FragmentPainter` (`SuppressTagging`).
+- **The structural passes skip `CssBoxSvg`**, so without `DomParser.CorrectForeignObjectContent` the HTML inside gets no anonymous blocks/tables. Children of a foreignObject are also not "foreign content" (`CssBox` ctor), or `DIV{}` selectors stop matching. UA rule `foreignObject { display: block }`.
+- **Units trap (found by rasterizing at `PixelsPerInch` 144, not at 72):** inside the SVG's transform, `PushTransform`/`PushClip` take layout units and divide by `PixelsPerPoint`, but drawn paths are user units. So the translate is `x × ppp`, and the content counter-scale is `1/PointsPerPx` (ppp-independent). A first version scaled by `1/(PointsPerPx·ppp)` and passed at 72 only.
+- **Clip trap:** the clip must be pushed *inside* the content's scale, in the content's own layout-unit space. Clipping in outer user-unit space made `FragmentPainter`'s clip-bound cull drop every word at ppp ≠ 1.
+- **Builder:** unbuildable (null) when the source node has no laid-out content (standalone SVG), so `<switch>` tests keep falling through. `CollectDefinitions`/`CollectImageHrefs`/`CollectColorProfiles` skip the subtree so HTML ids/`<img>` are not read as SVG.
+- Evidence: `SvgForeignObjectTests` (pixel asserts through `RasterCanvas`), `svg_foreign_object` showcase rasterized with MuPDF and PDFium. Limits: see [accepted gap](../accepted-gaps/svg-foreignobject-limits.md).
+- **Order trap:** `RunningElementLayout` restores the box with `ParentBox = savedParent`, which *appends* it to the parent's `Boxes`. Left alone, a foreignObject moves after its later siblings (wrong z-order; a `<switch>` picks the wrong child). `CssBoxSvg.LayoutForeignObjectsAsync` reinserts it at its original index.

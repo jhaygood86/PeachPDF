@@ -24,6 +24,9 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>True while a subtree is painted into a bitmap: its structure elements are created by the text pass instead.</summary>
         private bool _taggingSuppressed;
 
+        /// <summary>Set for a painter whose output lands inside another painter's artwork (an SVG <c>foreignObject</c>), where it must not add structure elements.</summary>
+        internal bool SuppressTagging { init => _taggingSuppressed = value; }
+
         /// <summary>
         /// Paints a fragment - and, via <see cref="PaintTagged"/>, its whole subtree - into a bitmap, runs the
         /// element's <c>filter</c> list over it, and draws the result into <paramref name="g"/>. This is how the
