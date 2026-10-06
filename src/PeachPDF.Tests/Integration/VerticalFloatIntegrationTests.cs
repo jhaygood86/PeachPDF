@@ -438,5 +438,28 @@ namespace PeachPDF.Tests.Integration
             Assert.All(firstColumn, w => Assert.True(f.ActualRight <= w.Left + 2,
                 $"the float ends at X {f.ActualRight}, beside '{w.Text}' at X {w.Left}"));
         }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task AThickColumnStartingBeforeAFloat_IsBesideItWhenItsSpanReachesIn(bool blockStartIsRight)
+        {
+            var mode = blockStartIsRight ? "vertical-rl" : "vertical-lr";
+            var (_, b) = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:{mode}; {Wrapper}'><div id='f' style='float:left; width:30pt; height:60pt'></div></div>", "f");
+            var f = b["f"];
+
+            // A point one pt short of the float's block-start edge: a 0-extent column there is clear of it...
+            var before = blockStartIsRight ? f.ActualRight + 1 : f.Location.X - 1;
+            var blockEndEdge = blockStartIsRight ? f.Location.X : f.ActualRight;
+            var beyond = blockStartIsRight ? f.Location.X - 1 : f.ActualRight + 1;
+            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight));
+            // ...but a 10pt-thick one reaches into it,
+            Assert.True(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight, 10));
+            // while a column that only touches the block-start edge, or starts at its block-end edge, stays clear.
+            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight, 1));
+            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockEndEdge, blockStartIsRight, 10));
+            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, beyond, blockStartIsRight, 0.5));
+        }
     }
 }

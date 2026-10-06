@@ -498,7 +498,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Whether <paramref name="style"/> is one of the alphabetic/additive counter styles
         /// <see cref="ConvertToAlphaNumber"/> genuinely handles - the single source of truth
-        /// <see cref="Dom.CssCounterEngine.FormatCounterValue"/> checks before calling it, so a known
+        /// <see cref="Dom.CssCounterEngine.FormatCounterValue(int, string, Dom.CssBox?)"/> checks before calling it, so a known
         /// style is never wrongly demoted to decimal and an unknown one never wrongly promoted to alpha.
         /// </summary>
         public static bool IsAlphabeticCounterStyle(string style) => _alphabeticConverters.ContainsKey(style);

@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Frozen;
@@ -40,6 +40,7 @@ namespace PeachPDF.CSS
         // @font-palette-values descriptors (font-family / base-palette / override-colors). Stored raw via
         // UnknownProperty and validated later in Layer B (RegisteredFontPalette.FromRule).
         private readonly FrozenDictionary<string, LonghandCreator> _fontPaletteDescriptors;
+        private readonly FrozenDictionary<string, LonghandCreator> _counterStyleDescriptors;
 
         private readonly FrozenDictionary<string, LonghandCreator> _longhands;
 
@@ -418,7 +419,11 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.OutlineWidth, () => new OutlineWidthProperty(), true);
             AddLonghand(PropertyNames.OutlineOffset, () => new OutlineOffsetProperty(), true);
 
-            AddLonghand(PropertyNames.Overflow, () => new OverflowProperty());
+            AddShorthand(PropertyNames.Overflow, () => new OverflowProperty(),
+                PropertyNames.OverflowX,
+                PropertyNames.OverflowY);
+            AddLonghand(PropertyNames.OverflowX, () => new OverflowXProperty());
+            AddLonghand(PropertyNames.OverflowY, () => new OverflowYProperty());
             AddLonghand(PropertyNames.OverflowWrap, () => new OverflowWrapProperty());
 
             AddShorthand(PropertyNames.Padding, () => new PaddingProperty(),
@@ -683,6 +688,17 @@ namespace PeachPDF.CSS
             AddLogicalShorthand(PropertyNames.All, () => new AllProperty(),
                 _longhandsBuilder.Keys.Where(name => !IsExcludedFromAll(name)).ToArray());
 
+            // CSS Counter Styles Level 3 §3 descriptors, stored raw (UnknownProperty) and parsed in Layer B
+            // (Html/Core/CounterStyles). speak-as is accepted and ignored (no speech output).
+            var counterStyleDescriptorsBuilder = new Dictionary<string, LonghandCreator>(StringComparer.OrdinalIgnoreCase);
+            foreach (var descriptor in CounterStyleRule.DescriptorNames)
+            {
+                var descriptorName = descriptor;
+                counterStyleDescriptorsBuilder[descriptorName] = () => new UnknownProperty(descriptorName);
+            }
+
+            _counterStyleDescriptors = counterStyleDescriptorsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
             _longhands = _longhandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
             _mappings = _mappingsBuilder.ToFrozenDictionary();
             _shorthands = _shorthandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
@@ -746,6 +762,11 @@ namespace PeachPDF.CSS
         public Property CreatePropertyDescriptor(string name)
         {
             return _propertyDescriptors.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
+        }
+
+        public Property CreateCounterStyleDescriptor(string name)
+        {
+            return _counterStyleDescriptors.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
         }
 
         public Property CreateFontPaletteDescriptor(string name)

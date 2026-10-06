@@ -44,14 +44,15 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         private void PaintWordsWithEllipsis(Canvas g, CssBox box, CssBox containingBlock, BoxFragment fragment)
         {
-            var isVertical = containingBlock.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
-            var isRtl = containingBlock.Direction.Value == DirectionMode.Rtl;
-            // The end boundary is where the clip cuts the text, so it follows the clip when that is snapped;
-            // the start boundary is where the (unsnapped) text begins, so it does not.
-            var boundary = ResolveInlineEndBoundary(
-                containingBlock, OverflowClipOf(g, fragment).Clip!.Value, isVertical, isRtl);
-            var lineStart = ResolveInlineStartBoundary(containingBlock, fragment, isVertical, isRtl);
+            if (ResolveEllipsisGeometry(g, containingBlock, fragment) is not { } geometry)
+            {
+                // No clip to take the content edge from (no clipping ancestor above these words): nothing to
+                // truncate at.
+                PaintWordSequence(g, box, fragment.Words);
+                return;
+            }
 
+            var (isVertical, isRtl, boundary, lineStart) = geometry;
             var consumed = new HashSet<CssRect>(ReferenceEqualityComparer.Instance);
 
             foreach (var lineFragment in fragment.Lines)
@@ -79,6 +80,144 @@ namespace PeachPDF.Html.Core.Paint
             if (leftover is { Count: > 0 }) PaintWordSequence(g, box, leftover);
         }
 
+        /// <summary>The writing mode, direction and content-edge coordinates the ellipsis walk of one fragment's lines is resolved against.</summary>
+        private readonly record struct EllipsisGeometry(bool IsVertical, bool IsRtl, double Boundary, double LineStart);
+
+        /// <summary>
+        /// One resolution shared by the word painter and the decoration's cut lookup, so the two cannot place
+        /// the cut differently. Null when <paramref name="fragment"/> carries no clip - no <c>overflow</c> clipping
+        /// ancestor above it, which is also what the root of a detached tree (a footnote body) has: with no content edge
+        /// there is nothing to truncate at.
+        /// </summary>
+        private EllipsisGeometry? ResolveEllipsisGeometry(Canvas g, CssBox containingBlock, BoxFragment fragment)
+        {
+            if (OverflowClipOf(g, fragment).Clip is not { } paddingEdge) return null;
+
+            var isVertical = containingBlock.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            var isRtl = containingBlock.Direction.Value == DirectionMode.Rtl;
+            // The end boundary is where the clip cuts the text, so it follows the clip when that is snapped;
+            // the start boundary is where the (unsnapped) text begins, so it does not.
+            var boundary = ResolveInlineEndBoundary(containingBlock, paddingEdge, isVertical, isRtl);
+            var lineStart = ResolveInlineStartBoundary(containingBlock, fragment.OverflowClip ?? paddingEdge, isVertical, isRtl);
+            return new EllipsisGeometry(isVertical, isRtl, boundary, lineStart);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="block"/> truncates its lines with an ellipsis - see
+        /// <see cref="FragmentPainter.PaintWords"/>'s remarks on why <c>Overflow.Hidden</c> specifically.
+        /// </summary>
+        private static bool EllipsisActive(CssBox block) =>
+            block.TextOverflow.Value == TextOverflow.Ellipsis && block.Overflow.Value == Overflow.Hidden;
+
+        /// <summary>Where a <c>text-overflow: ellipsis</c> line ends: the end of everything it keeps, on the line's inline axis.</summary>
+        /// <param name="Anchor">the coordinate the ellipsis begins at (LTR) or ends at (RTL)</param>
+        /// <param name="IsVertical">whether <paramref name="Anchor"/> is a Y coordinate (a true vertical writing mode)</param>
+        /// <param name="IsRtl">whether the line runs toward lower coordinates, so what is kept is the part past <paramref name="Anchor"/></param>
+        private readonly record struct EllipsisCut(double Anchor, bool IsVertical, bool IsRtl);
+
+        /// <summary>
+        /// Where <paramref name="line"/> was truncated, or null when it was not (or is not under
+        /// <c>text-overflow: ellipsis</c> at all). A text decoration ends here: css-text-decor-3 §2 decorates
+        /// the inline content, and the truncated part - the ellipsis included - is not part of it.
+        /// </summary>
+        /// <remarks>
+        /// Asked <i>before</i> the line's words are painted, because a decoration is painted with its box and
+        /// ahead of the descendants whose words may hold the cut. So this re-derives the cut the word painter
+        /// will make - from the same <see cref="PlanLineTruncation"/>, over every box that contributes words
+        /// to the line in tree order, the first one that cuts winning exactly as
+        /// <see cref="_linesAlreadyTruncated"/> makes it win at paint time - rather than waiting to read it
+        /// back. A box <see cref="PaintFragment"/> skips as outside the clip is skipped here too. Cached per
+        /// line; the page's fragment tree is indexed once, on the first ask.
+        /// </remarks>
+        private EllipsisCut? EllipsisCutOf(Canvas g, CssLineBox? line)
+        {
+            var root = _detachedRoot ?? _pageRoot;
+            if (line is null || root is null) return null;
+
+            if (_ellipsisCuts.TryGetValue(line, out var known)) return known;
+
+            _ellipsisLineFragments ??= IndexEllipsisLines(root);
+
+            EllipsisCut? cut = null;
+
+            if (_ellipsisLineFragments.TryGetValue(line, out var fragments))
+            {
+                var clip = g.GetClip();
+
+                foreach (var fragment in fragments)
+                {
+                    // A fragment wholly outside the clip is never entered by PaintFragment, so its words never
+                    // get to claim the line. In a right-to-left block a Latin run overflows toward the end
+                    // edge, which puts its first (tree order) box beyond the clip while a later box holds the
+                    // cut that is really drawn.
+                    if (fragment.Lines.Count > 0 && !IsAnyRectVisible(fragment, clip)) continue;
+
+                    cut = CutOfFragmentOnLine(g, fragment, line);
+                    if (cut is not null) break;
+                }
+            }
+
+            _ellipsisCuts[line] = cut;
+            return cut;
+        }
+
+        /// <summary>The cut <paramref name="fragment"/>'s own words make on <paramref name="line"/>, mirroring <see cref="PaintWordsWithEllipsis"/>.</summary>
+        private EllipsisCut? CutOfFragmentOnLine(Canvas g, BoxFragment fragment, CssLineBox line)
+        {
+            var box = fragment.Box;
+            if (box.Width is null or { Length: <= 0 }) return null;
+
+            if (ResolveEllipsisGeometry(g, box.ContainingBlock, fragment) is not { } geometry) return null;
+
+            var (isVertical, isRtl, boundary, lineStart) = geometry;
+
+            foreach (var lineFragment in fragment.Lines)
+            {
+                if (!ReferenceEquals(lineFragment.Line, line)) continue;
+
+                var lineWords = VisualOrderWordsOf(lineFragment, box, fragment, isVertical, isRtl);
+                if (lineWords.Count == 0) continue;
+
+                if (PlanLineTruncation(g, box, lineWords, isVertical, isRtl, boundary, lineStart) is { } plan)
+                    return new EllipsisCut(plan.EllipsisAnchor, isVertical, isRtl);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Every fragment under <paramref name="root"/> that paints words through
+        /// <see cref="PaintWordsWithEllipsis"/>, grouped by the line box it sits on, in tree order.
+        /// </summary>
+        private static Dictionary<CssLineBox, List<BoxFragment>> IndexEllipsisLines(BoxFragment root)
+        {
+            var index = new Dictionary<CssLineBox, List<BoxFragment>>(ReferenceEqualityComparer.Instance);
+            IndexEllipsisLines(root, index);
+            return index;
+        }
+
+        private static void IndexEllipsisLines(BoxFragment fragment, Dictionary<CssLineBox, List<BoxFragment>> index)
+        {
+            // A box PaintFragment skips (display: none, visibility other than visible) never reaches the word
+            // painter, so it never claims a line's cut there either.
+            if (fragment.Words.Count > 0 && fragment.OverflowClip is not null
+                && fragment.Box.DerivedStyle.ActualDisplay != Keywords.None
+                && fragment.Box.Visibility.Value == Visibility.Visible
+                && fragment.Box.ContainingBlock is { } containingBlock && EllipsisActive(containingBlock))
+            {
+                foreach (var lineFragment in fragment.Lines)
+                {
+                    if (lineFragment.Line is not { } line) continue;
+
+                    if (!index.TryGetValue(line, out var fragments)) index.Add(line, fragments = []);
+                    // Reference identity: BoxFragment is a record, whose Contains would compare structurally.
+                    if (fragments.Count == 0 || !ReferenceEquals(fragments[^1], fragment)) fragments.Add(fragment);
+                }
+            }
+
+            foreach (var child in fragment.Children) IndexEllipsisLines(child, index);
+        }
+
         /// <summary>
         /// The single content-edge coordinate a line's content must not cross - the inline-end edge of
         /// <paramref name="containingBlock"/>'s own content box, for its own writing mode/direction
@@ -99,9 +238,8 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>The content-edge coordinate a line's content naturally starts from - the mirror of <see cref="ResolveInlineEndBoundary"/>, used only to anchor an ellipsis that replaces a line's very first word.</summary>
-        private static double ResolveInlineStartBoundary(CssBox containingBlock, BoxFragment fragment, bool isVertical, bool isRtl)
+        private static double ResolveInlineStartBoundary(CssBox containingBlock, Rect paddingEdge, bool isVertical, bool isRtl)
         {
-            var paddingEdge = fragment.OverflowClip!.Value;
             if (!isVertical)
                 return isRtl ? paddingEdge.Right - containingBlock.ActualPaddingRight : paddingEdge.Left + containingBlock.ActualPaddingLeft;
             return isRtl ? paddingEdge.Bottom - containingBlock.ActualPaddingBottom : paddingEdge.Top + containingBlock.ActualPaddingTop;
@@ -175,14 +313,53 @@ namespace PeachPDF.Html.Core.Paint
         // and the reader can see, which is the opposite of the silent loss the report exists for.
         private bool PaintLineWithEllipsis(Canvas g, CssBox box, List<TextFragment> lineWords, bool isVertical, bool isRtl, double boundary, double lineStart)
         {
+            if (PlanLineTruncation(g, box, lineWords, isVertical, isRtl, boundary, lineStart) is not { } plan)
+            {
+                PaintWordSequence(g, box, lineWords);
+                return false;
+            }
+
+            var wf = lineWords[plan.WordIndex];
+            if (plan.WordIndex > 0) PaintWordSequence(g, box, lineWords.GetRange(0, plan.WordIndex));
+
+            if (plan.Truncation is { } c)
+            {
+                // Same visibility-clip check PaintWordSequence applies to every ordinary word
+                // (issue #113: a box relocated to the next page's content top can leave a
+                // near-zero-but-not-quite-empty clip intersection on the page it left) - the cut
+                // word's kept run and the ellipsis glyph go through DrawWordGlyphs directly, not
+                // PaintWordSequence, so they need their own copy of the same guard.
+                if (c.KeptText.Length > 0 && IsVisible(g, c.KeptRect)) DrawWordGlyphs(g, box, wf.Word, c.KeptRect, c.KeptText, c.KeptSize,
+                    precededBySeparator: wf.Word.PrecededByWordSeparator, separatorEdge: PrecedingWordEdge(g, wf.Word, c.KeptRect));
+            }
+
+            DrawEllipsis(g, box, wf.Word, isVertical, isRtl, plan.EllipsisAnchor, wf.Rect);
+            return true;
+        }
+
+        /// <summary>
+        /// Where one box's words on one line get cut: <paramref name="WordIndex"/> is the first word that
+        /// does not fit whole; <paramref name="Truncation"/> is its kept run when part of it fits, and null
+        /// when it (and everything after it) is dropped whole; <paramref name="EllipsisAnchor"/> is the
+        /// coordinate the ellipsis starts from (LTR) or ends at (RTL) - the end of everything kept.
+        /// </summary>
+        private readonly record struct LinePlan(int WordIndex, WordTruncation? Truncation, double EllipsisAnchor);
+
+        /// <returns>
+        /// The cut for the line, or null when its content - restricted to <paramref name="lineWords"/> -
+        /// fits without needing one. Decides only; painting the plan is <see cref="PaintLineWithEllipsis"/>'s
+        /// job, and the decoration painter asks the same question (<see cref="EllipsisCutOf"/>) so that a
+        /// text decoration ends exactly where the kept text does.
+        /// </returns>
+        private static LinePlan? PlanLineTruncation(Canvas g, CssBox box, List<TextFragment> lineWords, bool isVertical, bool isRtl, double boundary, double lineStart)
+        {
             var lastLeading = LeadingEdge(lineWords[^1].Rect, isVertical, isRtl);
             if (!(Forward(lastLeading, isRtl) > Forward(boundary, isRtl)))
             {
                 // The line's raw (untruncated) content already fits - nothing to do. Checked without any
                 // ellipsis-room reservation: text-overflow only takes effect when content genuinely
                 // overflows, not merely because there'd be less room left over than an ellipsis needs.
-                PaintWordSequence(g, box, lineWords);
-                return false;
+                return null;
             }
 
             var ellipsisReserve = ApproximateEllipsisExtent(g, box, isVertical);
@@ -204,33 +381,23 @@ namespace PeachPDF.Html.Core.Paint
                 var isAtomic = wf.Word.IsImage || wf.Word is CssRectLeader
                                || (isVertical && !ResolveIsUpright(box, wf.Word));
 
-                if (!isAtomic)
-                {
-                    var cut = FitTruncatedWord(g, box, wf, isVertical, isRtl, boundaryF);
-                    if (cut is { } c)
-                    {
-                        if (i > 0) PaintWordSequence(g, box, lineWords.GetRange(0, i));
-                        // Same visibility-clip check PaintWordSequence applies to every ordinary word
-                        // (issue #113: a box relocated to the next page's content top can leave a
-                        // near-zero-but-not-quite-empty clip intersection on the page it left) - the cut
-                        // word's kept run and the ellipsis glyph go through DrawWordGlyphs directly, not
-                        // PaintWordSequence, so they need their own copy of the same guard.
-                        if (c.KeptText.Length > 0 && IsVisible(g, c.KeptRect)) DrawWordGlyphs(g, box, wf.Word, c.KeptRect, c.KeptText, c.KeptSize);
-                        DrawEllipsis(g, box, wf.Word, isVertical, isRtl, c.EllipsisAnchor, wf.Rect);
-                        return true;
-                    }
-                }
+                if (!isAtomic && FitTruncatedWord(g, box, wf, isVertical, isRtl, boundaryF) is { } cut)
+                    return new LinePlan(i, cut, cut.EllipsisAnchor);
 
                 // Atomic content (image/leader/sideways-rotated vertical run), or a word with no room
                 // even for a single character: drop this word (and everything after it in visual order)
                 // whole, and place the ellipsis right after the last word actually kept.
-                if (i > 0) PaintWordSequence(g, box, lineWords.GetRange(0, i));
-                var dropAnchor = i == 0 ? lineStart : LeadingEdge(lineWords[i - 1].Rect, isVertical, isRtl);
-                DrawEllipsis(g, box, wf.Word, isVertical, isRtl, dropAnchor, wf.Rect);
-                return true;
+                // The first word of THIS box is not necessarily the line's first: a sibling before it may have
+                // been kept, in which case the line does not start at the content edge but where this word does.
+                var dropAnchor = i > 0
+                    ? LeadingEdge(lineWords[i - 1].Rect, isVertical, isRtl)
+                    : Forward(lineStart, isRtl) >= Forward(TrailingEdge(wf.Rect, isVertical, isRtl), isRtl)
+                        ? lineStart
+                        : TrailingEdge(wf.Rect, isVertical, isRtl);
+                return new LinePlan(i, null, dropAnchor);
             }
 
-            return false;
+            return null;
         }
 
         /// <summary>Mirrors <c>PaintWordSequence</c>'s own issue-#113 visibility check for a draw call that bypasses it (a truncation's kept run/ellipsis glyph, drawn directly through <see cref="FragmentPainter.DrawWordGlyphs"/>).</summary>

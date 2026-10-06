@@ -232,6 +232,28 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(raise20 * 2, raise40, 1);
         }
 
+        // An inline-block's own vertical-align says how it sits in its parent's line; its inner lines are
+        // baseline-aligned, so the text starts below the padding whatever that value is (CSS 2.1 §10.8.1).
+        [Theory]
+        [InlineData("top")]
+        [InlineData("middle")]
+        [InlineData("text-top")]
+        [InlineData("text-bottom")]
+        [InlineData("bottom")]
+        [InlineData("baseline")]
+        public async Task AnInlineBlocksText_StartsBelowItsTopPadding_WhateverItsOwnVerticalAlign(string verticalAlign)
+        {
+            var html = Wrap(
+                "<p id='p' style='margin:0;font:10pt/12pt Arial'>X<span id='ib' style='display:inline-block;width:100pt;"
+                + $"vertical-align:{verticalAlign};padding:30pt 6pt 0'>one two three four five six seven eight</span>Y</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var ib = FindById(root, "ib")!;
+            var word = CssBox.FirstWordOccurence(ib, ib.LineBoxes[0])!;
+
+            Assert.True(word.Top >= ib.Location.Y + 30 - 0.5, $"text at {word.Top} sits over the padding of a box at {ib.Location.Y}");
+            Assert.True(word.Top <= ib.Location.Y + 30 + 3, $"text at {word.Top} sits far below the padding of a box at {ib.Location.Y}");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<double> GetAlignedTopAsync(string verticalAlign, string? lineHeight = null)

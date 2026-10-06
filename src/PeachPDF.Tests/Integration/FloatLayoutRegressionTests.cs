@@ -1051,6 +1051,41 @@ namespace PeachPDF.Tests.Integration
                 $"float extends past its container: right={b.ActualRight}, container right={cols.ClientRight}");
         }
 
+        [Fact]
+        public async Task RightFloats_InTheIssueDocument_DoNotOverlap()
+        {
+            // Two consecutive block-level right floats were placed at the same position.
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>@page { size: 300pt 200pt; margin: 20pt } body { margin: 0; font: 10pt/12pt Arial }</style></head><body>" +
+                "<div id='a' style='float:right;width:60pt;background:#fcc'>F1<br>F2</div>" +
+                "<div id='b' style='float:right;width:60pt;background:#ccf'>G1</div><p>Text</p></body></html>",
+                pageWidth: 300, pageHeight: 200, margin: 20);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(220, a.Location.X, 1);
+            Assert.Equal(160, b.Location.X, 1);
+            Assert.Equal(a.Location.Y, b.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task RightFloat_AfterAnEarlierRightFloat_SitsToItsLeft()
+        {
+            var html = Wrap(@"
+                <div style='width:260pt'>
+                    <div id='a' style='float:right; width:60pt'>F1<br>F2</div>
+                    <div id='b' style='float:right; width:60pt'>G1</div>
+                    <p>Text</p>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(a.Location.X - b.ActualBoxSizingWidth, b.Location.X, 3);
+            Assert.Equal(a.Location.Y, b.Location.Y, 3);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

@@ -942,10 +942,17 @@ namespace PeachPDF.Html.Core.Dom
             // Where the current column's content starts along the inline axis and how far it may run: a float
             // pinned to the line-left or line-right side (physical top or bottom) takes that end of the column
             // (CSS Writing Modes 4 section 7.5), so words start after it and stop before the one on the other side.
+            // The block-axis thickness the column about to start will have at least: the strut's line-height or
+            // the first word's own line-box extent, whichever is larger (CSS 2.1 10.8.1). Float avoidance tests
+            // this whole span, not just the column's leading edge.
+            double ProspectiveColumnExtent(int wordIndex) =>
+                words.Count == 0 ? blockBox.ActualLineHeight
+                    : Math.Max(blockBox.ActualLineHeight, LineBoxExtentOf(words[Math.Min(wordIndex, words.Count - 1)], blockBox));
+
             await PlaceFloatsUpTo(0, 0);
 
             var (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
-                ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, 0, placedFloats);
+                ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, 0, ProspectiveColumnExtent(0), placedFloats);
             inlineOffset = columnStartInset;
             line.VerticalTopInset = columnTopInset;
             line.VerticalBottomInset = columnBottomInset;
@@ -980,13 +987,14 @@ namespace PeachPDF.Html.Core.Dom
 
                 line = new CssLineBox(blockBox);
                 (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
-                    ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
+                    ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, ProspectiveColumnExtent(currentWordIndex), placedFloats);
                 inlineOffset = columnStartInset;
                 line.VerticalTopInset = columnTopInset;
                 line.VerticalBottomInset = columnBottomInset;
             }
 
             var pendingWordSeparator = false;
+            CssBox? pendingWordSeparatorStyle = null;
 
             for (var i = 0; i < words.Count; i++)
             {
@@ -1001,7 +1009,7 @@ namespace PeachPDF.Html.Core.Dom
                     && await PlaceFloatsUpTo(i, blockOffset))
                 {
                     (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
-                        ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
+                        ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, ProspectiveColumnExtent(currentWordIndex), placedFloats);
                     inlineOffset = columnStartInset;
                     line.VerticalTopInset = columnTopInset;
                     line.VerticalBottomInset = columnBottomInset;
@@ -1168,12 +1176,19 @@ namespace PeachPDF.Html.Core.Dom
                 word.Width = physical.Width;
                 word.Height = physical.Height;
 
-                // The horizontal counterpart of FlowBox's own assignment - see
+                // The vertical counterpart of FlowBox's own assignment - see
                 // CssRect.PrecededByWordSeparator. This flow walks one flat word list rather than
                 // recursing through inline boxes, so it never adds a whitespace-only box's own advance
-                // and the two word-level sources are all there is.
-                word.PrecededByWordSeparator = pendingWordSeparator || word.HasSpaceBefore;
+                // and the two word-level sources are all there is. Like FlowBox, never for the word
+                // that opens a column: the space in front of it was removed (css-text-3 phase II), and
+                // the separator still pending from the column before is not between two words of this one.
+                var wordOpensTheLine = line.Words.TrueForAll(w => w.IsLineBreak);
+                word.PrecededByWordSeparator = !wordOpensTheLine && (pendingWordSeparator || word.HasSpaceBefore);
+                word.WordSeparatorStyle = !word.PrecededByWordSeparator ? null
+                    : pendingWordSeparator ? pendingWordSeparatorStyle
+                    : word.FirstLineStyle ?? word.OwnerBox;
                 pendingWordSeparator = word.HasSpaceAfter;
+                pendingWordSeparatorStyle = word.FirstLineStyle ?? word.OwnerBox;
 
                 line.ReportExistanceOf(word);
                 (trailingRegionalIndicatorCount, trailingGraphemeContext) = UpdateTrailingTextState(
@@ -1318,14 +1333,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static (double StartInset, double WrapLimit, double TopInset, double BottomInset) ComputeColumnInlineSpan(
             CssBox blockBox, WritingModeFrame frame,
-            double clientTop, double wrapLimit, double blockOffset, List<CssBox.VerticalFloatPlacement>? ownFloats = null)
+            double clientTop, double wrapLimit, double blockOffset, double columnExtent, List<CssBox.VerticalFloatPlacement>? ownFloats = null)
         {
             var columnBlockAxisPoint = frame.ToPhysical(0, blockOffset).X;
 
             // The same provisional bottom edge frame itself was built from (clientTop + wrapLimit), not
             // blockBox.ClientBottom - which, for an auto-height box, is not yet resolved at this point.
             var (topInset, bottomInset) = DomUtils.GetVerticalFloatInsets(
-                blockBox, columnBlockAxisPoint, frame.BlockStartIsRight, clientTop, clientTop + wrapLimit);
+                blockBox, columnBlockAxisPoint, frame.BlockStartIsRight, clientTop, clientTop + wrapLimit, columnExtent);
 
             // Floats this box's own inline flow placed are its children, which the scan of preceding siblings
             // does not reach.
@@ -1335,7 +1350,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (own.Box.VerticalFloatOccupancy is not { } reach) continue;
 
-                    if (DomUtils.VerticalFloatCoversBlockPoint(own.Box, columnBlockAxisPoint, frame.BlockStartIsRight))
+                    if (DomUtils.VerticalFloatCoversBlockPoint(own.Box, columnBlockAxisPoint, frame.BlockStartIsRight, columnExtent))
                     {
                         reach.GrowInsets(clientTop, clientTop + wrapLimit, ref topInset, ref bottomInset);
                     }
@@ -3176,12 +3191,15 @@ namespace PeachPDF.Html.Core.Dom
             // last, and min-height wins over it on conflict (CSS 2.1 §10.7).
             var isContainingBlockHeightDefinite = IsHeightDefinite(box.ContainingBlock);
 
-            if (CssValueParser.IsValidLength(box.MaxHeight) &&
-                (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(box.MaxHeight)))
+            if (ResolveMaxHeight(box) is { } maxHeight)
             {
-                var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
-                var maxHeight = CssValueParser.ParseLength(box.MaxHeight, maxHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
-                var maxBottom = box.Location.Y + maxHeight;
+                // A capped scroll container that broke across pages reaches its cap where the content it
+                // placed adds up to it, not a cap's distance below its first fragment: the strips the breaks
+                // skipped are not content (css-break-3 §4's consumed block size).
+                var maxBottom = Fragmentation.CappedScrollContainer.IsCapped(box)
+                    && Fragmentation.CappedScrollContainer.CapBottom(box) is { } cappedBottom
+                    ? Math.Max(cappedBottom, box.Location.Y + maxHeight)
+                    : box.Location.Y + maxHeight;
 
                 if (box.ActualBottom > maxBottom)
                 {
@@ -3202,6 +3220,21 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// The used <c>max-height</c> of <paramref name="box"/> as a distance from its top border edge, or null
+        /// when it has none or it cannot be resolved yet (a percentage of an indefinite height).
+        /// </summary>
+        internal static double? ResolveMaxHeight(CssBox box)
+        {
+            if (!CssValueParser.IsValidLength(box.MaxHeight)) return null;
+
+            if (!IsHeightDefinite(box.ContainingBlock) && CssValueParser.DependsOnPercentage(box.MaxHeight)) return null;
+
+            var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
+
+            return CssValueParser.ParseLength(box.MaxHeight, maxHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
         }
 
         #region Private methods
@@ -3742,6 +3775,7 @@ namespace PeachPDF.Html.Core.Dom
                 // contiguous with the previous one. It is a real word separator, and
                 // `<span>AA</span> <span>BB</span>` is exactly the common markup that produces it.
                 coordinates.PendingWordSeparator = true;
+                coordinates.PendingWordSeparatorStyle = box;
             }
 
             // Finalize what was captured at entry, now that this box's content has actually been placed
@@ -5556,6 +5590,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         coordinates.CurrentX += box.ActualWordSpacing;
                         coordinates.PendingWordSeparator = true;
+                        coordinates.PendingWordSeparatorStyle = box;
                     }
 
                     for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
@@ -5945,7 +5980,11 @@ namespace PeachPDF.Html.Core.Dom
                         // expansion point at the head of the line (issue #1087).
                         word.PrecededByWordSeparator = !wordOpensTheLine
                             && (coordinates.PendingWordSeparator || word.HasSpaceBefore);
+                        word.WordSeparatorStyle = !word.PrecededByWordSeparator ? null
+                            : coordinates.PendingWordSeparator ? coordinates.PendingWordSeparatorStyle
+                            : word.FirstLineStyle ?? word.OwnerBox;
                         coordinates.PendingWordSeparator = word.HasSpaceAfter;
+                        coordinates.PendingWordSeparatorStyle = word.FirstLineStyle ?? word.OwnerBox;
 
                         // A fixed box repeats at the same page-box position on every page (CSS 2.1
                         // §13.3.1), so a boundary means nothing to its words. A *table cell* used to be
@@ -5961,7 +6000,10 @@ namespace PeachPDF.Html.Core.Dom
                         // back to a relocation - issue #333 retired the last caller of the pre-#321
                         // per-word CssRect.BreakPage mechanism that used to run here.
                         if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
-                            && coordinates.Fragmentainer is not null)
+                            && coordinates.Fragmentainer is not null
+                            // A line past a capped scroll container's cap is clipped away or overflows, and
+                            // is laid out without a break (see CappedScrollContainer).
+                            && !Fragmentation.CappedScrollContainer.IsPastCap(blockBox, coordinates.Line.FlowTop ?? word.Top))
                         {
                             // css-gcpm-3 §2.8's footnote-policy: line: a footnote's own note area didn't
                             // fit its call's landing page (HtmlContainerInt.ResolveFootnotesForThisAttempt,
@@ -8061,7 +8103,11 @@ namespace PeachPDF.Html.Core.Dom
                 return firstLineStyle.VerticalAlign;
             }
 
+            // The owner's own value says how the owner sits in its parent's line, not how its content sits in
+            // its own lines (CSS 2.1 §10.8.1): a table cell's and an inline-block's inner lines are baseline.
             return styledBox.DerivedStyle.ActualDisplay == Keywords.TableCell
+                   || (ReferenceEquals(styledBox, ownerBox)
+                       && styledBox.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
                 ? BaselineVerticalAlign
                 : styledBox.VerticalAlign;
         }

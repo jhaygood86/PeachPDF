@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
@@ -953,6 +954,9 @@ namespace PeachPDF.Html.Core
         internal IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette> FontPaletteValues { get; set; }
             = new Dictionary<(string, string), RegisteredFontPalette>();
 
+        /// <summary>The document's <c>@counter-style</c> rules; null when it declares none.</summary>
+        internal CounterStyleRegistry? CounterStyles { get; set; }
+
         /// <summary>
         /// Named OpenType feature-value aliases registered with <c>@font-feature-values</c> at-rules,
         /// keyed by <c>(normalized-family, block-kind, name)</c>. Consulted when resolving
@@ -1382,6 +1386,7 @@ namespace PeachPDF.Html.Core
                 var cssValueParser = new CssValueParser(Adapter);
                 RegisteredProperties = RegisteredProperty.BuildRegistry(CssData, cssValueParser);
                 FontPaletteValues = RegisteredFontPalette.BuildRegistry(CssData, cssValueParser);
+                CounterStyles = CounterStyleRegistry.BuildRegistry(CssData);
                 FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(CssData);
 
                 var media = MediaQueryContext.FromContainer(this, Media);

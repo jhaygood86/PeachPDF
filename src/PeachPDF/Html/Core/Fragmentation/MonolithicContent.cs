@@ -41,16 +41,17 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         // An uncapped auto-height box grows with its content, so there is no block-axis scroll
         // area to keep together. In print, allow its normal line and block break points.
-        // A definite height or maximum keeps the box unbreakable for every overflow value. §4.1 only
-        // permits that for hidden without a maximum, but breaking a hidden box that has one dropped
-        // the content after it on the trees measured, so the sized box stays whole as it always has.
+        // A definite height keeps the box unbreakable for every overflow value. A maximum does so only
+        // where the box cannot hold back a break past it (CappedScrollContainer.MustStayWhole): otherwise
+        // the box breaks under its cap and lays what lies past the cap out unbroken.
         private static bool HasConstrainedLogicalHeight(CssBox box) =>
             box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
                 ? CssValueParser.IsValidLength(box.Width) || CssValueParser.IsValidLength(box.MaxWidth)
                 : CssLayoutEngine.HasDefiniteHeight(box)
                     || (CssValueParser.IsValidLength(box.MaxHeight)
                         && (!CssValueParser.DependsOnPercentage(box.MaxHeight)
-                            || CssLayoutEngine.IsHeightDefinite(box.ContainingBlock)));
+                            || CssLayoutEngine.IsHeightDefinite(box.ContainingBlock))
+                        && CappedScrollContainer.MustStayWhole(box));
 
         // A flex or grid item is sized and finally placed by its container's commit pass, which pins the
         // item's used size before its own layout, and a box inside a multi-column container is clipped and
@@ -112,10 +113,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// monolithic, where excluding it unconditionally would not.
         /// </para>
         /// <para>
-        /// §2's <c>clip</c> exception is satisfied vacuously rather than deliberately: <c>Map.OverflowModes</c>
-        /// accepts only <c>visible|hidden|scroll|auto</c>, so an authored <c>overflow: clip</c> fails to
-        /// convert and the box keeps <c>visible</c>. Should <c>clip</c> ever be implemented, it has to be
-        /// excluded here explicitly.
+        /// §2's <c>clip</c> exception holds because <see cref="CssBox.Overflow"/> is the used value read off both
+        /// axes and reports <c>visible</c> for a box whose axes are only <c>visible</c> or <c>clip</c>: such a
+        /// box clips (<see cref="CssBox.ClipsWithoutScrolling"/>) but is not a scroll container, so it
+        /// breaks across pages like any other block.
         /// </para>
         /// </remarks>
         internal static bool IsScrollContainer(CssBox box) =>

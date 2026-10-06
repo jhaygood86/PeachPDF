@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -859,7 +859,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="box">the candidate clipping box</param>
         /// <returns>true when <paramref name="box"/> has <c>overflow: hidden</c> and <c>overflow</c> applies to it</returns>
         internal static bool ClipsItsOverflow(CssBox box) =>
-            box.Overflow.Value == Overflow.Hidden
+            (box.Overflow.Value == Overflow.Hidden || box.ClipsWithoutScrolling)
             && !(box.IsInline && !IsAtomicInline(box))
             && !box.IsTableRowGroupBox
             && box.DerivedStyle.ActualDisplay is not (Keywords.TableRow or Keywords.TableColumn or Keywords.TableColumnGroup);
@@ -1312,7 +1312,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </para>
         /// </remarks>
         public static (double Top, double Bottom) GetVerticalFloatInsets(
-            CssBox reference, double columnBlockAxisPoint, bool blockStartIsRight, double readerTop, double readerBottom)
+            CssBox reference, double columnBlockAxisPoint, bool blockStartIsRight, double readerTop, double readerBottom, double columnBlockExtent = 0)
         {
             var container = reference.HtmlContainer;
             container?.RecordFloatScanCall();
@@ -1333,7 +1333,7 @@ namespace PeachPDF.Html.Core.Utils
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
                     ScanForVerticalFloatInsets(reference.ParentBox.Boxes[i], columnBlockAxisPoint, blockStartIsRight,
-                        readerTop, readerBottom, ref top, ref bottom, ref boxesVisited);
+                        readerTop, readerBottom, columnBlockExtent, ref top, ref bottom, ref boxesVisited);
                 }
 
                 reference = reference.ParentBox;
@@ -1344,7 +1344,7 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         private static void ScanForVerticalFloatInsets(CssBox box, double columnBlockAxisPoint, bool blockStartIsRight,
-            double readerTop, double readerBottom, ref double top, ref double bottom, ref int boxesVisited)
+            double readerTop, double readerBottom, double columnBlockExtent, ref double top, ref double bottom, ref int boxesVisited)
         {
             boxesVisited++;
 
@@ -1352,14 +1352,14 @@ namespace PeachPDF.Html.Core.Utils
             // along the inline axis, from the physical top or bottom edge of the box that placed it, the float
             // reaches, which the reach translates into the reader's own edges.
             if (box.IsFloated && box.VerticalFloatOccupancy is { } reach
-                && VerticalFloatCoversBlockPoint(box, columnBlockAxisPoint, blockStartIsRight))
+                && VerticalFloatCoversBlockPoint(box, columnBlockAxisPoint, blockStartIsRight, columnBlockExtent))
             {
                 reach.GrowInsets(readerTop, readerBottom, ref top, ref bottom);
             }
 
             foreach (var childBox in box.Boxes)
             {
-                ScanForVerticalFloatInsets(childBox, columnBlockAxisPoint, blockStartIsRight, readerTop, readerBottom,
+                ScanForVerticalFloatInsets(childBox, columnBlockAxisPoint, blockStartIsRight, readerTop, readerBottom, columnBlockExtent,
                     ref top, ref bottom, ref boxesVisited);
             }
         }
@@ -1370,10 +1370,23 @@ namespace PeachPDF.Html.Core.Utils
         /// column starting exactly where the float ends is beyond it, while one starting at the float's block-start
         /// edge is beside it, however thin the column.
         /// </summary>
-        internal static bool VerticalFloatCoversBlockPoint(CssBox floated, double columnBlockAxisPoint, bool blockStartIsRight)
+        internal static bool VerticalFloatCoversBlockPoint(CssBox floated, double columnBlockAxisPoint, bool blockStartIsRight,
+            double columnBlockExtent = 0)
         {
             var left = floated.Location.X - floated.ActualMarginLeft;
             var right = floated.ActualRight + floated.ActualMarginRight;
+
+            if (columnBlockExtent > 0)
+            {
+                // The column's whole prospective block-axis span, not just its leading edge: a thick column that
+                // starts before the float but reaches into it is beside it. Positive-width overlap only, so a
+                // column ending exactly where the float begins stays clear.
+                const double tolerance = 0.01;
+
+                return blockStartIsRight
+                    ? left < columnBlockAxisPoint - tolerance && columnBlockAxisPoint - columnBlockExtent < right - tolerance
+                    : columnBlockAxisPoint + columnBlockExtent > left + tolerance && columnBlockAxisPoint < right;
+            }
 
             return blockStartIsRight
                 ? left < columnBlockAxisPoint && columnBlockAxisPoint <= right

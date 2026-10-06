@@ -1745,6 +1745,30 @@ await SaveShowcaseAsync("list_style_type", "Lists & Generated Content", "List St
     "The full CSS Counter Styles Level 3 predefined-style coverage list-style-type now supports - numeric, fixed, symbolic, and additive systems, plus a literal <string> marker.",
     listStyleTypeHtml, pdfConfig);
 
+const string counterStyleHtml = """
+<!DOCTYPE html>
+<html><head><style>
+  @counter-style tally { system: additive; additive-symbols: 5 "V", 1 "I"; suffix: ") "; }
+  @counter-style padded { system: numeric; symbols: "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"; pad: 3 "0"; prefix: "#"; suffix: " "; }
+  @counter-style stars { system: cyclic; symbols: "★" "☆"; suffix: " "; }
+  @counter-style roman-bracket { system: extends lower-roman; prefix: "["; suffix: "] "; }
+  body { font-family: sans-serif; font-size: 13pt; }
+  div { display: inline-block; vertical-align: top; width: 30%; }
+  li::before { content: none; }
+</style></head><body>
+  <div><b>symbols(cyclic)</b><ol style="list-style-type: symbols(cyclic '*' '†' '‡')"><li>one</li><li>two</li><li>three</li><li>four</li></ol></div>
+  <div><b>symbols(alphabetic)</b><ol style="list-style-type: symbols(alphabetic 'a' 'b')"><li>one</li><li>two</li><li>three</li><li>four</li></ol></div>
+  <div><b>@counter-style additive</b><ol style="list-style-type: tally"><li>one</li><li>two</li><li>three</li><li>four</li><li>five</li><li>six</li></ol></div>
+  <div><b>numeric + pad</b><ol style="list-style-type: padded"><li>one</li><li>two</li><li>three</li></ol></div>
+  <div><b>cyclic symbols</b><ol style="list-style-type: stars"><li>one</li><li>two</li><li>three</li></ol></div>
+  <div><b>extends lower-roman</b><ol style="list-style-type: roman-bracket"><li>one</li><li>two</li><li>three</li><li>four</li></ol></div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("counter_styles", "Lists & Generated Content", "symbols() and @counter-style",
+    "Inline symbols() counter styles and author-defined @counter-style rules (cyclic, alphabetic, additive, numeric with pad, extends) driving list markers.",
+    counterStyleHtml, pdfConfig);
+
 // --- content image showcase ---
 
 static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before", string width = "40px", string height = "28px", string? cssLabel = null) =>
@@ -2367,6 +2391,17 @@ var footnotesHtml = """
     </div>
 
     <div style="break-before: page;">
+    <h1>overflow: hidden and text-overflow: ellipsis on a footnote body</h1>
+    <p>A footnote body is its own box, so overflow: hidden clips its content at the body's width, and
+    text-overflow: ellipsis ends a one-line note in an ellipsis instead of running on. The first note
+    below is clipped, the second is truncated, and the third is truncated with an underline that stops
+    where the ellipsis begins:</p>
+    <p>A clipped note<span style="float:footnote; width: 90pt; overflow: hidden; white-space: nowrap;">This note is far too long for its ninety point box and is simply cut at its edge.</span>, a truncated
+    note<span style="float:footnote; width: 90pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">This note is far too long for its ninety point box and ends in an ellipsis.</span>, and a truncated
+    underlined note<span style="float:footnote; width: 90pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-decoration: underline;">This note is far too long for its ninety point box and its underline stops at the ellipsis.</span>.</p>
+    </div>
+
+    <div style="break-before: page;">
     <h1>footnote-policy: block and line</h1>
     <p>footnote-policy controls what happens when a page's note area can't hold everything that landed
     on it - here, because the note body itself is long enough that its note area alone would exceed
@@ -2610,9 +2645,10 @@ var scrollContainersAcrossPagesHtml = $$"""
     <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
     </div>
 
-    <p>An overflow: auto box whose own height is capped is different. With a height or a max-height
-    PeachPDF treats it as monolithic content, like an image, and never breaks it between its lines
-    (browsers split such a box instead). Where it would straddle a page boundary, it is carried to the next page whole.</p>
+    <p>An overflow: auto box with a definite height is different. PeachPDF treats it as monolithic content,
+    like an image, and never breaks it between its lines (browsers split such a box instead). Where it would
+    straddle a page boundary, it is carried to the next page whole. A max-height alone does not do that: the
+    box breaks between its lines under its cap, as the next showcase shows.</p>
 
     <p>Everything above uses up most of this page, so the box below is left with less room than its own
     height. A box that scrolls has a fixed extent, so the page edge cannot be allowed to fall through it.</p>
@@ -2635,6 +2671,33 @@ var scrollContainersAcrossPagesHtml = $$"""
 await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
     "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
     scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── Scroll containers with a max-height ──────────────────────────────────────
+// An auto-height scroll container with a max-height breaks between its lines while its content is under the cap,
+// and ends where the lines it placed on the pages it broke over add up to the cap; what lies past the cap is clipped
+// away without a break, so the content after the box is never lost. Each section puts the box a few lines above the foot.
+static string NumberedLines(string prefix, int count) =>
+    string.Join("<br>", Enumerable.Range(1, count).Select(i => $"{prefix} line {i}"));
+
+var cappedScrollContainersHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 200pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/12pt sans-serif }" +
+    "section { break-before: page }" +
+    "section:first-of-type { break-before: auto }" +
+    ".box { background: #e8eefc; border-left: 3pt solid #3a5fcd; padding-left: 6pt }" +
+    ".note { font-size: 8pt; color: #666 }" +
+    "</style></head><body>" +
+    "<section><div class='note' style='height:112pt'>An overflow: auto box with a max-height of 400pt whose six lines fit under the cap: it breaks between its lines.</div>" +
+    "<div class='box' style='overflow:auto;max-height:400pt'>" + NumberedLines("Fits", 6) + "</div><p>After the box.</p></section>" +
+    "<section><div class='note' style='height:112pt'>An overflow: hidden box with a max-height of 96pt and twenty lines: it breaks after the third line, shows five more on the next page, and clips the rest.</div>" +
+    "<div class='box' style='overflow:hidden;max-height:96pt'>" + NumberedLines("Capped", 20) + "</div><p>After the box.</p></section>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("capped_scroll_containers_across_pages", "Paged Media", "Capped Scroll Containers Across Pages",
+    "An auto-height overflow: auto or hidden box with a max-height breaking between its lines across a page boundary, " +
+    "ending where its lines reach the cap, with the content after it kept.",
+    cappedScrollContainersHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── Cards that start just above the page foot ─────────────────────────────
 
@@ -5291,6 +5354,44 @@ await SaveShowcaseAsync("svg", "Graphics & Effects", "SVG",
     "Inline and embedded SVG rendered as true vector PDF content: shapes, paths, gradients, patterns, masks, and text.",
     svgHtml, pdfConfig);
 
+// --- SVG display showcase ---
+
+const string svgDisplayHtml = """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; margin: 12px }
+      h2 { font-size: 13pt; margin: 14px 0 4px }
+      .intro { font-size: 9.5pt; color: #444; margin: 0 0 6px }
+      .hide { display: none }
+      .strip { display: contents }
+      svg { border: 1px solid #ccc; background: #fafafa }
+    </style></head><body>
+    <h1>SVG: display</h1>
+    <h2>display: none</h2>
+    <p class="intro">The red square carries display: none (here from a class rule) and so does the red circle's group. Only the blue squares paint; a hidden element renders nothing, and nothing under it does either.</p>
+    <svg width="320" height="70" viewBox="0 0 320 70">
+      <rect x="10" y="10" width="50" height="50" fill="red" class="hide"/>
+      <rect x="80" y="10" width="50" height="50" fill="blue"/>
+      <g style="display: none"><circle cx="175" cy="35" r="25" fill="red"/></g>
+      <rect x="220" y="10" width="50" height="50" fill="blue"/>
+    </svg>
+    <h2>display: contents</h2>
+    <p class="intro">Left: a group with transform, opacity and a fill. Right: the same group with display: contents, which has no box, so it is neither moved nor faded; the green fill it passes down by inheritance still reaches the square.</p>
+    <svg width="320" height="70" viewBox="0 0 320 70">
+      <g transform="translate(40 0)" opacity="0.3" fill="green"><rect x="10" y="10" width="50" height="50"/></g>
+      <g class="strip" transform="translate(160 0)" opacity="0.3" fill="green"><rect x="130" y="10" width="50" height="50"/></g>
+    </svg>
+    <h2>Text content children</h2>
+    <p class="intro">A tspan with display: none leaves the text; a tspan with display: contents keeps its characters, in their own fill, without its own position.</p>
+    <svg width="320" height="40" viewBox="0 0 320 40">
+      <text x="10" y="26" font-size="18">alpha<tspan style="display: none"> hidden </tspan>beta<tspan class="strip" x="250" fill="purple"> kept</tspan></text>
+    </svg>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("svg_display", "Graphics & Effects", "SVG: display",
+    "display on SVG elements: none removes an element and its subtree from rendering, and contents strips a group, use or text content child while keeping its content and what it inherits.",
+    svgDisplayHtml, pdfConfig);
+
 // --- SVG Form XObject reuse showcase ---
 
 // Three pieces of SVG artwork: a `position: fixed` logo and a border-image repeated on every one of
@@ -7604,6 +7705,14 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
         "<div class=\"css\">outline: 10px solid invert; outline-offset: -14px</div></td>"
     ) +
 
+    "<h2>Replaced elements</h2>" +
+    "<p class=\"intro\">An image, inline SVG, object, MathML formula or form control takes an outline like any other box: a ring around its border box, painted after its own background and content.</p>" +
+    "<div style=\"padding: 16px\">" +
+    "<img style=\"width: 60px; height: 40px; background: #4a90d9; outline: 6px solid #d94a4a; outline-offset: 4px; margin-right: 24px\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\">" +
+    "<svg style=\"width: 60px; height: 40px; outline: 6px dashed #2e7d32; outline-offset: 4px; margin-right: 24px\" viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"4\" fill=\"#f39c12\"/></svg>" +
+    "<input type=\"checkbox\" style=\"outline: 4px solid #8e44ad; outline-offset: 3px\">" +
+    "</div>" +
+
     "<h2>Layout-neutral: outline never shifts surrounding content</h2>" +
     "<p class=\"intro\">This box's outline is wider than its own padding, so it visually overlaps its siblings - but every box below sits exactly where it would if the outline were removed.</p>" +
     "<div style=\"background:#eee\">before</div>" +
@@ -8311,6 +8420,63 @@ await SaveShowcaseAsync("text_decoration_skipping", "Typography & Text", "Decora
     "text-decoration-skip-ink (CSS Text Decoration 4) breaking underlines around descenders, and CSS Text Decoration 3's rule that atomic inlines are not decorated.",
     decorationSkipHtml, pdfConfig);
 
+// --- decorated inline-block showcase (css-text-decor-3 §2.4) ---
+// An inline-block that itself declares a decoration (every <a> does, by default) used to be underlined
+// across its whole content box, text or no text: the stray bar over an icon-only header link.
+
+var decorationInlineBlockHtml = """
+    <!DOCTYPE html><html><head>
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.2em }
+    h2 { font-size: 11pt; color: #444; margin: 1.1em 0 0.4em;
+         border-bottom: 1px solid #ddd; padding-bottom: 2px }
+    .label { font-size: 9pt; color: #666; margin: 0 0 4px }
+    a { color: rgb(0, 115, 89); text-decoration: underline }
+    .bar { background: rgb(10, 134, 114); height: 60pt; padding: 8pt 12pt; color: #fff }
+    .bar a { color: #fff }
+    .icon { display: inline-block; width: 44px; height: 44px; line-height: 44px;
+            padding: 5px 5px 0; background: rgb(30, 60, 90) }
+    .wide { display: inline-block; width: 220pt; background: #eef6f3 }
+    .narrow { display: inline-block; width: 90pt; background: #eef6f3 }
+    .tag { display: inline-block; padding: 2pt 6pt; background: #eef6f3; border: 1px solid #b7d6cc }
+    .clip { display: inline-block; width: 80pt; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: #eef6f3 }
+    </style></head><body>
+
+    <h1>A decorated inline-block is underlined under its text only</h1>
+
+    <h2>Icon-only link (no text) - no line at all</h2>
+    <div class="label">on a coloured header: the link colour used to be drawn as a bar across the icon</div>
+    <div class="bar">Header <a class="icon" href="#"> </a> <a class="icon" href="#"><span style="padding:0 6px"></span></a></div>
+
+    <h2>Short text in a wide box - the line covers the text, not the box</h2>
+    <div class="label">inline-block, 220pt wide, containing "ab"</div>
+    <p><a class="wide" href="#">ab</a> followed by more text on the same line</p>
+
+    <h2>Wrapped text - one line per text line</h2>
+    <div class="label">inline-block, 90pt wide</div>
+    <p><a class="narrow" href="#">aaa bbb ccc ddd eee fff</a> and text beside it</p>
+
+    <h2>Padding and a border are not underlined</h2>
+    <div class="label">the box's own padding and border sit outside its inline content</div>
+    <p><a class="tag" href="#">padded tag</a> <a class="tag" href="#">another</a></p>
+
+    <h2>Truncated link - the line stays inside the clipped box</h2>
+    <div class="label">overflow: hidden, white-space: nowrap on an 80pt box; the line is clipped with the text</div>
+    <p><a class="clip" href="#">A long link title that is truncated</a> and text beside it</p>
+
+    <h2>inline-flex</h2>
+    <div class="label">an item's text is underlined, the rest of the 220pt container is not</div>
+    <p><a class="wide" style="display:inline-flex" href="#"><span>flex item</span></a></p>
+
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("text_decoration_inline_block", "Typography & Text", "Decorated Inline-Block",
+    "A decorated inline-block (an <a>, say) is underlined only under its own text, per CSS Text Decoration 3 §2.4: an icon-only link has no line, and a wide box is underlined only as far as its text.",
+    decorationInlineBlockHtml, pdfConfig);
+
 // --- tab-size showcase (CSS Text 4 §3.6) ---
 
 const string TabSizeCss = """
@@ -8895,6 +9061,14 @@ var textOverflowHtml = "<!DOCTYPE html><html><head>" + TextOverflowCss +
     "This paragraph wraps normally, but one line below has a single run with no spaces:<br>" +
     "ThisIsOneVeryLongUnbreakableTokenWithNoSpacesAtAllToWrapOn<br>" +
     "and this last line is short again.</div>" +
+
+    "<h2>3b &mdash; a text decoration covers the kept text only, never the ellipsis or the room after it</h2>" +
+    "<div class=\"card truncate w2\" style=\"text-decoration: underline\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w2\"><a href=\"#\" style=\"text-decoration: underline\">The quick brown fox jumps over the lazy dog</a></div>" +
+    "<div class=\"card truncate w2\"><a href=\"#\" style=\"text-decoration: underline\"><span>The quick brown fox jumps over the lazy dog</span></a></div>" +
+    "<div class=\"card truncate w2\" style=\"text-decoration: line-through\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w2\" dir=\"rtl\" style=\"text-decoration: underline; font-family: 'PeachPDF Hebrew Subset', Arial, sans-serif\">" +
+    "זהו משפט ארוך בעברית שאמור להיחתך בקצה הנכון של התיבה</div>" +
 
     "<h2>4 &mdash; vertical-rl/vertical-lr columns: truncation along the inline (top-to-bottom) axis</h2>" +
     "<div class=\"vrow\">" +

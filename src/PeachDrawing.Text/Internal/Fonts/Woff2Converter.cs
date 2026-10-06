@@ -8,6 +8,12 @@ namespace PeachDrawing.Text.Internal.Fonts
     /// <summary>
     /// Converts WOFF2 font data to OpenType/TrueType format (W3C WOFF2 spec).
     /// </summary>
+    /// <remarks>
+    /// The reconstruction of the transformed <c>glyf</c> table (the triplet decoding and its sign helper, the
+    /// 4-byte-aligned bounding-box bitmap, and the separate instruction stream) follows fontTools'
+    /// <c>Lib/fontTools/ttLib/woff2.py</c> (<c>WOFF2GlyfTable._decodeTriplets</c> and its nested <c>withSign</c>).
+    /// fontTools is MIT licensed: Copyright (c) 2017 Just van Rossum. See THIRD-PARTY-LICENSES.md.
+    /// </remarks>
     internal static class Woff2Converter
     {
         private const uint Woff2Signature = 0x774F4632; // 'wOF2'
@@ -200,7 +206,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         // glyf inverse transform (W3C WOFF2 spec §6.2)
         // ---------------------------------------------------------------------------
 
-        // Sign helper matching the WOFF2 reference decoder's `withSign`: bit 0 of the (masked)
+        // Sign helper matching fontTools' `withSign` (woff2.py, WOFF2GlyfTable._decodeTriplets): bit 0 of the (masked)
         // flag selects the sign of the decoded magnitude.
         private static int WithSign(int flag, int baseValue)
         {
@@ -251,7 +257,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             int iBase = bboxBase + bboxStreamSize;
 
             // bboxStream starts with a bboxBitmap, padded up to a 4-byte (32-bit) boundary
-            // per the reference decoder (bboxBitmapSize = ceil(numGlyphs/32) * 4 bytes) --
+            // per the WOFF2 spec and fontTools (bboxBitmapSize = ceil(numGlyphs/32) * 4 bytes) --
             // NOT simply ceil(numGlyphs/8) as a tightly-packed bitmap would be.
             int bitmapBytes = (((int)numGlyphs + 31) >> 5) << 2;
             int bboxValBase = bboxBase + bitmapBytes;
@@ -311,14 +317,14 @@ namespace PeachDrawing.Text.Internal.Fonts
                     // Flag stream: exactly one byte per point, no repeat/run-length encoding
                     // (unlike the *output* TTF flags, which do support a repeat scheme -- see
                     // the write-side loop below). The high bit is the on-curve flag (0 = on
-                    // curve, per the W3C WOFF2 reference decoder); the low 7 bits select one of
+                    // curve, per the W3C WOFF2 spec); the low 7 bits select one of
                     // 128 coordinate "triplet" encodings decoded below.
                     var w2flags = new byte[totalPoints];
                     for (int pt0 = 0; pt0 < totalPoints; pt0++)
                         w2flags[pt0] = src[fSrc++];
 
                     // Decode coordinates from the glyph stream using the WOFF2 triplet encoding
-                    // (W3C WOFF2 spec sec. 5.2 / reference decoder's _decodeTriplets).
+                    // (W3C WOFF2 spec sec. 5.2 / fontTools' WOFF2GlyfTable._decodeTriplets).
                     int prevX = 0, prevY = 0;
                     int pt;
                     for (pt = 0; pt < totalPoints; pt++)

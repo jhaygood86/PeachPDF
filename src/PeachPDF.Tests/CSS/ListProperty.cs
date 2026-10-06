@@ -215,7 +215,7 @@ namespace PeachPDF.Tests.CSS
         [Fact]
         public void CssListStyleTypeNumberIllegal()
         {
-            var snippet = "list-style-type: number ";
+            var snippet = "list-style-type: 5 ";
             var property = ParseDeclaration(snippet);
             Assert.Equal("list-style-type", property.Name);
             Assert.False(property.IsImportant);

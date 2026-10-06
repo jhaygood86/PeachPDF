@@ -35,7 +35,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Sets <see cref="Number"/> and, unless the author overrode <c>content</c> on
         /// <c>::footnote-call</c> (still the cascaded default "normal" otherwise), formats it as this
-        /// call's text - via the same shared <see cref="CssCounterEngine.FormatCounterValue"/> every
+        /// call's text - via the same shared <see cref="CssCounterEngine.FormatCounterValue(int, string, CssBox?)"/> every
         /// other counter-driven marker in this codebase uses. Deliberately not resolved through
         /// <see cref="CssCounterEngine"/>'s own counter-reset/increment machinery: that engine resolves
         /// purely from DOM position, with no notion of which page a box lands on, while a footnote's

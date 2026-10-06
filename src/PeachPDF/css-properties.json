@@ -1977,8 +1977,8 @@
       }
     },
     {
-      "name": "overflow",
-      "comment": "'clip' is intentionally excluded - CssUtilsTests/MonolithicContentTests confirm it isn't (and wasn't, pre-migration) an accepted value, so it never overrides the inherited/initial 'visible' and MonolithicContent.IsScrollContainer sees 'visible', not a stored 'clip'. 'auto'/'scroll' are genuinely used by MonolithicContent.IsScrollContainer (a non-visible overflow makes a box a scroll container, treated as monolithic/unbreakable across pages) even though they don't distinguish real interactive scrolling from 'hidden' - both are meaningful CSS Overflow 3 values for a non-interactive, paginated renderer.",
+      "name": "overflow-x",
+      "comment": "One axis of the css-overflow-3 pair. CssBox.Overflow is the used value read from both axes (visible turns into auto beside a scroll container, clip into hidden); a lone clip axis stays out of it and is read through CssBox.ClipsWithoutScrolling.",
       "inherited": false,
       "initialValue": "visible",
       "cssDataType": {
@@ -1988,10 +1988,28 @@
         "fallback": "Overflow.Visible"
       },
       "html": {
-        "propertyPath": "Overflow",
+        "propertyPath": "OverflowX",
         "csharpDataType": "CssProperty<Overflow>",
         "area": "DisplayPositioningArea",
-        "getterExpression": "{box}.Overflow.ToString()"
+        "getterExpression": "{box}.OverflowX.ToString()"
+      }
+    },
+    {
+      "name": "overflow-y",
+      "comment": "One axis of the css-overflow-3 pair. CssBox.Overflow is the used value read from both axes (visible turns into auto beside a scroll container, clip into hidden); a lone clip axis stays out of it and is read through CssBox.ClipsWithoutScrolling.",
+      "inherited": false,
+      "initialValue": "visible",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Overflow",
+        "keywordMap": "Map.OverflowModes",
+        "fallback": "Overflow.Visible"
+      },
+      "html": {
+        "propertyPath": "OverflowY",
+        "csharpDataType": "CssProperty<Overflow>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.OverflowY.ToString()"
       }
     },
     {

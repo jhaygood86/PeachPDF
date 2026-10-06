@@ -2410,7 +2410,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 overflowRect = o.Rect;
                 if (o.Radii is { } radii) curve = new OverflowClipCurve(o.Rect, radii);
-                basis = new OverflowClipBasis(o.BorderBox, o.Rect, Band: null);
+                // An opened-out axis has no padding edge to re-snap, so such a clip carries no basis and is
+                // left as laid out.
+                if (!o.AxisOpen) basis = new OverflowClipBasis(o.BorderBox, o.Rect, Band: null);
             }
 
             if (draft.ConfinedTo is not { } band) return (overflowRect, curve, basis);
@@ -2817,7 +2819,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                             var ownRect = Displaced(Shifted(lineRect), shift);
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
                             var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
-                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop);
+                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop,
+                                snapshot is null && capture is null ? () => IsInSlicedContent(box) : null);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -3078,7 +3081,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// every slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsLine(Rect rect, Rect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop)
+        private bool ClaimsLine(
+            Rect rect, Rect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop,
+            Func<bool>? slicesStraddlingLines = null)
         {
             // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
             // own Y falls in would name a single page instead of all of them - exempt from every test below,
@@ -3114,6 +3119,16 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (nominalSlot == slotIndex) return true;
 
+            // A line of content layout could not move (§4.4: "the UA may also fragment the contents of monolithic
+            // elements by slicing the element's graphical representation") is drawn by every page it overlaps,
+            // each showing its own part, so the part past the foot of one page is not lost. Layout moves every
+            // other straddling line to the next page, so only a line that still straddles is sliced.
+            if (slotIndex > nominalSlot && slicesStraddlingLines is not null && StraddlesIntoNominalBand(rect, claimTop)
+                && slicesStraddlingLines())
+            {
+                return true;
+            }
+
             // The #1054 rescue only, never a #1047-shaped bonus claim - see this method's own remarks.
             // The nominal slot is genuinely unreachable (rather than merely a slot this same sweep already
             // claimed it at, or will) only when it lies strictly before the sweep's own fromSlot. Outside of
@@ -3123,6 +3138,38 @@ namespace PeachPDF.Html.Core.Fragmentation
             return (_currentPassFromSlot is not { } fromSlot || nominalSlot < fromSlot)
                 && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(claimTop))
                 && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="rect"/> overlaps the band the page of <paramref name="claimTop"/> holds
+        /// by more than the band-overlap tolerance, so that it genuinely runs on from it into a later band
+        /// rather than merely sitting beside the boundary.
+        /// </summary>
+        private bool StraddlesIntoNominalBand(Rect rect, double claimTop)
+        {
+            var band = container.BandStartingAt(claimTop);
+
+            return Math.Min(rect.Bottom, band.Bottom) - Math.Max(rect.Top, band.Top) > HtmlContainerInt.PageBoundaryEpsilon
+                   && rect.Bottom > band.Bottom;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> sits in content layout lays out whole and slices where it crosses a
+        /// page boundary: a scroll container or replaced box kept monolithic (<see cref="MonolithicContent.IsMonolithic"/>)
+        /// or an inline-block or inline-table (css-break-3 §4.1), at or above <paramref name="box"/>.
+        /// </summary>
+        private static bool IsInSlicedContent(CssBox box)
+        {
+            for (var ancestor = box; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (MonolithicContent.IsMonolithic(ancestor)
+                    || ancestor.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -3231,7 +3278,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// its own containing block outside the table, which is not proxied and so is read live correctly.
         /// </para>
         /// </remarks>
-        private static (Rect Rect, BorderRadii? Radii, Rect BorderBox)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
+        private static (Rect Rect, BorderRadii? Radii, Rect BorderBox, bool AxisOpen)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
         {
             var containingBlock = DomUtils.ClippingContainingBlockOf(box);
 
@@ -3240,13 +3287,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 if (DomUtils.ClipsItsOverflow(containingBlock))
                 {
                     var borderBoxRect = ClipSourceBoundsOf(containingBlock, snapshot);
-                    var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
-                    var radii = containingBlock.IsRounded
-                        ? containingBlock.ComputeInnerRadii(borderBoxRect, paddingRect,
-                            containingBlock.ActualBorderLeftWidth, containingBlock.ActualBorderTopWidth,
-                            containingBlock.ActualBorderRightWidth, containingBlock.ActualBorderBottomWidth)
-                        : (BorderRadii?)null;
-                    return (Localize(paddingRect, originY), radii, Localize(borderBoxRect, originY));
+                    var (clipRect, radii, axisOpen) = RenderUtils.OverflowClipGeometryOf(containingBlock, borderBoxRect);
+                    return (Localize(clipRect, originY), radii, Localize(borderBoxRect, originY), axisOpen);
                 }
 
                 var next = DomUtils.ClippingContainingBlockOf(containingBlock);
@@ -3646,18 +3688,26 @@ namespace PeachPDF.Html.Core.Fragmentation
             // left them at.
             var rectangles = RectanglesOf(box, snapshot);
 
+            // Ink a clipped capped scroll container's cap cuts away is not printed, so it cannot make a page
+            // worth building: its lines past the cap run on into later bands, and a band holding nothing but
+            // those would otherwise come out as a blank page. Read off the lines (CappedScrollContainer)
+            // rather than off the container's live bounds, which a box still continuing has not settled.
+            var cappedClip = CappedScrollContainer.ContainerOf(box) is { } capped && DomUtils.ClipsItsOverflow(capped);
+
             if (rectangles.Count > 0)
             {
                 foreach (var rect in rectangles.Values)
                 {
-                    if (rect.Bottom >= slot.BandTop && rect.Top < slot.BandBottom) return true;
+                    if (rect.Bottom >= slot.BandTop && rect.Top < slot.BandBottom
+                        && !(cappedClip && CappedScrollContainer.IsPastCap(box, rect.Top))) return true;
                 }
 
                 return false;
             }
 
             var bounds = BoundsOf(box, snapshot);
-            return bounds.Bottom >= slot.BandTop && bounds.Top < slot.BandBottom;
+            return bounds.Bottom >= slot.BandTop && bounds.Top < slot.BandBottom
+                   && !(cappedClip && CappedScrollContainer.IsPastCap(box, bounds.Top));
         }
 
 
@@ -4325,28 +4375,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// stream, and no <c>Tj</c> for the text). Falling back to the rectangles only when there is no
         /// border box to read leaves every box that has one measured exactly as before.
         /// </remarks>
-        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot)
-        {
-            var bounds = BoundsOf(box, snapshot);
-
-            if (!box.IsInline) return bounds;
-
-            var rectangles = RectanglesOf(box, snapshot);
-
-            if (rectangles.Count == 0) return bounds;
-
-            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
-
-            foreach (var rect in rectangles.Values)
-            {
-                left = Math.Min(left, rect.Left);
-                top = Math.Min(top, rect.Top);
-                right = Math.Max(right, rect.Right);
-                bottom = Math.Max(bottom, rect.Bottom);
-            }
-
-            return Rect.FromLTRB(left, top, right, bottom);
-        }
+        private static Rect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+            box.IsInline
+                ? RenderUtils.ClipSourceBoundsOf(BoundsOf(box, snapshot), isInline: true, RectanglesOf(box, snapshot))
+                : BoundsOf(box, snapshot);
 
         private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;

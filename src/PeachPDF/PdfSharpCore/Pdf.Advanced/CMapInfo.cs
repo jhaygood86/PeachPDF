@@ -125,8 +125,27 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             foreach (PlacedGlyph glyph in Shaper.Shape(_typeface, text, features).Glyphs)
             {
                 GlyphIndices[glyph.GlyphIndex] = null;
-                LigatureGlyphToText[glyph.GlyphIndex] = source.Substring(glyph.ClusterStart, glyph.ClusterLength);
+                MapGlyphToText(glyph.GlyphIndex, source.Substring(glyph.ClusterStart, glyph.ClusterLength));
             }
+        }
+
+        /// <summary>
+        /// Records <paramref name="sourceText"/> as the ToUnicode destination of
+        /// <paramref name="glyphIndex"/>. A glyph has one destination per font, so when two source
+        /// sequences share a glyph, the one drawn last wins - except that U+0020 SPACE, once recorded,
+        /// is never replaced, and always replaces. Many fonts draw U+00A0 NO-BREAK SPACE (and other
+        /// spaces) with the space glyph, and every word separator is shown with that glyph, so a single
+        /// <c>&amp;nbsp;</c> drawn after the last ordinary space would otherwise turn every word break
+        /// of the document into U+00A0 on extraction - breaking <c>split(' ')</c>, search and copy and
+        /// paste. The no-break space then extracts as an ordinary space, as it does from Chrome's PDFs
+        /// in pypdf and PDFium.
+        /// </summary>
+        private void MapGlyphToText(int glyphIndex, string sourceText)
+        {
+            if (sourceText != " " && LigatureGlyphToText.TryGetValue(glyphIndex, out var existing) && existing == " ")
+                return;
+
+            LigatureGlyphToText[glyphIndex] = sourceText;
         }
 
         /// <summary>
@@ -155,7 +174,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         public void AddShapedGlyph(int glyphIndex, string sourceText)
         {
             GlyphIndices[glyphIndex] = null;
-            LigatureGlyphToText[glyphIndex] = sourceText;
+            MapGlyphToText(glyphIndex, sourceText);
         }
 
         public int[] GetGlyphIndices()

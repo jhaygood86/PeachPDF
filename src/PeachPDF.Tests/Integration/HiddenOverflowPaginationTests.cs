@@ -62,7 +62,7 @@ public class HiddenOverflowPaginationTests
     [InlineData("height:50%", false)]
     [InlineData("height:50pt", true)]
     [InlineData("height:50pt;max-height:60pt", true)]
-    [InlineData("max-height:60pt", true)]
+    [InlineData("max-height:60pt", false)]
     [InlineData("writing-mode:vertical-rl;height:50pt", false)]
     [InlineData("writing-mode:vertical-rl;width:50pt", true)]
     [InlineData("writing-mode:vertical-rl;width:50pt;max-width:60pt", true)]

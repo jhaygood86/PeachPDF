@@ -61,6 +61,57 @@ namespace PeachPDF.Html.Core.Paint
         private readonly HashSet<CssLineBox> _linesAlreadyTruncated = new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
+        /// Where each <c>text-overflow: ellipsis</c> line is cut (null for one that is not), asked by the
+        /// text decoration painter - see <see cref="EllipsisCutOf"/>. Filled lazily, so a page with no
+        /// decorated text never builds the index below (one walk of the page's fragment tree otherwise).
+        /// </summary>
+        private readonly Dictionary<CssLineBox, EllipsisCut?> _ellipsisCuts = new(ReferenceEqualityComparer.Instance);
+
+        private Dictionary<CssLineBox, List<BoxFragment>>? _ellipsisLineFragments;
+
+        /// <summary>
+        /// The root of a fragment tree painted on its own - a footnote body or a margin box's content, neither of
+        /// which is part of the page's tree (<see cref="_pageRoot"/> stays null for them). The cut lookup indexes
+        /// whichever of the two it has.
+        /// </summary>
+        private BoxFragment? _detachedRoot;
+
+        /// <summary>
+        /// Paints a fragment tree that is not part of a page's own - a footnote body or a margin box's content - so
+        /// that what needs the whole tree around a fragment (a decoration finding where its line was truncated) has
+        /// one. Everything else is <see cref="PaintFragment"/>. Use a painter that is not in the middle of a page
+        /// walk: the per-tree line state it resets is the painter's own, not the tree's.
+        /// </summary>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="root">the root fragment of the detached tree</param>
+        internal void PaintDetached(Canvas g, BoxFragment root)
+        {
+            ResetDetachedState(root);
+
+            try
+            {
+                PaintFragment(g, root);
+            }
+            finally
+            {
+                ResetDetachedState(null);
+            }
+        }
+
+        /// <summary>
+        /// Per-tree state must not outlive the tree: one painter paints every margin box of a page, and a running
+        /// element shown in two of them is laid out again for each, so a line's cut or its already-truncated mark from
+        /// the first must not decide the second (or a later page walk on the same painter).
+        /// </summary>
+        private void ResetDetachedState(BoxFragment? root)
+        {
+            _detachedRoot = root;
+            _ellipsisLineFragments = null;
+            _ellipsisCuts.Clear();
+            _linesAlreadyTruncated.Clear();
+        }
+
+        /// <summary>
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
         /// window plus the room an outline on this page needs to spill into the page margin.
         /// </summary>
@@ -818,12 +869,28 @@ namespace PeachPDF.Html.Core.Paint
             // §2.4 propagates a block container's decoration to the anonymous inline box wrapping its
             // in-flow inline content, so the line spans that content, not the box's full width. The
             // per-line rectangles a line-hosted box carries already are that content, so only the
-            // one-rectangle (Line: null) case needs the content found for it.
+            // one-rectangle (Line: null) case needs the content found for it. An atomic inline
+            // (inline-block, inline-table, inline-flex, inline-grid) is a block container too, though: its
+            // one rectangle is its border box on the *parent's* line, so it carries a line box and would
+            // otherwise be underlined across its whole content box, text or no text - an icon-only
+            // `a { display: inline-block }` drew a stray line over its own background. Its own text still
+            // gets §2.4's propagated decoration, which is why it takes the same path; an empty one finds
+            // no content and draws nothing. A form control draws no decoration either: a browser underlines
+            // the control's text, but a control's value is never page content here (the phantom word
+            // only gives it a size; the text a reader shows is the widget's own appearance stream), so
+            // there is no text for a line to sit under and a per-own-line one only ran across the empty
+            // box. The other replaced kinds (<img>, <svg>, <math>...) never
+            // reach this code, so they need no say here.
             if (_textOnly)
             {
                 // Text decorations (underline, line-through) are drawn shapes, not text.
             }
-            else if (lines is [{ Line: null }])
+            else if (box is CssBoxFormField)
+            {
+                // No text on the page to decorate - see above.
+            }
+            else if (lines is [{ Line: null }]
+                || (DecorationsWorthCollecting(box) && DomUtils.IsAtomicInline(box)))
             {
                 PaintPropagatedDecoration(g, box, fragment, clip);
             }
@@ -850,7 +917,8 @@ namespace PeachPDF.Html.Core.Paint
 
                         PaintDecoration(g, box, actualRect, geometry.HasLeftEdge, geometry.HasRightEdge,
                             GetFirstLineStyleForRect(lines[i].Line), ownDecorationArea: true,
-                            content, lines[i].Line);
+                            content, lines[i].Line,
+                            content is null ? null : EllipsisCutOf(g, lines[i].Line));
                     }
                 }
             }

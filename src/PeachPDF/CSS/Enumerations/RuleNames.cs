@@ -15,6 +15,7 @@ namespace PeachPDF.CSS
         public static readonly string Container = "container";
         public static readonly string Property = "property";
         public static readonly string Layer = "layer";
+        public static readonly string CounterStyle = "counter-style";
         public static readonly string FontPaletteValues = "font-palette-values";
         public static readonly string FontFeatureValues = "font-feature-values";
         public static readonly string Styleset = "styleset";

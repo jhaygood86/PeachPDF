@@ -15,6 +15,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
+using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Utils
@@ -75,10 +76,10 @@ namespace PeachPDF.Html.Core.Utils
         /// live box only ever carries whichever page positioned it last.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        private static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
+        internal static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
         {
             var overflowBox = ancestor.Box;
-            if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;
+            if (overflowBox.Overflow.Value != Overflow.Hidden && !overflowBox.ClipsWithoutScrolling) return 0;
 
             var prevClip = g.GetClip();
             // Snapped like the ancestor's own decorations, on the edges they snap (the fragment may be a cut
@@ -96,12 +97,13 @@ namespace PeachPDF.Html.Core.Utils
                     owned.HasLeftEdge, owned.HasTopEdge, owned.HasRightEdge, owned.HasBottomEdge);
             }
 
-            var rect = paddingRect;
+            var oneAxis = ClipsOneAxisOnly(overflowBox);
+            var rect = oneAxis ? OpenUnclippedAxes(overflowBox, paddingRect) : paddingRect;
             rect.Intersect(prevClip);
             g.PushClip(rect);
             var pushed = 1;
 
-            if (overflowBox.IsRounded)
+            if (overflowBox.IsRounded && !oneAxis)
             {
                 var radii = overflowBox.ComputeInnerRadii(borderRect, paddingRect,
                     overflowBox.ActualBorderLeftWidth, overflowBox.ActualBorderTopWidth,
@@ -146,6 +148,78 @@ namespace PeachPDF.Html.Core.Utils
             borderBox.Top + box.ActualBorderTopWidth,
             borderBox.Right - box.ActualBorderRightWidth,
             borderBox.Bottom - box.ActualBorderBottomWidth);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> clips only one axis (<c>overflow-x: clip</c> beside a
+        /// <c>visible</c> <c>overflow-y</c>, or the reverse), leaving the other open.
+        /// </summary>
+        internal static bool ClipsOneAxisOnly(CssBox box) =>
+            box.ClipsOverflowHorizontally != box.ClipsOverflowVertically;
+
+        /// <summary>
+        /// The border box a clipping box's <c>overflow</c> clip is measured from: its <paramref name="bounds"/>, or for an
+        /// inline-level box the union of its line rectangles when it has any. Such a box is flowed into a line rather than
+        /// laid out as a box and so never has a <c>Location</c>/<c>Size</c> assigned; its bounds read as the unassigned
+        /// <c>(0,0,0,0)</c> and the clip came out with zero area, clipping every word inside it away. Shared by every
+        /// builder of fragments, so a box clips the same wherever it is shown.
+        /// </summary>
+        /// <param name="bounds">the box's own bounds</param>
+        /// <param name="isInline">whether the box is inline-level</param>
+        /// <param name="rectangles">the box's per-line rectangles</param>
+        internal static Rect ClipSourceBoundsOf(Rect bounds, bool isInline, IReadOnlyDictionary<CssLineBox, Rect> rectangles)
+        {
+            if (!isInline || rectangles.Count == 0) return bounds;
+
+            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
+
+            foreach (var rect in rectangles.Values)
+            {
+                left = Math.Min(left, rect.Left);
+                top = Math.Min(top, rect.Top);
+                right = Math.Max(right, rect.Right);
+                bottom = Math.Max(bottom, rect.Bottom);
+            }
+
+            return Rect.FromLTRB(left, top, right, bottom);
+        }
+
+        /// <summary>
+        /// The clip <paramref name="box"/>'s <c>overflow</c> imposes on its content, given where its border box
+        /// sits: the padding edge (with any axis it does not clip opened out), the corner curve that bounds it,
+        /// and whether an axis was opened. The one place this is derived, shared by every builder of fragments.
+        /// </summary>
+        /// <param name="box">the clipping box, read for its border widths, radii and clipped axes</param>
+        /// <param name="borderBox">its border box, in whatever space the caller's fragments are in</param>
+        internal static (Rect ClipRect, BorderRadii? Radii, bool AxisOpen) OverflowClipGeometryOf(CssBox box, Rect borderBox)
+        {
+            var paddingRect = PaddingEdgeOf(box, borderBox);
+            // A box clipping a single axis has that axis's edge only: the other is opened out, and the
+            // corners no longer bound the clip.
+            var axisOpen = ClipsOneAxisOnly(box);
+            var radii = box.IsRounded && !axisOpen
+                ? box.ComputeInnerRadii(borderBox, paddingRect,
+                    box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
+                    box.ActualBorderRightWidth, box.ActualBorderBottomWidth)
+                : (BorderRadii?)null;
+            return (axisOpen ? OpenUnclippedAxes(box, paddingRect) : paddingRect, radii, axisOpen);
+        }
+
+        /// <summary>
+        /// <paramref name="paddingEdge"/> with each axis <paramref name="box"/> does not clip opened out to
+        /// the extent of any page, so one clip rectangle serves a box that clips a single axis
+        /// (css-overflow-3 §3.2: <c>clip</c> cuts at the overflow clip edge on its own axis only).
+        /// </summary>
+        internal static Rect OpenUnclippedAxes(CssBox box, Rect paddingEdge)
+        {
+            const double Open = 1e6;
+
+            var left = box.ClipsOverflowHorizontally ? paddingEdge.Left : -Open;
+            var right = box.ClipsOverflowHorizontally ? paddingEdge.Right : Open;
+            var top = box.ClipsOverflowVertically ? paddingEdge.Top : -Open;
+            var bottom = box.ClipsOverflowVertically ? paddingEdge.Bottom : Open;
+
+            return Rect.FromLTRB(left, top, right, bottom);
+        }
 
         /// <summary>
         /// Pushes the <c>overflow: hidden</c> clip of every fragment in <paramref name="ancestors"/> that

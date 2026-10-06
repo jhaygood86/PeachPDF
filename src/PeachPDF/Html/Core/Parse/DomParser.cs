@@ -113,6 +113,9 @@ namespace PeachPDF.Html.Core.Parse
             // Collect @font-palette-values registrations (consulted when resolving font-palette:<dashed-ident>).
             htmlContainer.FontPaletteValues = RegisteredFontPalette.BuildRegistry(cssData, cssValueParser);
 
+            // Collect @counter-style rules (consulted when formatting a counter()/list marker).
+            htmlContainer.CounterStyles = CounterStyles.CounterStyleRegistry.BuildRegistry(cssData);
+
             // Collect @font-feature-values registrations (consulted when resolving font-variant-alternates
             // functions like styleset(<ident>)).
             htmlContainer.FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(cssData);
@@ -1343,7 +1346,8 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Blockifies an absolutely/fixed-positioned box (CSS 2.1 §9.7 / CSS Display 3 §2.7): its inline-level
         /// outer display type is coerced to the block-level equivalent (<c>inline</c>/<c>inline-block</c> →
-        /// <c>block</c>, <c>inline-flex</c> → <c>flex</c>, <c>inline-table</c> → <c>table</c>). Only
+        /// <c>block</c>, <c>inline-flex</c> → <c>flex</c>, <c>inline-table</c> → <c>table</c>, a table-internal
+        /// display such as <c>table-row</c> or <c>table-cell</c> → <c>block</c>). Only
         /// <c>position: absolute</c>/<c>fixed</c> are handled here; floats are also blockified per spec but are
         /// left as-is (PeachPDF's float layout already treats them block-like, and changing that is out of
         /// scope for this fix).
@@ -1362,6 +1366,13 @@ namespace PeachPDF.Html.Core.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Grid, DisplayMode.Grid),
                 DisplayMode.InlineTable =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
+                // css-display-3 §2.7: a layout-internal display (a table part) blockifies to flow. Left as
+                // it was, the box reached the table engine with no table around it, and a cell-less
+                // row threw out of LayoutBodyRows.
+                DisplayMode.TableRow or DisplayMode.TableRowGroup or DisplayMode.TableHeaderGroup
+                    or DisplayMode.TableFooterGroup or DisplayMode.TableCell or DisplayMode.TableColumn
+                    or DisplayMode.TableColumnGroup =>
+                    CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
                 _ => box.Display
             };
         }

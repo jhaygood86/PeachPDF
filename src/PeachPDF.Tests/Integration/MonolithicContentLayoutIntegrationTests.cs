@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
         // A hidden-overflow card with a definite height, or an explicit scroll container, stays whole.
         [Theory]
         [InlineData("overflow:hidden;height:60pt")]
-        [InlineData("overflow:scroll;max-height:10000pt")]
+        [InlineData("overflow:scroll;height:60pt")]
         public async Task StraddlingScrollContainer_MovesWholeToTheNextPage(string style)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.Integration
         public async Task RelocatedBox_MatchesWhatBreakInsideAvoidAlreadyDoes(double fillerHeight)
         {
             var (monolithic, _) = await LayoutHarness.LayoutAsync(
-                GapDocument(fillerHeight, "overflow:scroll;max-height:10000pt"), pageHeight: PageHeight, margin: Margin);
+                GapDocument(fillerHeight, "overflow:scroll;height:60pt"), pageHeight: PageHeight, margin: Margin);
             var (avoid, _) = await LayoutHarness.LayoutAsync(
                 GapDocument(fillerHeight, "break-inside:avoid"), pageHeight: PageHeight, margin: Margin);
 
@@ -101,7 +101,7 @@ namespace PeachPDF.Tests.Integration
                 "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
 
         [Theory]
-        [InlineData("overflow: scroll;max-height:10000pt")]
+        [InlineData("overflow: scroll;height:60pt")]
         [InlineData("overflow: auto;height:60pt")]
         public async Task EveryScrollContainerValue_MovesWhole(string css)
         {
@@ -326,7 +326,7 @@ namespace PeachPDF.Tests.Integration
         {
             const int linesEachSide = 10;
             var html = LayoutHarness.Wrap(
-                "<div id='card' style='overflow:scroll;max-height:10000pt;margin:0;line-height:22pt;font-size:10pt'>" +
+                "<div id='card' style='overflow:scroll;height:2000pt;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"Before{i}")) +
                 "<p id='afterBreak' style='break-before:page;margin:0'>After</p>" +
                 string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"After{i}")) +
@@ -382,7 +382,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsStillSuppressed()
         {
             var html = LayoutHarness.Wrap(
-                "<div id='card' style='overflow:scroll;max-height:10000pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
+                "<div id='card' style='overflow:scroll;height:660pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, 30).Select(i => $"Line{i}")) +
                 "</div>");
 

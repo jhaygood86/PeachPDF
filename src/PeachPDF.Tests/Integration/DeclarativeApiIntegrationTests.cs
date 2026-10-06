@@ -1837,6 +1837,26 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task TextSpans_LeadingSpaceOfALaterSpan_IsWrittenInTheFontThatMeasuredIt()
+        {
+            // A later span's leading space is advanced by the enclosing text box, in its 40pt font; the
+            // space glyph written into that gap has to come from the same font to fill it exactly.
+            var (_, container) = await BuildAndLayoutPage(page =>
+                page.Content(c => c.DefaultTextStyle(s => s.FontSize(40)).Text(t =>
+                {
+                    t.Span("a").FontSize(8);
+                    t.Span(" b").FontSize(8);
+                })));
+
+            using var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintPage(container, recorder);
+            var ops = recorder.Log.Where(o => o.Kind == PaintOpKind.DrawString).ToList();
+
+            Assert.Equal(["a", " ", "b"], ops.Select(o => o.Text));
+            Assert.Equal(ops[2].Bounds.Left - ops[0].Bounds.Right, ops[1].Bounds.Width, 3);
+        }
+
+        [Fact]
         public void TextAlignment_StartAndEnd_ResolveAgainstDirection()
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };

@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
@@ -844,7 +844,8 @@ namespace PeachPDF.CSS
                 {Keywords.Visible, Overflow.Visible},
                 {Keywords.Hidden, Overflow.Hidden},
                 {Keywords.Scroll, Overflow.Scroll},
-                {Keywords.Auto, Overflow.Auto}
+                {Keywords.Auto, Overflow.Auto},
+                {Keywords.Clip, Overflow.Clip}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, Floating> FloatingModes =
             new Dictionary<string, Floating>(StringComparer.OrdinalIgnoreCase)
