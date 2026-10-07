@@ -337,6 +337,19 @@ The grid is one pixel (0.75pt) wide on the page, anchored at its top-left corner
 
 **In PDFium the page size decides the result, not this option.** Snapping fixes where the box sits on the CSS pixel grid; it cannot fix where a viewer puts its own pixel grid. PDFium (the engine of Chrome and Edge's PDF viewers) rounds the page up to a whole number of pixels (A4 is 793.7px wide at 96 dpi, so 794px), which stretches the page by a fraction of a pixel, and it fills a plain rectangle without anti-aliasing, so a rectangle that lands a hair past a pixel boundary paints the whole next pixel. On an A4 page it therefore draws a 1px rule as two solid rows whether or not the option is on, and it can show a faint one-pixel edge of background beside a border. Measured on A4 at 96 dpi with thirteen 1px rules at fractional offsets: PDFium draws all thirteen as two rows with the option off and still with it on, while MuPDF draws all thirteen as one row with the option on. On a page whose size is a whole number of CSS pixels (for example `@page { size: 794px 1123px }`), PDFium draws every rule as one row even without the option. For output that will be read in a PDFium-based viewer, use a whole-pixel page size; the option helps viewers that anti-alias fills. The command-line equivalent is `--snap-box-decorations-to-css-pixels`.
 
+## Whole-pixel border widths
+
+A browser snaps a length-valued border width to whole device pixels: a width above 0 and below 1px becomes 1px, and a width of 1px or more is rounded down to a whole number. That is why a `0.5px` border shows as a visible 1px line. PeachPDF uses widths as written by default; to snap them, opt in:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    SnapBorderWidthsToCssPixels = true
+};
+```
+
+A PDF has no device pixel, so the snapping is done on the CSS pixel (0.75pt): `0.5px` becomes `1px`, `1.5px` becomes `1px` and `2.9px` becomes `2px`. It applies to `border-width`, `outline-width` and `column-rule-width`, and leaves the `thin`, `medium` and `thick` keywords alone. Unlike [`SnapBoxDecorationsToCssPixels`](#crisp-1px-borders-at-100-zoom) it changes the used width, so the box's size changes with it. The command-line equivalent is `--snap-border-widths-to-css-pixels`.
+
 ## Fonts
 
 For the full compatibility details of the font-related CSS properties themselves (`font-family`, `font-weight`, `font-style`, `font-stretch`, `@font-face`), see [Color & Typography](html-css-support.md#color--typography) and [CSS At-Rules](html-css-support.md#css-at-rules) in HTML & CSS Support.

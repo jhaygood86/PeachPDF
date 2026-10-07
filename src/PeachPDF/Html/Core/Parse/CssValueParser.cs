@@ -789,8 +789,20 @@ namespace PeachPDF.Html.Core.Parse
                 Keywords.Thin => 1f,
                 Keywords.Medium => 2f,
                 Keywords.Thick => 4f,
-                _ => Math.Abs(ParseLength(borderValue, 1, b))
+                _ => SnapBorderWidth(Math.Abs(ParseLength(borderValue, 1, b)), b.HtmlContainer?.SnapBorderWidthsToCssPixels == true)
             };
+        }
+
+        /// <summary>
+        /// CSS Values 4 "snap a length as a border width", on the CSS pixel: a width above 0 and below 1px
+        /// becomes 1px, 1px or more is rounded down to a whole number of pixels. A no-op when <paramref name="enabled"/> is false.
+        /// </summary>
+        internal static double SnapBorderWidth(double points, bool enabled)
+        {
+            if (!enabled || points <= 0) return points;
+            var px = points / Length.PointsPerPx;
+            px = px < 1 ? 1 : Math.Floor(px + 1e-9);
+            return px * Length.PointsPerPx;
         }
 
         /// <returns>

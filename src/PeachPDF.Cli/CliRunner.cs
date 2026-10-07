@@ -97,6 +97,7 @@ internal static class CliRunner
             CompressContentStreams = !options.NoCompress,
             EnableTaggedPdf = options.TaggedPdf,
             SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels,
+            SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels,
             EnableInteractivePdfForms = options.InteractivePdfForms,
             Media = options.Media ?? "print",
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,

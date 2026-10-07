@@ -98,6 +98,9 @@ internal sealed class CliOptions
 
     /// <summary>Snap box decorations to whole CSS pixels, like a browser (<c>--snap-box-decorations-to-css-pixels</c>).</summary>
     public bool SnapBoxDecorationsToCssPixels { get; set; }
+
+    /// <summary>Snap border widths to whole CSS pixels, like a browser (<c>--snap-border-widths-to-css-pixels</c>).</summary>
+    public bool SnapBorderWidthsToCssPixels { get; set; }
     public bool InteractivePdfForms { get; set; }
     public string? PdfTitle { get; set; }
     public string? PdfAuthor { get; set; }
