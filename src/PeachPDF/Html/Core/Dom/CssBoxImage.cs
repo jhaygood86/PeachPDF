@@ -83,7 +83,15 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public Image? Image => _imageWord.Image;
 
-        public string ImageSource => GetAttribute("src");
+        public string ImageSource => SelectSource().Url;
+
+        private double _srcsetDensity = 1;
+        private (string Url, double Density)? _selectedSource;
+
+        /// <summary>
+        /// The src/srcset/&lt;picture&gt; selection, made once per box (see <see cref="ResponsiveImageSelector"/>).
+        /// </summary>
+        private (string Url, double Density) SelectSource() => _selectedSource ??= ResponsiveImageSelector.Select(this);
 
         /// <summary>
         /// The phantom word carrying this box's replaced content, whose own rectangle positions the
@@ -137,7 +145,11 @@ namespace PeachPDF.Html.Core.Dom
 
                     }
                     else
-                        await _imageLoadHandler.LoadImage(ImageSource);
+                    {
+                        var (url, density) = SelectSource();
+                        _srcsetDensity = density;
+                        await _imageLoadHandler.LoadImage(url);
+                    }
 
                     OnLoadImageComplete();
                 }
@@ -153,7 +165,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
-                CssLayoutEngine.MeasureImageSize(_imageWord);
+                // A srcset candidate's density divides the natural size (HTML "density-corrected natural size").
+                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, _imageWord.Image?.Width / _srcsetDensity, _imageWord.Image?.Height / _srcsetDensity);
             }
         }
 

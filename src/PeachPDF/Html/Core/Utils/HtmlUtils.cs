@@ -28,7 +28,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             "area", "base", "basefont", "br", "col",
             "frame", "hr", "img", "input", "isindex",
-            "link", "meta", "param"
+            "link", "meta", "param", "source", "track"
         }.ToFrozenSet();
 
         /// <summary>
