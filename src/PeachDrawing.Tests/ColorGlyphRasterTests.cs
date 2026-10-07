@@ -183,5 +183,46 @@ namespace PeachDrawing.Tests
             var cone = await DrawAsync(BundledFonts.ColorCff, "E");
             Assert.True(Count(cone, IsBlue) > 100);
         }
+
+        private static bool IsWhite(int r, int g, int b) => r > 235 && g > 235 && b > 235;
+
+        [Fact]
+        public async Task CffColorFont_PlusAddsTheSourceToTheBackdrop()
+        {
+            // 'D': a blue triangle PLUS a yellow box. Source-over would leave the triangle blue; adding blue to yellow gives white.
+            using var canvas = await DrawAsync(BundledFonts.ColorCff, "D");
+
+            Assert.True(Count(canvas, IsWhite) > 300, "yellow + blue is white where the triangle overlaps the box");
+            Assert.True(Count(canvas, IsYellow) > 100, "the box outside the triangle stays yellow");
+            Assert.Equal(0, Count(canvas, IsBlue));
+        }
+
+        private static (int R, int G, int B) PixelAt(RasterCanvas canvas, int x, int y)
+        {
+            var buffer = canvas.ToPixelBuffer();
+            var span = buffer.PremultipliedRgba.Span;
+            int p = (y * buffer.Width + x) * 4;
+            return (span[p], span[p + 1], span[p + 2]);
+        }
+
+        [Fact]
+        public async Task CffColorFont_ConeRepeatAndReflectContinuePastTheOuterCircle_WherePadHoldsTheLastColor()
+        {
+            using var pad = await DrawAsync(BundledFonts.ColorCff, "E");
+            using var repeat = await DrawAsync(BundledFonts.ColorCff, "N");
+            using var reflect = await DrawAsync(BundledFonts.ColorCff, "O");
+
+            // The box's top-right corner (design 900,800) lies outside the outer circle (center 600,400, radius 300).
+            var (pr, _, pb) = PixelAt(pad, 62, 12);
+            Assert.True(pb > 200 && pr < 60, "pad holds the last stop, blue");
+
+            var (rr, _, rb) = PixelAt(repeat, 62, 12);
+            Assert.False(rb > 200 && rr < 60, "repeat starts the ramp over, so the corner is no longer pure blue");
+
+            var (fr, _, fb) = PixelAt(reflect, 62, 12);
+            Assert.False(fb > 200 && fr < 60, "reflect runs the ramp back, so the corner is no longer pure blue");
+
+            Assert.True(Count(repeat, IsRed) > Count(pad, IsRed), "the repeated ramp brings red back");
+        }
     }
 }

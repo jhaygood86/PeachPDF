@@ -16,6 +16,7 @@ namespace PeachDrawing.Core.ColorGlyphs
     {
         private const int UseForegroundColor = 0xFFFF;
         private const int MaxPaintDepth = 64;
+        private const int PlusCompositeMode = 12;
 
         private readonly Typeface _typeface;
         private readonly PaintColor _foreground;
@@ -131,7 +132,7 @@ namespace PeachDrawing.Core.ColorGlyphs
                     break;
 
                 case PaintRadialGradient radial:
-                    FillClip(hasClip, clip, BuildRadial(radial, t, hasClip, clip), target);
+                    FillClip(hasClip, clip, BuildRadial(radial, t, hasClip, clip, target.SupportsPeriodicConeGradients), target);
                     break;
 
                 case PaintSweepGradient sweep:
@@ -147,8 +148,9 @@ namespace PeachDrawing.Core.ColorGlyphs
         // Compositing. A separable/HSL blend mode is applied to the source. The Porter-Duff modes are built from the two
         // things a vector target can do: paint order and clipping to a glyph shape (SRC_IN, DEST_IN, SRC_ATOP, DEST_ATOP
         // clip one operand to the other's glyph outlines, SRC_OUT/DEST_OUT/XOR clip to its complement with an even-odd clip).
-        // PLUS needs an additive blend no vector target has, and falls back to source-over, as do the complement modes on a
-        // target that cannot clip to a complement.
+        // PLUS needs an additive blend, which only a pixel target has (IColorGlyphTarget.SupportsAdditiveComposite); any other
+        // target paints it source-over, as the complement modes fall back to on a target that cannot clip to a complement.
+        // RequiresRasterFidelity tells a vector backend which glyphs would lose something, so it can route them to a pixel target.
         private void PaintCompositeNode(PaintComposite composite, Affine2x3 t, bool hasClip, Rect clip, int depth, IColorGlyphTarget target)
         {
             void Paint(ColorPaint? p, bool c, Rect r) => PaintV1(p, t, c, r, depth + 1, target);
@@ -260,7 +262,10 @@ namespace PeachDrawing.Core.ColorGlyphs
 
             Paint(composite.Backdrop, hasClip, clip);
 
-            if (BlendModeFor(composite.Mode) is not { } mode)
+            PaintBlendMode? blend = composite.Mode == PlusCompositeMode && target.SupportsAdditiveComposite
+                ? PaintBlendMode.Plus
+                : BlendModeFor(composite.Mode);
+            if (blend is not { } mode)
             {
                 Paint(composite.Source, hasClip, clip); // source-over
                 return;
@@ -365,7 +370,7 @@ namespace PeachDrawing.Core.ColorGlyphs
             return new LinearColorGlyphPaint(p0, p1, colors, positions);
         }
 
-        private RadialColorGlyphPaint? BuildRadial(PaintRadialGradient g, Affine2x3 t, bool hasClip, Rect clip)
+        private RadialColorGlyphPaint? BuildRadial(PaintRadialGradient g, Affine2x3 t, bool hasClip, Rect clip, bool periodicCone)
         {
             if (!TryBuildStops(g.Line, out PaintColor[] colors, out double[] positions))
                 return null;
@@ -386,12 +391,131 @@ namespace PeachDrawing.Core.ColorGlyphs
                 return new RadialColorGlyphPaint(center, center, outer * radiusScale, colors, positions);
             }
 
-            // Circles with different centers: the two-circle gradient itself, padded beyond both circles (repeat/reflect is
-            // not modeled for it).
+            // Circles with different centers: the two-circle gradient itself. A target that can repeat it (a pixel target) gets
+            // repeat as is, and reflect as a repeat of the gradient run forward and then backward over twice the circles' span (the
+            // circles at t = 2 are on the same family); every other target gets it padded beyond both circles.
+            if (periodicCone && g.Line.Extend is ColorExtend.Repeat or ColorExtend.Reflect)
+            {
+                if (g.Line.Extend == ColorExtend.Repeat)
+                {
+                    PadStopsToUnit(ref colors, ref positions);
+                    return new RadialColorGlyphPaint(Map(t, g.X1, g.Y1), Map(t, g.X0, g.Y0), g.R1 * radiusScale, colors, positions)
+                    {
+                        FocalRadius = g.R0 * radiusScale,
+                        Repeating = true,
+                    };
+                }
+
+                double r2 = g.R0 + 2 * span;
+                if (r2 >= 0)
+                {
+                    MirrorStops(ref colors, ref positions);
+                    return new RadialColorGlyphPaint(Map(t, g.X0 + 2 * (g.X1 - g.X0), g.Y0 + 2 * (g.Y1 - g.Y0)), Map(t, g.X0, g.Y0), r2 * radiusScale, colors, positions)
+                    {
+                        FocalRadius = g.R0 * radiusScale,
+                        Repeating = true,
+                    };
+                }
+            }
+
             return new RadialColorGlyphPaint(Map(t, g.X1, g.Y1), Map(t, g.X0, g.Y0), g.R1 * radiusScale, colors, positions)
             {
                 FocalRadius = g.R0 * radiusScale,
             };
+        }
+
+        /// <summary>
+        /// Makes the stops run exactly over [0, 1] (the first color held from 0, the last held to 1), because a repeating brush's period is
+        /// its stops' own extent while a COLR gradient's period is the unit interval.
+        /// </summary>
+        private static void PadStopsToUnit(ref PaintColor[] colors, ref double[] positions)
+        {
+            var c = new List<PaintColor>(colors);
+            var p = new List<double>(positions);
+            if (p[0] > 0)
+            {
+                c.Insert(0, c[0]);
+                p.Insert(0, 0);
+            }
+
+            if (p[^1] < 1)
+            {
+                c.Add(c[^1]);
+                p.Add(1);
+            }
+
+            colors = [.. c];
+            positions = [.. p];
+        }
+
+        /// <summary>
+        /// Lays the stops out forward over [0, 0.5] and backward over [0.5, 1], the repeating unit of a reflected gradient run over twice its span.
+        /// </summary>
+        private static void MirrorStops(ref PaintColor[] colors, ref double[] positions)
+        {
+            PadStopsToUnit(ref colors, ref positions);
+            int n = positions.Length;
+            var newColors = new PaintColor[2 * n];
+            var newPositions = new double[2 * n];
+            double last = -1;
+            for (int i = 0; i < 2 * n; i++)
+            {
+                int src = i < n ? i : 2 * n - 1 - i;
+                double pos = i < n ? positions[src] / 2 : 1 - positions[src] / 2;
+                if (pos <= last)
+                    pos = last + 1e-6; // keep strictly increasing
+                last = pos;
+                newColors[i] = colors[src];
+                newPositions[i] = pos;
+            }
+
+            colors = newColors;
+            positions = newPositions;
+        }
+
+        /// <summary>
+        /// Whether painting this glyph on a pure vector target loses something a pixel target keeps: a <c>PLUS</c> composite (a vector
+        /// target has no additive blend) or a repeating/reflecting radial gradient between circles with different centers (a vector
+        /// target can only pad it). A vector backend can draw such a glyph through a pixel target instead, passing
+        /// <see cref="CanvasColorGlyphTarget"/> the matching <c>Supports...</c> flags.
+        /// </summary>
+        /// <param name="glyphId">the glyph to inspect</param>
+        /// <returns><see langword="true"/> when a pixel target would draw the glyph more faithfully than a vector one</returns>
+        public bool RequiresRasterFidelity(ushort glyphId) =>
+            _typeface.GetColorPaint(glyphId) is { } paint && NeedsRaster(paint, 0);
+
+        private bool NeedsRaster(ColorPaint? paint, int depth)
+        {
+            if (paint is null || depth > MaxPaintDepth)
+                return false;
+
+            switch (paint)
+            {
+                case PaintColrLayers layers:
+                    for (int i = 0; i < layers.NumLayers; i++)
+                    {
+                        if (NeedsRaster(_typeface.GetColorLayerPaint(layers.FirstLayerIndex + i), depth + 1))
+                            return true;
+                    }
+
+                    return false;
+                case PaintGlyph glyph:
+                    return NeedsRaster(glyph.Paint, depth + 1);
+                case PaintColrGlyph colrGlyph:
+                    return NeedsRaster(_typeface.GetColorPaint((ushort)colrGlyph.GlyphId), depth + 1);
+                case PaintTransform transform:
+                    return NeedsRaster(transform.Paint, depth + 1);
+                case PaintComposite composite:
+                    return composite.Mode == PlusCompositeMode || NeedsRaster(composite.Backdrop, depth + 1) || NeedsRaster(composite.Source, depth + 1);
+                case PaintRadialGradient radial:
+                {
+                    double centerShift = Math.Abs(radial.X1 - radial.X0) + Math.Abs(radial.Y1 - radial.Y0);
+                    bool concentric = centerShift <= 1e-6 * Math.Max(1.0, radial.R1);
+                    return !concentric && radial.Line.Extend is ColorExtend.Repeat or ColorExtend.Reflect;
+                }
+                default:
+                    return false;
+            }
         }
 
         private static double FarthestCorner(PaintPoint center, Rect r)

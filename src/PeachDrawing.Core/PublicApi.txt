@@ -95,6 +95,8 @@ PeachDrawing.Core.ColorGlyphs.CanvasColorGlyphTarget : sealed class
   method virtual Void PopClip()
   method virtual Void PushBlendMode(PaintBlendMode mode)
   method virtual Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+  property Boolean SupportsAdditiveComposite { get; init; }
+  property Boolean SupportsPeriodicConeGradients { get; init; }
 PeachDrawing.Core.ColorGlyphs.ColorGlyphPaint : abstract class
   method abstract ColorGlyphPaint <Clone>$()
   method virtual Boolean Equals(ColorGlyphPaint other)
@@ -104,6 +106,7 @@ PeachDrawing.Core.ColorGlyphs.ColorGlyphPaint : abstract class
 PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter : sealed class
   ctor(Typeface typeface, Double fontSize, PaintColor foreground, Boolean yDown = True, Int32 paletteIndex = 0, IReadOnlyDictionary<Int32, PaintColor> overrides = null)
   method Affine2x3 Placement(Double originX, Double originY)
+  method Boolean RequiresRasterFidelity(UInt16 glyphId)
   method Void Paint(UInt16 glyphId, Affine2x3 placement, IColorGlyphTarget target)
 PeachDrawing.Core.ColorGlyphs.IColorGlyphTarget : interface
   method abstract Void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
@@ -113,6 +116,8 @@ PeachDrawing.Core.ColorGlyphs.IColorGlyphTarget : interface
   method abstract Void PushBlendMode(PaintBlendMode mode)
   method abstract Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
   method virtual Boolean PushOutlineComplementClip(GlyphOutline outline, Affine2x3 transform, Rect bounds)
+  property Boolean SupportsAdditiveComposite { get; }
+  property Boolean SupportsPeriodicConeGradients { get; }
 PeachDrawing.Core.ColorGlyphs.LinearColorGlyphPaint : sealed class
   ctor(PaintPoint Start, PaintPoint End, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> Positions)
   method Void Deconstruct(out PaintPoint Start, out PaintPoint End, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> Positions)
@@ -135,6 +140,7 @@ PeachDrawing.Core.ColorGlyphs.RadialColorGlyphPaint : sealed class
   method virtual Int32 GetHashCode()
   method virtual RadialColorGlyphPaint <Clone>$()
   method virtual String ToString()
+  property Boolean Repeating { get; init; }
   property Double FocalRadius { get; init; }
   property Double Radius { get; init; }
   property IReadOnlyList<Double> Positions { get; init; }
@@ -485,6 +491,7 @@ PeachDrawing.Core.PaintBlendMode : enum Int32
   Multiply = 1
   Normal = 0
   Overlay = 3
+  Plus = 16
   Saturation = 13
   Screen = 2
   SoftLight = 9

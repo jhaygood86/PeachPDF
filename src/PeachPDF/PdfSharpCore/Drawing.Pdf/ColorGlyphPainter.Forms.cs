@@ -11,10 +11,14 @@
 //
 #endregion
 
+using PeachDrawing;
+using PeachDrawing.Core;
+using PeachDrawing.Core.ColorGlyphs;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 
@@ -29,6 +33,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         private const double FormPadding = 2.0;
 
+        /// <summary>The context pixel canvases are built from, when this painter may draw a glyph through the raster backend.</summary>
+        private readonly RenderContext? _rasterContext;
+
+        /// <summary>Pixels per canonical world unit of a glyph drawn through the raster backend (a 300-pixel em, about 216 dpi at 72pt).</summary>
+        private const double RasterPixelsPerUnit = 3.0;
+
         /// <summary>True while a measure pass is running - see <see cref="MeasureGlyphBounds"/>.</summary>
         private bool _measuring;
         private bool _hasMeasuredBounds;
@@ -42,8 +52,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// not to the artwork.
         /// </summary>
         private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, Typeface typeface, XColor foreground,
-            int paletteIndex, IReadOnlyDictionary<int, XColor>? overrides, double originX, double originY)
+            int paletteIndex, IReadOnlyDictionary<int, XColor>? overrides, double originX, double originY, RenderContext? rasterContext = null)
         {
+            _rasterContext = rasterContext;
             _renderer = formRenderer;
             _gfx = formRenderer.Gfx;
             _typeface = typeface;
@@ -121,8 +132,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             try
             {
                 var painter = new ColorGlyphPainter(form.PdfRenderer, _typeface, _foreground, _paletteIndex,
-                    _overrides, -left, -top);
-                painter.PaintGlyph(glyphId, -left);
+                    _overrides, -left, -top, _gfx.RasterContext);
+                if (!painter.TryPaintGlyphRasterized(glyphId, right - left, bottom - top))
+                    painter.PaintGlyph(glyphId, -left);
             }
             finally
             {
@@ -132,6 +144,38 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
             return new ColorGlyphForm(form, left, top);
+        }
+
+        /// <summary>
+        /// Draws a glyph a vector target would get wrong - a <c>PLUS</c> composite (PDF has no additive blend) or a repeating cone gradient
+        /// (PDF shadings only pad) - as a picture: the artwork is painted on a pixel canvas through the shared walker and the result drawn into
+        /// this painter's form, covering the (<paramref name="width"/> by <paramref name="height"/>) form. False when the glyph does not need
+        /// it or no raster backend is available, leaving the caller to draw the vectors.
+        /// </summary>
+        private bool TryPaintGlyphRasterized(int glyphId, double width, double height)
+        {
+            if (_rasterContext is not { } context || !Shared.RequiresRasterFidelity((ushort)glyphId))
+                return false;
+
+            int pixelWidth = (int)Math.Ceiling(width * RasterPixelsPerUnit);
+            int pixelHeight = (int)Math.Ceiling(height * RasterPixelsPerUnit);
+            if (pixelWidth <= 0 || pixelHeight <= 0 || pixelWidth > RasterSurfaceFactory.MaxDimension || pixelHeight > RasterSurfaceFactory.MaxDimension
+                || (long)pixelWidth * pixelHeight > context.MaxRasterPixels)
+                return false;
+
+            using var surface = new RasterSurface(pixelWidth, pixelHeight, 0, 0, 1, 1);
+            using (var canvas = new RasterCanvas(context, surface, 1))
+            {
+                var painter = new PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter(_typeface, ColorGlyphFormCache.EmSize * RasterPixelsPerUnit,
+                    ToPaintColor(_foreground), yDown: true, _paletteIndex, ToPaintOverrides(_overrides));
+                painter.Paint((ushort)glyphId, painter.Placement(_baselineX * RasterPixelsPerUnit, _baselineY * RasterPixelsPerUnit),
+                    new CanvasColorGlyphTarget(canvas) { SupportsAdditiveComposite = true, SupportsPeriodicConeGradients = true });
+            }
+
+            byte[] png = RasterSurfaceEncoding.EncodePng(surface, opaque: false);
+            XImage image = XImage.FromStream(() => new MemoryStream(png));
+            _gfx.DrawImage(image, new XRect(0, 0, pixelWidth / RasterPixelsPerUnit, pixelHeight / RasterPixelsPerUnit));
+            return true;
         }
 
         /// <summary>

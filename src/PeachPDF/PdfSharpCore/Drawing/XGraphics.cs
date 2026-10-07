@@ -1186,6 +1186,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>What draws the SVG documents of a font's glyphs (OpenType SVG) on this graphics, or <see langword="null"/> when nothing does.</summary>
         internal PeachDrawing.Core.ISvgGlyphPainter? SvgGlyphPainter { get; set; }
 
+        /// <summary>The render context pixel canvases are built from when a glyph is drawn through the raster backend, or <see langword="null"/> when there is none.</summary>
+        internal PeachDrawing.Core.RenderContext? RasterContext { get; set; }
+
         public void DrawString(string s, XFont font, XBrush brush, XPoint point)
         {
             DrawString(s, font, brush, new XRect(point.X, point.Y, 0, 0), XStringFormats.Default);

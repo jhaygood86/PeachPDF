@@ -35,10 +35,10 @@ def empty():
 
 def main():
     names = [".notdef", "space", "box", "circ", "tri", "inner", "radialR0", "radialRepeat", "linearP2",
-             "srcIn", "destIn", "srcAtop", "destOver", "clear", "src", "dest", "srcOut", "destOut", "xor", "plus", "radialCone", "complexIn", "colrRefIn", "unboundedIn", "unboundedOut", "destAtop", "reflectInner", "repeatInner"]
+             "srcIn", "destIn", "srcAtop", "destOver", "clear", "src", "dest", "srcOut", "destOut", "xor", "plus", "radialCone", "complexIn", "colrRefIn", "unboundedIn", "unboundedOut", "destAtop", "reflectInner", "repeatInner", "coneRepeat", "coneReflect"]
     cmap = {0x20: "space", 0x58: "box", 0x59: "tri", 0x5A: "circ", 0x49: "inner",
             0x30: "radialR0", 0x31: "radialRepeat", 0x32: "linearP2", 0x33: "srcIn", 0x34: "destIn", 0x35: "srcAtop",
-            0x36: "destOver", 0x37: "clear", 0x38: "src", 0x39: "dest", 0x41: "srcOut", 0x42: "destOut", 0x43: "xor", 0x44: "plus", 0x45: "radialCone", 0x46: "complexIn", 0x47: "colrRefIn", 0x48: "unboundedIn", 0x4A: "unboundedOut", 0x4B: "destAtop", 0x4C: "reflectInner", 0x4D: "repeatInner"}
+            0x36: "destOver", 0x37: "clear", 0x38: "src", 0x39: "dest", 0x41: "srcOut", 0x42: "destOut", 0x43: "xor", 0x44: "plus", 0x45: "radialCone", 0x46: "complexIn", 0x47: "colrRefIn", 0x48: "unboundedIn", 0x4A: "unboundedOut", 0x4B: "destAtop", 0x4C: "reflectInner", 0x4D: "repeatInner", 0x4E: "coneRepeat", 0x4F: "coneReflect"}
     chars = {n: empty() for n in names}
     chars["box"] = rect(100, 0, 900, 800)
     chars["circ"] = rect(200, 100, 800, 700)
@@ -68,6 +68,11 @@ def main():
         return glyph("box", {"Format": ot.PaintFormat.PaintRadialGradient,
                              "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": extend},
                              "x0": 500, "y0": 400, "r0": r0, "x1": 500, "y1": 400, "r1": r1})
+
+    def cone(extend):
+        return glyph("box", {"Format": ot.PaintFormat.PaintRadialGradient,
+                             "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": extend},
+                             "x0": 300, "y0": 400, "r0": 100, "x1": 600, "y1": 400, "r1": 300})
 
     colr = {
         "box": None,
@@ -115,6 +120,9 @@ def main():
         # concentric radial gradients whose first circle has a radius, tiled out past the glyph
         "reflectInner": radial(ot.ExtendMode.REFLECT, 100, 250),
         "repeatInner": radial(ot.ExtendMode.REPEAT, 100, 250),
+        # circles with different centers, repeated / reflected past the outer circle (a pixel target draws it; PDF can only pad)
+        "coneRepeat": cone(ot.ExtendMode.REPEAT),
+        "coneReflect": cone(ot.ExtendMode.REFLECT),
     })
     del colr["box"]
     fb.setupCOLR(colr, version=1)

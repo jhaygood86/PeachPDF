@@ -94,7 +94,11 @@ namespace PeachPDF.Adapters
             PixelsPerPoint = pixelsPerPoint;
             _previousSvgGlyphPainter = _g.SvgGlyphPainter;
             _g.SvgGlyphPainter = new SvgGlyphPainter(this, adapter);
+            _previousRasterContext = _g.RasterContext;
+            _g.RasterContext = adapter;
         }
+
+        private readonly RenderContext? _previousRasterContext;
 
         private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
 
@@ -502,6 +506,9 @@ namespace PeachPDF.Adapters
             // Graphics wrapped one after another over one XGraphics: what draws SVG glyphs goes back to the adapter that had it.
             if (_g.SvgGlyphPainter is SvgGlyphPainter own && ReferenceEquals(own.Host, this))
                 _g.SvgGlyphPainter = _previousSvgGlyphPainter;
+
+            if (ReferenceEquals(_g.RasterContext, _adapter))
+                _g.RasterContext = _previousRasterContext;
 
             if (_releaseGraphics)
                 _g.Dispose();
