@@ -130,6 +130,23 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Stretch_WithPerCharacterRotate_TurnsTheBentGlyph()
+        {
+            var plain = Render("""<text font-size="20"><textPath href="#p" method="stretch"><tspan>H</tspan></textPath></text>""", Arc);
+            var rotated = Render("""<text font-size="20"><textPath href="#p" method="stretch"><tspan rotate="45">H</tspan></textPath></text>""", Arc);
+
+            Assert.NotEqual(Paths(plain.G)[0].Points, Paths(rotated.G)[0].Points);
+        }
+
+        [Fact]
+        public void Stretch_WithNoPaint_AddsNoInvisibleText()
+        {
+            var (g, _) = Render("""<text font-size="20" fill="none"><textPath href="#p" method="stretch">Hi</textPath></text>""", Arc);
+
+            Assert.Empty(g.InvisibleStringCalls);
+        }
+
+        [Fact]
         public void StretchedText_AddsInvisibleText()
         {
             var (g, _) = Render("""<text font-size="20"><textPath href="#p" method="stretch">Hi</textPath></text>""", Arc);

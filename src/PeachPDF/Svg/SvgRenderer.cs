@@ -2389,6 +2389,14 @@ namespace PeachPDF.Svg
         {
             var scale = placed.Info.IsScaled ? placed.Info.GlyphScale : 1.0;
             var length = layout.Geometry.TotalLength;
+
+            // A per-character rotate turns the glyph about its own origin before it is bent, as it does the rigid frame.
+            if (placed.Info.Rotate is { } degrees && degrees != 0)
+            {
+                var radians = degrees * (Math.PI / 180.0);
+                (lx, ly) = (lx * Math.Cos(radians) - ly * Math.Sin(radians), lx * Math.Sin(radians) + ly * Math.Cos(radians));
+            }
+
             var distance = placed.Mid + lx * scale;
             var sample = layout.Geometry.Measure.PointAtLength(Math.Clamp(layout.Right ? length - distance : distance, 0, length));
             var tangent = (sample.TangentDegrees + (layout.Right ? 180 : 0)) * (Math.PI / 180.0);
@@ -2574,9 +2582,13 @@ namespace PeachPDF.Svg
 
             PaintOutlinedGlyph(g, document, run, fill, stroke, hasStroke, outline, opacity, bounds);
 
-            g.PushTransform(placed.Frame);
-            PaintInvisibleText(g, run, gi.Glyph, gi.Font, topLeft, glyphSize, 0, run.ShapingFeatures, gi.LogicalGlyph);
-            g.PopTransform();
+            // Text that paints nothing (fill none, no stroke) is not supplied either, as for unstretched text.
+            if (fill.Kind != SvgPaintKind.None || hasStroke)
+            {
+                g.PushTransform(placed.Frame);
+                PaintInvisibleText(g, run, gi.Glyph, gi.Font, topLeft, glyphSize, 0, run.ShapingFeatures, gi.LogicalGlyph);
+                g.PopTransform();
+            }
         }
 
         private static void RenderElement(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
