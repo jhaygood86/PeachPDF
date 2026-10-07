@@ -29,6 +29,12 @@ namespace PeachDrawing.Core.ColorGlyphs
             _canvas.DrawPath(_canvas.GetSolidBrush(color), path);
         }
 
+        /// <summary>Whether the canvas adds <see cref="PaintBlendMode.Plus"/> composites (true for a pixel canvas such as <c>RasterCanvas</c>; default false).</summary>
+        public bool SupportsAdditiveComposite { get; init; }
+
+        /// <summary>Whether the canvas's radial brushes repeat between circles with different centers (true for a pixel canvas such as <c>RasterCanvas</c>; default false).</summary>
+        public bool SupportsPeriodicConeGradients { get; init; }
+
         /// <inheritdoc/>
         public void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
         {
@@ -67,8 +73,8 @@ namespace PeachDrawing.Core.ColorGlyphs
                 SolidColorGlyphPaint solid => _canvas.GetSolidBrush(solid.Color),
                 LinearColorGlyphPaint linear => _canvas.GetLinearGradientBrush(linear.Start, linear.End, Stops(linear.Colors, linear.Positions)),
                 RadialColorGlyphPaint radial => radial.FocalRadius > 0
-                    ? _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), false, radial.Focal, radial.FocalRadius)
-                    : _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), false, radial.Focal),
+                    ? _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), radial.Repeating, radial.Focal, radial.FocalRadius)
+                    : _canvas.GetRadialGradientBrush(radial.Center, radial.Radius, radial.Radius, Stops(radial.Colors, radial.Positions), radial.Repeating, radial.Focal),
                 SweepColorGlyphPaint sweep => SweepBrush(sweep),
                 _ => null,
             };

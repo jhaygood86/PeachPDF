@@ -390,6 +390,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         internal void SetBlendMode(string pdfBlendModeName)
         {
+            // PDF has no additive blend (PaintBlendMode.Plus); such a canvas paints it as a plain overlay.
+            if (pdfBlendModeName == "Plus")
+                pdfBlendModeName = "Normal";
+
             // A non-Normal /BM (any value other than "Normal"/"Compatible") is itself a transparency
             // -group-requiring construct PDF/A-1 forbids, same as an alpha ExtGState - see
             // PdfATransparencyGuard's remarks.

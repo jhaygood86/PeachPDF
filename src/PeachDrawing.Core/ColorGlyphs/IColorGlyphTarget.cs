@@ -47,5 +47,17 @@ namespace PeachDrawing.Core.ColorGlyphs
 
         /// <summary>Ends the blend begun by the last unmatched <see cref="PushBlendMode"/>.</summary>
         void PopBlendMode();
+
+        /// <summary>
+        /// Whether <see cref="PushBlendMode"/> honors <see cref="PaintBlendMode.Plus"/> (an additive composite). The painter asks for it, for a
+        /// <c>PLUS</c> composite, only when this is <see langword="true"/>; otherwise it paints that composite source-over. The default is <see langword="false"/>.
+        /// </summary>
+        bool SupportsAdditiveComposite => false;
+
+        /// <summary>
+        /// Whether a <see cref="RadialColorGlyphPaint"/> between circles with different centers may ask for <see cref="RadialColorGlyphPaint.Repeating"/>
+        /// (a gradient that repeats past its outer circle). The default is <see langword="false"/>, which keeps such a gradient padded.
+        /// </summary>
+        bool SupportsPeriodicConeGradients => false;
     }
 }

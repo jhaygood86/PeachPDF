@@ -50,6 +50,8 @@ namespace PeachDrawing.Core
         /// <summary>Takes the hue and saturation of the source with the luminosity of the backdrop.</summary>
         Color,
         /// <summary>Takes the luminosity of the source with the hue and saturation of the backdrop - the inverse of <see cref="Color"/>.</summary>
-        Luminosity
+        Luminosity,
+        /// <summary>Adds the premultiplied source to the backdrop and clamps the result - Porter-Duff <c>plus</c>, so overlapping translucent ink brightens. A backend with no additive blend ignores it and paints as <see cref="Normal"/>.</summary>
+        Plus
     }
 }

@@ -20,6 +20,16 @@ internal static class BlendModes
         if (sa == 0)
             return;
 
+        // Porter-Duff plus: on premultiplied pixels it is the clamped sum of source and backdrop, alpha included.
+        if (mode == PaintBlendMode.Plus)
+        {
+            dst[0] = (byte)Math.Min(255, dst[0] + sr);
+            dst[1] = (byte)Math.Min(255, dst[1] + sg);
+            dst[2] = (byte)Math.Min(255, dst[2] + sb);
+            dst[3] = (byte)Math.Min(255, dst[3] + sa);
+            return;
+        }
+
         float ab = dst[3] / 255f;
         float a = sa / 255f;
 

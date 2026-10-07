@@ -37,6 +37,10 @@ namespace PeachDrawing.Core.ColorGlyphs
         /// <summary>The radius of the circle around <c>Focal</c> that the first stop fills, in target units (0 is a point). With a nonzero value
         /// the gradient is the two-circle gradient from that circle to the outer one.</summary>
         public double FocalRadius { get; init; }
+
+        /// <summary>Whether the gradient repeats past the outer circle instead of padding. Only requested of a target whose
+        /// <see cref="IColorGlyphTarget.SupportsPeriodicConeGradients"/> is <see langword="true"/>.</summary>
+        public bool Repeating { get; init; }
     }
 
     /// <summary>A gradient that sweeps around a center, like a conic gradient.</summary>

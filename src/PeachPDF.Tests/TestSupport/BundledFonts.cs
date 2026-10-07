@@ -166,9 +166,15 @@ namespace PeachPDF.Tests.TestSupport
         /// A hand-authored COLR v1 test font over <b>CFF</b> outlines (public domain): a radial gradient with an inner radius
         /// ('0'), a repeating radial gradient ('1'), a linear gradient with a slanted p2 ('2'), and the Porter-Duff composites of a
         /// blue triangle (source) over a yellow box (backdrop): SRC_IN '3', DEST_IN '4', SRC_ATOP '5', DEST_OVER '6', CLEAR '7',
-        /// SRC '8', DEST '9', SRC_OUT 'A', DEST_OUT 'B', XOR 'C', PLUS 'D'; 'E' is a radial gradient between circles with different centers, 'F' SRC_IN over layers under a translate, 'G' SRC_IN over a PaintColrGlyph, 'H'/'J' SRC_IN/SRC_OUT over a bare gradient, 'K' DEST_ATOP, 'L'/'M' reflecting/repeating radial gradients with an inner radius. 'X'/'Y'/'Z'/'I' are the plain box, triangle, circle and inner-box outlines.
+        /// SRC '8', DEST '9', SRC_OUT 'A', DEST_OUT 'B', XOR 'C', PLUS 'D'; 'E' is a radial gradient between circles with different centers, 'F' SRC_IN over layers under a translate, 'G' SRC_IN over a PaintColrGlyph, 'H'/'J' SRC_IN/SRC_OUT over a bare gradient, 'K' DEST_ATOP, 'L'/'M' reflecting/repeating radial gradients with an inner radius, 'N'/'O' repeating/reflecting gradients between circles with different centers. 'X'/'Y'/'Z'/'I' are the plain box, triangle, circle and inner-box outlines.
         /// </summary>
         internal static string ColorCff => Path.Combine(AppContext.BaseDirectory, "ColorTestCff.otf");
+
+        /// <summary>Simon Cozens' <c>CBDT.otf</c> (Apache-2.0, see SimonCozensTestFonts.LICENSE.txt): a real font whose 'A' is a CBDT/CBLC format 17 PNG picture; 'B' has none.</summary>
+        internal static string RealCbdt => Path.Combine(AppContext.BaseDirectory, "SimonCozensCBDT.otf");
+
+        /// <summary>Simon Cozens' <c>CFF-and-SBIX.otf</c> (Apache-2.0, see SimonCozensTestFonts.LICENSE.txt): a real CFF font whose 'A' is an sbix <c>png </c> picture at 512, 256, 128 and 64 ppem; 'B' has none.</summary>
+        internal static string RealSbix => Path.Combine(AppContext.BaseDirectory, "SimonCozensCffAndSbix.otf");
 
         /// <summary>
         /// A hand-authored fixture (see CcmpLigatureTest.LICENSE.txt) shaped like a modern color-emoji

@@ -147,7 +147,7 @@ public sealed partial class RasterCanvas
 
         // Path coordinates are in this canvas's user units (points * pixelsPerPoint); the glyph's design units scale to those.
         var painter = new ColorGlyphPainter(typeface, fontSize * _pixelsPerPoint, color, yDown: true, paletteIndex, overrides);
-        painter.Paint((ushort)glyphId, painter.Placement(originX * _pixelsPerPoint, baselineY * _pixelsPerPoint), new CanvasColorGlyphTarget(this));
+        painter.Paint((ushort)glyphId, painter.Placement(originX * _pixelsPerPoint, baselineY * _pixelsPerPoint), new CanvasColorGlyphTarget(this) { SupportsAdditiveComposite = true, SupportsPeriodicConeGradients = true });
         return true;
     }
 

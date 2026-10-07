@@ -11638,6 +11638,15 @@ var colorEmojiHtml =
     ColorGlyph("<span class=\"cff\">B</span>", "DEST_OUT", "the box outside the triangle") +
     ColorGlyph("<span class=\"cff\">E</span>", "Two-circle radial", "different centers, r0 = 100") +
     "</tr></table>" +
+    "<div style=\"break-inside: avoid\"><h2>Drawn through the raster backend</h2>" +
+    "<p class=\"intro\">A PDF has no additive blend and a PDF shading can only pad, so a glyph with a " +
+    "<code>PLUS</code> composite, or a repeating/reflecting radial gradient between circles with different " +
+    "centers, is painted once on a pixel canvas and embedded as a picture. Every other glyph stays vector.</p>" +
+    "<table class=\"sw\"><tr>" +
+    ColorGlyph("<span class=\"cff\">D</span>", "PLUS", "yellow + blue adds to white where they overlap") +
+    ColorGlyph("<span class=\"cff\">N</span>", "Cone repeat", "EXTEND_REPEAT, different centers") +
+    ColorGlyph("<span class=\"cff\">O</span>", "Cone reflect", "EXTEND_REFLECT, different centers") +
+    "</tr></table></div>" +
     "<h2>Emoji sequences</h2>" +
     "<p class=\"intro\">A multi-codepoint emoji sequence composes into the single glyph the font " +
     "defines for it, via the font's <code>ccmp</code> feature — which is where Noto Color Emoji keeps " +
