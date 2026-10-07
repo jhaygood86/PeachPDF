@@ -118,6 +118,9 @@ namespace PeachPDF.Svg
     /// <summary>Which side of a <c>&lt;textPath&gt;</c>'s path its glyphs read along (SVG 2 <c>side</c>).</summary>
     internal enum SvgTextPathSide { Left, Right }
 
+    /// <summary>How a <c>&lt;textPath&gt;</c>'s glyphs follow its path (SVG 1.1 <c>method</c>): rigidly turned to the tangent (<see cref="Align"/>) or bent along the curve (<see cref="Stretch"/>).</summary>
+    internal enum SvgTextPathMethod { Align, Stretch }
+
     /// <summary>One item of a text run's ordered <see cref="SvgTextElement.Content"/>: a text fragment or a child run.</summary>
     internal abstract class SvgTextContentItem;
 
@@ -238,6 +241,9 @@ namespace PeachPDF.Svg
 
         /// <summary>The <c>&lt;textPath&gt;</c> <c>side</c> (default <see cref="SvgTextPathSide.Left"/>).</summary>
         public SvgTextPathSide Side { get; set; } = SvgTextPathSide.Left;
+
+        /// <summary>The <c>&lt;textPath&gt;</c> <c>method</c> (default <see cref="SvgTextPathMethod.Align"/>). <c>spacing</c> needs no field: <c>auto</c> is laid out as <c>exact</c>, which the spec lets a user agent choose.</summary>
+        public SvgTextPathMethod Method { get; set; } = SvgTextPathMethod.Align;
 
         /// <summary>Resolved <c>letter-spacing</c>, in user units - added to every glyph's own advance
         /// (see <c>SvgRenderer.LayoutGlyphs</c>), the same "per shown glyph" semantics HTML text uses.</summary>

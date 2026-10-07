@@ -41,6 +41,13 @@ namespace PeachPDF.Tests.Integration
             return Encoding.Latin1.GetString(ms.ToArray());
         }
 
+        /// <summary>Outlined text is painted as vector art and also supplied as invisible text (render mode 3), so it stays selectable - there is a text show, but never a visible one.</summary>
+        private static void AssertOnlyInvisibleText(string pdf)
+        {
+            Assert.True(Count(pdf, " Tj") > 0, "expected invisible text for selection");
+            Assert.Contains("3 Tr", pdf);
+        }
+
         private static int Count(string haystack, string needle)
         {
             int n = 0, i = 0;
@@ -49,7 +56,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task GradientFillText_PaintsShadingOutline_NoTextShow()
+        public async Task GradientFillText_PaintsShadingOutline_OnlyInvisibleTextShow()
         {
             string pdf = await RenderSvgText(BundledFonts.Ttf,
                 """fill="url(#g)" """,
@@ -57,11 +64,11 @@ namespace PeachPDF.Tests.Integration
 
             // Outlined text - a gradient shading fills the glyph path, and there is no CID text show.
             Assert.Contains("/ShadingType", pdf);
-            Assert.Equal(0, Count(pdf, " Tj"));
+            AssertOnlyInvisibleText(pdf);
         }
 
         [Fact]
-        public async Task StrokedText_PaintsStrokeOperator_NoTextShow()
+        public async Task StrokedText_PaintsStrokeOperator_OnlyInvisibleTextShow()
         {
             string pdf = await RenderSvgText(BundledFonts.Ttf,
                 """fill="rgb(0,128,0)" stroke="rgb(0,0,255)" stroke-width="2" """);
@@ -69,7 +76,7 @@ namespace PeachPDF.Tests.Integration
             // Fill then stroke of the glyph outline; no selectable text show.
             Assert.Contains("\nf\n", pdf);
             Assert.Contains("\nS\n", pdf);
-            Assert.Equal(0, Count(pdf, " Tj"));
+            AssertOnlyInvisibleText(pdf);
         }
 
         [Fact]
@@ -83,7 +90,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task PatternFillText_TilesFormXObject_NoTextShow()
+        public async Task PatternFillText_TilesFormXObject_OnlyInvisibleTextShow()
         {
             string pdf = await RenderSvgText(BundledFonts.Ttf,
                 """fill="url(#p)" """,
@@ -91,37 +98,37 @@ namespace PeachPDF.Tests.Integration
 
             // The pattern tile is drawn as a repeated Form XObject clipped to the glyph outline.
             Assert.Matches(@"/Fm\d+ Do", pdf);
-            Assert.Equal(0, Count(pdf, " Tj"));
+            AssertOnlyInvisibleText(pdf);
         }
 
         [Fact]
-        public async Task RadialGradientFillText_PaintsShadingOutline_NoTextShow()
+        public async Task RadialGradientFillText_PaintsShadingOutline_OnlyInvisibleTextShow()
         {
             string pdf = await RenderSvgText(BundledFonts.Ttf,
                 """fill="url(#rg)" """,
                 """<radialGradient id="rg"><stop offset="0" stop-color="#ffd23f"/><stop offset="1" stop-color="#ee4266"/></radialGradient>""");
 
             Assert.Contains("/ShadingType", pdf);
-            Assert.Equal(0, Count(pdf, " Tj"));
+            AssertOnlyInvisibleText(pdf);
         }
 
         [Fact]
-        public async Task CffFont_StrokedText_PaintsStrokeOperator_NoTextShow()
+        public async Task CffFont_StrokedText_PaintsStrokeOperator_OnlyInvisibleTextShow()
         {
             // Source Code Pro is CFF (no glyf) - its outline now comes from
             // Type2CharstringInterpreter (issue #1117), same as a glyf font's, so a stroke is honored
-            // exactly like StrokedText_PaintsStrokeOperator_NoTextShow's TrueType case rather than
+            // exactly like StrokedText_PaintsStrokeOperator_OnlyInvisibleTextShow's TrueType case rather than
             // falling back to a solid text show.
             string pdf = await RenderSvgText(BundledFonts.Otf,
                 """fill="rgb(0,128,0)" stroke="rgb(0,0,255)" stroke-width="2" """);
 
             Assert.Contains("\nf\n", pdf);
             Assert.Contains("\nS\n", pdf);
-            Assert.Equal(0, Count(pdf, " Tj"));
+            AssertOnlyInvisibleText(pdf);
         }
 
         [Fact]
-        public async Task CffFont_TextPath_StrokedGlyphs_PaintsStrokeOperator_NoTextShow()
+        public async Task CffFont_TextPath_StrokedGlyphs_PaintsStrokeOperator_OnlyInvisibleTextShow()
         {
             // A stroked <textPath> on a CFF font: each glyph now has a real decoded outline (issue
             // #1117), so the stroke is honored per glyph instead of falling back to a solid text show.
@@ -145,7 +152,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains("\nf\n", pdf);
             Assert.Contains("\nS\n", pdf);
-            Assert.Equal(0, Count(pdf, " Tj"));
+            AssertOnlyInvisibleText(pdf);
         }
     }
 }

@@ -120,23 +120,32 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         public HashSet<int> BezierControlPoints { get; } = [];
 
+        // The base methods keep the shared segment list the real backends keep, so Flatten() works on a test path too.
         public override void Start(double x, double y)
         {
+            base.Start(x, y);
             SubpathStarts.Add(Points.Count);
             Points.Add(new PaintPoint(x, y));
         }
 
-        public override void LineTo(double x, double y) => Points.Add(new PaintPoint(x, y));
+        public override void LineTo(double x, double y)
+        {
+            base.LineTo(x, y);
+            Points.Add(new PaintPoint(x, y));
+        }
+
         public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) => Points.Add(new PaintPoint(x, y));
 
         public override void AddMove(double x, double y)
         {
+            base.AddMove(x, y);
             SubpathStarts.Add(Points.Count);
             Points.Add(new PaintPoint(x, y));
         }
 
         public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3)
         {
+            base.AddBezierTo(x1, y1, x2, y2, x3, y3);
             BezierControlPoints.Add(Points.Count);
             BezierControlPoints.Add(Points.Count + 1);
             Points.Add(new PaintPoint(x1, y1));
@@ -145,7 +154,7 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) => Points.Add(new PaintPoint(x, y));
-        public override void CloseFigure() { }
+        public override void CloseFigure() => base.CloseFigure();
 
         public override void Transform(Matrix3x2 matrix)
         {
@@ -292,6 +301,9 @@ namespace PeachPDF.Tests.TestSupport
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
 
+        /// <summary>Text shown while <see cref="Canvas.InvisibleText"/> was set (PDF render mode 3): it paints nothing, so it is kept out of <see cref="DrawStringCalls"/>.</summary>
+        public List<DrawStringCall> InvisibleStringCalls { get; } = [];
+
         /// <summary>
         /// <see cref="DrawStringCalls"/> without the word separators the painter shows between words - a
         /// lone space each (see <c>FragmentPainter.PaintWordSeparator</c>) - for a test that counts,
@@ -319,6 +331,12 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null)
         {
             var call = new DrawStringCall(str, font, color, point, size, letterSpacing, features, FontPalette: fontPalette);
+            if (InvisibleText)
+            {
+                InvisibleStringCalls.Add(call);
+                return;
+            }
+
             DrawStringCalls.Add(call);
             Log.Add(call);
         }
@@ -334,7 +352,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
-            if (logicalText is null) return;
+            if (logicalText is null || InvisibleText) return;
 
             var withLogicalText = DrawStringCalls[^1] with { LogicalText = logicalText };
             DrawStringCalls[^1] = withLogicalText;

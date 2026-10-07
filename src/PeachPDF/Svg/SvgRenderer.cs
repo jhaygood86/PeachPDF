@@ -1981,8 +1981,9 @@ namespace PeachPDF.Svg
         /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/> path (a single-color PDF text show, so it stays
         /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
         /// needs the glyphs as an addressable vector path (<see cref="Canvas.GetTextOutline"/>),
-        /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
-        /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
+        /// filled/stroked through the same brush/pen machinery shapes use, with the same text drawn again
+        /// invisibly so it stays selectable (<see cref="PaintInvisibleText"/>). A bitmap-only font yields no
+        /// outline, so it goes through the raster backend instead (<see cref="PaintBitmapGlyphs"/>).
         /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
         /// positionally aligned with it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
         /// null (the common case) when this run of characters was never bidi-mirrored.
@@ -2021,10 +2022,9 @@ namespace PeachPDF.Svg
 
             if (outline is null)
             {
-                // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
-                // simply can't be honored here (documented gap).
-                if (fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                // No outline source (a bitmap-only font): the glyphs can't be traced, so draw them through the raster backend and
+                // let the gradient/pattern fill show through their coverage. The stroke is a band around the coverage edge.
+                PaintBitmapGlyphs(g, document, run, text, font, new PaintPoint(drawX, drawY), size, opacity, letterSpacing, features, logicalText, fill, stroke, hasStroke, new Rect(drawX, drawY, size.Width, size.Height));
                 return;
             }
 
@@ -2036,14 +2036,24 @@ namespace PeachPDF.Svg
             var spacedWidth = size.Width + (letterSpacing != 0 ? g.CountShapedGlyphs(text, font, features) * letterSpacing : 0);
             var textBounds = new Rect(drawX, drawY, spacedWidth, size.Height);
 
-            // Fill then stroke unless paint-order says otherwise (SVG 2 §13.6). A gradient/pattern that came through context-fill/context-stroke is
-            // measured against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
+            PaintOutlinedGlyph(g, document, run, fill, stroke, hasStroke, outline, opacity, textBounds);
+            PaintInvisibleText(g, run, text, font, new PaintPoint(drawX, drawY), size, letterSpacing, features, logicalText);
+        }
+
+        /// <summary>
+        /// Fills and strokes one glyph (or run) outline through the same brush/pen machinery shapes use, fill then stroke unless
+        /// <c>paint-order</c> says otherwise (SVG 2 §13.6). A gradient/pattern that came through context-fill/context-stroke is measured
+        /// against the context element (<see cref="ContextBounds"/>), not <paramref name="bounds"/>, the same rule <see cref="PaintShape"/> follows.
+        /// Disposes <paramref name="outline"/>.
+        /// </summary>
+        private static void PaintOutlinedGlyph(Canvas g, SvgDocument document, SvgTextElement run, SvgPaint fill, SvgPaint stroke, bool hasStroke, GraphicsPath outline, double opacity, Rect bounds)
+        {
             void PaintFill()
             {
                 if (fill.Kind == SvgPaintKind.None)
                     return;
 
-                var fillBounds = ContextBounds(g, fill) ?? textBounds;
+                var fillBounds = ContextBounds(g, fill) ?? bounds;
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
                     PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, fillBounds, fill);
@@ -2061,7 +2071,7 @@ namespace PeachPDF.Svg
                 if (!hasStroke)
                     return;
 
-                var strokeBounds = ContextBounds(g, stroke) ?? textBounds;
+                var strokeBounds = ContextBounds(g, stroke) ?? bounds;
                 var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (pen is not null)
                     g.DrawPath(pen, outline);
@@ -2082,24 +2092,224 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// Draws <paramref name="text"/> a second time as invisible text (PDF text render mode 3) over glyphs that were painted as vector
+        /// outlines or a bitmap, so it stays selectable and searchable - the same device <c>FragmentPainter.PaintSelectableText</c> uses for
+        /// an HTML subtree drawn as a bitmap.
+        /// </summary>
+        private static void PaintInvisibleText(Canvas g, SvgTextElement run, string text, Font font, PaintPoint topLeft, Size size, double letterSpacing, ShapeSettings? features, string? logicalText)
+        {
+            g.InvisibleText = true;
+            try
+            {
+                g.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+            }
+            finally
+            {
+                g.InvisibleText = false;
+            }
+        }
+
+        /// <summary>
+        /// Paints a glyph run whose font has no outlines to trace (a bitmap-only font), through the raster backend: the run is drawn black
+        /// into a raster surface to get its coverage, each paint (a gradient/pattern fill, and a stroke) is painted over the same area into
+        /// a surface of its own and cut to a mask made from that coverage, and the result is drawn. The fill's mask is the coverage; the
+        /// stroke's is a band centred on the edge of the glyphs (the coverage grown by half the stroke width, less the coverage shrunk by it).
+        /// A solid fill with no stroke is the ordinary text show. <paramref name="area"/> is the run's box in the current coordinate system.
+        /// </summary>
+        private static void PaintBitmapGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, PaintPoint topLeft, Size size, double opacity,
+            double letterSpacing, ShapeSettings? features, string? logicalText, SvgPaint fill, SvgPaint stroke, bool hasStroke, Rect area)
+        {
+            if (fill.Kind == SvgPaintKind.Solid && !hasStroke)
+            {
+                g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                return;
+            }
+
+            var rasterFill = fill.Kind != SvgPaintKind.None;
+            if (!rasterFill && !hasStroke)
+                return;
+
+            // Room for the bitmap's own overhang past the advance box, and for a stroke's reach.
+            var margin = area.Height * 0.25 + (hasStroke ? run.StrokeWidth : 0);
+            var bounds = new Rect(area.X - margin, area.Y - margin, area.Width + 2 * margin, area.Height + 2 * margin);
+            using var coverage = g.BeginRasterSurface(bounds);
+            if (coverage is null)
+                return;
+
+            coverage.Graphics.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+
+            var surface = coverage.Surface;
+            var cover = new byte[surface.Width * surface.Height];
+            var pixels = surface.Pixels;
+            for (var i = 0; i < cover.Length; i++)
+                cover[i] = pixels[i * 4 + 3];
+
+            byte[]? band = null;
+            if (hasStroke)
+            {
+                // Half the stroke width, in pixels of the surface's grid.
+                var radius = Math.Clamp((int)Math.Round(run.StrokeWidth / 2 * Math.Max(surface.PixelsPerUnitX, surface.PixelsPerUnitY)), 1, 48);
+                var grown = MorphologyFilter(cover, surface.Width, surface.Height, radius, grow: true);
+                var shrunk = MorphologyFilter(cover, surface.Width, surface.Height, radius, grow: false);
+                band = new byte[cover.Length];
+                for (var i = 0; i < band.Length; i++)
+                    band[i] = (byte)Math.Max(0, grown[i] - shrunk[i]);
+            }
+
+            void PaintThroughMask(SvgPaint paint, double paintOpacity, byte[] mask)
+            {
+                using var layer = g.BeginRasterSurface(bounds);
+                if (layer is null)
+                    return;
+
+                using (var box = layer.Graphics.GetGraphicsPath())
+                {
+                    box.Start(bounds.X, bounds.Y);
+                    box.LineTo(bounds.Right, bounds.Y);
+                    box.LineTo(bounds.Right, bounds.Bottom);
+                    box.LineTo(bounds.X, bounds.Bottom);
+                    box.CloseFigure();
+
+                    var paintBounds = ContextBounds(g, paint) ?? area;
+                    if (paint.Kind == SvgPaintKind.PatternRef)
+                    {
+                        PaintPatternFill(layer.Graphics, document, run, box, paintOpacity, paintBounds, paint);
+                    }
+                    else if (ResolvePaintBrush(layer.Graphics, document, run, paint, paintOpacity, paintBounds) is { } brush)
+                    {
+                        layer.Graphics.DrawPath(brush, box);
+                    }
+                }
+
+                // Both surfaces cover the same pixels (premultiplied RGBA8), so cutting the paint to the mask is a per-pixel scale.
+                var layerPixels = layer.Surface.Pixels;
+                for (var i = 0; i < mask.Length && i * 4 + 3 < layerPixels.Length; i++)
+                {
+                    var alpha = mask[i];
+                    if (alpha == 255)
+                        continue;
+
+                    for (var c = 0; c < 4; c++)
+                        layerPixels[i * 4 + c] = (byte)((layerPixels[i * 4 + c] * alpha + 127) / 255);
+                }
+
+                g.DrawRaster(layer.Surface);
+            }
+
+            void PaintFill()
+            {
+                if (rasterFill)
+                    PaintThroughMask(fill, opacity * run.FillOpacity, cover);
+            }
+
+            void PaintStroke()
+            {
+                if (band is not null)
+                    PaintThroughMask(stroke, opacity * run.StrokeOpacity, band);
+            }
+
+            if (run.StrokeFirst)
+            {
+                PaintStroke();
+                PaintFill();
+            }
+            else
+            {
+                PaintFill();
+                PaintStroke();
+            }
+
+            PaintInvisibleText(g, run, text, font, topLeft, size, letterSpacing, features, logicalText);
+        }
+
+        /// <summary>
+        /// Grows (a maximum filter) or shrinks (a minimum filter) an 8-bit coverage map by <paramref name="radius"/> pixels, as two passes
+        /// of a square window - cheap, and close enough to a round one for the thin band a stroke makes.
+        /// </summary>
+        private static byte[] MorphologyFilter(byte[] source, int width, int height, int radius, bool grow)
+        {
+            var horizontal = new byte[source.Length];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var value = grow ? (byte)0 : (byte)255;
+                    for (var k = Math.Max(0, x - radius); k <= Math.Min(width - 1, x + radius); k++)
+                    {
+                        var v = source[y * width + k];
+                        value = grow ? Math.Max(value, v) : Math.Min(value, v);
+                    }
+
+                    horizontal[y * width + x] = value;
+                }
+            }
+
+            var result = new byte[source.Length];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var value = grow ? (byte)0 : (byte)255;
+                    for (var k = Math.Max(0, y - radius); k <= Math.Min(height - 1, y + radius); k++)
+                    {
+                        var v = horizontal[k * width + x];
+                        value = grow ? Math.Max(value, v) : Math.Min(value, v);
+                    }
+
+                    result[y * width + x] = value;
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// A <c>&lt;textPath&gt;</c> run laid out along its path: the measured path, which way it is read, and each glyph that lands on it.
+        /// </summary>
+        private sealed class TextPathLayout(SvgTextPathGeometry geometry, bool right, List<PlacedPathGlyph> glyphs)
+        {
+            public SvgTextPathGeometry Geometry { get; } = geometry;
+
+            /// <summary>Whether the path is read from its far end (<c>side="right"</c>).</summary>
+            public bool Right { get; } = right;
+
+            public List<PlacedPathGlyph> Glyphs { get; } = glyphs;
+        }
+
+        /// <summary>One glyph of a <see cref="TextPathLayout"/> with where it sits on the path.</summary>
+        private sealed class PlacedPathGlyph(GlyphInfo info, double advance, double mid, double extraDy, Matrix3x2 frame)
+        {
+            public GlyphInfo Info { get; } = info;
+
+            /// <summary>The glyph's natural advance (before any <c>textLength</c> stretch), which is the width of its cell.</summary>
+            public double Advance { get; } = advance;
+
+            /// <summary>Where the glyph's centre falls, measured along the path.</summary>
+            public double Mid { get; } = mid;
+
+            /// <summary>How far the glyph sits off the path's own baseline, along its normal (<c>dy</c>, baseline alignment and shift).</summary>
+            public double ExtraDy { get; } = extraDy;
+
+            /// <summary>The rigid frame (translate to the point on the path, turn to its tangent plus any per-character <c>rotate</c>), scaled along the glyph for <c>textLength</c>. The glyph's own origin is its centre on the baseline.</summary>
+            public Matrix3x2 Frame { get; } = frame;
+        }
+
+        /// <summary>
         /// Lays a <c>&lt;textPath&gt;</c>'s glyphs along its referenced path (a <c>&lt;path&gt;</c> or a basic
         /// shape): the run's own text and any nested <c>&lt;tspan&gt;</c>s are flattened in document order,
         /// and each glyph is placed at its own midpoint distance along the path (honoring <c>startOffset</c>,
-        /// <c>text-anchor</c>, per-character <c>dx</c>/<c>dy</c>/<c>rotate</c>, and <c>side</c>) and rotated
-        /// to the path tangent there. A glyph whose midpoint falls off the path is dropped. Each glyph paints
-        /// in its own run's font/fill/stroke via <see cref="PaintGlyphAlongPath"/>.
+        /// <c>text-anchor</c>, per-character <c>dx</c>/<c>dy</c>/<c>rotate</c>, and <c>side</c>). A glyph whose
+        /// midpoint falls off the path is dropped. Null when the run has no usable path or no glyphs.
         /// </summary>
-        private static void RenderTextPath(Canvas g, SvgDocument document, SvgTextElement run, double inheritedOpacity)
+        private static TextPathLayout? LayoutTextPath(Canvas g, SvgTextElement run)
         {
             if (run.PathData is not { } segments)
-                return;
+                return null;
 
             var geometry = new SvgTextPathGeometry(segments);
             var totalLength = geometry.TotalLength;
             if (totalLength <= 0)
-                return;
-
-            var opacity = inheritedOpacity * run.Opacity;
+                return null;
 
             // Flatten the textPath's own text plus nested <tspan>s (a nested <textPath> is out of scope and
             // dropped). Each glyph carries its owning run (font/paint) and its assigned dx/dy/rotate.
@@ -2108,7 +2318,7 @@ namespace PeachPDF.Svg
             var overrides = new List<EmbeddingSpan>();
             FlattenRun(run, 1.0, glyphs, ignoredTextPaths, overrides);
             if (glyphs.Count == 0)
-                return;
+                return null;
 
             // A <textPath> always flows its glyphs along the path's own tangent, regardless of
             // writing-mode - there is no vertical variant of this layout (out of scope, matching real
@@ -2143,6 +2353,8 @@ namespace PeachPDF.Svg
                     _ => 0,
                 };
 
+            var right = run.Side == SvgTextPathSide.Right;
+            var placed = new List<PlacedPathGlyph>(glyphs.Count);
             foreach (var gi in glyphs)
             {
                 // The run's baseline alignment and shift move the glyph off the path's own baseline, along the path's normal, like a dy does.
@@ -2157,102 +2369,214 @@ namespace PeachPDF.Svg
                 // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°); dy offsets the glyph
                 // perpendicular to the path; the glyph turns to the tangent plus any per-character rotate. A glyph centred off
                 // either end of the path is not rendered.
-                if (PathText.GetGlyphFrame(geometry.Measure, mid, run.Side == SvgTextPathSide.Right ? PathTextSide.Right : PathTextSide.Left,
-                        extraDy, gi.Rotate ?? 0) is not { } frame)
+                if (PathText.GetGlyphFrame(geometry.Measure, mid, right ? PathTextSide.Right : PathTextSide.Left, extraDy, gi.Rotate ?? 0) is not { } frame)
                     continue;
 
-                // A glyph textLength stretched is scaled along the path about its centre, inside the glyph's frame. A shadow's offset is in user
-                // space, so it is applied after the frame, the way a rotated straight glyph's is.
-                var glyphFrame = gi.IsScaled ? MultiplyMatrix(Matrix3x2.CreateScale((float)gi.GlyphScale, 1f), frame) : frame;
+                // A glyph textLength stretched is scaled along the path about its centre, inside the glyph's frame.
+                placed.Add(new PlacedPathGlyph(gi, advance, mid, extraDy, gi.IsScaled ? MultiplyMatrix(Matrix3x2.CreateScale((float)gi.GlyphScale, 1f), frame) : frame));
+            }
+
+            return placed.Count == 0 ? null : new TextPathLayout(geometry, right, placed);
+        }
+
+        /// <summary>
+        /// Where the glyph-local point (<paramref name="lx"/>, <paramref name="ly"/>) lands when the glyph is bent along the path
+        /// (<c>method="stretch"</c>): <paramref name="lx"/> (from the glyph's centre) picks the distance along the path and
+        /// <paramref name="ly"/> (from the baseline, y down) the offset along the path's normal at that distance. A point past either end
+        /// of the path takes the end's position and direction.
+        /// </summary>
+        private static PaintPoint WarpPathPoint(TextPathLayout layout, PlacedPathGlyph placed, double lx, double ly)
+        {
+            var scale = placed.Info.IsScaled ? placed.Info.GlyphScale : 1.0;
+            var length = layout.Geometry.TotalLength;
+            var distance = placed.Mid + lx * scale;
+            var sample = layout.Geometry.Measure.PointAtLength(Math.Clamp(layout.Right ? length - distance : distance, 0, length));
+            var tangent = (sample.TangentDegrees + (layout.Right ? 180 : 0)) * (Math.PI / 180.0);
+            var offset = ly + placed.ExtraDy;
+            return new PaintPoint(sample.X - Math.Sin(tangent) * offset, sample.Y + Math.Cos(tangent) * offset);
+        }
+
+        /// <summary>
+        /// Bends a glyph outline (built centred on the origin at its baseline) along the path, point by point: it is flattened, and each
+        /// edge cut into short pieces so a long straight edge follows the curve instead of cutting across it. Disposes
+        /// <paramref name="outline"/>.
+        /// </summary>
+        private static GraphicsPath WarpOutline(Canvas g, GraphicsPath outline, TextPathLayout layout, PlacedPathGlyph placed)
+        {
+            var warped = g.GetGraphicsPath();
+            warped.FillMode = FillMode.Nonzero;
+
+            // About 1/32 of an em: fine enough that a bend is smooth, coarse enough that a glyph stays a few hundred points.
+            var step = Math.Max(placed.Info.Font.Height / 32.0, 0.05);
+
+            foreach (var contour in outline.Flatten(0.05))
+            {
+                var points = contour.Points;
+                if (points.Count == 0)
+                    continue;
+
+                var first = WarpPathPoint(layout, placed, points[0].X, points[0].Y);
+                warped.AddMove(first.X, first.Y);
+
+                void LineThrough(PaintPoint from, PaintPoint to)
+                {
+                    var pieces = Math.Clamp((int)Math.Ceiling(Math.Sqrt((to.X - from.X) * (to.X - from.X) + (to.Y - from.Y) * (to.Y - from.Y)) / step), 1, 64);
+                    for (var k = 1; k <= pieces; k++)
+                    {
+                        var t = (double)k / pieces;
+                        var p = WarpPathPoint(layout, placed, from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t);
+                        warped.LineTo(p.X, p.Y);
+                    }
+                }
+
+                for (var i = 1; i < points.Count; i++)
+                    LineThrough(points[i - 1], points[i]);
+
+                if (contour.Closed)
+                {
+                    LineThrough(points[^1], points[0]);
+                    warped.CloseFigure();
+                }
+            }
+
+            outline.Dispose();
+            return warped;
+        }
+
+        /// <summary>
+        /// The bounding box of the laid-out text in user space: the union of every glyph's cell (its advance wide, from the font's ascent
+        /// to its descent - the box SVG measures a text's bounding box from), turned to the path, or bent along it for
+        /// <c>method="stretch"</c>. This is what <c>objectBoundingBox</c> paint, clipping and masking on a <c>&lt;textPath&gt;</c> measure against.
+        /// </summary>
+        private static Rect TextPathBounds(TextPathLayout layout, bool stretch)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+            void Extend(double x, double y)
+            {
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+            }
+
+            foreach (var placed in layout.Glyphs)
+            {
+                var half = placed.Advance / 2;
+                var top = -placed.Info.Font.Ascent;
+                var bottom = top + placed.Info.Font.Height;
+
+                // A bent cell is not a rectangle, so its edges are sampled; a turned one has only its corners.
+                var columns = stretch ? 8 : 1;
+                for (var c = 0; c <= columns; c++)
+                {
+                    var x = -half + placed.Advance * c / columns;
+                    foreach (var y in (ReadOnlySpan<double>)[top, bottom])
+                    {
+                        if (stretch)
+                        {
+                            var p = WarpPathPoint(layout, placed, x, y);
+                            Extend(p.X, p.Y);
+                        }
+                        else
+                        {
+                            var p = Vector2.Transform(new Vector2((float)x, (float)y), placed.Frame);
+                            Extend(p.X, p.Y);
+                        }
+                    }
+                }
+            }
+
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
+        }
+
+        /// <summary>
+        /// Renders a <c>&lt;textPath&gt;</c> (see <see cref="LayoutTextPath"/> for the placement). Each glyph paints in its own run's
+        /// font/fill/stroke via <see cref="PaintPathGlyph"/>.
+        /// </summary>
+        private static void RenderTextPath(Canvas g, SvgDocument document, SvgTextElement run, double inheritedOpacity)
+        {
+            if (LayoutTextPath(g, run) is not { } layout)
+                return;
+
+            var opacity = inheritedOpacity * run.Opacity;
+            var stretch = run.Method == SvgTextPathMethod.Stretch;
+            var bounds = TextPathBounds(layout, stretch);
+
+            foreach (var placed in layout.Glyphs)
+            {
+                var gi = placed.Info;
+
+                // A shadow's offset is in user space, so it is applied after the frame, the way a rotated straight glyph's is.
                 if (gi.Run.TextShadows.Count > 0)
                 {
                     var shadowSize = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures);
-                    PaintTextShadows(g, gi.Run, gi.Glyph, gi.Font, -advance / 2, -gi.Font.Ascent, shadowSize, opacity * gi.Opacity,
-                        0, gi.Run.ShapingFeatures, gi.LogicalGlyph, glyphFrame);
+                    PaintTextShadows(g, gi.Run, gi.Glyph, gi.Font, -placed.Advance / 2, -gi.Font.Ascent, shadowSize, opacity * gi.Opacity,
+                        0, gi.Run.ShapingFeatures, gi.LogicalGlyph, placed.Frame);
                 }
 
-                g.PushTransform(glyphFrame);
-                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, gi.LogicalGlyph);
-                g.PopTransform();
+                PaintPathGlyph(g, document, layout, placed, stretch, opacity * gi.Opacity, bounds);
             }
         }
 
-        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
-        private static void PaintGlyphAlongPath(Canvas g, SvgDocument document, SvgTextElement run, Font font, string glyph, double advance, double opacity, string? logicalGlyph = null)
+        /// <summary>
+        /// Paints one glyph of a <c>&lt;textPath&gt;</c>. Plain solid, unstroked text turned to the path keeps the fast text show under the
+        /// glyph's frame (selectable as it is). Anything that needs the glyph as geometry - a gradient/pattern fill, a stroke, or being
+        /// bent along the path - paints the outline in user space (so a <c>userSpaceOnUse</c> paint server stays fixed and an
+        /// <c>objectBoundingBox</c> one measures against the whole text, <paramref name="bounds"/>) and adds invisible text in the glyph's
+        /// frame so it stays selectable. A font with no outlines (a bitmap font) is turned rigidly and filled through its raster coverage.
+        /// <paramref name="opacity"/> already includes the glyph's own.
+        /// </summary>
+        private static void PaintPathGlyph(Canvas g, SvgDocument document, TextPathLayout layout, PlacedPathGlyph placed, bool stretch, double opacity, Rect bounds)
         {
+            var gi = placed.Info;
+            var run = gi.Run;
+
             // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - see PaintTextGlyphs.
             var fill = ResolveInMarker(run.Fill);
             var stroke = ResolveInMarker(run.Stroke);
 
             var hasStroke = stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
-            var needsOutline = fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+            var needsOutline = fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke || stretch;
 
-            var leftX = -advance / 2;
-            var glyphSize = g.MeasureString(glyph, font, run.ShapingFeatures);
+            var leftX = -placed.Advance / 2;
+            var glyphSize = g.MeasureString(gi.Glyph, gi.Font, run.ShapingFeatures);
+            var topLeft = new PaintPoint(leftX, -gi.Font.Ascent);
 
             if (!needsOutline)
             {
                 if (fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                g.PushTransform(placed.Frame);
+                g.DrawString(gi.Glyph, gi.Font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: gi.LogicalGlyph);
+                g.PopTransform();
                 return;
             }
 
-            var outline = g.GetTextOutline(glyph, font, new PaintPoint(leftX, 0), features: run.ShapingFeatures);
+            var outline = g.GetTextOutline(gi.Glyph, gi.Font, new PaintPoint(leftX, 0), features: run.ShapingFeatures);
             if (outline is null)
             {
-                if (fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), new PaintPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                g.PushTransform(placed.Frame);
+                PaintBitmapGlyphs(g, document, run, gi.Glyph, gi.Font, topLeft, glyphSize, opacity, 0, run.ShapingFeatures, gi.LogicalGlyph, fill, stroke, hasStroke, new Rect(leftX, -gi.Font.Ascent, glyphSize.Width, glyphSize.Height));
+                g.PopTransform();
                 return;
             }
 
-            // objectBoundingBox gradient/pattern on a textPath glyph uses the glyph's own local box (an
-            // envelope approximation, since the run's straight bbox is meaningless in the rotated frame).
-            // A gradient/pattern that came through context-fill/context-stroke instead measures against the context element.
-            var bounds = new Rect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
-
-            void PaintFill()
+            if (stretch)
             {
-                if (fill.Kind == SvgPaintKind.None)
-                    return;
-
-                var fillBounds = ContextBounds(g, fill) ?? bounds;
-                if (fill.Kind == SvgPaintKind.PatternRef)
-                {
-                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, fillBounds, fill);
-                }
-                else
-                {
-                    var brush = ResolvePaintBrush(g, document, run, fill, opacity * run.FillOpacity, fillBounds);
-                    if (brush is not null)
-                        g.DrawPath(brush, outline);
-                }
-            }
-
-            void PaintStroke()
-            {
-                if (!hasStroke)
-                    return;
-
-                var strokeBounds = ContextBounds(g, stroke) ?? bounds;
-                var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
-                if (strokePen is not null)
-                    g.DrawPath(strokePen, outline);
-            }
-
-            if (run.StrokeFirst)
-            {
-                PaintStroke();
-                PaintFill();
+                outline = WarpOutline(g, outline, layout, placed);
             }
             else
             {
-                PaintFill();
-                PaintStroke();
+                outline.Transform(placed.Frame);
             }
 
-            outline.Dispose();
+            PaintOutlinedGlyph(g, document, run, fill, stroke, hasStroke, outline, opacity, bounds);
+
+            g.PushTransform(placed.Frame);
+            PaintInvisibleText(g, run, gi.Glyph, gi.Font, topLeft, glyphSize, 0, run.ShapingFeatures, gi.LogicalGlyph);
+            g.PopTransform();
         }
 
         private static void RenderElement(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
@@ -2281,7 +2605,7 @@ namespace PeachPDF.Svg
                 // the mapping is Matrix3x2(w, 0, 0, h, x, y). A missing/zero bbox falls back to no mapping.
                 Matrix3x2? unitsMatrix = null;
                 if (!clipDefinition.ClipPathUnitsUserSpaceOnUse &&
-                    SvgGeometryBounds.GetBoundingBox(element) is { Width: > 0, Height: > 0 } bbox)
+                    ElementBounds(g, element) is { Width: > 0, Height: > 0 } bbox)
                 {
                     unitsMatrix = new Matrix3x2((float)bbox.Width, 0, 0, (float)bbox.Height, (float)bbox.X, (float)bbox.Y);
                 }
@@ -2456,13 +2780,22 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// The bounding box <c>objectBoundingBox</c> units resolve against: <see cref="SvgGeometryBounds.GetBoundingBox"/> for geometry, and for
+        /// a <c>&lt;text&gt;</c> (which that can't measure without a font) its glyph cells as laid out for painting.
+        /// </summary>
+        private static Rect? ElementBounds(Canvas g, SvgElement element) =>
+            element is SvgTextElement text ? MeasureTextBounds(g, text, forPaintExtent: false) : SvgGeometryBounds.GetBoundingBox(element);
+
+        /// <summary>
         /// Local-space bounds of a <c>&lt;text&gt;</c> and its descendants, computed from the exact same
         /// flatten + layout <see cref="RenderText"/> paints with (so the opacity-group tile region and the
         /// painted glyphs can't drift). Each straight glyph contributes its measured box (rotated by its own
         /// per-character <c>rotate</c> about its position); a <c>&lt;textPath&gt;</c> descendant contributes
         /// its flattened path's bbox inflated by the font ascent. The tile's own -10%/+20% margin absorbs slack.
+        /// With <paramref name="forPaintExtent"/> false it is instead the text's bounding box proper - the union of the glyph cells, with no
+        /// shadow reach and a <c>&lt;textPath&gt;</c>'s cells where the glyphs actually sit - which is what <c>objectBoundingBox</c> units measure.
         /// </summary>
-        private static Rect? MeasureTextBounds(Canvas g, SvgTextElement text)
+        private static Rect? MeasureTextBounds(Canvas g, SvgTextElement text, bool forPaintExtent = true)
         {
             Rect? result = null;
 
@@ -2506,7 +2839,7 @@ namespace PeachPDF.Svg
 
                 // A shadow paints outside the glyph boxes by its offset plus the reach of its blur.
                 var reach = 0.0;
-                foreach (var gi in glyphs)
+                foreach (var gi in forPaintExtent ? glyphs : [])
                 {
                     foreach (var shadow in gi.Run.TextShadows)
                         reach = Math.Max(reach, Math.Max(Math.Abs(shadow.Dx), Math.Abs(shadow.Dy)) + 1.5 * shadow.Blur + gi.Size.Height * 0.25);
@@ -2518,6 +2851,17 @@ namespace PeachPDF.Svg
 
             foreach (var (run, _) in textPaths)
             {
+                if (!forPaintExtent)
+                {
+                    if (LayoutTextPath(g, run) is { } layout)
+                    {
+                        var cells = TextPathBounds(layout, run.Method == SvgTextPathMethod.Stretch);
+                        result = result is { } placedSoFar ? UnionRects(placedSoFar, cells) : cells;
+                    }
+
+                    continue;
+                }
+
                 if (run.PathData is not { } pathSegments || run.Font is not { } pathFont)
                     continue;
 
@@ -2763,7 +3107,7 @@ namespace PeachPDF.Svg
 
         private static void RenderMaskedElementContent(Canvas g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
         {
-            var (x, y, width, height) = ResolveMaskRect(element, mask);
+            var (x, y, width, height) = ResolveMaskRect(g, element, mask);
             if (width <= 0 || height <= 0)
                 return;
 
@@ -2936,7 +3280,7 @@ namespace PeachPDF.Svg
         /// </summary>
         private static Image? BuildMaskTile(Canvas g, SvgDocument document, SvgElement owner, SvgMask mask)
         {
-            var (x, y, width, height) = ResolveMaskRect(owner, mask);
+            var (x, y, width, height) = ResolveMaskRect(g, owner, mask);
             if (width <= 0 || height <= 0)
                 return null;
 
@@ -2959,12 +3303,12 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Resolves a mask's region, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>/<see cref="ResolvePatternRect"/>.</summary>
-        private static (double X, double Y, double Width, double Height) ResolveMaskRect(SvgElement owner, SvgMask mask)
+        private static (double X, double Y, double Width, double Height) ResolveMaskRect(Canvas g, SvgElement owner, SvgMask mask)
         {
             if (mask.MaskUnitsUserSpaceOnUse)
                 return (mask.X, mask.Y, mask.Width, mask.Height);
 
-            if (SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+            if (ElementBounds(g, owner) is not { } bbox)
                 return (mask.X, mask.Y, mask.Width, mask.Height);
 
             return (bbox.X + mask.X * bbox.Width, bbox.Y + mask.Y * bbox.Height, mask.Width * bbox.Width, mask.Height * bbox.Height);
