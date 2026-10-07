@@ -15,38 +15,14 @@ namespace PeachPDF.Svg
     {
         private static readonly Vector128<byte> ExpandCoverage = Vector128.Create((byte)0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
 
-        private static Vector128<byte> AlphaOfFourPixels(int lane) => lane switch
-        {
-            0 => Vector128.Create((byte)3, 7, 11, 15, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80),
-            1 => Vector128.Create((byte)0x80, 0x80, 0x80, 0x80, 3, 7, 11, 15, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80),
-            2 => Vector128.Create((byte)0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 3, 7, 11, 15, 0x80, 0x80, 0x80, 0x80),
-            _ => Vector128.Create((byte)0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 3, 7, 11, 15),
-        };
-
-        /// <summary>Copies the alpha byte of each RGBA pixel of <paramref name="rgba"/> into <paramref name="alpha"/> (one byte per pixel).</summary>
+        /// <summary>
+        /// Copies the alpha byte of each RGBA pixel of <paramref name="rgba"/> into <paramref name="alpha"/> (one byte per pixel). Plain scalar: a
+        /// shuffle-based version measured no faster (the loop is memory-bound and the JIT already unrolls it).
+        /// </summary>
         public static void ExtractAlpha(ReadOnlySpan<byte> rgba, Span<byte> alpha)
         {
             var count = Math.Min(alpha.Length, rgba.Length / 4);
-            var i = 0;
-
-            if (Vector128.IsHardwareAccelerated)
-            {
-                var m0 = AlphaOfFourPixels(0);
-                var m1 = AlphaOfFourPixels(1);
-                var m2 = AlphaOfFourPixels(2);
-                var m3 = AlphaOfFourPixels(3);
-                for (; i + 16 <= count; i += 16)
-                {
-                    var at = i * 4;
-                    var packed = Vector128.Shuffle(Vector128.Create(rgba.Slice(at, 16)), m0)
-                        | Vector128.Shuffle(Vector128.Create(rgba.Slice(at + 16, 16)), m1)
-                        | Vector128.Shuffle(Vector128.Create(rgba.Slice(at + 32, 16)), m2)
-                        | Vector128.Shuffle(Vector128.Create(rgba.Slice(at + 48, 16)), m3);
-                    packed.CopyTo(alpha.Slice(i, 16));
-                }
-            }
-
-            for (; i < count; i++)
+            for (var i = 0; i < count; i++)
                 alpha[i] = rgba[i * 4 + 3];
         }
 
