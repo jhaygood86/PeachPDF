@@ -50,6 +50,18 @@ namespace PeachPDF.Tests.Svg
             Assert.True(Count(stroked, "/Subtype /Image") > Count(filled, "/Subtype /Image"));
         }
 
+        [Fact]
+        public async Task Stretch_OnABitmapGlyphAlongAPath_IsBentThroughTheRasterBackend()
+        {
+            var pdf = await RenderAsync("""
+                <defs><path id="p" d="M20,100 A60,60 0 0 1 140,100"/></defs>
+                <text font-family="FAMILY" font-size="40" fill="url(#g)"><textPath href="#p" method="stretch">AAA</textPath></text>
+                """);
+
+            Assert.Contains("/Subtype /Image", pdf);
+            Assert.Contains("3 Tr", pdf);
+        }
+
         private static int Count(string haystack, string needle)
         {
             var count = 0;

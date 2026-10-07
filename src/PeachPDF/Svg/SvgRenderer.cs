@@ -2118,9 +2118,9 @@ namespace PeachPDF.Svg
         /// </summary>
         private static void PaintBitmapGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, PaintPoint topLeft, Size size, double opacity,
             double letterSpacing, ShapeSettings? features, string? logicalText, SvgPaint fill, SvgPaint stroke, bool hasStroke, Rect area,
-            Matrix3x2? frame = null, Rect? paintArea = null)
+            Matrix3x2? frame = null, Rect? paintArea = null, Func<double, double, PaintPoint>? bend = null, Matrix3x2? bendTextFrame = null)
         {
-            if (fill.Kind == SvgPaintKind.Solid && !hasStroke)
+            if (fill.Kind == SvgPaintKind.Solid && !hasStroke && bend is null)
             {
                 g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
@@ -2137,8 +2137,13 @@ namespace PeachPDF.Svg
             if (frame is { } glyphFrame)
                 bounds = SvgGeometryBounds.TransformBounds(bounds, glyphFrame);
 
+            // A bent glyph is drawn flat (in its own space) and its coverage then carried point by point onto a surface covering where the bend puts it.
+            var flatBounds = bounds;
+            if (bend is not null)
+                bounds = BentEnvelope(bounds, bend);
+
             var paintBox = paintArea ?? (frame is { } f ? SvgGeometryBounds.TransformBounds(area, f) : area);
-            using var coverage = g.BeginRasterSurface(bounds);
+            using var coverage = g.BeginRasterSurface(bend is null ? bounds : flatBounds);
             if (coverage is null)
                 return;
 
@@ -2155,6 +2160,16 @@ namespace PeachPDF.Svg
             var pixels = surface.Pixels;
             for (var i = 0; i < cover.Length; i++)
                 cover[i] = pixels[i * 4 + 3];
+
+            if (bend is not null)
+            {
+                using var target = g.BeginRasterSurface(bounds);
+                if (target is null)
+                    return;
+
+                cover = BendCoverage(surface, cover, target.Surface, bend);
+                surface = target.Surface;
+            }
 
             byte[]? band = null;
             if (hasStroke)
@@ -2231,13 +2246,94 @@ namespace PeachPDF.Svg
                 PaintStroke();
             }
 
-            if (frame is { } textFrame)
+            // The selectable text sits in the rigid frame, even when the glyphs themselves were bent.
+            var selectFrame = frame ?? bendTextFrame;
+            if (selectFrame is { } textFrame)
                 g.PushTransform(textFrame);
 
             PaintInvisibleText(g, run, text, font, topLeft, size, letterSpacing, features, logicalText);
 
-            if (frame is not null)
+            if (selectFrame is not null)
                 g.PopTransform();
+        }
+
+        /// <summary>The box that holds <paramref name="box"/> once every point of it has gone through <paramref name="bend"/> (sampled on a grid, since a bend is not affine).</summary>
+        private static Rect BentEnvelope(Rect box, Func<double, double, PaintPoint> bend)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            const int steps = 16;
+            for (var i = 0; i <= steps; i++)
+            {
+                for (var j = 0; j <= steps; j++)
+                {
+                    var p = bend(box.X + box.Width * i / steps, box.Y + box.Height * j / steps);
+                    minX = Math.Min(minX, p.X);
+                    minY = Math.Min(minY, p.Y);
+                    maxX = Math.Max(maxX, p.X);
+                    maxY = Math.Max(maxY, p.Y);
+                }
+            }
+
+            return new Rect(minX - 1, minY - 1, maxX - minX + 2, maxY - minY + 2);
+        }
+
+        /// <summary>
+        /// Carries a coverage map drawn flat (<paramref name="source"/>/<paramref name="cover"/>) onto <paramref name="target"/>'s pixels through
+        /// <paramref name="bend"/>, which takes a point in the flat surface's coordinates to where it lands. Each source pixel is sampled several times
+        /// so that where the bend stretches the glyph it still covers whole pixels, and the strongest coverage reaching a pixel wins.
+        /// </summary>
+        private static byte[] BendCoverage(RasterSurface source, byte[] cover, RasterSurface target, Func<double, double, PaintPoint> bend)
+        {
+            var result = new byte[target.Width * target.Height];
+            const int samples = 8;
+            var sourceRect = source.LayoutRect;
+
+            for (var y = 0; y < source.Height; y++)
+            {
+                for (var x = 0; x < source.Width; x++)
+                {
+                    var value = cover[y * source.Width + x];
+                    if (value == 0)
+                        continue;
+
+                    for (var sy = 0; sy < samples; sy++)
+                    {
+                        for (var sx = 0; sx < samples; sx++)
+                        {
+                            var p = bend(sourceRect.X + (x + (sx + 0.5) / samples) / source.PixelsPerUnitX, sourceRect.Y + (y + (sy + 0.5) / samples) / source.PixelsPerUnitY);
+                            var tx = (int)Math.Floor(p.X * target.PixelsPerUnitX) - target.GridX;
+                            var ty = (int)Math.Floor(p.Y * target.PixelsPerUnitY) - target.GridY;
+                            if (tx < 0 || ty < 0 || tx >= target.Width || ty >= target.Height)
+                                continue;
+
+                            var index = ty * target.Width + tx;
+                            if (value > result[index])
+                                result[index] = value;
+                        }
+                    }
+                }
+            }
+
+            // A one-pixel gap between two covered neighbours (either way) is where the bend stretched past the sampling; close it.
+            var closed = (byte[])result.Clone();
+            for (var y = 1; y < target.Height - 1; y++)
+            {
+                for (var x = 1; x < target.Width - 1; x++)
+                {
+                    var i = y * target.Width + x;
+                    if (result[i] != 0)
+                        continue;
+
+                    if (result[i - 1] != 0 && result[i + 1] != 0)
+                        closed[i] = (byte)((result[i - 1] + result[i + 1]) / 2);
+                    else if (result[i - target.Width] != 0 && result[i + target.Width] != 0)
+                        closed[i] = (byte)((result[i - target.Width] + result[i + target.Width]) / 2);
+                }
+            }
+
+            result = closed;
+
+            return result;
         }
 
         /// <summary>
@@ -2417,7 +2513,17 @@ namespace PeachPDF.Svg
 
             var distance = placed.Mid + lx * scale;
             var sample = layout.Geometry.Measure.PointAtLength(Math.Clamp(layout.Right ? length - distance : distance, 0, length));
-            var tangent = (sample.TangentDegrees + (layout.Right ? 180 : 0)) * (Math.PI / 180.0);
+            var along = Math.Clamp(layout.Right ? length - distance : distance, 0, length);
+
+            // The measured path is a polyline, whose direction jumps at each joint; swung out by an offset, that opens a wedge-shaped gap on the
+            // outside of a curve. The direction is taken across a short stretch of the path instead, so it turns smoothly from one piece to the next.
+            var reach = Math.Min(2.0, length / 2);
+            var before = layout.Geometry.Measure.PointAtLength(Math.Max(0, along - reach));
+            var after = layout.Geometry.Measure.PointAtLength(Math.Min(length, along + reach));
+            var forward = before.X == after.X && before.Y == after.Y
+                ? sample.TangentDegrees
+                : Math.Atan2(after.Y - before.Y, after.X - before.X) * (180.0 / Math.PI);
+            var tangent = (forward + (layout.Right ? 180 : 0)) * (Math.PI / 180.0);
             var offset = ly + placed.ExtraDy;
             return new PaintPoint(sample.X - Math.Sin(tangent) * offset, sample.Y + Math.Cos(tangent) * offset);
         }
@@ -2631,7 +2737,8 @@ namespace PeachPDF.Svg
             if (outline is null)
             {
                 PaintBitmapGlyphs(g, document, run, gi.Glyph, gi.Font, topLeft, glyphSize, opacity, 0, run.ShapingFeatures, gi.LogicalGlyph, fill, stroke, hasStroke,
-                    new Rect(leftX, -gi.Font.Ascent, glyphSize.Width, glyphSize.Height), placed.Frame, bounds);
+                    new Rect(leftX, -gi.Font.Ascent, glyphSize.Width, glyphSize.Height), stretch ? null : placed.Frame, bounds,
+                    stretch ? (x, y) => WarpPathPoint(layout, placed, x, y) : null, placed.Frame);
                 return;
             }
 
