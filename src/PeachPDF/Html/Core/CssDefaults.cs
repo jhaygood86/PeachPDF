@@ -46,7 +46,7 @@ namespace PeachPDF.Html.Core
             li              { display: list-item }
             /* HTML Standard 15.3.1 "Hidden elements", verbatim except where noted. */
             area, base, basefont, datalist, head, link, meta, noembed,
-            noframes, param, rp, script, style, template, title
+            noframes, param, rp, script, source, style, template, title, track
                             { display: none }
             [hidden]:not([hidden=until-found i]):not(embed)
                             { display: none }

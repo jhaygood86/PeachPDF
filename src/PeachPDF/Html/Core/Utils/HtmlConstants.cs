@@ -54,6 +54,8 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string I = "I";
         public const string Iframe = "iframe";
         public const string Img = "img";
+        public const string Picture = "picture";
+        public const string Source = "source";
         public const string Input = "input";
         //        public const string INS = "INS";
         //        public const string ISINDEX = "ISINDEX";

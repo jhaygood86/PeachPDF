@@ -10459,6 +10459,39 @@ await SaveShowcaseAsync("image_rendering", "Images & Replaced Content", "image-r
     "to a repeating background as well as an img.",
     imageRenderingHtml, pdfConfig);
 
+// ── srcset / sizes / <picture>: responsive image selection ────────────────────────────────
+// The two candidates are visibly different (a pale 8x8 pixel-art and a deep-blue one) so the card shows which one
+// each markup form selected; `x` descriptors divide the chosen image's natural size.
+var srcsetLow = pixelArt;
+var srcsetHigh = "data:image/svg+xml;utf8," + Uri.EscapeDataString(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='#1e3a8a'/>" +
+    "<circle cx='32' cy='32' r='20' fill='#f59e0b'/></svg>");
+static string SrcsetCell(string label, string markup) =>
+    $"<div class=\"cell\"><div class=\"frame\">{markup}</div><div class=\"lbl\">{label}</div></div>";
+var srcsetPictureHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } .note { color: #555; font-size: 12px; margin: 0 0 14px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 14px; }" +
+    ".cell { font-size: 11px; color: #555; width: 150px; }" +
+    ".frame { width: 150px; height: 96px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f1f5f9; }" +
+    ".lbl { margin-top: 6px; font-family: monospace; } img { width: 96px; height: 96px; }" +
+    "</style></head><body>" +
+    "<h2>srcset, sizes and &lt;picture&gt;</h2>" +
+    "<p class=\"note\">A PDF has a fixed page, so the highest-density candidate that applies is chosen.</p>" +
+    "<div class=\"row\">" +
+    SrcsetCell("src only", $"<img src=\"{srcsetLow}\">") +
+    SrcsetCell("srcset 1x, 2x", $"<img src=\"{srcsetLow}\" srcset=\"{srcsetLow} 1x, {srcsetHigh} 2x\">") +
+    SrcsetCell("srcset 64w, sizes", $"<img sizes=\"96px\" srcset=\"{srcsetLow} 8w, {srcsetHigh} 192w\">") +
+    SrcsetCell("picture, media match", $"<picture><source media=\"(min-width: 100px)\" srcset=\"{srcsetHigh}\"><img src=\"{srcsetLow}\"></picture>") +
+    SrcsetCell("picture, no match", $"<picture><source media=\"(min-width: 99999px)\" srcset=\"{srcsetHigh}\"><img src=\"{srcsetLow}\"></picture>") +
+    "</div></body></html>";
+
+await SaveShowcaseAsync("responsive_images", "Images & Replaced Content", "srcset, sizes & <picture>",
+    "Responsive image markup resolved for a fixed page: srcset with x and w descriptors, sizes, and <picture>/<source> " +
+    "selected by media and type, each cell showing which candidate was chosen.",
+    srcsetPictureHtml, pdfConfig);
+
 // ── CMYK JPEG images: preserved, never converted to RGB ────────────────────────────────
 // A real Adobe-authored CMYK JPEG (Adobe APP14 transform=0, inverted-CMYK convention) - copied
 // byte-for-byte from PeachImage's own test corpus (tests/corpus/image-rs-jpeg-decoder/tests/reftest/
