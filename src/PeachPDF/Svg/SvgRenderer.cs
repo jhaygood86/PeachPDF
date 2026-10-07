@@ -2157,9 +2157,7 @@ namespace PeachPDF.Svg
 
             var surface = coverage.Surface;
             var cover = new byte[surface.Width * surface.Height];
-            var pixels = surface.Pixels;
-            for (var i = 0; i < cover.Length; i++)
-                cover[i] = pixels[i * 4 + 3];
+            SvgRasterKernels.ExtractAlpha(surface.Pixels, cover);
 
             if (bend is not null)
             {
@@ -2176,11 +2174,9 @@ namespace PeachPDF.Svg
             {
                 // Half the stroke width, in pixels of the surface's grid.
                 var radius = Math.Clamp((int)Math.Round(run.StrokeWidth / 2 * Math.Max(surface.PixelsPerUnitX, surface.PixelsPerUnitY)), 1, 48);
-                var grown = MorphologyFilter(cover, surface.Width, surface.Height, radius, grow: true);
-                var shrunk = MorphologyFilter(cover, surface.Width, surface.Height, radius, grow: false);
-                band = new byte[cover.Length];
-                for (var i = 0; i < band.Length; i++)
-                    band[i] = (byte)Math.Max(0, grown[i] - shrunk[i]);
+                band = SvgRasterKernels.Difference(
+                    SvgRasterKernels.Morphology(cover, surface.Width, surface.Height, radius, grow: true),
+                    SvgRasterKernels.Morphology(cover, surface.Width, surface.Height, radius, grow: false));
             }
 
             void PaintThroughMask(SvgPaint paint, double paintOpacity, byte[] mask)
@@ -2209,16 +2205,7 @@ namespace PeachPDF.Svg
                 }
 
                 // Both surfaces cover the same pixels (premultiplied RGBA8), so cutting the paint to the mask is a per-pixel scale.
-                var layerPixels = layer.Surface.Pixels;
-                for (var i = 0; i < mask.Length && i * 4 + 3 < layerPixels.Length; i++)
-                {
-                    var alpha = mask[i];
-                    if (alpha == 255)
-                        continue;
-
-                    for (var c = 0; c < 4; c++)
-                        layerPixels[i * 4 + c] = (byte)((layerPixels[i * 4 + c] * alpha + 127) / 255);
-                }
+                SvgRasterKernels.ScaleByCoverage(layer.Surface.Pixels, mask);
 
                 g.DrawRaster(layer.Surface);
             }
@@ -2288,19 +2275,21 @@ namespace PeachPDF.Svg
             const int samples = 8;
             var sourceRect = source.LayoutRect;
 
-            for (var y = 0; y < source.Height; y++)
+            // Column by column, sub-column by sub-column, so that a bend which depends on x alone is worked out once per sub-column.
+            for (var x = 0; x < source.Width; x++)
             {
-                for (var x = 0; x < source.Width; x++)
+                for (var sx = 0; sx < samples; sx++)
                 {
-                    var value = cover[y * source.Width + x];
-                    if (value == 0)
-                        continue;
-
-                    for (var sy = 0; sy < samples; sy++)
+                    var flatX = sourceRect.X + (x + (sx + 0.5) / samples) / source.PixelsPerUnitX;
+                    for (var y = 0; y < source.Height; y++)
                     {
-                        for (var sx = 0; sx < samples; sx++)
+                        var value = cover[y * source.Width + x];
+                        if (value == 0)
+                            continue;
+
+                        for (var sy = 0; sy < samples; sy++)
                         {
-                            var p = bend(sourceRect.X + (x + (sx + 0.5) / samples) / source.PixelsPerUnitX, sourceRect.Y + (y + (sy + 0.5) / samples) / source.PixelsPerUnitY);
+                            var p = bend(flatX, sourceRect.Y + (y + (sy + 0.5) / samples) / source.PixelsPerUnitY);
                             var tx = (int)Math.Floor(p.X * target.PixelsPerUnitX) - target.GridX;
                             var ty = (int)Math.Floor(p.Y * target.PixelsPerUnitY) - target.GridY;
                             if (tx < 0 || ty < 0 || tx >= target.Width || ty >= target.Height)
@@ -2332,47 +2321,6 @@ namespace PeachPDF.Svg
             }
 
             result = closed;
-
-            return result;
-        }
-
-        /// <summary>
-        /// Grows (a maximum filter) or shrinks (a minimum filter) an 8-bit coverage map by <paramref name="radius"/> pixels, as two passes
-        /// of a square window - cheap, and close enough to a round one for the thin band a stroke makes.
-        /// </summary>
-        private static byte[] MorphologyFilter(byte[] source, int width, int height, int radius, bool grow)
-        {
-            var horizontal = new byte[source.Length];
-            for (var y = 0; y < height; y++)
-            {
-                for (var x = 0; x < width; x++)
-                {
-                    var value = grow ? (byte)0 : (byte)255;
-                    for (var k = Math.Max(0, x - radius); k <= Math.Min(width - 1, x + radius); k++)
-                    {
-                        var v = source[y * width + k];
-                        value = grow ? Math.Max(value, v) : Math.Min(value, v);
-                    }
-
-                    horizontal[y * width + x] = value;
-                }
-            }
-
-            var result = new byte[source.Length];
-            for (var y = 0; y < height; y++)
-            {
-                for (var x = 0; x < width; x++)
-                {
-                    var value = grow ? (byte)0 : (byte)255;
-                    for (var k = Math.Max(0, y - radius); k <= Math.Min(height - 1, y + radius); k++)
-                    {
-                        var v = horizontal[k * width + x];
-                        value = grow ? Math.Max(value, v) : Math.Min(value, v);
-                    }
-
-                    result[y * width + x] = value;
-                }
-            }
 
             return result;
         }
@@ -2499,33 +2447,74 @@ namespace PeachPDF.Svg
         /// <paramref name="ly"/> (from the baseline, y down) the offset along the path's normal at that distance. A point past either end
         /// of the path takes the end's position and direction.
         /// </summary>
-        private static PaintPoint WarpPathPoint(TextPathLayout layout, PlacedPathGlyph placed, double lx, double ly)
-        {
-            var scale = placed.Info.IsScaled ? placed.Info.GlyphScale : 1.0;
-            var length = layout.Geometry.TotalLength;
+        private static PaintPoint WarpPathPoint(TextPathLayout layout, PlacedPathGlyph placed, double lx, double ly) =>
+            new PathBender(layout, placed).Bend(lx, ly);
 
-            // A per-character rotate turns the glyph about its own origin before it is bent, as it does the rigid frame.
-            if (placed.Info.Rotate is { } degrees && degrees != 0)
+        /// <summary>A point on the path and the sine/cosine of the direction that bends a glyph column there.</summary>
+        private readonly record struct PathColumn(double X, double Y, double Sin, double Cos);
+
+        /// <summary>
+        /// Bends one glyph's points along its path (see <see cref="WarpPathPoint"/>). Where a point lands along the path depends on its x alone
+        /// (unless the glyph is rotated), so the last column is remembered: a run of points down one column, as in a rasterized glyph, finds the
+        /// path position and direction once instead of searching the path for each.
+        /// </summary>
+        private sealed class PathBender(TextPathLayout layout, PlacedPathGlyph placed)
+        {
+            private readonly double _scale = placed.Info.IsScaled ? placed.Info.GlyphScale : 1.0;
+            private readonly double _radians = (placed.Info.Rotate ?? 0) * (Math.PI / 180.0);
+            private double _lx = double.NaN;
+            private PathColumn _column;
+
+            public PaintPoint Bend(double lx, double ly)
             {
-                var radians = degrees * (Math.PI / 180.0);
-                (lx, ly) = (lx * Math.Cos(radians) - ly * Math.Sin(radians), lx * Math.Sin(radians) + ly * Math.Cos(radians));
+                // A per-character rotate turns the glyph about its own origin before it is bent, as it does the rigid frame; x then depends on y too.
+                PathColumn column;
+                if (_radians == 0)
+                {
+                    column = Cached(lx);
+                }
+                else
+                {
+                    var cos = Math.Cos(_radians);
+                    var sin = Math.Sin(_radians);
+                    column = ColumnAt(lx * cos - ly * sin);
+                    ly = lx * sin + ly * cos;
+                }
+
+                var offset = ly + placed.ExtraDy;
+                return new PaintPoint(column.X - column.Sin * offset, column.Y + column.Cos * offset);
             }
 
-            var distance = placed.Mid + lx * scale;
-            var sample = layout.Geometry.Measure.PointAtLength(Math.Clamp(layout.Right ? length - distance : distance, 0, length));
-            var along = Math.Clamp(layout.Right ? length - distance : distance, 0, length);
+            private PathColumn Cached(double lx)
+            {
+                if (lx != _lx)
+                {
+                    _column = ColumnAt(lx);
+                    _lx = lx;
+                }
 
-            // The measured path is a polyline, whose direction jumps at each joint; swung out by an offset, that opens a wedge-shaped gap on the
-            // outside of a curve. The direction is taken across a short stretch of the path instead, so it turns smoothly from one piece to the next.
-            var reach = Math.Min(2.0, length / 2);
-            var before = layout.Geometry.Measure.PointAtLength(Math.Max(0, along - reach));
-            var after = layout.Geometry.Measure.PointAtLength(Math.Min(length, along + reach));
-            var forward = before.X == after.X && before.Y == after.Y
-                ? sample.TangentDegrees
-                : Math.Atan2(after.Y - before.Y, after.X - before.X) * (180.0 / Math.PI);
-            var tangent = (forward + (layout.Right ? 180 : 0)) * (Math.PI / 180.0);
-            var offset = ly + placed.ExtraDy;
-            return new PaintPoint(sample.X - Math.Sin(tangent) * offset, sample.Y + Math.Cos(tangent) * offset);
+                return _column;
+            }
+
+            private PathColumn ColumnAt(double lx)
+            {
+                var length = layout.Geometry.TotalLength;
+                var distance = placed.Mid + lx * _scale;
+                var along = Math.Clamp(layout.Right ? length - distance : distance, 0, length);
+                var measure = layout.Geometry.Measure;
+                var sample = measure.PointAtLength(along);
+
+                // The measured path is a polyline, whose direction jumps at each joint; swung out by an offset, that opens a wedge-shaped gap on the
+                // outside of a curve. The direction is taken across a short stretch of the path instead, so it turns smoothly from one piece to the next.
+                var reach = Math.Min(2.0, length / 2);
+                var before = measure.PointAtLength(Math.Max(0, along - reach));
+                var after = measure.PointAtLength(Math.Min(length, along + reach));
+                var forward = before.X == after.X && before.Y == after.Y
+                    ? sample.TangentDegrees
+                    : Math.Atan2(after.Y - before.Y, after.X - before.X) * (180.0 / Math.PI);
+                var tangent = (forward + (layout.Right ? 180 : 0)) * (Math.PI / 180.0);
+                return new PathColumn(sample.X, sample.Y, Math.Sin(tangent), Math.Cos(tangent));
+            }
         }
 
         /// <summary>
@@ -2541,13 +2530,14 @@ namespace PeachPDF.Svg
             // About 1/32 of an em: fine enough that a bend is smooth, coarse enough that a glyph stays a few hundred points.
             var step = Math.Max(placed.Info.Font.Height / 32.0, 0.05);
 
+            var bender = new PathBender(layout, placed);
             foreach (var contour in outline.Flatten(0.05))
             {
                 var points = contour.Points;
                 if (points.Count == 0)
                     continue;
 
-                var first = WarpPathPoint(layout, placed, points[0].X, points[0].Y);
+                var first = bender.Bend(points[0].X, points[0].Y);
                 warped.AddMove(first.X, first.Y);
 
                 void LineThrough(PaintPoint from, PaintPoint to)
@@ -2556,7 +2546,7 @@ namespace PeachPDF.Svg
                     for (var k = 1; k <= pieces; k++)
                     {
                         var t = (double)k / pieces;
-                        var p = WarpPathPoint(layout, placed, from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t);
+                        var p = bender.Bend(from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t);
                         warped.LineTo(p.X, p.Y);
                     }
                 }
@@ -2594,6 +2584,7 @@ namespace PeachPDF.Svg
 
             foreach (var placed in layout.Glyphs)
             {
+                var bender = new PathBender(layout, placed);
                 var half = placed.Advance / 2;
                 var top = -placed.Info.Font.Ascent;
                 var bottom = top + placed.Info.Font.Height;
@@ -2607,7 +2598,7 @@ namespace PeachPDF.Svg
                     {
                         if (stretch)
                         {
-                            var p = WarpPathPoint(layout, placed, x, y);
+                            var p = bender.Bend(x, y);
                             Extend(p.X, p.Y);
                         }
                         else
@@ -2738,7 +2729,7 @@ namespace PeachPDF.Svg
             {
                 PaintBitmapGlyphs(g, document, run, gi.Glyph, gi.Font, topLeft, glyphSize, opacity, 0, run.ShapingFeatures, gi.LogicalGlyph, fill, stroke, hasStroke,
                     new Rect(leftX, -gi.Font.Ascent, glyphSize.Width, glyphSize.Height), stretch ? null : placed.Frame, bounds,
-                    stretch ? (x, y) => WarpPathPoint(layout, placed, x, y) : null, placed.Frame);
+                    stretch ? new PathBender(layout, placed).Bend : null, placed.Frame);
                 return;
             }
 
