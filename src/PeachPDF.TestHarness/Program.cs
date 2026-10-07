@@ -5640,6 +5640,70 @@ await SaveShowcaseAsync("svg_text_advanced", "Graphics & Effects", "SVG Text: Gr
     "SVG text with gradient/pattern fill, stroke, and glyphs laid along a path (textPath) - all rendered as real vector PDF content.",
     svgTextAdvancedHtml, pdfConfig);
 
+// --- SVG textPath: stretch, user-space paint, text bounding box ---
+var svgTextPathStretchHtml = "<!DOCTYPE html><html><head>" + SvgTextCss + "</head><body>" +
+    "<h1>SVG &lt;textPath&gt;: stretch, fixed paint &amp; text bounds</h1>" +
+    "<p class=\"intro\">method=\"stretch\" bends each glyph's outline along the path instead of only turning it. A gradient on curved text stays fixed in the text's space (userSpaceOnUse) or spans the whole text (objectBoundingBox), and an objectBoundingBox clip-path on &lt;text&gt; uses the text's own bounds. Outlined text still carries invisible text, so it stays selectable.</p>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("method=\"align\" (default): rigid glyphs",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs><path id="tight" d="M30,95 A40,40 0 0 1 110,95" fill="none"/></defs>
+          <use href="#tight" stroke="#ddd"/>
+          <text font-size="26" font-weight="bold" fill="#2c3e50"><textPath href="#tight">HHHH</textPath></text>
+        </svg>
+        """) +
+    TextPanel("method=\"stretch\": glyphs bent along the curve",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs><path id="tight" d="M30,95 A40,40 0 0 1 110,95" fill="none"/></defs>
+          <use href="#tight" stroke="#ddd"/>
+          <text font-size="26" font-weight="bold" fill="#c0392b"><textPath href="#tight" method="stretch">HHHH</textPath></text>
+        </svg>
+        """) +
+    TextPanel("stretch with a stroke and side=\"right\"",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs><path id="wave" d="M10,60 C50,0 100,120 190,50" fill="none"/></defs>
+          <use href="#wave" stroke="#ddd"/>
+          <text font-size="22" font-weight="bold" fill="#f9e79f" stroke="#7d6608" stroke-width="1"><textPath href="#wave" method="stretch" side="right">Bent text</textPath></text>
+        </svg>
+        """) +
+    "</tr><tr>" +
+    TextPanel("userSpaceOnUse gradient: fixed across the curve",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs>
+            <path id="ring" d="M100,65 m-45,0 a45,45 0 1 1 90,0 a45,45 0 1 1 -90,0" fill="none"/>
+            <linearGradient id="us" gradientUnits="userSpaceOnUse" x1="50" y1="0" x2="150" y2="0"><stop offset="0" stop-color="#e11"/><stop offset="1" stop-color="#14e"/></linearGradient>
+          </defs>
+          <text font-size="15" font-weight="bold" fill="url(#us)"><textPath href="#ring">Colour stays put around the ring</textPath></text>
+        </svg>
+        """) +
+    TextPanel("objectBoundingBox gradient: spans the whole text",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs>
+            <path id="arc2" d="M15,90 Q100,0 185,90" fill="none"/>
+            <linearGradient id="bb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f39c12"/><stop offset="1" stop-color="#8e44ad"/></linearGradient>
+          </defs>
+          <text font-size="20" font-weight="bold" fill="url(#bb)"><textPath href="#arc2">One gradient across it all</textPath></text>
+        </svg>
+        """) +
+    TextPanel("objectBoundingBox clip-path on text",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs><clipPath id="top" clipPathUnits="objectBoundingBox"><rect x="0" y="0" width="1" height="0.55"/></clipPath></defs>
+          <text x="10" y="70" font-size="48" font-weight="bold" fill="#16a085" clip-path="url(#top)">Clipped</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_textpath_stretch", "Graphics & Effects", "SVG textPath: Stretch & Fixed Paint",
+    "textPath method=stretch bends glyph outlines along the curve; gradients on curved text stay fixed or span the whole text; objectBoundingBox clip-path on text uses the text bounds.",
+    svgTextPathStretchHtml, pdfConfig);
+
 // --- SVG foreignObject showcase ---
 var svgForeignObjectHtml = """
 <!DOCTYPE html>

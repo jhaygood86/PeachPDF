@@ -2507,6 +2507,9 @@ namespace PeachPDF.Svg
                                 textPathRun.Side = string.Equals(child.GetAttribute("side")?.Trim(), "right", StringComparison.OrdinalIgnoreCase)
                                     ? SvgTextPathSide.Right
                                     : SvgTextPathSide.Left;
+                                textPathRun.Method = string.Equals(child.GetAttribute("method")?.Trim(), "stretch", StringComparison.OrdinalIgnoreCase)
+                                    ? SvgTextPathMethod.Stretch
+                                    : SvgTextPathMethod.Align;
                             }
                         }
 
