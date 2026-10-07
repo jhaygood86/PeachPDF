@@ -10,6 +10,6 @@
 
 **Stale items in the issue:** CFF outlines already worked (Type2CharstringInterpreter), and `PathMeasure`/`GraphicsPath.Flatten` flatten adaptively already.
 
-**Not done:** a `<g>`/`<use>` of text still has no bbox for `objectBoundingBox` clip/mask (see the accepted-gap file).
+**Not done:** a bitmap-only font cannot be bent and its stroke is approximate (see the accepted-gap file).
 
 **Evidence:** full net8.0 suite green; `svg_textpath_stretch` and `svg_text_advanced` showcases rasterized in PDFium and MuPDF and agree; text extraction returns the glyphs.

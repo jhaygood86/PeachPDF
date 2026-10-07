@@ -2117,7 +2117,8 @@ namespace PeachPDF.Svg
         /// A solid fill with no stroke is the ordinary text show. <paramref name="area"/> is the run's box in the current coordinate system.
         /// </summary>
         private static void PaintBitmapGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, PaintPoint topLeft, Size size, double opacity,
-            double letterSpacing, ShapeSettings? features, string? logicalText, SvgPaint fill, SvgPaint stroke, bool hasStroke, Rect area)
+            double letterSpacing, ShapeSettings? features, string? logicalText, SvgPaint fill, SvgPaint stroke, bool hasStroke, Rect area,
+            Matrix3x2? frame = null, Rect? paintArea = null)
         {
             if (fill.Kind == SvgPaintKind.Solid && !hasStroke)
             {
@@ -2129,14 +2130,25 @@ namespace PeachPDF.Svg
             if (!rasterFill && !hasStroke)
                 return;
 
-            // Room for the bitmap's own overhang past the advance box, and for a stroke's reach.
+            // Room for the bitmap's own overhang past the advance box, and for a stroke's reach. A glyph turned to a path is drawn under its
+            // frame, so the surfaces cover the frame's envelope of that box and the paint is measured in the text's own space (paintArea).
             var margin = area.Height * 0.25 + (hasStroke ? run.StrokeWidth : 0);
             var bounds = new Rect(area.X - margin, area.Y - margin, area.Width + 2 * margin, area.Height + 2 * margin);
+            if (frame is { } glyphFrame)
+                bounds = SvgGeometryBounds.TransformBounds(bounds, glyphFrame);
+
+            var paintBox = paintArea ?? (frame is { } f ? SvgGeometryBounds.TransformBounds(area, f) : area);
             using var coverage = g.BeginRasterSurface(bounds);
             if (coverage is null)
                 return;
 
+            if (frame is { } coverageFrame)
+                coverage.Graphics.PushTransform(coverageFrame);
+
             coverage.Graphics.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+
+            if (frame is not null)
+                coverage.Graphics.PopTransform();
 
             var surface = coverage.Surface;
             var cover = new byte[surface.Width * surface.Height];
@@ -2170,7 +2182,7 @@ namespace PeachPDF.Svg
                     box.LineTo(bounds.X, bounds.Bottom);
                     box.CloseFigure();
 
-                    var paintBounds = ContextBounds(g, paint) ?? area;
+                    var paintBounds = ContextBounds(g, paint) ?? paintBox;
                     if (paint.Kind == SvgPaintKind.PatternRef)
                     {
                         PaintPatternFill(layer.Graphics, document, run, box, paintOpacity, paintBounds, paint);
@@ -2219,7 +2231,13 @@ namespace PeachPDF.Svg
                 PaintStroke();
             }
 
+            if (frame is { } textFrame)
+                g.PushTransform(textFrame);
+
             PaintInvisibleText(g, run, text, font, topLeft, size, letterSpacing, features, logicalText);
+
+            if (frame is not null)
+                g.PopTransform();
         }
 
         /// <summary>
@@ -2516,7 +2534,11 @@ namespace PeachPDF.Svg
                 var gi = placed.Info;
 
                 // A shadow's offset is in user space, so it is applied after the frame, the way a rotated straight glyph's is.
-                if (gi.Run.TextShadows.Count > 0)
+                if (gi.Run.TextShadows.Count > 0 && stretch && PaintStretchedShadows(g, layout, placed, opacity * gi.Opacity))
+                {
+                    // Bent with the glyph.
+                }
+                else if (gi.Run.TextShadows.Count > 0)
                 {
                     var shadowSize = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures);
                     PaintTextShadows(g, gi.Run, gi.Glyph, gi.Font, -placed.Advance / 2, -gi.Font.Ascent, shadowSize, opacity * gi.Opacity,
@@ -2525,6 +2547,49 @@ namespace PeachPDF.Svg
 
                 PaintPathGlyph(g, document, layout, placed, stretch, opacity * gi.Opacity, bounds);
             }
+        }
+
+        /// <summary>
+        /// A <c>method="stretch"</c> glyph's <c>text-shadow</c> layers: the bent outline filled in the shadow colour at the offset, blurred through a
+        /// layer when the shadow has a blur radius. False when the font has no outline to bend (the caller then offsets the rigid frame instead).
+        /// </summary>
+        private static bool PaintStretchedShadows(Canvas g, TextPathLayout layout, PlacedPathGlyph placed, double opacity)
+        {
+            var gi = placed.Info;
+            var run = gi.Run;
+            var fill = ResolveInMarker(run.Fill);
+            var textColor = fill.Kind == SvgPaintKind.Solid ? fill.PaintColor : PaintColor.Black;
+
+            for (var i = run.TextShadows.Count - 1; i >= 0; i--)
+            {
+                var shadow = run.TextShadows[i];
+                var color = ApplyOpacity(shadow.Color ?? textColor, opacity * run.FillOpacity);
+                if (color.A == 0)
+                    continue;
+
+                var outline = g.GetTextOutline(gi.Glyph, gi.Font, new PaintPoint(-placed.Advance / 2, 0), features: run.ShapingFeatures);
+                if (outline is null)
+                    return false;
+
+                var bent = WarpOutline(g, outline, layout, placed);
+                bent.Transform(Matrix3x2.CreateTranslation((float)shadow.Dx, (float)shadow.Dy));
+
+                if (shadow.Blur <= 0)
+                {
+                    g.DrawPath(g.GetSolidBrush(color), bent);
+                }
+                else
+                {
+                    var box = new PathMeasure(bent).Bounds;
+                    var spread = 1.5 * shadow.Blur + gi.Font.Height * 0.25;
+                    using var layer = g.BeginLayer(new LayerOptions(Bounds: new Rect(box.X - spread, box.Y - spread, box.Width + 2 * spread, box.Height + 2 * spread), Effects: [new BlurEffect(shadow.Blur / 2)]));
+                    layer?.Canvas.DrawPath(layer.Canvas.GetSolidBrush(color), bent);
+                }
+
+                bent.Dispose();
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -2565,9 +2630,8 @@ namespace PeachPDF.Svg
             var outline = g.GetTextOutline(gi.Glyph, gi.Font, new PaintPoint(leftX, 0), features: run.ShapingFeatures);
             if (outline is null)
             {
-                g.PushTransform(placed.Frame);
-                PaintBitmapGlyphs(g, document, run, gi.Glyph, gi.Font, topLeft, glyphSize, opacity, 0, run.ShapingFeatures, gi.LogicalGlyph, fill, stroke, hasStroke, new Rect(leftX, -gi.Font.Ascent, glyphSize.Width, glyphSize.Height));
-                g.PopTransform();
+                PaintBitmapGlyphs(g, document, run, gi.Glyph, gi.Font, topLeft, glyphSize, opacity, 0, run.ShapingFeatures, gi.LogicalGlyph, fill, stroke, hasStroke,
+                    new Rect(leftX, -gi.Font.Ascent, glyphSize.Width, glyphSize.Height), placed.Frame, bounds);
                 return;
             }
 
@@ -2795,8 +2859,38 @@ namespace PeachPDF.Svg
         /// The bounding box <c>objectBoundingBox</c> units resolve against: <see cref="SvgGeometryBounds.GetBoundingBox"/> for geometry, and for
         /// a <c>&lt;text&gt;</c> (which that can't measure without a font) its glyph cells as laid out for painting.
         /// </summary>
-        private static Rect? ElementBounds(Canvas g, SvgElement element) =>
-            element is SvgTextElement text ? MeasureTextBounds(g, text, forPaintExtent: false) : SvgGeometryBounds.GetBoundingBox(element);
+        private static Rect? ElementBounds(Canvas g, SvgElement element)
+        {
+            switch (element)
+            {
+                case SvgTextElement text:
+                    return MeasureTextBounds(g, text, forPaintExtent: false);
+
+                // A container's box is the union of its children's, each in the container's own space, so text inside one counts too.
+                case SvgGroupElement group:
+                {
+                    Rect? union = null;
+                    foreach (var child in group.Children)
+                    {
+                        if (ElementBounds(g, child) is not { } box)
+                            continue;
+
+                        if (child.Transform is { } transform)
+                            box = SvgGeometryBounds.TransformBounds(box, transform);
+
+                        union = union is { } existing ? UnionRects(existing, box) : box;
+                    }
+
+                    return union;
+                }
+
+                case SvgUseElement { Target: SvgTextElement or SvgGroupElement or SvgUseElement } use:
+                    return OffsetBounds(ElementBounds(g, use.Target!), use.X, use.Y);
+
+                default:
+                    return SvgGeometryBounds.GetBoundingBox(element);
+            }
+        }
 
         /// <summary>
         /// Local-space bounds of a <c>&lt;text&gt;</c> and its descendants, computed from the exact same

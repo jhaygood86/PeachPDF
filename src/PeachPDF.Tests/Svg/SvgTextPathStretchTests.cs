@@ -147,6 +147,28 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void ObjectBoundingBoxClipPath_OnGroupOfText_UsesTheTextBounds()
+        {
+            var clip = """<clipPath id="c" clipPathUnits="objectBoundingBox"><rect x="0" y="0" width="1" height="1"/></clipPath>""";
+            var (g, _) = Render("""<g clip-path="url(#c)"><text x="10" y="50" font-size="40">Hi</text></g>""", clip);
+
+            var clipPath = Assert.Single(g.ClipPaths);
+            var rect = Rect.FromLTRB(clipPath.Points.Min(p => p.X), clipPath.Points.Min(p => p.Y), clipPath.Points.Max(p => p.X), clipPath.Points.Max(p => p.Y));
+            Assert.Equal(10, rect.X, 1);
+            Assert.Equal(48, rect.Width, 1);
+        }
+
+        [Fact]
+        public void StretchedShadow_IsTheBentOutline_NotTheRigidGlyph()
+        {
+            var (g, _) = Render("""<text font-size="20" style="text-shadow: 3px 3px 0 rgb(0,0,255)"><textPath href="#p" method="stretch">H</textPath></text>""", Arc);
+
+            // The shadow is a filled path in the shadow colour (the bent outline), not a text show under a rotated frame.
+            var shadow = Assert.Single(Paths(g), p => p.PaintColor == PaintColor.FromArgb(255, 0, 0, 255));
+            Assert.True(shadow.Points.Count > 20);
+        }
+
+        [Fact]
         public void StretchedText_AddsInvisibleText()
         {
             var (g, _) = Render("""<text font-size="20"><textPath href="#p" method="stretch">Hi</textPath></text>""", Arc);

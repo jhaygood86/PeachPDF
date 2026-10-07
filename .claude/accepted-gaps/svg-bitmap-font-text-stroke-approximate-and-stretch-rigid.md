@@ -1,0 +1,3 @@
+# SVG text in a bitmap-only font: stroke is approximate and `stretch` is rigid
+
+A bitmap-only font (CBDT/sbix) has pixels, not outlines. Its gradient/pattern fill is exact (painted through the glyph coverage by the raster backend, `PaintBitmapGlyphs`), but two things cannot be exact: a `stroke` is a band made by growing and shrinking the glyph coverage by half the stroke width with a square window (`MorphologyFilter`, so corners are squarer than a true round/miter join and a stroke thinner than a device pixel renders about 2 px wide), and `<textPath method="stretch">` turns such glyphs rigidly instead of bending them. Bending the coverage bitmap with the raster warp primitives is possible but was judged not worth it for a font kind that is almost always colour emoji.
