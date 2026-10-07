@@ -118,6 +118,7 @@ the default media type is **print**.
 | `--facturx-profile=NAME` | State the e-invoice profile (`minimum`, `basic-wl`, `basic`, `en16931`, `extended` or `xrechnung`) instead of reading it from the XML; it must agree with the XML. Only with `--facturx-xml`. |
 | `--tagged-pdf` | Emit a tagged (PDF/UA) structure tree. |
 | `--snap-box-decorations-to-css-pixels` | Snap box backgrounds, borders and outlines to whole CSS pixels, like a browser, so a 1px border covers one device pixel at 100% zoom. |
+| `--snap-border-widths-to-css-pixels` | Snap length-valued border widths to whole CSS pixels, like a browser: a width between 0 and 1px becomes 1px, larger widths round down. Unlike the option above this changes box sizes. |
 | `--interactive-pdf-forms` | Emit fillable AcroForm fields for `<input>`/`<select>` elements. |
 | `--no-compress` | Do not compress PDF content streams. |
 | `--raster-dpi=DPI` | Resolution, in pixels per inch of paper (72 to 1200, default 300), of effects PeachPDF renders as bitmaps, such as CSS `filter: blur()`. Higher is sharper and larger; the printed size never changes. See [Rasterized effects](usage-examples.md#rasterized-effects-and-resolution). |

@@ -261,6 +261,17 @@ namespace PeachPDF
         public bool SnapBoxDecorationsToCssPixels { get; set; } = false;
 
         /// <summary>
+        /// When set to <c>true</c>, a length-valued <c>border-width</c> (and <c>outline-width</c> and
+        /// <c>column-rule-width</c>) is snapped to whole CSS pixels the way CSS Values 4's "snap a length as a
+        /// border width" describes: a width above 0 and below 1px becomes 1px, and a width of 1px or more is
+        /// rounded down to a whole number of pixels. This is what makes a <c>0.5px</c> border a visible 1px line
+        /// in a browser. Unlike <see cref="SnapBoxDecorationsToCssPixels"/> it changes the used width and so the
+        /// size of the box. A PDF has no device pixel, so the CSS pixel (0.75pt) is used. The keywords
+        /// <c>thin</c>, <c>medium</c> and <c>thick</c> are left alone. Defaults to <c>false</c>.
+        /// </summary>
+        public bool SnapBorderWidthsToCssPixels { get; set; } = false;
+
+        /// <summary>
         /// When set to <c>true</c>, PeachPDF emits real, fillable AcroForm fields (text, checkbox,
         /// radio, select) for form elements whose resolved <c>-peachpdf-pdf-form-field</c> value
         /// requests one, instead of the default static box rendering. Defaults to <c>false</c> - an

@@ -1190,6 +1190,13 @@ namespace PeachPDF.Html.Core
         internal bool SnapBoxDecorationsToCssPixels { get; set; }
 
         /// <summary>
+        /// When true, a length-valued border/outline/column-rule width resolves snapped to whole CSS pixels
+        /// (see <see cref="PdfGenerateConfig.SnapBorderWidthsToCssPixels"/>). Read during layout, so it must
+        /// be set before the document is laid out.
+        /// </summary>
+        internal bool SnapBorderWidthsToCssPixels { get; set; }
+
+        /// <summary>
         /// Orchestrates tagged-PDF structure-tree/MCID bookkeeping during painting. Set by
         /// <c>PdfGenerator</c> before the page-render loop only when
         /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is

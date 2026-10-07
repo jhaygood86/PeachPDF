@@ -102,6 +102,9 @@ internal static class CliProgram
               --snap-box-decorations-to-css-pixels
                                      Snap box backgrounds and borders to whole CSS pixels,
                                      like a browser.
+              --snap-border-widths-to-css-pixels
+                                     Snap border widths to whole CSS pixels, like a
+                                     browser (changes box sizes).
               --interactive-pdf-forms
                                      Emit fillable AcroForm fields for form elements.
               --no-compress          Do not compress PDF content streams.

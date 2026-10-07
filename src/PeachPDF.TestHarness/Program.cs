@@ -81,6 +81,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     PreferredColorScheme = source.PreferredColorScheme,
     IgnoreAuthorStyleSheets = source.IgnoreAuthorStyleSheets,
     SnapBoxDecorationsToCssPixels = source.SnapBoxDecorationsToCssPixels,
+    SnapBorderWidthsToCssPixels = source.SnapBorderWidthsToCssPixels,
     PageSize = source.PageSize,
     ManualPageWidth = source.ManualPageWidth,
     ManualPageHeight = source.ManualPageHeight,
@@ -825,6 +826,23 @@ await SaveShowcaseAsync("border_pixel_snapping_exact", "Backgrounds & Borders", 
 await SaveShowcaseAsync("border_pixel_snapping_snapped", "Backgrounds & Borders", "Border Pixel Snapping: SnapBoxDecorationsToCssPixels",
     "The same document with SnapBoxDecorationsToCssPixels on: each border edge is rounded to a whole CSS pixel like a browser does, so a 1px border covers exactly one device column at 100% zoom. Backgrounds, outlines and shadows move to the same snapped edges, so they still meet the border.",
     BorderSnapHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, PixelsPerInch = 96, SnapBoxDecorationsToCssPixels = true });
+
+const string BorderWidthSnapHtml = """
+<html><body style="font-family:sans-serif;margin:24px">
+<p style="border:0.5px solid #000;padding:6px">border: 0.5px</p>
+<p style="border:1.5px solid #000;padding:6px">border: 1.5px</p>
+<p style="border:2.9px solid #000;padding:6px">border: 2.9px</p>
+<p style="border:4px solid #000;padding:6px">border: 4px</p>
+</body></html>
+""";
+
+await SaveShowcaseAsync("border_width_snapping_exact", "Backgrounds & Borders", "Border Width Snapping: As Written (default)",
+    "Border widths used exactly as written: 0.5px is drawn 0.5px wide and 1.5px 1.5px wide.",
+    BorderWidthSnapHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, PixelsPerInch = 96 });
+
+await SaveShowcaseAsync("border_width_snapping_snapped", "Backgrounds & Borders", "Border Width Snapping: SnapBorderWidthsToCssPixels",
+    "The same document with SnapBorderWidthsToCssPixels on: 0.5px becomes a visible 1px line, 1.5px becomes 1px and 2.9px becomes 2px, as in a browser. Box sizes follow the snapped widths.",
+    BorderWidthSnapHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, PixelsPerInch = 96, SnapBorderWidthsToCssPixels = true });
 
 // --- Box-shadow showcase ---
 
