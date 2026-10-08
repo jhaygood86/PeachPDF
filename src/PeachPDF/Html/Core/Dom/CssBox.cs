@@ -8344,7 +8344,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="GetMinMaxWidth(Canvas, out double, out double)"/> call, which needs
         /// no reset. A box blockified by its <c>float</c> or by <c>position: absolute</c>/<c>fixed</c>
         /// reaches this with an already-blockified <see cref="DerivedStyle.ActualDisplay"/>, so it is
-        /// correctly seen as block-level; a flex or grid ITEM does not, which is what
+        /// correctly seen as block-level; so is a flex or grid ELEMENT item, which
+        /// <c>DomParser.NormalizeFlexOrGridItem</c> blockifies in the cascade (it used to keep its
+        /// inline-level display, and a flex COLUMN of <c>inline-block</c> items then measured as the
+        /// SUM of its items: 72.5742pt against the 39.5859pt a column of plain blocks gives). An item the
+        /// cascade never sees (an anonymous text run) still reads as inline-level, which is what
         /// <see cref="IsFlexOrGridItem"/> is for.
         /// </para>
         /// </summary>
@@ -8353,10 +8357,11 @@ namespace PeachPDF.Html.Core.Dom
             // every box that is not one of §9.2.1.1's anonymous wrappers.
             !SharesItsLineWithAFloat(box)
             // Own display first, parent second, so the parent's ActualDisplay (recomputed per call,
-            // not cached) is consulted only where the box's own display reads as inline-level. Worth
-            // knowing before optimising this on instinct: that is NOT the rare case - measured over
-            // the test suite, 138k of 148k calls reach the second operand, because the walk descends
-            // through every inline box in the tree. The ordering is free, not a significant saving.
+            // not cached) is consulted only where the box's own display reads as inline-level. The
+            // parent check is what still answers for an item the cascade never blockified: an
+            // anonymous text run, or a box created after it. `AB CD<span style=position:absolute>x</span>EF GH`
+            // in a flex column is two such runs, and without it they were summed onto one line
+            // (60.24pt against the 30.94pt a column of two blocks gives).
             && (box.DerivedStyle.ActualDisplay is not (Keywords.Inline or Keywords.InlineBlock
                     or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid
                     or Keywords.TableCell)
@@ -8429,23 +8434,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether this box is a flex or grid ITEM, and so blockified by the formatting context it
-        /// participates in
-        /// (<see href="https://www.w3.org/TR/css-display-3/#blockify">css-display-3 &#167;2.7</see>, as
-        /// required by <see href="https://www.w3.org/TR/css-flexbox-1/#flex-items">css-flexbox-1
-        /// &#167;4</see> and <see href="https://www.w3.org/TR/css-grid-2/#grid-items">css-grid-2
-        /// &#167;6</see>) whatever its own computed <c>display</c> says.
-        /// <para>
-        /// <see cref="DerivedStyle.ActualDisplay"/> is not a sufficient oracle for "is this box
-        /// block-level" on its own, because PeachPDF deliberately leaves an inline-level item's
-        /// COMPUTED display alone and blockifies it at layout time instead
-        /// (<c>DomParser.NormalizeFlexOrGridItem</c>, and
-        /// <c>.claude/accepted-gaps/inline-level-flex-and-grid-items-are-not-blockified.md</c>). Without
-        /// this, a single-line flex COLUMN of <c>inline-block</c> items measured as the SUM of its
-        /// items rather than the widest of them - 72.5742pt against the 39.5859pt the same container
-        /// gives for plain block items, at <c>font: 16px monospace</c> - and took that width out of the
-        /// table column beside it.
-        /// </para>
+        /// Whether this box is a flex or grid ITEM: a child of a flex or grid container, asked of the
+        /// PARENT's display. <c>DomParser.NormalizeFlexOrGridItem</c> blockifies every ELEMENT item
+        /// (<see href="https://www.w3.org/TR/css-display-3/#blockify">css-display-3 &#167;2.7</see>), so
+        /// <see cref="DerivedStyle.ActualDisplay"/> answers "is this block-level" for those; this still
+        /// answers for a box the cascade never visited, such as an anonymous text run, and for
+        /// <c>MonolithicContent</c>, which needs "is this an item" rather than "is this block-level".
         /// </summary>
         internal static bool IsFlexOrGridItem(CssBox box) =>
             box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
@@ -8483,19 +8477,16 @@ namespace PeachPDF.Html.Core.Dom
         /// table column) that holds one of these as a child (issue #1032).
         /// </para>
         /// <para>
-        /// Excludes a flex or grid ITEM (<see cref="IsFlexOrGridItem"/>), even though its own computed
-        /// display can be one of the atomic-inline values above: participating in a flex/grid formatting
-        /// context blockifies it (css-display-3 §2.7) regardless of that computed display, so it is not on
-        /// any inline formatting context's line at all and must compete for "widest line wins" via the
-        /// ordinary <see cref="StartsNewLine"/> path instead of being isolated and SUMMED as if it sat
-        /// beside its siblings. Isolating it here anyway reintroduces exactly the bug
-        /// <see cref="IsFlexOrGridItem"/>'s own remarks describe: a single-line flex COLUMN of
-        /// <c>inline-block</c> items measuring as their SUM (72.5742pt) instead of their widest (39.5859pt).
+        /// A flex or grid ITEM is never one of these: participating in a flex/grid formatting context
+        /// blockifies it (css-display-3 §2.7), and <c>DomParser.NormalizeFlexOrGridItem</c> has already
+        /// rewritten its computed display, so it competes for "widest line wins" via the ordinary
+        /// <see cref="StartsNewLine"/> path instead of being isolated and SUMMED as if it sat beside its
+        /// siblings (a single-line flex COLUMN of <c>inline-block</c> items measuring as their SUM,
+        /// 72.5742pt, instead of their widest, 39.5859pt).
         /// </para>
         /// </summary>
         private static bool IsAtomicInlineRequiringIsolatedMeasurement(CssBox box) =>
-            !IsFlexOrGridItem(box)
-            && box.DerivedStyle.ActualDisplay switch
+            box.DerivedStyle.ActualDisplay switch
             {
                 Keywords.InlineBlock or Keywords.InlineTable or Keywords.InlineGrid => true,
                 Keywords.InlineFlex => !IsFlexRow(box),

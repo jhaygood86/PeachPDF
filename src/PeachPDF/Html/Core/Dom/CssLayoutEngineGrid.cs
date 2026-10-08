@@ -1281,7 +1281,14 @@ namespace PeachPDF.Html.Core.Dom
             // its margin - ActualBoxSizeIncludedWidth is already 0 there).
             var cssWidth = Math.Max(0, columnWidth - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
             var savedWidth = box.Width;
-            box.Width = FormatLayoutUnits(cssWidth, box);
+
+            // A replaced item that keeps its natural size under `justify-self: normal` (see PlaceItemInCell)
+            // is measured at that size, not at the track's: pinning it to the track would scale it by its
+            // aspect ratio and leave its phantom word measured at the track width for the pass that places it.
+            var measuredAtNaturalSize = IsReplacedWithNaturalSize(box) && box.Width == Keywords.Auto
+                && ResolveSelfAlignment(box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()).Isi(Keywords.Normal);
+            if (!measuredAtNaturalSize)
+                box.Width = FormatLayoutUnits(cssWidth, box);
 
             box.Location = new PaintPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
             box.ActualBottom = box.Location.Y;
@@ -1301,9 +1308,13 @@ namespace PeachPDF.Html.Core.Dom
         {
             var autoWidth = box.Width == Keywords.Auto;
             var autoHeight = box.Height == Keywords.Auto;
-            var stretchWidth = IsStretch(justify) && autoWidth;
-            var stretchHeight = IsStretch(align) && autoHeight;
 
+            // css-grid-2 §6.2: `normal` stretches an item only if it has no preferred aspect ratio and no
+            // natural size in that axis; an image or inline svg has both, so `normal` behaves as `start`
+            // for it. An explicit `stretch` still stretches it.
+            var keepsNaturalSize = IsReplacedWithNaturalSize(box);
+            var stretchWidth = IsStretch(justify) && autoWidth && !(keepsNaturalSize && justify.Isi(Keywords.Normal));
+            var stretchHeight = IsStretch(align) && autoHeight && !(keepsNaturalSize && align.Isi(Keywords.Normal));
             var savedWidth = box.Width;
             var savedHeight = box.Height;
 
@@ -1363,16 +1374,21 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>Resolves a grid item's used self-alignment: <c>auto</c>/<c>normal</c> defer to the
-        /// container's <c>*-items</c> value, which itself defaults to <c>stretch</c>.</summary>
+        /// container's <c>*-items</c> value, which itself defaults to <c>normal</c>. <c>normal</c> is kept
+        /// distinct from an explicit <c>stretch</c>, because it stretches a non-replaced item but lets a
+        /// replaced item with a natural size keep it (see <see cref="PlaceItemInCell"/>).</summary>
         private static string ResolveSelfAlignment(string self, string items)
         {
             var value = self;
             if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Auto) || value.Isi(Keywords.Normal))
                 value = items;
             if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Normal) || value.Isi(Keywords.Auto))
-                value = Keywords.Stretch;
+                value = Keywords.Normal;
             return value;
         }
+
+        /// <summary>An image or inline svg: replaced, with a natural size and a preferred aspect ratio.</summary>
+        private static bool IsReplacedWithNaturalSize(CssBox box) => box is CssBoxImage or CssBoxSvg;
 
         private static bool IsStretch(string value) =>
             value.Isi(Keywords.Stretch) || value.Isi(Keywords.Normal);
@@ -1747,6 +1763,8 @@ namespace PeachPDF.Html.Core.Dom
             (value / ((box.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0))
                 .ToString("F4", CultureInfo.InvariantCulture) + "pt";
 
+        // Mirrors the flex engine's twin: the cascade (DomParser.NormalizeFlexOrGridItem) blockifies every
+        // element item, so this temporary display swap now only fires for an anonymous text run.
         private static async ValueTask PerformLayoutBlockified(Canvas g, CssBox box)
         {
             CssProperty<DisplayMode>? savedDisplay = null;

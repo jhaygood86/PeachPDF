@@ -370,12 +370,14 @@ namespace PeachPDF.Tests.Integration
         {
             // A flex or grid item is blockified by the formatting context it is in (css-display-3 §2.7,
             // as css-flexbox-1 §4 and css-grid-2 §6 require), so a single-line COLUMN of them is as
-            // wide as its widest item, not as wide as all of them laid end to end. PeachPDF
-            // deliberately leaves an inline-level item's COMPUTED display alone and blockifies at
-            // layout time instead (issue #1003), so `ActualDisplay` alone answers "inline-level" here
-            // and is the wrong oracle — `StartsNewLine` has to ask the PARENT. Without that, this
-            // measured 72.5742pt against the 39.5859pt the block-item control gives, and took the
-            // difference out of whatever sat beside it.
+            // wide as its widest item, not as wide as all of them laid end to end. Before issue #1003
+            // was closed an inline-level item's COMPUTED display was left alone, so `ActualDisplay`
+            // answered "inline-level" here and `StartsNewLine` had to ask the PARENT; measured that way
+            // it was 72.5742pt against the 39.5859pt the block-item control gives, and took the
+            // difference out of whatever sat beside it. The cascade now blockifies these element items;
+            // the parent check in `StartsNewLine` is still needed for an item the cascade never sees (an
+            // anonymous text run), which FlexGridItemBlockificationIntegrationTests
+            // .TextRunsSplitByAnOutOfFlowChild_InAColumn_MeasureAsTwoLines pins.
             var control = await ColumnContainerWidthAsync("flex-column", "div", "");
 
             Assert.Equal(control, await ColumnContainerWidthAsync("flex-column", "span", display), 3);

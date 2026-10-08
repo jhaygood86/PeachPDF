@@ -2700,7 +2700,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Runs PerformLayout on a flex item, temporarily blockifying it when its computed
         /// display is inline. CSS spec §9.2 requires flex items to be blockified, so that
-        /// block-layout sizing (CreateLineBoxes, explicit width/height) works correctly. Every
+        /// block-layout sizing (CreateLineBoxes, explicit width/height) works correctly.
+        /// <c>DomParser.NormalizeFlexOrGridItem</c> already blockifies every element item in the
+        /// cascade, so the branch below now fires only for a box the cascade never visits - an
+        /// anonymous text run - and must stay for those. Every
         /// caller in this class uses this purely to measure/re-measure natural or constrained
         /// content size at a provisional position (<c>(_flexBox.ClientLeft, _flexBox.ClientTop)</c>
         /// - whatever <paramref name="box"/>'s <c>Location</c> currently holds), never as the
