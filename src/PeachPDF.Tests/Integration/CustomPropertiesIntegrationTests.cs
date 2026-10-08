@@ -483,6 +483,24 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(0, 0, 0)", el.Color);
         }
 
+        [Fact]
+        public async Task Var_SeesAnImportantCustomPropertyDeclaredAfterTheDeclarationUsingIt()
+        {
+            // var() resolves once the whole cascade, !important phases included, has run, so the important
+            // custom property wins over the normal one the color declaration was written beside.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  #el { --c: red; color: var(--c); }
+                  #el { --c: blue !important; }
+                </style></head><body><div id="el">text</div></body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el")!;
+
+            Assert.Equal("rgb(0, 0, 255)", el.Color);
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
 
         private static async Task<CssBox> BuildBoxTree(string html)
