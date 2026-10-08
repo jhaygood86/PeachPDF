@@ -65,13 +65,23 @@ namespace PeachPDF.CSS
 
                             if (targetIndex == i)
                             {
-                                // This is the right slot for this time value - actually consume it
-                                TryMatchTime(list, out timeValue);
-                                options[i] = timeValue;
-                                matched[i] = true;
-                                timeValuesFound++;
-                                foundMatch = true;
-                                break;
+                                // This is the right slot for this time value - actually consume it, through the
+                                // slot's own converter rather than the bare TimeConverter: only that one wraps
+                                // the value with the longhand's name (Option().For(...)), which is what lets
+                                // ExtractFor hand duration and delay each their own value. The bare value
+                                // answers to every name, so a time anywhere in the shorthand used to make
+                                // duration and delay both read it and every other longhand read "initial".
+                                var consumed = new List<Token>(list);
+                                var slotValue = _converters[i].VaryStart(consumed);
+                                if (slotValue != null && consumed.Count < list.Count)
+                                {
+                                    options[i] = slotValue;
+                                    list = consumed;
+                                    matched[i] = true;
+                                    timeValuesFound++;
+                                    foundMatch = true;
+                                    break;
+                                }
                             }
                             // else: This time value belongs to a different slot, skip this converter for now
                         }
