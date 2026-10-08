@@ -1288,8 +1288,9 @@ namespace PeachPDF.Html.Core.Dom
             // an explicit `stretch` - `normal` per css-grid-2 §6.2, and `start`/`center`/`end` because those
             // size the item to its content.
             var natural = box.Width == Keywords.Auto ? await GetReplacedNaturalSizeAsync(g, box) : null;
-            var measuredAtNaturalSize = natural is { Width: true }
-                && !ResolveSelfAlignment(box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()).Isi(Keywords.Stretch);
+            var measuredAtNaturalSize = natural is { } naturalSize
+                && !ReplacedStretchesWidth(naturalSize,
+                    ResolveSelfAlignment(box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
             if (!measuredAtNaturalSize)
                 box.Width = FormatLayoutUnits(cssWidth, box);
 
@@ -1320,9 +1321,8 @@ namespace PeachPDF.Html.Core.Dom
             // with only an aspect ratio (a viewBox-only svg) under any alignment, which is how browsers
             // treat it.
             var natural = autoWidth || autoHeight ? await GetReplacedNaturalSizeAsync(g, box) : null;
-            var replaced = natural is not null;
             var stretchWidth = autoWidth
-                && (replaced ? justify.Isi(Keywords.Stretch) || natural is { Width: false } : IsStretch(justify));
+                && (natural is { } replacedSize ? ReplacedStretchesWidth(replacedSize, justify) : IsStretch(justify));
             var stretchHeight = autoHeight && IsStretch(align)
                 && !(align.Isi(Keywords.Normal) && natural is { Height: true });
             var savedWidth = box.Width;
@@ -1406,6 +1406,14 @@ namespace PeachPDF.Html.Core.Dom
                 value = Keywords.Normal;
             return value;
         }
+
+        /// <summary>Whether a replaced item's width is stretched to its area under the resolved
+        /// <paramref name="justify"/>: an explicit <c>stretch</c>, or no natural width to keep (an item with only
+        /// an aspect ratio fills its area under any alignment, as browsers do). Anything else - <c>normal</c>
+        /// per css-grid-2 §6.2, or <c>start</c>/<c>center</c>/<c>end</c> - keeps the natural width. One rule for
+        /// both the row-height measurement and the placement, so they cannot disagree about the width.</summary>
+        private static bool ReplacedStretchesWidth(ReplacedNaturalSize natural, string justify) =>
+            justify.Isi(Keywords.Stretch) || !natural.Width;
 
         /// <summary>A replaced item's natural size: whether it has one in each axis (an aspect ratio alone is
         /// not one), and its aspect ratio.</summary>
