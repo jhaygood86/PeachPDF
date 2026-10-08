@@ -20,8 +20,10 @@ Plain `display: inline` / `inline-block` items, in-flow replaced items (`<img>`,
 lay out as before.
 
 A replaced grid item (`<img>`, inline `<svg>`) now keeps its natural size under the default
-`justify-self`/`align-self: normal` instead of being stretched across its track (css-grid-2 §6.2); an
-explicit `stretch` still stretches it. This applies to `<img style="display:block">` too.
+`justify-self`/`align-self: normal`, and under `start`/`center`/`end`, instead of being stretched across
+its track (css-grid-2 §6.2). An explicit `stretch` still stretches it, and so does an item with no natural
+size in that axis (an `<svg>` or SVG image with a `viewBox` but no `width`/`height`). This applies to
+`<img style="display:block">` too.
 
 Known leftover: an `inline-grid` item's auto width in a flex row is wider than its content (a 2×50pt
 grid measured 290pt rather than 100pt, pushing its sibling away); it was also wrong before, differently.

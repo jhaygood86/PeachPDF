@@ -284,6 +284,126 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(img.Location.X + 100, z.Location.X, 1.0);
         }
 
+        // A grid with two 100pt tracks: a 96x48px (72x36pt) image in the first, a tall sibling in the
+        // same row so the block axis has room to align in.
+        private static string GridWithImage(string containerStyle, string itemTag) =>
+            "<div id='c' style='display:grid; grid-template-columns:100pt 100pt; width:300pt; " +
+            containerStyle + "'>" + itemTag + "<span id='tall' style='height:100pt'>zz</span></div>";
+
+        [Theory]
+        // inline axis, from justify-items and from justify-self; 72pt image in a 100pt track
+        [InlineData("justify-items:start", "", 0)]
+        [InlineData("justify-items:center", "", 14)]
+        [InlineData("justify-items:end", "", 28)]
+        [InlineData("", "justify-self:start", 0)]
+        [InlineData("", "justify-self:center", 14)]
+        [InlineData("", "justify-self:end", 28)]
+        [InlineData("justify-items:center", "display:block;", 14)]
+        [InlineData("justify-items:end", "display:block;", 28)]
+        [InlineData("", "display:block; justify-self:center", 14)]
+        [InlineData("", "display:block; justify-self:start", 0)]
+        // both axes aligned at once: the item used to be pinned to the track, stretched and overlapped
+        [InlineData("align-items:center", "display:block; justify-self:center", 14)]
+        [InlineData("align-items:center", "justify-self:center", 14)]
+        [InlineData("align-items:end; justify-items:end", "display:block;", 28)]
+        [InlineData("align-items:start; justify-items:center", "", 14)]
+        public async Task ReplacedGridItem_UnderAStartCenterOrEndInlineAlignment_KeepsItsNaturalWidth(
+            string containerStyle, string imgStyle, double expectedOffset)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage(containerStyle, $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" />")));
+
+            var c = LayoutHarness.FindById(root, "c")!;
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(72, img.ActualWidth, 1.0);
+            Assert.Equal(expectedOffset, img.Location.X - c.Location.X, 1.0);
+        }
+
+        [Theory]
+        [InlineData("align-items:start", "", 0)]
+        [InlineData("align-items:center", "", 1)]
+        [InlineData("align-items:end", "", 2)]
+        [InlineData("", "align-self:center", 1)]
+        [InlineData("", "align-self:end", 2)]
+        [InlineData("align-items:center", "display:block;", 1)]
+        [InlineData("", "display:block; align-self:end", 2)]
+        [InlineData("", "", 0)]                               // align-items: normal
+        public async Task ReplacedGridItem_AlongTheBlockAxis_KeepsItsNaturalHeightAndAligns(
+            string containerStyle, string imgStyle, int where)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage(containerStyle, $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" />")));
+
+            var c = LayoutHarness.FindById(root, "c")!;
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(72, img.ActualWidth, 1.0);
+            Assert.True(img.ActualHeight < 60, $"natural height, not the 100pt row's: {img.ActualHeight}");
+
+            var free = 100 - img.ActualHeight;
+            var expected = where switch { 0 => 0.0, 1 => free / 2, _ => free };
+            Assert.Equal(expected, img.Location.Y - c.Location.Y, 1.5);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("justify-self:center")]
+        public async Task RasterImageGridItem_KeepsItsNaturalSize(string style)
+        {
+            // A 40x20px PNG is 30x15pt.
+            const string png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAAOElEQVR4nO3NQQEAMAgDsa6S8C9gsvYdBo4HjYGcW6UJHlmVGGQy+yXGmKu6xBhzVZcYY67S8vgB2VcBVG4eWXEAAAAASUVORK5CYII=";
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("", $"<img id='img' style='{style}' src=\"{png}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(30, img.ActualWidth, 1.0);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("justify-self:center")]
+        public async Task InlineSvgGridItem_KeepsItsNaturalSize(string style)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("", $"<svg id='s' style='{style}' width='96' height='48'><rect width='96' height='48'/></svg>")));
+
+            var svg = LayoutHarness.FindById(root, "s")!;
+
+            Assert.Equal(72, svg.ActualWidth, 1.0);
+            Assert.Equal(36, svg.ActualHeight, 1.0);
+        }
+
+        [Fact]
+        public async Task ViewBoxOnlyInlineSvg_HasNoNaturalSize_SoItStillStretchesAcrossItsTrack()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("", "<svg id='s' viewBox='0 0 96 48'><rect width='96' height='48'/></svg>")));
+
+            Assert.Equal(100, LayoutHarness.FindById(root, "s")!.ActualWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task ViewBoxOnlySvgImage_HasNoNaturalSize_SoItStillStretchesAcrossItsTrack()
+        {
+            const string viewBoxOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("", $"<img id='img' src=\"{viewBoxOnly}\" />")));
+
+            Assert.Equal(100, LayoutHarness.FindById(root, "img")!.ActualWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task InlineSvgWithOnlyAWidthAndAViewBox_HasANaturalSize()
+        {
+            // A width plus a viewBox gives both a natural width and (through the ratio) a natural height.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("", "<svg id='s' width='96' viewBox='0 0 96 48'><rect width='96' height='48'/></svg>")));
+
+            Assert.Equal(72, LayoutHarness.FindById(root, "s")!.ActualWidth, 1.0);
+        }
+
         [Fact]
         public async Task ReplacedGridItem_WithExplicitJustifySelfStretch_StillStretches()
         {

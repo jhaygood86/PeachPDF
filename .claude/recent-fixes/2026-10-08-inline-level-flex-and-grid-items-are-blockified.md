@@ -84,6 +84,20 @@ for the pass that places it (the trace showed `GetFitContentWidth` returning 100
 Both places must skip the pin. Pinned by `ReplacedGridItem_KeepsItsNaturalSize_UnderJustifySelfNormal`
 (both `<img>` and `display:block`) and `..._WithExplicitJustifySelfStretch_StillStretches`.
 
+**Review corrections, all three found by the maintainer.** (1) The first version only handled `normal`:
+under `start`/`center`/`end` (as `-self` or `-items`) the item was still pinned to the track, stretched,
+and with `align-items:center` + `justify-self:center` overlapped its neighbour. The measure-time test is
+now "anything but an explicit `stretch`". **A mutation test is what makes this stick, and the
+single-axis cases were not enough:** reverting to the `normal`-only test survived every case that set
+one axis, and was only killed by the combined ones (`align-items:center` with `justify-self:center`;
+`justify-items:end` with `align-items:end`), so those are in the theory. (2) `<img>`/`<svg>` were
+assumed to have a natural size. `SvgIntrinsicSize.Resolve` sizes a `viewBox`-only svg from its viewBox so
+it has something to lay out at, but CSS gives it an aspect ratio and no natural size, and browsers
+stretch it; `SvgIntrinsicSize.HasNaturalSize` now answers per axis (own attribute, or the other one plus a
+`viewBox`). (3) **A trap in (2):** at the time the grid asks, an image is not loaded and an inline svg is
+not built, so `Image`/`Document` are null and every natural-size check was false (the whole theory failed,
+including the `normal` cases that had passed). `HasNaturalSizeAsync` awaits `MeasureWordsSize` first.
+
 **Still open: a grid container as a flex item** is sized from the flex container, not its tracks
 ([gap](../accepted-gaps/a-grid-container-as-a-flex-item-is-not-sized-to-its-tracks.md), issue #1663).
 
