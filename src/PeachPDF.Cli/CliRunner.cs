@@ -106,6 +106,8 @@ internal static class CliRunner
             AllowLocalFileAccess = !options.NoLocalFiles,
         };
 
+        config.AnimationProgress = options.AnimationProgress;
+
         if (options.RasterDpi is { } rasterDpi)
         {
             config.RasterizationDpi = rasterDpi;

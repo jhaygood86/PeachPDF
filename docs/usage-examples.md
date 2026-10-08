@@ -21,6 +21,7 @@ using PeachPDF.Network;
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
 - [Crisp 1px borders at 100% zoom](#crisp-1px-borders-at-100-zoom)
+- [Rendering CSS animations as a still frame](#rendering-css-animations-as-a-still-frame)
 - [Fonts](#fonts)
 - [Rendering MathML formulas](#rendering-mathml-formulas)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
@@ -349,6 +350,30 @@ var config = new PdfGenerateConfig
 ```
 
 A PDF has no device pixel, so the snapping is done on the CSS pixel (0.75pt): `0.5px` becomes `1px`, `1.5px` becomes `1px` and `2.9px` becomes `2px`. It applies to `border-width`, `outline-width` and `column-rule-width`, and leaves the `thin`, `medium` and `thick` keywords alone. Unlike [`SnapBoxDecorationsToCssPixels`](#crisp-1px-borders-at-100-zoom) it changes the used width, so the box's size changes with it. The command-line equivalent is `--snap-border-widths-to-css-pixels`.
+
+## Rendering CSS animations as a still frame
+
+A PDF is a single moment, so a page that is animated with CSS (`animation` and `@keyframes`) has to be rendered at one point in the animation. By default PeachPDF ignores animations and every element shows its ordinary style. To render a point of the animation instead, set `AnimationProgress` to a number from 0 (the start) to 1 (the end):
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    AnimationProgress = 0   // 0 = the start of every animation, 1 = the end, 0.5 = half way
+};
+```
+
+A page whose two logos fade over each other (one animates `opacity` from 1 to 0 and the other from 0 to 1) shows both logos on top of each other without the option. At `0` it shows the first logo, at `1` the second, and at `0.5` both at half strength, as the page looks half way through the cross-fade.
+
+Each animation is sampled at that fraction of **its own** run, with its easing (`animation-timing-function`, including a keyframe's own) and `animation-direction` applied:
+
+- The run of an animation with a fixed `animation-iteration-count` is all of its iterations, so `0.5` of `animation-iteration-count: 3` is half way through the second one.
+- An `infinite` animation has no end, so its run is one iteration: `1` is the end of its first cycle. With `animation-direction: alternate` that first cycle still runs forward, so `1` shows the `100%` keyframe.
+- `animation-delay`, `animation-fill-mode` and `animation-play-state` do not change what is rendered: the frame is taken inside the run, whether or not a browser would have started it yet. An animation with a duration or iteration count of zero has no run, and only applies, in its final state, when its `animation-fill-mode` is `forwards` or `both`.
+- Two animations with different durations are each sampled at the same *fraction* of their own run, not at the same time.
+
+The animated values replace the ordinary ones before layout, so an animated `width` or `margin` moves the content around it just as a declared one would, and an `!important` declaration still wins over an animation. A keyframe may leave out `from` or `to`, and the element's ordinary value fills in. Values are mixed as a browser mixes them: numbers, lengths and percentages (lengths of different units are left to `calc()`), angles, colors (premultiplied, so a fade from `transparent` keeps the other color's hue), and the arguments of `transform` and `filter` functions, `box-shadow` and similar lists. A value with no way to be mixed, such as `display`, flips half way through the interval. See [Animations](html-css-support.md#animations) for the full list of what is supported.
+
+CSS transitions never apply: a transition runs after a style changes, and a document that has just loaded has no such change. The value must be between 0 and 1; anything else makes generation throw an `ArgumentOutOfRangeException`. The command-line equivalent is `--animation-progress`, which takes `start`, `end` or a number.
 
 ## Fonts
 

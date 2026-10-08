@@ -14,6 +14,7 @@ using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
+using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -112,6 +113,12 @@ namespace PeachPDF.Html.Core.Parse
 
             // Collect @font-palette-values registrations (consulted when resolving font-palette:<dashed-ident>).
             htmlContainer.FontPaletteValues = RegisteredFontPalette.BuildRegistry(cssData, cssValueParser);
+
+            // Collect @keyframes (read by AnimationApplier mid-cascade); nothing consults them unless animations
+            // are being sampled, so a document pays nothing for them otherwise.
+            htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null
+                ? RegisteredKeyframes.BuildRegistry(cssData)
+                : new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
 
             // Collect @counter-style rules (consulted when formatting a counter()/list marker).
             htmlContainer.CounterStyles = CounterStyles.CounterStyleRegistry.BuildRegistry(cssData);
@@ -1176,6 +1183,14 @@ namespace PeachPDF.Html.Core.Parse
                 var needsInlineNormalSnapshot = authorUsesRevert;
                 inlineNormalSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
                 inlineNormalCustomSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+            }
+
+            // 5b. Animations. The animation origin sits between normal and important declarations (CSS Cascade
+            // 4 §6.1), so this is its place: it overrides everything above and is overridden by the
+            // !important phases below. Skipped outright, and at no cost, unless a snapshot was asked for.
+            if (box.HtmlContainer?.AnimationProgress is { } animationProgress)
+            {
+                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties);
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to

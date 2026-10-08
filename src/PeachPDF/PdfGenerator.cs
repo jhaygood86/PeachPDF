@@ -1320,6 +1320,14 @@ namespace PeachPDF
             container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
             container.HtmlContainerInt.SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels;
 
+            if (config.AnimationProgress is { } animationProgress && !(animationProgress >= 0 && animationProgress <= 1))
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), animationProgress,
+                    "PdfGenerateConfig.AnimationProgress must be a number from 0 to 1.");
+            }
+
+            container.HtmlContainerInt.AnimationProgress = config.AnimationProgress;
+
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the
             // language-dependent line-break tailorings need the language then, not after SetHtml returns.
             container.HtmlContainerInt.DefaultLanguage = string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage;

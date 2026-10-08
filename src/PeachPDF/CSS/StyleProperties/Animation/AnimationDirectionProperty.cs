@@ -2,8 +2,11 @@
 {
     internal sealed class AnimationDirectionProperty : Property
     {
-        private static readonly IValueConverter ListConverter =
-            Converters.AnimationDirectionConverter.FromList().OrDefault(AnimationDirection.Normal);
+        // Exposed for css-properties.json's "cssom-grammar" validator, which calls this same real grammar
+        // directly instead of the full cssom round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar = Converters.AnimationDirectionConverter.FromList();
+
+        private static readonly IValueConverter ListConverter = ValueGrammar.OrDefault(AnimationDirection.Normal);
 
         internal AnimationDirectionProperty()
             : base(PropertyNames.AnimationDirection)

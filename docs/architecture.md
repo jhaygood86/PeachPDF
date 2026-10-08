@@ -235,7 +235,7 @@ The parsed output is a `Stylesheet` object containing a typed collection of at-r
 | `FontFaceRule` | `@font-face` |
 | `ImportRule` | `@import` |
 | `ContainerRule` | `@container` |
-| `KeyframesRule` | `@keyframes` (parsed but not animated) |
+| `KeyframesRule` | `@keyframes` (sampled once per animation at `PdfGenerateConfig.AnimationProgress`; see [Animations](html-css-support.md#animations)) |
 | `ViewportRule` | `@viewport` |
 | `DocumentRule` | `@document` |
 

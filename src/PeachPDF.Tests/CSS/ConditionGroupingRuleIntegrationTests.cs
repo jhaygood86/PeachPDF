@@ -41,10 +41,10 @@ public class ConditionGroupingRuleIntegrationTests
     [Fact]
     public async Task Supports_InnerRules_DoNotApply_WhenConditionIsUnsupported()
     {
-        // animation-name parses fine in the CSS-OM but PeachPDF never renders animations - the
+        // transition-duration parses fine in the CSS-OM but PeachPDF never renders transitions - the
         // condition must evaluate false, not merely "unknown so ignored."
         var html = Html(
-            "p { color: #ff0000; } @supports (animation-name: spin) { p { color: #0000ff; } }",
+            "p { color: #ff0000; } @supports (transition-duration: 1s) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
         Assert.Equal(Red, box.Color);
@@ -54,7 +54,7 @@ public class ConditionGroupingRuleIntegrationTests
     public async Task SupportsNot_Fallback_Applies_WhenFeatureIsUnsupported()
     {
         var html = Html(
-            "@supports not (animation-name: spin) { p { color: #0000ff; } }",
+            "@supports not (transition-duration: 1s) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
         Assert.Equal(Blue, box.Color);
@@ -92,7 +92,7 @@ public class ConditionGroupingRuleIntegrationTests
         // though `transform` alone is genuinely supported.
         var html = Html(
             "p { color: #ff0000; } " +
-            "@supports ((transition-property: color) or (animation-name: spin)) and (transform: rotate(10deg)) " +
+            "@supports ((transition-property: color) or (transition-duration: 1s)) and (transform: rotate(10deg)) " +
             "{ p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");

@@ -74,6 +74,29 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void AnimationProgress_DefaultsToOff_AndMapsStartEndAndNumbers()
+    {
+        Assert.Null(CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).AnimationProgress);
+
+        Assert.Equal(0, CliRunner.BuildConfig(ArgumentParser.Parse(["--animation-progress=start", "doc.html"])).AnimationProgress);
+        Assert.Equal(1, CliRunner.BuildConfig(ArgumentParser.Parse(["--animation-progress=END", "doc.html"])).AnimationProgress);
+        Assert.Equal(0.25, CliRunner.BuildConfig(ArgumentParser.Parse(["--animation-progress=0.25", "doc.html"])).AnimationProgress);
+        Assert.Equal(0.5, CliRunner.BuildConfig(ArgumentParser.Parse(["--animation-progress", "0.5", "doc.html"])).AnimationProgress);
+    }
+
+    [Theory]
+    [InlineData("1.5")]
+    [InlineData("-0.1")]
+    [InlineData("middle")]
+    [InlineData("")]
+    public void AnimationProgress_OutOfRangeOrMalformed_IsAnArgumentError(string value)
+    {
+        var options = ArgumentParser.Parse([$"--animation-progress={value}", "doc.html"]);
+
+        Assert.NotEmpty(options.Errors);
+    }
+
+    [Fact]
     public void FlattenTransparency_DefaultsToReject_AndMapsWhenGiven()
     {
         Assert.Equal(TransparencyPolicy.Reject, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).TransparencyPolicy);

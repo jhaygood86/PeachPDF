@@ -272,6 +272,37 @@ namespace PeachPDF
         public bool SnapBorderWidthsToCssPixels { get; set; } = false;
 
         /// <summary>
+        /// Renders CSS animations (<c>animation</c> and <c>@keyframes</c>) as the single frame a PDF can hold. A
+        /// document has no clock, so instead of playing, every animation is sampled at this position in <em>its
+        /// own</em> run, from <c>0</c> (the start) to <c>1</c> (the end). <c>null</c>, the default, leaves
+        /// animations unapplied, so an element renders with its ordinary style, as it did before this option
+        /// existed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>0</c> renders each animation at its <c>0%</c> keyframe and <c>1</c> at the end of its run; a value
+        /// between is that fraction of the run, eased and interpolated as a browser would at that moment. For an
+        /// animation that runs a fixed number of times the run is all of its iterations, so <c>0.5</c> of
+        /// <c>animation-iteration-count: 3</c> is half way through the second iteration. An
+        /// <c>infinite</c> animation has no end, so its run is taken to be one iteration. <c>animation-direction</c>
+        /// applies, so with <c>alternate</c> the first iteration still runs forward and <c>1</c> shows its
+        /// <c>100%</c> keyframe.
+        /// </para>
+        /// <para>
+        /// <c>animation-delay</c>, <c>animation-fill-mode</c> and <c>animation-play-state</c> do not change what is
+        /// rendered: the frame is taken inside the run, whether or not a browser would have started it yet. Two
+        /// animations with different durations are each sampled at the same fraction of their own run, not at the
+        /// same time.
+        /// </para>
+        /// <para>
+        /// CSS transitions never apply: a transition only runs after a style changes, and a document that has just
+        /// loaded has no such change. The value must be a number from 0 to 1; anything else makes generation throw
+        /// an <see cref="System.ArgumentOutOfRangeException"/>.
+        /// </para>
+        /// </remarks>
+        public double? AnimationProgress { get; set; }
+
+        /// <summary>
         /// When set to <c>true</c>, PeachPDF emits real, fillable AcroForm fields (text, checkbox,
         /// radio, select) for form elements whose resolved <c>-peachpdf-pdf-form-field</c> value
         /// requests one, instead of the default static box rendering. Defaults to <c>false</c> - an
