@@ -97,6 +97,10 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void AnimationProgress_WithoutAValue_IsAnArgumentError() =>
+        Assert.NotEmpty(ArgumentParser.Parse(["doc.html", "--animation-progress"]).Errors);
+
+    [Fact]
     public void FlattenTransparency_DefaultsToReject_AndMapsWhenGiven()
     {
         Assert.Equal(TransparencyPolicy.Reject, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).TransparencyPolicy);

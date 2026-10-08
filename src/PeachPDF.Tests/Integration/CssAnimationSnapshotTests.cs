@@ -96,6 +96,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public void Easing_LinearWithStops_IsReadAsLinear()
+        {
+            Assert.True(EasingFunction.TryParse("linear(0, 0.25 40%, 1)", out var function));
+            Assert.Equal(0.3, function.Evaluate(0.3), 9);
+        }
+
+        [Fact]
         public void Easing_EaseIn_StartsSlowAndEaseOut_EndsSlow()
         {
             Assert.True(EasingFunction.TryParse("ease-in", out var easeIn));
@@ -175,6 +182,28 @@ namespace PeachPDF.Tests.Integration
         [InlineData(1.0, "visible")]
         public void Interpolate_Visibility_IsVisibleThroughoutAnyTransitionToVisible(double t, string expected) =>
             Assert.Equal(expected, Mix("visibility", "hidden", "visible", t));
+
+        [Theory]
+        [InlineData("transform", "rotate(100grad)", "rotate(0.25turn)", 0.5, "rotate(90deg)")]   // grad and turn meet in degrees
+        [InlineData("transform", "rotate(0rad)", "rotate(180deg)", 0.5, "rotate(90deg)")]
+        [InlineData("opacity", "1e0", "5e-1", 0.5, "0.75")]                                       // exponents are part of the number
+        [InlineData("width", "calc((10px))", "calc((20px))", 0.5, "calc((15px))")]                // a bare parenthesis keeps its shape
+        [InlineData("transform", "none", "translateX(10px) scale(2)", 0.5, "translateX(5px) scale(1.5)")]
+        [InlineData("filter", "hue-rotate(90deg)", "none", 0.5, "hue-rotate(45deg)")]
+        public void Interpolate_UnitsExponentsAndIdentities(string property, string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix(property, from, to, t));
+
+        [Theory]
+        [InlineData("background-image", "url(a.png)", "url(b.png)", 0.4, "url(a.png)")]          // a url() is opaque text
+        [InlineData("background-image", "url(a.png)", "url(b.png)", 0.6, "url(b.png)")]
+        [InlineData("content", "\"a\"", "\"b\"", 0.6, "\"b\"")]                               // so is a string
+        [InlineData("transform", "none", "matrix(1, 0, 0, 1, 0, 0)", 0.4, "none")]                // no identity known for matrix()
+        [InlineData("transform", "none", "translateX(calc(10px))", 0.6, "translateX(calc(10px))")] // nested function: not mixed
+        [InlineData("filter", "none", "drop-shadow(1px 1px 1px red)", 0.4, "none")]
+        [InlineData("margin-left", "10px", "2", 0.4, "10px")]                                     // a unitless non-zero number is not a length
+        [InlineData("width", "10px", "1.5deg", 0.6, "1.5deg")]                                    // nor is an angle
+        public void Interpolate_WhatCannotBeMixed_FlipsHalfWay(string property, string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix(property, from, to, t));
 
         [Fact]
         public void Interpolate_Opacity_IsClampedWhenAnEasingOvershoots()
@@ -260,6 +289,24 @@ namespace PeachPDF.Tests.Integration
                 """, 0.5);
 
             Assert.Equal(1.0, Opacity(Find(root, "x")), 3);
+        }
+
+        [Theory]
+        [InlineData("animation: k 2000ms linear", 0.5, 0.5)]                    // milliseconds
+        [InlineData("animation: k 1s linear reverse", 0.25, 0.75)]
+        [InlineData("animation: k 1s linear alternate-reverse", 0.25, 0.75)]
+        [InlineData("animation: k 1s linear 2 alternate", 0.75, 0.5)]           // second iteration, running backward
+        [InlineData("animation: k 1s linear 0.5", 1.0, 0.5)]                    // half an iteration is all there is
+        [InlineData("animation: k 0s linear forwards", 0.5, 1.0)]               // no run: only the final state is left
+        [InlineData("animation: k 0s linear", 0.5, 1.0)]                        // ...unless it does not fill forwards: base value
+        public async Task AnimationTimingProperties_DecideTheSampledOpacity(string declaration, double progress, double expected)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ {declaration} }}</style><div id=""a"">x</div>", progress);
+
+            // The last case has no run and no fill, so the animation leaves the base opacity (1) alone.
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
         }
 
         [Fact]
