@@ -434,7 +434,8 @@ namespace PeachPDF.Tests.Integration
         }
 
         // An svg with only one of width/height has a natural size in that axis alone (and no ratio to derive
-        // the other from), so each axis is decided on its own.
+        // the other from), so each axis is decided on its own. Known deviation: Chrome gives the missing axis
+        // the 300x150px default (72 x 112.5pt for the width-only case below) instead of stretching it.
         [Fact]
         public async Task SvgImageWithOnlyAWidth_KeepsItsWidth_AndStretchesItsHeightInTheRow()
         {
@@ -468,7 +469,8 @@ namespace PeachPDF.Tests.Integration
         public async Task ReplacedGridItem_WithAnExplicitBlockAxisStretch_FillsTheHeightAndKeepsItsRatioWidth(
             string containerStyle, string imgStyle)
         {
-            // 80pt tall at a 2:1 ratio would be 160pt wide, clamped to the 100pt track.
+            // 80pt tall at a 2:1 ratio would be 160pt wide, clamped to the 100pt track. Known deviation: Chrome
+            // lets it overflow to 160pt unless the page sets `max-width: 100%`, which gives 100pt as here.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 GridWithImage("grid-template-rows:80pt; " + containerStyle, $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" />")));
 

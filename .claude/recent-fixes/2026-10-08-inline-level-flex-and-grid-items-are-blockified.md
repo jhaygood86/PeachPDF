@@ -120,6 +120,20 @@ maintainer's method). The mutation sweep (14 mutants: swapped axes, dropped view
 `>= 0`, reverted `normal`-only test, ...) is `scratchpad`-only, but its results are why the unit tests
 for `SvgIntrinsicSize.HasNaturalSize` and the explicit-row cases exist.
 
+**Check against Chrome, not against memory.** A first pass at the open questions reasoned about what browsers
+do and called it unverifiable; Chrome was installed. A headless page that builds the same grids and writes each
+item's `getBoundingClientRect()` (in pt) into the DOM, dumped with `--dump-dom`, compared against the same
+cases through `LayoutHarness`, settled it: 23 of 31 cases agree (images' boxes read ~2.8pt tall, the known
+strut), and the 8 that differ are two families, both now recorded rather than half-fixed. (1) A stretched
+image's ratio width: Chrome lets 160pt overflow a 100pt track and gives 100pt only with `img { max-width:
+100% }`; unclamping it here would break pages with that reset because PeachPDF resolves a percentage
+`max-width` on a grid item against the container, not the area, so the clamp stays. (2) An svg with only a
+`width` or only a `height`: Chrome uses the 300x150px default for the missing axis; making the grid do the
+same turned a height-only svg into 15pt wide, because the generic sizing is not Chrome's default, so it was
+reverted. Also: `<canvas>` is unsupported (my first probe row for it was a plain block), and `<math>` was
+never measured in a grid. Flaky tooling note: `chrome --headless --dump-dom` sometimes returns an empty page
+when chained after other commands; run it alone and check for the result element.
+
 **Still open: a grid container as a flex item** is sized from the flex container, not its tracks
 ([gap](../accepted-gaps/a-grid-container-as-a-flex-item-is-not-sized-to-its-tracks.md), issue #1663).
 
