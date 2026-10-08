@@ -375,6 +375,151 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(36, svg.ActualHeight, 1.0);
         }
 
+        // A grid with an explicit row height never measures its items' heights up front, so the image's own
+        // size has to be established when it is placed.
+        [Theory]
+        [InlineData("justify-items:center; align-items:center", "display:block;", 14, 22)]
+        [InlineData("justify-items:center; align-items:center", "", 14, 22)]
+        [InlineData("justify-items:end; align-items:end", "display:block;", 28, 44)]
+        [InlineData("justify-items:start; align-items:start", "display:block;", 0, 0)]
+        [InlineData("", "display:block; justify-self:center; align-self:center", 14, 22)]
+        [InlineData("", "justify-self:center; align-self:center", 14, 22)]
+        [InlineData("justify-items:center; align-items:center; place-content:center", "display:block;", 64, 22)]
+        [InlineData("justify-items:center", "display:block;", 14, 0)]
+        [InlineData("align-items:center", "display:block;", 0, 22)]
+        public async Task ReplacedGridItem_InARowWithAnExplicitHeight_KeepsItsNaturalSizeAndAligns(
+            string containerStyle, string imgStyle, double expectedX, double expectedY)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:80pt; " + containerStyle, $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" />")));
+
+            var c = LayoutHarness.FindById(root, "c")!;
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(72, img.ActualWidth, 1.0);
+            Assert.True(img.ActualHeight < 60, $"natural height, not the 80pt row's: {img.ActualHeight}");
+            Assert.Equal(expectedX, img.Location.X - c.Location.X, 1.0);
+
+            // block axis: the image is ~36pt tall (plus the known strut quirk), in an 80pt row
+            var free = 80 - img.ActualHeight;
+            var expected = expectedY switch { 0 => 0.0, 22 => free / 2, _ => free };
+            Assert.Equal(expected, img.Location.Y - c.Location.Y, 1.5);
+        }
+
+        // The height of an auto row is measured with the item at its natural width. Pinned to the track
+        // instead, a 2:1 image is scaled up to ~52.8pt tall and the whole row grows with it.
+        [Theory]
+        [InlineData("", "", true)]
+        [InlineData("justify-items:center", "", true)]
+        [InlineData("justify-items:start", "", true)]
+        [InlineData("justify-items:end", "display:block;", true)]
+        [InlineData("", "justify-self:center", true)]
+        [InlineData("", "justify-self:stretch", false)]   // an explicit stretch really is scaled to the track
+        [InlineData("justify-items:stretch", "", false)]
+        public async Task ReplacedGridItem_AutoRowHeight_IsMeasuredAtTheNaturalWidthUnlessStretched(
+            string containerStyle, string imgStyle, bool naturalHeight)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='c' style='display:grid; grid-template-columns:100pt 100pt; width:300pt; " + containerStyle + "'>" +
+                $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" /><span>a</span><span id='next'>next</span></div>"));
+
+            var c = LayoutHarness.FindById(root, "c")!;
+            var next = LayoutHarness.FindById(root, "next")!;
+            var firstRow = next.Location.Y - c.Location.Y;
+
+            if (naturalHeight)
+                Assert.True(firstRow < 45, $"first row is the natural ~38.8pt, not the scaled ~52.8pt: {firstRow}");
+            else
+                Assert.True(firstRow > 50, $"first row grew to the scaled image: {firstRow}");
+        }
+
+        // An svg with only one of width/height has a natural size in that axis alone (and no ratio to derive
+        // the other from), so each axis is decided on its own.
+        [Fact]
+        public async Task SvgImageWithOnlyAWidth_KeepsItsWidth_AndStretchesItsHeightInTheRow()
+        {
+            const string widthOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:80pt", $"<img id='img' src=\"{widthOnly}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(72, img.ActualWidth, 1.0);
+            Assert.Equal(80, img.ActualHeight, 1.0);
+        }
+
+        [Fact]
+        public async Task SvgImageWithOnlyAHeight_FillsItsWidth_AndKeepsItsHeightInTheRow()
+        {
+            const string heightOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:80pt", $"<img id='img' src=\"{heightOnly}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(100, img.ActualWidth, 1.0);
+            Assert.True(img.ActualHeight < 60, $"natural height, not the 80pt row's: {img.ActualHeight}");
+        }
+
+        [Theory]
+        [InlineData("", "align-self:stretch")]
+        [InlineData("align-items:stretch", "")]
+        [InlineData("align-items:stretch", "display:block;")]
+        public async Task ReplacedGridItem_WithAnExplicitBlockAxisStretch_FillsTheHeightAndKeepsItsRatioWidth(
+            string containerStyle, string imgStyle)
+        {
+            // 80pt tall at a 2:1 ratio would be 160pt wide, clamped to the 100pt track.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:80pt; " + containerStyle, $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(100, img.ActualWidth, 1.0);
+            Assert.Equal(80, img.ActualHeight, 1.0);
+        }
+
+        [Fact]
+        public async Task ReplacedGridItem_WithAnExplicitBlockAxisStretch_TakesItsWidthFromTheStretchedHeight()
+        {
+            // 30pt tall at 2:1 is 60pt wide, which fits the 100pt track, so it is not widened to it.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:30pt; align-items:stretch", $"<img id='img' src=\"{RedSvg}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(60, img.ActualWidth, 1.0);
+            Assert.Equal(30, img.ActualHeight, 1.0);
+        }
+
+        [Theory]
+        [InlineData("justify-items:center", "")]
+        [InlineData("justify-items:start", "")]
+        [InlineData("justify-items:end", "")]
+        [InlineData("", "justify-self:center")]
+        [InlineData("", "justify-self:end")]
+        [InlineData("align-items:center", "")]
+        [InlineData("justify-items:center; align-items:center", "")]
+        [InlineData("grid-template-rows:80pt; justify-items:center; align-items:center", "")]
+        public async Task ViewBoxOnlyGridItem_StretchesAcrossItsTrack_UnderAnyAlignment(string containerStyle, string style)
+        {
+            const string viewBoxOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+
+            foreach (var item in new[]
+            {
+                $"<svg id='s' style='{style}' viewBox='0 0 96 48'><rect width='96' height='48' fill='red'/></svg>",
+                $"<img id='s' style='{style}' src=\"{viewBoxOnly}\" />"
+            })
+            {
+                var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(GridWithImage(containerStyle, item)));
+
+                var s = LayoutHarness.FindById(root, "s")!;
+                var c = LayoutHarness.FindById(root, "c")!;
+
+                Assert.Equal(100, s.ActualWidth, 1.0);
+                Assert.Equal(c.Location.X, s.Location.X, 1.0);
+            }
+        }
+
         [Fact]
         public async Task ViewBoxOnlyInlineSvg_HasNoNaturalSize_SoItStillStretchesAcrossItsTrack()
         {

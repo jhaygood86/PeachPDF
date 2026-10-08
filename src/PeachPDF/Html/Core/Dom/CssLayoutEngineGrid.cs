@@ -1283,12 +1283,12 @@ namespace PeachPDF.Html.Core.Dom
             var cssWidth = Math.Max(0, columnWidth - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
             var savedWidth = box.Width;
 
-            // A replaced item that keeps its natural size (see PlaceItemInCell) is measured at that size, not
-            // at the track's: pinning it to the track would scale it by its aspect ratio and leave its
-            // phantom word measured at the track width for the pass that places it. It keeps it under
-            // anything but an explicit `stretch` - `normal` per css-grid-2 §6.2, and `start`/`center`/`end`
-            // because those size the item to its content.
-            var measuredAtNaturalSize = box.Width == Keywords.Auto && await HasNaturalSizeAsync(g, box, horizontal: true)
+            // A replaced item that keeps its natural width (see PlaceItemInCell) is measured at that size, not
+            // at the track's: pinning it would scale it by its aspect ratio. It keeps it under anything but
+            // an explicit `stretch` - `normal` per css-grid-2 §6.2, and `start`/`center`/`end` because those
+            // size the item to its content.
+            var natural = box.Width == Keywords.Auto ? await GetReplacedNaturalSizeAsync(g, box) : null;
+            var measuredAtNaturalSize = natural is { Width: true }
                 && !ResolveSelfAlignment(box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()).Isi(Keywords.Stretch);
             if (!measuredAtNaturalSize)
                 box.Width = FormatLayoutUnits(cssWidth, box);
@@ -1313,13 +1313,18 @@ namespace PeachPDF.Html.Core.Dom
             var autoHeight = box.Height == Keywords.Auto;
 
             // css-grid-2 §6.2: `normal` stretches an item only if it has no preferred aspect ratio and no
-            // natural size in that axis; an image or svg that has a natural size in an axis behaves as
-            // `start` there. An explicit `stretch` still stretches it, and so does an item with only an
-            // aspect ratio (a viewBox-only svg), which is how browsers treat it.
-            var stretchWidth = IsStretch(justify) && autoWidth
-                && !(justify.Isi(Keywords.Normal) && await HasNaturalSizeAsync(g, box, horizontal: true));
-            var stretchHeight = IsStretch(align) && autoHeight
-                && !(align.Isi(Keywords.Normal) && await HasNaturalSizeAsync(g, box, horizontal: false));
+            // natural size in that axis; an image or svg with a natural size in an axis behaves as `start`
+            // there. It is measured here, at `auto` width, because nothing guarantees the item's own word
+            // was measured at all (rows with an explicit height never run MeasureItemHeight) or was not
+            // left at the track width by it. An explicit `stretch` still stretches it, and so does an item
+            // with only an aspect ratio (a viewBox-only svg) under any alignment, which is how browsers
+            // treat it.
+            var natural = autoWidth || autoHeight ? await GetReplacedNaturalSizeAsync(g, box) : null;
+            var replaced = natural is not null;
+            var stretchWidth = autoWidth
+                && (replaced ? justify.Isi(Keywords.Stretch) || natural is { Width: false } : IsStretch(justify));
+            var stretchHeight = autoHeight && IsStretch(align)
+                && !(align.Isi(Keywords.Normal) && natural is { Height: true });
             var savedWidth = box.Width;
             var savedHeight = box.Height;
 
@@ -1340,9 +1345,19 @@ namespace PeachPDF.Html.Core.Dom
                 // added back for border-box (where ActualBoxSizeIncludedWidth is 0) and left alone for
                 // content-box (where it already equals that padding/border, cancelling to a no-op).
                 var ownPaddingBorder = HorizontalMarginBorderPadding(box) - box.ActualMarginLeft - box.ActualMarginRight;
+
+                // An item with a natural size whose height is explicitly stretched takes its width from that
+                // height through its aspect ratio, clamped to its area: a 2:1 image stretched to 80pt in a
+                // 100pt-wide area is 100pt wide, not left at its natural width with a distorted height.
+                var ratioWidth = stretchHeight && natural is { Width: true, Ratio: > 0 } naturalSize
+                    ? Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight) * naturalSize.Ratio!.Value
+                    : (double?)null;
+
                 var used = stretchWidth
                     ? cellContentWidth
-                    : await CssLayoutEngine.GetFitContentWidth(g, box, cellContentWidth);
+                    : ratioWidth is { } fromHeight
+                        ? Math.Min(fromHeight, cellContentWidth)
+                        : await CssLayoutEngine.GetFitContentWidth(g, box, cellContentWidth);
                 box.Width = FormatLayoutUnits(Math.Max(0, used + ownPaddingBorder - box.ActualBoxSizeIncludedWidth), box);
             }
             if (stretchHeight)
@@ -1392,21 +1407,33 @@ namespace PeachPDF.Html.Core.Dom
             return value;
         }
 
-        /// <summary>Whether a replaced item has a natural size in the given axis (an aspect ratio alone does
-        /// not count): a loaded raster image always does; an svg does when its own attributes give one
-        /// (<see cref="SvgIntrinsicSize.HasNaturalSize"/>).
-        /// The item's words are measured first, which is what loads an image and builds an inline svg: until
-        /// then neither knows its own size, and a grid reaches its items before anything else has.</summary>
-        private static async ValueTask<bool> HasNaturalSizeAsync(Canvas g, CssBox box, bool horizontal)
+        /// <summary>A replaced item's natural size: whether it has one in each axis (an aspect ratio alone is
+        /// not one), and its aspect ratio.</summary>
+        private readonly record struct ReplacedNaturalSize(bool Width, bool Height, double? Ratio);
+
+        /// <summary>The natural size of an image or inline svg, or null for any other box. The item's words
+        /// are measured first, which is what loads an image and builds an inline svg - until then neither
+        /// knows its size - and that leaves the word at the size its own <c>width</c>/<c>height</c> give it,
+        /// so callers ask while the box is still <c>auto</c> sized and before they pin anything.</summary>
+        private static async ValueTask<ReplacedNaturalSize?> GetReplacedNaturalSizeAsync(Canvas g, CssBox box)
         {
-            if (box is not (CssBoxImage or CssBoxSvg)) return false;
+            if (box is not (CssBoxImage or CssBoxSvg)) return null;
 
             await box.MeasureWordsSize(g);
 
-            if (box is CssBoxImage image)
-                return image.SvgDocument is { } svg ? SvgIntrinsicSize.HasNaturalSize(svg, horizontal) : image.Image is not null;
+            if (box is CssBoxImage { SvgDocument: null } raster)
+            {
+                var image = raster.Image;
+                return new ReplacedNaturalSize(image is not null, image is not null,
+                    image is { Height: > 0 } ? image.Width / image.Height : null);
+            }
 
-            return SvgIntrinsicSize.HasNaturalSize(((CssBoxSvg)box).Document, horizontal);
+            var document = box is CssBoxImage svgImage ? svgImage.SvgDocument : ((CssBoxSvg)box).Document;
+            var (width, height) = SvgIntrinsicSize.Resolve(document);
+            return new ReplacedNaturalSize(
+                SvgIntrinsicSize.HasNaturalSize(document, horizontal: true),
+                SvgIntrinsicSize.HasNaturalSize(document, horizontal: false),
+                width is > 0 && height is > 0 ? width / height : null);
         }
 
         private static bool IsStretch(string value) =>

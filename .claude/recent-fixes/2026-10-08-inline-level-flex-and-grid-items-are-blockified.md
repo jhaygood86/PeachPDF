@@ -98,6 +98,28 @@ stretch it; `SvgIntrinsicSize.HasNaturalSize` now answers per axis (own attribut
 not built, so `Image`/`Document` are null and every natural-size check was false (the whole theory failed,
 including the `normal` cases that had passed). `HasNaturalSizeAsync` awaits `MeasureWordsSize` first.
 
+**Second review round — the first fix was wrong in three more ways, all invisible to auto-row tests.**
+(1) `HasNaturalSizeAsync` awaits `MeasureWordsSize`, which re-runs `MeasureIntrinsicSize` on the item's
+phantom word *every time*. `PlaceItemInCell` called it after `MeasureItemHeight` had pinned the word to
+the track, so it reset a `viewBox`-only svg to its viewBox size just before `GetFitContentWidth` read it
+(`justify-items:center` gave 96x47 where `main` and Chrome fill the 100pt track). (2) A grid with an
+explicit `grid-template-rows` height never runs `MeasureItemHeight` at all (`!IsFixed(rows)`), so under
+`center`/`end` nothing had measured the image's own word: `GetFitContentWidth` returned 0 and the image
+painted from the track's centre, 48px right of where it belongs. **The `normal` case had only worked
+because the natural-size check happened to measure the word as a side effect** — and a plain inline
+`<img>` with `justify-self:center` was already broken that way on `main`. (3) Treating `align-self:
+stretch` as "stretch only that axis" left a sized image at its natural width with a 80pt-high box.
+The fix is one design rather than three patches: `GetReplacedNaturalSizeAsync` measures the word at
+`auto` width explicitly, right before it is used, and returns natural width, natural height and aspect
+ratio together; `PlaceItemInCell` then (a) stretches width under explicit `stretch` or when there is no
+natural width, (b) stretches height under `stretch` unless `normal` with a natural height, and (c) when
+only the height is stretched, takes the width from the ratio, clamped to the track (Chrome's 99.8x81).
+**Measuring this needs painted pixels, not `ActualWidth`:** a `display:block` image on `main` sits in a
+wrapper, so its own box reads 0 wide and says nothing; render the PDF and take the red bounding box (the
+maintainer's method). The mutation sweep (14 mutants: swapped axes, dropped viewBox branch, `> 0` to
+`>= 0`, reverted `normal`-only test, ...) is `scratchpad`-only, but its results are why the unit tests
+for `SvgIntrinsicSize.HasNaturalSize` and the explicit-row cases exist.
+
 **Still open: a grid container as a flex item** is sized from the flex container, not its tracks
 ([gap](../accepted-gaps/a-grid-container-as-a-flex-item-is-not-sized-to-its-tracks.md), issue #1663).
 

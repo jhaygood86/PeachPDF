@@ -21,9 +21,16 @@ lay out as before.
 
 A replaced grid item (`<img>`, inline `<svg>`) now keeps its natural size under the default
 `justify-self`/`align-self: normal`, and under `start`/`center`/`end`, instead of being stretched across
-its track (css-grid-2 §6.2). An explicit `stretch` still stretches it, and so does an item with no natural
-size in that axis (an `<svg>` or SVG image with a `viewBox` but no `width`/`height`). This applies to
-`<img style="display:block">` too.
+its track (css-grid-2 §6.2), including in a row with an explicit `grid-template-rows` height (where an
+inline `<img>` with `justify-self: center` used to paint from the middle of its track). An explicit
+`justify-self: stretch` still stretches it; an explicit `align-self: stretch` fills the row's height and
+takes its width from that height through the aspect ratio, up to its track. An item with no natural width
+(an `<svg>` or SVG image with a `viewBox` but no `width`/`height`) fills its track under any alignment.
+This applies to `<img style="display:block">` too.
+
+**One regression is knowingly left:** an absolutely or fixed positioned `<img>`/`<svg>` inside an
+`inline-flex` container used to paint (the wrapper hid that an `inline-flex` box never lays out its
+out-of-flow children) and no longer does; the same `<div>` was never laid out on any version. See #1665.
 
 Known leftover: an `inline-grid` item's auto width in a flex row is wider than its content (a 2×50pt
 grid measured 290pt rather than 100pt, pushing its sibling away); it was also wrong before, differently.
