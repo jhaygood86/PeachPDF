@@ -63,3 +63,30 @@ animation, so both are additions, not rewrites.
 cross-fading page rasterized with both MuPDF and PDFium at none/start/0.45/0.5/0.55/end (the 45%-55% ramp of the
 keyframes lands exactly there); the animation showcase (one PDF of three pages, built with `AddPdfPages` and a config
 per page) rasterized with both.
+
+## Review follow-ups (traps worth knowing)
+
+- **A `var()` author declaration is still *pending* when the animation step runs** (the cascade resolves them at its very
+  end). Two bugs fell out of that: the implicit 0%/100% keyframe read the UA default instead of the author's value
+  (`width: var(--w)` + `to { width: 400px }` flipped from `auto` at 50%), and a pending entry for an animated property resolved
+  *over* the animated value afterwards. `Apply` now resolves the pending entries that overlap the animated properties
+  (`DomParser.ResolveDeferredVarProperties(..., only)`) before sampling, and removes them. "Overlap" includes a pending
+  *shorthand* whose longhand is animated - `margin: var(--m)` with `margin-left` keyframes used to overwrite the animation
+  with `--m`; found by a test, not by the review.
+- **A shorthand with `var()` stays whole in a keyframe** (the CSS-OM only splits a shorthand it can see through), so a
+  resolved keyframe value is expanded into longhands (`ExpandShorthand`) before sampling; the registry has no setter for the
+  shorthand name itself.
+- **Global keywords in keyframes** `inherit`/`initial`/`unset` are kept and resolved against the box at sample time (same arms
+  as `AssignCssBlock`); `revert` resolves to the cascade's UA-level snapshot (the animation origin counts as author origin for it, Cascade 5 §7.3.4 - the snapshot is only taken when a keyframe uses `revert`, via `HtmlContainerInt.KeyframesUseRevert`) and `revert-layer` to the value the box holds when the animation step runs (the animation origin is a layer of its own, §7.3.5).
+- **Zero-duration `forwards`** shares `AnimationTimeline.EndOfActiveInterval` with the finished-run case, so a fractional
+  iteration count ends at its remainder rather than at 1.
+- `ClonePdfAConfig` in the TestHarness copies the config by hand (deliberately not attachments or FacturX, which PDF/A-2B rejects): a new property that is not copied silently
+  makes the PDF/A sweep validate a different document from the showcase.
+- **`@supports (animation-name: ...)` is true whether or not `AnimationProgress` is set** - decided, not overlooked. A
+  browser answers `@supports` about the implementation, never about the user's settings (reduced motion leaves it true;
+  `prefers-reduced-motion` is the author's hook, and PeachPDF already reports `reduce`). Gating it on the config would need
+  the flag threaded into the stylesheet parser, since `DeclarationCondition.Check` runs at parse time with no context, and
+  would make PeachPDF answer differently from a browser. Revisit only if a maintainer wants the gate.
+- `animation-*` values from `var()` are read: the applier settles the deferred `animation*` declarations before reading
+  them (same `ResolveDeferredVarProperties(..., only)` filter). Known edge: custom properties declared `!important` are not
+  yet visible at that point - see the limitations note.

@@ -968,6 +968,12 @@ namespace PeachPDF.Html.Core
         internal IReadOnlyDictionary<string, KeyframeSet> Keyframes { get; set; }
             = new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Whether any keyframe declares <c>revert</c>, which the cascade then keeps the UA-level snapshot for
+        /// (the value <c>revert</c> rolls back to). Decided once when the keyframes are registered.
+        /// </summary>
+        internal bool KeyframesUseRevert { get; set; }
+
         /// <summary>The document's <c>@counter-style</c> rules; null when it declares none.</summary>
         internal CounterStyleRegistry? CounterStyles { get; set; }
 

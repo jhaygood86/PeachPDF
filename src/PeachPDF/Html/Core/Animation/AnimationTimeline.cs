@@ -51,29 +51,16 @@ namespace PeachPDF.Html.Core.Animation
             {
                 if (!fillsForwards) return null;
 
-                // The animation ends the instant it starts; what is left is its last iteration's final state.
-                var lastIteration = double.IsPositiveInfinity(iterationCount) || !(iterationCount > 0) ? 0 : Math.Ceiling(iterationCount) - 1;
-                return Direct(1, lastIteration, direction);
+                // The animation ends the instant it starts; what is left is where its active interval ends.
+                var (finalProgress, finalIteration) = iterationCount > 0 ? EndOfActiveInterval(iterationCount) : (1d, 0d);
+                return Direct(finalProgress, finalIteration, direction);
             }
 
             double iterationProgress, currentIteration;
 
             if (fraction >= 1)
             {
-                if (double.IsPositiveInfinity(iterationCount))
-                {
-                    // No end: the end of the first cycle.
-                    iterationProgress = 1;
-                    currentIteration = 0;
-                }
-                else
-                {
-                    // CSS Animations 1 §4.3 / Web Animations 1 §4.6.3: at the end of the active interval the
-                    // iteration progress is the fractional part of the count, or 1 for a whole number of cycles.
-                    var remainder = iterationCount % 1;
-                    iterationProgress = remainder == 0 ? 1 : remainder;
-                    currentIteration = remainder == 0 ? iterationCount - 1 : Math.Floor(iterationCount);
-                }
+                (iterationProgress, currentIteration) = EndOfActiveInterval(iterationCount);
             }
             else
             {
@@ -84,6 +71,19 @@ namespace PeachPDF.Html.Core.Animation
             }
 
             return Direct(iterationProgress, currentIteration, direction);
+        }
+
+        /// <summary>
+        /// The iteration progress and the (zero-based) iteration at the end of the active interval. CSS Animations
+        /// 1 §4.3 / Web Animations 1 §4.6.3: the progress is the fractional part of the count, or 1 for a whole
+        /// number of cycles. An infinite animation has no end, so its end is the end of the first cycle.
+        /// </summary>
+        private static (double IterationProgress, double CurrentIteration) EndOfActiveInterval(double iterationCount)
+        {
+            if (double.IsPositiveInfinity(iterationCount)) return (1, 0);
+
+            var remainder = iterationCount % 1;
+            return remainder == 0 ? (1, iterationCount - 1) : (remainder, Math.Floor(iterationCount));
         }
 
         private static double Direct(double iterationProgress, double currentIteration, AnimationDirectionKind direction)

@@ -17,8 +17,13 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   stops is read as plain `linear`. Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation space), and
   only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
 - **Not animated:** custom properties registered with `@property`, `animation-composition` (`add`/`accumulate`),
-  `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, `animation-*` values
-  that arrive through `var()` (they are resolved after the animation step), and the declarative document-building API
-  (its cascade is a different entry point and does not call the applier).
+  `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
+  document-building API (its cascade is a different entry point and does not call the applier).
+- **`!important` custom properties are not seen by `var()` in an animated property.** The animation step sits before the
+  author-`!important` phase, so for a property the animation owns - or an `animation-*` property - `var(--x)` resolves
+  against the custom properties as the normal phases left them. `#a { --w: 100pt; width: var(--w) }` plus
+  `#a { --w: 300pt !important }` therefore gives the implicit keyframe 100pt, not 300pt. Properties the animation does not
+  touch resolve at the very end of the cascade and are unaffected. Fixing it means resolving custom properties' important
+  declarations ahead of the animation step.
 - **SMIL** (`<animate>`, `<animateTransform>`) is separate and out of scope - see
   [svg-features-out-of-scope](svg-features-out-of-scope.md).

@@ -99,6 +99,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     TextHinting = source.TextHinting,
     TextStemDarkening = source.TextStemDarkening,
     MaxRasterPixels = source.MaxRasterPixels,
+    AnimationProgress = source.AnimationProgress,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
     MarginLeft = source.MarginLeft,

@@ -71,6 +71,14 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0.0, AnimationTimeline.DirectedProgress(0.5, 0, 1, AnimationDirectionKind.Reverse, true)!.Value, 9);
         }
 
+        [Theory]
+        [InlineData("Normal", 2.5, 0.5)]            // the end state of 2.5 iterations is half way through the third
+        [InlineData("Alternate", 2.5, 0.5)]         // third iteration (index 2) runs forward
+        [InlineData("Alternate", 1.5, 0.5)]         // second iteration runs backward: 1 - 0.5
+        [InlineData("Alternate", 2, 0.0)]           // second iteration, whole: ends at its 0% (backward)
+        public void Timeline_ZeroDurationFillingForwards_EndsWhereTheFinalIterationEnds(string direction, double count, double expected) =>
+            Assert.Equal(expected, AnimationTimeline.DirectedProgress(0.5, 0, count, Enum.Parse<AnimationDirectionKind>(direction), true)!.Value, 9);
+
         [Fact]
         public void Timeline_ZeroIterations_HasNoEffectUnlessItFillsForwards() =>
             Assert.Null(AnimationTimeline.DirectedProgress(0.5, 1, 0, AnimationDirectionKind.Normal, false));
@@ -479,6 +487,196 @@ namespace PeachPDF.Tests.Integration
             await generator.AddPdfPages(document, FadingLogos, At(1));
 
             Assert.Equal(3, document.PageCount);
+        }
+
+        // ─── Underlying value, var() and global keywords ─────────────────────────
+
+        [Fact]
+        public async Task ImplicitKeyframe_TakesAnAuthorVarDeclarationAsTheUnderlyingValue()
+        {
+            // width is still a deferred var() declaration when the animation step runs; the implicit 0% keyframe
+            // must be its resolved value (200pt), not the UA default (auto, which cannot be mixed).
+            var root = await BuildAsync("""
+                <style>@keyframes k { to { width: 400pt } }
+                #a { --w: 200pt; width: var(--w); height: 10pt; animation: k 1s linear; }</style><div id="a"></div>
+                """, 0.5);
+
+            var a = Find(root, "a");
+            Assert.Equal(300.0, a.ActualRight - a.Location.X, 1);
+        }
+
+        [Fact]
+        public async Task ImplicitKeyframe_WithAVarOpacity_MixesFromTheResolvedValue()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { to { opacity: 0 } }
+                #a { --o: 0.8; opacity: var(--o); animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal(0.4, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task ShorthandWithVarInAKeyframe_IsExpandedAndAnimated()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { margin: var(--m) } to { margin: 40pt } }
+                #a { --m: 20pt; margin: var(--m); animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.5);
+
+            var a = Find(root, "a");
+            Assert.Equal("30pt", a.MarginLeft.ToString());
+            Assert.Equal("30pt", a.MarginTop.ToString());
+        }
+
+        [Fact]
+        public async Task PendingVarShorthand_IsNotLostWhenOnlyALonghandIsAnimated()
+        {
+            // The animation owns margin-left; the rest of the margin: var() declaration still resolves.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { margin-left: 0pt } to { margin-left: 100pt } }
+                #a { --m: 20pt; margin: var(--m); animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.5);
+
+            var a = Find(root, "a");
+            Assert.Equal("50pt", a.MarginLeft.ToString());
+            Assert.Equal("20pt", a.MarginTop.ToString());
+        }
+
+        [Fact]
+        public async Task UnrelatedVarDeclaration_StillResolvesAfterTheAnimationStep()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { --w: 90pt; width: var(--w); height: 10pt; animation: k 1s linear; }</style><div id="a"></div>
+                """, 0.5);
+
+            var a = Find(root, "a");
+            Assert.Equal(90.0, a.ActualRight - a.Location.X, 1);
+            Assert.Equal(0.5, Opacity(a), 3);
+        }
+
+        [Fact]
+        public async Task KeyframeInherit_ResolvesAgainstTheParent()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: inherit } to { opacity: 1 } }
+                #p { opacity: 0.2; } #c { animation: k 1s linear; }</style><div id="p"><div id="c">x</div></div>
+                """, 0.0);
+
+            Assert.Equal(0.2, Opacity(Find(root, "c")), 3);
+        }
+
+        [Fact]
+        public async Task KeyframeInitial_ResolvesToTheInitialValue()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: initial } }
+                #a { opacity: 0.5; animation: k 1s linear; }</style><div id="a">x</div>
+                """, 1.0);
+
+            Assert.Equal(1.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task KeyframeUnset_ResolvesLikeInheritOrInitial()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { color: unset; opacity: unset } to { color: unset; opacity: unset } }
+                #p { color: rgb(0, 0, 255); opacity: 0.3 } #c { color: rgb(255, 0, 0); opacity: 0.5; animation: k 1s; }</style>
+                <div id="p"><div id="c">x</div></div>
+                """, 0.5);
+
+            var c = Find(root, "c");
+            Assert.Equal("rgb(0, 0, 255)", c.Color);   // color is inherited: unset = inherit
+            Assert.Equal(1.0, Opacity(c), 3);          // opacity is not: unset = initial
+        }
+
+        [Fact]
+        public async Task KeyframeRevert_RollsBackToTheUserAgentValue()
+        {
+            // The author's 0.5 is below the animation origin's reach: revert goes to the UA level, where opacity is 1.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: revert } to { opacity: 0 } }
+                #a { opacity: 0.5; animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.0);
+
+            Assert.Equal(1.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task KeyframeRevert_NamingAUserAgentStyledProperty_UsesTheUaRule()
+        {
+            // The UA sheet gives a <p> its margins; the author sheet overrides one, and revert undoes the override
+            // - so it matches an untouched <p>, which an ignored keyword would not.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { margin-top: revert } to { margin-top: revert } }
+                #a { margin-top: 3pt; animation: k 1s; }</style><p id="a">x</p><p id="b">y</p>
+                """, 0.5);
+
+            var animated = Find(root, "a").MarginTop.ToString();
+            Assert.NotEqual("3pt", animated);
+            Assert.Equal(Find(root, "b").MarginTop.ToString(), animated);
+        }
+
+        [Fact]
+        public async Task KeyframeRevertLayer_RollsBackToTheAuthorValue()
+        {
+            // The animation origin is a layer of its own, so the layer below is the author's 0.8 - at the middle
+            // keyframe, not just where an implicit keyframe would have filled it in.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } 50% { opacity: revert-layer } to { opacity: 0 } }
+                #a { opacity: 0.8; animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal(0.8, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task AnimationProperties_GivenThroughVar_AreRead()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { --n: k; --d: 2s; animation-name: var(--n); animation-duration: var(--d); animation-timing-function: linear; }
+                #b { --all: k 1s linear; animation: var(--all); }</style><div id="a">x</div><div id="b">y</div>
+                """, 0.5);
+
+            Assert.Equal(0.5, Opacity(Find(root, "a")), 3);
+            Assert.Equal(0.5, Opacity(Find(root, "b")), 3);
+        }
+
+        [Fact]
+        public async Task KeyframeInheritOnAShorthand_ExpandsToTheParentsLonghands()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { margin: inherit } to { margin: 0pt } }
+                #p { margin-left: 30pt; } #c { animation: k 1s linear; }</style><div id="p"><div id="c">x</div></div>
+                """, 0.0);
+
+            Assert.Equal("30pt", Find(root, "c").MarginLeft.ToString());
+        }
+
+        [Fact]
+        public async Task KeyframeSet_UsesRevertOnlyForADeclarationThatSurvives()
+        {
+            var adapter = new PdfSharpAdapter();
+            var overridden = RegisteredKeyframes.BuildRegistry(await CssData.Parse(adapter, "@keyframes k { to { opacity: revert; opacity: 1 } }"));
+            var used = RegisteredKeyframes.BuildRegistry(await CssData.Parse(adapter, "@keyframes k { to { opacity: revert } }"));
+
+            Assert.False(overridden["k"].UsesRevert);
+            Assert.True(used["k"].UsesRevert);
+        }
+
+        [Fact]
+        public async Task KeyframeRevert_CostsNothingWhenNoKeyframeUsesIt()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { opacity: 0.8; animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.False(root.HtmlContainer!.KeyframesUseRevert);
+            Assert.Equal(0.5, Opacity(Find(root, "a")), 3);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

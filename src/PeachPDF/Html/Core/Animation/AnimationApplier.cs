@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -23,14 +24,26 @@ namespace PeachPDF.Html.Core.Animation
         /// <param name="valueParser">The cascade's value parser.</param>
         /// <param name="box">The box being cascaded.</param>
         /// <param name="fraction">Where in its run each animation is sampled, 0 to 1.</param>
-        /// <param name="pendingVarProperties">The cascade's deferred <c>var()</c> declarations; an animated
-        /// property's earlier entry is dropped so its resolution cannot overwrite the animated value.</param>
-        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties)
+        /// <param name="pendingVarProperties">The cascade's deferred <c>var()</c> declarations; those covering an
+        /// animated property are resolved and removed here, so the animated value is not overwritten later.</param>
+        /// <param name="uaSnapshot">The box's properties as the UA stylesheet left them, which a keyframe's
+        /// <c>revert</c> rolls back to; null when no keyframe uses <c>revert</c>.</param>
+        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot)
         {
-            var names = SplitList(box.AnimationName);
-            if (names.Count == 0) return;
-
+            // Nearly every box names no animation; settle that before allocating anything.
             if (box.HtmlContainer?.Keyframes is not { Count: > 0 } keyframes) return;
+
+            // The cascade resolves var() last, so `animation-name: var(--n)` or `animation: var(--a)` is still
+            // deferred here; settle the animation-* declarations before they are read.
+            if (pendingVarProperties.Count > 0)
+            {
+                DomParser.ResolveDeferredVarProperties(valueParser, box, pendingVarProperties,
+                    name => name.StartsWith("animation", StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (IsNone(box.AnimationName)) return;
+
+            var names = SplitList(box.AnimationName);
 
             var durations = SplitList(box.AnimationDuration);
             var iterationCounts = SplitList(box.AnimationIterationCount);
@@ -59,30 +72,143 @@ namespace PeachPDF.Html.Core.Animation
 
                 var easing = EasingFunction.TryParse(Cycle(timingFunctions, i), out var parsed) ? parsed : EasingFunction.Ease;
 
-                foreach (var property in set.Properties)
+                // An animated property's author declaration may still be waiting on var() resolution, which the
+                // cascade only does at its very end. Settle those now: the implicit 0%/100% keyframe stands for the
+                // value the author wrote (§4.2), and a deferred entry left behind would resolve over the animated
+                // value afterwards. A deferred shorthand (margin: var(--m)) is settled when any longhand it covers
+                // is animated; the longhands the animation does not own keep what that resolution gave them.
+                if (pendingVarProperties.Count > 0)
                 {
-                    var value = Sample(valueParser, box, set, property, directed, easing);
-                    if (value is null) continue;
+                    DomParser.ResolveDeferredVarProperties(valueParser, box, pendingVarProperties, name => Overlaps(name, set.DeclaredNames));
+                }
 
-                    pendingVarProperties.Remove(property);
-                    CssUtils.SetPropertyValue(valueParser, box, property, value);
+                var stops = ResolveStops(valueParser, box, set, uaSnapshot);
+                var animated = new List<string>();
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var stop in stops)
+                {
+                    foreach (var property in stop.Values.Keys)
+                    {
+                        if (seen.Add(property)) animated.Add(property);
+                    }
+                }
+
+                foreach (var property in animated)
+                {
+                    var value = Sample(valueParser, box, stops, property, directed, easing);
+                    if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
                 }
             }
         }
 
-        /// <summary>The value of one property at <paramref name="progress"/> through the keyframes, or null if it has none.</summary>
-        private static string? Sample(CssValueParser valueParser, CssBox box, KeyframeSet set, string property, double progress, EasingFunction animationEasing)
+        private static bool IsNone(string? list) =>
+            string.IsNullOrWhiteSpace(list) || list.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Whether a deferred declaration for <paramref name="name"/> covers a property the animation owns.</summary>
+        private static bool Overlaps(string name, HashSet<string> animated)
         {
-            var frames = new List<(double Offset, string Value, string? Easing)>();
+            if (animated.Contains(name)) return true;
+
+            foreach (var longhand in PropertyFactory.Instance.GetLonghands(name))
+            {
+                if (animated.Contains(longhand)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>One keyframe with its values settled: <c>var()</c> substituted, global keywords resolved against the box, shorthands split into longhands.</summary>
+        private sealed record ResolvedStop(double Offset, string? Easing, Dictionary<string, string> Values);
+
+        private static List<ResolvedStop> ResolveStops(CssValueParser valueParser, CssBox box, KeyframeSet set, IReadOnlyDictionary<string, string?>? uaSnapshot)
+        {
+            var stops = new List<ResolvedStop>(set.Stops.Count);
 
             foreach (var stop in set.Stops)
             {
-                if (!stop.Declarations.TryGetValue(property, out var declared)) continue;
+                var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-                var value = ResolveVariables(valueParser, box, declared);
-                if (value is null) continue;
+                foreach (var (name, declared) in stop.Declarations)
+                {
+                    var resolved = ResolveGlobalKeyword(box, name, declared, uaSnapshot);
+                    if (resolved is null) continue;
 
-                frames.Add((stop.Offset, value, stop.Easing));
+                    resolved = ResolveVariables(valueParser, box, resolved);
+                    if (resolved is null) continue;
+
+                    foreach (var (longhand, value) in ExpandShorthand(name, resolved))
+                        values[longhand] = value;
+                }
+
+                stops.Add(new ResolvedStop(stop.Offset, stop.Easing, values));
+            }
+
+            return stops;
+        }
+
+        /// <summary>
+        /// <c>inherit</c>, <c>initial</c> and <c>unset</c> in a keyframe resolve against the element the animation
+        /// runs on, as the cascade resolves them in a rule. <c>revert</c> rolls back to the UA level (the animation
+        /// origin counts as author origin for it, CSS Cascade 5 §7.3.4), and <c>revert-layer</c> to the layer below:
+        /// the animation origin is a layer of its own (§7.3.5), so that is the author-level value the box holds now.
+        /// Null when the property has no such value.
+        /// </summary>
+        private static string? ResolveGlobalKeyword(CssBox box, string name, string value, IReadOnlyDictionary<string, string?>? uaSnapshot)
+        {
+            if (!CssGlobalKeywords.TryParse(value, out var keyword)) return value;
+
+            return keyword switch
+            {
+                CssGlobalKeyword.Inherit when box.ParentBox is not null => CssUtils.GetPropertyValue(box.ParentBox, name),
+                CssGlobalKeyword.Unset when box.ParentBox is not null && CssDefaults.InheritedProperties.Contains(name) => CssUtils.GetPropertyValue(box.ParentBox, name),
+                // The snapshot holds null for a property the UA left unset, which reverts to the initial value.
+                CssGlobalKeyword.Revert => uaSnapshot is not null && uaSnapshot.TryGetValue(name, out var uaValue) && uaValue is not null
+                    ? uaValue
+                    : CssDefaults.GetInitialValue(name),
+                CssGlobalKeyword.RevertLayer => CssUtils.GetPropertyValue(box, name),
+                _ => CssDefaults.GetInitialValue(name)
+            };
+        }
+
+        /// <summary>
+        /// The CSS-OM expands a shorthand into longhands as it parses, except one holding <c>var()</c>, which is kept
+        /// whole until the reference resolves. This is that expansion, for a keyframe value that has just resolved.
+        /// A longhand (the common case) comes back as itself.
+        /// </summary>
+        private static IEnumerable<(string Name, string Value)> ExpandShorthand(string name, string value)
+        {
+            if (!PropertyFactory.Instance.IsShorthand(name))
+            {
+                yield return (name, value);
+                yield break;
+            }
+
+            if (StylesheetParser.Default.ParseDeclaration($"{name}: {value}") is not ShorthandProperty { HasValue: true } shorthand) yield break;
+
+            var longhands = PropertyFactory.Instance.CreateLonghandsFor(name);
+            shorthand.Export(longhands);
+
+            foreach (var longhand in longhands)
+            {
+                // A longhand the shorthand text did not mention resets to its initial value, as in the cascade.
+                var longhandValue = longhand.HasValue && longhand.Value != Keywords.Initial
+                    ? longhand.Value
+                    : CssDefaults.GetInitialValue(longhand.Name);
+
+                if (longhandValue is not null) yield return (longhand.Name, longhandValue);
+            }
+        }
+
+        /// <summary>The value of one property at <paramref name="progress"/> through the keyframes, or null if it has none.</summary>
+        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing)
+        {
+            var frames = new List<(double Offset, string Value, string? Easing)>();
+
+            foreach (var stop in stops)
+            {
+                if (stop.Values.TryGetValue(property, out var value))
+                    frames.Add((stop.Offset, value, stop.Easing));
             }
 
             if (frames.Count == 0) return null;

@@ -119,6 +119,7 @@ namespace PeachPDF.Html.Core.Parse
             htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null
                 ? RegisteredKeyframes.BuildRegistry(cssData)
                 : new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
+            htmlContainer.KeyframesUseRevert = htmlContainer.Keyframes.Values.Any(set => set.UsesRevert);
 
             // Collect @counter-style rules (consulted when formatting a counter()/list marker).
             htmlContainer.CounterStyles = CounterStyles.CounterStyleRegistry.BuildRegistry(cssData);
@@ -1150,7 +1151,9 @@ namespace PeachPDF.Html.Core.Parse
 
             // 3. UA normal (no cascade layers in the UA sheet, so revert-layer target == revert target)
             AssignCssBlocks(valueParser, box, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
-            var needsUaSnapshot = authorUsesRevert;
+            // A keyframe's `revert` rolls back to this same UA-level state (the animation origin counts as author
+            // origin for revert, CSS Cascade 5 §7.3.4), so it asks for the snapshot too.
+            var needsUaSnapshot = authorUsesRevert || box.HtmlContainer?.KeyframesUseRevert == true;
             var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
@@ -1190,7 +1193,7 @@ namespace PeachPDF.Html.Core.Parse
             // !important phases below. Skipped outright, and at no cost, unless a snapshot was asked for.
             if (box.HtmlContainer?.AnimationProgress is { } animationProgress)
             {
-                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties);
+                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot);
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to
@@ -2288,7 +2291,13 @@ namespace PeachPDF.Html.Core.Parse
         /// --b: var(--c); --c: var(--a);) are detected correctly regardless of which pending property triggers
         /// the lookup first.
         /// </summary>
-        private static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, Dictionary<string, string> pendingVarProperties)
+        /// <param name="valueParser">The cascade's value parser.</param>
+        /// <param name="box">The box being cascaded.</param>
+        /// <param name="pendingVarProperties">The deferred declarations, keyed by property name.</param>
+        /// <param name="only">When given, resolves just the entries whose property name it accepts and removes them
+        /// from <paramref name="pendingVarProperties"/>; the animation step uses this to settle the properties it is
+        /// about to animate, so their underlying value is real and nothing resolves over the animated value later.</param>
+        internal static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, Dictionary<string, string> pendingVarProperties, Func<string, bool>? only = null)
         {
             if (pendingVarProperties.Count == 0) return;
 
@@ -2301,13 +2310,20 @@ namespace PeachPDF.Html.Core.Parse
                 ? new CssVarResolver.VarContext(registered, valueParser)
                 : null;
 
-            foreach (var (name, rawValue) in pendingVarProperties)
+            IEnumerable<KeyValuePair<string, string>> entries = only is null
+                ? pendingVarProperties
+                : pendingVarProperties.Where(entry => only(entry.Key)).ToList();
+
+            foreach (var (name, rawValue) in entries)
             {
                 var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic, context);
                 var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
 
                 if (finalValue is not null)
                     ApplyResolvedPropertyValue(valueParser, box, name, finalValue);
+
+                if (only is not null)
+                    pendingVarProperties.Remove(name);
             }
         }
 

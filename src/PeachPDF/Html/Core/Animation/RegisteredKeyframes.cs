@@ -7,7 +7,7 @@ namespace PeachPDF.Html.Core.Animation
 {
     /// <summary>One keyframe: the declarations that apply at <see cref="Offset"/> (0 to 1) of an animation.</summary>
     /// <param name="Offset">Where the keyframe sits in the animation, 0 for <c>0%</c>/<c>from</c> to 1 for <c>100%</c>/<c>to</c>.</param>
-    /// <param name="Declarations">Property name to specified value; no <c>!important</c>, global-keyword or <c>animation-*</c> entries.</param>
+    /// <param name="Declarations">Property name to specified value; no <c>!important</c> or <c>animation-*</c> entries.</param>
     /// <param name="Easing">The keyframe's own <c>animation-timing-function</c>, which eases the interval that starts here; null to use the animation's.</param>
     internal sealed record KeyframeStop(double Offset, Dictionary<string, string> Declarations, string? Easing);
 
@@ -19,9 +19,30 @@ namespace PeachPDF.Html.Core.Animation
         public KeyframeSet(IReadOnlyList<KeyframeStop> stops)
         {
             Stops = stops;
+
+            // Worked out once, here, from the declarations that survived: a `revert` a later declaration in the same
+            // keyframe overrode is not counted.
+            DeclaredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var stop in stops)
+            {
+                foreach (var (name, value) in stop.Declarations)
+                {
+                    DeclaredNames.Add(name);
+                    DeclaredNames.UnionWith(PropertyFactory.Instance.GetLonghands(name));
+
+                    if (CssGlobalKeywords.TryParse(value, out var keyword) && keyword == CssGlobalKeyword.Revert)
+                        UsesRevert = true;
+                }
+            }
         }
 
         public IReadOnlyList<KeyframeStop> Stops { get; }
+
+        /// <summary>Whether a declaration is <c>revert</c>, which rolls back to the UA value and so needs the cascade to keep that snapshot.</summary>
+        public bool UsesRevert { get; }
+
+        /// <summary>Every property name the keyframes declare, plus the longhands of any shorthand among them.</summary>
+        public HashSet<string> DeclaredNames { get; }
 
         /// <summary>Every property any keyframe declares, in the order first declared.</summary>
         public IEnumerable<string> Properties =>
@@ -81,8 +102,9 @@ namespace PeachPDF.Html.Core.Animation
                             continue;
                         }
 
-                        if (!IsAnimatable(property.Name) || CssGlobalKeywords.TryParse(property.Value, out _)) continue;
+                        if (!IsAnimatable(property.Name)) continue;
 
+                        // The CSS-wide keywords are kept and resolved against the element when sampled.
                         existing.Declarations[property.Name] = property.Value;
                     }
 
