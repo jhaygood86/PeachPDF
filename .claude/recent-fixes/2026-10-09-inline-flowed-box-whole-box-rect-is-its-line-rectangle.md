@@ -17,7 +17,7 @@ rotated `inline-block` square was missing, and in a longer page it showed up dis
 
 `FragmentEmitter.ExtentOf` starts from `ClipSourceBoundsOf` (the union of the box's line rectangles for an
 inline-level box that has any, `Bounds` otherwise) instead of `BoundsOf`, and
-`MarginBoxContentFragmentBuilder` (running elements, footnote bodies) builds `WholeBoxRect` from
+`MarginBoxContentFragmentBuilder` (running elements; footnote bodies share it but do not paint such a box at all, [issue #1690](https://github.com/jhaygood86/PeachPDF/issues/1690)) builds `WholeBoxRect` from
 `RenderUtils.ClipSourceBoundsOf` the same way. That is the stand-in the `overflow` clip already used for exactly
 this reason. These are the two builders of a `BoxFragment`; a new one has to do the same, since nothing makes the
 choice for it (a single "border box of any box" helper was considered and not done: the two builders read
@@ -47,7 +47,7 @@ different sources, a live box and a geometry snapshot).
   Measured against Chrome after the fix, in both axes: a 40pt `<img>` rotated 45 degrees has its box centre where
   Chrome has it.
 - **A transform on a plain non-replaced inline box is now visible**, where Chrome ignores it (it is not a
-  transformable element). It used to be drawn off the page, which is no more right
+  transformable element). It used to be drawn displaced, about the wrong point, which is no more right
   ([issue #1684](https://github.com/jhaygood86/PeachPDF/issues/1684)).
 - An identity transform was never affected (no matrix to rebase), which is why `rotate(0deg) scale(1)` drew.
 
@@ -59,7 +59,7 @@ and `MarginBoxContentClipTests.FlowedInlineBlock_WholeBoxRect_IsItsLineRectangle
 merge base. `perspective()` and filter extents have no assertion of their own: they read the same
 `WholeBoxRect`, which the tests above pin, and were checked by rasterizing. The new `inline_block_effects`
 showcase rasterizes identically in PDFium and MuPDF, and every existing showcase regenerates with byte-identical
-page content streams before and after. The defect is present at `v0.9.20` (same `ExtentOf` line).
+page content streams before and after. The defect is present at `v0.9.21` (same `ExtentOf` line).
 
 ## Not done
 

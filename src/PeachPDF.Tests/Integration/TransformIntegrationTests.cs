@@ -506,6 +506,9 @@ namespace PeachPDF.Tests.Integration
         [InlineData("bottom center", 0.5, 1.0)]
         [InlineData("bottom right", 1.0, 1.0)]
         [InlineData("left", 0.0, 0.5)]
+        [InlineData("top", 0.5, 0.0)]               // a lone vertical keyword leaves x at the centre
+        [InlineData("bottom", 0.5, 1.0)]
+        [InlineData("right", 1.0, 0.5)]
         public async Task ParseTransformOrigin_Keywords_ResolveAgainstAFlowedInlineBlocksLineRectangle(
             string origin, double fractionX, double fractionY)
         {
