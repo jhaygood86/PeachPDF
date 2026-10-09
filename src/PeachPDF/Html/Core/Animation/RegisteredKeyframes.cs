@@ -44,9 +44,6 @@ namespace PeachPDF.Html.Core.Animation
         /// <summary>Every property name the keyframes declare, plus the longhands of any shorthand among them.</summary>
         public HashSet<string> DeclaredNames { get; }
 
-        /// <summary>Every property any keyframe declares, in the order first declared.</summary>
-        public IEnumerable<string> Properties =>
-            Stops.SelectMany(stop => stop.Declarations.Keys).Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

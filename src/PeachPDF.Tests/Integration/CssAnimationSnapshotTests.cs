@@ -675,6 +675,31 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0.5, Opacity(Find(root, "b")), 3);    // the important 2s run is the one sampled; half of it is still 0.5
         }
 
+        [Theory]
+        [InlineData("animation-name: inherit !important", 1.0)]   // the parent's animation-name is none
+        [InlineData("animation-name: initial !important", 1.0)]
+        [InlineData("animation-name: unset !important", 1.0)]
+        [InlineData("animation-name: revert !important", 1.0)]    // rolls back to the UA level, where animation-name is none
+        public async Task ImportantAnimationProperty_WithAGlobalKeyword_Resolves(string declaration, double expectedOpacity)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 0 }} }}
+                #a {{ animation: k 1s; {declaration}; }}</style><div id=""p""><div id=""a"">x</div></div>", 0.5);
+
+            Assert.Equal(expectedOpacity, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task ImportantAnimationProperty_HoldingVar_IsReadAfterResolution()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { --n: k; animation-name: var(--n) !important; animation-duration: 1s; animation-timing-function: linear; }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal(0.5, Opacity(Find(root, "a")), 3);
+        }
+
         [Fact]
         public async Task ImportantInlineAnimationNone_BeatsAStylesheetAnimation()
         {
