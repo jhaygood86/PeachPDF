@@ -16,3 +16,12 @@ Three changes a document author could notice, alongside the new opt-in `PdfGener
   read back and `@supports`/`getComputedStyle`-like consumers now see the real ones.
 - **`@supports (animation-name: ...)` is now true** (it was false: the property was not rendered). `@supports (transition-*)`
   is still false. A stylesheet that used `@supports not (animation-name: x) { ... }` as a fallback no longer applies it.
+
+## Text extraction and tagged order follow the new paint order
+
+A stacking context created by `opacity` below 1, `transform` or `filter` on a non-positioned element is now painted with
+the positioned boxes of its stacking context, in tree order, instead of before all of them. The text it contains is written
+to the content stream at that point too, so **extracted text and tagged-PDF reading order change for such documents**: the
+text of an element with `opacity: .8`, say, now comes after the in-flow content that follows it in the markup, as it is
+painted. Two adjacent words whose spaces were separate text runs can come out joined in an extraction that reads purely by
+stream order. Pages, page count and what is visible are unaffected.

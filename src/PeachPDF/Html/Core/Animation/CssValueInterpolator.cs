@@ -33,6 +33,29 @@ namespace PeachPDF.Html.Core.Animation
             "px", "pt", "pc", "in", "cm", "mm", "q", "em", "rem", "ex", "ch", "vw", "vh", "vmin", "vmax", "%"
         };
 
+        /// <summary>
+        /// Every function that is a colour. Scanned whole and resolved to sRGB, never as a function of plain numbers:
+        /// a hue or a lab component mixed like a length gives the wrong colour (red to lime through the wrong hues). A
+        /// colour the parser cannot resolve stays text and flips half way.
+        /// </summary>
+        private static readonly HashSet<string> ColorFunctions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix"
+        };
+
+        /// <summary>
+        /// Properties whose value may not be negative. An easing that overshoots can take the mix below zero, where the
+        /// property's range clamps it (CSS Values 4 §10.1: a mixed value is clamped to the range the property allows).
+        /// </summary>
+        private static readonly HashSet<string> NonNegativeProperties = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "width", "height", "min-width", "min-height", "max-width", "max-height",
+            "padding-top", "padding-right", "padding-bottom", "padding-left",
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "outline-width",
+            "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
+            "font-size", "line-height", "column-width", "row-gap", "column-gap", "flex-grow", "flex-shrink", "stroke-width"
+        };
+
         private static readonly HashSet<string> IntegerProperties = new(StringComparer.OrdinalIgnoreCase)
         {
             "z-index", "order", "column-count", "orphans", "widows"
@@ -54,6 +77,14 @@ namespace PeachPDF.Html.Core.Animation
             {
                 if (from.Equals("visible", StringComparison.OrdinalIgnoreCase) || to.Equals("visible", StringComparison.OrdinalIgnoreCase))
                     return "visible";
+            }
+
+            // CSS Display 3 §2.5.1 (display): none against anything else is a discrete step that shows the other value
+            // for the whole of the way between, so a box fading out is not removed from the layout half way.
+            if (property.Equals("display", StringComparison.OrdinalIgnoreCase) && t > 0 && t < 1)
+            {
+                if (from.Equals("none", StringComparison.OrdinalIgnoreCase)) return to;
+                if (to.Equals("none", StringComparison.OrdinalIgnoreCase)) return from;
             }
 
             var a = Scan(valueParser, from);
@@ -164,6 +195,7 @@ namespace PeachPDF.Html.Core.Animation
 
             if (IntegerProperties.Contains(property) && unitX.Length == 0) mixed = Math.Round(mixed, MidpointRounding.AwayFromZero);
             else if (wholeValue && unitX.Length == 0 && property.Equals("opacity", StringComparison.OrdinalIgnoreCase)) mixed = Math.Clamp(mixed, 0, 1);
+            else if (wholeValue && mixed < 0 && NonNegativeProperties.Contains(property)) mixed = 0;
 
             sb.Append(Format(mixed)).Append(unitX);
             return true;
@@ -311,7 +343,7 @@ namespace PeachPDF.Html.Core.Animation
                     if (i < text.Length && text[i] == '(')
                     {
                         if (name.Equals("url", StringComparison.OrdinalIgnoreCase) || name.Equals("var", StringComparison.OrdinalIgnoreCase)
-                            || name.Equals("rgb", StringComparison.OrdinalIgnoreCase) || name.Equals("rgba", StringComparison.OrdinalIgnoreCase))
+                            || ColorFunctions.Contains(name))
                         {
                             var end = MatchingParen(text, i);
                             var whole = text[start..end];

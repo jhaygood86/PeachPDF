@@ -58,6 +58,7 @@ namespace PeachPDF.CSS
         public const string ScaleY = "scaleY";
         public const string ScaleZ = "scaleZ";
         public const string Steps = "steps";
+        public const string Linear = "linear";
         public const string CubicBezier = "cubic-bezier";
         public const string Perspective = "perspective";
         public const string Gray = "gray";

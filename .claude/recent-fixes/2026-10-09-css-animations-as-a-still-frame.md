@@ -97,3 +97,30 @@ per page) rasterized with both.
 - **A percentage's identity is 100%, not 1%**: `filter: none` mixed with `brightness(150%)` used to start from
   `brightness(1%)` (nearly black) because the neutral argument kept the token's unit. `CssValueInterpolator.TryIdentity`
   now scales it by 100 for `%`.
+
+## Second review round (traps worth knowing)
+
+- **The eased value may leave 0 to 1, and the sampler used to cut it there.** `eased <= 0 / >= 1` returned the literal end
+  value, which flattened every overshooting `cubic-bezier()`; only exactly 0 and 1 keep the specified text now, and the
+  interpolator extrapolates (colours and `opacity` still clamp).
+- **Exactly at the first keyframe is the start of its interval, not "before it".** Returning the 0% literal for
+  `progress <= firstOffset` skipped the interval's easing, so `step-start`/`steps(n, jump-start)` showed 0% at progress 0
+  where a browser shows the first step. Only strictly before the first keyframe holds the first value.
+- **`hsl()`/`hsla()` were scanned as a function of plain numbers**, mixing hue like a length (red to lime went through
+  yellow). They are colour tokens now (the legacy colour syntaxes all interpolate in sRGB).
+- **`display` between `none` and anything is a discrete step that shows the other value for the whole interval** (the same
+  special case as `visibility`), not a flip at 50%.
+- **The CSS-OM easing grammar rejected `jump-*`, `linear()` and, in the shorthand, string names - and `animation: inherit`
+  was read as an animation called "inherit".** The longhand did not "work": it was dropped and the property kept `ease`,
+  silently. Fixing the one grammar (`StepsConverter`, `LinearEasingConverter`, `AnimationNameConverter`, which refuses the
+  CSS-wide keywords) fixed `animation`, `animation-timing-function` and `transition` together. `linear()` is validated for
+  shape only and still read as plain `linear`.
+- **`iteration-count: 0` with `forwards` rests at the start, not the end**: overall progress is the iteration count, 0.
+- **`CreateDocument`/`AddPages` validate `AnimationProgress` too** (`PdfGenerator.ValidateAnimationProgress`), so the
+  documented "anything else makes generation throw" holds for every entry point; they still do not animate HTML.
+- **A behaviour test through the public API matters**: mutating `PdfGenerator` to never assign the progress to the container
+  used to pass the whole suite, because the API tests asserted only `NotNull` and page counts. `GeneratePdf_PaintsTheSampledFrame`
+  and `AddPdfPages_PaintsItsOwnConfigsFrame` read the rectangle widths out of the page content stream.
+- The showcase is registered through `SaveStatesShowcaseAsync`, not `SaveShowcaseAsync`: one document of several pages, each
+  the same HTML at another `AnimationProgress`, which `SaveShowcaseAsync` (one config, one render) cannot express. It writes
+  the manifest entry itself, as `SaveDeclarativeShowcaseAsync` does, so the docs site card still appears.

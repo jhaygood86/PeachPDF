@@ -52,7 +52,8 @@ namespace PeachPDF.Html.Core.Animation
                 if (!fillsForwards) return null;
 
                 // The animation ends the instant it starts; what is left is where its active interval ends.
-                var (finalProgress, finalIteration) = iterationCount > 0 ? EndOfActiveInterval(iterationCount) : (1d, 0d);
+                // With no iterations at all there is no progress to end on: overall progress is the iteration count, 0.
+                var (finalProgress, finalIteration) = iterationCount > 0 ? EndOfActiveInterval(iterationCount) : (0d, 0d);
                 return Direct(finalProgress, finalIteration, direction);
             }
 

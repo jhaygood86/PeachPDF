@@ -327,6 +327,10 @@
         public const string Balance = "balance";
         public const string Separate = "separate";
         public const string Start = "start";
+        public const string JumpStart = "jump-start";
+        public const string JumpEnd = "jump-end";
+        public const string JumpNone = "jump-none";
+        public const string JumpBoth = "jump-both";
         public const string End = "end";
         public const string MatchParent = "match-parent";
         public const string JustifyAll = "justify-all";

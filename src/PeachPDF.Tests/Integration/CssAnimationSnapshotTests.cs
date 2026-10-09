@@ -5,7 +5,9 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -82,6 +84,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Timeline_ZeroIterations_HasNoEffectUnlessItFillsForwards() =>
             Assert.Null(AnimationTimeline.DirectedProgress(0.5, 1, 0, AnimationDirectionKind.Normal, false));
+
+        [Fact]
+        public void Timeline_ZeroIterationsFillingForwards_StaysAtTheStart()
+        {
+            // Overall progress is the iteration count, 0, so the animation is left where it began (Web Animations 1, 4.6.3).
+            Assert.Equal(0.0, AnimationTimeline.DirectedProgress(0.5, 1, 0, AnimationDirectionKind.Normal, true)!.Value, 9);
+            Assert.Equal(1.0, AnimationTimeline.DirectedProgress(0.5, 1, 0, AnimationDirectionKind.Reverse, true)!.Value, 9);
+        }
 
         // ─── Easing ──────────────────────────────────────────────────────────────
 
@@ -179,11 +189,42 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, Mix(property, from, to, t));
 
         [Theory]
-        [InlineData("display", "block", "none", 0.49, "block")]
-        [InlineData("display", "block", "none", 0.5, "none")]
+        [InlineData("display", "block", "inline", 0.49, "block")]
+        [InlineData("display", "block", "inline", 0.5, "inline")]
         [InlineData("transform", "rotate(10deg)", "translateX(10px)", 0.4, "rotate(10deg)")]   // different functions: discrete
         [InlineData("width", "auto", "100px", 0.9, "100px")]
         public void Interpolate_WhatDoesNotMatch_FlipsHalfWay(string property, string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix(property, from, to, t));
+
+        [Theory]
+        [InlineData("block", "none", 0.001, "block")]    // none against anything keeps the other value for the whole way between
+        [InlineData("block", "none", 0.999, "block")]
+        [InlineData("none", "block", 0.5, "block")]
+        [InlineData("none", "flex", 0.25, "flex")]
+        [InlineData("none", "block", 0.0, "none")]       // ...but the ends are the ends
+        [InlineData("none", "block", 1.0, "block")]
+        [InlineData("block", "none", 1.0, "none")]
+        public void Interpolate_DisplayNone_IsShownThroughoutTheInterval(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("display", from, to, t));
+
+        [Theory]
+        [InlineData("hsl(0, 100%, 50%)", "hsl(120, 100%, 50%)", 0.5, "rgb(128, 128, 0)")]   // sRGB, so olive; the hue is not averaged
+        [InlineData("hsl(0, 100%, 50%)", "rgb(0, 255, 0)", 0.5, "rgb(128, 128, 0)")]        // hsl and rgb meet
+        [InlineData("hsla(0, 100%, 50%, 0)", "hsl(240, 100%, 50%)", 0.5, "rgba(0, 0, 255, 0.5)")]
+        [InlineData("rgba(255, 0, 0, 0)", "rgb(0, 0, 255)", 0.5, "rgba(0, 0, 255, 0.5)")]   // premultiplied: the clear red contributes nothing
+        [InlineData("rgba(1, 2, 3, 0)", "rgba(9, 9, 9, 0)", 0.5, "rgba(0, 0, 0, 0)")]       // nothing to see, so no colour either
+        [InlineData("rgb(0, 0, 0)", "rgb(200, 100, 0)", 1.5, "rgb(255, 150, 0)")]            // beyond the end a channel clamps
+        [InlineData("rgb(0, 0, 0)", "rgb(200, 100, 0)", -0.5, "rgb(0, 0, 0)")]
+        public void Interpolate_Colors_MixInSrgbPremultiplied(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("color", from, to, t));
+
+        [Theory]
+        [InlineData("width", "40px", "100px", 1.5, "130px")]               // overshoot extrapolates
+        [InlineData("width", "40px", "100px", -0.5, "10px")]
+        [InlineData("width", "40pt", "50%", 0.25, "calc(30pt + 12.5%)")]   // each end is weighted by its own share, not half and half
+        [InlineData("opacity", "0.2", "0.6", 2.0, "1")]                    // ...but opacity clamps
+        [InlineData("opacity", "0.2", "0.6", -3.0, "0")]
+        public void Interpolate_OutsideZeroToOne_ExtrapolatesWhatMayBe(string property, string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix(property, from, to, t));
 
         [Theory]
@@ -743,6 +784,352 @@ namespace PeachPDF.Tests.Integration
 
             Assert.False(root.HtmlContainer!.KeyframesUseRevert);
             Assert.Equal(0.5, Opacity(Find(root, "a")), 3);
+        }
+
+        // ─── Sampling details ────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task OvershootingEasing_IsMixedBeyondTheEndValue()
+        {
+            const string easingText = "cubic-bezier(0.5, -1, 0.5, 2)";
+            Assert.True(EasingFunction.TryParse(easingText, out var easing));
+            var eased = easing.Evaluate(0.75);
+            Assert.True(eased > 1, "the chosen curve must overshoot at 0.75");
+
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ width: 100pt }} to {{ width: 200pt }} }}
+                #a {{ height: 10pt; animation: k 1s {easingText}; }}</style><div id=""a""></div>", 0.75);
+
+            var a = Find(root, "a");
+            Assert.Equal(100 + 100 * eased, a.ActualRight - a.Location.X, 1);
+            Assert.True(a.ActualRight - a.Location.X > 200);
+        }
+
+        [Theory]
+        [InlineData("step-start", 0.0, 1.0)]                  // the first step is already taken at the very start
+        [InlineData("step-end", 0.0, 0.0)]
+        [InlineData("step-end", 1.0, 1.0)]
+        [InlineData("steps(4, jump-start)", 0.0, 0.25)]
+        [InlineData("steps(2, jump-both)", 0.0, 1.0 / 3)]
+        [InlineData("steps(2, jump-none)", 0.0, 0.0)]
+        [InlineData("steps(2, jump-none)", 1.0, 1.0)]
+        public async Task StepEasing_AtTheEndsOfTheRun_AppliesItsFirstAndLastStep(string easing, double progress, double expected)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ animation: k 1s {easing}; }}</style><div id=""a"">x</div>", progress);
+
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
+        }
+
+        [Theory]
+        [InlineData("animation: k 1s linear 0 forwards", 0.0)]             // no iterations: left at the start...
+        [InlineData("animation: k 1s linear 0 reverse forwards", 1.0)]     // ...which is the end when it runs in reverse
+        [InlineData("animation: k 1s linear 0", 0.6)]                      // without a fill it leaves the base value
+        [InlineData("animation: k 0ms linear", 0.6)]                       // a zero duration in any unit has no run
+        [InlineData("animation: k 0.0s linear", 0.6)]
+        [InlineData("animation: k 0s linear forwards", 1.0)]               // a zero-duration run that fills forwards ends at the end
+        public async Task NoRun_LeavesTheBaseValueUnlessItFillsForwards(string declaration, double expected)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ opacity: 0.6; {declaration}; }}</style><div id=""a"">x</div>", 0.5);
+
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task FillModeBoth_OfAnAnimationWithNoRun_LeavesItsEndValue()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0.2 } to { opacity: 0.4 } }
+                #a { animation: k 0s linear both; }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal(0.4, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task AnimationLists_RepeatToTheLengthOfTheNameList()
+        {
+            // Three names, two fill modes: the third animation reuses the first mode (forwards), the second has none.
+            var root = await BuildAsync("""
+                <style>
+                @keyframes ka { to { opacity: 0.2 } }
+                @keyframes kb { to { width: 50pt } }
+                @keyframes kc { to { height: 30pt } }
+                #a { width: 10pt; height: 10pt; animation-name: ka, kb, kc; animation-duration: 0s; animation-fill-mode: forwards, none; }
+                </style><div id="a"></div>
+                """, 0.5);
+
+            var a = Find(root, "a");
+            Assert.Equal(0.2, Opacity(a), 3);                           // ka: forwards
+            Assert.Equal(10.0, a.ActualRight - a.Location.X, 1);        // kb: no fill, no run, no effect
+            Assert.Equal(30.0, a.ActualBottom - a.Location.Y, 1);       // kc: the list repeated back to forwards
+        }
+
+        [Fact]
+        public async Task ImplicitEndKeyframe_IsTheUnderlyingValue()
+        {
+            // 50% is the last keyframe given; the implicit 100% is the base 0.5, so 0.75 of the way is half from 1 to 0.5.
+            var root = await BuildAsync("""
+                <style>@keyframes k { 0% { opacity: 0 } 50% { opacity: 1 } }
+                #a { opacity: 0.5; animation: k 1s linear; }</style><div id="a">x</div>
+                """, 0.75);
+
+            Assert.Equal(0.75, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task CustomPropertiesInAKeyframe_AreNotAnimated()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { --w: 10pt } to { --w: 90pt } }
+                #a { --w: 70pt; width: var(--w); height: 10pt; animation: k 1s linear; }</style><div id="a"></div>
+                """, 0.5);
+
+            var a = Find(root, "a");
+            Assert.Equal(70.0, a.ActualRight - a.Location.X, 1);
+        }
+
+        [Fact]
+        public void StandardEasingKeywords_AreTheirStandardCurves()
+        {
+            Assert.True(EasingFunction.TryParse("ease-in", out var easeIn));
+            Assert.True(EasingFunction.TryParse("ease-out", out var easeOut));
+            Assert.True(EasingFunction.TryParse("ease-in-out", out var easeInOut));
+            Assert.True(EasingFunction.TryParse("ease", out var ease));
+
+            Assert.Equal(0.3153, easeIn.Evaluate(0.5), 3);
+            Assert.Equal(0.6847, easeOut.Evaluate(0.5), 3);
+            Assert.Equal(0.5, easeInOut.Evaluate(0.5), 3);
+            Assert.Equal(0.8024, ease.Evaluate(0.5), 3);
+            Assert.Equal(1 - easeIn.Evaluate(0.25), easeOut.Evaluate(0.75), 3);    // ease-out mirrors ease-in
+        }
+
+        // ─── The public API ──────────────────────────────────────────────────────
+
+        private const string GrowingBar = """
+            <!DOCTYPE html><html><head><style>
+            @keyframes grow { from { width: 20pt } to { width: 100pt } }
+            #bar { height: 10pt; background: #000; animation: grow 1s linear; }
+            </style></head><body style="margin:0"><div id="bar"></div></body></html>
+            """;
+
+        [Theory]
+        [InlineData(0.0, 20.0)]
+        [InlineData(0.5, 60.0)]
+        [InlineData(1.0, 100.0)]
+        public async Task GeneratePdf_PaintsTheSampledFrame(double progress, double expectedWidth)
+        {
+            var document = await new PdfGenerator().GeneratePdf(GrowingBar,
+                new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = progress });
+
+            Assert.Contains(expectedWidth, RectangleWidths(document.PdfDocument, 0).Select(w => Math.Round(w)));
+        }
+
+        [Fact]
+        public async Task GeneratePdf_WithoutAProgress_PaintsTheBaseValue()
+        {
+            // No width is declared outside the animation, so without it the bar is as wide as the page's content box.
+            var document = await new PdfGenerator().GeneratePdf(GrowingBar, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+            var widths = RectangleWidths(document.PdfDocument, 0).Select(w => Math.Round(w)).ToList();
+            Assert.DoesNotContain(20.0, widths);
+            Assert.DoesNotContain(60.0, widths);
+            Assert.DoesNotContain(100.0, widths);
+        }
+
+        [Fact]
+        public async Task AddPdfPages_PaintsItsOwnConfigsFrame()
+        {
+            var generator = new PdfGenerator();
+            var document = await generator.GeneratePdf(GrowingBar, new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 0 });
+            await generator.AddPdfPages(document, GrowingBar, new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 1 });
+
+            Assert.Equal(2, document.PageCount);
+            Assert.Contains(20.0, RectangleWidths(document.PdfDocument, 0).Select(w => Math.Round(w)));
+            Assert.Contains(100.0, RectangleWidths(document.PdfDocument, 1).Select(w => Math.Round(w)));
+        }
+
+        [Theory]
+        [InlineData(double.NaN)]
+        [InlineData(-0.1)]
+        [InlineData(1.0001)]
+        [InlineData(double.PositiveInfinity)]
+        [InlineData(double.NegativeInfinity)]
+        public async Task EveryEntryPoint_RejectsAnOutOfRangeProgress(double progress)
+        {
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = progress };
+
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => generator.GeneratePdf("<p>x</p>", config));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+                await generator.AddPdfPages(await generator.GeneratePdf("<p>x</p>", PageSize.A4), "<p>y</p>", config));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => generator.CreateDocument(_ => { }, config));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+                await generator.AddPages(await generator.GeneratePdf("<p>x</p>", PageSize.A4), _ => { }, config));
+        }
+
+        [Fact]
+        public async Task DeclarativeEntryPoints_AcceptAValidProgress()
+        {
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 0.5 };
+
+            var document = await generator.CreateDocument(_ => { }, config);
+            await generator.AddPages(document, _ => { }, config);
+
+            Assert.NotNull(document);
+        }
+
+        /// <summary>The widths of every <c>re</c> rectangle in a page's content stream, read from the live object graph.</summary>
+        private static IEnumerable<double> RectangleWidths(PeachPDF.PdfSharpCore.Pdf.PdfDocument document, int page)
+        {
+            using var bytes = new System.IO.MemoryStream();
+
+            foreach (var content in document.Pages[page].Contents)
+            {
+                bytes.Write(content.Stream.Value, 0, content.Stream.Value.Length);
+            }
+
+            var stream = System.Text.Encoding.Latin1.GetString(bytes.ToArray());
+
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+                         stream, @"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re"))
+            {
+                yield return double.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+            }
+        }
+
+        // ─── The animation shorthand must never drop an animation over its easing or name ───
+
+        [Theory]
+        [InlineData("animation: k 1s steps(4, jump-start)", 0.75)]        // floor(2) + 1 = 3 of 4 jumps
+        [InlineData("animation: k 1s steps(4, jump-end)", 0.5)]
+        [InlineData("animation: k 1s steps(4, jump-none)", 2.0 / 3)]      // 2 of 3 jumps
+        [InlineData("animation: k 1s steps(4, jump-both)", 0.6)]          // 3 of 5 jumps
+        [InlineData("animation: k 1s steps(4, start)", 0.75)]
+        [InlineData("animation: k 1s steps(4, end)", 0.5)]
+        [InlineData("animation: k 1s linear(0, 0.25 25%, 1)", 0.5)]       // read as plain linear
+        [InlineData("animation: k 1s linear(0, 1)", 0.5)]
+        [InlineData("animation: \"k\" 1s linear", 0.5)]                   // a string names the animation too
+        [InlineData("animation: 1s linear 'k'", 0.5)]
+        public async Task AnimationShorthand_WithAnEasingOrNameForm_StillAnimates(string declaration, double expected)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ {declaration} }}</style><div id=""a"">x</div>", 0.5);
+
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
+        }
+
+        [Theory]
+        [InlineData("animation-timing-function: steps(4, jump-start)", 0.75)]
+        [InlineData("animation-timing-function: steps(4, jump-both)", 0.6)]
+        [InlineData("animation-timing-function: linear(0, 0.25 25%, 1)", 0.5)]
+        public async Task AnimationTimingFunctionLonghand_WithAnEasingForm_Applies(string declaration, double expected)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ animation-name: k; animation-duration: 1s; {declaration} }}</style><div id=""a"">x</div>", 0.5);
+
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task AnimationInherit_CopiesTheParentsAnimation()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #p { animation: k 1s linear } #c { animation: inherit }</style><div id="p"><div id="c">x</div></div>
+                """, 0.5);
+
+            Assert.Equal(0.5, Opacity(Find(root, "c")), 3);
+        }
+
+        // ─── Review follow-ups: ranges, colour functions, quoted lists, easing grammar ───
+
+        [Theory]
+        [InlineData("width", "10px", "100px", -0.5, "0px")]            // a width cannot be negative: the property's range clamps the overshoot
+        [InlineData("padding-left", "10px", "100px", -0.5, "0px")]
+        [InlineData("border-top-width", "2px", "10px", -1.0, "0px")]
+        [InlineData("margin-left", "10px", "100px", -0.5, "-35px")]    // a margin may be
+        [InlineData("width", "10px", "100px", 1.5, "145px")]
+        public void Interpolate_Overshoot_IsClampedToThePropertysRange(string property, string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix(property, from, to, t));
+
+        [Fact]
+        public void Interpolate_OtherColorFunctions_AreColorsNotNumbers()
+        {
+            // hwb() resolves to sRGB like hsl() does, so red to lime passes through olive, not through averaged hue numbers.
+            Assert.Equal("rgb(128, 128, 0)", Mix("color", "hwb(0 0% 0%)", "hwb(120 0% 0%)", 0.5));
+
+            // A colour function the parser cannot resolve is not mixed component by component: it flips half way.
+            var from = "color-mix(in oklab, red 30%, blue)";
+            var to = "color-mix(in oklab, lime 30%, blue)";
+            var early = Mix("color", from, to, 0.4);
+            var late = Mix("color", from, to, 0.6);
+            Assert.True(early == from || early.StartsWith("rgb"), early);
+            Assert.True(late == to || late.StartsWith("rgb"), late);
+            Assert.DoesNotContain("color-mix(in oklab, red 12", early);
+        }
+
+        [Fact]
+        public void SplitList_KeepsCommasAndParenthesesInsideAQuotedName()
+        {
+            Assert.Equal(["\"a,b\"", "c"], AnimationApplier.SplitList("\"a,b\", c"));
+            Assert.Equal(["\"a(b\"", "c", "d"], AnimationApplier.SplitList("\"a(b\", c, d"));
+            Assert.Equal(["\"say \\\"hi, there\\\"\"", "x"], AnimationApplier.SplitList("\"say \\\"hi, there\\\"\", x"));
+            Assert.Equal(["steps(4, end)", "linear"], AnimationApplier.SplitList("steps(4, end), linear"));
+        }
+
+        [Theory]
+        [InlineData("steps(0, end)")]
+        [InlineData("steps(-2, jump-start)")]
+        [InlineData("steps(1, jump-none)")]            // would divide by zero
+        [InlineData("cubic-bezier(2, 0, 0.5, 1)")]     // x outside 0 to 1: not a function of x
+        [InlineData("cubic-bezier(0.5, 0, -1, 1)")]
+        [InlineData("linear(0)")]                       // a single stop is not a curve
+        [InlineData("linear(0, 1,)")]
+        [InlineData("linear(a, b)")]
+        public async Task InvalidEasing_IsDroppedSoAnEarlierValidOneStillApplies(string invalid)
+        {
+            // step-end shows the 0% value until the very end; the invalid declaration must not replace it (nor become ease).
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ animation-name: k; animation-duration: 1s; animation-timing-function: step-end; animation-timing-function: {invalid}; }}</style><div id=""a"">x</div>", 0.5);
+
+            Assert.Equal(0.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Theory]
+        [InlineData("steps(1, jump-start)")]
+        [InlineData("steps(2, jump-none)")]
+        [InlineData("cubic-bezier(0, 2, 1, -1)")]      // the y values may leave 0 to 1
+        [InlineData("cubic-bezier(0.25, 0.1, 0.25, 1)")]
+        [InlineData("linear(0 0%, 1 100%)")]            // the percentage may come after the number...
+        [InlineData("linear(0, 25% 0.25, 1)")]          // ...or before it
+        [InlineData("linear(0, 0.25 25% 75%, 1)")]
+        public async Task ValidEasing_IsNotTreatedAsInvalid(string valid)
+        {
+            // The earlier step-end would give 0 at the middle; a declaration that is accepted replaces it, so the result is not 0.
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ animation-name: k; animation-duration: 1s; animation-timing-function: step-end; animation-timing-function: {valid}; }}</style><div id=""a"">x</div>", 0.5);
+
+            Assert.NotEqual(0.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task AddPdfPages_WithEmptyHtml_StillRejectsAnOutOfRangeProgress()
+        {
+            var generator = new PdfGenerator();
+            var document = await generator.GeneratePdf("<p>x</p>", PageSize.A4);
+
+            // An empty document returns before anything else in AddPdfPages; the progress is checked ahead of that.
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                generator.AddPdfPages(document, "", new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 2 }));
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

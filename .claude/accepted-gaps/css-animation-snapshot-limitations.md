@@ -26,5 +26,25 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   touch resolve at the very end of the cascade and are unaffected - except that a shorthand holding `var()` is settled as a
   whole when any one of its longhands is animated (`margin: var(--m)` with only `margin-left` animated settles all four
   margins early). Fixing it means resolving custom properties' important declarations ahead of the animation step.
+- **Overshoot is clamped only for a whole-value, non-negative property.** An easing that overshoots is followed past the end
+  value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
+  `CssValueInterpolator`). A negative argument inside a function (`blur(-5px)`) or in a `calc()` written for lengths of
+  different units is not clamped.
+- **Other colour functions are mixed in sRGB, not in their own space.** `hwb()`, `lab()`, `oklch()`, `color-mix()` and the
+  like resolve to sRGB first (a colour the parser cannot resolve flips half way), where CSS Color 4 §12 mixes in the
+  function's space.
+- **`currentcolor` is not mixed.** A keyframe colour of `currentcolor` against a colour flips half way instead of mixing with
+  the box's `color`. Resolving it at sample time is wrong when `color` is itself animated in the same animation.
+- **Transform functions with a different number of arguments are not mixed.** `scale(1)` against `scale(2, .5)` and
+  `translate(10px)` against `translate(10px, 50px)` flip half way; the documented case is two lists of different functions.
+- **CSS animations on the elements of an inline `<svg>` are not applied.** `rect { animation: ... }` (fill, opacity,
+  transform, stroke-width, `stroke-dashoffset`, `r`, a `<g>`'s transform) is parsed and ignored; the SVG tree builder has its
+  own cascade entry point that does not call the animation step. Only HTML boxes (and their pseudo-elements) are animated.
+- **Gradients, `calc()` of another shape and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
+  way; `calc()` against a value of another shape flips; `@-webkit-keyframes` and `-webkit-animation` are ignored.
+- **`prefers-reduced-motion` is reported as `reduce`** (a static PDF has no motion), so the common
+  `@media (prefers-reduced-motion: reduce) { * { animation: none !important } }` reset switches every animation off even
+  when a progress is set. That is the browser-faithful answer for the media feature; a caller who wants a frame despite such a
+  reset has no option for it.
 - **SMIL** (`<animate>`, `<animateTransform>`) is separate and out of scope - see
   [svg-features-out-of-scope](svg-features-out-of-scope.md).

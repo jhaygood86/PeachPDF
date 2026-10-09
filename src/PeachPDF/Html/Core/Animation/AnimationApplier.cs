@@ -57,7 +57,7 @@ namespace PeachPDF.Html.Core.Animation
             for (var i = 0; i < names.Count; i++)
             {
                 if (names[i].Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!keyframes.TryGetValue(names[i], out var set)) continue;
+                if (!keyframes.TryGetValue(Unquote(names[i]), out var set)) continue;
 
                 // The lists are repeated or truncated to the length of animation-name (§3.1).
                 var fill = Cycle(fillModes, i);
@@ -101,6 +101,15 @@ namespace PeachPDF.Html.Core.Animation
                 }
             }
         }
+
+        /// <summary>
+        /// An <c>animation-name</c> may be a string, which names the same animation as the identifier spelled the same way.
+        /// The CSS-OM stores it double-quoted with <c>\"</c> and <c>\\</c> escaped (<c>ValueExtensions.ToAnimationName</c>).
+        /// </summary>
+        private static string Unquote(string name) =>
+            name.Length >= 2 && name[0] == '"' && name[^1] == '"'
+                ? name[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\")
+                : name;
 
         private static bool IsNone(string? list) =>
             string.IsNullOrWhiteSpace(list) || list.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
@@ -222,7 +231,10 @@ namespace PeachPDF.Html.Core.Animation
                 if (frames[^1].Offset < 1) frames.Add((1, underlying, null));
             }
 
-            if (progress <= frames[0].Offset) return frames[0].Value;
+            // Before the first keyframe and from the last one on, the nearest value holds. Exactly *at* the first
+            // keyframe is the start of its interval, which its easing still shapes: step-start shows its first step
+            // there, not the 0% value.
+            if (progress < frames[0].Offset || frames.Count == 1) return frames[0].Value;
             if (progress >= frames[^1].Offset) return frames[^1].Value;
 
             var index = 0;
@@ -235,9 +247,10 @@ namespace PeachPDF.Html.Core.Animation
             var interval = from.Easing is not null && EasingFunction.TryParse(from.Easing, out var own) ? own : animationEasing;
             var eased = interval.Evaluate(local);
 
-            // Exactly at an end the specified text is kept rather than reformatted.
-            if (eased <= 0) return from.Value;
-            if (eased >= 1) return to.Value;
+            // Exactly at an end the specified text is kept rather than reformatted. Only exactly: an easing that
+            // overshoots (a cubic-bezier with a y outside 0 to 1) is past the end, and mixed beyond it.
+            if (eased == 0) return from.Value;
+            if (eased == 1) return to.Value;
 
             return CssValueInterpolator.Interpolate(valueParser, property, from.Value, to.Value, eased);
         }
@@ -255,8 +268,8 @@ namespace PeachPDF.Html.Core.Animation
         }
 
         /// <summary>
-        /// Splits a comma-separated list (commas inside parentheses stay put). The animation properties hold one
-        /// entry per animation; an empty value is an empty list.
+        /// Splits a comma-separated list (commas inside parentheses or a quoted string stay put). The animation
+        /// properties hold one entry per animation; an empty value is an empty list.
         /// </summary>
         internal static List<string> SplitList(string? list)
         {
@@ -269,6 +282,14 @@ namespace PeachPDF.Html.Core.Animation
             {
                 switch (list[i])
                 {
+                    case '"' or '\'':
+                        // A quoted string (an animation-name): skip to its closing quote, honouring backslash escapes.
+                        var quote = list[i];
+                        for (i++; i < list.Length && list[i] != quote; i++)
+                        {
+                            if (list[i] == '\\') i++;
+                        }
+                        break;
                     case '(': depth++; break;
                     case ')': depth--; break;
                     case ',' when depth == 0:

@@ -67,7 +67,8 @@ namespace PeachPDF.Html.Core.Animation
 
             if (name == "cubic-bezier" && args.Length == 4
                 && TryNumber(args[0], out var x1) && TryNumber(args[1], out var y1)
-                && TryNumber(args[2], out var x2) && TryNumber(args[3], out var y2))
+                && TryNumber(args[2], out var x2) && TryNumber(args[3], out var y2)
+                && x1 >= 0 && x1 <= 1 && x2 >= 0 && x2 <= 1)   // css-easing-1 §2.1: outside 0 to 1 the curve is not a function of x
             {
                 easing = Bezier(x1, y1, x2, y2);
                 return true;
