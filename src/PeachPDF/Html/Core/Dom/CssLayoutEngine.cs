@@ -3922,6 +3922,10 @@ namespace PeachPDF.Html.Core.Dom
 
             await CssLayoutEngineFlex.PerformLayout(g, b);
 
+            // The flex engine never positions out-of-flow children (css-flexbox-1 §4.1); a block-level
+            // flex container gets them from CssBox.LayoutEngineContent, which this path bypasses.
+            await b.LayoutOutOfFlowChildrenDetached(g);
+
             // Advance to content-right so that the outer rightSpacing addition lands correctly.
             coordinates.CurrentX = b.ClientRight;
             coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
@@ -8099,11 +8103,18 @@ namespace PeachPDF.Html.Core.Dom
         private static CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>> EffectiveVerticalAlignOf(
             CssBox box, CssLineBox lineBox, out CssBox styledBox)
         {
+            var ownerBox = lineBox.OwnerBox;
+
+            // The walk stops at the box that owns the line: what it declares says how IT sits in its own
+            // parent's line, and the box above it is not on this line at all. A generated ::before/::after
+            // (no HtmlTag) holding its own text, absolutely positioned inside an inline-flex, used to walk
+            // past itself to that container and take the container's `vertical-align`, which moved the
+            // pseudo-element's text off its box by the container's alignment.
             styledBox = box;
-            while (styledBox.HtmlTag is null && !styledBox.IsMarkerPseudoElement && styledBox.ParentBox is not null)
+            while (styledBox.HtmlTag is null && !styledBox.IsMarkerPseudoElement && styledBox.ParentBox is not null
+                   && !ReferenceEquals(styledBox, ownerBox))
                 styledBox = styledBox.ParentBox;
 
-            var ownerBox = lineBox.OwnerBox;
             if (ReferenceEquals(lineBox, ownerBox.LineBoxes.FirstOrDefault())
                 && ownerBox.ResolvedFirstLineStyle is { } firstLineStyle
                 && firstLineStyle.VerticalAlign != ownerBox.VerticalAlign)
@@ -8635,9 +8646,18 @@ namespace PeachPDF.Html.Core.Dom
             // earlier pass may already have frozen. Its own rectangle on this line is still moved below:
             // OffsetTop walks CssBox.Rectangles, which CssLineBox.AssignRectanglesToBoxes has not yet
             // populated for this line - it runs after alignment.
-            if (!ReferenceEquals(lineBox.OwnerBox, box) && LastOwnLineBaselineOf(box) is not null)
+            // An inline-flex box is such a unit even when none of its items holds text (so it has no
+            // baseline to recognise it by): its out-of-flow children are positioned against its Location
+            // during FlowInlineFlexChild and have to travel with it.
+            if (!ReferenceEquals(lineBox.OwnerBox, box)
+                && (LastOwnLineBaselineOf(box) is not null || box.DerivedStyle.ActualDisplay == Keywords.InlineFlex))
             {
                 box.OffsetTop(delta);
+
+                // An absolutely positioned descendant with auto offsets sits at its static position, inside
+                // the content just moved, even though its containing block (and so the translation) is
+                // outside the box.
+                MoveStaticallyPlacedDescendants(box, box, delta, isVertical: false);
             }
 
             if (lineBox.Rectangles.TryGetValue(box, out var r))

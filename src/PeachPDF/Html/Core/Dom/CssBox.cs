@@ -4643,11 +4643,14 @@ namespace PeachPDF.Html.Core.Dom
         /// something that is measuring it".
         /// </para>
         /// <para>
-        /// <see cref="LayoutOutOfFlowChildren"/> keeps a suppressed scope of its own, and that is not
-        /// incidental: it <b>discards</b> any resumption record a child leaves behind, and it is the only
-        /// way an absolutely-positioned child of one of these containers is laid out at all. Dropping a
-        /// token there drops the content it names. It used to be safe because its caller suppressed;
-        /// making that explicit is what keeps it safe now that the caller does not.
+        /// <see cref="LayoutOutOfFlowChildrenDetached"/> runs <see cref="LayoutOutOfFlowChildren"/> in a
+        /// suppressed scope of its own, and that is not incidental: it <b>discards</b> any resumption
+        /// record a child leaves behind, and it is the only way an absolutely-positioned child of one of
+        /// these containers is laid out at all. Dropping a token there drops the content it names. It used
+        /// to be safe because its caller suppressed; making that explicit is what keeps it safe now that
+        /// the caller does not. An inline-level flex container (<c>CssLayoutEngine.FlowInlineFlexChild</c>)
+        /// reaches the flex engine without passing through here and calls the same helper, so a change to
+        /// the detach or to how resumption records are discarded has two call sites to keep in step.
         /// </para>
         /// </remarks>
         /// <param name="g">the graphics context layout is running against</param>
@@ -4665,7 +4668,23 @@ namespace PeachPDF.Html.Core.Dom
             Canvas g, Func<Canvas, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume)
         {
             await engine(g, this, resume);
+            await LayoutOutOfFlowChildrenDetached(g);
+        }
 
+        /// <summary>
+        /// Lays this box's absolutely/fixed-positioned children out under a detached fragmentainer — the
+        /// step a flex/grid/table container ends with, because its engine never positions out-of-flow
+        /// children itself (css-flexbox-1 §4.1). Also called by an inline-level flex container, which
+        /// reaches the flex engine without going through <see cref="LayoutEngineContent"/>.
+        /// </summary>
+        /// <remarks>
+        /// The detach is what keeps breaking from reaching the children: see
+        /// <see cref="LayoutEngineContent"/>'s remarks for why <see cref="LayoutOutOfFlowChildren"/> must
+        /// run suppressed.
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        internal async ValueTask LayoutOutOfFlowChildrenDetached(Canvas g)
+        {
             var previous = HtmlContainer?.DetachFragmentainer();
 
             try
