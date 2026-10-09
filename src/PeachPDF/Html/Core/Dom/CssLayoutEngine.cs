@@ -3914,6 +3914,10 @@ namespace PeachPDF.Html.Core.Dom
 
             await CssLayoutEngineFlex.PerformLayout(g, b);
 
+            // The flex engine never positions out-of-flow children (css-flexbox-1 §4.1); a block-level
+            // flex container gets them from CssBox.LayoutEngineContent, which this path bypasses.
+            await b.LayoutOutOfFlowChildrenDetached(g);
+
             // Advance to content-right so that the outer rightSpacing addition lands correctly.
             coordinates.CurrentX = b.ClientRight;
             coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
@@ -8627,9 +8631,18 @@ namespace PeachPDF.Html.Core.Dom
             // earlier pass may already have frozen. Its own rectangle on this line is still moved below:
             // OffsetTop walks CssBox.Rectangles, which CssLineBox.AssignRectanglesToBoxes has not yet
             // populated for this line - it runs after alignment.
-            if (!ReferenceEquals(lineBox.OwnerBox, box) && LastOwnLineBaselineOf(box) is not null)
+            // An inline-flex box is such a unit even when none of its items holds text (so it has no
+            // baseline to recognise it by): its out-of-flow children are positioned against its Location
+            // during FlowInlineFlexChild and have to travel with it.
+            if (!ReferenceEquals(lineBox.OwnerBox, box)
+                && (LastOwnLineBaselineOf(box) is not null || box.DerivedStyle.ActualDisplay == Keywords.InlineFlex))
             {
                 box.OffsetTop(delta);
+
+                // An absolutely positioned descendant with auto offsets sits at its static position, inside
+                // the content just moved, even though its containing block (and so the translation) is
+                // outside the box.
+                MoveStaticallyPlacedDescendants(box, box, delta, isVertical: false);
             }
 
             if (lineBox.Rectangles.TryGetValue(box, out var r))
