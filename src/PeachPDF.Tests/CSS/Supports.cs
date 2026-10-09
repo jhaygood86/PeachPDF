@@ -129,16 +129,25 @@ namespace PeachPDF.Tests.CSS
         }
 
         // The old oracle (Property.TrySetValue) is a proven mismatch in both directions:
-        // animation-name parses fine in the CSS-OM but Layer B never dispatches it (false positive);
+        // transition-duration parses fine in the CSS-OM but Layer B never dispatches it (false positive);
         // fill isn't registered in the CSS-OM's PropertyFactory at all despite full SVG support
         // (false negative). These two prove DeclarationCondition.Check() now gets both right.
         [Fact]
-        public void SupportsAnimationNameRule_NoLongerFalsePositive()
+        public void SupportsTransitionDurationRule_NoLongerFalsePositive()
+        {
+            var source = @"@supports (transition-duration: 1s) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsAnimationNameRule_IsTrue_NowThatAnimationsAreRendered()
         {
             var source = @"@supports (animation-name: spin) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check());
+            Assert.True(supports.Condition.Check());
         }
 
         [Fact]
@@ -392,37 +401,37 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
-        // PeachPDF's CSS-OM parses transition-property/animation-name fine (it understands the
+        // PeachPDF's CSS-OM parses transition-property/transition-delay fine (it understands the
         // grammar), but the render engine never dispatches either - they aren't authored into
         // css-properties.json (see CLAUDE.md's generator section), so both branches of the OR are
         // false and the AND short-circuits false regardless of `transform` (which genuinely is
         // supported). This is the exact false-positive the old oracle (CSS-OM grammar validity
         // alone) got wrong; asserting False here is what proves the fix, not a regression.
         [Fact]
-        public void SupportsTransitionOrAnimationNameAndTransformFrontBracketRule()
+        public void SupportsTransitionPropertyOrDelayAndTransformFrontBracketRule()
         {
             var source = @"@supports ((transition-property: color) or
-           (animation-name: foo)) and
+           (transition-delay: 1s)) and
           (transform: rotate(10deg)) { }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.Equal("((transition-property: color) or (animation-name: foo)) and (transform: rotate(10deg))", supports.ConditionText);
+            Assert.Equal("((transition-property: color) or (transition-delay: 1s)) and (transform: rotate(10deg))", supports.ConditionText);
             Assert.False(supports.Condition.Check());
         }
 
         [Fact]
-        public void SupportsTransitionOrAnimationNameAndTransformBackBracketRule()
+        public void SupportsTransitionPropertyOrDelayAndTransformBackBracketRule()
         {
             var source = @"@supports (transition-property: color) or
-           ((animation-name: foo) and
+           ((transition-delay: 1s) and
           (transform: rotate(10deg))) { }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.Equal("(transition-property: color) or ((animation-name: foo) and (transform: rotate(10deg)))", supports.ConditionText);
+            Assert.Equal("(transition-property: color) or ((transition-delay: 1s) and (transform: rotate(10deg)))", supports.ConditionText);
             Assert.False(supports.Condition.Check());
         }
 

@@ -983,6 +983,102 @@
       }
     },
     {
+      "name": "animation-name",
+      "comment": "CSS Animations 1 §3.2. Stored as the raw comma-separated list (cssDataType 'cssom-grammar' validates it through AnimationNameProperty.ValueGrammar, the same grammar the CSS-OM uses). It is read by AnimationApplier at the end of the author-normal cascade phase and never by layout or paint: PeachPDF has no timeline, so an animation is sampled once at PdfGenerateConfig.AnimationProgress and its result written onto the box as ordinary declarations. The animation-* longhands are all non-inherited.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationNameProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationName",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-duration",
+      "comment": "CSS Animations 1 §3.3. Raw comma-separated <time> list; see animation-name.",
+      "inherited": false,
+      "initialValue": "0s",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationDurationProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationDuration",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-timing-function",
+      "comment": "CSS Animations 1 §3.4 / CSS Easing 1. Raw comma-separated <easing-function> list; see animation-name.",
+      "inherited": false,
+      "initialValue": "ease",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationTimingFunctionProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationTimingFunction",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-delay",
+      "comment": "CSS Animations 1 §3.5. Raw comma-separated <time> list; see animation-name. Parsed and stored for completeness - a snapshot samples an animation relative to the start of its active interval, so the delay never moves it.",
+      "inherited": false,
+      "initialValue": "0s",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationDelayProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationDelay",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-iteration-count",
+      "comment": "CSS Animations 1 §3.6. Raw comma-separated <number [0,inf]> | infinite list; see animation-name.",
+      "inherited": false,
+      "initialValue": "1",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationIterationCountProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationIterationCount",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-direction",
+      "comment": "CSS Animations 1 §3.7. Raw comma-separated normal | reverse | alternate | alternate-reverse list; see animation-name.",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationDirectionProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationDirection",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-fill-mode",
+      "comment": "CSS Animations 1 §3.9. Raw comma-separated none | forwards | backwards | both list; see animation-name. Stored for completeness - a snapshot is always taken inside the active interval, so the fill mode never changes what is rendered.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationFillModeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationFillMode",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-play-state",
+      "comment": "CSS Animations 1 §3.8. Raw comma-separated running | paused list; see animation-name. Stored for completeness - a snapshot has no playback to pause.",
+      "inherited": false,
+      "initialValue": "running",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationPlayStateProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationPlayState",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
       "name": "-peachpdf-pdf-tag-type",
       "comment": "cssDataType 'cssom-grammar' calls Converters.PdfTagTypeConverter.Convert directly (Map.PdfTagTypes.ToConverter(), which already includes \"auto\" as a real keyword) instead of the full cssom round trip.",
       "inherited": false,

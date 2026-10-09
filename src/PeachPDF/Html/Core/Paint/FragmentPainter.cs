@@ -1010,7 +1010,7 @@ namespace PeachPDF.Html.Core.Paint
             // this stacking context's own direct children).
             foreach (var p in layerBoxes)
             {
-                if (!StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
+                if (!StackingOrder.ActsAsInline(p.Box) && !PaintsWithPositioned(p.Box) && !p.Box.IsFloated)
                     PaintStackingParticipant(g, p);
             }
 
@@ -1019,13 +1019,13 @@ namespace PeachPDF.Html.Core.Paint
                 // Appendix E step 5 is NON-positioned floats only. A float that is also positioned
                 // belongs to step 8 below, in tree order with every other positioned box - painting it
                 // here let a later positioned sibling or ancestor's background cover it.
-                if (p.Box.IsFloated && !p.Box.IsPositioned)
+                if (p.Box.IsFloated && !PaintsWithPositioned(p.Box))
                     PaintStackingParticipant(g, p);
             }
 
             foreach (var p in layerBoxes)
             {
-                if (StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
+                if (StackingOrder.ActsAsInline(p.Box) && !PaintsWithPositioned(p.Box) && !p.Box.IsFloated)
                     PaintStackingParticipant(g, p);
             }
 
@@ -1034,10 +1034,22 @@ namespace PeachPDF.Html.Core.Paint
                 // CSS 2.1 Appendix E step 8 is one tree-order bucket for every positioned
                 // descendant at stack level 0. Splitting absolute/fixed/relative into separate
                 // passes reorders otherwise-equal siblings by positioning scheme.
-                if (p.Box.IsPositioned)
+                if (PaintsWithPositioned(p.Box))
                     PaintStackingParticipant(g, p);
             }
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> paints in Appendix E step 8, in tree order with the positioned descendants.
+        /// That is every positioned box and also every box that is a stacking context for another reason - a
+        /// non-positioned element with <c>opacity</c> below 1, a <c>transform</c>, a <c>filter</c>, a blend mode -
+        /// which paints "on the same layer, within its parent stacking context, as positioned elements with stack level 0"
+        /// (<see href="https://www.w3.org/TR/css-color-3/#transparency">CSS Color 3 §3.2</see>; CSS Transforms 1 §2 and Filter Effects 1 §3
+        /// say the same of theirs). Left in the block or inline pass instead, such a box painted <em>before</em> the
+        /// positioned boxes that precede it in tree order, so their backgrounds covered it: a half-transparent
+        /// <c>&lt;img&gt;</c> inside a positioned header vanished altogether.
+        /// </summary>
+        private static bool PaintsWithPositioned(CssBox box) => box.IsPositioned || DomUtils.IsStackingContextBox(box);
 
         /// <summary>
         /// Paints one stacking-context participant discovered by <see cref="StackingOrder.Flatten"/>.

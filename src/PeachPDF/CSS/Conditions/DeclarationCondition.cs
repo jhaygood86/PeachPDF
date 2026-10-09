@@ -20,8 +20,12 @@ namespace PeachPDF.CSS
         /// The @supports oracle: does PeachPDF's rendering pipeline actually accept this declaration -
         /// not merely "does the CSS-OM's generic grammar parse it" (the old
         /// <c>_property.TrySetValue(_tokenValue)</c> check), which is a proven mismatch in both
-        /// directions (<c>animation-name</c> parses fine there but PeachPDF never renders animations;
-        /// <c>fill</c>/<c>stroke</c> aren't registered there at all despite full SVG support). Delegates
+        /// directions (<c>transition-duration</c> parses fine there but PeachPDF never runs a transition;
+        /// <c>fill</c>/<c>stroke</c> aren't registered there at all despite full SVG support). The answer is about
+        /// the implementation, never the configuration, as in a browser: <c>animation-name</c> is supported whether
+        /// or not <see cref="PdfGenerateConfig.AnimationProgress"/> is set, the way <c>@supports</c> stays true in
+        /// a browser whose user has asked for reduced motion (which is what <c>prefers-reduced-motion</c> is for).
+        /// Delegates
         /// to the generated <see cref="CssPropertyRegistry.SupportsDeclaration(string, string)"/>/
         /// <see cref="SvgPropertyRegistry.SupportsDeclaration"/> instead - the same registries
         /// <c>CssUtils</c>/<c>SvgTreeBuilder.ApplyCommon</c> dispatch through for real. Checked with OR,

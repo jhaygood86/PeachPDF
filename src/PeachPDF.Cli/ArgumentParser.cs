@@ -118,6 +118,7 @@ internal static class ArgumentParser
                 case "no-default-style": _options.NoDefaultStyle = true; break;
                 case "no-author-style": _options.NoAuthorStyle = true; break;
                 case "media": _options.Media = RequireValue(name, inlineValue) ?? _options.Media; break;
+                case "animation-progress": SetAnimationProgress(_options, RequireValue(name, inlineValue)); break;
                 case "page-size": ParsePageSize(_options, RequireValue(name, inlineValue)); break;
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
 
@@ -223,6 +224,31 @@ internal static class ArgumentParser
         if (value is not null)
         {
             options.HttpHeaders.Add(value);
+        }
+    }
+
+    private static void SetAnimationProgress(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (value.Equals("start", StringComparison.OrdinalIgnoreCase))
+        {
+            options.AnimationProgress = 0;
+        }
+        else if (value.Equals("end", StringComparison.OrdinalIgnoreCase))
+        {
+            options.AnimationProgress = 1;
+        }
+        else if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var progress) && progress is >= 0 and <= 1)
+        {
+            options.AnimationProgress = progress;
+        }
+        else
+        {
+            options.Errors.Add($"invalid --animation-progress value '{value}' (expected start, end, or a number from 0 to 1)");
         }
     }
 

@@ -230,6 +230,23 @@ namespace PeachPDF.CSS
             return null;
         }
 
+        /// <summary>
+        /// An <c>animation-name</c>: a <c>&lt;custom-ident&gt;</c> (which is never a CSS-wide keyword) or a
+        /// <c>&lt;string&gt;</c>, which names the same animation as the identifier spelled the same way.
+        /// </summary>
+        public static string ToAnimationName(this IReadOnlyList<Token> value)
+        {
+            switch (value.OnlyOrDefault())
+            {
+                case { Type: TokenType.Ident } ident when !CssGlobalKeywords.TryParse(ident.Data.ToString(), out _):
+                    return ident.Data.ToString();
+                case { Type: TokenType.String } text:
+                    return "\"" + text.Data.ToString().Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+                default:
+                    return null;
+            }
+        }
+
         public static string ToIdentifierCaseInsensitive(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();

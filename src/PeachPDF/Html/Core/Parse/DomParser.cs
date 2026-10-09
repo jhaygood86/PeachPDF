@@ -14,6 +14,7 @@ using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
+using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -112,6 +113,13 @@ namespace PeachPDF.Html.Core.Parse
 
             // Collect @font-palette-values registrations (consulted when resolving font-palette:<dashed-ident>).
             htmlContainer.FontPaletteValues = RegisteredFontPalette.BuildRegistry(cssData, cssValueParser);
+
+            // Collect @keyframes (read by AnimationApplier mid-cascade); nothing consults them unless animations
+            // are being sampled, so a document pays nothing for them otherwise.
+            htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null
+                ? RegisteredKeyframes.BuildRegistry(cssData)
+                : new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
+            htmlContainer.KeyframesUseRevert = htmlContainer.Keyframes.Values.Any(set => set.UsesRevert);
 
             // Collect @counter-style rules (consulted when formatting a counter()/list marker).
             htmlContainer.CounterStyles = CounterStyles.CounterStyleRegistry.BuildRegistry(cssData);
@@ -1143,7 +1151,9 @@ namespace PeachPDF.Html.Core.Parse
 
             // 3. UA normal (no cascade layers in the UA sheet, so revert-layer target == revert target)
             AssignCssBlocks(valueParser, box, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
-            var needsUaSnapshot = authorUsesRevert;
+            // A keyframe's `revert` rolls back to this same UA-level state (the animation origin counts as author
+            // origin for revert, CSS Cascade 5 §7.3.4), so it asks for the snapshot too.
+            var needsUaSnapshot = authorUsesRevert || box.HtmlContainer?.KeyframesUseRevert == true;
             var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
@@ -1176,6 +1186,17 @@ namespace PeachPDF.Html.Core.Parse
                 var needsInlineNormalSnapshot = authorUsesRevert;
                 inlineNormalSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
                 inlineNormalCustomSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+            }
+
+            // 5b. Animations. The animation origin sits between normal and important declarations (CSS Cascade
+            // 4 §6.1), so this is its place: it overrides everything above and is overridden by the
+            // !important phases below. Skipped outright, and at no cost, unless a snapshot was asked for.
+            if (box.HtmlContainer?.AnimationProgress is { } animationProgress)
+            {
+                if (box.HtmlContainer.Keyframes.Count > 0)
+                    ApplyImportantAnimationProperties(valueParser, box, authorImportant, inlineRule, pendingVarProperties);
+
+                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot);
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to
@@ -2048,6 +2069,52 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Puts the author's and the inline style's <c>!important</c> <c>animation-*</c> declarations on the box ahead
+        /// of the animation step. The step sits before the important phases (the animation origin outranks normal
+        /// declarations only), but the animation-* properties decide <em>which</em> animations exist, so
+        /// <c>animation: none !important</c> must already have taken effect when they are read, and
+        /// <c>animation: fade 1s !important</c> must already be there. Phase 6 applies the same declarations again,
+        /// to the same result. <c>revert</c> and <c>revert-layer</c> are left to that phase.
+        /// </summary>
+        private static void ApplyImportantAnimationProperties(
+            CssValueParser valueParser,
+            CssBox box,
+            IReadOnlyList<CssData.LayeredStyleRule> authorImportant,
+            IStyleRule? inlineRule,
+            Dictionary<string, string> pendingVarProperties)
+        {
+            foreach (var layered in authorImportant)
+                ApplyImportantAnimationDeclarations(valueParser, box, layered.Rule, pendingVarProperties);
+
+            if (inlineRule is not null)
+                ApplyImportantAnimationDeclarations(valueParser, box, inlineRule, pendingVarProperties);
+        }
+
+        private static void ApplyImportantAnimationDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties)
+        {
+            foreach (var prop in rule.Style)
+            {
+                if (!prop.IsImportant || !prop.Name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)) continue;
+
+                // The animation properties are not inherited, so unset is initial and inherit copies the parent's.
+                var value = prop.Value switch
+                {
+                    Keywords.Inherit when box.ParentBox != null => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
+                    Keywords.Inherit or Keywords.Initial or Keywords.Unset => CssDefaults.GetInitialValue(prop.Name),
+                    Keywords.Revert or Keywords.RevertLayer => null,
+                    _ => prop.Value
+                };
+
+                if (value is null) continue;
+
+                if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                    pendingVarProperties[prop.Name] = value;
+                else
+                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+            }
+        }
+
+        /// <summary>
         /// Checks whether any declaration in the given rules literally uses the revert/revert-layer keyword,
         /// so the (relatively expensive) property snapshot used as their revert target only needs to be
         /// captured when it can actually be consulted.
@@ -2273,7 +2340,13 @@ namespace PeachPDF.Html.Core.Parse
         /// --b: var(--c); --c: var(--a);) are detected correctly regardless of which pending property triggers
         /// the lookup first.
         /// </summary>
-        private static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, Dictionary<string, string> pendingVarProperties)
+        /// <param name="valueParser">The cascade's value parser.</param>
+        /// <param name="box">The box being cascaded.</param>
+        /// <param name="pendingVarProperties">The deferred declarations, keyed by property name.</param>
+        /// <param name="only">When given, resolves just the entries whose property name it accepts and removes them
+        /// from <paramref name="pendingVarProperties"/>; the animation step uses this to settle the properties it is
+        /// about to animate, so their underlying value is real and nothing resolves over the animated value later.</param>
+        internal static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, Dictionary<string, string> pendingVarProperties, Func<string, bool>? only = null)
         {
             if (pendingVarProperties.Count == 0) return;
 
@@ -2286,13 +2359,20 @@ namespace PeachPDF.Html.Core.Parse
                 ? new CssVarResolver.VarContext(registered, valueParser)
                 : null;
 
-            foreach (var (name, rawValue) in pendingVarProperties)
+            IEnumerable<KeyValuePair<string, string>> entries = only is null
+                ? pendingVarProperties
+                : pendingVarProperties.Where(entry => only(entry.Key)).ToList();
+
+            foreach (var (name, rawValue) in entries)
             {
                 var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic, context);
                 var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
 
                 if (finalValue is not null)
                     ApplyResolvedPropertyValue(valueParser, box, name, finalValue);
+
+                if (only is not null)
+                    pendingVarProperties.Remove(name);
             }
         }
 

@@ -14,7 +14,7 @@
             AnimationDirectionConverter.Option().For(PropertyNames.AnimationDirection), // 4
             AnimationFillStyleConverter.Option().For(PropertyNames.AnimationFillMode), // 5
             PlayStateConverter.Option().For(PropertyNames.AnimationPlayState), // 6
-            IdentifierConverter.Option().For(PropertyNames.AnimationName) // 7
+            AnimationNameConverter.Option().For(PropertyNames.AnimationName) // 7
         ).FromList().OrDefault();
 
         internal AnimationProperty() : base(PropertyNames.Animation)

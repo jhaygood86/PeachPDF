@@ -99,6 +99,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     TextHinting = source.TextHinting,
     TextStemDarkening = source.TextStemDarkening,
     MaxRasterPixels = source.MaxRasterPixels,
+    AnimationProgress = source.AnimationProgress,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
     MarginLeft = source.MarginLeft,
@@ -188,6 +189,59 @@ async Task SaveDeclarativeShowcaseAsync(string slug, string category, string car
     File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
     showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html", ShowcaseSourceKind.CSharp));
     Console.WriteLine($"Saved {slug}.pdf + {slug}.html (declarative)");
+}
+
+// A showcase made of several pages, each rendering the same HTML under its own config - for a feature whose
+// whole point is how one document differs between settings (e.g. PdfGenerateConfig.AnimationProgress), so a single
+// card shows every state side by side instead of one card per state. Each page gets a small banner naming its state;
+// the saved source file is the HTML without it, since the banner is only a showcase aid. Pages are appended with
+// PdfGenerator.AddPdfPages, which takes a config per call.
+async Task SaveStatesShowcaseAsync(string slug, string category, string cardTitle, string cardDescription,
+    string sourceHtml, params (string Label, PdfGenerateConfig Config)[] states)
+{
+    RequirePlainTextMetadata(slug, category, cardTitle, cardDescription);
+
+    static string Labelled(string html, string label) =>
+        html.Replace("<body>", "<body><p style=\"margin:0 0 6px;padding:3px 8px;background:#222;color:#fff;font:bold 8pt Arial,sans-serif\">State: "
+            + System.Net.WebUtility.HtmlEncode(label) + "</p>", StringComparison.Ordinal);
+
+    async Task<PeachPdfDocument> BuildAsync(Func<PdfGenerateConfig, PdfGenerateConfig> configFor)
+    {
+        var document = await generator.GeneratePdf(Labelled(sourceHtml, states[0].Label), configFor(states[0].Config));
+        foreach (var (label, config) in states.Skip(1))
+            await generator.AddPdfPages(document, Labelled(sourceHtml, label), configFor(config));
+        return document;
+    }
+
+    // --benchmark times one render of the HTML; the extra pages only repeat it under another setting.
+    if (benchmarkMode)
+    {
+        await BenchmarkShowcaseAsync(slug, sourceHtml, states[0].Config);
+        return;
+    }
+
+    var showcaseDocument = await BuildAsync(config => config);
+    using var pdfStream = new MemoryStream();
+    showcaseDocument.Save(pdfStream);
+    File.WriteAllBytes(Path.Combine(outputDir, $"{slug}.pdf"), pdfStream.ToArray());
+    File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
+    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html"));
+    Console.WriteLine($"Saved {slug}.pdf + {slug}.html ({states.Length} states)");
+
+    if (pdfASweep)
+    {
+        try
+        {
+            var pdfADocument = await BuildAsync(config => ClonePdfAConfig(config, pdfASweepCreationDate));
+            using var pdfAStream = new MemoryStream();
+            pdfADocument.Save(pdfAStream);
+            File.WriteAllBytes(Path.Combine(pdfASweepDir, $"{slug}.pdf"), pdfAStream.ToArray());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PDF/A SWEEP GENERATION FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
 }
 
 // Renders sourceHtml the same way a real caller would - GeneratePdf, then Save to a stream - without
@@ -14137,6 +14191,64 @@ var mixBlendModeHtml = "<!DOCTYPE html><html><head>" + BlendCss + "</head><body>
 await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode",
     "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
     mixBlendModeHtml, pdfConfig);
+
+// --- CSS animations rendered as a still frame (PdfGenerateConfig.AnimationProgress) ---
+
+const string AnimationHtml = """
+<!DOCTYPE html><html><head><style>
+@page { size: a4; margin: 15mm }
+body { font: 9pt Arial, sans-serif; margin: 0 }
+h1 { font-size: 15pt; margin: 0 0 0.3em }
+h2 { font-size: 10pt; margin: 1.2em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+p.note { margin: 0 0 0.6em; color: #555; font-size: 7.5pt }
+code { font-size: 7.5pt; color: #444 }
+
+/* Two logos fade over each other: without animation support both are drawn on top of each other. */
+.header { position: relative; height: 54px; background: #087f6a; overflow: hidden }
+.logo { position: absolute; top: 8px; left: 12px; font: bold 26pt Arial, sans-serif; color: #fff }
+.logo small { display: block; font: 7pt Arial, sans-serif; letter-spacing: 1px }
+@keyframes fadeOut { 0% { opacity: 1 } 45% { opacity: 1 } 55% { opacity: 0 } 100% { opacity: 0 } }
+@keyframes fadeIn  { 0% { opacity: 0 } 45% { opacity: 0 } 55% { opacity: 1 } 100% { opacity: 1 } }
+.logo.first  { animation: fadeOut 10s ease-in-out infinite alternate }
+.logo.second { animation: fadeIn 10s ease-in-out infinite alternate }
+
+/* Values mixed between keyframes. */
+@keyframes grow    { from { width: 40px } to { width: 100% } }
+@keyframes recolor { from { background-color: #e63946; color: #fff } to { background-color: #1d4ed8; color: #ffe066 } }
+@keyframes spin    { from { transform: rotate(0deg) scale(1) } to { transform: rotate(90deg) scale(1.4) } }
+@keyframes glow    { from { box-shadow: 0 0 0 0 #1d4ed8 } to { box-shadow: 0 6px 18px 2px #e63946 } }
+@keyframes stairs  { from { margin-left: 0 } to { margin-left: 240px } }
+.row { margin: 4px 0; padding: 6px 8px; background: #eef1f5 }
+.bar  { height: 16px; background: #1d4ed8; animation: grow 4s linear }
+.chip { display: inline-block; padding: 6px 12px; border-radius: 4px; animation: recolor 4s linear }
+.tile { width: 46px; height: 46px; margin: 18px 18px 18px 60px; background: #2a9d8f; animation: spin 4s ease-in-out, glow 4s linear }
+.step { width: 60px; height: 16px; background: #2a9d8f; animation: stairs 4s steps(4, end) }
+</style></head><body>
+<h1>CSS animations as a still frame</h1>
+<p class="note">PdfGenerateConfig.AnimationProgress samples every animation at one point of its own run. This page is rendered at the start, the midpoint and the end. (docs/html-css-support.md#animations)</p>
+
+<h2>Two logos cross-fading (opacity, ease-in-out, infinite alternate)</h2>
+<div class="header"><div class="logo first">Example Tea<small>FIRST LOGO</small></div><div class="logo second">Sample Coffee<small>SECOND LOGO</small></div></div>
+<p class="note"><code>animation: fadeOut 10s ease-in-out infinite alternate</code> on the first logo and <code>fadeIn</code> on the second.</p>
+
+<h2>Mixed values</h2>
+<div class="row"><div class="bar"></div></div>
+<p class="note"><code>width: 40px → 100%</code>, linear: lengths of different units are mixed through calc().</p>
+<div class="row"><span class="chip">background and text color</span></div>
+<p class="note"><code>background-color: #e63946 → #1d4ed8; color: #fff → #ffe066</code></p>
+<div class="row"><div class="tile"></div></div>
+<p class="note"><code>transform: rotate(0deg) scale(1) → rotate(90deg) scale(1.4)</code> with ease-in-out, and <code>box-shadow</code> mixed at the same time (two animations on one element).</p>
+<div class="row"><div class="step"></div></div>
+<p class="note"><code>margin-left: 0 → 240px</code> with <code>steps(4, end)</code>: the box jumps a quarter of the way at a time.</p>
+</body></html>
+""";
+
+await SaveStatesShowcaseAsync("css_animation", "Graphics & Effects", "CSS Animations: Start, Midpoint and End",
+    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow and a stepped box move between the states. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
+    AnimationHtml,
+    ("start (AnimationProgress = 0)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0 }),
+    ("midpoint (AnimationProgress = 0.5)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0.5 }),
+    ("end (AnimationProgress = 1)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 1 }));
 
 // --- CSS filter: drop-shadow() showcase ---
 

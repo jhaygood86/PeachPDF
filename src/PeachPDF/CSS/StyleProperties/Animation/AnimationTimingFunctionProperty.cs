@@ -2,8 +2,11 @@
 {
     internal sealed class AnimationTimingFunctionProperty : Property
     {
-        private static readonly IValueConverter ListConverter =
-            Converters.TransitionConverter.FromList().OrDefault(Map.TimingFunctions[Keywords.Ease]);
+        // Exposed for css-properties.json's "cssom-grammar" validator, which calls this same real grammar
+        // directly instead of the full cssom round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar = Converters.TransitionConverter.FromList();
+
+        private static readonly IValueConverter ListConverter = ValueGrammar.OrDefault(Map.TimingFunctions[Keywords.Ease]);
 
         internal AnimationTimingFunctionProperty()
             : base(PropertyNames.AnimationTimingFunction)

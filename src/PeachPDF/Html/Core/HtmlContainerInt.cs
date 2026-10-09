@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF;
 using PeachPDF.Adapters;
@@ -953,6 +954,25 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette> FontPaletteValues { get; set; }
             = new Dictionary<(string, string), RegisteredFontPalette>();
+
+        /// <summary>
+        /// Where in its run every CSS animation is sampled (see <see cref="PdfGenerateConfig.AnimationProgress"/>);
+        /// null leaves animations unapplied. Set by <c>PdfGenerator.SetContent</c> before the DOM/CSS tree is generated.
+        /// </summary>
+        internal double? AnimationProgress { get; set; }
+
+        /// <summary>
+        /// The document's <c>@keyframes</c> rules, keyed by name (case-sensitive). Only built when
+        /// <see cref="AnimationProgress"/> is set; empty otherwise. Rebuilt each parse pass.
+        /// </summary>
+        internal IReadOnlyDictionary<string, KeyframeSet> Keyframes { get; set; }
+            = new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Whether any keyframe declares <c>revert</c>, which the cascade then keeps the UA-level snapshot for
+        /// (the value <c>revert</c> rolls back to). Decided once when the keyframes are registered.
+        /// </summary>
+        internal bool KeyframesUseRevert { get; set; }
 
         /// <summary>The document's <c>@counter-style</c> rules; null when it declares none.</summary>
         internal CounterStyleRegistry? CounterStyles { get; set; }

@@ -27,6 +27,11 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter IdentifierConverter =
             new IdentifierValueConverter(ValueExtensions.ToIdentifierCaseInsensitive);
 
+        // <custom-ident> | <string>, the form an animation-name takes; a CSS-wide keyword is not a name, so
+        // `animation: inherit` is the keyword and not an animation called "inherit".
+        public static readonly IValueConverter AnimationNameConverter =
+            new IdentifierValueConverter(ValueExtensions.ToAnimationName);
+
         public static readonly IValueConverter AnimatableConverter =
             new IdentifierValueConverter(ValueExtensions.ToAnimatableIdentifier);
 
@@ -111,7 +116,16 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter StepsConverter = new FunctionValueConverter(
             FunctionNames.Steps, WithArgs(
                 IntegerConverter.Required(),
-                Assign(Keywords.Start, true).Or(Keywords.End, false).Option(false)));
+                // css-easing-1 §2.2: start/end are the older spellings of jump-start/jump-end. The value only has to
+                // validate: the renderer reads the steps back out of the text (EasingFunction).
+                Assign(Keywords.Start, true).Or(Keywords.End, false)
+                    .Or(Keywords.JumpStart, true).Or(Keywords.JumpEnd, false)
+                    .Or(Keywords.JumpNone, false).Or(Keywords.JumpBoth, true)
+                    .Option(false)));
+
+        // linear(<stops>) (css-easing-2 §2.2); the stops are checked for shape only.
+        public static readonly IValueConverter LinearEasingConverter = new FunctionValueConverter(
+            FunctionNames.Linear, new LinearStopsValueConverter());
 
         public static readonly IValueConverter CubicBezierConverter = Construct(() =>
         {
@@ -575,7 +589,8 @@ namespace PeachPDF.CSS
             LengthOrPercentConverter.Or(NumberConverter).Or(Keywords.Auto);
 
         public static readonly IValueConverter TransitionConverter = new DictionaryValueConverter<ITimingFunction>(
-            Map.TimingFunctions).Or(StepsConverter).Or(CubicBezierConverter);
+            Map.TimingFunctions).Or(new EasingArgumentRangeValueConverter(StepsConverter))
+            .Or(new EasingArgumentRangeValueConverter(CubicBezierConverter)).Or(LinearEasingConverter);
 
         public static readonly IValueConverter GradientConverter = LinearGradientConverter.Or(RadialGradientConverter).Or(ConicGradientConverter);
 

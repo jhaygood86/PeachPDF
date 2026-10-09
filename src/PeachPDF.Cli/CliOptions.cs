@@ -73,6 +73,9 @@ internal sealed class CliOptions
     public bool NoAuthorStyle { get; set; }
     public string? Media { get; set; }
 
+    /// <summary>Where in its run every CSS animation is sampled, 0 to 1 (<c>--animation-progress</c>); null leaves animations unapplied.</summary>
+    public double? AnimationProgress { get; set; }
+
     // --- Page geometry ---
     public PageSize? PageSize { get; set; }
     public double? ManualPageWidthPt { get; set; }

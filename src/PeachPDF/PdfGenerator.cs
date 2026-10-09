@@ -245,6 +245,10 @@ namespace PeachPDF
         /// <returns>the generated image of the html</returns>
         public async Task AddPdfPages(PeachPdfDocument document, string? html, PdfGenerateConfig config, PeachPdfCssContent? cssData = null)
         {
+            // First, so a bad value changes nothing: not the document's options, not the network, and not an
+            // empty-html call that would otherwise return before reaching it.
+            ValidateAnimationProgress(config);
+
             // get the size of each page to layout the HTML in
             var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new XSize(config.ManualPageWidth, config.ManualPageHeight);
 
@@ -551,6 +555,7 @@ namespace PeachPDF
                 MarginRight = 20
             };
 
+            ValidateAnimationProgress(config);
             EstablishDocumentOptions(document, config);
 
             // Collected synchronously first (the builder callback itself is synchronous, matching
@@ -1304,6 +1309,19 @@ namespace PeachPDF
         internal static bool NeedsRescale(double currentPixelsPerPoint, double effectivePixelsPerPoint) =>
             effectivePixelsPerPoint != currentPixelsPerPoint;
 
+        /// <summary>
+        /// Rejects an <see cref="PdfGenerateConfig.AnimationProgress"/> that is not a number from 0 to 1 (NaN, the
+        /// infinities, negative and above 1), so every entry point - HTML and declarative alike - treats it alike.
+        /// </summary>
+        internal static void ValidateAnimationProgress(PdfGenerateConfig config)
+        {
+            if (config.AnimationProgress is { } animationProgress && !(animationProgress >= 0 && animationProgress <= 1))
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), animationProgress,
+                    "PdfGenerateConfig.AnimationProgress must be a number from 0 to 1.");
+            }
+        }
+
         internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
         {
             container.MarginBottom = config.MarginBottom;
@@ -1319,6 +1337,9 @@ namespace PeachPDF
             container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
             container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
             container.HtmlContainerInt.SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels;
+
+            ValidateAnimationProgress(config);
+            container.HtmlContainerInt.AnimationProgress = config.AnimationProgress;
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the
             // language-dependent line-break tailorings need the language then, not after SetHtml returns.

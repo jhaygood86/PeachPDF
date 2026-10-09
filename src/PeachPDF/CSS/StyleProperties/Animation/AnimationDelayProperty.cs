@@ -2,8 +2,11 @@
 {
     internal sealed class AnimationDelayProperty : Property
     {
-        private static readonly IValueConverter
-            ListConverter = Converters.TimeConverter.FromList().OrDefault(Time.Zero);
+        // Exposed for css-properties.json's "cssom-grammar" validator, which calls this same real grammar
+        // directly instead of the full cssom round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar = Converters.TimeConverter.FromList();
+
+        private static readonly IValueConverter ListConverter = ValueGrammar.OrDefault(Time.Zero);
 
         internal AnimationDelayProperty()
             : base(PropertyNames.AnimationDelay)
