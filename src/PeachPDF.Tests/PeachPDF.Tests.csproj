@@ -17,6 +17,16 @@
   </ItemGroup>
 
   <!--
+    Small JPEG XL fixtures (PeachImage has no JPEG XL encoder, so they are committed files), copied
+    from PeachImage v0.5.0's own test assets (BSD-3-Clause, see TestSupport/Jxl/README.md).
+  -->
+  <ItemGroup>
+    <None Include="TestSupport\Jxl\*.jxl" LinkBase="TestSupport\Jxl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!--
     Font assets live in the repository-root assets/fonts/ directory, shared with
     PeachPDF.TestHarness and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several
     times. Each is <Link>ed to the output root, so BundledFonts' AppContext.BaseDirectory lookups

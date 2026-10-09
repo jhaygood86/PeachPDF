@@ -86,6 +86,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Picture_JpegXlSource_IsChosenOverFallback()
+        {
+            // rgb_lossy.jxl is 64x48 px => 48pt wide; the <img> fallback would be 400px => 300pt.
+            var html = $"<picture><source type='image/jxl' srcset='{JxlFixtures.DataUri("rgb_lossy")}'><img id='i' src='{Large}'></picture>";
+            Assert.Equal(48, await WidthOfAsync(html), 3);
+        }
+
+        [Fact]
         public async Task Picture_UnsupportedType_IsSkipped()
         {
             var html = $"<picture><source type='image/jxl-unknown' srcset='{Large}'><source type='image/png' srcset='{Small} 1x'><img id='i' src='{Large}'></picture>";

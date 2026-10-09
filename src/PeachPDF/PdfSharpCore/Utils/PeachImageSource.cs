@@ -1,5 +1,6 @@
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachImage;
+using PeachImage.Formats.Jxl;
 using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Gif;
 using PeachImage.Formats.Jpeg;
@@ -53,31 +54,65 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         private static IImageSource Decode(string name, byte[] bytes, int quality)
         {
+            var source = DecodeCore(name, bytes, quality, out var info);
+
+            // PeachImage never applies a file's stored orientation (JPEG/TIFF Exif, PNG eXIf, WebP EXIF, AVIF irot/imir,
+            // the JPEG XL header): pixels and dimensions are as stored and ImageInfo.Orientation reports it (EXIF values
+            // 1-8), which is surfaced for image-orientation and applied through the draw matrix, so pass-through
+            // embeds stay byte for byte. JPEG XL sets its own (DecodeJxl): a recompressed JPEG re-enters Decode as its
+            // rebuilt JPEG bytes and is oriented by that inner call from the JPEG's own Exif.
+            if (info.FormatName != "jxl" && info.Orientation != PeachImage.ImageOrientation.Normal)
+            {
+                SetOrientation(source, (int)info.Orientation);
+            }
+
+            return source;
+        }
+
+        private static void SetOrientation(IImageSource source, int orientation)
+        {
+            switch (source)
+            {
+                case PeachImageSourceImpl impl: impl.ExifOrientation = orientation; break;
+                case PeachPngPassthroughImageSourceImpl png: png.ExifOrientation = orientation; break;
+                case PeachCmykImageSourceImpl cmyk: cmyk.ExifOrientation = orientation; break;
+            }
+        }
+
+        private static IImageSource DecodeCore(string name, byte[] bytes, int quality, out ImageInfo info)
+        {
+            info = default;
             try
             {
-                var info = Image.Identify(new MemoryStream(bytes));
+                var imageInfo = Image.Identify(new MemoryStream(bytes));
+                info = imageInfo;
 
-                if (info.PixelFormat == PixelFormat.Cmyk32)
+                if (imageInfo.FormatName == "jxl")
                 {
-                    return DecodeCmyk(name, bytes, info);
+                    return DecodeJxl(name, bytes, quality, imageInfo);
                 }
 
-                if (info.FormatName == "jpeg")
+                if (imageInfo.PixelFormat == PixelFormat.Cmyk32)
+                {
+                    return DecodeCmyk(name, bytes, imageInfo);
+                }
+
+                if (imageInfo.FormatName == "jpeg")
                 {
                     return DecodeRgbOrGrayJpeg(name, bytes, quality);
                 }
 
-                if (info.FormatName == "png")
+                if (imageInfo.FormatName == "png")
                 {
                     return DecodePng(name, bytes, quality);
                 }
 
-                if (info.FormatName == "gif")
+                if (imageInfo.FormatName == "gif")
                 {
                     return DecodeGif(name, bytes, quality);
                 }
 
-                return DecodeGenericRaster(name, bytes, quality, info);
+                return DecodeGenericRaster(name, bytes, quality, imageInfo);
             }
             catch (ImageFormatException ex)
             {
@@ -92,11 +127,44 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         /// <summary>
+        /// Routes a JPEG XL source. A file made by losslessly recompressing a JPEG carries the data to
+        /// rebuild that exact JPEG (<see cref="JxlJpegReconstruction"/>), so it is turned back into the
+        /// original JPEG bytes without decoding any pixels and handed to <see cref="Decode"/> again as a
+        /// plain JPEG - which means every JPEG rule (CMYK/YCCK and ICC-tagged RGB/gray byte-for-byte
+        /// <c>/DCTDecode</c> pass-through, re-encode otherwise) applies unchanged and there is no second
+        /// pass-through implementation. Any other JPEG XL file decodes to <see cref="PixelFormat.Rgba32"/>
+        /// like the other raster formats; a CMYK one (which PeachImage returns as <c>Cmyk32</c> with its
+        /// profile attached) is color-managed to sRGB first, since PDF has no pass-through filter for it.
+        /// </summary>
+        private static IImageSource DecodeJxl(string name, byte[] bytes, int quality, ImageInfo info)
+        {
+            if (JxlJpegReconstruction.TryReconstructJpeg(new MemoryStream(bytes), out var jpeg))
+            {
+                return Decode(name, jpeg, quality);
+            }
+
+            if (info.PixelFormat == PixelFormat.Cmyk32)
+            {
+                using var cmyk = Image.Load(new MemoryStream(bytes));
+                var srgb = cmyk.ConvertToSrgb();
+                var rgba = srgb.PixelFormat == PixelFormat.Rgba32 ? srgb : srgb.ConvertTo(PixelFormat.Rgba32);
+                var cmykSource = new PeachImageSourceImpl(name, rgba, quality, rgba.HasAlpha, jpegPassthrough: null,
+                    isLosslessSourceFormat: false, rgbIccProfile: null);
+                SetOrientation(cmykSource, (int)info.Orientation);
+                return cmykSource;
+            }
+
+            var source = DecodeGenericRaster(name, bytes, quality, info);
+            SetOrientation(source, (int)info.Orientation);
+            return source;
+        }
+
+        /// <summary>
         /// Routes every raster format with no dedicated pass-through mechanism of its own (BMP, WebP,
         /// AVIF, TIFF) - decodes to <see cref="PixelFormat.Rgba32"/> like every non-pass-through format
         /// does, and computes <see cref="ImageSource.IImageSource.IsLosslessSourceFormat"/> (issue #1107:
         /// unconditional for BMP/GIF, conditional on <see cref="ImageInfo.IsLosslessEncoding"/> for
-        /// WebP/AVIF/TIFF). For WebP/AVIF specifically, also extracts a usable embedded ICC profile
+        /// WebP/AVIF/TIFF/JPEG XL). For WebP/AVIF/JPEG XL specifically, also extracts a usable embedded ICC profile
         /// (issue #1106) via a second, native (no <c>TargetPixelFormat</c>) decode purely to read
         /// <c>Image.Metadata</c> - forcing <see cref="Rgba32DecoderOptions"/> in one hop, the way every
         /// other call site here does, would silently lose it for an opaque source (native format Rgb24):
@@ -111,7 +179,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         private static IImageSource DecodeGenericRaster(string name, byte[] bytes, int quality, ImageInfo info)
         {
             byte[]? rgbIccProfile = null;
-            if (info.FormatName is "webp" or "avif")
+            if (info.FormatName is "webp" or "avif" or "jxl")
             {
                 using var probe = Image.Load(new MemoryStream(bytes));
                 rgbIccProfile = TryGetUsableIccProfileBytes(probe, IccColorSpace.Rgb, expectedChannelCount: 3);
@@ -122,7 +190,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
 
             bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif" ||
-                (info.FormatName is "webp" or "avif" or "tiff" && info.IsLosslessEncoding);
+                (info.FormatName is "webp" or "avif" or "tiff" or "jxl" && info.IsLosslessEncoding);
             return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat, rgbIccProfile);
         }
 
@@ -612,6 +680,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public string Name { get; }
             public bool Transparent => false;
             public bool IsCmyk => true;
+            public int ExifOrientation { get; set; } = 1;
             public bool IsGrayscale => false;
             public JpegPassthroughData? JpegPassthrough => _passthrough;
             public CmykRasterData? CmykRaster => _raster;
@@ -701,6 +770,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public string Name { get; }
             public bool Transparent => false;
             public bool IsCmyk => false;
+            public int ExifOrientation { get; set; } = 1;
             public bool IsGrayscale => false;
             public JpegPassthroughData? JpegPassthrough => null;
             public CmykRasterData? CmykRaster => null;
@@ -814,6 +884,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public string Name { get; }
             public bool Transparent { get; }
             public bool IsCmyk => false;
+            public int ExifOrientation { get; set; } = 1;
 
             // Only ever true for a JPEG source decoded via DecodeRgbOrGrayJpeg's native (not
             // Rgba32-forced) path - every other format still forces Rgba32 (see Rgba32DecoderOptions'

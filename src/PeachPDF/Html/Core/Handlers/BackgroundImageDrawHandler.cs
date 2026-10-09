@@ -49,8 +49,14 @@ namespace PeachPDF.Html.Core.Handlers
             bool intrinsicSizeInCssPixels)
         {
             var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx : 1d;
-            var intrinsicWidth = image.Width > 0 ? image.Width * pxFactor : (double?)null;
-            var intrinsicHeight = image.Height > 0 ? image.Height * pxFactor : (double?)null;
+
+            // image-orientation turns a natural bitmap upright; a generated tile (gradient) has no orientation.
+            var orientation = intrinsicSizeInCssPixels ? ImageOrientationResolver.Effective(box, image) : ImageOrientation.Upright;
+            var orientedWidth = orientation.SwapsAxes ? image.Height : image.Width;
+            var orientedHeight = orientation.SwapsAxes ? image.Width : image.Height;
+
+            var intrinsicWidth = orientedWidth > 0 ? orientedWidth * pxFactor : (double?)null;
+            var intrinsicHeight = orientedHeight > 0 ? orientedHeight * pxFactor : (double?)null;
             var intrinsicRatio = intrinsicWidth is not null && intrinsicHeight is not null
                 ? intrinsicWidth.Value / intrinsicHeight.Value
                 : (double?)null;
@@ -67,7 +73,8 @@ namespace PeachPDF.Html.Core.Handlers
 
             var location = new PaintPoint(positioningRect.X + offsetX, positioningRect.Y + offsetY);
 
-            var srcRect = new Rect(0, 0, image.Width, image.Height);
+            // The whole picture, in oriented pixels (the same as the stored raster's when there is no rotation).
+            var srcRect = new Rect(0, 0, orientedWidth, orientedHeight);
             var destRect = new Rect(location, new Size(tileWidth, tileHeight));
 
             // The actual visible painting area - clipRect (rounded corners only ever shrink this
@@ -109,16 +116,16 @@ namespace PeachPDF.Html.Core.Handlers
             switch (backgroundRepeat)
             {
                 case "no-repeat":
-                    g.DrawImage(image, destRect, srcRect, sampling);
+                    ImageOrientationPainter.Draw(g, image, destRect, srcRect, sampling, orientation);
                     break;
                 case "repeat-x":
-                    DrawRepeatX(g, image, tileBounds, srcRect, destRect, sampling);
+                    DrawRepeatX(g, image, tileBounds, srcRect, destRect, sampling, orientation);
                     break;
                 case "repeat-y":
-                    DrawRepeatY(g, image, tileBounds, srcRect, destRect, sampling);
+                    DrawRepeatY(g, image, tileBounds, srcRect, destRect, sampling, orientation);
                     break;
                 default:
-                    DrawRepeat(g, image, tileBounds, srcRect, destRect, sampling);
+                    DrawRepeat(g, image, tileBounds, srcRect, destRect, sampling, orientation);
                     break;
             }
 
@@ -153,31 +160,31 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Draw the background image repeating it over the X axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatX(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling)
+        private static void DrawRepeatX(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling, ImageOrientation orientation)
         {
             var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
 
             var x = startX;
             for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
-                g.DrawImage(image, new Rect(x, destRect.Y, destRect.Width, destRect.Height), srcRect, sampling);
+                ImageOrientationPainter.Draw(g, image, new Rect(x, destRect.Y, destRect.Width, destRect.Height), srcRect, sampling, orientation);
         }
 
         /// <summary>
         /// Draw the background image repeating it over the Y axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatY(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling)
+        private static void DrawRepeatY(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling, ImageOrientation orientation)
         {
             var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
 
             var y = startY;
             for (var i = 0; i < MaxTilesPerAxis && y < rectangle.Bottom; i++, y += destRect.Height)
-                g.DrawImage(image, new Rect(destRect.X, y, destRect.Width, destRect.Height), srcRect, sampling);
+                ImageOrientationPainter.Draw(g, image, new Rect(destRect.X, y, destRect.Width, destRect.Height), srcRect, sampling, orientation);
         }
 
         /// <summary>
         /// Draw the background image repeating it over both X and Y axes, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeat(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling)
+        private static void DrawRepeat(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling, ImageOrientation orientation)
         {
             var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
             var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
@@ -187,7 +194,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 var x = startX;
                 for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
-                    g.DrawImage(image, new Rect(x, y, destRect.Width, destRect.Height), srcRect, sampling);
+                    ImageOrientationPainter.Draw(g, image, new Rect(x, y, destRect.Width, destRect.Height), srcRect, sampling, orientation);
             }
         }
 

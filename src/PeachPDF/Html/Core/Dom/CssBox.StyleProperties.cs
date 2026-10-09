@@ -1043,10 +1043,11 @@ namespace PeachPDF.Html.Core.Dom
             inheritedGeneratedContent = inheritedGeneratedContent.SetPropertyValue(inheritedGeneratedContent.Quotes, parentStyle.GeneratedContent.Quotes, static (a, v) => a with { Quotes = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.GeneratedContent, inheritedGeneratedContent, static (s, a) => s with { GeneratedContent = a });
 
-            // `image-rendering` is the one Inherited: true property in BackgroundArea (the rest are box-local), so, like
+            // `image-rendering` and `image-orientation` are the Inherited: true properties in BackgroundArea (the rest are box-local), so, like
             // `quotes` above, it is copied on its own rather than by adopting the whole area.
             var inheritedBackground = _computedStyle.Background;
             inheritedBackground = inheritedBackground.SetPropertyValue(inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
+            inheritedBackground = inheritedBackground.SetPropertyValue(inheritedBackground.ImageOrientation, parentStyle.Background.ImageOrientation, static (a, v) => a with { ImageOrientation = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)

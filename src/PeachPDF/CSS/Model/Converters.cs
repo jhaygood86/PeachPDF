@@ -403,6 +403,9 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter ObjectFittingConverter = Map.ObjectFittings.ToConverter();
 
         public static readonly IValueConverter ImageRenderingConverter = Map.ImageRenderingModes.ToConverter();
+
+        /// <summary><c>image-orientation</c>: <c>from-image | none | [ &lt;angle&gt; || flip ]</c>.</summary>
+        public static readonly IValueConverter ImageOrientationConverter = new ImageOrientationValueConverter();
         public static readonly IValueConverter PositionModeConverter = Map.PositionModes.ToConverter();
         public static readonly IValueConverter OverflowModeConverter = Map.OverflowModes.ToConverter();
         public static readonly IValueConverter FloatingConverter = Map.FloatingModes.ToConverter();

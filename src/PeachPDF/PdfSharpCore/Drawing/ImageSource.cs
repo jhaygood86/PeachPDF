@@ -224,6 +224,13 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             bool IsCmyk { get; }
 
             /// <summary>
+            /// The Exif Orientation value (1 to 8, 1 = upright) stored in the encoded file, which the decoder did not
+            /// apply to <see cref="Width"/>/<see cref="Height"/> or the pixels. 1 for a format that carries none, and for a
+            /// decoder that already applied it (JPEG XL). Read by <c>image-orientation</c>; never changes the embedded bytes.
+            /// </summary>
+            int ExifOrientation => 1;
+
+            /// <summary>
             /// Non-null when this source should be embedded via byte-for-byte JPEG pass-through instead
             /// of the normal lossy-re-encode (<see cref="SaveAsJpeg"/>) or bitmap (<see cref="SaveAsPdfBitmap"/>)
             /// paths: always non-null when <see cref="IsCmyk"/> and the source is a CMYK/YCCK JPEG, with

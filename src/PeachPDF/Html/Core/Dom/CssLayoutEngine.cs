@@ -56,7 +56,15 @@ namespace PeachPDF.Html.Core.Dom
         public static void MeasureImageSize(CssRectImage imageWord)
         {
             ArgumentNullException.ThrowIfNull(imageWord);
-            MeasureIntrinsicSize(imageWord, imageWord.Image?.Width, imageWord.Image?.Height);
+            if (imageWord.Image is { } image)
+            {
+                var (width, height) = ImageOrientationResolver.OrientedSize(imageWord.OwnerBox, image);
+                MeasureIntrinsicSize(imageWord, width, height);
+            }
+            else
+            {
+                MeasureIntrinsicSize(imageWord, null, null);
+            }
         }
 
         /// <summary>

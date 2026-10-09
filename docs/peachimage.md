@@ -2,7 +2,7 @@
 
 [PeachImage](https://github.com/jhaygood86/PeachImage) is the pure .NET image codec library PeachPDF decodes every raster image
 with, and that [PeachDrawing](peachdrawing.md) encodes the bitmaps it saves with. It reads and writes the formats the web uses
-(JPEG, PNG, GIF, WebP, AVIF, BMP, and TIFF for reading) as managed code only: no native library, no P/Invoke, no platform
+(JPEG, PNG, GIF, WebP, AVIF, BMP, plus TIFF and JPEG XL for reading) as managed code only: no native library, no P/Invoke, no platform
 imaging API, so the same code runs on Windows, Linux, macOS, Android and in the browser. It targets .NET 8 and .NET 10.
 
 PeachImage is a project of its own, released under the MIT license, and it is not versioned with PeachPDF. This page describes the
@@ -28,6 +28,7 @@ your own code loads, converts or resizes images, as in the examples below.
 | AVIF | yes | yes | Still images; lossy and lossless encode. Animated AVIF is not supported. |
 | BMP | yes | yes | Every common header variant and bit depth, RLE, bit-field masks. |
 | TIFF | yes | no | Uncompressed, LZW and PackBits; RGB, grayscale, palette and CMYK. |
+| JPEG XL | yes | no | Lossy (VarDCT) and lossless (Modular), alpha, animation, 16-bit and floating-point samples, HDR (PQ/HLG) and wide-gamut color, ICC profiles, CMYK. Files made by recompressing a JPEG can be turned back into that exact JPEG. See [JPEG XL](#jpeg-xl). |
 
 The format is detected from the file's contents, so nothing needs registering, and a file with the wrong extension still loads.
 A feature a codec does not implement throws a descriptive exception instead of producing a wrong image. Ask the library what it
@@ -66,6 +67,17 @@ ImageInfo info = Image.Identify(stream);
 Console.WriteLine($"{info.Width}x{info.Height} {info.PixelFormat} ({info.FormatName})");
 ```
 
+`ImageInfo` also answers a few questions a caller usually wants settled before it decodes:
+
+- `IsLosslessEncoding`: whether the pixel data was encoded losslessly by its own codec, so a caller can avoid silently re-encoding an
+  already-lossy source as if it were exact. It is true for WebP's lossless mode, a fully lossless AVIF, every TIFF the decoder supports,
+  and a JPEG XL whose colour channels are not XYB-encoded and whose first frame is Modular. It is false for JPEG (always lossy), for
+  lossy files, and for a JPEG XL made by recompressing a JPEG (lossless only relative to the original JPEG bytes, not the pixels).
+- `Orientation`: the orientation the file records, as an [`ImageOrientation`](api/PeachImage/ImageOrientation.html); see
+  [Orientation](#orientation).
+- `HasPreview`: whether decoding can produce an early, lower-fidelity version; see [Early previews](#early-previews).
+- `IsAnimated`, `HasAlpha`, `IsAdobeInvertedCmyk` and `IsYcck`.
+
 `Image.TryLoad` is the non-throwing form for untrusted input, returning `false` for a stream that is not an image it can read.
 
 ## Pixels
@@ -80,9 +92,109 @@ Span<byte> pixels = image.GetPixelSpan();
 Span<byte> firstRow = image.GetRowSpan(0);
 ```
 
-`PixelFormat` says how to read it: `Gray8`, `Rgb24`, `Rgba32`, `Cmyk32`, and the 16-bit-per-channel `Gray16`, `Rgb48` and `Rgba64`.
-A decoder keeps the source's format by default (a CMYK JPEG stays CMYK, so its separations are not thrown away); pass decoder
-options to have the image converted to a format you ask for in the same pass.
+`PixelFormat` says how to read it: `Gray8`, `Rgb24`, `Rgba32`, `Cmyk32`, the 16-bit-per-channel `Gray16`, `Rgb48` and `Rgba64`,
+and the 32-bit floating-point `GrayF32`, `RgbF32` and `RgbaF32` that high-dynamic-range sources decode to. A decoder keeps the
+source's format by default (a CMYK JPEG stays CMYK, so its separations are not thrown away); pass decoder options to have the image
+converted to a format you ask for in the same pass.
+
+### Converting pixel formats
+
+`Image.ConvertTo` converts between the gray, RGB and RGBA formats at 8-bit, 16-bit and floating-point depth, for example an HDR
+`RgbaF32` decode down to `Rgb24` before encoding it. Integer targets round and clamp, color to gray uses BT.601 luma, and a target
+without alpha discards the alpha channel. Values are converted as stored, with no tone mapping. The encoders reject the floating-point
+formats, so convert first. CMYK images go through `ConvertToSrgb`, which applies the image's embedded profile, instead.
+
+```csharp
+using PeachImage;
+
+using var hdr = Image.Load("photo.jxl");            // may be RgbaF32 for an HDR file
+using var jpegReady = hdr.ConvertTo(PixelFormat.Rgb24);
+```
+
+## Orientation
+
+Cameras and phones often store a photo sideways and record the turn needed to show it upright. `ImageInfo.Orientation` reports that
+value as an [`ImageOrientation`](api/PeachImage/ImageOrientation.html), whose members use the EXIF numbering: `Normal` (1),
+`MirrorHorizontal` (2), `Rotate180` (3), `MirrorVertical` (4), `Transpose` (5), `Rotate90` (6), `Transverse` (7) and `Rotate270` (8). It
+is read from JPEG and TIFF EXIF, a PNG `eXIf` chunk (one placed after the image data is not seen by `Identify`), a WebP `EXIF` chunk,
+AVIF `irot`/`imir` properties and the JPEG XL header.
+
+**No decoder applies it.** The pixels and the width and height are always as stored, so a sideways photo loads sideways. Apply the
+orientation yourself with `Image.ApplyOrientation`, which comes in three forms: one that returns a new image (or the same instance for
+`Normal`), one that writes into a destination image you supply without allocating, and `ApplyOrientationInPlace`, which works for any
+size with `MirrorHorizontal`, `Rotate180` and `MirrorVertical` and for square images with the rest. The result's EXIF orientation is
+reset to 1 and its resolution values are swapped for a rotation; orientation stored in XMP is not rewritten.
+
+```csharp
+using PeachImage;
+
+ImageInfo info = Image.Identify(File.OpenRead("phone-photo.jpg"));
+using var image = Image.Load("phone-photo.jpg");
+using var upright = image.ApplyOrientation(info.Orientation);
+```
+
+PeachPDF does not use `ApplyOrientation`: it draws the stored pixels through a rotation matrix so that an embedded JPEG stays
+byte-for-byte unchanged. See the [`image-orientation`](html-css-support.md) property and
+[Image orientation](usage-examples.md#image-orientation).
+
+## Early previews
+
+`DecoderOptions.PreviewAvailable` is an `Action<Image>` that `Load` calls, synchronously on the decoding thread, with a lower-fidelity
+version of the image while the full decode is still running. `ImageInfo.HasPreview` says whether a file can produce one:
+
+- **JPEG XL:** the file's preview frame, which may be smaller than the image, delivered before the main frame decodes.
+- **PNG:** one full-size preview per Adam7 pass except the last (six for an ordinary interlaced image), with the pixels not yet decoded
+  filled in from their decoded neighbors.
+- **JPEG:** one preview per progressive scan except the last, starting once DC data for every component has arrived.
+
+The callback owns each image it is given and must dispose it, and an exception thrown from it aborts the decode. Previews honor
+`TargetPixelFormat`, and the final image is identical with or without a callback. An interlaced GIF, an AVIF thumbnail and a TIFF
+reduced-resolution image do not produce previews.
+
+```csharp
+using PeachImage;
+
+var options = new DecoderOptions
+{
+    PreviewAvailable = preview =>
+    {
+        using (preview)
+        {
+            ShowPlaceholder(preview);   // your own code
+        }
+    },
+};
+
+using var image = Image.Load("large-progressive.jpg", options);
+```
+
+## JPEG XL
+
+JPEG XL is decode-only. The decoder is written in managed code and covers both coding modes (VarDCT and Modular), alpha, premultiplied
+alpha, extra channels (spot colors, CMYK), patches, splines, noise, upsampling, animation with full frame blending, PQ and HLG transfer
+functions, wide-gamut color and embedded ICC profiles. Samples above 8 bits decode to the 16-bit formats, and floating-point or deeper
+samples to `GrayF32`, `RgbF32` and `RgbaF32`; 32-bit integer samples are not supported (the reference decoder rejects them too), and
+encoding is not available. A multi-frame file loads as an `AnimatedImage`; EXIF, XMP and the ICC profile are exposed through
+`Image.Metadata`. Like every decoder here, it reports the stored orientation through `ImageInfo.Orientation` rather than rotating the
+pixels.
+
+A JPEG XL file made by losslessly recompressing a JPEG (what `cjxl` does with JPEG input) carries enough information to rebuild that
+exact JPEG file, including its progressive scans, restart intervals, Huffman tables, ICC profile, EXIF and XMP.
+[`JxlJpegReconstruction`](api/PeachImage/JxlJpegReconstruction.html) returns those original bytes without decoding any pixels, which is
+useful wherever a JPEG can be embedded as-is, such as in a PDF:
+
+```csharp
+using PeachImage.Formats.Jxl;
+
+using var stream = File.OpenRead("photo.jxl");
+if (JxlJpegReconstruction.TryReconstructJpeg(stream, out byte[]? jpeg))
+{
+    File.WriteAllBytes("photo.jpg", jpeg);   // identical to the JPEG that was recompressed
+}
+```
+
+`HasJpegReconstructionData` tells whether a file qualifies without rebuilding it, and `ReconstructJpeg` throws
+`JxlUnsupportedFeatureException` for a file that was not made from a JPEG (those decode through `Image.Load` as usual).
 
 ## Animated images
 
@@ -144,7 +256,10 @@ load, such as a service resizing many uploads at once, where reusing buffers cut
 
 - **PeachPDF** decodes the raster images a document references (`<img>`, CSS images, `data:` URIs) with PeachImage. A CMYK or
   ICC-profiled JPEG is embedded byte for byte rather than converted, and everything else is decoded to RGBA for the PDF writer. See
-  [Image loading and decoding](architecture.md#image-loading-and-decoding).
+  [Image loading and decoding](architecture.md#image-loading-and-decoding). A JPEG XL file made by recompressing a JPEG is
+  turned back into the original JPEG (without decoding any pixels) and then embedded by the same rules as any JPEG, so a CMYK
+  or ICC-tagged one is embedded byte for byte. `ImageInfo.IsLosslessEncoding` is what lets a lossless WebP, AVIF, TIFF or JPEG XL embed
+  without a lossy JPEG re-encode, and `ImageInfo.Orientation` is what the [`image-orientation`](html-css-support.md) property reads.
 - **[PeachDrawing](peachdrawing.md)** draws into a `RasterSurface` and saves it through PeachImage's encoders
   ([`RasterCanvas.Save`](api/PeachDrawing/RasterCanvas.html) takes a format name and an
   `EncoderOptions`), so any format above that can encode is a format a `RasterCanvas` can save.

@@ -610,9 +610,13 @@ This paint-order correctness — together with the pagination fixes above (blank
 
 ### Image loading and decoding
 
-Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, AVIF, and TIFF — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
+Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, AVIF, TIFF, and JPEG XL — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
 
 `PeachImageSource` (the `ImageSource`/`IImageSource` implementation backing this, in `PdfSharpCore/Utils/`) routes a CMYK/YCCK JPEG around the usual forced-RGBA32 decode entirely — that conversion has no color management at all, so applying it to a CMYK source would destroy its print separations. A CMYK JPEG (and an RGB/grayscale JPEG carrying a usable embedded ICC profile) is instead embedded via byte-for-byte pass-through in `PdfImage` — see [Color and ICC profiles](usage-examples.md#color-and-icc-profiles) for the embedding behavior itself.
+
+Orientation is reported, never applied, by PeachImage's decoders: `PeachImageSource` copies `ImageInfo.Orientation` onto the source it returns, and `Image.Width`/`Height` stay the stored raster's size so downscale decisions and every pass-through embed keep working on the real pixels. The CSS `image-orientation` property (default `from-image`) resolves to a rotation and flip, intrinsic sizes are read through the oriented size, and painting pushes a matrix around the draw call, which is why a passed-through JPEG is never re-encoded to rotate it.
+
+A JPEG XL file is routed first: one made by losslessly recompressing a JPEG carries the data to rebuild that exact JPEG, so `PeachImageSource` reconstructs it (no pixel decode) and hands the bytes back through the JPEG routing above — the same CMYK/ICC pass-through rules apply, with no second implementation. Any other JPEG XL file decodes to RGBA like the other raster formats; a CMYK one is color-managed to sRGB first, and an animation renders its first frame.
 
 `ImageLoadHandler` is an implementation detail of `CssImage.Url`: each URL image owns its handler and exposes `EnsureLoadedAsync(HtmlContainerInt)` for lazy loading and `Dispose()` for cleanup. Callers (background layer loops, list marker painting) interact only with `CssImage` and never touch `ImageLoadHandler` directly.
 
@@ -695,7 +699,7 @@ Bidirectional layout is a separate engine, `BidiResolver` ([Text/Bidi/](https://
 
 ### Image pipeline
 
-PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF) arrive as pre-decoded RGBA bitmaps from PeachImage (see [Image loading and decoding](#image-loading-and-decoding)) and are written as PDF image XObjects using `XBitmapImage`.
+PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF, WebP, AVIF, TIFF, JPEG XL) arrive as pre-decoded RGBA bitmaps from PeachImage (see [Image loading and decoding](#image-loading-and-decoding)) and are written as PDF image XObjects using `XBitmapImage`.
 
 ### Graphics context
 

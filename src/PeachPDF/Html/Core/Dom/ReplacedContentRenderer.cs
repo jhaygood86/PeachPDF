@@ -32,8 +32,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             else if (image is not null)
             {
-                naturalWidth = image.Width;
-                naturalHeight = image.Height;
+                // The size of the upright picture (image-orientation), not of the stored raster.
+                (naturalWidth, naturalHeight) = ImageOrientationResolver.OrientedSize(box, image);
             }
 
             // Intrinsic pixels -> layout points, to match contentBox.
@@ -49,7 +49,8 @@ namespace PeachPDF.Html.Core.Dom
             if (svg is not null)
                 SvgRenderer.RenderCachedInto(g, svg, destination);
             else if (image is not null)
-                g.DrawImage(image, destination, ImageRenderingResolver.Resolve(box.ImageRendering.Value));
+                ImageOrientationPainter.Draw(g, image, destination, null, ImageRenderingResolver.Resolve(box.ImageRendering.Value),
+                    ImageOrientationResolver.Effective(box, image));
 
             if (needsClip)
                 g.PopClip();

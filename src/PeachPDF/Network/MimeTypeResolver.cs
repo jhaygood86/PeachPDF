@@ -122,6 +122,7 @@ namespace PeachPDF.Network
             "gif" => "image/gif",
             "webp" => "image/webp",
             "avif" => "image/avif",
+            "jxl" => "image/jxl",
             "tga" => "image/x-tga",
             "psd" => "image/vnd.adobe.photoshop",
             "hdr" => "image/vnd.radiance",

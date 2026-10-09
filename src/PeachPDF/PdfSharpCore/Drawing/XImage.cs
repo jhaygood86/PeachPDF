@@ -120,7 +120,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// Requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
         /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
         /// </summary>
-        /// <param name="path">The path to a BMP, PNG, JPEG, or GIF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
+        /// <param name="path">The path to a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, or JPEG XL file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
         public static XImage FromFile(string path)
         {
             return new XImage(path);
@@ -131,7 +131,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// For non-pdf files, this requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
         /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
         /// </summary>
-        /// <param name="stream">The stream containing a BMP, PNG, JPEG, GIF, or PDF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
+        /// <param name="stream">The stream containing a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, JPEG XL, or PDF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
         public static XImage FromStream(Func<Stream> stream)
         {
             if (stream == null)
@@ -151,7 +151,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Tests if a file exists.
         /// </summary>
-        /// <param name="path">The path to a BMP, PNG, GIF, or JPEG file.</param>
+        /// <param name="path">The path to a BMP, PNG, GIF, JPEG, WebP, AVIF, TIFF, or JPEG XL file.</param>
         public static bool ExistsFile(string path)
         {
             return false;
@@ -208,6 +208,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <see cref="JpegPassthroughColorSpace.Cmyk"/> instead (see <c>EmbedJpegPassthrough</c>).
         /// </summary>
         internal bool IsCmyk => _source.IsCmyk;
+
+        /// <summary>The Exif Orientation (1 to 8, 1 = upright) stored in the file; see <see cref="IImageSource.ExifOrientation"/>. 1 for a form or any non-raster image.</summary>
+        internal int ExifOrientation => _source?.ExifOrientation ?? 1;
 
         /// <summary>
         /// Non-null when this image should be embedded via byte-for-byte JPEG pass-through - see

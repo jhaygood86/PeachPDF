@@ -41,6 +41,9 @@ namespace PeachPDF.Adapters
             get { return _image; }
         }
 
+        /// <summary>The Exif Orientation (1 to 8, 1 = upright) of the underlying raster, which its decoded pixels do not apply.</summary>
+        internal int ExifOrientation => _image.ExifOrientation;
+
         /// <summary>
         /// This image's natural size. A raster <see cref="XImage"/> reports its pixel count, which the
         /// caller converts; an <see cref="XForm"/> — a vector Form XObject, as

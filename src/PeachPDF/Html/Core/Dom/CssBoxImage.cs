@@ -166,7 +166,16 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 // A srcset candidate's density divides the natural size (HTML "density-corrected natural size").
-                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, _imageWord.Image?.Width / _srcsetDensity, _imageWord.Image?.Height / _srcsetDensity);
+                // The upright picture's size (image-orientation), then the srcset density correction.
+                double? orientedWidth = null, orientedHeight = null;
+                if (_imageWord.Image is { } raster)
+                {
+                    var (w, h) = ImageOrientationResolver.OrientedSize(this, raster);
+                    orientedWidth = w / _srcsetDensity;
+                    orientedHeight = h / _srcsetDensity;
+                }
+
+                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, orientedWidth, orientedHeight);
             }
         }
 

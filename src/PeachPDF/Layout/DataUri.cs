@@ -17,8 +17,8 @@ namespace PeachPDF.Layout
         }
 
         /// <summary>
-        /// Sniffs a raster image's mime type from its own file-signature bytes - PNG, JPEG, GIF, BMP, and
-        /// WEBP are all distinguishable this way. Defaults to <c>image/png</c> for anything else, since
+        /// Sniffs a raster image's mime type from its own file-signature bytes - PNG, JPEG, GIF, BMP,
+        /// WEBP, and JPEG XL are all distinguishable this way. Defaults to <c>image/png</c> for anything else, since
         /// the underlying loader still needs *some* mime type to attempt decoding with.
         /// </summary>
         private static string SniffMimeType(byte[] data)
@@ -38,6 +38,15 @@ namespace PeachPDF.Layout
             if (data.Length >= 12 && data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F'
                 && data[8] == 'W' && data[9] == 'E' && data[10] == 'B' && data[11] == 'P')
                 return "image/webp";
+
+            // JPEG XL: a bare codestream starts FF 0A; the ISO BMFF container starts with a 12-byte "JXL " signature box.
+            if (data.Length >= 2 && data[0] == 0xFF && data[1] == 0x0A)
+                return "image/jxl";
+
+            if (data.Length >= 12 && data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 0x0C
+                && data[4] == 'J' && data[5] == 'X' && data[6] == 'L' && data[7] == ' '
+                && data[8] == 0x0D && data[9] == 0x0A && data[10] == 0x87 && data[11] == 0x0A)
+                return "image/jxl";
 
             return "image/png";
         }

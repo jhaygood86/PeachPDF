@@ -693,6 +693,29 @@ The [showcase](showcase.html) has two complete, validated examples, built with t
 
 A PDF/A `OutputIntent` needs a device-independent ICC profile to name — PeachPDF embeds the ICC's own freely-redistributable `sRGB2014.icc` profile for this and identifies it as `"sRGB IEC61966-2.1"`. PeachPDF's document-wide color mode stays mixed/undefined under `PdfAConformance` (a `device-cmyk()`-authored color still writes as real `DeviceCMYK`, unaffected by PDF/A's own sRGB `OutputIntent`), so the bundled sRGB profile is always the right one to name here. It's unrelated to how a *source raster image* embeds its own color data, covered next.
 
+#### Image orientation
+
+A photo taken with the phone held sideways is usually stored sideways, with its orientation recorded in the file (JPEG and TIFF EXIF, a
+PNG `eXIf` chunk, WebP `EXIF`, AVIF `irot`/`imir`, or the JPEG XL header). PeachPDF draws it upright, as browsers do: the CSS
+`image-orientation` property defaults to `from-image`, and an image's intrinsic size is its upright size, so `<img>` without a size,
+`background-size: auto`, `object-fit` and `border-image-slice` all see the picture the way a person would.
+
+```html
+<!-- Drawn upright from its recorded orientation (the default) -->
+<img src="phone-photo.jpg" style="width: 3in">
+
+<!-- Ignore the recorded orientation and draw the stored pixels -->
+<img src="phone-photo.jpg" style="width: 3in; image-orientation: none">
+
+<!-- Ignore it and apply an explicit quarter turn and mirror instead -->
+<img src="phone-photo.jpg" style="width: 3in; image-orientation: 90deg flip">
+```
+
+The turn is a transform in the page content, so the embedded image bytes are never re-encoded: a passed-through JPEG, PNG, GIF or CMYK
+image stays byte-for-byte what the source file held. The property is inherited, so one rule on `body` (for example
+`image-orientation: none`) changes a whole document. See the [`image-orientation` row](html-css-support.md) for the full grammar and
+where it applies.
+
 #### CMYK and embedded ICC profiles in source images
 
 A CMYK or YCCK JPEG — the form a print-ready image typically arrives in, separated for a specific press profile — is embedded via byte-for-byte pass-through rather than converted to RGB: PeachPDF has no general color-management engine, so preserving the original bytes unchanged is the only way to guarantee the source's separations survive intact. The PDF `ColorSpace` is `DeviceCMYK`, or `ICCBased` (referencing the JPEG's own embedded ICC profile, carried through verbatim) when one is present. An Adobe-authored CMYK JPEG's inverted-sample convention is corrected via a PDF `Decode` array rather than by re-encoding the pixel data.
@@ -704,6 +727,8 @@ A CMYK TIFF is preserved the same way in spirit, but by a different mechanism: T
 An RGB or grayscale JPEG carrying a usable embedded ICC profile is *also* embedded via byte-for-byte pass-through, specifically to preserve that profile (`ICCBased` referencing it, rather than the usual bare `DeviceRGB`/`DeviceGray`). Unlike a CMYK source, this doesn't disable resizing: if the image is being downscaled for its on-page display size, that particular embed falls back to the ordinary re-encoded path instead (losing the embedded profile for that embed, not the image) — pass-through and downscaling are mutually exclusive for a given embed, and downscaling wins when both would otherwise apply. An RGB/grayscale JPEG with no embedded ICC profile is unaffected by any of this.
 
 PNG, WebP, and AVIF sources may also carry an embedded ICC profile, and PeachPDF preserves it. A PNG's `iCCP` chunk rides along its own byte-for-byte pass-through path (below): the color space PeachPDF would otherwise write as a bare `DeviceGray`/`DeviceRGB`/`Indexed` becomes `ICCBased` (referencing the profile, carried through verbatim) instead — pixel data is untouched either way, since the profile only changes how the `ColorSpace` entry names the space those pixels live in. WebP and AVIF have no pass-through mechanism (their pixel data is always decoded and embedded as a raw bitmap, as before), but PeachPDF now decodes a WebP/AVIF source a second time, natively, purely to read its embedded profile — the ordinary pixel decode still runs once, so this doesn't affect what gets embedded, only the `ColorSpace` it's tagged with. Unlike the JPEG case above, this isn't defeated by downscaling or `ImageCompression.Lossy`: a PNG/WebP/AVIF that falls back to a re-encoded JPEG embed for either reason still carries its source profile forward onto that embed, since re-encoding only recompresses already-decoded samples — it never changes what color space they're in. A source PNG/WebP/AVIF with no embedded profile is unaffected: it embeds with a bare `DeviceGray`/`DeviceRGB` exactly as before.
+
+A JPEG XL file made by recompressing a JPEG (what `cjxl` does for JPEG input) carries the information to rebuild that exact JPEG, so PeachPDF turns it back into the original JPEG without decoding any pixels and then treats it exactly like a `.jpg`: a CMYK/YCCK or ICC-tagged one is embedded byte for byte as above, and an untagged RGB/grayscale one is decoded and embedded like any other JPEG. Any other JPEG XL image (lossy or lossless, with or without alpha, 8/16-bit or HDR) is decoded to RGBA and embedded like a WebP or AVIF; a CMYK one is color-managed to sRGB first, and an animated one renders its first frame. A lossless JPEG XL (Modular, not XYB-encoded) is protected from a lossy JPEG re-encode by `ImageCompression.Auto` the same way a lossless WebP or AVIF is, and embeds as a raw Flate stream; a lossy one is re-encoded as JPEG like any other lossy source.
 
 Requesting `PdfAConformance` on a document containing a CMYK image without an embedded ICC profile throws an `InvalidOperationException` at generation time: a bare `DeviceCMYK` image has no relationship to PeachPDF's RGB-based `OutputIntent`, so it isn't PDF/A-conformant on its own. An `ICCBased` CMYK image (one with an embedded profile) is self-describing and doesn't have this problem. An RGB or grayscale image is unaffected either way — it stays conformant with or without an embedded ICC profile.
 
@@ -731,7 +756,7 @@ var config = new PdfGenerateConfig { ImageCompression = ImageCompression.Lossles
 
 An interlaced PNG (alpha-bearing or not) is unaffected by `ImageCompression` in every mode — it still falls back to the existing decode-and-`FlateDecode` path regardless of the setting. A non-interlaced alpha-bearing PNG, though, is pass-through-eligible like any other (see above) and follows the same `Auto`/`Lossless`/`Lossy` table: `Lossy` doesn't force a JPEG re-encode for it either, since JPEG has no alpha channel to hold the transparency in at all.
 
-A losslessly-encoded WebP, AVIF, or TIFF source gets the same protection as an opaque PNG/BMP/GIF: PeachPDF can tell whether a given source actually used its format's lossless mode (WebP's VP8L, AVIF's lossless AV1 tool, or TIFF's uncompressed/LZW/PackBits compression), and only re-encodes it as lossy JPEG under `ImageCompression.Lossy`. A *lossy*-encoded WebP/AVIF/TIFF source is unaffected by `ImageCompression` in every mode — re-encoding an already-lossy source as JPEG loses nothing a lossless re-embed would have recovered, so it stays on the JPEG-re-encode path regardless of the setting.
+A losslessly-encoded WebP, AVIF, TIFF, or JPEG XL source gets the same protection as an opaque PNG/BMP/GIF: PeachPDF can tell whether a given source actually used its format's lossless mode (WebP's VP8L, AVIF's lossless AV1 tool, TIFF's uncompressed/LZW/PackBits compression, or JPEG XL's Modular mode without XYB color), and only re-encodes it as lossy JPEG under `ImageCompression.Lossy`. A *lossy*-encoded WebP/AVIF/JPEG XL source (and a JPEG XL recompressed from a JPEG, which follows the JPEG rules above) is unaffected by `ImageCompression` in every mode — re-encoding an already-lossy source as JPEG loses nothing a lossless re-embed would have recovered, so it stays on the JPEG-re-encode path regardless of the setting.
 
 ### Deduplicating repeated images
 
