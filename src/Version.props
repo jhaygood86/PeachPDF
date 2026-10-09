@@ -6,6 +6,6 @@
     must not spell the element out: the workflows grep for its opening tag and would match the comment too.
   -->
   <PropertyGroup>
-    <PackageVersion>0.9.21</PackageVersion>
+    <PackageVersion>0.9.22</PackageVersion>
   </PropertyGroup>
 </Project>
