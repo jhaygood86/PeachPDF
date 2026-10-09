@@ -10,8 +10,12 @@ a line of only that text would get, so a 120pt box lands at Xâ‰ˆ179 (center) / â
 container's right edge). An `inline-block` with a declared width and text looked similar in the same probe but
 was not investigated.
 
+Under `text-align: center|right` or `dir=rtl` the box's background does move (x 240 against Chrome's 231.5) while
+its in-flow item text stays at x=32.5, and an absolute child stays with the items about 200px from the painted box.
+
 Found while testing out-of-flow children of `inline-flex`
 ([recent fix](../recent-fixes/2026-10-09-inline-flex-out-of-flow-children.md)), whose tests therefore pin only
-the child's offset from its container under `text-align`, not the container's position.
+the child's offset from its container under `text-align`, not the container's position (a box alone on its line is
+not moved at all, so a `Location` check would pass for the wrong reason).
 
 Tracked as [issue #1679](https://github.com/jhaygood86/PeachPDF/issues/1679).

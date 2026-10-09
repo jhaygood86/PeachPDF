@@ -31,3 +31,25 @@ fragmentainer slot with the block-level `flex` container's. Side findings, both 
 container's, for a block-level `flex` too — the already-recorded [static position gap](../accepted-gaps/absolutely-positioned-box-ignores-its-static-position.md), so the static-position test pins only Y; and
 `text-align` ignores an atomic `inline-flex`/`-grid`/`-table` box's width ([gap](../accepted-gaps/text-align-ignores-the-width-of-an-inline-flex-grid-or-table-box.md)), which is why the text-align test pins only
 the child's offset from its container.
+
+## Review round: an absolute child perturbed the outer line (traps)
+
+With the child now laid out, an absolute `<img>`/`<svg>`/`::after` moved the container and the lines after it under
+a non-baseline `vertical-align` (main 39.9 → 43.9/47.4 for the next block's y). Two separate causes, both found by
+comparing a layout *with* and *without* the child (the invariant the tests now pin) and tracing `CssRect.Top` writes:
+
+- `CssLineBox.UpdateRectangle` bubbled a word's rectangle into any inline-level parent. A blockified image owns its own
+  line, but its parent is the `inline-flex` (`IsInline`), so the container got a second rectangle at the image's
+  position; the outer `vertical-align` pass then aligned that stray rectangle, moving the box. It now bubbles only from an
+  inline-level box (`box.IsInline`). This also removes the stray rectangle an in-flow `<img>` item gave the container.
+- `EffectiveVerticalAlignOf` walks up from a text box with no `HtmlTag` to the styled element. A generated
+  `::after` that owns its own line has no tag, so the walk passed the pseudo-element and took the container's
+  `vertical-align` for the pseudo's *own* line, shifting its text by the container's alignment (`sub`: +5pt off the box).
+  The walk now stops at the box that owns the line. A real `<span>` child was never affected (it has a tag), which is
+  how the two were told apart.
+
+Tests: `AbsoluteChild_DoesNotMoveTheContainerOrTheLinesAroundIt` (img/svg/::after/div/text × 11 alignments, comparing
+container position, rectangles and the next block's y with the child absent), `PseudoElementChild_StaysAtAConstantOffsetFromTheContainer`,
+`InFlowImage_InsideAnInlineFlex_DoesNotAddARectangleToTheContainer`. The `InlineFlex` special case and the stale text-align
+claim are in the gap files.
+

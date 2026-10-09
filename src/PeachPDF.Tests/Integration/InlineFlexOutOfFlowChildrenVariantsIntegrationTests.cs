@@ -132,6 +132,93 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(120, LayoutHarness.FindById(root, "c")!.ActualWidth, 1.0);
         }
 
+        // ─── An absolute child must not perturb the line the container sits on ────
+
+        private const string Svg20 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='red'/%3E%3C/svg%3E";
+
+        private const string PseudoStyle =
+            "<style>.q{position:relative;display:inline-flex;padding:2px 8px;background:#fed}"
+            + ".q.with::after{content:\"!\";position:absolute;right:-6px;top:-6px;font-size:10px}</style>";
+
+        private static string ParagraphWith(string align, string kind, bool withChild)
+        {
+            var child = !withChild ? "" : kind switch
+            {
+                "img" => $"<img id='o' style='position:absolute;left:5px;top:5px;width:20px;height:20px' src=\"{Svg20}\">",
+                "svg" => "<svg id='o' style='position:absolute;left:5px;top:5px' width='20' height='20'><rect width='20' height='20'/></svg>",
+                "div" => "<div id='o' style='position:absolute;left:5px;top:5px;width:20px;height:20px'></div>",
+                "text" => "<span id='o' style='position:absolute;left:5px;top:5px'>abc</span>",
+                _ => ""
+            };
+
+            var cls = kind == "after" ? (withChild ? "q with" : "q") : "";
+
+            return LayoutHarness.Wrap(PseudoStyle
+                + $"<p style='margin:0'>Line one <span id='c' class='{cls}' style='display:inline-flex;vertical-align:{align};position:relative;width:40px;height:40px;background:#cde'>"
+                + child + "</span> end</p><p id='n' style='margin:0'>NEXTBLOCK</p>");
+        }
+
+        public static TheoryData<string, string> AlignmentsAndKinds()
+        {
+            var data = new TheoryData<string, string>();
+            foreach (var kind in new[] { "img", "svg", "after", "div", "text" })
+            {
+                foreach (var align in new[] { "baseline", "text-top", "text-bottom", "sub", "super", "top", "middle", "bottom", "5px", "-5px", "30%" })
+                {
+                    data.Add(align, kind);
+                }
+            }
+
+            return data;
+        }
+
+        [Theory]
+        [MemberData(nameof(AlignmentsAndKinds))]
+        public async Task AbsoluteChild_DoesNotMoveTheContainerOrTheLinesAroundIt(string align, string kind)
+        {
+            var (without, _) = await LayoutHarness.LayoutAsync(ParagraphWith(align, kind, withChild: false));
+            var (with, _) = await LayoutHarness.LayoutAsync(ParagraphWith(align, kind, withChild: true));
+
+            var c0 = LayoutHarness.FindById(without, "c")!;
+            var c1 = LayoutHarness.FindById(with, "c")!;
+
+            Assert.Equal(c0.Location.Y, c1.Location.Y, 0.01);
+            Assert.Equal(c0.Location.X, c1.Location.X, 0.01);
+            Assert.Equal(LayoutHarness.FindById(without, "n")!.Location.Y, LayoutHarness.FindById(with, "n")!.Location.Y, 0.01);
+
+            // The container's decoration is the one rectangle it has on its line: the child's word must not
+            // have registered a second one (painted as a stray square at the child's position).
+            Assert.Equal(c0.Rectangles.Count, c1.Rectangles.Count);
+            Assert.Equal(c0.Rectangles.Values.Single(), c1.Rectangles.Values.Single());
+        }
+
+        [Theory]
+        [InlineData("baseline")]
+        [InlineData("text-top")]
+        [InlineData("sub")]
+        [InlineData("bottom")]
+        [InlineData("middle")]
+        [InlineData("-5px")]
+        public async Task PseudoElementChild_StaysAtAConstantOffsetFromTheContainer(string align)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(ParagraphWith(align, "after", withChild: true));
+            var c = LayoutHarness.FindById(root, "c")!;
+            var pseudo = c.Boxes[0];
+
+            // top:-6px against the padding box of the container, whatever vertical-align did to the container.
+            Assert.Equal(c.Location.Y - 4.5, pseudo.Location.Y, 0.5);
+            Assert.Equal(c.Location.Y - 4.5, pseudo.Words[0].Top, 0.5);
+        }
+
+        [Fact]
+        public async Task InFlowImage_InsideAnInlineFlex_DoesNotAddARectangleToTheContainer()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<p style='margin:0'>Line <span id='c' style='display:inline-flex;vertical-align:sub;width:40px;height:40px;background:#cde'><img style='width:20px;height:20px' src=\"{Svg20}\"></span> end</p>"));
+
+            Assert.Single(LayoutHarness.FindById(root, "c")!.Rectangles);
+        }
+
         // ─── Containers that measure the inline-flex box more than once ───────────
 
         [Theory]

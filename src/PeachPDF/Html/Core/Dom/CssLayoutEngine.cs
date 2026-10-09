@@ -8095,11 +8095,18 @@ namespace PeachPDF.Html.Core.Dom
         private static CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>> EffectiveVerticalAlignOf(
             CssBox box, CssLineBox lineBox, out CssBox styledBox)
         {
+            var ownerBox = lineBox.OwnerBox;
+
+            // The walk stops at the box that owns the line: what it declares says how IT sits in its own
+            // parent's line, and the box above it is not on this line at all. A generated ::before/::after
+            // (no HtmlTag) holding its own text, absolutely positioned inside an inline-flex, used to walk
+            // past itself to that container and take the container's `vertical-align`, which moved the
+            // pseudo-element's text off its box by the container's alignment.
             styledBox = box;
-            while (styledBox.HtmlTag is null && !styledBox.IsMarkerPseudoElement && styledBox.ParentBox is not null)
+            while (styledBox.HtmlTag is null && !styledBox.IsMarkerPseudoElement && styledBox.ParentBox is not null
+                   && !ReferenceEquals(styledBox, ownerBox))
                 styledBox = styledBox.ParentBox;
 
-            var ownerBox = lineBox.OwnerBox;
             if (ReferenceEquals(lineBox, ownerBox.LineBoxes.FirstOrDefault())
                 && ownerBox.ResolvedFirstLineStyle is { } firstLineStyle
                 && firstLineStyle.VerticalAlign != ownerBox.VerticalAlign)

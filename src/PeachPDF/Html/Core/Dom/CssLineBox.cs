@@ -305,7 +305,11 @@ namespace PeachPDF.Html.Core.Dom
                 Rectangles.Add(box, Rect.FromLTRB(x, y, r, b));
             }
 
-            if (box.ParentBox is { IsInline: true })
+            // Only an inline-level box is part of its parent's inline content. A block-level one that owns
+            // a line of its own (an absolutely positioned or flex-item <img>, which is blockified) is not,
+            // and bubbling its word's rectangle into an inline-level parent — an inline-flex container —
+            // gave that container a stray second rectangle at the image's position.
+            if (box.IsInline && box.ParentBox is { IsInline: true })
             {
                 UpdateRectangle(box.ParentBox, x, y, r, b);
             }
