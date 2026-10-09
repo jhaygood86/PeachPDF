@@ -14,6 +14,9 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class FlexGridItemBlockificationIntegrationTests
     {
+        // A 40x20px PNG: 30x15pt, a 2:1 ratio that comes from the decoded bitmap rather than an SVG's own size.
+        private const string RedPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAAOElEQVR4nO3NQQEAMAgDsa6S8C9gsvYdBo4HjYGcW6UJHlmVGGQy+yXGmKu6xBhzVZcYY67S8vgB2VcBVG4eWXEAAAAASUVORK5CYII=";
+
         private const string RedSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
 
         [Theory]
@@ -351,10 +354,8 @@ namespace PeachPDF.Tests.Integration
         [InlineData("justify-self:center")]
         public async Task RasterImageGridItem_KeepsItsNaturalSize(string style)
         {
-            // A 40x20px PNG is 30x15pt.
-            const string png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAAOElEQVR4nO3NQQEAMAgDsa6S8C9gsvYdBo4HjYGcW6UJHlmVGGQy+yXGmKu6xBhzVZcYY67S8vgB2VcBVG4eWXEAAAAASUVORK5CYII=";
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                GridWithImage("", $"<img id='img' style='{style}' src=\"{png}\" />")));
+                GridWithImage("", $"<img id='img' style='{style}' src=\"{RedPng}\" />")));
 
             var img = LayoutHarness.FindById(root, "img")!;
 
@@ -491,6 +492,22 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(60, img.ActualWidth, 1.0);
             Assert.Equal(30, img.ActualHeight, 1.0);
+        }
+
+        [Theory]
+        [InlineData(30, 60)]    // 2:1 ratio from the stretched height: 30pt tall is 60pt wide
+        [InlineData(80, 100)]   // 80pt tall would be 160pt wide, clamped to the 100pt track
+        public async Task RasterImageGridItem_WithAnExplicitBlockAxisStretch_TakesItsWidthFromTheStretchedHeight(
+            int rowHeight, int expectedWidth)
+        {
+            // An inverted ratio (height / width) would give 15pt (and 40pt) instead.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage($"grid-template-rows:{rowHeight}pt; align-items:stretch", $"<img id='img' src=\"{RedPng}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(expectedWidth, img.ActualWidth, 1.0);
+            Assert.Equal(rowHeight, img.ActualHeight, 1.0);
         }
 
         [Theory]
