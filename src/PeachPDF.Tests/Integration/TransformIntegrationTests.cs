@@ -386,6 +386,141 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(divBox.Bounds.Y, mappedY, 1);
         }
 
+        // --- Regression: a transformed inline-level box is pivoted where it sits in its line ---
+        //
+        // An `inline-block` that fits on its line (and an inline replaced element) is flowed into the
+        // line rather than laid out as a box, so its CssBox.Location is never assigned and reads (0, 0).
+        // WholeBoxRect - what the transform pivot is re-anchored to - was built from that, so the box was
+        // pivoted around the page origin and rotated/translated off the page: it was laid out, and
+        // nothing was painted where it belongs.
+
+        private const string OnePixelGif = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+        [Theory]
+        [InlineData("<span style='display:inline-block;width:40px;height:40px;transform:rotate(45deg)'></span>", "span")]
+        [InlineData("<span style='display:inline-block;width:40px;height:40px;transform:rotate(45deg)'></span> text after", "span")]
+        [InlineData("<img alt='' src='" + OnePixelGif + "' style='display:inline-block;width:40px;height:40px;transform:rotate(45deg)'>", "img")]
+        [InlineData("<span style='display:inline-block;width:40px;height:40px;transform:scale(2)'></span>", "span")]
+        [InlineData("<span style='display:inline-block;padding:4px 8px;transform:rotate(-20deg)'>Label</span>", "span")]   // sized by its content
+        [InlineData("<img alt='' src='" + OnePixelGif + "' style='width:40px;height:40px;transform:rotate(45deg)'>", "img")]   // default display: inline
+        public async Task Paint_TransformedInlineBlock_PivotsAroundItsPositionInTheLine(string content, string tag)
+        {
+            // Well away from the page origin, so a pivot taken from an unassigned (0, 0) Location is wrong.
+            var html = "<!DOCTYPE html><html><body style='margin:0'>" +
+                       "<div style='margin:90px 0 0 120px;height:100px'>" + content + "</div></body></html>";
+
+            var container = await LayoutHtml(html);
+            var box = FindByTag(container.Root!, tag)!;
+            var fragment = FragmentPaintHarness.FragmentOf(container, box);
+
+            // Its whole border box is the rectangle it was flowed into, not a box at (0, 0).
+            Assert.Equal(fragment.Rect.X, fragment.WholeBoxRect.X, 1);
+            Assert.Equal(fragment.Rect.Y, fragment.WholeBoxRect.Y, 1);
+            Assert.True(fragment.WholeBoxRect.Width > 10, $"has the width the line gave it: {fragment.WholeBoxRect.Width}");
+            Assert.True(fragment.WholeBoxRect.X >= 90, $"left edge on the page, not at the origin: {fragment.WholeBoxRect.X}");
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+
+            Assert.NotNull(spy.LastPushedTransform);
+            var pushed = spy.LastPushedTransform!.Value;
+
+            // A rotation or scale about the centre leaves the box's own centre where it is.
+            var cx = fragment.WholeBoxRect.X + fragment.WholeBoxRect.Width / 2;
+            var cy = fragment.WholeBoxRect.Y + fragment.WholeBoxRect.Height / 2;
+            Assert.Equal(cx, cx * pushed.M11 + cy * pushed.M21 + pushed.M31, 1);
+            Assert.Equal(cy, cx * pushed.M12 + cy * pushed.M22 + pushed.M32, 1);
+        }
+
+        [Theory]
+        [InlineData("transform-origin:left top;transform:rotate(30deg)", 0.0, 0.0)]       // a keyword origin: the box's own top-left is the fixed point
+        [InlineData("transform-origin:right bottom;transform:rotate(30deg)", 1.0, 1.0)]
+        [InlineData("transform-origin:25% 75%;transform:scale(2)", 0.25, 0.75)]           // percentages of the box's real size
+        [InlineData("transform-origin:center center;transform:rotate(30deg)", 0.5, 0.5)]
+        [InlineData("transform-origin:top left;transform:rotate(30deg)", 0.0, 0.0)]       // the vertical keyword written first
+        [InlineData("transform-origin:top center;transform:rotate(30deg)", 0.5, 0.0)]
+        [InlineData("transform-origin:bottom center;transform:rotate(30deg)", 0.5, 1.0)]
+        public async Task Paint_TransformedContentSizedInlineBlock_ResolvesTransformOriginAgainstItsLineRectangle(
+            string style, double fractionX, double fractionY)
+        {
+            var html = "<!DOCTYPE html><html><body style='margin:0'><div style='margin:90px 0 0 120px;height:100px'>" +
+                       $"<span style='display:inline-block;padding:4px 8px;{style}'>Label</span></div></body></html>";
+
+            var container = await LayoutHtml(html);
+            var box = FindByTag(container.Root!, "span")!;
+            var rect = FragmentPaintHarness.FragmentOf(container, box).WholeBoxRect;
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+            var m = spy.LastPushedTransform!.Value;
+
+            // The transform-origin point is the one point the matrix leaves where it is.
+            var px = rect.X + fractionX * rect.Width;
+            var py = rect.Y + fractionY * rect.Height;
+            Assert.Equal(px, px * m.M11 + py * m.M21 + m.M31, 1);
+            Assert.Equal(py, px * m.M12 + py * m.M22 + m.M32, 1);
+        }
+
+        [Theory]
+        [InlineData("translate(50%, 100%)", 0.5, 1.0)]
+        [InlineData("translateX(50%)", 0.5, 0.0)]
+        [InlineData("translateY(100%)", 0.0, 1.0)]
+        [InlineData("translate3d(50%, 100%, 0)", 0.5, 1.0)]
+        public async Task Paint_TransformedContentSizedInlineBlock_ResolvesTranslatePercentageAgainstItsLineRectangle(
+            string transform, double fractionX, double fractionY)
+        {
+            var html = "<!DOCTYPE html><html><body style='margin:0'><div style='margin:90px 0 0 120px;height:100px'>" +
+                       $"<span style='display:inline-block;padding:4px 8px;transform:{transform}'>Label</span></div></body></html>";
+
+            var container = await LayoutHtml(html);
+            var box = FindByTag(container.Root!, "span")!;
+            var rect = FragmentPaintHarness.FragmentOf(container, box).WholeBoxRect;
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+            var m = spy.LastPushedTransform!.Value;
+
+            Assert.Equal(fractionX * rect.Width, m.M31, 1);
+            Assert.Equal(fractionY * rect.Height, m.M32, 1);
+        }
+
+        [Fact]
+        public async Task ParseTransformOrigin_WithNoValue_IsTheCentreOfAFlowedInlineBlocksLineRectangle()
+        {
+            var container = await LayoutHtml(
+                "<!DOCTYPE html><html><body style='margin:0'><div style='margin:90px 0 0 120px'>" +
+                "<span style='display:inline-block;padding:4px 8px'>Label</span></div></body></html>");
+            var box = FindByTag(container.Root!, "span")!;
+            var rect = FragmentPaintHarness.FragmentOf(container, box).WholeBoxRect;
+
+            var (x, y, z) = PeachPDF.Html.Core.Parse.CssValueParser.ParseTransformOriginPublic("", box);
+
+            Assert.Equal(rect.Width / 2, x, 1);
+            Assert.Equal(rect.Height / 2, y, 1);
+            Assert.Equal(0, z);
+        }
+
+        [Theory]
+        [InlineData("top left", 0.0, 0.0)]          // the vertical keyword first, as the CSS grammar allows
+        [InlineData("top center", 0.5, 0.0)]
+        [InlineData("bottom center", 0.5, 1.0)]
+        [InlineData("bottom right", 1.0, 1.0)]
+        [InlineData("left", 0.0, 0.5)]
+        public async Task ParseTransformOrigin_Keywords_ResolveAgainstAFlowedInlineBlocksLineRectangle(
+            string origin, double fractionX, double fractionY)
+        {
+            var container = await LayoutHtml(
+                "<!DOCTYPE html><html><body style='margin:0'><div style='margin:90px 0 0 120px'>" +
+                "<span style='display:inline-block;padding:4px 8px'>Label</span></div></body></html>");
+            var box = FindByTag(container.Root!, "span")!;
+            var rect = FragmentPaintHarness.FragmentOf(container, box).WholeBoxRect;
+
+            var (x, y, _) = PeachPDF.Html.Core.Parse.CssValueParser.ParseTransformOriginPublic(origin, box);
+
+            Assert.Equal(fractionX * rect.Width, x, 1);
+            Assert.Equal(fractionY * rect.Height, y, 1);
+        }
+
         private sealed class SpyGraphics : Canvas
         {
             public Matrix3x2? LastPushedTransform { get; private set; }

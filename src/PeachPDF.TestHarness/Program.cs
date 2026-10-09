@@ -4639,6 +4639,30 @@ await SaveShowcaseAsync("transform", "Graphics & Effects", "Transforms",
     "CSS transforms - translate, rotate, scale, skew - with transform-origin control.",
     transformHtml, pdfConfig);
 
+// --- transform / clip-path / filter on inline-block boxes: they sit in a line rather than being laid out as a box ---
+
+const string inlineBlockEffectsHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; font-size: 11pt; margin: 20pt; }" +
+    ".row { background: #eef1f5; margin: 8pt 0; padding: 14pt 10pt; }" +
+    ".b { display: inline-block; vertical-align: top; width: 40pt; height: 40pt; background: #2a9d8f; margin: 0 14pt; }" +
+    "</style></head><body>" +
+    "<h2>Effects on inline-block boxes</h2>" +
+    "<p>Each box sits in a line of text. It is pivoted, clipped and filtered where it is, not around the page origin.</p>" +
+    "<div class=\"row\"><span class=\"b\" style=\"transform: rotate(45deg)\"></span>" +
+    "<span class=\"b\" style=\"transform: scale(.6)\"></span>" +
+    "<span class=\"b\" style=\"transform: perspective(160pt) rotateY(40deg)\"></span> text after</div>" +
+    "<div class=\"row\"><span class=\"b\" style=\"clip-path: circle(50%)\"></span>" +
+    "<span class=\"b\" style=\"clip-path: polygon(50% 0, 100% 100%, 0 100%)\"></span>" +
+    "<span class=\"b\" style=\"filter: drop-shadow(4pt 4pt 2pt #c33)\"></span>" +
+    "<img class=\"b\" alt=\"\" style=\"transform: rotate(-20deg)\" " +
+    "src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7\"></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("inline_block_effects", "Graphics & Effects", "Effects on inline-block boxes",
+    "transform, clip-path and filter on inline-block boxes and images that sit in a line of text.",
+    inlineBlockEffectsHtml, pdfConfig);
+
 // --- CSS calc() / min() / max() / clamp() showcase ---
 
 static string CalcSwatch(string desc, string css) =>

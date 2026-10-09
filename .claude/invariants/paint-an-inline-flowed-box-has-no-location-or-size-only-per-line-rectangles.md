@@ -30,3 +30,16 @@ three decimal places, asserted by a test that passed before and after. Nothing a
 area has to reach the content stream (or a rasterization) and check the **relationship** between the
 clip and the content it governs — `InlineBlockOverflowClipPaintTests` does, since the broken clip has
 real area and satisfies every "is a clip emitted" check.
+
+## A second consumer: the whole-box rectangle and the transform's reference size
+
+The overflow clip was the first reader of `Bounds` to go wrong; `BoxFragment.WholeBoxRect` was the second. It is
+the `transform` pivot, the `clip-path` reference box, the filter/opacity raster extent and the 3D origin, and it
+read `Bounds`, so a transformed `inline-block` was pivoted around the page origin and drawn off the page. And
+`Size` is *not* assigned in the sense that matters for percentages: `ActualWidth`/`ActualHeight` of a flowed box are
+its padding and border only (0 wide for a default-`inline` `<img>`), so `transform-origin: 50% 50%` and
+`translate(%)` landed on the corner of a content-sized badge. Both now read the line rectangle:
+`FragmentEmitter.ExtentOf` and `MarginBoxContentFragmentBuilder` through `RenderUtils.ClipSourceBoundsOf`, and
+`CssValueParser.ReferenceWidth`/`ReferenceHeight` for the transform's own size. **A new reader of a flowed box's
+position or size must take it from `Rectangles` the same way.** The measured symptom for the transform case is a
+box that is laid out (its space is reserved in the line) and painted nowhere, or rotated about the wrong point.

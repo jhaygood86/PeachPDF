@@ -45,6 +45,32 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Polygon_OnAnInlineBlock_IsResolvedAgainstItsRectangleInTheLine()
+        {
+            // An inline-block that fits its line is flowed into it and never gets a Location, so its Bounds read as
+            // the unassigned origin: the clip used to be resolved there and cut away the whole box.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div style='margin:50pt 0 0 80pt'><span id='el' style='display:inline-block; clip-path: polygon(0 0, 100% 0, 50% 100%); width: 40pt; height: 30pt; background: red'></span></div>"));
+            var el = FindById(root, "el")!;
+            var fragment = FragmentPaintHarness.FragmentOf(container, el);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            var pts = g.ClipPaths[0].Points;
+            var r = fragment.Rect;
+            Assert.True(r.X >= 80 && r.Y >= 50, $"the box is well away from the origin: {r}");
+            Assert.Equal(3, pts.Count);
+            Assert.Equal(r.X, pts[0].X, 1);
+            Assert.Equal(r.Y, pts[0].Y, 1);
+            Assert.Equal(r.X + r.Width, pts[1].X, 1);
+            Assert.Equal(r.Y, pts[1].Y, 1);
+            Assert.Equal(r.X + r.Width / 2, pts[2].X, 1);
+            Assert.Equal(r.Y + r.Height, pts[2].Y, 1);
+        }
+
+        [Fact]
         public async Task Path_PushesResolvedClipPath_BracketingThePaint()
         {
             var (root, container) = await BuildAndLayout(Wrap(

@@ -1022,8 +1022,8 @@ namespace PeachPDF.Html.Core.Parse
             if (built is not { } b)
                 return (Matrix3x2.Identity, null);
 
-            var epsilonX = Math.Max(box.ActualWidth / 2, 1);
-            var epsilonY = Math.Max(box.ActualHeight / 2, 1);
+            var epsilonX = Math.Max(ReferenceWidth(box) / 2, 1);
+            var epsilonY = Math.Max(ReferenceHeight(box) / 2, 1);
             return (ProjectTo2D(b.Final4, b.Ox, b.Oy, epsilonX, epsilonY), b.Final4);
         }
 
@@ -1139,20 +1139,20 @@ namespace PeachPDF.Html.Core.Parse
 
             if (Named(name, FunctionNames.Translate))
             {
-                var tx = LengthArg(0, box.ActualWidth);
-                var ty = args.Count > 1 ? LengthArg(1, box.ActualHeight) : 0;
+                var tx = LengthArg(0, ReferenceWidth(box));
+                var ty = args.Count > 1 ? LengthArg(1, ReferenceHeight(box)) : 0;
                 return Matrix4x4.CreateTranslation((float)tx, (float)ty, 0);
             }
             if (Named(name, FunctionNames.TranslateX))
-                return Matrix4x4.CreateTranslation((float)LengthArg(0, box.ActualWidth), 0, 0);
+                return Matrix4x4.CreateTranslation((float)LengthArg(0, ReferenceWidth(box)), 0, 0);
             if (Named(name, FunctionNames.TranslateY))
-                return Matrix4x4.CreateTranslation(0, (float)LengthArg(0, box.ActualHeight), 0);
+                return Matrix4x4.CreateTranslation(0, (float)LengthArg(0, ReferenceHeight(box)), 0);
             if (Named(name, FunctionNames.TranslateZ))
                 return Matrix4x4.CreateTranslation(0, 0, (float)LengthArg(0, 0));
             if (Named(name, FunctionNames.Translate3d))
             {
-                var tx = LengthArg(0, box.ActualWidth);
-                var ty = LengthArg(1, box.ActualHeight);
+                var tx = LengthArg(0, ReferenceWidth(box));
+                var ty = LengthArg(1, ReferenceHeight(box));
                 var tz = LengthArg(2, 0);
                 return Matrix4x4.CreateTranslation((float)tx, (float)ty, (float)tz);
             }
@@ -1395,6 +1395,21 @@ namespace PeachPDF.Html.Core.Parse
             group.Count > 0 ? group[0].ToValue() : "0";
 
         /// <summary>
+        /// The reference box a <c>transform</c> resolves its percentages against: the box's border box. An inline-flowed
+        /// box (an <c>inline-block</c> or replaced element sitting in a line) never has its <c>Size</c> assigned, so
+        /// <c>ActualWidth</c>/<c>ActualHeight</c> read as its padding and border only; its border box is the rectangle
+        /// the line gave it.
+        /// </summary>
+        private static double ReferenceWidth(CssBox box) =>
+            box.IsInline && box.Rectangles.Count > 0 ? ReferenceBox(box).Width : box.ActualWidth;
+
+        private static double ReferenceHeight(CssBox box) =>
+            box.IsInline && box.Rectangles.Count > 0 ? ReferenceBox(box).Height : box.ActualHeight;
+
+        private static Rect ReferenceBox(CssBox box) =>
+            RenderUtils.ClipSourceBoundsOf(box.Bounds, isInline: true, box.Rectangles);
+
+        /// <summary>
         /// Parses transform-origin: 1-3 values (X, Y, optional Z). X/Y accept length/percentage/keywords
         /// (resolved against the box's own border-box size), Z is a plain length (no percentage), default 0.
         /// </summary>
@@ -1403,30 +1418,30 @@ namespace PeachPDF.Html.Core.Parse
         private static (double X, double Y, double Z) ParseTransformOrigin(string value, CssBox box)
         {
             if (string.IsNullOrWhiteSpace(value))
-                return (box.ActualWidth / 2, box.ActualHeight / 2, 0);
+                return (ReferenceWidth(box) / 2, ReferenceHeight(box) / 2, 0);
 
             var parts = value.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
 
             double ResolveX(string token) => token switch
             {
                 "left" => 0,
-                "right" => box.ActualWidth,
-                "center" => box.ActualWidth / 2,
-                "top" or "bottom" => box.ActualWidth / 2, // keyword belongs to the other axis; fall back to center
-                _ => ParseLength(token, box.ActualWidth, box)
+                "right" => ReferenceWidth(box),
+                "center" => ReferenceWidth(box) / 2,
+                "top" or "bottom" => ReferenceWidth(box) / 2, // keyword belongs to the other axis; fall back to center
+                _ => ParseLength(token, ReferenceWidth(box), box)
             };
 
             double ResolveY(string token) => token switch
             {
                 "top" => 0,
-                "bottom" => box.ActualHeight,
-                "center" => box.ActualHeight / 2,
-                "left" or "right" => box.ActualHeight / 2,
-                _ => ParseLength(token, box.ActualHeight, box)
+                "bottom" => ReferenceHeight(box),
+                "center" => ReferenceHeight(box) / 2,
+                "left" or "right" => ReferenceHeight(box) / 2,
+                _ => ParseLength(token, ReferenceHeight(box), box)
             };
 
-            var ox = box.ActualWidth / 2;
-            var oy = box.ActualHeight / 2;
+            var ox = ReferenceWidth(box) / 2;
+            var oy = ReferenceHeight(box) / 2;
             var oz = 0d;
 
             if (parts.Length >= 1) ox = ResolveX(parts[0].ToLowerInvariant());
@@ -1439,8 +1454,8 @@ namespace PeachPDF.Html.Core.Parse
                 var first = parts[0].ToLowerInvariant();
                 if (first is "top" or "bottom")
                 {
-                    oy = first == "top" ? 0 : box.ActualHeight;
-                    ox = box.ActualWidth / 2;
+                    oy = first == "top" ? 0 : ReferenceHeight(box);
+                    ox = ReferenceWidth(box) / 2;
                     if (parts.Length >= 2) ox = ResolveX(parts[1].ToLowerInvariant());
                 }
             }
