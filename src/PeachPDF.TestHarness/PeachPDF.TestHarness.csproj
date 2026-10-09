@@ -29,6 +29,9 @@
     which fonts it needs.
   -->
   <ItemGroup>
+    <None Include="..\PeachPDF.Tests\TestSupport\Jxl\*.jxl" LinkBase="jxl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\SvgTest.ttf" Link="SvgTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

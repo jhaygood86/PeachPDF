@@ -36,21 +36,17 @@ web or to a local file resolves to nothing.
 - **This is not a performance benchmark.** Blazor WebAssembly interprets IL rather than JIT-compiling it,
   so the same document renders far faster on any non-browser host. Enabling `RunAOTCompilation` would
   narrow the gap at a large cost in download size and build time, and it is not what this demo is for.
-- **Fonts are WOFF 1.0, not WOFF2**, for a historical reason that no longer holds: `System.IO.Compression.BrotliStream`
-  throws `PlatformNotSupportedException` in the browser (installing the `wasm-tools` workload to natively relink the
-  runtime does not change it — measured; the limitation is managed-side), so this demo used to have no way to read
-  WOFF2's Brotli-compressed tables at all. That gap is closed now (see the next bullet), but the shipped Liberation
-  faces were not switched over — WOFF 1.0's deflate compression is close enough (about 2.3 MB for the twelve faces
-  against WOFF2's 1.6 MB) that re-doing the OFL round-trip verification `convert_liberation_webfonts.py` requires
-  wasn't worth it just for this demo's own UI text. A `@font-face` pointing at a WOFF2 file in an *uploaded* document
-  works correctly, and is what actually exercises the fix (see the next bullet).
-- **`hyphens: auto` and WOFF2 fonts both work now.** Program.cs registers a pure-managed Brotli decoder
-  (`PeachDrawing.Text.Brotli`, gated on `OperatingSystem.IsBrowser()`) at startup, which every Brotli-compressed
-  resource this library reads — the shared hyphenation/dictionary-line-breaking data and WOFF2 font tables alike —
-  falls back to wherever the runtime's own `BrotliStream` would otherwise throw. `hyphens: auto` hyphenates
-  normally here, Thai/Lao/Khmer/Burmese text wraps at dictionary word boundaries, and a WOFF2 `@font-face` in an
-  uploaded document loads like any other font. See `PeachDrawing.Text.Brotli`'s own `PORTING-NOTES.md` for exactly
-  what was ported and verified.
+- **`hyphens: auto` and WOFF2 fonts work.** A browser has no usable `System.IO.Compression.BrotliStream` (it throws
+  `PlatformNotSupportedException`, and installing the `wasm-tools` workload does not change that — the limitation is
+  managed-side), so Program.cs registers a pure-managed Brotli decoder (`PeachDrawing.Text.Brotli`, gated on
+  `OperatingSystem.IsBrowser()`) at startup. Every Brotli-compressed resource the library reads — the shared
+  hyphenation/dictionary-line-breaking data and WOFF2 font tables alike — uses it wherever the runtime's own
+  `BrotliStream` would otherwise throw. `hyphens: auto` hyphenates normally, Thai/Lao/Khmer/Burmese text wraps at
+  dictionary word boundaries, and a WOFF2 `@font-face` in an uploaded document loads like any other font. See
+  `PeachDrawing.Text.Brotli`'s own `PORTING-NOTES.md` for exactly what was ported and verified. The demo's own UI
+  text still uses the bundled Liberation faces as WOFF 1.0 (about 2.3 MB for the twelve against WOFF2's 1.6 MB): that
+  is a size/provenance choice, not a limitation, since re-doing the OFL round-trip verification
+  `convert_liberation_webfonts.py` requires was not worth it for this demo's UI text.
 - **The footer names the build it is running.** A `GenerateDemoBuildInfo` target bakes in the library's
   `PackageVersion`, this commit, and whether the two agree — a release is tagged `v{PackageVersion}`, so a
   commit that is not that tag's commit is a prerelease of it, and the footer links the commit instead of
@@ -60,7 +56,8 @@ web or to a local file resolves to nothing.
   describe itself as a prerelease.
 - **`Arial Narrow` renders at normal width.** Liberation Sans Narrow is not part of Liberation 2.x — it
   ships separately under a different licence — so no metrically compatible narrow face is bundled.
-- **WebP images do not render.** PeachPDF's image decoder does not support the format.
+- **Raster images decode in the browser.** PNG, JPEG, GIF, BMP, WebP, AVIF, TIFF and JPEG XL all use the same
+  managed decoder as every other host; only TGA, PSD and HDR are unsupported.
 - **ZIP entry names are read as UTF-8.** A legacy CP437-encoded archive with non-ASCII names will not
   match; `System.Text.Encoding.CodePages` is not available in this host.
 - **`<meta charset>` is not honoured** when decoding an upload — a byte-order mark, or UTF-8, only.

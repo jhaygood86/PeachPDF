@@ -1,7 +1,7 @@
 # TGA, PSD, and HDR raster images are not decodable
 
 `PdfSharpCore/Utils/PeachImageSource.cs` decodes raster images via the PeachImage NuGet package.
-PeachImage implements JPEG, PNG, BMP, and GIF; TGA, PSD, and HDR are not implemented (see its own
+PeachImage implements JPEG, PNG, BMP, GIF, WebP, AVIF, TIFF, and JPEG XL; TGA, PSD, and HDR are not implemented (see its own
 README's Status section) and are not on its roadmap as of writing. A `<img>`/`background-image`/SVG
 `<image>` pointing at a `.tga`/`.psd`/`.hdr` file (or the matching `data:` URI) throws
 `InvalidOperationException` during decode (`PeachImageSource.Decode` normalizes PeachImage's

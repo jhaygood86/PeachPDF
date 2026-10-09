@@ -81,10 +81,12 @@ namespace PeachPDF.Html.Core.Handlers
             // or background layer using the same url().
             // An explicit `image-rendering` wins over that default.
             var sampling = ImageRenderingResolver.Resolve(box.ImageRendering.Value, ImageSampling.Pixelated);
+            var orientation = source is CssImage.Url { Image: { } raster } ? ImageOrientationResolver.Effective(box, raster) : ImageOrientation.Upright;
+            var mode = new ImageDrawMode(sampling, orientation);
 
             try
             {
-                PaintNineSlice(g, sampling, image.Image, image.NaturalWidth, image.NaturalHeight, slice, areaRect, width,
+                PaintNineSlice(g, mode, image.Image, image.NaturalWidth, image.NaturalHeight, slice, areaRect, width,
                     repeatHorizontal, repeatVertical);
             }
             finally
@@ -138,7 +140,12 @@ namespace PeachPDF.Html.Core.Handlers
         private static ResolvedSourceImage? ResolveSourceImage(Canvas g, CssImage source, CssBox box, Rect borderBoxRect)
         {
             if (source is CssImage.Url { Image: { } raster })
-                return new ResolvedSourceImage(raster, raster.Width, raster.Height, numberUnit: 1, ownsImage: false);
+            {
+                // image-orientation turns the raster upright: slices are cut from the oriented picture, so its natural
+                // size is the oriented one. (Gradients and SVG forms below have no orientation.)
+                var (orientedWidth, orientedHeight) = ImageOrientationResolver.OrientedSize(box, raster);
+                return new ResolvedSourceImage(raster, orientedWidth, orientedHeight, numberUnit: 1, ownsImage: false);
+            }
 
             // A gradient has no size of its own, so it is rendered at the border-image area itself - the
             // default object size CSS Images 3 §5.3 hands a border-image - matching a generated background
@@ -200,7 +207,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <paramref name="repeatHorizontal"/>/<paramref name="repeatVertical"/>, and (only when
         /// <paramref name="slice"/> declared <c>fill</c>) a center tiled along both axes.
         /// </summary>
-        private static void PaintNineSlice(Canvas g, ImageSampling sampling, Image image, double naturalWidth, double naturalHeight,
+        private static void PaintNineSlice(Canvas g, ImageDrawMode mode, Image image, double naturalWidth, double naturalHeight,
             BorderImageSlice slice, Rect areaRect, BorderImageSides width,
             BorderRepeat repeatHorizontal, BorderRepeat repeatVertical)
         {
@@ -215,33 +222,33 @@ namespace PeachPDF.Html.Core.Handlers
             var destMidBottom = areaRect.Bottom - width.Bottom;
 
             // Corners
-            DrawScaled(g, sampling, image,
+            DrawScaled(g, mode, image,
                 new Rect(0, 0, srcMidLeft, srcMidTop),
                 new Rect(areaRect.Left, areaRect.Top, destMidLeft - areaRect.Left, destMidTop - areaRect.Top));
-            DrawScaled(g, sampling, image,
+            DrawScaled(g, mode, image,
                 new Rect(srcMidRight, 0, naturalWidth - srcMidRight, srcMidTop),
                 new Rect(destMidRight, areaRect.Top, areaRect.Right - destMidRight, destMidTop - areaRect.Top));
-            DrawScaled(g, sampling, image,
+            DrawScaled(g, mode, image,
                 new Rect(0, srcMidBottom, srcMidLeft, naturalHeight - srcMidBottom),
                 new Rect(areaRect.Left, destMidBottom, destMidLeft - areaRect.Left, areaRect.Bottom - destMidBottom));
-            DrawScaled(g, sampling, image,
+            DrawScaled(g, mode, image,
                 new Rect(srcMidRight, srcMidBottom, naturalWidth - srcMidRight, naturalHeight - srcMidBottom),
                 new Rect(destMidRight, destMidBottom, areaRect.Right - destMidRight, areaRect.Bottom - destMidBottom));
 
             // Edges - tiled along their one free axis
-            DrawEdge(g, sampling, image,
+            DrawEdge(g, mode, image,
                 new Rect(srcMidLeft, 0, srcMidRight - srcMidLeft, srcMidTop),
                 new Rect(destMidLeft, areaRect.Top, destMidRight - destMidLeft, destMidTop - areaRect.Top),
                 tileAlongX: true, repeatHorizontal);
-            DrawEdge(g, sampling, image,
+            DrawEdge(g, mode, image,
                 new Rect(srcMidLeft, srcMidBottom, srcMidRight - srcMidLeft, naturalHeight - srcMidBottom),
                 new Rect(destMidLeft, destMidBottom, destMidRight - destMidLeft, areaRect.Bottom - destMidBottom),
                 tileAlongX: true, repeatHorizontal);
-            DrawEdge(g, sampling, image,
+            DrawEdge(g, mode, image,
                 new Rect(0, srcMidTop, srcMidLeft, srcMidBottom - srcMidTop),
                 new Rect(areaRect.Left, destMidTop, destMidLeft - areaRect.Left, destMidBottom - destMidTop),
                 tileAlongX: false, repeatVertical);
-            DrawEdge(g, sampling, image,
+            DrawEdge(g, mode, image,
                 new Rect(srcMidRight, srcMidTop, naturalWidth - srcMidRight, srcMidBottom - srcMidTop),
                 new Rect(destMidRight, destMidTop, areaRect.Right - destMidRight, destMidBottom - destMidTop),
                 tileAlongX: false, repeatVertical);
@@ -249,17 +256,25 @@ namespace PeachPDF.Html.Core.Handlers
             // Center
             if (slice.Fill)
             {
-                DrawMiddle(g, sampling, image,
+                DrawMiddle(g, mode, image,
                     new Rect(srcMidLeft, srcMidTop, srcMidRight - srcMidLeft, srcMidBottom - srcMidTop),
                     new Rect(destMidLeft, destMidTop, destMidRight - destMidLeft, destMidBottom - destMidTop),
                     repeatHorizontal, repeatVertical);
             }
         }
 
-        private static void DrawScaled(Canvas g, ImageSampling sampling, Image image, Rect src, Rect dest)
+        /// <summary>How a border-image region is drawn: the sampling, and the orientation that turns the raster upright.</summary>
+        private readonly record struct ImageDrawMode(ImageSampling Sampling, ImageOrientation Orientation)
+        {
+            /// <summary>Draws the part <paramref name="src"/> (in oriented pixels) of <paramref name="image"/> into <paramref name="dest"/>.</summary>
+            public void Draw(Canvas g, Image image, Rect dest, Rect src) =>
+                ImageOrientationPainter.Draw(g, image, dest, src, Sampling, Orientation);
+        }
+
+        private static void DrawScaled(Canvas g, ImageDrawMode mode, Image image, Rect src, Rect dest)
         {
             if (src.Width <= 0 || src.Height <= 0 || dest.Width <= 0 || dest.Height <= 0) return;
-            g.DrawImage(image, dest, src, sampling);
+            mode.Draw(g, image, dest, src);
         }
 
         /// <summary>
@@ -332,13 +347,13 @@ namespace PeachPDF.Html.Core.Handlers
         /// against the edge's fixed cross-axis thickness rarely divides it evenly) is cut off rather than
         /// overrunning into a neighboring corner.
         /// </summary>
-        private static void DrawEdge(Canvas g, ImageSampling sampling, Image image, Rect src, Rect dest, bool tileAlongX, BorderRepeat repeat)
+        private static void DrawEdge(Canvas g, ImageDrawMode mode, Image image, Rect src, Rect dest, bool tileAlongX, BorderRepeat repeat)
         {
             if (src.Width <= 0 || src.Height <= 0 || dest.Width <= 0 || dest.Height <= 0) return;
 
             if (repeat == BorderRepeat.Stretch)
             {
-                g.DrawImage(image, dest, src, sampling);
+                mode.Draw(g, image, dest, src);
                 return;
             }
 
@@ -352,7 +367,7 @@ namespace PeachPDF.Html.Core.Handlers
                     if (plan.TileExtent <= 0 || plan.Count <= 0) return;
                     var x = dest.Left;
                     for (var i = 0; i < plan.Count; i++, x += plan.TileExtent + plan.Gap)
-                        g.DrawImage(image, new Rect(x, dest.Top, plan.TileExtent, dest.Height), src, sampling);
+                        mode.Draw(g, image, new Rect(x, dest.Top, plan.TileExtent, dest.Height), src);
                 }
                 else
                 {
@@ -361,7 +376,7 @@ namespace PeachPDF.Html.Core.Handlers
                     if (plan.TileExtent <= 0 || plan.Count <= 0) return;
                     var y = dest.Top;
                     for (var i = 0; i < plan.Count; i++, y += plan.TileExtent + plan.Gap)
-                        g.DrawImage(image, new Rect(dest.Left, y, dest.Width, plan.TileExtent), src, sampling);
+                        mode.Draw(g, image, new Rect(dest.Left, y, dest.Width, plan.TileExtent), src);
                 }
             }
             finally
@@ -376,14 +391,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// <see cref="ResolveTiling"/>, resolved independently per axis - so a "repeat horizontally, stretch
         /// vertically" center still comes out one tile tall, each with its own tile size/count/gap.
         /// </summary>
-        private static void DrawMiddle(Canvas g, ImageSampling sampling, Image image, Rect src, Rect dest,
+        private static void DrawMiddle(Canvas g, ImageDrawMode mode, Image image, Rect src, Rect dest,
             BorderRepeat repeatHorizontal, BorderRepeat repeatVertical)
         {
             if (src.Width <= 0 || src.Height <= 0 || dest.Width <= 0 || dest.Height <= 0) return;
 
             if (repeatHorizontal == BorderRepeat.Stretch && repeatVertical == BorderRepeat.Stretch)
             {
-                g.DrawImage(image, dest, src, sampling);
+                mode.Draw(g, image, dest, src);
                 return;
             }
 
@@ -400,7 +415,7 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     var x = dest.Left;
                     for (var i = 0; i < horizontal.Count; i++, x += horizontal.TileExtent + horizontal.Gap)
-                        g.DrawImage(image, new Rect(x, y, horizontal.TileExtent, vertical.TileExtent), src, sampling);
+                        mode.Draw(g, image, new Rect(x, y, horizontal.TileExtent, vertical.TileExtent), src);
                 }
             }
             finally

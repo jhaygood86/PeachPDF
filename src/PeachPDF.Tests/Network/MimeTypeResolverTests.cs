@@ -17,6 +17,7 @@ namespace PeachPDF.Tests.Network
         [InlineData("anim.gif", "image/gif")]
         [InlineData("photo.webp", "image/webp")]
         [InlineData("photo.avif", "image/avif")]
+        [InlineData("photo.jxl", "image/jxl")]
         [InlineData("tex.tga", "image/x-tga")]
         [InlineData("art.psd", "image/vnd.adobe.photoshop")]
         [InlineData("scene.hdr", "image/vnd.radiance")]

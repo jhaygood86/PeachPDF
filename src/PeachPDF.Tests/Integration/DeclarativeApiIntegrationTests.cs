@@ -1513,6 +1513,9 @@ namespace PeachPDF.Tests.Integration
             Assert.StartsWith("data:image/bmp;base64,", DataUri.FromBytes([(byte)'B', (byte)'M']));
             Assert.StartsWith("data:image/webp;base64,", DataUri.FromBytes(
                 [(byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P']));
+            Assert.StartsWith("data:image/jxl;base64,", DataUri.FromBytes([0xFF, 0x0A, 0, 0]));
+            Assert.StartsWith("data:image/jxl;base64,", DataUri.FromBytes(
+                [0, 0, 0, 0x0C, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 0x0D, 0x0A, 0x87, 0x0A]));
             Assert.StartsWith("data:image/png;base64,", DataUri.FromBytes([1, 2, 3]));
         }
 

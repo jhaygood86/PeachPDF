@@ -22,7 +22,7 @@ namespace PeachPDF.Html.Core.Utils
 
         private static readonly HashSet<string> _supportedTypes = new(StringComparer.OrdinalIgnoreCase)
         {
-            "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif",
+            "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif", "image/jxl",
             "image/bmp", "image/x-ms-bmp", "image/tiff", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"
         };
 

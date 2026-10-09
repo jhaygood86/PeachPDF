@@ -14408,6 +14408,83 @@ await SaveShowcaseAsync("lossless_webp_avif", "Images & Replaced Content", "Loss
     "earlier PeachPDF version did regardless of the source's own encoding.",
     losslessRasterHtml, pdfConfig);
 
+// ── JPEG XL (PeachImage 0.5.0) ─────────────────────────────────────────────────────────
+// PeachImage decodes JPEG XL but has no encoder, so the images are small committed files (linked from
+// PeachPDF.Tests/TestSupport/Jxl, see its README for their origin).
+static string JxlDataUri(string name) =>
+    "data:image/jxl;base64," + Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "jxl", name + ".jxl")));
+
+static string JxlCell(string name, string label, string extraStyle = "") =>
+    $"<div class=\"cell\"><img src=\"{JxlDataUri(name)}\" style=\"{extraStyle}\"><div class=\"label\">{label}</div></div>";
+
+var jpegXlHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    ".row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 16px; }" +
+    ".cell img { border: 1px solid #cbd5e1; display: block; }" +
+    ".label { font-size: 11px; color: #555; margin-top: 4px; max-width: 130px; }" +
+    ".checker { background: #fde68a; display: inline-block; line-height: 0; }" +
+    "</style></head><body>" +
+    "<h2>JPEG XL images</h2>" +
+    "<p class=\"note\">JPEG XL decodes in-process (Modular and VarDCT, alpha, 16-bit samples, animation, ICC). " +
+    "A file made by recompressing a JPEG is turned back into that exact JPEG first, so it follows the ordinary JPEG rules.</p>" +
+    "<div class=\"row\">" +
+    JxlCell("rgb_lossy", "Lossy (VarDCT)", "width:128px") +
+    JxlCell("rgb_lossless", "Lossless (Modular)", "width:128px") +
+    JxlCell("rgb16", "16-bit samples", "width:128px") +
+    JxlCell("gray", "Grayscale", "width:140px") +
+    "<div class=\"cell\"><span class=\"checker\"><img src=\"" + JxlDataUri("rgba") + "\" style=\"width:128px;border:0\"></span><div class=\"label\">Alpha over a tinted backdrop</div></div>" +
+    "</div><div class=\"row\">" +
+    JxlCell("conformance_blendmodes", "Blend modes (16-bit RGBA)", "width:128px") +
+    JxlCell("conformance_animation_spline", "Animation: first frame", "width:128px") +
+    JxlCell("icc_lossless", "Embedded ICC profile", "width:128px; image-rendering: pixelated") +
+    JxlCell("recompressed_generated_ycc420", "Recompressed from a JPEG (4:2:0)", "width:128px") +
+    JxlCell("recompressed_generated_gray", "Recompressed from a gray JPEG", "width:128px") +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("jpeg_xl", "Images & Replaced Content", "JPEG XL Images",
+    "JPEG XL (decode only, via PeachImage 0.5.0): lossy and lossless, alpha, 16-bit samples, animation (first frame), " +
+    "ICC profiles, and files made by recompressing a JPEG, which are turned back into the original JPEG and then " +
+    "embedded under the usual JPEG rules (a CMYK or ICC-tagged one byte for byte).",
+    jpegXlHtml, pdfConfig);
+
+// ── image-orientation ──────────────────────────────────────────────────────────────────
+// recompressed_sideways_bench.jxl is a JPEG recompressed to JPEG XL: it comes back as a JPEG whose pixels are
+// stored sideways with an Exif orientation tag, and (it carries an ICC profile) embeds byte for byte.
+var sidewaysUri = JxlDataUri("recompressed_sideways_bench");
+string OrientationCell(string label, string css) =>
+    $"<div class=\"cell\"><img src=\"{sidewaysUri}\" style=\"width:150px; {css}\"><div class=\"label\">{label}</div></div>";
+
+var imageOrientationHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    ".row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }" +
+    ".cell img { border: 1px solid #cbd5e1; display: block; }" +
+    ".label { font-size: 11px; color: #555; margin-top: 4px; }" +
+    "</style></head><body>" +
+    "<h2>image-orientation</h2>" +
+    "<p class=\"note\">The photo is stored sideways and carries an Exif orientation tag. The default, from-image, " +
+    "shows it upright like a browser; none ignores the tag; an angle and flip replace it. The JPEG bytes are " +
+    "embedded unchanged either way - only the placement matrix differs.</p>" +
+    "<div class=\"row\">" +
+    OrientationCell("from-image (default)", "") +
+    OrientationCell("none", "image-orientation: none") +
+    OrientationCell("90deg", "image-orientation: 90deg") +
+    OrientationCell("flip", "image-orientation: flip") +
+    OrientationCell("180deg flip", "image-orientation: 180deg flip") +
+    "</div></body></html>";
+
+await SaveShowcaseAsync("image_orientation", "Images & Replaced Content", "image-orientation",
+    "image-orientation: from-image honors the image's own Exif orientation (a photo taken with the phone held sideways " +
+    "renders upright), none ignores it, and an angle with an optional flip replaces it. The orientation is applied as a " +
+    "placement transform, so JPEG, PNG and CMYK pass-through embedding stays byte for byte.",
+    imageOrientationHtml, pdfConfig);
+
 // ── GIF LZW pass-through (issue #1110) ─────────────────────────────────────────────────
 static byte[] BuildFullPaletteGifBytes(int size)
 {

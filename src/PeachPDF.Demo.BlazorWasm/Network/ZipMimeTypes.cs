@@ -10,8 +10,8 @@ namespace PeachPDF.Demo.BlazorWasm.Network;
 /// <para>
 /// PeachPDF has its own resolver for this, but it is internal to the library and consults the host OS —
 /// neither of which suits a zip being read inside a browser, so the demo carries this small table instead.
-/// The raster list matches what the library's image decoder actually understands; notably there is no
-/// WebP entry, because it cannot decode WebP at all.
+/// The raster list matches what the library's image decoder actually understands (PNG, JPEG, GIF, BMP,
+/// WebP, AVIF, TIFF, and JPEG XL, plus TGA/PSD/HDR entries it recognises but cannot decode).
 /// </para>
 /// </summary>
 internal static class ZipMimeTypes
@@ -32,6 +32,10 @@ internal static class ZipMimeTypes
             "jpg" or "jpeg" => "image/jpeg",
             "gif" => "image/gif",
             "bmp" => "image/bmp",
+            "webp" => "image/webp",
+            "avif" => "image/avif",
+            "jxl" => "image/jxl",
+            "tif" or "tiff" => "image/tiff",
             "tga" => "image/x-tga",
             "psd" => "image/vnd.adobe.photoshop",
             "hdr" => "image/vnd.radiance",
