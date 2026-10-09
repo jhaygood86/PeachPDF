@@ -16,6 +16,16 @@ Compared with v0.9.21:
 - **Statically positioned absolute descendant of an atomic inline box** (`inline-block` with a baseline,
   `inline-flex`): now follows the box when `vertical-align` moves it, instead of staying at the pre-alignment
   position (baseline: 20 → 32, Chrome 33; `bottom`: 20 → 30, Chrome 30).
+- **Text in an anonymous block box no longer picks up the `vertical-align` of the element around it** (affects
+  documents with no `inline-flex` and no absolute children). The `vertical-align` lookup used to walk from a
+  tag-less box that owns a line up to the nearest element and apply that element's value to the box's *own*
+  lines; it now stops at the box that owns the line, as CSS 2.1 §10.8.1 has it (the value says how a box sits in
+  its parent's line, not how its content sits in its own lines). Example: an `inline-block` with
+  `vertical-align: top|middle|…` holding a `<div>` plus text that includes `<small>` — the text's offset used to
+  vary from 15.8 to 30.0 depending on the value, and is now a constant 20.8 (Chrome 21 for all ten values tried).
+  The same applies to the text of `inline-flex`/`inline-grid` items, a block-first `inline-block`, an `<li>`
+  with `vertical-align`, and `::before` blocks. Known side effect: an `inline-flex` icon-plus-text button under
+  `super`, `5px` or `30%` moved further from Chrome in the text offset (-0.4, against -6.0 on `main` and Chrome's -9.3).
 - **In-flow `<img>` in an `inline-flex`:** no longer adds a second rectangle to the container.
 
 **Why:** `inline-flex` reached the flex engine without the step that lays out out-of-flow children.
