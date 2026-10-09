@@ -1220,7 +1220,8 @@ namespace PeachPDF.Html.Core.Parse
             BlockifyPositionedBox(box);
 
             // 11. Normalize a flex/grid item's own computed style (css-flexbox-1 §4 / css-grid-2 §6):
-            // blockify a layout-internal display, and drop `float`, which has no effect on an item. The
+            // blockify its display (layout-internal and inline-level alike; an anonymous text run is left
+            // alone), and drop `float`, which has no effect on an item. The
             // parent's own cascade — including step 10 above — has already finished by the time this box is
             // reached, so its display is final and can be asked about here.
             NormalizeFlexOrGridItem(box);
@@ -1392,6 +1393,27 @@ namespace PeachPDF.Html.Core.Parse
 
             box.Display = box.Display.Value switch
             {
+                // css-display-3 §2.7: a layout-internal display (a table part) blockifies to flow. Left as
+                // it was, the box reached the table engine with no table around it, and a cell-less
+                // row threw out of LayoutBodyRows.
+                DisplayMode.TableRow or DisplayMode.TableRowGroup or DisplayMode.TableHeaderGroup
+                    or DisplayMode.TableFooterGroup or DisplayMode.TableCell or DisplayMode.TableColumn
+                    or DisplayMode.TableColumnGroup =>
+                    CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
+                _ => BlockifyInlineLevel(box.Display)
+            };
+        }
+
+        /// <summary>
+        /// The block-level equivalent of an inline-level <c>display</c> (CSS Display 3 §2.7):
+        /// <c>inline</c>/<c>inline-block</c> → <c>block</c>, <c>inline-flex</c> → <c>flex</c>,
+        /// <c>inline-grid</c> → <c>grid</c>, <c>inline-table</c> → <c>table</c>; anything else is returned
+        /// unchanged. Shared by <see cref="BlockifyPositionedBox"/> and <see cref="NormalizeFlexOrGridItem"/>
+        /// so the table lives in one place.
+        /// </summary>
+        private static CssProperty<DisplayMode> BlockifyInlineLevel(CssProperty<DisplayMode> display) =>
+            display.Value switch
+            {
                 DisplayMode.Inline or DisplayMode.InlineBlock =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
                 DisplayMode.InlineFlex =>
@@ -1400,16 +1422,8 @@ namespace PeachPDF.Html.Core.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Grid, DisplayMode.Grid),
                 DisplayMode.InlineTable =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
-                // css-display-3 §2.7: a layout-internal display (a table part) blockifies to flow. Left as
-                // it was, the box reached the table engine with no table around it, and a cell-less
-                // row threw out of LayoutBodyRows.
-                DisplayMode.TableRow or DisplayMode.TableRowGroup or DisplayMode.TableHeaderGroup
-                    or DisplayMode.TableFooterGroup or DisplayMode.TableCell or DisplayMode.TableColumn
-                    or DisplayMode.TableColumnGroup =>
-                    CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
-                _ => box.Display
+                _ => display
             };
-        }
 
         /// <summary>
         /// Brings an in-flow child of a flex or grid container — a flex/grid item — into the shape those
@@ -1420,13 +1434,15 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The <c>display</c> half is scoped to the <b>layout-internal</b> set (css-display-3 §2.6's
-        /// table-internal displays), which
-        /// become <c>block</c>: a <c>table-row</c> child of a flex container is not a table part, it is a
-        /// flex item, and leaving it as one meant the box was handed to a table engine that never ran over
-        /// it — its whole subtree laid out at the origin and its text was silently dropped. A
-        /// <c>&lt;tbody style="display:flex"&gt;</c> of ordinary <c>&lt;tr&gt;</c>s rendered completely
-        /// blank.
+        /// The <c>display</c> half follows css-display-3 §2.7 for every in-flow item: the
+        /// <b>layout-internal</b> set (§2.6's table-internal displays) and the inline-level set
+        /// (<c>inline</c>/<c>inline-block</c> → <c>block</c>, <c>inline-flex</c> → <c>flex</c>,
+        /// <c>inline-grid</c> → <c>grid</c>, <c>inline-table</c> → <c>table</c>, the same arms
+        /// <see cref="BlockifyPositionedBox"/> uses). A <c>table-row</c> child of a flex container is not a
+        /// table part, it is a flex item, and leaving it as one meant the box was handed to a table engine
+        /// that never ran over it — its whole subtree laid out at the origin and its text was silently
+        /// dropped. A <c>&lt;tbody style="display:flex"&gt;</c> of ordinary <c>&lt;tr&gt;</c>s rendered
+        /// completely blank.
         /// </para>
         /// <para>
         /// Doing this in the cascade rather than at layout time is what makes it stick: the anonymous
@@ -1438,28 +1454,30 @@ namespace PeachPDF.Html.Core.Parse
         /// <see cref="BlockifyPositionedBox"/> has already blockified them for their own reason.
         /// </para>
         /// <para>
-        /// <b>Inline-level items are left alone here</b>, even though the spec blockifies them too: the
-        /// flex and grid engines already lay every item out blockified
-        /// (<c>CssLayoutEngineFlex.PerformLayoutBlockified</c>), so an inline item's own
-        /// <c>width</c>/<c>height</c> already apply, and coercing the computed value as well would change
-        /// how a <i>replaced</i> item is sized — a replaced box takes its size from the phantom word
-        /// carrying its content, which only reaches the box through inline flow, so as a block-level box it
-        /// would instead fill its containing block (CSS 2.1 §10.3.4's intrinsic width for block-level
-        /// replaced content is not implemented). What actually broke without a rule here was the box tree,
-        /// not the computed value, and <see cref="CorrectInlineBoxesParent"/> owns that.
+        /// A <b>replaced</b> item (<c>&lt;img&gt;</c>, inline <c>&lt;svg&gt;</c>) takes its size from the
+        /// phantom word carrying its content, which only reaches the box through inline flow. A
+        /// <c>display:block</c> replaced box is normally wrapped in a synthetic block with the replaced box
+        /// demoted back to inline (<see cref="CorrectReplacedElementBoxes"/>), which supplies that; as a
+        /// flex/grid item the wrapper would become the item and the replaced box a bare inline inside it,
+        /// losing the item's own alignment and sizing. So <see cref="CorrectReplacedElementBoxes"/> skips
+        /// the wrapper for a direct child of a flex/grid container, and the item stays the replaced box
+        /// itself — the shape <c>CssLayoutEngineFlex.PerformLayoutBlockified</c> already measured it in
+        /// before the computed value was blockified. Blockifying without that skip regressed six tests
+        /// (centred and stretched replaced items, items relocated across a page break).
         /// </para>
         /// </remarks>
         private static void NormalizeFlexOrGridItem(CssBox box)
         {
             if (box.ParentBox is not { } parent) return;
 
-            if (parent.Display.Value is not (DisplayMode.Flex or DisplayMode.InlineFlex
-                or DisplayMode.Grid or DisplayMode.InlineGrid))
-            {
-                return;
-            }
+            if (!IsFlexOrGridContainer(parent)) return;
 
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return;
+
+            // A text run is not an element and carries no cascaded display of its own: it stays inline
+            // and WrapFlexOrGridTextSequences gathers a contiguous run into one anonymous item. Only a
+            // display:contents lift reaches here with one (the cascade never visits a text box).
+            if (IsAnonymousTextRun(box)) return;
 
             box.Display = box.Display.Value switch
             {
@@ -1468,7 +1486,7 @@ namespace PeachPDF.Html.Core.Parse
                     or DisplayMode.TableFooterGroup or DisplayMode.TableHeaderGroup
                     or DisplayMode.TableRow or DisplayMode.TableRowGroup =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
-                _ => box.Display
+                _ => BlockifyInlineLevel(box.Display)
             };
 
             // `float` has no effect on a flex/grid item (css-flexbox-1 §4). Coerced to `none` here rather
@@ -2894,7 +2912,9 @@ namespace PeachPDF.Html.Core.Parse
         /// Go over all word-based replaced-element boxes (&lt;img&gt;, inline &lt;svg&gt;) and if
         /// their display style is set to block, put them inside another block but set them back to
         /// inline - both box types represent themselves as a single atomic word in the normal inline
-        /// layout algorithm, which can't itself be a block-level box directly.
+        /// layout algorithm, which can't itself be a block-level box directly. A direct child of a
+        /// flex or grid container is left as it is: it is an item, already blockified by
+        /// <see cref="NormalizeFlexOrGridItem"/>, and a wrapper would become the item in its place.
         /// </summary>
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectReplacedElementBoxes(CssBox box)
@@ -2906,7 +2926,8 @@ namespace PeachPDF.Html.Core.Parse
             for (int i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
-                if (childBox is CssBoxImage or CssBoxSvg && childBox.DerivedStyle.ActualDisplay == Keywords.Block)
+                if (childBox is CssBoxImage or CssBoxSvg && childBox.DerivedStyle.ActualDisplay == Keywords.Block
+                    && !IsFlexOrGridContainer(box))
                 {
                     var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
                     block.IsReplacedBlockWrapper = true;
@@ -2920,6 +2941,12 @@ namespace PeachPDF.Html.Core.Parse
                 }
             }
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is a flex or grid container, i.e. its in-flow children are items.
+        /// </summary>
+        private static bool IsFlexOrGridContainer(CssBox box) =>
+            box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex or DisplayMode.Grid or DisplayMode.InlineGrid;
 
         /// <summary>
         /// Correct the DOM tree recursively by replacing  "br" html boxes with anonymous blocks that respect br spec.<br/>
@@ -3199,10 +3226,7 @@ namespace PeachPDF.Html.Core.Parse
             // line charts are exactly that shape (an inline `td::after` spacer beside a `display: flex`
             // `.data` label), and every data label collapsed onto the chart baseline instead of sitting at
             // its data point. Recursion below is unaffected: the children's own subtrees still normalize.
-            var isFlexOrGridContainer = box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex
-                or DisplayMode.Grid or DisplayMode.InlineGrid;
-
-            if (isFlexOrGridContainer)
+            if (IsFlexOrGridContainer(box))
             {
                 WrapFlexOrGridTextSequences(box);
             }

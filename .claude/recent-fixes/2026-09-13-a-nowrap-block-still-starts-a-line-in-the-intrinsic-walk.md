@@ -56,9 +56,9 @@ Float widths at `font: 16px monospace` (one character advances 6.5977pt), Chromi
   is what the review pass caught.** It applies CSS 2.1 §9.7 for a float and
   `DomParser.BlockifyPositionedBox` handles `position: absolute`/`fixed` — but
   `NormalizeFlexOrGridItem` deliberately blockifies only the *table-internal* set, leaving an
-  inline-level flex/grid item's computed display alone (see
-  [.claude/accepted-gaps/inline-level-flex-and-grid-items-are-not-blockified.md](../accepted-gaps/inline-level-flex-and-grid-items-are-not-blockified.md),
-  issue #1003 — a deviation that file described as invisible to layout, and this change is what made
+  inline-level flex/grid item's computed display alone (an accepted gap at the time, since closed —
+  see [2026-10-08-inline-level-flex-and-grid-items-are-blockified.md](2026-10-08-inline-level-flex-and-grid-items-are-blockified.md),
+  issue #1003 — a deviation that gap described as invisible to layout, and this change is what made
   it visible). So the first version of this fix read a single-line flex COLUMN of `inline-block` items
   as summing onto one line: 72.5742pt against the 39.5859pt the same container gives for plain block
   items. `StartsNewLine` now asks `IsFlexOrGridItem` first, which reads the PARENT's display, because

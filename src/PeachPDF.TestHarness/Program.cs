@@ -6681,6 +6681,62 @@ await SaveShowcaseAsync("flex_item_pinned_height_background", "Layout", "Flex It
     + "children it genuinely holds there (issue #569).",
     flexItemBackgroundHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
+// --- inline-level flex/grid items are blockified ---
+var blockifiedItemsHtml = """
+<!DOCTYPE html><html lang="en"><head><style>
+    @page { size: A5; margin: 24pt }
+    body { font-family: Arial, sans-serif; color: #222; font-size: 10pt }
+    h1 { font-size: 16pt; margin: 0 0 4pt }
+    h2 { font-size: 10pt; margin: 14pt 0 4pt; color: #8a5700 }
+    .intro { color: #555; font-size: 8.5pt; margin: 0 0 8pt }
+    .row { display: flex; gap: 8pt; align-items: flex-start; width: 100% }
+    .box { border: 1pt solid #999; background: #eef6ff; padding: 3pt }
+    .cell { border: 1pt solid #999; background: #fff8dc; padding: 3pt 5pt }
+    .tile { display: grid; grid-template-columns: 40pt 40pt; gap: 3pt }
+    .tile span { background: #d6e8d0; text-align: center }
+    img { display: block }   /* the usual CSS reset */
+    .imgs { display: grid; grid-template-columns: 110pt 110pt; gap: 8pt }
+</style></head><body>
+<h1>Blockified flex and grid items</h1>
+<p class="intro">Every in-flow child of a flex or grid container computes to a block-level display, so a
+nested inline-flex, inline-grid or inline-table item is a real flex, grid or table container: its gap and
+alignment, grid tracks and table cells all apply.</p>
+
+<h2>inline-flex, inline-grid and inline-table as flex items</h2>
+<div class="row">
+  <div class="box" style="display:inline-flex; align-items:center; gap:6pt">
+    <span>short</span><span style="height:28pt; background:#cfe0f5">tall</span><span>gap 6pt</span>
+  </div>
+  <div class="box" style="display:inline-grid; grid-template-columns:40pt 40pt; gap:3pt; width:92pt">
+    <span class="cell">a</span><span class="cell">b</span><span class="cell">c</span><span class="cell">d</span>
+  </div>
+  <div class="box" style="display:inline-table">
+    <div style="display:table-row"><div class="cell" style="display:table-cell">cell 1</div><div class="cell" style="display:table-cell">cell 2</div></div>
+  </div>
+</div>
+
+<h2>Images keep their natural size (here 72pt x 36pt)</h2>
+<p class="intro">Left: a grid with <code>img { display:block }</code>. Right: a flex row. An
+explicit <code>justify-self: stretch</code> stretches the third image across its 110pt track.</p>
+<div class="imgs">
+  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%23c0392b'/%3E%3C/svg%3E">
+  <div class="row">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%232980b9'/%3E%3C/svg%3E">
+    <span>text beside it</span>
+  </div>
+  <img style="justify-self:stretch" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%2327ae60'/%3E%3C/svg%3E">
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("blockified_flex_grid_items", "Layout", "Blockified Flex and Grid Items",
+    "Every in-flow child of a flex or grid container now computes to its block-level display "
+    + "(inline-block to block, inline-flex to flex, inline-grid to grid, inline-table to table), so a "
+    + "nested inline-flex, inline-grid or inline-table item lays out its own gap, alignment, tracks and "
+    + "cells instead of collapsing them. Images stay the item themselves and keep their natural size in "
+    + "a flex row and in a grid, including under the common img { display: block } reset.",
+    blockifiedItemsHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // --- overflow-wrap emergency line-breaking showcase ---
 var overflowWrapHtml = """
 <!DOCTYPE html><html lang="en"><head><style>
