@@ -90,3 +90,10 @@ per page) rasterized with both.
 - `animation-*` values from `var()` are read: the applier settles the deferred `animation*` declarations before reading
   them (same `ResolveDeferredVarProperties(..., only)` filter). Known edge: custom properties declared `!important` are not
   yet visible at that point - see the limitations note.
+- **`!important` on `animation-*` is applied before the animation step** (`DomParser.ApplyImportantAnimationProperties`),
+  because those properties decide which animations exist while the animation origin itself sits *below* the important
+  phase. Without it `* { animation: none !important }` (the usual print-stylesheet reset) was ignored and
+  `animation: fade 1s !important` never applied. Phase 6 re-applies the same declarations, to the same result.
+- **A percentage's identity is 100%, not 1%**: `filter: none` mixed with `brightness(150%)` used to start from
+  `brightness(1%)` (nearly black) because the neutral argument kept the token's unit. `CssValueInterpolator.TryIdentity`
+  now scales it by 100 for `%`.

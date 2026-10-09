@@ -127,17 +127,7 @@ namespace PeachPDF.Html.Core.Animation
             && !name.StartsWith("transition", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>The first entry of a comma-separated list, keeping commas inside parentheses together.</summary>
-        internal static string FirstListEntry(string list)
-        {
-            var depth = 0;
-            for (var i = 0; i < list.Length; i++)
-            {
-                if (list[i] == '(') depth++;
-                else if (list[i] == ')') depth--;
-                else if (list[i] == ',' && depth == 0) return list[..i].Trim();
-            }
-
-            return list.Trim();
-        }
+        internal static string FirstListEntry(string list) =>
+            AnimationApplier.SplitList(list) is [var first, ..] ? first : string.Empty;
     }
 }

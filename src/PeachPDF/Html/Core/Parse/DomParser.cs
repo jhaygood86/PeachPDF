@@ -1193,6 +1193,9 @@ namespace PeachPDF.Html.Core.Parse
             // !important phases below. Skipped outright, and at no cost, unless a snapshot was asked for.
             if (box.HtmlContainer?.AnimationProgress is { } animationProgress)
             {
+                if (box.HtmlContainer.Keyframes.Count > 0)
+                    ApplyImportantAnimationProperties(valueParser, box, authorImportant, inlineRule, pendingVarProperties);
+
                 AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot);
             }
 
@@ -2062,6 +2065,52 @@ namespace PeachPDF.Html.Core.Parse
                 }
 
                 AssignCssBlock(valueParser, box, layered.Rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties, skipPropertyNames);
+            }
+        }
+
+        /// <summary>
+        /// Puts the author's and the inline style's <c>!important</c> <c>animation-*</c> declarations on the box ahead
+        /// of the animation step. The step sits before the important phases (the animation origin outranks normal
+        /// declarations only), but the animation-* properties decide <em>which</em> animations exist, so
+        /// <c>animation: none !important</c> must already have taken effect when they are read, and
+        /// <c>animation: fade 1s !important</c> must already be there. Phase 6 applies the same declarations again,
+        /// to the same result. <c>revert</c> and <c>revert-layer</c> are left to that phase.
+        /// </summary>
+        private static void ApplyImportantAnimationProperties(
+            CssValueParser valueParser,
+            CssBox box,
+            IReadOnlyList<CssData.LayeredStyleRule> authorImportant,
+            IStyleRule? inlineRule,
+            Dictionary<string, string> pendingVarProperties)
+        {
+            foreach (var layered in authorImportant)
+                ApplyImportantAnimationDeclarations(valueParser, box, layered.Rule, pendingVarProperties);
+
+            if (inlineRule is not null)
+                ApplyImportantAnimationDeclarations(valueParser, box, inlineRule, pendingVarProperties);
+        }
+
+        private static void ApplyImportantAnimationDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties)
+        {
+            foreach (var prop in rule.Style)
+            {
+                if (!prop.IsImportant || !prop.Name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)) continue;
+
+                // The animation properties are not inherited, so unset is initial and inherit copies the parent's.
+                var value = prop.Value switch
+                {
+                    Keywords.Inherit when box.ParentBox != null => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
+                    Keywords.Inherit or Keywords.Initial or Keywords.Unset => CssDefaults.GetInitialValue(prop.Name),
+                    Keywords.Revert or Keywords.RevertLayer => null,
+                    _ => prop.Value
+                };
+
+                if (value is null) continue;
+
+                if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                    pendingVarProperties[prop.Name] = value;
+                else
+                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
             }
         }
 

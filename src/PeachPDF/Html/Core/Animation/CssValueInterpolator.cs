@@ -239,7 +239,9 @@ namespace PeachPDF.Html.Core.Animation
                         identity.Add(token);
                         break;
                     case TokenKind.Number when depth == 1:
-                        identity.Add(token with { Number = neutral, Raw = Format(neutral) + token.Unit });
+                        // A percentage argument states the same amount 100 times larger: brightness(1) is brightness(100%).
+                        var amount = token.Unit == "%" ? neutral * 100 : neutral;
+                        identity.Add(token with { Number = amount, Raw = Format(amount) + token.Unit });
                         break;
                     case TokenKind.Space or TokenKind.Punct when depth == 1:
                         identity.Add(token);

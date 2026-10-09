@@ -23,7 +23,8 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   author-`!important` phase, so for a property the animation owns - or an `animation-*` property - `var(--x)` resolves
   against the custom properties as the normal phases left them. `#a { --w: 100pt; width: var(--w) }` plus
   `#a { --w: 300pt !important }` therefore gives the implicit keyframe 100pt, not 300pt. Properties the animation does not
-  touch resolve at the very end of the cascade and are unaffected. Fixing it means resolving custom properties' important
-  declarations ahead of the animation step.
+  touch resolve at the very end of the cascade and are unaffected - except that a shorthand holding `var()` is settled as a
+  whole when any one of its longhands is animated (`margin: var(--m)` with only `margin-left` animated settles all four
+  margins early). Fixing it means resolving custom properties' important declarations ahead of the animation step.
 - **SMIL** (`<animate>`, `<animateTransform>`) is separate and out of scope - see
   [svg-features-out-of-scope](svg-features-out-of-scope.md).

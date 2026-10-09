@@ -173,6 +173,8 @@ namespace PeachPDF.Tests.Integration
         [InlineData("transform", "scale(3)", "none", 0.5, "scale(2)")]
         [InlineData("filter", "none", "grayscale(1)", 0.5, "grayscale(0.5)")]
         [InlineData("filter", "none", "brightness(0)", 0.5, "brightness(0.5)")]
+        [InlineData("filter", "none", "brightness(150%)", 0.5, "brightness(125%)")]    // the identity of a percentage is 100%, not 1%
+        [InlineData("filter", "opacity(50%)", "none", 0.5, "opacity(75%)")]
         public void Interpolate_NoneAgainstAList_MeetsItsIdentity(string property, string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix(property, from, to, t));
 
@@ -643,6 +645,45 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(0.5, Opacity(Find(root, "a")), 3);
             Assert.Equal(0.5, Opacity(Find(root, "b")), 3);
+        }
+
+        [Fact]
+        public async Task ImportantAnimationNone_SwitchesAnAnimationOff()
+        {
+            // The print-stylesheet reset: !important on animation-* decides which animations exist, even though the
+            // animation origin itself sits below the important phase.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 0 } }
+                * { animation: none !important; }
+                #a { animation: k 1s; }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal(1.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task ImportantAnimation_AppliesAnAnimationTheNormalCascadeDoesNotName()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { animation: k 1s linear !important; }
+                #b { animation-name: k; animation-duration: 1s; animation-timing-function: linear; }
+                #b { animation-duration: 2s !important; }</style><div id="a">x</div><div id="b">y</div>
+                """, 0.5);
+
+            Assert.Equal(0.5, Opacity(Find(root, "a")), 3);
+            Assert.Equal(0.5, Opacity(Find(root, "b")), 3);    // the important 2s run is the one sampled; half of it is still 0.5
+        }
+
+        [Fact]
+        public async Task ImportantInlineAnimationNone_BeatsAStylesheetAnimation()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 0 } }
+                #a { animation: k 1s; }</style><div id="a" style="animation: none !important">x</div>
+                """, 0.5);
+
+            Assert.Equal(1.0, Opacity(Find(root, "a")), 3);
         }
 
         [Fact]
