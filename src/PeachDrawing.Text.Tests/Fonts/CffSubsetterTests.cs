@@ -1,9 +1,8 @@
 using System;
-using System.Buffers.Binary;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 
-using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 
 using Xunit;
@@ -18,48 +17,42 @@ namespace PeachDrawing.Text.Tests.Fonts
     /// </summary>
     public class CffSubsetterTests
     {
-        // A CID-keyed CJK CFF, in whichever of the two usual places it is. Ubuntu's
-        // fonts-noto-cjk puts one collection on disk; the Windows CJK fonts are
-        // collections too, but none of them is CID-keyed CFF, so the test skips
-        // rather than pretending to have covered anything.
-        private static readonly string[] NotoCjkCandidates =
-        [
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-        ];
+        // The source Noto Sans CJK CFF in the PR evidence was 15,458,582 bytes.
+        private const int OriginalNotoCffLength = 15_458_582;
 
-        private static byte[]? LoadCff()
+        private static byte[] LoadCff()
         {
-            foreach (var candidate in NotoCjkCandidates)
-            {
-                if (!File.Exists(candidate))
-                    continue;
+            var path = Path.Combine(AppContext.BaseDirectory, "NotoSansCJK-Subset-CFF.cff.gz");
+            using var file = File.OpenRead(path);
+            using var compressed = new GZipStream(file, CompressionMode.Decompress);
+            using var expanded = new MemoryStream();
+            compressed.CopyTo(expanded);
+            return expanded.ToArray();
+        }
 
-                var font = File.ReadAllBytes(candidate);
-                var cff = GetTable(SfntCollection.IsCollection(font) ? SfntCollection.ExtractFace(font, 0) : font, "CFF ");
-
-                if (cff is not null && new CffTable(cff, 0).IsCidKeyed)
-                    return cff;
-            }
-
-            return null;
+        private static int[] NonEmptyGlyphs(CffIndex charStrings)
+        {
+            // The checked-in CFF is itself the small output of the original real-font
+            // subset. Its unused glyphs are one-byte endchar programs; retain the glyphs
+            // that still have outlines so repeated subsetting exercises real charstrings.
+            return Enumerable.Range(0, charStrings.Count)
+                .Where(glyph => charStrings[glyph].Length > 1)
+                .ToArray();
         }
 
         [Fact]
         public void Subset_KeepsTheGlyphsAskedFor()
         {
             var cff = LoadCff();
-
-            if (cff is null)
-                return;
-
-            int[] wanted = [0, 100, 5000, 30000];
+            var original = new CffTable(cff, 0);
+            Assert.True(original.IsSupported);
+            Assert.True(original.IsCidKeyed);
+            int[] wanted = NonEmptyGlyphs(original.CharStrings);
 
             var subset = CffSubsetter.Subset(cff, wanted);
 
             Assert.NotNull(subset);
 
-            var original = new CffTable(cff, 0);
             var rewritten = new CffTable(subset!, 0);
 
             Assert.True(rewritten.IsSupported);
@@ -78,67 +71,43 @@ namespace PeachDrawing.Text.Tests.Fonts
         public void Subset_EmptiesTheGlyphsNotAskedFor()
         {
             var cff = LoadCff();
-
-            if (cff is null)
-                return;
-
-            var subset = CffSubsetter.Subset(cff, [0, 100]);
+            var original = new CffTable(cff, 0);
+            var nonEmpty = NonEmptyGlyphs(original.CharStrings);
+            Assert.True(nonEmpty.Length > 2);
+            var keep = nonEmpty.Take(2).ToArray();
+            var subset = CffSubsetter.Subset(cff, keep);
 
             Assert.NotNull(subset);
 
             var rewritten = new CffTable(subset!, 0);
 
             // 0x0E is endchar: the glyph is still there and draws nothing.
-            Assert.Equal([0x0E], rewritten.CharStrings[101].ToArray());
-            Assert.Equal([0x0E], rewritten.CharStrings[30000].ToArray());
+            foreach (var glyph in nonEmpty.Skip(2))
+                Assert.Equal([0x0E], rewritten.CharStrings[glyph].ToArray());
         }
 
         [Fact]
-        public void Subset_IsDramaticallySmaller()
+        public void Subset_RemainsSmallComparedToTheOriginalCjkCff()
         {
             var cff = LoadCff();
-
-            if (cff is null)
-                return;
-
-            var subset = CffSubsetter.Subset(cff, [0, 100, 5000]);
+            var original = new CffTable(cff, 0);
+            var subset = CffSubsetter.Subset(cff, NonEmptyGlyphs(original.CharStrings).Take(1).ToArray());
 
             Assert.NotNull(subset);
 
-            // The font is about 8MB; a handful of glyphs out of it has no
-            // business being more than a small fraction of that. The bound is
-            // deliberately loose -- this guards against the whole face being
-            // embedded again, not against a few kilobytes of drift.
+            // The fixture is the output of subsetting the 15.4MB source font in
+            // the PR evidence. Keep the deliberately loose bound: this guards
+            // against embedding the original CFF table whole, not against a few
+            // kilobytes of drift in a repeated subset.
             Assert.True(
-                subset!.Length < cff.Length / 10,
-                $"The subset is {subset.Length:N0} bytes of an original {cff.Length:N0}.");
+                subset!.Length < OriginalNotoCffLength / 10,
+                $"The subset is {subset.Length:N0} bytes; the original CFF was {OriginalNotoCffLength:N0}.");
         }
 
         [Fact]
         public void Subset_NotAFont_ReturnsNull()
         {
             Assert.Null(CffSubsetter.Subset([1, 2, 3], [0]));
-        }
-
-        private static byte[]? GetTable(byte[] font, string tag)
-        {
-            var tableCount = BinaryPrimitives.ReadUInt16BigEndian(font.AsSpan(4));
-            var wanted = BinaryPrimitives.ReadUInt32BigEndian(System.Text.Encoding.ASCII.GetBytes(tag));
-
-            for (var i = 0; i < tableCount; i++)
-            {
-                var record = 12 + (i * 16);
-
-                if (BinaryPrimitives.ReadUInt32BigEndian(font.AsSpan(record)) != wanted)
-                    continue;
-
-                var offset = (int)BinaryPrimitives.ReadUInt32BigEndian(font.AsSpan(record + 8));
-                var length = (int)BinaryPrimitives.ReadUInt32BigEndian(font.AsSpan(record + 12));
-
-                return font.AsSpan(offset, length).ToArray();
-            }
-
-            return null;
         }
     }
 }

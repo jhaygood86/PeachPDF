@@ -441,20 +441,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // dictionaries are the same size whatever the offsets turn out to
             // be and one pass settles the layout.
             var isCid = fontDicts is not null;
+            var hasTopPrivateBlock = !isCid && privateBytes.Length > 0 && privateBytes[0].Length > 0;
 
             const int headerLength = 4;
 
             // Built with placeholder offsets purely to measure: the operands
             // are a fixed width, so the real one is the same size, and the
             // index around it is measured rather than predicted because its
-            // own offsets shrink to fit what they point at.
+            // own offsets shrink to fit what they point at. Preserve the
+            // final layout's nullability too: a predefined charset or absent
+            // top-level Private block keeps its original DICT operand bytes.
             var placeholderTopDict = BuildTopDict(
                 topDict, topEntries,
-                HasEntry(topEntries, OpCharset) ? 0 : null,
+                charset is null ? null : 0,
                 HasEntry(topEntries, OpFdSelect) ? 0 : null,
                 0,
                 isCid ? 0 : null,
-                isCid || !HasEntry(topEntries, OpPrivate) ? null : (0, 0));
+                hasTopPrivateBlock ? (0, 0) : null);
 
             var topDictIndexLength = WriteIndex([placeholderTopDict]).Length;
 
@@ -496,9 +499,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 fdSelect is null ? null : fdSelectAt,
                 charStringsAt,
                 isCid ? fdArrayAt : null,
-                isCid || privateBytes.Length == 0 || privateBytes[0].Length == 0
-                    ? null
-                    : (privates[0].DictLength, privateAt[0]));
+                hasTopPrivateBlock ? (privates[0].DictLength, privateAt[0]) : null);
 
             if (newTopDict.Length != placeholderTopDict.Length)
                 throw new InvalidOperationException("The top dictionary did not settle to a fixed size.");
