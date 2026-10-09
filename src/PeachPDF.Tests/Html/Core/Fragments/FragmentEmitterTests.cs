@@ -153,12 +153,39 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                         Assert.Equal(word.Word.Rectangle.Y + expectedOffset, word.Rect.Y, 6);
                     }
 
-                    Assert.Equal(fragment.Box.Bounds.Y + expectedOffset, fragment.WholeBoxRect.Y, 6);
+                    // An inline-flowed box has no Location of its own (its Bounds read as the unassigned origin), so its
+                    // whole border box is the union of its line rectangles - see FragmentEmitter.ExtentOf.
+                    var wholeBoxTop = fragment.Box.IsInline && fragment.Box.Rectangles.Count > 0
+                        ? fragment.Box.Rectangles.Values.Min(r => r.Top)
+                        : fragment.Box.Bounds.Y;
+
+                    Assert.Equal(wholeBoxTop + expectedOffset, fragment.WholeBoxRect.Y, 6);
                 }
             }
 
             Assert.NotEmpty(Flatten(container.FragmentTree.Fragmentainers[0].Root));
             Assert.NotNull(root);
+        }
+
+        [Fact]
+        public async Task WrappedInlineSpan_WholeBoxRect_IsTheUnionOfItsLineRectangles()
+        {
+            // An inline box has no Location of its own, so its whole border box is what it occupies on its lines: here
+            // two, one under the other. (Its Bounds would read as a small rectangle at the page origin.)
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div style='width:100pt;margin:40pt 0 0 30pt'><span id='s'>one two three four five six seven eight</span></div>"));
+
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = span.Rectangles.Values.ToList();
+            Assert.True(rects.Count >= 2, "the span wraps onto more than one line");
+
+            var fragment = FragmentPaintHarness.FragmentOf(container, span);
+
+            Assert.Equal(rects.Min(r => r.Left), fragment.WholeBoxRect.Left, 3);
+            Assert.Equal(rects.Min(r => r.Top), fragment.WholeBoxRect.Top, 3);
+            Assert.Equal(rects.Max(r => r.Right), fragment.WholeBoxRect.Right, 3);
+            Assert.Equal(rects.Max(r => r.Bottom), fragment.WholeBoxRect.Bottom, 3);
+            Assert.True(fragment.WholeBoxRect.Left >= 30 && fragment.WholeBoxRect.Top >= 40, $"on the page, not at the origin: {fragment.WholeBoxRect}");
         }
 
         // ─── Per-box fragmentation ─────────────────────────────────────────────────

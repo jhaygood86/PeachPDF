@@ -55,7 +55,9 @@ namespace PeachPDF.Html.Core.Fragmentation
                 Box: box,
                 FragmentainerIndex: -1,
                 OriginY: 0,
-                WholeBoxRect: box.Bounds,
+                // An inline-flowed box has no Location of its own, so its whole border box (the `transform` pivot, the
+                // `clip-path` reference box) is its line rectangle - as in the page emitter's FragmentEmitter.ExtentOf.
+                WholeBoxRect: RenderUtils.ClipSourceBoundsOf(box.Bounds, box.IsInline, box.Rectangles),
                 IsFixed: false,
                 IsFirstFragment: true,
                 IsLastFragment: true,

@@ -4007,7 +4007,10 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             // A stated fragment's extent is what was stated: the box's own bounds describe the
             // fragmentainer that placed it, which is a different one.
-            var bounds = draft.ShellRect ?? BoundsOf(draft.Box, draft.Snapshot);
+            // An inline-flowed box (an `inline-block` that fits on its line, a replaced inline) has no Location of its
+            // own, so its whole border box - the `transform` pivot, the `clip-path` reference box - is its line
+            // rectangle, the same stand-in the `overflow` clip uses (see ClipSourceBoundsOf).
+            var bounds = draft.ShellRect ?? ClipSourceBoundsOf(draft.Box, draft.Snapshot);
 
             // The box's own live bounds (the ShellRect-absent branch just above) were read fresh here,
             // bypassing whatever BuildDraft already shifted its stored Lines/Words by for the same

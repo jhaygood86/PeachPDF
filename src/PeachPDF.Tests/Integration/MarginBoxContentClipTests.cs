@@ -76,6 +76,24 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FlowedInlineBlock_WholeBoxRect_IsItsLineRectangle_NotTheUnassignedOrigin()
+        {
+            // The transform pivot and clip-path reference box read WholeBoxRect; an inline-block that fits its line has
+            // no Location, so its Bounds sit at the origin and a transformed one was pivoted (and drawn) there.
+            var root = await RunningContentAsync(
+                "<div class='running'>before <span id='t' style='display:inline-block; width:30pt; height:20pt; transform:rotate(30deg)'></span> after</div>");
+
+            var box = All(root).First(f => f.Box.HtmlTag?.Name == "span" && f.Box.Rectangles.Count > 0);
+            var line = Assert.Single(box.Box.Rectangles.Values);
+
+            Assert.True(line.X > 0, $"the box sits after the text in its line: {line}");
+            Assert.Equal(line.X, box.WholeBoxRect.X, 3);
+            Assert.Equal(line.Y, box.WholeBoxRect.Y, 3);
+            Assert.Equal(line.Width, box.WholeBoxRect.Width, 3);
+            Assert.Equal(line.Height, box.WholeBoxRect.Height, 3);
+        }
+
+        [Fact]
         public async Task RoundedClipper_GivesItsContentTheCornerCurve()
         {
             var root = await RunningContentAsync(
