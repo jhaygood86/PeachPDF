@@ -122,6 +122,8 @@ the default media type is **print**.
 | `--animation-progress=P` | Render CSS animations as a single frame: `start`, `end`, or a number from 0 to 1, a point in each animation's own run. Without it animations are not applied. See [Rendering CSS animations as a still frame](usage-examples.md#rendering-css-animations-as-a-still-frame). |
 | `--interactive-pdf-forms` | Emit fillable AcroForm fields for `<input>`/`<select>` elements. |
 | `--no-compress` | Do not compress PDF content streams. |
+| `--pdf-version=VER` | PDF version to write: `1.7` or `2.0`. PDF 2.0 compresses streams with Brotli (`/BrotliDecode`), which not every PDF reader supports yet. |
+| `--no-brotli` | Compress with Flate even when writing PDF 2.0, for output that must open in every reader. Has no effect for other versions. |
 | `--raster-dpi=DPI` | Resolution, in pixels per inch of paper (72 to 1200, default 300), of effects PeachPDF renders as bitmaps, such as CSS `filter: blur()`. Higher is sharper and larger; the printed size never changes. See [Rasterized effects](usage-examples.md#rasterized-effects-and-resolution). |
 | `--flatten-transparency` | For a document that targets PDF/A-1 or PDF/X-1a/X-3 (which forbid transparency): render what needs it as opaque bitmaps at `--raster-dpi` instead of failing. See [Flattening transparency](usage-examples.md#flattening-transparency-for-pdfa-1-and-pdfx). |
 | `--no-raster-antialiasing` | Do not anti-alias bitmaps PeachPDF renders itself (shape fills, images and text alike) — threshold every pixel to fully transparent or fully opaque instead of smoothing it. Has no effect on the PDF's own vector content. See [Turning off smoothing](usage-examples.md#turning-off-smoothing-rasterantialiasing). |

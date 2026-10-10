@@ -123,6 +123,8 @@ internal static class ArgumentParser
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
 
                 case "no-compress": _options.NoCompress = true; break;
+                case "brotli": _options.Brotli = true; break;
+                case "pdf-version": ParsePdfVersion(_options, RequireValue(name, inlineValue)); break;
                 case "raster-dpi": SetRasterDpi(_options, RequireValue(name, inlineValue)); break;
                 case "flatten-transparency": _options.FlattenTransparency = true; break;
                 case "no-raster-antialiasing": _options.NoRasterAntiAliasing = true; break;
@@ -297,6 +299,21 @@ internal static class ArgumentParser
         ["3b"] = PdfAConformance.PdfA3B,
         ["3u"] = PdfAConformance.PdfA3U,
     };
+
+    private static void ParsePdfVersion(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        switch (value)
+        {
+            case "1.7": options.PdfVersion = PdfVersion.Pdf17; break;
+            case "2.0": options.PdfVersion = PdfVersion.Pdf20; break;
+            default: options.Errors.Add($"invalid --pdf-version value '{value}' (expected 1.7 or 2.0)"); break;
+        }
+    }
 
     private static void ParsePdfA(CliOptions options, string? value)
     {

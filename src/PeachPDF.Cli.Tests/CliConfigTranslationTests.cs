@@ -6,6 +6,33 @@ namespace PeachPDF.Cli.Tests;
 public class CliConfigTranslationTests
 {
     [Fact]
+    public void PdfVersionAndBrotli_AreApplied()
+    {
+        var config = CliRunner.BuildConfig(ArgumentParser.Parse(["--pdf-version", "2.0", "--brotli", "doc.html"]));
+        Assert.Equal(PdfVersion.Pdf20, config.PdfVersion);
+        Assert.True(config.BrotliCompression);
+
+        var legacy = CliRunner.BuildConfig(ArgumentParser.Parse(["--pdf-version=1.7", "doc.html"]));
+        Assert.Equal(PdfVersion.Pdf17, legacy.PdfVersion);
+        Assert.False(legacy.BrotliCompression);
+    }
+
+    [Fact]
+    public void PdfVersion_WithoutAValue_IsAnError()
+    {
+        var options = ArgumentParser.Parse(["doc.html", "--pdf-version"]);
+        Assert.NotEmpty(options.Errors);
+        Assert.Null(options.PdfVersion);
+    }
+
+    [Fact]
+    public void InvalidPdfVersion_IsAnError()
+    {
+        var options = ArgumentParser.Parse(["--pdf-version", "3.1", "doc.html"]);
+        Assert.Contains(options.Errors, e => e.Contains("--pdf-version"));
+    }
+
+    [Fact]
     public void Defaults_UseLetterPortrait_PrintMedia_Compressed()
     {
         var config = CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"]));

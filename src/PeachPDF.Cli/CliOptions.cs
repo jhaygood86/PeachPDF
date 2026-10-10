@@ -89,6 +89,12 @@ internal sealed class CliOptions
     // --- PDF output ---
     public bool NoCompress { get; set; }
 
+    /// <summary>Compress with Brotli when writing PDF 2.0 (<c>--brotli</c>).</summary>
+    public bool Brotli { get; set; }
+
+    /// <summary>The PDF version to target (<c>--pdf-version</c>); null keeps the library default.</summary>
+    public PdfVersion? PdfVersion { get; set; }
+
     /// <summary>Pixels per inch of paper for effects rendered as bitmaps (<c>--raster-dpi</c>); null keeps the library default.</summary>
     public double? RasterDpi { get; set; }
 

@@ -83,6 +83,27 @@ namespace PeachPDF.PdfSharpCore.Pdf
         PdfFlateEncodeMode _flateEncodeMode = PdfFlateEncodeMode.Default;
 
         /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.BrotliCompression"/> - see there for behavior. The request alone;
+        /// <see cref="UseBrotli"/> is what the writer consults.
+        /// </summary>
+        public bool BrotliCompression
+        {
+            get { return _brotliCompression; }
+            set { _brotliCompression = value; }
+        }
+        bool _brotliCompression;
+
+        /// <summary>
+        /// Whether general-purpose streams are compressed with <c>/BrotliDecode</c> instead of <c>/FlateDecode</c>: the
+        /// <see cref="BrotliCompression"/> request, force-disabled unless the document is PDF 2.0 (the only version that
+        /// defines the filter).
+        /// </summary>
+        public bool UseBrotli
+        {
+            get { return _brotliCompression && _pdfVersion == PdfVersion.Pdf20; }
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether to compress bilevel images using CCITT compression.
         /// With true, PDFsharp will try FlateDecode CCITT and will use the smallest one or a combination of both.
         /// With false, PDFsharp will always use FlateDecode only - files may be a few bytes larger, but file creation is faster.

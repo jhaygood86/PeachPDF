@@ -70,10 +70,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     PdfItem filter = Elements[PdfStream.Keys.Filter];
                     if (filter == null)
                     {
-                        byte[] bytes = Filtering.FlateDecode.Encode(Stream.Value, _document.Options.FlateEncodeMode);
+                        byte[] bytes = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
                         Stream.Value = bytes;
                         Elements.SetInteger(PdfStream.Keys.Length, Stream.Length);
-                        Elements.SetName(PdfStream.Keys.Filter, "/FlateDecode");
+                        Elements.SetName(PdfStream.Keys.Filter, filterName);
                     }
                 }
             }
@@ -122,9 +122,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 //if (Owner.Options.CompressContentStreams)
                 if (Owner.Options.CompressContentStreams && Elements.GetName("/Filter").Length == 0)
                 {
-                    Stream.Value = Filtering.FlateDecode.Encode(Stream.Value, _document.Options.FlateEncodeMode);
-                    //Elements["/Filter"] = new PdfName("/FlateDecode");
-                    Elements.SetName("/Filter", "/FlateDecode");
+                    Stream.Value = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
+                    Elements.SetName("/Filter", filterName);
                 }
                 Elements.SetInteger("/Length", Stream.Length);
             }

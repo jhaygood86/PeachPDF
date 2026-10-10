@@ -527,6 +527,18 @@ var config = new PdfGenerateConfig
 
 This is needed for full spec conformance when combined with `EnableTaggedPdf` on a document containing `<math>` elements: the `/AF` (Associated Files) array PeachPDF attaches to a `Formula` structure element to carry the original MathML source (see [MathML Associated Files](html-css-support.md#mathml-associated-files)) is a PDF 2.0 addition to the structure element dictionary. `/AF` is still written under `PdfVersion.Pdf17` (the default) and tolerated by most real-world readers, but only `Pdf20` makes the file's own header agree with the features it uses.
 
+#### Brotli stream compression
+
+Set `BrotliCompression = true` under `PdfVersion.Pdf20` and PeachPDF compresses page content, fonts, embedded files and raster image data with the PDF 2.0 `/BrotliDecode` filter instead of `/FlateDecode`, which usually produces smaller files. It is off by default because not every PDF reader decodes Brotli yet: PDFium (the engine behind Chrome's and Edge's viewers) and Acrobat show such a file as blank, while MuPDF and pdf.js read it. Enable it when you control the readers. It is always off for other `PdfVersion` values. Brotli uses .NET's own encoder; on a host without one (WebAssembly in a browser) PeachPDF falls back to `/FlateDecode` unless you register an encoder with `PeachDrawing.Text.Compression.BrotliCompression.SetCompressor`. The [`peachpdf`](cli.md) tool exposes both as `--pdf-version` and `--brotli`.
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfVersion = PdfVersion.Pdf20,
+    BrotliCompression = true // Brotli streams: smaller, but unreadable in PDFium and Acrobat today
+};
+```
+
 `PdfVersion.Pdf20` is incompatible with `PdfAConformance` set to anything other than `PdfAConformance.None` — PeachPDF doesn't implement PDF/A-4 (the PDF-2.0-based PDF/A level), and every PDF/A level it does implement is defined against PDF 1.4 or 1.7. Requesting both throws.
 
 ## Enabling interactive PDF forms

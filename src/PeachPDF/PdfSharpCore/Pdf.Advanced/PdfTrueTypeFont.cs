@@ -131,8 +131,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             fontStream.Elements["/Length1"] = new PdfInteger(fontData.Length);
             if (!Owner.Options.NoCompression)
             {
-                fontData = Filtering.FlateDecode.Encode(fontData, _document.Options.FlateEncodeMode);
-                fontStream.Elements["/Filter"] = new PdfName("/FlateDecode");
+                fontData = StreamCompression.Encode(_document.Options, fontData, out var fontFilter);
+                fontStream.Elements["/Filter"] = new PdfName(fontFilter);
             }
             fontStream.Elements["/Length"] = new PdfInteger(fontData.Length);
             fontStream.CreateStream(fontData);

@@ -61,4 +61,19 @@ namespace PeachDrawing.Text.Internal.Text
         /// <summary>Registers or clears the custom decoder. Thread-safe; see the public seam's remarks for when it takes effect.</summary>
         internal static void SetDecompressor(Func<Stream, Stream>? decompressor) => _custom = decompressor;
     }
+
+    /// <summary>
+    /// The one custom Brotli encoder a host may register. See <see cref="PeachDrawing.Text.Compression.BrotliCompression"/>
+    /// (the public seam this backs) for the semantics a caller sees.
+    /// </summary>
+    internal static class BrotliEncoderRegistry
+    {
+        private static volatile Func<Stream, int, Stream>? _custom;
+
+        /// <summary>The registered encoder, or <see langword="null"/> for the default (the .NET runtime's own Brotli support).</summary>
+        internal static Func<Stream, int, Stream>? Custom => _custom;
+
+        /// <summary>Registers or clears the custom encoder. Thread-safe.</summary>
+        internal static void SetCompressor(Func<Stream, int, Stream>? compressor) => _custom = compressor;
+    }
 }
