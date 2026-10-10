@@ -1,0 +1,5 @@
+# The lengths in transform: matrix() and matrix3d() are in CSS pixels
+
+Before: the `e` and `f` of `matrix()` and the 13th to 15th values of `matrix3d()` (the translation) were applied as points, so a translation moved the element 33% too far (`matrix(1,0,0,1,10,5)` moved it 10pt and 5pt instead of 10px = 7.5pt and 5px = 3.75pt). `translate()` and the other functions were already in pixels. The perspective terms of `matrix3d()` (the 4th, 8th and 12th values, a number per CSS pixel) were likewise used per point, so `matrix3d(..., 0,0,-1/300,1)` foreshortened the element about 25% more weakly than the `perspective(300px)` it is defined to equal.
+
+Now: the translation is in CSS pixels, so `matrix(1,0,0,1,10,5)` places the element exactly where `translate(10px, 5px)` does, and a document using `matrix()`/`matrix3d()` with a non-zero translation sits 25% nearer its origin than before. The perspective terms are per CSS pixel, so `matrix3d(..., 0,0,-1/300,1)` renders the same as `perspective(300px)`; a document using them is foreshortened more strongly than before. The unitless linear part (the other values) is unchanged.

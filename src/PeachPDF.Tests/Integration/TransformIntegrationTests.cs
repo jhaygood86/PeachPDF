@@ -123,17 +123,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task MatrixPassthrough_MapsDirectly()
+        public async Task MatrixPassthrough_MapsLinearPartDirectly_AndTranslationIsInCssPixels()
         {
-            var divBox = await FindDivBox("transform: matrix(1, 0, 0, 1, 10, 20);");
+            var divBox = await FindDivBox("transform: matrix(1, 0, 0, 1, 40, 80);");
             var m = divBox.ActualTransformMatrix;
 
             Assert.Equal(1, m.M11, 3);
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(1, m.M22, 3);
-            Assert.Equal(10, m.M31, 3);
-            Assert.Equal(20, m.M32, 3);
+            // e and f are CSS pixels (1px = 0.75pt), like translate()'s.
+            Assert.Equal(30, m.M31, 3);
+            Assert.Equal(60, m.M32, 3);
+        }
+
+        [Fact]
+        public async Task Matrix_TranslationMatchesTheEquivalentTranslate()
+        {
+            var viaMatrix = (await FindDivBox("transform: matrix(1, 0, 0, 1, 10, 5); transform-origin: 0 0;")).ActualTransformMatrix;
+            var viaTranslate = (await FindDivBox("transform: translate(10px, 5px); transform-origin: 0 0;")).ActualTransformMatrix;
+
+            Assert.Equal(viaTranslate.M31, viaMatrix.M31, 3);
+            Assert.Equal(viaTranslate.M32, viaMatrix.M32, 3);
         }
 
         // --- transform-origin ---
@@ -255,18 +266,90 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Matrix_WithALinearPart_KeepsItUnscaledAndConvertsOnlyTheTranslation()
+        {
+            // The conversion is a change of coordinate system, not a scaling of the whole matrix.
+            var viaMatrix = (await FindDivBox("transform: matrix(2, .2, .3, 1.5, 40, 20); transform-origin: 0 0;")).ActualTransformMatrix;
+            var viaTranslate = (await FindDivBox("transform: translate(40px, 20px) matrix(2, .2, .3, 1.5, 0, 0); transform-origin: 0 0;")).ActualTransformMatrix;
+
+            Assert.Equal(2, viaMatrix.M11, 3);
+            Assert.Equal(0.2, viaMatrix.M12, 3);
+            Assert.Equal(0.3, viaMatrix.M21, 3);
+            Assert.Equal(1.5, viaMatrix.M22, 3);
+            Assert.Equal(30, viaMatrix.M31, 3);
+            Assert.Equal(15, viaMatrix.M32, 3);
+            Assert.Equal(viaTranslate.M31, viaMatrix.M31, 3);
+            Assert.Equal(viaTranslate.M32, viaMatrix.M32, 3);
+        }
+
+        [Fact]
+        public async Task Matrix3d_PerspectiveOnly_MatchesPerspectiveFunction_AtTheDefaultOrigin()
+        {
+            // With the default (centre) origin the box-local origin translations are baked into the 4x4 too.
+            var viaMatrix = (await FindDivBox("transform: matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,-0.0033333333, 0,0,0,1);")).ActualTransform4;
+            var viaPerspective = (await FindDivBox("transform: perspective(300px);")).ActualTransform4;
+
+            Assert.NotNull(viaMatrix);
+            Assert.NotNull(viaPerspective);
+            var a = viaMatrix!.Value;
+            var b = viaPerspective!.Value;
+            Assert.Equal(b.M11, a.M11, 4); Assert.Equal(b.M12, a.M12, 4); Assert.Equal(b.M13, a.M13, 4); Assert.Equal(b.M14, a.M14, 4);
+            Assert.Equal(b.M21, a.M21, 4); Assert.Equal(b.M22, a.M22, 4); Assert.Equal(b.M23, a.M23, 4); Assert.Equal(b.M24, a.M24, 4);
+            Assert.Equal(b.M31, a.M31, 4); Assert.Equal(b.M32, a.M32, 4); Assert.Equal(b.M33, a.M33, 4); Assert.Equal(b.M34, a.M34, 4);
+            Assert.Equal(b.M41, a.M41, 3); Assert.Equal(b.M42, a.M42, 3); Assert.Equal(b.M43, a.M43, 3); Assert.Equal(b.M44, a.M44, 4);
+        }
+
+        [Fact]
         public async Task Matrix3d_PureTranslation_MatchesTranslate2D()
         {
             var divBox = await FindDivBox(
-                "transform: matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0, 30,40,0,1); transform-origin: 0 0;");
+                "transform: matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0, 40,80,0,1); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
+            var viaTranslate = (await FindDivBox("transform: translate(40px, 80px); transform-origin: 0 0;")).ActualTransformMatrix;
 
             Assert.Equal(1, m.M11, 3);
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(1, m.M22, 3);
+            // The 13th and 14th values are CSS pixels (1px = 0.75pt), like translate()'s.
             Assert.Equal(30, m.M31, 2);
-            Assert.Equal(40, m.M32, 2);
+            Assert.Equal(60, m.M32, 2);
+            Assert.Equal(viaTranslate.M31, m.M31, 3);
+            Assert.Equal(viaTranslate.M32, m.M32, 3);
+        }
+
+        [Fact]
+        public async Task Matrix3d_ZTranslation_IsInCssPixels()
+        {
+            // The flat Matrix3x2 drops z, so read the 4x4 the box keeps for the projection.
+            var viaMatrix = (await FindDivBox("transform: matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,40,1); transform-origin: 0 0;")).ActualTransform4;
+            var viaTranslate = (await FindDivBox("transform: translate3d(0, 0, 40px); transform-origin: 0 0;")).ActualTransform4;
+
+            Assert.NotNull(viaMatrix);
+            Assert.NotNull(viaTranslate);
+            Assert.Equal(30, viaMatrix!.Value.M43, 3);
+            Assert.Equal(viaTranslate!.Value.M43, viaMatrix.Value.M43, 3);
+        }
+
+        [Fact]
+        public async Task Matrix3d_PerspectiveTerms_ArePerCssPixel_AndMatchPerspectiveFunction()
+        {
+            // perspective(300px) is spec-defined as matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,-1/300, 0,0,0,1).
+            var viaMatrix = (await FindDivBox(
+                $"transform: matrix3d(1,0,0,0.001, 0,1,0,0.002, 0,0,1,{(-1.0 / 300).ToString(System.Globalization.CultureInfo.InvariantCulture)}, 0,0,0,1); transform-origin: 0 0;")).ActualTransform4;
+            var viaPerspective = (await FindDivBox("transform: perspective(300px); transform-origin: 0 0;")).ActualTransform4;
+            var viaPerspectiveOnly = (await FindDivBox(
+                $"transform: matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,{(-1.0 / 300).ToString(System.Globalization.CultureInfo.InvariantCulture)}, 0,0,0,1); transform-origin: 0 0;")).ActualTransform4;
+
+            Assert.NotNull(viaMatrix);
+            Assert.NotNull(viaPerspective);
+            Assert.NotNull(viaPerspectiveOnly);
+            Assert.Equal(viaPerspective!.Value.M34, viaPerspectiveOnly!.Value.M34, 6);
+            Assert.Equal(-1.0 / 225, viaPerspectiveOnly.Value.M34, 6);
+            // The x and y terms scale the same way (per px -> per pt).
+            Assert.Equal(0.001 / 0.75, viaMatrix!.Value.M14, 6);
+            Assert.Equal(0.002 / 0.75, viaMatrix.Value.M24, 6);
+            Assert.Equal(-1.0 / 225, viaMatrix.Value.M34, 6);
         }
 
         // --- perspective() ---
