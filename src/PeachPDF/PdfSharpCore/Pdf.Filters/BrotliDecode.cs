@@ -23,11 +23,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
         /// </summary>
         public byte[]? Encode(byte[] data, PdfFlateEncodeMode mode)
         {
+            // Same levels as MuPDF's writer (FZ_BROTLI_BEST_SPEED / DEFAULT / BEST). Measured on 13-22 MB system fonts, quality 6
+            // costs 0.2-0.4 s where 9 costs 1.6-2.9 s and 11 costs 23-30 s, for 1-4% and 8-13% smaller output respectively.
             int quality = mode switch
             {
                 PdfFlateEncodeMode.BestCompression => 11,
-                PdfFlateEncodeMode.BestSpeed => 4,
-                _ => 9
+                PdfFlateEncodeMode.BestSpeed => 1,
+                _ => 6
             };
 
             return BrotliCompression.TryCompress(data, quality, out var compressed) ? compressed : null;
