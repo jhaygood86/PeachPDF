@@ -18,6 +18,14 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void PdfVersion_WithoutAValue_IsAnError()
+    {
+        var options = ArgumentParser.Parse(["doc.html", "--pdf-version"]);
+        Assert.NotEmpty(options.Errors);
+        Assert.Null(options.PdfVersion);
+    }
+
+    [Fact]
     public void InvalidPdfVersion_IsAnError()
     {
         var options = ArgumentParser.Parse(["--pdf-version", "3.1", "doc.html"]);

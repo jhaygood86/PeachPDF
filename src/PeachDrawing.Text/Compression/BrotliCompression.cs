@@ -1,5 +1,6 @@
 using PeachDrawing.Text.Internal.Text;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 
@@ -65,13 +66,9 @@ namespace PeachDrawing.Text.Compression
                 }
 
                 var buffer = new byte[BrotliEncoder.GetMaxCompressedLength(data.Length)];
-                if (!BrotliEncoder.TryCompress(data, buffer, out var written, quality, 22))
-                {
-                    return false;
-                }
-
-                compressed = buffer.AsSpan(0, written).ToArray();
-                return true;
+                var succeeded = BrotliEncoder.TryCompress(data, buffer, out var written, quality, 22);
+                compressed = succeeded ? buffer.AsSpan(0, written).ToArray() : [];
+                return succeeded;
             }
             catch (PlatformNotSupportedException)
             {
@@ -83,6 +80,9 @@ namespace PeachDrawing.Text.Compression
             }
         }
 
+        // Only the catch is platform-dependent: it is reached on a host whose runtime has no Brotli (WebAssembly), which no test
+        // host is.
+        [ExcludeFromCodeCoverage]
         private static bool BrotliEncoderIsSupported()
         {
             try
