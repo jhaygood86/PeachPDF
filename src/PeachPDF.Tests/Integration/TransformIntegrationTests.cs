@@ -748,6 +748,100 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(spy.LastPushedTransform);
         }
 
+        // --- An edge-on plane is not painted, whatever size the box is ---
+        //
+        // The float cos(90deg) is about 4e-8: a determinant far above any cut-off that spares a legitimate small scale, so whether a
+        // turned-away box was skipped used to depend on its size (skipped at 40 and 75px, drawn at 50, 100 and 200px as a one-pixel
+        // hairline with coordinates around 1.5e9 in the content stream).
+
+        [Theory]
+        [InlineData("rotateX(90deg)", 10)]
+        [InlineData("rotateX(90deg)", 40)]
+        [InlineData("rotateX(90deg)", 50)]
+        [InlineData("rotateX(90deg)", 75)]
+        [InlineData("rotateX(90deg)", 100)]
+        [InlineData("rotateX(90deg)", 200)]
+        [InlineData("rotateX(90deg)", 300)]
+        [InlineData("rotateY(90deg)", 50)]
+        [InlineData("rotateY(90deg)", 100)]
+        [InlineData("rotateY(90deg)", 200)]
+        [InlineData("rotateX(270deg)", 100)]
+        [InlineData("rotateX(450deg)", 100)]
+        [InlineData("rotateY(89.995deg)", 100)]    // 0.0065pt thick: under the cut
+        [InlineData("rotateY(90.005deg)", 100)]
+        public async Task Paint_EdgeOnPlane_PaintsNothingAtAnyBoxSize(string transform, int sizePx)
+        {
+            var container = await LayoutHtml(
+                $"<!DOCTYPE html><html><body style='margin:0'><div style='transform:{transform}; width:{sizePx}px; height:{sizePx}px; background:#c33'></div></body></html>");
+            var box = FindByTag(container.Root!, "div")!;
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+
+            Assert.Null(spy.LastPushedTransform);
+            Assert.Equal(0, spy.FilledRectangles);
+        }
+
+        [Theory]
+        [InlineData("rotateX(89.9deg)", 100)]      // 0.17px thick: Chrome still shows a faint line
+        [InlineData("rotateY(89.9deg)", 200)]
+        [InlineData("rotateX(60deg)", 100)]
+        [InlineData("rotateX(60deg)", 10)]
+        [InlineData("scale(0.001)", 100)]          // 0.1px square: small, but not a sliver
+        [InlineData("scale(1, 0.01)", 100)]        // 1px tall, still 100px wide
+        [InlineData("rotate(45deg)", 100)]
+        public async Task Paint_PlaneThatKeepsAVisibleThickness_IsStillPainted(string transform, int sizePx)
+        {
+            var container = await LayoutHtml(
+                $"<!DOCTYPE html><html><body style='margin:0'><div style='transform:{transform}; width:{sizePx}px; height:{sizePx}px; background:#c33'></div></body></html>");
+            var box = FindByTag(container.Root!, "div")!;
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+
+            Assert.NotNull(spy.LastPushedTransform);
+            Assert.True(spy.FilledRectangles > 0);
+        }
+
+        [Fact]
+        public async Task GeneratePdf_EdgeOnPlane_LeavesNoHugeCoordinatesInTheContentStream()
+        {
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+
+            var doc = await generator.GeneratePdf(
+                "<!DOCTYPE html><html><body><div style='transform:rotateX(90deg); width:100px; height:100px; background:#c33'></div><p>after</p></body></html>",
+                config);
+
+            using var stream = new MemoryStream();
+            doc.Save(stream);
+            var pdf = System.Text.Encoding.Latin1.GetString(stream.ToArray());
+
+            // A rectangle stretched to the 1e9 range is the hairline's content: its height was divided by the edge-on scale.
+            // (a decimal with eight or more integer digits; the xref's ten-digit offsets have no fraction)
+            Assert.DoesNotMatch(@"\d{8,}\.\d", pdf);
+        }
+
+        [Theory]
+        [InlineData(1.0, 0.0, 0.0, 1.0, 75.0, 75.0, true)]            // identity
+        [InlineData(0.0, 0.0, 0.0, 0.0, 75.0, 75.0, false)]           // collapsed
+        [InlineData(1.0, 0.0, 0.0, 4e-8, 75.0, 75.0, false)]          // rotateX(90deg) of a 100px box: 3e-6pt thick
+        [InlineData(1.0, 0.0, 0.0, 4e-8, 7.5e6, 75.0, false)]         // thickness follows the short side, not the long one
+        [InlineData(1.0, 0.0, 0.0, 1.7e-3, 75.0, 75.0, true)]         // 89.9deg: 0.13pt
+        [InlineData(1.0, 0.0, 0.0, 1.8e-4, 75.0, 75.0, true)]         // 0.0135pt, just over the cut
+        [InlineData(1.0, 0.0, 0.0, 1.8e-4, 7.5, 7.5, false)]          // the same angle on a 10px box is a tenth as thick
+        [InlineData(1e-6, 0.0, 0.0, 1e-6, 75.0, 75.0, false)]         // a speck
+        [InlineData(1e-3, 0.0, 0.0, 1e-3, 75.0, 75.0, true)]          // 0.075pt square
+        [InlineData(1.0, 0.0, 0.0, 2e-4, 300.0, 100.0, true)]         // 0.02pt: the short side is what is squashed
+        [InlineData(1.0, 0.0, 0.0, 2e-4, 300.0, 50.0, false)]         // 0.01pt
+        [InlineData(1.0, 0.0, 0.0, 1e-4, 0.0, 0.0, false)]            // nothing to measure
+        public void HasVisibleThickness_MeasuresTheImageOfTheBox(double m11, double m12, double m21, double m22, double width, double height, bool expected)
+        {
+            var matrix = new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, 0, 0);
+
+            Assert.Equal(expected, PeachPDF.Html.Core.Paint.FragmentPainter.HasVisibleThickness(matrix, width, height));
+        }
+
         private const string PaintedBoxHtml =
             "<!DOCTYPE html><html><body style='margin:0'><div style='width:50pt;height:50pt;background:#c33'>x</div></body></html>";
 

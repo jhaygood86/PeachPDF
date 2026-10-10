@@ -236,6 +236,60 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// The thickness, in layout units, below which a transformed element is not painted: 0.017 CSS px, where Chrome stops drawing an
+        /// edge-on plane (<c>rotateY(89.99deg)</c> of a 100px box shows nothing; 89.9deg still shows a faint line).
+        /// </summary>
+        private const double MinVisibleThickness = 0.017 * Length.PointsPerPx;
+
+        /// <summary>
+        /// Below this determinant a matrix is close enough to singular for its thickness to be worth working out (see
+        /// <see cref="HasVisibleThickness"/>): anything larger keeps a visible area for every box a page can hold, and is not measured.
+        /// </summary>
+        private const double NearlySingularDeterminant = 1e-3;
+
+        /// <summary>
+        /// Whether a <paramref name="width"/> x <paramref name="height"/> rectangle is still more than a hairline thick once
+        /// <paramref name="matrix"/> has transformed it - false for a plane turned edge-on (its image is a sliver of no visible area, which
+        /// a renderer would still stroke as a one-pixel line) and for one scaled down to a speck.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="IsInvertible"/> alone cannot decide this: an absolute determinant tells a collapsed matrix from a merely small one but
+        /// not how much of a box is left. The float <c>cos(90deg)</c> is about 4e-8, so <c>rotateX(90deg)</c> has a determinant far above any
+        /// cut-off that spares a legitimate small scale, yet a 100px box turned to it is 4e-6px thick. The thickness is the image's area
+        /// over its longest edge, which is the width of the parallelogram across its narrow direction and does not depend on where the box
+        /// sits (a linear map moves a rectangle without reshaping what it does to its size).
+        /// </remarks>
+        internal static bool HasVisibleThickness(in Matrix3x2 matrix, double width, double height)
+        {
+            var determinant = Math.Abs((double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21);
+            if (determinant >= NearlySingularDeterminant)
+                return true;
+
+            var widthEdge = Math.Sqrt((double)matrix.M11 * matrix.M11 + (double)matrix.M12 * matrix.M12) * width;
+            var heightEdge = Math.Sqrt((double)matrix.M21 * matrix.M21 + (double)matrix.M22 * matrix.M22) * height;
+            var longestEdge = Math.Max(widthEdge, heightEdge);
+
+            return longestEdge > 0 && determinant * width * height / longestEdge >= MinVisibleThickness;
+        }
+
+        /// <summary>
+        /// Whether the element's own <c>transform</c> leaves anything to paint: <see cref="IsInvertible"/>, and - for a matrix near enough to
+        /// singular to matter - a visible thickness for the extent of everything the element paints.
+        /// </summary>
+        private static bool LeavesVisibleArea(in Matrix3x2 matrix, BoxFragment fragment)
+        {
+            if (!IsInvertible(matrix))
+                return false;
+
+            var determinant = Math.Abs((double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21);
+            if (determinant >= NearlySingularDeterminant)
+                return true;
+
+            // Nothing with an extent (so nothing to cull on): left to the ordinary paint, as before.
+            return SubtreeExtent(fragment) is not { } extent || HasVisibleThickness(matrix, extent.Width, extent.Height);
+        }
+
+        /// <summary>
         /// Pushes <paramref name="matrix"/> unless it has no inverse (<see cref="IsInvertible"/>), in which case nothing under it is visible.
         /// The transforms this painter pushes for an element's box (beyond its own <c>transform</c>) go through here. Pushes made elsewhere -
         /// SVG content, image orientation, pattern tiles - are not guarded by it; for those the PDF writer's tolerance of a singular
@@ -318,7 +372,7 @@ namespace PeachPDF.Html.Core.Paint
 
                     // css-transforms-1 §"Transform Rendering": an element whose matrix is not invertible has no visible area and is not
                     // rendered (its layout box is unchanged). The PDF writer inverts the CTM it realizes, so pushing it would throw.
-                    var degenerate = transformed && !IsInvertible(box.ActualTransformMatrix);
+                    var degenerate = transformed && !LeavesVisibleArea(box.ActualTransformMatrix, fragment);
                     if (degenerate)
                         transformed = false;
 
