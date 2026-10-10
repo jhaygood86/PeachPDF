@@ -319,18 +319,8 @@ namespace PeachPDF.Html.Core.Paint
             for (var i = 0; i < planes.Length; i++)
             {
                 ref var plane = ref planes[i];
-                if (!plane.HasSource)
-                    continue;
-
-                g.PushTransform(Linearise(plane.Map, plane.Fragment.WholeBoxRect));
-                try
-                {
-                    PaintSelectableText(g, plane.Fragment);
-                }
-                finally
-                {
-                    g.PopTransform();
-                }
+                if (plane.HasSource)
+                    SupplyWarpedText(g, plane.Fragment, plane.Map);
             }
 
             return true;

@@ -607,14 +607,220 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(fractionY * rect.Height, y, 1);
         }
 
+        // --- Regression: a non-invertible transform paints nothing instead of throwing NotInvertible ---
+        //
+        // css-transforms-1: an element whose matrix has no inverse has no visible area and is not rendered,
+        // its layout box unchanged. The PDF writer inverts the CTM it realizes, so pushing the matrix threw
+        // out of FragmentPainter.PaintFragment and no PDF was written at all.
+
+        [Theory]
+        [InlineData("matrix(0,0,0,0,0,0)")]
+        [InlineData("scale(0)")]
+        [InlineData("scaleX(0)")]
+        [InlineData("matrix(1,2,2,4,0,0)")]    // rank 1: collapses onto a line
+        [InlineData("rotateX(90deg)")]         // an edge-on plane projects to a line
+        public async Task Paint_NonInvertibleTransform_PaintsNothingForTheBoxOrItsSubtree(string transform)
+        {
+            var container = await LayoutHtml(
+                $"<!DOCTYPE html><html><body style='margin:0'><div id='t' style='transform:{transform}; width:50pt; height:50pt; background:#c33'>" +
+                "<p style='background:#33c'>x</p></div><p>after</p></body></html>");
+            var box = FindByTag(container.Root!, "div")!;
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+
+            Assert.Null(spy.LastPushedTransform);
+            Assert.Equal(0, spy.FilledRectangles);
+            Assert.Equal(0, spy.StringsDrawn);
+        }
+
+        [Fact]
+        public async Task Paint_NonInvertibleTransform_LeavesTheLayoutBoxUnchanged()
+        {
+            var plain = await LayoutHtml("<!DOCTYPE html><html><body style='margin:0'><div style='width:50pt;height:50pt'>x</div><p>after</p></body></html>");
+            var squashed = await LayoutHtml("<!DOCTYPE html><html><body style='margin:0'><div style='transform:scale(0);width:50pt;height:50pt'>x</div><p>after</p></body></html>");
+
+            var expected = FindByTag(plain.Root!, "p")!.Bounds;
+            var actual = FindByTag(squashed.Root!, "p")!.Bounds;
+
+            Assert.Equal(expected.Y, actual.Y, 3);
+            Assert.Equal(expected.Height, actual.Height, 3);
+        }
+
+        [Fact]
+        public async Task Paint_InvertibleTransform_StillPaintsTheBox()
+        {
+            // The control: the guard must not swallow a transform that merely shrinks the box.
+            var container = await LayoutHtml(
+                "<!DOCTYPE html><html><body style='margin:0'><div style='transform:scale(0.5); width:50pt; height:50pt; background:#c33'></div></body></html>");
+            var box = FindByTag(container.Root!, "div")!;
+
+            var spy = new SpyGraphics();
+            FragmentPaintHarness.PaintBox(container, box, spy);
+
+            Assert.NotNull(spy.LastPushedTransform);
+            Assert.True(spy.FilledRectangles > 0);
+        }
+
+        [Theory]
+        [InlineData("matrix(0,0,0,0,0,0)")]
+        [InlineData("scale(0)")]
+        [InlineData("rotateX(90deg)")]
+        public async Task GeneratePdf_NonInvertibleTransform_StillWritesTheDocument(string transform)
+        {
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+
+            var doc = await generator.GeneratePdf(
+                $"<!DOCTYPE html><html><body><div style='transform:{transform}; width:50pt; height:50pt; background:#c33'>x</div><p>after</p></body></html>",
+                config);
+
+            using var stream = new MemoryStream();
+            doc.Save(stream);
+            Assert.True(stream.Length > 0);
+            Assert.Equal(1, doc.PageCount);
+        }
+
+        [Theory]
+        // Each scale is invertible alone; the cumulative CTM the writer inverts is not.
+        [InlineData("<div style='transform:scale(0.00001);width:50pt;height:50pt'><div style='transform:scale(0.00001);background:#c33;width:50pt;height:50pt'>x</div></div>")]
+        // An edge-on plane seen through its parent's perspective.
+        [InlineData("<div style='perspective:200pt'><div style='transform:rotateY(90deg);width:50pt;height:50pt;background:#c33'>x</div></div>")]
+        [InlineData("<div style='perspective:200pt'><div style='transform:perspective(100pt) rotateX(90deg);width:50pt;height:50pt;background:#c33'>x</div></div>")]
+        // SVG pushes its own transforms, outside the painter's guard: the writer's tolerance is all that stands between it and an abort.
+        [InlineData("<svg width='100' height='100'><rect width='50' height='50' fill='#c33' transform='scale(0)'/><g transform='matrix(0 0 0 0 0 0)'><circle r='20' cx='50' cy='50'/></g></svg>")]
+        // A 3D rendering context with an edge-on member.
+        [InlineData("<div style='transform-style:preserve-3d;transform:rotateX(20deg);width:80pt;height:80pt'><div style='transform:rotateY(90deg);width:50pt;height:50pt;background:#c33'>x</div><div style='transform:translateZ(10pt);width:50pt;height:50pt;background:#33c'>y</div></div>")]
+        public async Task GeneratePdf_DegenerateCompoundTransforms_StillWriteTheDocument(string body)
+        {
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+
+            var doc = await generator.GeneratePdf($"<!DOCTYPE html><html><body>{body}<p>after</p></body></html>", config);
+
+            using var stream = new MemoryStream();
+            doc.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        // The guard every extra transform the painter pushes (the affine-after-perspective one, the no-raster fallback, the text
+        // supplied over a warped bitmap) goes through.
+
+        public static TheoryData<Matrix3x2> PushableMatrices => new()
+        {
+            Matrix3x2.Identity,
+            Matrix3x2.CreateRotation(0.5f),
+            Matrix3x2.CreateScale(0.001f),                // small but visible; its float determinant (1e-6) is still well clear
+            Matrix3x2.CreateScale(-1f, 1f),               // a mirror
+            Matrix3x2.CreateTranslation(1e6f, -1e6f),
+        };
+
+        public static TheoryData<Matrix3x2> UnpushableMatrices => new()
+        {
+            new Matrix3x2(),                              // all zero
+            Matrix3x2.CreateScale(0f),
+            Matrix3x2.CreateScale(1f, 0f),
+            new Matrix3x2(1, 2, 2, 4, 0, 0),              // rank 1
+            Matrix3x2.CreateScale(1e-8f),                 // determinant 1e-16: nothing visible
+            new Matrix3x2(1, 0, 0, 1, float.NaN, 0),
+            new Matrix3x2(1, 0, 0, 1, 0, float.PositiveInfinity),
+            new Matrix3x2(float.NaN, 0, 0, 1, 0, 0),
+            new Matrix3x2(float.MaxValue, 0, 0, float.PositiveInfinity, 0, 0),
+        };
+
+        [Theory]
+        [MemberData(nameof(PushableMatrices))]
+        public void TryPushTransform_InvertibleMatrix_IsPushed(Matrix3x2 matrix)
+        {
+            var spy = new SpyGraphics();
+
+            Assert.True(PeachPDF.Html.Core.Paint.FragmentPainter.TryPushTransform(spy, matrix));
+            Assert.Equal(matrix, spy.LastPushedTransform);
+        }
+
+        [Theory]
+        [MemberData(nameof(UnpushableMatrices))]
+        public void TryPushTransform_NonInvertibleOrNonFiniteMatrix_IsNotPushed(Matrix3x2 matrix)
+        {
+            var spy = new SpyGraphics();
+
+            Assert.False(PeachPDF.Html.Core.Paint.FragmentPainter.TryPushTransform(spy, matrix));
+            Assert.Null(spy.LastPushedTransform);
+        }
+
+        private const string PaintedBoxHtml =
+            "<!DOCTYPE html><html><body style='margin:0'><div style='width:50pt;height:50pt;background:#c33'>x</div></body></html>";
+
+        [Fact]
+        public async Task PaintUnderTransform_InvertibleMatrix_PushesItAndPaintsTheFragment()
+        {
+            var container = await LayoutHtml(PaintedBoxHtml);
+            var fragment = FragmentPaintHarness.FragmentOf(container, FindByTag(container.Root!, "div")!);
+            var matrix = Matrix3x2.CreateScale(0.5f);
+
+            var spy = new SpyGraphics();
+            new PeachPDF.Html.Core.Paint.FragmentPainter(container).PaintUnderTransform(spy, fragment, matrix);
+
+            Assert.Equal(matrix, spy.LastPushedTransform);
+            Assert.True(spy.FilledRectangles > 0);
+            Assert.Equal(1, spy.PopTransformCount);
+        }
+
+        [Fact]
+        public async Task PaintUnderTransform_SingularMatrix_PaintsNothing()
+        {
+            var container = await LayoutHtml(PaintedBoxHtml);
+            var fragment = FragmentPaintHarness.FragmentOf(container, FindByTag(container.Root!, "div")!);
+
+            var spy = new SpyGraphics();
+            new PeachPDF.Html.Core.Paint.FragmentPainter(container).PaintUnderTransform(spy, fragment, Matrix3x2.CreateScale(0f));
+
+            Assert.Null(spy.LastPushedTransform);
+            Assert.Equal(0, spy.FilledRectangles);
+            Assert.Equal(0, spy.PopTransformCount);
+        }
+
+        [Fact]
+        public async Task SupplyWarpedText_InvertibleLinearisation_PushesItAndPopsAfterwards()
+        {
+            var container = await LayoutHtml(PaintedBoxHtml);
+            var fragment = FragmentPaintHarness.FragmentOf(container, FindByTag(container.Root!, "div")!);
+
+            var spy = new SpyGraphics();
+            new PeachPDF.Html.Core.Paint.FragmentPainter(container).SupplyWarpedText(spy, fragment, PeachDrawing.Homography.Identity);
+
+            Assert.NotNull(spy.LastPushedTransform);
+            Assert.Equal(1, spy.PopTransformCount);
+        }
+
+        [Fact]
+        public async Task SupplyWarpedText_EdgeOnPlane_SuppliesNoText()
+        {
+            var container = await LayoutHtml(PaintedBoxHtml);
+            var fragment = FragmentPaintHarness.FragmentOf(container, FindByTag(container.Root!, "div")!);
+
+            // The plane collapsed onto the x axis: its linearisation has no inverse.
+            var edgeOn = new PeachDrawing.Homography(1, 0, 0, 0, 0, 0, 0, 0, 1);
+
+            var spy = new SpyGraphics();
+            new PeachPDF.Html.Core.Paint.FragmentPainter(container).SupplyWarpedText(spy, fragment, edgeOn);
+
+            Assert.Null(spy.LastPushedTransform);
+            Assert.Equal(0, spy.PopTransformCount);
+        }
+
         private sealed class SpyGraphics : Canvas
         {
+            public int PopTransformCount { get; private set; }
+
             public Matrix3x2? LastPushedTransform { get; private set; }
+            public int FilledRectangles { get; private set; }
+            public int StringsDrawn { get; private set; }
 
             public SpyGraphics() : base(new PdfSharpAdapter(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void PushTransform(Matrix3x2 matrix) => LastPushedTransform = matrix;
-            public override void PopTransform() { }
+            public override void PopTransform() => PopTransformCount++;
             public override void PushBlendMode(PaintBlendMode mode) { }
             public override void PopBlendMode() { }
             public override void PushClip(Rect rect) => _clipStack.Push(rect);
@@ -644,11 +850,11 @@ namespace PeachPDF.Tests.Integration
                 charFit = str?.Length ?? 0;
                 charFitWidth = 0;
             }
-            public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) { }
+            public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) => StringsDrawn++;
             public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }
             public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) { }
             public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
-            public override void DrawRectangle(Brush brush, double x, double y, double width, double height) { }
+            public override void DrawRectangle(Brush brush, double x, double y, double width, double height) => FilledRectangles++;
             public override void DrawImage(Image image, Rect destRect, Rect srcRect) { }
             public override void DrawImage(Image image, Rect destRect) { }
             public override void DrawPath(Pen pen, GraphicsPath path) { }

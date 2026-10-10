@@ -8,6 +8,7 @@ using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace PeachPDF.Html.Core.Paint
 {
@@ -220,6 +221,47 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// Whether <paramref name="matrix"/> can be pushed onto the canvas: finite, with a determinant the PDF writer's CTM inversion
+        /// (<c>XMatrix.HasInverse</c>, which treats anything under ten times double epsilon as zero) will accept. The cut-off is a
+        /// little looser than the writer's, so a single matrix this lets through is never one the writer rejects on its own; a scale small
+        /// enough to fall between the two has no visible area anyway. It is a per-element check: the writer inverts the cumulative CTM, which
+        /// it tolerates being singular (<c>PdfGraphicsState.RealizeCtm</c>). Computed in double, since the float determinant of a small
+        /// but real scale underflows.
+        /// </summary>
+        private static bool IsInvertible(in Matrix3x2 matrix)
+        {
+            var determinant = (double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21;
+            return float.IsFinite(matrix.M11) && float.IsFinite(matrix.M12) && float.IsFinite(matrix.M21) && float.IsFinite(matrix.M22) &&
+                   float.IsFinite(matrix.M31) && float.IsFinite(matrix.M32) && Math.Abs(determinant) >= 1e-12;
+        }
+
+        /// <summary>
+        /// Pushes <paramref name="matrix"/> unless it has no inverse (<see cref="IsInvertible"/>), in which case nothing under it is visible.
+        /// The transforms this painter pushes for an element's box (beyond its own <c>transform</c>) go through here. Pushes made elsewhere -
+        /// SVG content, image orientation, pattern tiles - are not guarded by it; for those the PDF writer's tolerance of a singular
+        /// CTM (<c>PdfGraphicsState.RealizeCtm</c>) is what keeps a degenerate matrix from aborting the document.
+        /// </summary>
+        /// <returns>true when the matrix was pushed, and the caller owes a <see cref="Canvas.PopTransform"/></returns>
+        internal static bool TryPushTransform(Canvas g, in Matrix3x2 matrix)
+        {
+            if (!IsInvertible(matrix))
+                return false;
+
+            g.PushTransform(matrix);
+            return true;
+        }
+
+        /// <summary>Paints <paramref name="fragment"/> with its clips and effects under <paramref name="matrix"/>, or not at all when that has no inverse.</summary>
+        internal void PaintUnderTransform(Canvas g, BoxFragment fragment, in Matrix3x2 matrix)
+        {
+            if (!TryPushTransform(g, matrix))
+                return;
+
+            PaintClippedWithEffects(g, fragment);
+            g.PopTransform();
+        }
+
+        /// <summary>
         /// Paints one box fragment — the portion of a box that lives in a single fragmentainer (CSS
         /// Fragmentation Level 3 §2) — establishing the whole-element effects (<c>transform</c>,
         /// <c>clip-path</c>, <c>opacity</c>) around it.
@@ -274,6 +316,12 @@ namespace PeachPDF.Html.Core.Paint
                     var projective = _textOnly ? null : ResolveProjective(fragment);
                     var transformed = box.IsTransformed && projective is null;
 
+                    // css-transforms-1 §"Transform Rendering": an element whose matrix is not invertible has no visible area and is not
+                    // rendered (its layout box is unchanged). The PDF writer inverts the CTM it realizes, so pushing it would throw.
+                    var degenerate = transformed && !IsInvertible(box.ActualTransformMatrix);
+                    if (degenerate)
+                        transformed = false;
+
                     if (transformed)
                     {
                         // ActualTransformMatrix is cached treating the box's own top-left as local
@@ -283,21 +331,21 @@ namespace PeachPDF.Html.Core.Paint
                         g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                     }
 
-                    if (projective is { Affine: { } affine })
+                    if (degenerate)
+                    {
+                        // Not rendered: the element and its whole subtree have no visible area.
+                    }
+                    else if (projective is { Affine: { } affine })
                     {
                         // Affine once the parent's perspective is in: a plain transform after all (a plane brought nearer is just larger).
-                        g.PushTransform(affine);
-                        PaintClippedWithEffects(g, fragment);
-                        g.PopTransform();
+                        PaintUnderTransform(g, fragment, affine);
                     }
                     else if (projective is { } warp)
                     {
                         if (!PaintProjective(g, fragment, warp))
                         {
                             // No raster context (a measure-only pass): the affine linearisation of the transform is the best that is left.
-                            g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
-                            PaintClippedWithEffects(g, fragment);
-                            g.PopTransform();
+                            PaintUnderTransform(g, fragment, box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                         }
                     }
                     else

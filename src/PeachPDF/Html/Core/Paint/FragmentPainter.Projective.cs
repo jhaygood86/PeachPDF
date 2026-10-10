@@ -161,9 +161,20 @@ namespace PeachPDF.Html.Core.Paint
             using (builder?.OpenArtifact(g))
                 g.DrawRaster(destinationScope.Surface);
 
-            // The text that was drawn into the bitmap is supplied again, invisibly. Its positions follow the transform's local
-            // linearisation: exact at the box's centre, approximate away from it, which is as close as an affine text matrix can get.
-            g.PushTransform(Linearise(warp.Map, fragment.WholeBoxRect));
+            SupplyWarpedText(g, fragment, warp.Map);
+            return true;
+        }
+
+        /// <summary>
+        /// Supplies the text that was drawn into a warped bitmap again, invisibly, so it stays selectable. Its positions follow the transform's
+        /// local linearisation: exact at the box's centre, approximate away from it, which is as close as an affine text matrix can get. An
+        /// edge-on plane (a linearisation with no inverse) has no visible area, so it has no text to supply either.
+        /// </summary>
+        internal void SupplyWarpedText(Canvas g, BoxFragment fragment, in Homography map)
+        {
+            if (!TryPushTransform(g, Linearise(map, fragment.WholeBoxRect)))
+                return;
+
             try
             {
                 PaintSelectableText(g, fragment);
@@ -172,8 +183,6 @@ namespace PeachPDF.Html.Core.Paint
             {
                 g.PopTransform();
             }
-
-            return true;
         }
 
         /// <summary>How much larger than its flat size the warp draws <paramref name="source"/> at its most magnified corner or its centre, at least 1.</summary>
