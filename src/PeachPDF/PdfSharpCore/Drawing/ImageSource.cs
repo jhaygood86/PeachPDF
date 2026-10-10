@@ -41,6 +41,25 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
     }
 
     /// <summary>
+    /// Data needed to embed a JPEG XL source byte-for-byte as an experimental <c>/JXLDecode</c> stream - see
+    /// <see cref="ImageSource.IImageSource.JxlPassthrough"/> for when this applies.
+    /// </summary>
+    internal readonly struct JxlPassthroughData
+    {
+        /// <summary>The original JPEG XL file bytes, unchanged.</summary>
+        public required byte[] Data { get; init; }
+
+        /// <summary>Gray or RGB (a JPEG XL source with alpha, animation or CMYK is never eligible).</summary>
+        public required JpegPassthroughColorSpace ColorSpace { get; init; }
+
+        /// <summary>8 or 16.</summary>
+        public required int BitsPerComponent { get; init; }
+
+        /// <summary>A usable embedded RGB ICC profile's raw bytes, or <see langword="null"/> if none.</summary>
+        public byte[]? IccProfile { get; init; }
+    }
+
+    /// <summary>
     /// Which bare Device*/Indexed color space a <see cref="PngPassthroughData"/> embed's pixel data is
     /// in - separate from whether the embed's actual PDF color space ends up <c>/ICCBased</c> instead
     /// (see <see cref="PngPassthroughData.IccProfile"/>, issue #1106): the source's own <c>iCCP</c>
@@ -240,6 +259,14 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             /// an RGB/Gray JPEG with no usable ICC profile.
             /// </summary>
             JpegPassthroughData? JpegPassthrough { get; }
+
+            /// <summary>
+            /// Non-null when this is an opaque, upright, non-animated gray or RGB JPEG XL source whose original bytes
+            /// can ride into the PDF as an experimental <c>/JXLDecode</c> stream (see
+            /// <see cref="PeachPDF.PdfGenerateConfig.JxlPassthrough"/>). Every other member still describes the
+            /// decoded raster fallback, so nothing changes for a document that leaves the option off.
+            /// </summary>
+            JxlPassthroughData? JxlPassthrough => null;
 
             /// <summary>
             /// Non-null when <see cref="IsCmyk"/> is true but <see cref="JpegPassthrough"/> is null - a

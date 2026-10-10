@@ -124,6 +124,7 @@ internal static class ArgumentParser
 
                 case "no-compress": _options.NoCompress = true; break;
                 case "brotli": _options.Brotli = true; break;
+                case "jxl-passthrough": _options.JxlPassthrough = true; break;
                 case "pdf-version": ParsePdfVersion(_options, RequireValue(name, inlineValue)); break;
                 case "raster-dpi": SetRasterDpi(_options, RequireValue(name, inlineValue)); break;
                 case "flatten-transparency": _options.FlattenTransparency = true; break;

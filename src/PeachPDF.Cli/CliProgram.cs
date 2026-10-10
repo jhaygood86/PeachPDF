@@ -114,6 +114,8 @@ internal static class CliProgram
               --brotli               With PDF 2.0, compress streams with Brotli (smaller,
                                      but Chrome, Edge and Acrobat show them blank).
               --pdf-version=VER      PDF version to write: 1.7 or 2.0.
+              --jxl-passthrough      Experimental: with PDF 2.0, embed opaque JPEG XL
+                                     images as-is (no reader supports them yet).
               --raster-dpi=DPI       Resolution, in pixels per inch of paper (72-1200,
                                      default 300), of effects PeachPDF renders as bitmaps,
                                      such as CSS filter: blur(). Higher is sharper and

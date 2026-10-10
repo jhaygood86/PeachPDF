@@ -343,6 +343,17 @@ namespace PeachPDF
         public bool BrotliCompression { get; set; }
 
         /// <summary>
+        /// <b>Experimental, off by default.</b> When <c>true</c> and <see cref="PdfVersion"/> is
+        /// <see cref="PeachPDF.PdfVersion.Pdf20"/>, an opaque, upright, non-animated gray or RGB JPEG XL image is embedded
+        /// as its original bytes with the <c>/JXLDecode</c> filter instead of being decoded and recompressed. There is no
+        /// published PDF filter for JPEG XL yet: the name and layout follow the only open-source design so far (an
+        /// experimental PDFium decoder), so no shipping PDF reader opens such a file today. A JPEG XL with alpha, animation
+        /// or CMYK always takes the normal raster path. Ignored for other <see cref="PdfVersion"/> values, and under
+        /// <see cref="ImageCompression.Lossy"/> (which asks for JPEG re-encoding).
+        /// </summary>
+        public bool JxlPassthrough { get; set; }
+
+        /// <summary>
         /// When set to <c>true</c>, PeachPDF emits an XMP metadata stream (the document catalog's
         /// <c>/Metadata</c> entry) alongside the classic Document Information dictionary - useful for
         /// digital-asset-management/archival pipelines that read XMP directly. This is independent of

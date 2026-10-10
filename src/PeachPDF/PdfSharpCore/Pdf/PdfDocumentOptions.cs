@@ -104,6 +104,23 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.JxlPassthrough"/> - see there for behavior. The request alone;
+        /// <see cref="UseJxlPassthrough"/> is what the writer consults.
+        /// </summary>
+        public bool JxlPassthrough
+        {
+            get { return _jxlPassthrough; }
+            set { _jxlPassthrough = value; }
+        }
+        bool _jxlPassthrough;
+
+        /// <summary>Whether an eligible JPEG XL image embeds as <c>/JXLDecode</c>: the request, and only for a PDF 2.0 document.</summary>
+        public bool UseJxlPassthrough
+        {
+            get { return _jxlPassthrough && _pdfVersion == PdfVersion.Pdf20; }
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether to compress bilevel images using CCITT compression.
         /// With true, PDFsharp will try FlateDecode CCITT and will use the smallest one or a combination of both.
         /// With false, PDFsharp will always use FlateDecode only - files may be a few bytes larger, but file creation is faster.

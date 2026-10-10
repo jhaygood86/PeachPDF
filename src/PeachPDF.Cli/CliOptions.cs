@@ -92,6 +92,9 @@ internal sealed class CliOptions
     /// <summary>Compress with Brotli when writing PDF 2.0 (<c>--brotli</c>).</summary>
     public bool Brotli { get; set; }
 
+    /// <summary>Embed eligible JPEG XL images as-is (<c>--jxl-passthrough</c>, experimental).</summary>
+    public bool JxlPassthrough { get; set; }
+
     /// <summary>The PDF version to target (<c>--pdf-version</c>); null keeps the library default.</summary>
     public PdfVersion? PdfVersion { get; set; }
 

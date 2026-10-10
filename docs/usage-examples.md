@@ -539,6 +539,10 @@ var config = new PdfGenerateConfig
 };
 ```
 
+#### JPEG XL pass-through (experimental)
+
+Set `JxlPassthrough = true` (default `false`) with `PdfVersion.Pdf20` to embed an opaque, upright, non-animated gray or RGB JPEG XL image as its original bytes under a `/JXLDecode` filter, instead of decoding it and recompressing the pixels. No PDF standard defines a JPEG XL filter yet: the filter name and image dictionary follow the only open-source design published so far, so **no shipping PDF reader opens such a file today**. A JPEG XL image with alpha, animation or CMYK, a sideways orientation, or any image under `ImageCompression.Lossy`, takes the normal raster path. The image is embedded at its natural size and is never downscaled. The [`peachpdf`](cli.md) tool exposes this as `--jxl-passthrough`.
+
 `PdfVersion.Pdf20` is incompatible with `PdfAConformance` set to anything other than `PdfAConformance.None` — PeachPDF doesn't implement PDF/A-4 (the PDF-2.0-based PDF/A level), and every PDF/A level it does implement is defined against PDF 1.4 or 1.7. Requesting both throws.
 
 ## Enabling interactive PDF forms

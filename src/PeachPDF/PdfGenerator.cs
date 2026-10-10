@@ -365,6 +365,7 @@ namespace PeachPDF
         {
             document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
             document.PdfDocument.Options.BrotliCompression = config.BrotliCompression;
+            document.PdfDocument.Options.JxlPassthrough = config.JxlPassthrough;
             // Undefined (not the PdfSharpCore-internal default of Rgb) lets each color write in
             // whichever space it actually carries - RGB-authored colors as /DeviceRGB, device-cmyk()
             // -authored colors as real /DeviceCMYK operators (see PdfEncoders.ToString's per-color branch
