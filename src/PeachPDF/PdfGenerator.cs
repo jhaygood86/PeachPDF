@@ -365,6 +365,7 @@ namespace PeachPDF
         {
             document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
             document.PdfDocument.Options.BrotliCompression = config.BrotliCompression;
+            document.PdfDocument.Options.JxlPassthrough = config.JxlPassthrough;
             // Undefined (not the PdfSharpCore-internal default of Rgb) lets each color write in
             // whichever space it actually carries - RGB-authored colors as /DeviceRGB, device-cmyk()
             // -authored colors as real /DeviceCMYK operators (see PdfEncoders.ToString's per-color branch
@@ -406,27 +407,36 @@ namespace PeachPDF
                 document.PdfDocument.Version = 17;
             }
 
-            // PeachPDF implements no PDF/A level defined against PDF 2.0 (there is no PDF/A-4 support),
-            // and every level it does implement is defined against PDF 1.4 or 1.7 - so requesting both
-            // is a contradiction the caller needs to resolve, not something to silently pick a winner for.
-            if (config.PdfVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
+            // PDF/A-4 and PDF/X-6 are defined against PDF 2.0; every other PDF/A or PDF/X level is defined against
+            // PDF 1.4, 1.6 or 1.7. A caller who never touched PdfVersion gets the version the requested standard
+            // needs; one who set it explicitly to something the standard cannot use has a contradiction to resolve,
+            // not something to silently pick a winner for.
+            var requiresPdf20 = config.PdfAConformance is PdfAConformance.PdfA4 or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F
+                || config.PdfXConformance == PdfXConformance.X6;
+            var requestedVersion = requiresPdf20 && !config.PdfVersionExplicit ? PdfVersion.Pdf20 : config.PdfVersion;
+
+            if (requiresPdf20 && requestedVersion != PdfVersion.Pdf20)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.PdfVersion is set to {requestedVersion}, but PdfAConformance ({config.PdfAConformance}) " +
+                    $"or PdfXConformance ({config.PdfXConformance}) is a level defined against PDF 2.0 (PDF/A-4, PDF/X-6). " +
+                    "Set PdfVersion to Pdf20, or leave it unset.");
+            }
+
+            if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
             {
                 throw new InvalidOperationException(
                     "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfAConformance is also set to a " +
-                    "level other than None. PeachPDF does not implement PDF/A-4 (the PDF-2.0-based PDF/A " +
-                    "level); request PdfVersion.Pdf17 (or leave PdfVersion at its default) when requesting " +
-                    "PdfAConformance.");
+                    "level defined against PDF 1.4 or 1.7. Only PDF/A-4 (PdfA4, PdfA4E, PdfA4F) is a PDF 2.0 level; " +
+                    "request PdfVersion.Pdf17 (or leave PdfVersion at its default) for the earlier ones.");
             }
 
-            // PDF/X-1a/X3/X4 all target PDF 1.4/1.6 (see the PdfXConformance version block below) - PDF
-            // 2.0 is a contradiction, same reasoning as the PdfA/Pdf20 check above.
-            if (config.PdfVersion == PdfVersion.Pdf20 && config.PdfXConformance != PdfXConformance.None)
+            if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && config.PdfXConformance != PdfXConformance.None)
             {
                 throw new InvalidOperationException(
                     "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfXConformance is also set to a " +
-                    "level other than None. PeachPDF's PDF/X output always targets PDF 1.4 (X1a/X3) or " +
-                    "1.6 (X4); request PdfVersion.Pdf17 (or leave PdfVersion at its default) when " +
-                    "requesting PdfXConformance.");
+                    "level defined against PDF 1.4 (X1a/X3) or 1.6 (X4). Only PdfXConformance.X6 is a PDF 2.0 " +
+                    "level; request PdfVersion.Pdf17 (or leave PdfVersion at its default) for the earlier ones.");
             }
 
             // Same "a PDF file has exactly one header version" reasoning as the PdfAConformance guard
@@ -434,19 +444,19 @@ namespace PeachPDF
             // PdfVersion than the first would leave the file's already-written header disagreeing with
             // how some of its pages/structure elements were painted.
             if (document.PdfDocument.Options.PdfVersionEstablished
-                && document.PdfDocument.Options.PdfVersion != config.PdfVersion)
+                && document.PdfDocument.Options.PdfVersion != requestedVersion)
             {
                 throw new InvalidOperationException(
                     $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages/AddPages call for " +
                     $"a given document - this document was already established as '{document.PdfDocument.Options.PdfVersion}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfVersion}'. A single PDF file " +
+                    $"by an earlier call, and this call specifies '{requestedVersion}'. A single PDF file " +
                     "can only have one header version.");
             }
 
-            document.PdfDocument.Options.PdfVersion = config.PdfVersion;
+            document.PdfDocument.Options.PdfVersion = requestedVersion;
             document.PdfDocument.Options.PdfVersionEstablished = true;
 
-            if (config.PdfVersion == PdfVersion.Pdf20)
+            if (requestedVersion == PdfVersion.Pdf20)
             {
                 document.PdfDocument.Version = 20;
             }
@@ -890,11 +900,15 @@ namespace PeachPDF
                 // source of truth for the exact identifier strings (and their sourcing) - this and the XMP
                 // pdfx: block above always agree by construction. Guarded the same way as the OutputIntent
                 // above - these never vary call to call for one document.
-                var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance);
-                document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.RawEncoding);
-                if (gtsConformance is not null)
+                // PDF/X-6 identifies itself in XMP only (pdfxid), like PDF 2.0's own deprecation of the Info dictionary.
+                if (config.PdfXConformance != PdfXConformance.X6)
                 {
-                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.RawEncoding);
+                    var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance);
+                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.RawEncoding);
+                    if (gtsConformance is not null)
+                    {
+                        document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.RawEncoding);
+                    }
                 }
             }
 

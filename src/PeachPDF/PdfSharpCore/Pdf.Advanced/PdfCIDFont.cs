@@ -1,3 +1,4 @@
+using System.Linq;
 #region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
@@ -108,6 +109,23 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
             fontStream.Elements["/Length"] = new PdfInteger(fontData.Length);
             fontStream.CreateStream(fontData);
+
+            // ISO 19005-1 (6.3.5) alone requires every CIDFont subset's descriptor to carry a /CIDSet bitmap of the CIDs it
+            // holds; PDF/A-2 and later made it optional, so only PDF/A-1 pays for the extra object. CID == glyph index
+            // here (see /CIDToGIDMap above), and glyph 0 (.notdef) is always part of the subset.
+            if (Owner.Options.PdfAConformance is PeachPDF.PdfAConformance.PdfA1B or PeachPDF.PdfAConformance.PdfA1A)
+            {
+                var cids = _cmapInfo.GlyphIndices.Keys.Append(0).ToArray();
+                var cidSet = new byte[cids.Max() / 8 + 1];
+                foreach (var cid in cids)
+                    cidSet[cid >> 3] |= (byte)(0x80 >> (cid & 7));
+
+                var cidSetStream = new PdfDictionary(Owner);
+                Owner.Internals.AddObject(cidSetStream);
+                cidSetStream.Elements["/Length"] = new PdfInteger(cidSet.Length);
+                cidSetStream.CreateStream(cidSet);
+                FontDescriptor.Elements["/CIDSet"] = cidSetStream.Reference;
+            }
         }
 
         /// <summary>

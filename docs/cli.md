@@ -111,7 +111,7 @@ the default media type is **print**.
 | `--pdf-keywords=KEYWORDS` | Set the PDF keywords. |
 | `--pdf-creator=CREATOR` | Set the PDF creator. |
 | `--pdf-lang=LANG` | Set the PDF document language (the catalog `/Lang` entry), used when the document declares no language of its own (a document's own `<html lang>` takes priority). |
-| `--pdfa=LEVEL` | Produce a PDF/A-conformant file: `1a`, `1b`, `2a`, `2b`, `2u`, `3a`, `3b` or `3u` (see [Generating PDF/A-conformant output](usage-examples.md#generating-pdfa-conformant-output)). |
+| `--pdfa=LEVEL` | Produce a PDF/A-conformant file: `1a`, `1b`, `2a`, `2b`, `2u`, `3a`, `3b`, `3u`, `4`, `4e` or `4f` (see [Generating PDF/A-conformant output](usage-examples.md#generating-pdfa-conformant-output)). |
 | `--pdf-creation-date=DATE` | Set the PDF creation date, as an ISO 8601 date or date-time (a value without an offset is UTC). PDF/A needs a creation date and none is made up: without this option the document's own date (`<meta name="date">`) is used, and a document with none makes `--pdfa` fail. |
 | `--attach=FILE` | Embed a file in the PDF (repeatable). Needs a PDF/A-3 level or no PDF/A at all. The MIME type is guessed from the extension; give it and the relationship explicitly after the name, as `FILE;mime=TYPE;rel=RELATIONSHIP` (`rel` is `source`, `data`, `alternative`, `supplement` or `unspecified`). See [Embedding files](usage-examples.md#embedding-files-pdfa-3-attachments). |
 | `--facturx-xml=FILE` | Make a ZUGFeRD / Factur-X e-invoice by embedding this Cross Industry Invoice XML file. Requires `--pdfa=3a`, `3b` or `3u`. The XML is embedded as it is - it is neither generated nor validated. See [ZUGFeRD / Factur-X e-invoices](usage-examples.md#zugferd--factur-x-e-invoices). |
@@ -123,6 +123,7 @@ the default media type is **print**.
 | `--interactive-pdf-forms` | Emit fillable AcroForm fields for `<input>`/`<select>` elements. |
 | `--no-compress` | Do not compress PDF content streams. |
 | `--pdf-version=VER` | PDF version to write: `1.7` or `2.0`. PDF 2.0 compresses streams with Brotli (`/BrotliDecode`), which not every PDF reader supports yet. |
+| `--jxl-passthrough` | Experimental. With `--pdf-version=2.0`, embed opaque, upright JPEG XL images as their original bytes (`/JXLDecode`) instead of decoding them. No published PDF filter exists for JPEG XL yet, so no PDF reader opens such a file today. |
 | `--no-brotli` | Compress with Flate even when writing PDF 2.0, for output that must open in every reader. Has no effect for other versions. |
 | `--raster-dpi=DPI` | Resolution, in pixels per inch of paper (72 to 1200, default 300), of effects PeachPDF renders as bitmaps, such as CSS `filter: blur()`. Higher is sharper and larger; the printed size never changes. See [Rasterized effects](usage-examples.md#rasterized-effects-and-resolution). |
 | `--flatten-transparency` | For a document that targets PDF/A-1 or PDF/X-1a/X-3 (which forbid transparency): render what needs it as opaque bitmaps at `--raster-dpi` instead of failing. See [Flattening transparency](usage-examples.md#flattening-transparency-for-pdfa-1-and-pdfx). |

@@ -50,6 +50,8 @@ jobs:
             - 'src/!(Version.props)'
             - '.github/actions/**'
             - '.github/workflows/test.yml'
+            - '.github/conformance/**'
+            - '.github/scripts/Test-PdfConformance.ps1'
 
   # One leg per {OS x suite}, run in parallel; wall time is the slowest leg rather than the sum.
   #   main   - PeachPDF.Tests, one step per target framework (a multi-targeted `dotnet test` would
@@ -284,10 +286,87 @@ jobs:
     - name: Build Blazor WebAssembly demo
       run: dotnet build src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj --configuration Release
 
+  # Every PDF/A level PeachPDF offers, rendered by the Release CLI and validated by veraPDF - the unit tests prove what we
+  # meant to write, this proves a conforming reader accepts it (see .github/scripts/Test-PdfConformance.ps1). veraPDF is
+  # pinned to a version and a SHA-256, downloaded from Maven Central: the same bytes every run, or the job fails.
+  conformance:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERAPDF_VERSION: '1.30.3'
+      VERAPDF_SHA256: '3d71ad77a497ddba2cb4a8834f4e61066ba1860dc0361d0fa570b04d53f641b5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+      with:
+        include-net11: 'false'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Install fonts
+      run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+
+    - name: Install veraPDF
+      run: |
+        $jar = Join-Path $env:RUNNER_TEMP 'verapdf-installer.jar'
+        Invoke-WebRequest "https://repo1.maven.org/maven2/org/verapdf/apps/installer/$env:VERAPDF_VERSION/installer-$env:VERAPDF_VERSION-installer.jar" -OutFile $jar
+        $actual = (Get-FileHash $jar -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $env:VERAPDF_SHA256) { throw "veraPDF installer checksum mismatch: expected $env:VERAPDF_SHA256, got $actual" }
+
+        $target = Join-Path $env:RUNNER_TEMP 'verapdf'
+        @"
+        <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+        <AutomatedInstallation langpack="eng">
+          <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>
+          <com.izforge.izpack.panels.target.TargetPanel id="install_dir"><installpath>$target</installpath></com.izforge.izpack.panels.target.TargetPanel>
+          <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select">
+            <pack index="0" name="veraPDF Runtime" selected="true"/>
+            <pack index="1" name="veraPDF Mac and *nix Scripts" selected="true"/>
+            <pack index="2" name="veraPDF Validation model" selected="false"/>
+            <pack index="3" name="veraPDF Documentation" selected="false"/>
+            <pack index="4" name="veraPDF Sample Plugins" selected="false"/>
+          </com.izforge.izpack.panels.packs.PacksPanel>
+          <com.izforge.izpack.panels.install.InstallPanel id="install"/>
+          <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>
+        </AutomatedInstallation>
+        "@ | Set-Content (Join-Path $env:RUNNER_TEMP 'verapdf-auto.xml')
+
+        java -jar $jar (Join-Path $env:RUNNER_TEMP 'verapdf-auto.xml')
+        if ($LASTEXITCODE -ne 0) { throw 'veraPDF installation failed' }
+        chmod +x (Join-Path $target 'verapdf')
+
+    # Release, not Debug: a Debug build writes a comment after every `obj` keyword, which ISO 19005 rejects.
+    - name: Build CLI
+      run: dotnet build src/PeachPDF.Cli/PeachPDF.Cli.csproj --configuration Release
+
+    - name: Validate every PDF/A level with veraPDF
+      run: >
+        ./.github/scripts/Test-PdfConformance.ps1
+        -VeraPdf (Join-Path $env:RUNNER_TEMP 'verapdf/verapdf')
+        -CliDll (Join-Path $PWD 'src/PeachPDF.Cli/bin/Release/net10.0/PeachPDF.Cli.dll')
+        -OutDir (Join-Path $env:RUNNER_TEMP 'conformance')
+
+    - name: Upload PDFs and veraPDF reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pdfa-conformance
+        path: ${{ runner.temp }}/conformance
+        if-no-files-found: ignore
+
   # The single required status check. Skipped jobs (docs-only change) count as success; any failed
   # or cancelled job fails the gate.
   test-gate:
-    needs: [changes, test, coverage, build-extras]
+    needs: [changes, test, coverage, build-extras, conformance]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -140,7 +140,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         {
             if (JxlJpegReconstruction.TryReconstructJpeg(new MemoryStream(bytes), out var jpeg))
             {
-                return Decode(name, jpeg, quality);
+                return WrapJxlPassthrough(Decode(name, jpeg, quality), bytes, info);
             }
 
             if (info.PixelFormat == PixelFormat.Cmyk32)
@@ -156,7 +156,44 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             var source = DecodeGenericRaster(name, bytes, quality, info);
             SetOrientation(source, (int)info.Orientation);
-            return source;
+            return WrapJxlPassthrough(source, bytes, info);
+        }
+
+        /// <summary>
+        /// Attaches the original JPEG XL bytes to <paramref name="decoded"/> when they can be embedded as-is: no alpha
+        /// (JXL alpha would need a separate <c>/SMask</c> and PeachImage has no JXL encoder to split it), no animation,
+        /// an upright orientation (a PDF image cannot rotate itself), and a plain 8/16-bit gray or RGB sample format.
+        /// The raster fallback stays fully intact underneath.
+        /// </summary>
+        private static IImageSource WrapJxlPassthrough(IImageSource decoded, byte[] bytes, ImageInfo info)
+        {
+            if (info.HasAlpha || info.IsAnimated || info.Orientation != ImageOrientation.Normal
+                || decoded.Transparent || decoded.IsCmyk || decoded.ExifOrientation != 1)
+            {
+                return decoded;
+            }
+
+            var (colorSpace, bits) = info.PixelFormat switch
+            {
+                PixelFormat.Gray8 => (JpegPassthroughColorSpace.Gray, 8),
+                PixelFormat.Gray16 => (JpegPassthroughColorSpace.Gray, 16),
+                PixelFormat.Rgb24 => (JpegPassthroughColorSpace.Rgb, 8),
+                PixelFormat.Rgb48 => (JpegPassthroughColorSpace.Rgb, 16),
+                _ => (JpegPassthroughColorSpace.Cmyk, 0),
+            };
+
+            if (bits == 0)
+            {
+                return decoded;
+            }
+
+            return new PeachJxlPassthroughImageSourceImpl(decoded, new JxlPassthroughData
+            {
+                Data = bytes,
+                ColorSpace = colorSpace,
+                BitsPerComponent = bits,
+                IccProfile = colorSpace == JpegPassthroughColorSpace.Rgb ? decoded.RgbIccProfile : null,
+            });
         }
 
         /// <summary>
@@ -758,6 +795,56 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// under the default <see cref="PeachPDF.ImageCompression.Auto"/>/<see cref="PeachPDF.ImageCompression.Lossless"/>
         /// modes, neither ever is, so this is genuinely cheaper than today for the common case.
         /// </summary>
+        /// <summary>
+        /// A decoded JPEG XL source plus the original file bytes, for the experimental <c>/JXLDecode</c> embed. Delegates
+        /// every member to <see cref="_inner"/> (the same source <c>DecodeJxl</c> returned before this wrapper existed),
+        /// so a render that does not enable the passthrough is byte-identical to one without it.
+        /// </summary>
+        private sealed class PeachJxlPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
+        {
+            private readonly IImageSource _inner;
+            private readonly JxlPassthroughData _passthrough;
+
+            public PeachJxlPassthroughImageSourceImpl(IImageSource inner, JxlPassthroughData passthrough)
+            {
+                _inner = inner;
+                _passthrough = passthrough;
+            }
+
+            public int Width => _inner.Width;
+            public int Height => _inner.Height;
+            public string Name => _inner.Name;
+            public bool Transparent => _inner.Transparent;
+            public bool IsGrayscale => _inner.IsGrayscale;
+            public bool IsCmyk => _inner.IsCmyk;
+            public int ExifOrientation => _inner.ExifOrientation;
+            public JpegPassthroughData? JpegPassthrough => _inner.JpegPassthrough;
+            public CmykRasterData? CmykRaster => _inner.CmykRaster;
+            public PngPassthroughData? PngPassthrough => _inner.PngPassthrough;
+            public GifPassthroughData? GifPassthrough => _inner.GifPassthrough;
+            public bool IsLosslessSourceFormat => _inner.IsLosslessSourceFormat;
+            public byte[]? RgbIccProfile => _inner.RgbIccProfile;
+            public JxlPassthroughData? JxlPassthrough => _passthrough;
+
+            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
+                _inner.SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
+
+            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
+                _inner.SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+
+            public bool TryGetRgba(out int width, out int height, out byte[] rgba)
+            {
+                if (_inner is IRgbaPixelProvider provider)
+                {
+                    return provider.TryGetRgba(out width, out height, out rgba);
+                }
+
+                width = height = 0;
+                rgba = [];
+                return false;
+            }
+        }
+
         private sealed class PeachPngPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
         {
             private readonly byte[] _bytes;

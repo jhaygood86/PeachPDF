@@ -55,5 +55,20 @@ namespace PeachPDF
 
         /// <summary>PDF/A-3, level A (visual conformance plus accessibility/tagged-structure requirements; also permits arbitrary embedded files).</summary>
         PdfA3A,
+
+        /// <summary>
+        /// PDF/A-4 (ISO 19005-4, based on PDF 2.0). Visual conformance with guaranteed Unicode text extraction; there is no
+        /// A/B/U level system in this part. Requires <see cref="PdfVersion.Pdf20"/> (selected automatically when
+        /// <see cref="PdfGenerateConfig.PdfVersion"/> is left alone), which also switches off the non-ISO
+        /// <c>/BrotliDecode</c> and <c>/JXLDecode</c> filters. The document Information dictionary is omitted: all metadata
+        /// is in the XMP stream.
+        /// </summary>
+        PdfA4,
+
+        /// <summary>PDF/A-4e: PDF/A-4 for engineering documents (the variant that may carry 3D, RichMedia and JavaScript; PeachPDF writes none of those).</summary>
+        PdfA4E,
+
+        /// <summary>PDF/A-4f: PDF/A-4 that also permits arbitrary embedded files (<see cref="PdfGenerateConfig.Attachments"/>).</summary>
+        PdfA4F,
     }
 }

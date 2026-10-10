@@ -324,11 +324,26 @@ namespace PeachPDF
         /// <summary>
         /// The PDF version to target. Defaults to <see cref="PeachPDF.PdfVersion.Pdf17"/> - PeachPDF's
         /// long-standing output version. Set to <see cref="PeachPDF.PdfVersion.Pdf20"/> to emit a real
-        /// PDF 2.0 (ISO 32000-2) file header. Incompatible with requesting any
-        /// <see cref="PdfAConformance"/> level other than <see cref="PeachPDF.PdfAConformance.None"/> -
-        /// generation throws if both are set on the same call.
+        /// PDF 2.0 (ISO 32000-2) file header. The PDF/A-4 levels and <see cref="PeachPDF.PdfXConformance.X6"/>
+        /// are defined against PDF 2.0: when this property is never set, requesting one selects
+        /// <see cref="PeachPDF.PdfVersion.Pdf20"/> for you, and setting it to <see cref="PeachPDF.PdfVersion.Pdf17"/>
+        /// explicitly alongside one throws. Every earlier PDF/A or PDF/X level is incompatible with an explicit
+        /// <see cref="PeachPDF.PdfVersion.Pdf20"/> - generation throws if both are set on the same call.
         /// </summary>
-        public PdfVersion PdfVersion { get; set; } = PdfVersion.Pdf17;
+        public PdfVersion PdfVersion
+        {
+            get => _pdfVersion;
+            set
+            {
+                _pdfVersion = value;
+                PdfVersionExplicit = true;
+            }
+        }
+
+        private PdfVersion _pdfVersion = PdfVersion.Pdf17;
+
+        /// <summary>Whether <see cref="PdfVersion"/> was assigned, as opposed to left at its default.</summary>
+        internal bool PdfVersionExplicit { get; private set; }
 
         /// <summary>
         /// Off by default. When <c>true</c> and <see cref="PdfVersion"/> is <see cref="PeachPDF.PdfVersion.Pdf20"/>, PeachPDF
@@ -341,6 +356,17 @@ namespace PeachPDF
         /// <c>/FlateDecode</c> silently.
         /// </summary>
         public bool BrotliCompression { get; set; }
+
+        /// <summary>
+        /// <b>Experimental, off by default.</b> When <c>true</c> and <see cref="PdfVersion"/> is
+        /// <see cref="PeachPDF.PdfVersion.Pdf20"/>, an opaque, upright, non-animated gray or RGB JPEG XL image is embedded
+        /// as its original bytes with the <c>/JXLDecode</c> filter instead of being decoded and recompressed. There is no
+        /// published PDF filter for JPEG XL yet: the name and layout follow the only open-source design so far (an
+        /// experimental PDFium decoder), so no shipping PDF reader opens such a file today. A JPEG XL with alpha, animation
+        /// or CMYK always takes the normal raster path. Ignored for other <see cref="PdfVersion"/> values, and under
+        /// <see cref="ImageCompression.Lossy"/> (which asks for JPEG re-encoding).
+        /// </summary>
+        public bool JxlPassthrough { get; set; }
 
         /// <summary>
         /// When set to <c>true</c>, PeachPDF emits an XMP metadata stream (the document catalog's

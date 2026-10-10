@@ -6,6 +6,13 @@ namespace PeachPDF.Cli.Tests;
 public class CliConfigTranslationTests
 {
     [Fact]
+    public void JxlPassthrough_IsOffUnlessRequested()
+    {
+        Assert.False(CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).JxlPassthrough);
+        Assert.True(CliRunner.BuildConfig(ArgumentParser.Parse(["--jxl-passthrough", "doc.html"])).JxlPassthrough);
+    }
+
+    [Fact]
     public void PdfVersionAndBrotli_AreApplied()
     {
         var config = CliRunner.BuildConfig(ArgumentParser.Parse(["--pdf-version", "2.0", "--brotli", "doc.html"]));

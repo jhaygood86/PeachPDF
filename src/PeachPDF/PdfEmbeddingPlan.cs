@@ -60,6 +60,15 @@ namespace PeachPDF
                 invoice = FacturXInvoice.Create(facturX);
             }
 
+            // ISO 19005-4 (veraPDF rule 6.9 test 5): a PDF/A-4f file must contain at least one embedded file - that is
+            // what the f variant is for. Writing one without any would claim a conformance the file does not have.
+            if (config.PdfAConformance == PdfAConformance.PdfA4F && config.Attachments.Count == 0 && invoice is null)
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfAConformance is PdfA4F, but PdfGenerateConfig.Attachments is empty. A PDF/A-4f file " +
+                    "must embed at least one file - add an attachment, or use PdfAConformance.PdfA4.");
+            }
+
             if (config.Attachments.Count == 0 && invoice is null)
                 return Empty;
 
@@ -80,6 +89,15 @@ namespace PeachPDF
                     "Embedding arbitrary files is what PDF/A-3 adds over PDF/A-1 and PDF/A-2 (PDF/A-1 forbids " +
                     "embedded files entirely; PDF/A-2 allows only PDF/A files) - use PdfAConformance.PdfA3B, " +
                     "PdfA3U or PdfA3A, or leave PdfAConformance at None.");
+            }
+
+            if (config.Attachments.Count > 0
+                && config.PdfAConformance is PdfAConformance.PdfA4 or PdfAConformance.PdfA4E)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.Attachments is not empty, but PdfAConformance is '{config.PdfAConformance}'. " +
+                    "Among the PDF/A-4 levels only PdfA4F permits embedded files - use PdfAConformance.PdfA4F, " +
+                    "PdfA3B/PdfA3U/PdfA3A, or leave PdfAConformance at None.");
             }
 
             var files = new List<PdfAttachment>(config.Attachments.Count + 1);

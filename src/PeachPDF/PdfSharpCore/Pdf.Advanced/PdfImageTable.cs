@@ -144,6 +144,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // to the display size would throw that resolution away (see XImage.IsRasterOutput).
             if (image.IsRasterOutput) return (null, null);
 
+            if (IsJxlPinnedToNaturalSize(image)) return (null, null);
             if (IsPngPinnedToNaturalSize(image)) return (null, null);
             if (IsGifPinnedToNaturalSize(image)) return (null, null);
 
@@ -194,6 +195,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// pass-through fast path for it regardless of <c>ImageCompression</c> (the same "the format can't
         /// hold this, so the setting doesn't apply" treatment).
         /// </remarks>
+        private bool IsJxlPinnedToNaturalSize(XImage image) =>
+            image.JxlPassthrough is not null
+            && Owner.Options.UseJxlPassthrough
+            && Owner.Options.ImageCompression != ImageCompression.Lossy;
+
         private bool IsPngPinnedToNaturalSize(XImage image)
         {
             if (image.PngPassthrough is not { } pngPassthrough) return false;

@@ -244,6 +244,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal GifPassthroughData? GifPassthrough => _source.GifPassthrough;
 
         /// <summary>
+        /// The original JPEG XL bytes when this source is eligible for the experimental <c>/JXLDecode</c> embed - see
+        /// <see cref="IImageSource.JxlPassthrough"/>. An eligible source is opaque, so it already resolves to
+        /// <see cref="XImageFormat.Jpeg"/> above and reaches <see cref="PdfImage"/>'s JPEG initializer.
+        /// </summary>
+        internal JxlPassthroughData? JxlPassthrough => _source.JxlPassthrough;
+
+        /// <summary>
         /// True when this image's source format has no lossy encoding mode at all (PNG/BMP/GIF) - see
         /// <see cref="IImageSource.IsLosslessSourceFormat"/>. Consulted by <see cref="PdfImage"/>'s
         /// JPEG-dispatch fast path to decide whether <see cref="PeachPDF.ImageCompression.Auto"/>/

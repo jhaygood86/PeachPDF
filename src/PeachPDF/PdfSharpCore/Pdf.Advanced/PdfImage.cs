@@ -132,6 +132,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // way: a resize can't be byte-for-byte, so an RGB/Gray source falls through to the existing
             // lossy behavior below instead (losing the ICC profile for that specific embed, not the image
             // itself - see issue #1085's plan notes on "guarantee full fidelity").
+            // The experimental JPEG XL pass-through outranks the JPEG one: a JXL whose payload is a recompressed
+            // JPEG carries both, and the caller asked for the JXL bytes. PdfImageTable.IsJxlPinnedToNaturalSize
+            // mirrors this exact condition so _targetWidth is null whenever it holds.
+            if (_targetWidth is null && _document.Options.UseJxlPassthrough
+                && _document.Options.ImageCompression != ImageCompression.Lossy
+                && _image.JxlPassthrough is { } jxlPassthrough)
+            {
+                EmbedJxlPassthrough(jxlPassthrough);
+                return;
+            }
+
             if (_targetWidth is null && _image.JpegPassthrough is { } passthrough)
             {
                 EmbedJpegPassthrough(passthrough);
@@ -275,6 +286,28 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
             Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
             Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+        }
+
+        /// <summary>
+        /// Embeds a JPEG XL source byte-for-byte as an experimental <c>/JXLDecode</c> stream, following the only
+        /// open-source design that exists so far (PDFium's experimental decoder): the original file bytes, no
+        /// <c>/DecodeParms</c>, and the color space and bit depth stated by the image dictionary. Alpha never gets here
+        /// (an alpha JPEG XL is not eligible); the filter name is a placeholder until the PDF Association publishes one.
+        /// </summary>
+        void EmbedJxlPassthrough(JxlPassthroughData data)
+        {
+            var (n, deviceName) = data.ColorSpace == JpegPassthroughColorSpace.Gray ? (1, "/DeviceGray") : (3, "/DeviceRGB");
+            Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(n, deviceName, data.IccProfile);
+
+            Stream = new PdfStream(data.Data, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(data.Data.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/JXLDecode");
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(data.BitsPerComponent);
         }
 
         /// <summary>

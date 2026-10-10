@@ -56,5 +56,14 @@ namespace PeachPDF
 
         /// <summary>PDF/X-4: ICC-managed color and live transparency both permitted, output intent required.</summary>
         X4,
+
+        /// <summary>
+        /// PDF/X-6 (ISO 15930-9, based on PDF 2.0): ICC-managed color and live transparency permitted, output intent
+        /// required. Requires <see cref="PdfVersion.Pdf20"/> (selected automatically when
+        /// <see cref="PdfGenerateConfig.PdfVersion"/> is left alone), which also switches off the non-ISO
+        /// <c>/BrotliDecode</c> and <c>/JXLDecode</c> filters. Only the complete-exchange flavor is supported: PDF/X-6p and
+        /// PDF/X-6n, which reference an external output-intent profile, are not.
+        /// </summary>
+        X6,
     }
 }

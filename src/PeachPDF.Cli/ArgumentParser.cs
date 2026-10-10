@@ -124,6 +124,7 @@ internal static class ArgumentParser
 
                 case "no-compress": _options.NoCompress = true; break;
                 case "brotli": _options.Brotli = true; break;
+                case "jxl-passthrough": _options.JxlPassthrough = true; break;
                 case "pdf-version": ParsePdfVersion(_options, RequireValue(name, inlineValue)); break;
                 case "raster-dpi": SetRasterDpi(_options, RequireValue(name, inlineValue)); break;
                 case "flatten-transparency": _options.FlattenTransparency = true; break;
@@ -298,6 +299,9 @@ internal static class ArgumentParser
         ["3a"] = PdfAConformance.PdfA3A,
         ["3b"] = PdfAConformance.PdfA3B,
         ["3u"] = PdfAConformance.PdfA3U,
+        ["4"] = PdfAConformance.PdfA4,
+        ["4e"] = PdfAConformance.PdfA4E,
+        ["4f"] = PdfAConformance.PdfA4F,
     };
 
     private static void ParsePdfVersion(CliOptions options, string? value)
