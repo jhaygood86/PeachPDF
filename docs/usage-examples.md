@@ -516,16 +516,18 @@ PDF outline (bookmark) generation is a separate, always-on feature — no `PdfGe
 
 ## PDF 2.0 output
 
-PeachPDF defaults to PDF 1.7 output. Set `PdfVersion` to target a real PDF 2.0 ([ISO 32000-2](https://www.iso.org/standard/75839.html)) file header instead:
+PeachPDF writes PDF 2.0 ([ISO 32000-2](https://www.iso.org/standard/75839.html)) by default. Set `PdfVersion` to `Pdf17` for a PDF 1.x file (the header is `%PDF-1.4`, or later when a feature or a PDF/A or PDF/X level needs it):
 
 ```csharp
 var config = new PdfGenerateConfig
 {
-    PdfVersion = PdfVersion.Pdf20
+    PdfVersion = PdfVersion.Pdf17
 };
 ```
 
-This is needed for full spec conformance when combined with `EnableTaggedPdf` on a document containing `<math>` elements: the `/AF` (Associated Files) array PeachPDF attaches to a `Formula` structure element to carry the original MathML source (see [MathML Associated Files](html-css-support.md#mathml-associated-files)) is a PDF 2.0 addition to the structure element dictionary. `/AF` is still written under `PdfVersion.Pdf17` (the default) and tolerated by most real-world readers, but only `Pdf20` makes the file's own header agree with the features it uses.
+Requesting a PDF/A or PDF/X level while leaving `PdfVersion` alone picks the version that standard is defined against, so the default never conflicts with an earlier level: `PdfA1B` still produces a PDF 1.4 file, `PdfA2B` and `PdfA3B` PDF 1.7, `X4` PDF 1.6, and `PdfA4` and `X6` PDF 2.0. Only an explicit `PdfVersion` that contradicts the level throws.
+
+This is needed for full spec conformance when combined with `EnableTaggedPdf` on a document containing `<math>` elements: the `/AF` (Associated Files) array PeachPDF attaches to a `Formula` structure element to carry the original MathML source (see [MathML Associated Files](html-css-support.md#mathml-associated-files)) is a PDF 2.0 addition to the structure element dictionary. `/AF` is still written under `PdfVersion.Pdf17` and tolerated by most real-world readers, but only `Pdf20` (the default) makes the file's own header agree with the features it uses.
 
 #### Brotli stream compression
 

@@ -322,13 +322,13 @@ namespace PeachPDF
         public PdfAConformance PdfAConformance { get; set; } = PdfAConformance.None;
 
         /// <summary>
-        /// The PDF version to target. Defaults to <see cref="PeachPDF.PdfVersion.Pdf17"/> - PeachPDF's
-        /// long-standing output version. Set to <see cref="PeachPDF.PdfVersion.Pdf20"/> to emit a real
-        /// PDF 2.0 (ISO 32000-2) file header. The PDF/A-4 levels and <see cref="PeachPDF.PdfXConformance.X6"/>
-        /// are defined against PDF 2.0: when this property is never set, requesting one selects
-        /// <see cref="PeachPDF.PdfVersion.Pdf20"/> for you, and setting it to <see cref="PeachPDF.PdfVersion.Pdf17"/>
-        /// explicitly alongside one throws. Every earlier PDF/A or PDF/X level is incompatible with an explicit
-        /// <see cref="PeachPDF.PdfVersion.Pdf20"/> - generation throws if both are set on the same call.
+        /// The PDF version to target. Defaults to <see cref="PeachPDF.PdfVersion.Pdf20"/> (ISO 32000-2), whose output
+        /// compresses streams with Brotli unless <see cref="BrotliCompression"/> is turned off. Set it to
+        /// <see cref="PeachPDF.PdfVersion.Pdf17"/> for a PDF 1.x file that every reader opens. Requesting a PDF/A or PDF/X
+        /// level while leaving this property alone picks the version that standard needs: PDF 2.0 for the PDF/A-4 levels and
+        /// <see cref="PeachPDF.PdfXConformance.X6"/>, and the PDF 1.4, 1.6 or 1.7 file of the earlier ones. Setting it
+        /// explicitly to something the requested level cannot use - <see cref="PeachPDF.PdfVersion.Pdf17"/> with PDF/A-4 or
+        /// PDF/X-6, <see cref="PeachPDF.PdfVersion.Pdf20"/> with any earlier level - throws.
         /// </summary>
         public PdfVersion PdfVersion
         {
@@ -340,7 +340,7 @@ namespace PeachPDF
             }
         }
 
-        private PdfVersion _pdfVersion = PdfVersion.Pdf17;
+        private PdfVersion _pdfVersion = PdfVersion.Pdf20;
 
         /// <summary>Whether <see cref="PdfVersion"/> was assigned, as opposed to left at its default.</summary>
         internal bool PdfVersionExplicit { get; private set; }
