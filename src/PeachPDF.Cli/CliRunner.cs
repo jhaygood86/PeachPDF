@@ -95,7 +95,7 @@ internal static class CliRunner
         {
             PageOrientation = options.Orientation ?? PageOrientation.Portrait,
             CompressContentStreams = !options.NoCompress,
-            BrotliCompression = !options.NoBrotli,
+            BrotliCompression = options.Brotli,
             EnableTaggedPdf = options.TaggedPdf,
             SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels,
             SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels,

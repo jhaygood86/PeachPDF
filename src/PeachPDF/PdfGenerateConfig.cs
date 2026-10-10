@@ -331,15 +331,16 @@ namespace PeachPDF
         public PdfVersion PdfVersion { get; set; } = PdfVersion.Pdf17;
 
         /// <summary>
-        /// When <c>true</c> (the default) and <see cref="PdfVersion"/> is <see cref="PeachPDF.PdfVersion.Pdf20"/>, PeachPDF
+        /// Off by default. When <c>true</c> and <see cref="PdfVersion"/> is <see cref="PeachPDF.PdfVersion.Pdf20"/>, PeachPDF
         /// compresses page content, fonts, embedded files and raster images' pixel data with the PDF 2.0
-        /// <c>/BrotliDecode</c> filter instead of <c>/FlateDecode</c> - typically smaller output. The filter is not part of
-        /// every PDF reader yet, so set this to <c>false</c> for output that must open everywhere. Ignored (always
-        /// off) for any other <see cref="PdfVersion"/>. Brotli comes from .NET's own encoder, or from the encoder a host
-        /// registers with <c>PeachDrawing.Text.Compression.BrotliCompression.SetCompressor</c>; with neither, PeachPDF
-        /// falls back to <c>/FlateDecode</c> silently.
+        /// <c>/BrotliDecode</c> filter instead of <c>/FlateDecode</c> - typically smaller output. The filter is not read by
+        /// every PDF reader yet (PDFium, the engine behind Chrome's and Edge's viewers, and Acrobat show such a file as
+        /// blank), so enable it only when you control the readers. Ignored (always off) for any other
+        /// <see cref="PdfVersion"/>. Brotli comes from .NET's own encoder, or from the encoder a host registers with
+        /// <c>PeachDrawing.Text.Compression.BrotliCompression.SetCompressor</c>; with neither, PeachPDF falls back to
+        /// <c>/FlateDecode</c> silently.
         /// </summary>
-        public bool BrotliCompression { get; set; } = true;
+        public bool BrotliCompression { get; set; }
 
         /// <summary>
         /// When set to <c>true</c>, PeachPDF emits an XMP metadata stream (the document catalog's

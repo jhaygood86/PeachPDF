@@ -6,15 +6,15 @@ namespace PeachPDF.Cli.Tests;
 public class CliConfigTranslationTests
 {
     [Fact]
-    public void PdfVersionAndNoBrotli_AreApplied()
+    public void PdfVersionAndBrotli_AreApplied()
     {
-        var config = CliRunner.BuildConfig(ArgumentParser.Parse(["--pdf-version", "2.0", "--no-brotli", "doc.html"]));
+        var config = CliRunner.BuildConfig(ArgumentParser.Parse(["--pdf-version", "2.0", "--brotli", "doc.html"]));
         Assert.Equal(PdfVersion.Pdf20, config.PdfVersion);
-        Assert.False(config.BrotliCompression);
+        Assert.True(config.BrotliCompression);
 
         var legacy = CliRunner.BuildConfig(ArgumentParser.Parse(["--pdf-version=1.7", "doc.html"]));
         Assert.Equal(PdfVersion.Pdf17, legacy.PdfVersion);
-        Assert.True(legacy.BrotliCompression);
+        Assert.False(legacy.BrotliCompression);
     }
 
     [Fact]

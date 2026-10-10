@@ -91,7 +91,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _brotliCompression; }
             set { _brotliCompression = value; }
         }
-        bool _brotliCompression = true;
+        bool _brotliCompression;
 
         /// <summary>
         /// Whether general-purpose streams are compressed with <c>/BrotliDecode</c> instead of <c>/FlateDecode</c>: the

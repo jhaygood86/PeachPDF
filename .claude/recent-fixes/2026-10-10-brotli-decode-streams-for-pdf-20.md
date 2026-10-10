@@ -1,6 +1,6 @@
 # /BrotliDecode streams for PDF 2.0 (and the Brotli encoder seam)
 
-Under `PdfVersion.Pdf20`, `PdfGenerateConfig.BrotliCompression` (default true) makes every general-purpose stream use
+Under `PdfVersion.Pdf20`, `PdfGenerateConfig.BrotliCompression` (opt-in, default **false**) makes every general-purpose stream use
 `/BrotliDecode` instead of `/FlateDecode`. The load-bearing idea is one chokepoint: `StreamCompression.Encode(options, data, out filterName)`
 (`PdfSharpCore/Pdf.Filters/`) replaced every direct `Filtering.FlateDecode.Encode` + hard-coded `"/FlateDecode"` pair (content, forms,
 fonts, ToUnicode, embedded files, `PdfStream.Zip`, raster image/mask/SMask data). A new call site must use it or it silently stays Flate.
@@ -27,3 +27,8 @@ fonts, ToUnicode, embedded files, `PdfStream.Zip`, raster image/mask/SMask data)
 - pdf.js notes the browser `DecompressionStream` rejects bytes after the end of the Brotli data (it falls back to its own decoder), so `/Length` must stay exact.
 - Reader support: pdf.js (5.7+), MuPDF (1.26+, experimental); Acrobat does not read it yet.
 
+## Why it is opt-in
+Measured with pypdfium2 (PDFium 152) and PyMuPDF 1.28 on the same document: PDF 2.0 + Flate renders in both; PDF 2.0 + **Brotli renders a blank page in
+PDFium** (one grey level) and normally in MuPDF. PDFium is Chrome's and Edge's viewer engine, and the docs site's showcase thumbnails use it, so a
+default-on Brotli would have made default output blank in them. `BrotliCompression` therefore defaults to false (CLI: `--brotli`); revisit when PDFium and
+Acrobat read the filter.

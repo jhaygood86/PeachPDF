@@ -123,7 +123,7 @@ internal static class ArgumentParser
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
 
                 case "no-compress": _options.NoCompress = true; break;
-                case "no-brotli": _options.NoBrotli = true; break;
+                case "brotli": _options.Brotli = true; break;
                 case "pdf-version": ParsePdfVersion(_options, RequireValue(name, inlineValue)); break;
                 case "raster-dpi": SetRasterDpi(_options, RequireValue(name, inlineValue)); break;
                 case "flatten-transparency": _options.FlattenTransparency = true; break;

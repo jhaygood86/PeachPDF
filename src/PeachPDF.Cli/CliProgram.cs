@@ -111,8 +111,8 @@ internal static class CliProgram
               --interactive-pdf-forms
                                      Emit fillable AcroForm fields for form elements.
               --no-compress          Do not compress PDF content streams.
-              --no-brotli            Compress with Flate even when targeting PDF 2.0
-                                     (which otherwise uses Brotli).
+              --brotli               With PDF 2.0, compress streams with Brotli (smaller,
+                                     but Chrome, Edge and Acrobat show them blank).
               --pdf-version=VER      PDF version to write: 1.7 or 2.0.
               --raster-dpi=DPI       Resolution, in pixels per inch of paper (72-1200,
                                      default 300), of effects PeachPDF renders as bitmaps,

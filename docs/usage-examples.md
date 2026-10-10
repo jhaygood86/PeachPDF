@@ -529,13 +529,13 @@ This is needed for full spec conformance when combined with `EnableTaggedPdf` on
 
 #### Brotli stream compression
 
-Under `PdfVersion.Pdf20`, PeachPDF compresses page content, fonts, embedded files and raster image data with the PDF 2.0 `/BrotliDecode` filter instead of `/FlateDecode`, which usually produces smaller files. Not every PDF reader decodes Brotli yet, so set `BrotliCompression = false` for output that must open everywhere; it is always off for other `PdfVersion` values. Brotli uses .NET's own encoder; on a host without one (WebAssembly in a browser) PeachPDF falls back to `/FlateDecode` unless you register an encoder with `PeachDrawing.Text.Compression.BrotliCompression.SetCompressor`. The [`peachpdf`](cli.md) tool exposes both as `--pdf-version` and `--no-brotli`.
+Set `BrotliCompression = true` under `PdfVersion.Pdf20` and PeachPDF compresses page content, fonts, embedded files and raster image data with the PDF 2.0 `/BrotliDecode` filter instead of `/FlateDecode`, which usually produces smaller files. It is off by default because not every PDF reader decodes Brotli yet: PDFium (the engine behind Chrome's and Edge's viewers) and Acrobat show such a file as blank, while MuPDF and pdf.js read it. Enable it when you control the readers. It is always off for other `PdfVersion` values. Brotli uses .NET's own encoder; on a host without one (WebAssembly in a browser) PeachPDF falls back to `/FlateDecode` unless you register an encoder with `PeachDrawing.Text.Compression.BrotliCompression.SetCompressor`. The [`peachpdf`](cli.md) tool exposes both as `--pdf-version` and `--brotli`.
 
 ```csharp
 var config = new PdfGenerateConfig
 {
     PdfVersion = PdfVersion.Pdf20,
-    BrotliCompression = false // Flate streams, PDF 2.0 header
+    BrotliCompression = true // Brotli streams: smaller, but unreadable in PDFium and Acrobat today
 };
 ```
 
