@@ -4649,10 +4649,11 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
         TransformSwatch("origin: 25% 75%", "rotate(45deg)", "transform-origin: 25% 75%;")
     ) +
 
-    "<h2>4 — matrix() Passthrough</h2>" +
+    "<h2>4 — matrix()</h2>" +
     Row(
         TransformSwatch("identity matrix", "matrix(1, 0, 0, 1, 0, 0)"),
-        TransformSwatch("translate via matrix", "matrix(1, 0, 0, 1, 20, 10)"),
+        TransformSwatch("translate via matrix (px)", "matrix(1, 0, 0, 1, 20, 10)"),
+        TransformSwatch("translate(20px, 10px): same offset", "translate(20px, 10px)"),
         TransformSwatch("scale via matrix", "matrix(1.3, 0, 0, 1.3, 0, 0)"),
         TransformSwatch("skew via matrix", "matrix(1, 0.3, 0, 1, 0, 0)")
     ) +

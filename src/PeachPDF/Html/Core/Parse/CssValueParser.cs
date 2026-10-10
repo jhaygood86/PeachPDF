@@ -1004,8 +1004,8 @@ namespace PeachPDF.Html.Core.Parse
         /// 3D functions are composed as a genuine 4x4 matrix (see <see cref="BuildFunctionMatrix"/>) and then
         /// projected onto the box's own z=0 plane - this projection is mathematically exact (the flattened
         /// result is a true 2D affine transform, with no approximation), see <see cref="ProjectTo2D"/>.
-        /// <c>perspective()</c> is not supported (see docs/html-css-support.md) and is ignored like any other
-        /// unrecognized function name, contributing identity.
+        /// A <c>perspective()</c> (or a <c>matrix3d()</c> with perspective terms) makes the 4x4 projective; the returned
+        /// affine matrix is then only its linearisation, see <see cref="ParseTransformFull"/>.
         /// </remarks>
         public static Matrix3x2 ParseTransform(string transformValue, string transformOriginValue, CssBox box) =>
             ParseTransformFull(transformValue, transformOriginValue, box).Affine;
@@ -1202,11 +1202,11 @@ namespace PeachPDF.Html.Core.Parse
                 if (args.Count < 6) return null;
                 float a = NumberArg(0), b = NumberArg(1), c = NumberArg(2),
                       d = NumberArg(3), e = NumberArg(4), f = NumberArg(5);
-                return new Matrix4x4(
+                return PixelMatrixToPoints(new Matrix4x4(
                     a, b, 0, 0,
                     c, d, 0, 0,
                     0, 0, 1, 0,
-                    e, f, 0, 1);
+                    e, f, 0, 1));
             }
             if (Named(name, FunctionNames.Matrix3d))
             {
@@ -1217,11 +1217,11 @@ namespace PeachPDF.Html.Core.Parse
                 // with translation in row 4. These two conventions are transposes of each other, so
                 // reading the 16 source arguments straight into the row-major constructor (in order)
                 // yields the mathematically correct matrix - verified against translate3d() equivalence.
-                return new Matrix4x4(
+                return PixelMatrixToPoints(new Matrix4x4(
                     v[0], v[1], v[2], v[3],
                     v[4], v[5], v[6], v[7],
                     v[8], v[9], v[10], v[11],
-                    v[12], v[13], v[14], v[15]);
+                    v[12], v[13], v[14], v[15]));
             }
 
             // perspective(<length> | none): the CSS Transforms 2 matrix that divides by 1 - z/d. A non-positive length is invalid there and
@@ -1242,6 +1242,19 @@ namespace PeachPDF.Html.Core.Parse
 
             // Unrecognized / unsupported (future functions) -> identity, contributes nothing.
             return null;
+        }
+
+        /// <summary>
+        /// Re-expresses a matrix whose lengths are CSS pixels (the raw numbers of <c>matrix()</c>/<c>matrix3d()</c>) in the
+        /// layout unit, the point. With <c>S = scale(pt/px)</c> mapping pixel coordinates to point coordinates, a point's
+        /// transform is <c>S⁻¹ · M · S</c> (row-vector convention): the translation (a length) is multiplied by pt/px, the
+        /// perspective terms (<c>w' = x*m14 + y*m24 + z*m34 + 1</c>, a number per length) are divided by it, and the unitless
+        /// linear part is unchanged - which is what keeps <c>matrix3d(..., 0,0,-1/300,1)</c> identical to <c>perspective(300px)</c>.
+        /// </summary>
+        private static Matrix4x4 PixelMatrixToPoints(Matrix4x4 matrixInPixels)
+        {
+            const float pointsPerPx = (float)Length.PointsPerPx;
+            return Matrix4x4.CreateScale(1f / pointsPerPx) * matrixInPixels * Matrix4x4.CreateScale(pointsPerPx);
         }
 
         private static bool Named(ReadOnlySpan<char> data, string functionName) =>
