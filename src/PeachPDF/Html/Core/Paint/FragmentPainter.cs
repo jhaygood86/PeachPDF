@@ -8,6 +8,7 @@ using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace PeachPDF.Html.Core.Paint
 {
@@ -220,6 +221,101 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// Whether <paramref name="matrix"/> can be pushed onto the canvas: finite, with a determinant the PDF writer's CTM inversion
+        /// (<c>XMatrix.HasInverse</c>, which treats anything under ten times double epsilon as zero) will accept. The cut-off is a
+        /// little looser than the writer's, so a single matrix this lets through is never one the writer rejects on its own; a scale small
+        /// enough to fall between the two has no visible area anyway. It is a per-element check: the writer inverts the cumulative CTM, which
+        /// it tolerates being singular (<c>PdfGraphicsState.RealizeCtm</c>). Computed in double, since the float determinant of a small
+        /// but real scale underflows.
+        /// </summary>
+        private static bool IsInvertible(in Matrix3x2 matrix)
+        {
+            var determinant = (double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21;
+            return float.IsFinite(matrix.M11) && float.IsFinite(matrix.M12) && float.IsFinite(matrix.M21) && float.IsFinite(matrix.M22) &&
+                   float.IsFinite(matrix.M31) && float.IsFinite(matrix.M32) && Math.Abs(determinant) >= 1e-12;
+        }
+
+        /// <summary>
+        /// The thickness, in layout units, below which a transformed element is not painted: 0.017 CSS px, where Chrome stops drawing an
+        /// edge-on plane (<c>rotateY(89.99deg)</c> of a 100px box shows nothing; 89.9deg still shows a faint line).
+        /// </summary>
+        private const double MinVisibleThickness = 0.017 * Length.PointsPerPx;
+
+        /// <summary>
+        /// Below this determinant a matrix is close enough to singular for its thickness to be worth working out (see
+        /// <see cref="HasVisibleThickness"/>): anything larger keeps a visible area for every box a page can hold, and is not measured.
+        /// </summary>
+        private const double NearlySingularDeterminant = 1e-3;
+
+        /// <summary>
+        /// Whether a <paramref name="width"/> x <paramref name="height"/> rectangle is still more than a hairline thick once
+        /// <paramref name="matrix"/> has transformed it - false for a plane turned edge-on (its image is a sliver of no visible area, which
+        /// a renderer would still stroke as a one-pixel line) and for one scaled down to a speck.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="IsInvertible"/> alone cannot decide this: an absolute determinant tells a collapsed matrix from a merely small one but
+        /// not how much of a box is left. The float <c>cos(90deg)</c> is about 4e-8, so <c>rotateX(90deg)</c> has a determinant far above any
+        /// cut-off that spares a legitimate small scale, yet a 100px box turned to it is 4e-6px thick. The thickness is the image's area
+        /// over its longest edge, which is the width of the parallelogram across its narrow direction and does not depend on where the box
+        /// sits (a linear map moves a rectangle without reshaping what it does to its size).
+        /// </remarks>
+        internal static bool HasVisibleThickness(in Matrix3x2 matrix, double width, double height)
+        {
+            var determinant = Math.Abs((double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21);
+            if (determinant >= NearlySingularDeterminant)
+                return true;
+
+            var widthEdge = Math.Sqrt((double)matrix.M11 * matrix.M11 + (double)matrix.M12 * matrix.M12) * width;
+            var heightEdge = Math.Sqrt((double)matrix.M21 * matrix.M21 + (double)matrix.M22 * matrix.M22) * height;
+            var longestEdge = Math.Max(widthEdge, heightEdge);
+
+            return longestEdge > 0 && determinant * width * height / longestEdge >= MinVisibleThickness;
+        }
+
+        /// <summary>
+        /// Whether the element's own <c>transform</c> leaves anything to paint: <see cref="IsInvertible"/>, and - for a matrix near enough to
+        /// singular to matter - a visible thickness for the extent of everything the element paints.
+        /// </summary>
+        private static bool LeavesVisibleArea(in Matrix3x2 matrix, BoxFragment fragment)
+        {
+            if (!IsInvertible(matrix))
+                return false;
+
+            var determinant = Math.Abs((double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21);
+            if (determinant >= NearlySingularDeterminant)
+                return true;
+
+            // Nothing with an extent (so nothing to cull on): left to the ordinary paint, as before.
+            return SubtreeExtent(fragment) is not { } extent || HasVisibleThickness(matrix, extent.Width, extent.Height);
+        }
+
+        /// <summary>
+        /// Pushes <paramref name="matrix"/> unless it has no inverse (<see cref="IsInvertible"/>), in which case nothing under it is visible.
+        /// The transforms this painter pushes for an element's box (beyond its own <c>transform</c>) go through here. Pushes made elsewhere -
+        /// SVG content, image orientation, pattern tiles - are not guarded by it; for those the PDF writer's tolerance of a singular
+        /// CTM (<c>PdfGraphicsState.RealizeCtm</c>) is what keeps a degenerate matrix from aborting the document.
+        /// </summary>
+        /// <returns>true when the matrix was pushed, and the caller owes a <see cref="Canvas.PopTransform"/></returns>
+        internal static bool TryPushTransform(Canvas g, in Matrix3x2 matrix)
+        {
+            if (!IsInvertible(matrix))
+                return false;
+
+            g.PushTransform(matrix);
+            return true;
+        }
+
+        /// <summary>Paints <paramref name="fragment"/> with its clips and effects under <paramref name="matrix"/>, or not at all when that has no inverse.</summary>
+        internal void PaintUnderTransform(Canvas g, BoxFragment fragment, in Matrix3x2 matrix)
+        {
+            if (!TryPushTransform(g, matrix))
+                return;
+
+            PaintClippedWithEffects(g, fragment);
+            g.PopTransform();
+        }
+
+        /// <summary>
         /// Paints one box fragment — the portion of a box that lives in a single fragmentainer (CSS
         /// Fragmentation Level 3 §2) — establishing the whole-element effects (<c>transform</c>,
         /// <c>clip-path</c>, <c>opacity</c>) around it.
@@ -274,6 +370,12 @@ namespace PeachPDF.Html.Core.Paint
                     var projective = _textOnly ? null : ResolveProjective(fragment);
                     var transformed = box.IsTransformed && projective is null;
 
+                    // css-transforms-1 §"Transform Rendering": an element whose matrix is not invertible has no visible area and is not
+                    // rendered (its layout box is unchanged). The PDF writer inverts the CTM it realizes, so pushing it would throw.
+                    var degenerate = transformed && !LeavesVisibleArea(box.ActualTransformMatrix, fragment);
+                    if (degenerate)
+                        transformed = false;
+
                     if (transformed)
                     {
                         // ActualTransformMatrix is cached treating the box's own top-left as local
@@ -283,21 +385,21 @@ namespace PeachPDF.Html.Core.Paint
                         g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                     }
 
-                    if (projective is { Affine: { } affine })
+                    if (degenerate)
+                    {
+                        // Not rendered: the element and its whole subtree have no visible area.
+                    }
+                    else if (projective is { Affine: { } affine })
                     {
                         // Affine once the parent's perspective is in: a plain transform after all (a plane brought nearer is just larger).
-                        g.PushTransform(affine);
-                        PaintClippedWithEffects(g, fragment);
-                        g.PopTransform();
+                        PaintUnderTransform(g, fragment, affine);
                     }
                     else if (projective is { } warp)
                     {
                         if (!PaintProjective(g, fragment, warp))
                         {
                             // No raster context (a measure-only pass): the affine linearisation of the transform is the best that is left.
-                            g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
-                            PaintClippedWithEffects(g, fragment);
-                            g.PopTransform();
+                            PaintUnderTransform(g, fragment, box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                         }
                     }
                     else

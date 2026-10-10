@@ -631,8 +631,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 RealizedCtm.Prepend(UnrealizedCtm);
                 UnrealizedCtm = new XMatrix();
                 EffectiveCtm = RealizedCtm;
+                // A cumulative CTM can collapse (nested tiny scales, each invertible on its own) and has no inverse then; nothing
+                // painted under it is visible, so fall back to identity rather than abort the document.
                 InverseEffectiveCtm = EffectiveCtm;
-                InverseEffectiveCtm.Invert();
+                if (InverseEffectiveCtm.HasInverse)
+                    InverseEffectiveCtm.Invert();
+                else
+                    InverseEffectiveCtm = new XMatrix();
             }
         }
         #endregion
