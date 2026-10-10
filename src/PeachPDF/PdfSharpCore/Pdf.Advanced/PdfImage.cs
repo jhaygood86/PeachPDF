@@ -631,11 +631,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(4, "/DeviceCMYK", raster.IccProfile);
 
-            var flateDecode = new FlateDecode();
-            var compressed = flateDecode.Encode(raster.Data, _document.Options.FlateEncodeMode);
+            var compressed = StreamCompression.Encode(_document.Options, raster.Data, out var rasterFilter);
             Stream = new PdfStream(compressed, this);
             Elements[PdfStream.Keys.Length] = new PdfInteger(compressed.Length);
-            Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+            Elements[PdfStream.Keys.Filter] = new PdfName(rasterFilter);
 
             if (AllowInterpolate)
                 Elements[Keys.Interpolate] = PdfBoolean.True;
@@ -767,12 +766,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     throw new NotImplementedException("Image format not supported (grayscales).");
                 }
 
-                FlateDecode fd = new FlateDecode();
                 if (hasMask)
                 {
                     // monochrome mask is either sufficient or
                     // provided for compatibility with older reader versions
-                    byte[] maskDataCompressed = fd.Encode(mask.MaskData, _document.Options.FlateEncodeMode);
+                    byte[] maskDataCompressed = StreamCompression.Encode(_document.Options, mask.MaskData, out var maskFilter);
                     PdfDictionary pdfMask = new PdfDictionary(_document);
                     pdfMask.Elements.SetName(Keys.Type, "/XObject");
                     pdfMask.Elements.SetName(Keys.Subtype, "/Image");
@@ -780,7 +778,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     Owner._irefTable.Add(pdfMask);
                     pdfMask.Stream = new PdfStream(maskDataCompressed, pdfMask);
                     pdfMask.Elements[PdfStream.Keys.Length] = new PdfInteger(maskDataCompressed.Length);
-                    pdfMask.Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+                    pdfMask.Elements[PdfStream.Keys.Filter] = new PdfName(maskFilter);
                     pdfMask.Elements[Keys.Width] = new PdfInteger(width);
                     pdfMask.Elements[Keys.Height] = new PdfInteger(height);
                     pdfMask.Elements[Keys.BitsPerComponent] = new PdfInteger(1);
@@ -797,7 +795,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
 
                     // The image provides an alpha mask (requires Arcrobat 5.0 or higher)
-                    byte[] alphaMaskCompressed = fd.Encode(alphaMask, _document.Options.FlateEncodeMode);
+                    byte[] alphaMaskCompressed = StreamCompression.Encode(_document.Options, alphaMask, out var alphaFilter);
                     PdfDictionary smask = new PdfDictionary(_document);
                     smask.Elements.SetName(Keys.Type, "/XObject");
                     smask.Elements.SetName(Keys.Subtype, "/Image");
@@ -805,7 +803,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     Owner._irefTable.Add(smask);
                     smask.Stream = new PdfStream(alphaMaskCompressed, smask);
                     smask.Elements[PdfStream.Keys.Length] = new PdfInteger(alphaMaskCompressed.Length);
-                    smask.Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+                    smask.Elements[PdfStream.Keys.Filter] = new PdfName(alphaFilter);
                     smask.Elements[Keys.Width] = new PdfInteger(width);
                     smask.Elements[Keys.Height] = new PdfInteger(height);
                     smask.Elements[Keys.BitsPerComponent] = new PdfInteger(8);
@@ -815,11 +813,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     Elements[Keys.SMask] = smask.Reference;
                 }
 
-                byte[] imageDataCompressed = fd.Encode(imageData, _document.Options.FlateEncodeMode);
+                byte[] imageDataCompressed = StreamCompression.Encode(_document.Options, imageData, out var imageFilter);
 
                 Stream = new PdfStream(imageDataCompressed, this);
                 Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
-                Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+                Elements[PdfStream.Keys.Filter] = new PdfName(imageFilter);
                 Elements[Keys.Width] = new PdfInteger(width);
                 Elements[Keys.Height] = new PdfInteger(height);
                 Elements[Keys.BitsPerComponent] = new PdfInteger(8);

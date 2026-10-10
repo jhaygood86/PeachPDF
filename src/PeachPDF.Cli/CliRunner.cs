@@ -95,6 +95,7 @@ internal static class CliRunner
         {
             PageOrientation = options.Orientation ?? PageOrientation.Portrait,
             CompressContentStreams = !options.NoCompress,
+            BrotliCompression = !options.NoBrotli,
             EnableTaggedPdf = options.TaggedPdf,
             SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels,
             SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels,
@@ -142,6 +143,11 @@ internal static class CliRunner
         if (options.MarginRightPt is { } right) config.MarginRight = (int)Math.Round(right);
         if (options.MarginBottomPt is { } bottom) config.MarginBottom = (int)Math.Round(bottom);
         if (options.MarginLeftPt is { } left) config.MarginLeft = (int)Math.Round(left);
+
+        if (options.PdfVersion is { } pdfVersion)
+        {
+            config.PdfVersion = pdfVersion;
+        }
 
         if (options.PdfA is { } pdfA)
         {

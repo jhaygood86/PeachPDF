@@ -664,6 +664,11 @@ if (OperatingSystem.IsBrowser())
 `PeachPDF.Demo.BlazorWasm`'s `Program.cs` does exactly this, which is how its own WOFF2 fonts, `hyphens: auto` and Thai/Lao/Khmer/
 Burmese dictionary line breaking all work in the browser.
 
+
+### Brotli compression
+
+`PeachDrawing.Text.Compression.BrotliCompression` is the encoding counterpart of `BrotliDecompression`: `TryCompress(data, quality, out compressed)` compresses with .NET's own encoder, `IsAvailable` reports whether any encoder works on this host, and `SetCompressor` registers a replacement (it receives the destination stream and the quality, 0 to 11, and returns a writable stream that finishes the Brotli data when disposed and leaves the destination open). PeachPDF uses it for PDF 2.0's `/BrotliDecode` streams.
+
 ## Licences
 
 The engine (`PeachDrawing.Text`) is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font

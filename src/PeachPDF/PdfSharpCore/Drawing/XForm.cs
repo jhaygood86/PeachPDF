@@ -199,8 +199,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
                 if (_document.Options.CompressContentStreams)
                 {
-                    _pdfForm.Stream.Value = Filtering.FlateDecode.Encode(_pdfForm.Stream.Value, _document.Options.FlateEncodeMode);
-                    _pdfForm.Elements["/Filter"] = new PdfName("/FlateDecode");
+                    _pdfForm.Stream.Value = StreamCompression.Encode(_document.Options, _pdfForm.Stream.Value, out var formFilter);
+                    _pdfForm.Elements["/Filter"] = new PdfName(formFilter);
                 }
                 int length = _pdfForm.Stream.Length;
                 _pdfForm.Elements.SetInteger("/Length", length);

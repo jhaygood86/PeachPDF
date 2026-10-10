@@ -120,8 +120,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             ms.Dispose();
             if (Owner.Options.CompressContentStreams)
             {
-                Elements.SetName("/Filter", "/FlateDecode");
-                bytes = Filtering.FlateDecode.Encode(bytes, _document.Options.FlateEncodeMode);
+                bytes = StreamCompression.Encode(_document.Options, bytes, out var filterName);
+                Elements.SetName("/Filter", filterName);
             }
             //PdfStream stream = CreateStream(bytes);
             else

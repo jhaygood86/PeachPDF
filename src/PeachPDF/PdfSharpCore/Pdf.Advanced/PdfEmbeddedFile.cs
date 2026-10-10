@@ -79,8 +79,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // Same write-time pattern PdfContent uses; the Filter check makes a second Save() a no-op.
             if (CompressOnWrite && Stream != null && Elements.GetName(Keys.Filter).Length == 0)
             {
-                Stream.Value = Filtering.FlateDecode.Encode(Stream.Value, _document.Options.FlateEncodeMode);
-                Elements.SetName(Keys.Filter, "/FlateDecode");
+                Stream.Value = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
+                Elements.SetName(Keys.Filter, filterName);
                 Elements.SetInteger(Keys.Length, Stream.Length);
             }
 

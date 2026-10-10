@@ -237,7 +237,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// </para>
         /// </summary>
         private static LanguagePatternSet? LoadPatternSet(string tag) =>
-            LoadPatternSet(tag, static compressed => new BrotliStream(compressed, CompressionMode.Decompress));
+            LoadPatternSet(tag, static compressed => BrotliDecoderRegistry.Custom?.Invoke(compressed) ?? new BrotliStream(compressed, CompressionMode.Decompress));
 
         /// <param name="tag">the BCP-47 primary language subtag whose patterns to load</param>
         /// <param name="openDecompressed">

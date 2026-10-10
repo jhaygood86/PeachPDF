@@ -1581,8 +1581,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
                 if (!_ownerDictionary.Elements.ContainsKey(Keys.Filter))
                 {
-                    _value = Filtering.FlateDecode.Encode(_value, _ownerDictionary._document.Options.FlateEncodeMode);
-                    _ownerDictionary.Elements[Keys.Filter] = new PdfName("/FlateDecode");
+                    _value = StreamCompression.Encode(_ownerDictionary._document.Options, _value, out var filterName);
+                    _ownerDictionary.Elements[Keys.Filter] = new PdfName(filterName);
                     _ownerDictionary.Elements[Keys.Length] = new PdfInteger(_value.Length);
                 }
             }

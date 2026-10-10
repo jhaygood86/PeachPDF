@@ -34,6 +34,10 @@ PeachDrawing.Text.AxisTags : static class
   field const String Slant
   field const String Weight
   field const String Width
+PeachDrawing.Text.Compression.BrotliCompression : static class
+  method static Boolean TryCompress(ReadOnlySpan<Byte> data, Int32 quality, out Byte[] compressed)
+  method static Void SetCompressor(Func<Stream, Int32, Stream> compressor)
+  property static Boolean IsAvailable { get; }
 PeachDrawing.Text.Compression.BrotliDecompression : static class
   method static Void SetDecompressor(Func<Stream, Stream> decompressor)
 PeachDrawing.Text.Export.ExportedFont : sealed class
