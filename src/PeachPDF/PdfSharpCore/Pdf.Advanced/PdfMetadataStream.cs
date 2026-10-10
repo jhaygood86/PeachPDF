@@ -123,7 +123,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 var (part, level) = PdfAConformanceIdentifiers(conformance);
                 description.Add(new XAttribute(XNamespace.Xmlns + "pdfaid", PdfaidNs));
                 description.Add(new XElement(PdfaidNs + "part", part));
-                description.Add(new XElement(PdfaidNs + "conformance", level));
+
+                // PDF/A-4 identifies its revision instead of an A/B/U level, and carries pdfaid:conformance only for the
+                // e and f variants (ISO 19005-4, 6.7.3): a plain PDF/A-4 file must not have the property at all.
+                if (part == "4")
+                    description.Add(new XElement(PdfaidNs + "rev", "2020"));
+                if (level is not null)
+                    description.Add(new XElement(PdfaidNs + "conformance", level));
             }
 
             // pdfx:GTS_PDFXVersion/GTS_PDFXConformance mirror the Info-dictionary keys PdfGenerator writes
@@ -134,12 +140,18 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (pdfXConformance != PeachPDF.PdfXConformance.None)
             {
                 var (version, xConformance) = PdfXIdentifiers(pdfXConformance);
-                description.Add(new XAttribute(XNamespace.Xmlns + "pdfx", PdfxNs));
-                description.Add(new XElement(PdfxNs + "GTS_PDFXVersion", version));
-                if (xConformance is not null)
-                    description.Add(new XElement(PdfxNs + "GTS_PDFXConformance", xConformance));
 
-                if (pdfXConformance == PeachPDF.PdfXConformance.X4)
+                // PDF/X-6 identifies itself only under the ISO-registered pdfxid schema; the Adobe-era pdfx block (and the
+                // matching Info-dictionary keys) belong to the levels that predate it.
+                if (pdfXConformance != PeachPDF.PdfXConformance.X6)
+                {
+                    description.Add(new XAttribute(XNamespace.Xmlns + "pdfx", PdfxNs));
+                    description.Add(new XElement(PdfxNs + "GTS_PDFXVersion", version));
+                    if (xConformance is not null)
+                        description.Add(new XElement(PdfxNs + "GTS_PDFXConformance", xConformance));
+                }
+
+                if (pdfXConformance is PeachPDF.PdfXConformance.X4 or PeachPDF.PdfXConformance.X6)
                 {
                     description.Add(new XAttribute(XNamespace.Xmlns + "pdfxid", PdfxidNs));
                     description.Add(new XElement(PdfxidNs + "GTS_PDFXVersion", version));
@@ -229,8 +241,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 new XElement(FxNs + "Version", "1.0"),
                 new XElement(FxNs + "ConformanceLevel", conformanceLevel));
 
-        static (string Part, string Level) PdfAConformanceIdentifiers(PdfAConformance conformance) => conformance switch
+        static (string Part, string? Level) PdfAConformanceIdentifiers(PdfAConformance conformance) => conformance switch
         {
+            PdfAConformance.PdfA4 => ("4", null),
+            PdfAConformance.PdfA4E => ("4", "E"),
+            PdfAConformance.PdfA4F => ("4", "F"),
             PdfAConformance.PdfA1B => ("1", "B"),
             PdfAConformance.PdfA1A => ("1", "A"),
             PdfAConformance.PdfA2B => ("2", "B"),
@@ -276,6 +291,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PeachPDF.PdfXConformance.X1a => ("PDF/X-1a:2003", "PDF/X-1a:2003"),
             PeachPDF.PdfXConformance.X3 => ("PDF/X-3:2003", null),
             PeachPDF.PdfXConformance.X4 => ("PDF/X-4", null),
+            PeachPDF.PdfXConformance.X6 => ("PDF/X-6", null),
             _ => throw new ArgumentOutOfRangeException(nameof(conformance), conformance, null),
         };
 

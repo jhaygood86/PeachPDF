@@ -17,10 +17,8 @@ namespace PeachPDF
         /// PDF 2.0 (ISO 32000-2). Needed for spec-conformant use of PDF 2.0-only structure-tree
         /// features such as a structure element's <c>/AF</c> (Associated Files) array - see the
         /// <c>-peachpdf-pdf-tag-type: Formula</c> MathML embedding described in
-        /// docs/html-css-support.md. Incompatible with requesting any
-        /// <see cref="PeachPDF.PdfAConformance"/> level other than <see cref="PeachPDF.PdfAConformance.None"/>:
-        /// PeachPDF does not implement PDF/A-4 (ISO 19005-4), the PDF-2.0-based PDF/A level, and every
-        /// PDF/A level it does implement is defined against PDF 1.4 or 1.7.
+        /// docs/html-css-support.md. The version the PDF/A-4 and PDF/X-6
+        /// levels require; incompatible with every earlier PDF/A and PDF/X level, which are defined against PDF 1.4, 1.6 or 1.7.
         /// </summary>
         Pdf20
     }

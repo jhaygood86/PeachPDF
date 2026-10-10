@@ -41,6 +41,9 @@ public class CliPdfAAndEmbeddingTests
     [InlineData("2u", PdfAConformance.PdfA2U)]
     [InlineData("3a", PdfAConformance.PdfA3A)]
     [InlineData("3b", PdfAConformance.PdfA3B)]
+    [InlineData("4", PdfAConformance.PdfA4)]
+    [InlineData("4e", PdfAConformance.PdfA4E)]
+    [InlineData("4f", PdfAConformance.PdfA4F)]
     [InlineData("3U", PdfAConformance.PdfA3U)]
     public void PdfA_LevelIsParsed(string value, PdfAConformance expected)
     {

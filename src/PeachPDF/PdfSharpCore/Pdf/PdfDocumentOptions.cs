@@ -100,7 +100,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// </summary>
         public bool UseBrotli
         {
-            get { return _brotliCompression && _pdfVersion == PdfVersion.Pdf20; }
+            get { return _brotliCompression && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly; }
         }
 
         /// <summary>
@@ -117,7 +117,23 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>Whether an eligible JPEG XL image embeds as <c>/JXLDecode</c>: the request, and only for a PDF 2.0 document.</summary>
         public bool UseJxlPassthrough
         {
-            get { return _jxlPassthrough && _pdfVersion == PdfVersion.Pdf20; }
+            get { return _jxlPassthrough && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly; }
+        }
+
+        /// <summary>
+        /// Whether the document may only use the stream filters listed in ISO 32000-2 Table 6, which excludes the
+        /// <c>/BrotliDecode</c> and <c>/JXLDecode</c> extensions: required by PDF/A-4 (ISO 19005-4, 6.1.6.2) and applied to
+        /// PDF/X-6 as well.
+        /// </summary>
+        public bool StandardFiltersOnly
+        {
+            get { return IsPdfA4 || PdfXConformance == PeachPDF.PdfXConformance.X6; }
+        }
+
+        /// <summary>Whether the document claims one of the PDF/A-4 levels.</summary>
+        public bool IsPdfA4
+        {
+            get { return PdfAConformance is PeachPDF.PdfAConformance.PdfA4 or PeachPDF.PdfAConformance.PdfA4E or PeachPDF.PdfAConformance.PdfA4F; }
         }
 
         /// <summary>

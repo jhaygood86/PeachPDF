@@ -458,6 +458,9 @@ FodyWeavers.xsd
 !/docs/showcase.html
 !/docs/why-peachpdf.html
 
+# The PDF/A conformance job renders this document with the CLI, so it is source too
+!/.github/conformance/*.html
+
 # Staged into the demo's wwwroot by its StageSharedFontAssets target; the source of truth is
 # assets/fonts/
 /src/PeachPDF.Demo.BlazorWasm/wwwroot/fonts/

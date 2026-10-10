@@ -324,11 +324,26 @@ namespace PeachPDF
         /// <summary>
         /// The PDF version to target. Defaults to <see cref="PeachPDF.PdfVersion.Pdf17"/> - PeachPDF's
         /// long-standing output version. Set to <see cref="PeachPDF.PdfVersion.Pdf20"/> to emit a real
-        /// PDF 2.0 (ISO 32000-2) file header. Incompatible with requesting any
-        /// <see cref="PdfAConformance"/> level other than <see cref="PeachPDF.PdfAConformance.None"/> -
-        /// generation throws if both are set on the same call.
+        /// PDF 2.0 (ISO 32000-2) file header. The PDF/A-4 levels and <see cref="PeachPDF.PdfXConformance.X6"/>
+        /// are defined against PDF 2.0: when this property is never set, requesting one selects
+        /// <see cref="PeachPDF.PdfVersion.Pdf20"/> for you, and setting it to <see cref="PeachPDF.PdfVersion.Pdf17"/>
+        /// explicitly alongside one throws. Every earlier PDF/A or PDF/X level is incompatible with an explicit
+        /// <see cref="PeachPDF.PdfVersion.Pdf20"/> - generation throws if both are set on the same call.
         /// </summary>
-        public PdfVersion PdfVersion { get; set; } = PdfVersion.Pdf17;
+        public PdfVersion PdfVersion
+        {
+            get => _pdfVersion;
+            set
+            {
+                _pdfVersion = value;
+                PdfVersionExplicit = true;
+            }
+        }
+
+        private PdfVersion _pdfVersion = PdfVersion.Pdf17;
+
+        /// <summary>Whether <see cref="PdfVersion"/> was assigned, as opposed to left at its default.</summary>
+        internal bool PdfVersionExplicit { get; private set; }
 
         /// <summary>
         /// Off by default. When <c>true</c> and <see cref="PdfVersion"/> is <see cref="PeachPDF.PdfVersion.Pdf20"/>, PeachPDF

@@ -298,6 +298,14 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
                 _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
 
+                // ISO 19005-4 (6.1.3) allows an Info dictionary only as a lone /ModDate and deprecates it: PDF/A-4 carries
+                // its metadata in the XMP stream (already built from Info's values), so the trailer drops /Info altogether.
+                if (Options.IsPdfA4 && _trailer.Elements.GetReference(PdfTrailer.Keys.Info) is { } infoReference)
+                {
+                    _trailer.Elements.Remove(PdfTrailer.Keys.Info);
+                    _irefTable.Remove(infoReference);
+                }
+
                 PrepareForSave();
 
                 writer.WriteFileHeader(this);

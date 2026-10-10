@@ -5,9 +5,8 @@ in place of PDF/A-3. `PdfGenerateConfig.FacturX` requires one of `PdfA3B`/`PdfA3
 
 ## Why
 
-PeachPDF implements no PDF/A-4 level at all (`PdfAConformance` stops at part 3, and
-`PdfGenerator.EstablishDocumentOptions` rejects `PdfVersion.Pdf20` together with any PDF/A level). Supporting
-the 4f container would mean building PDF/A-4 generally - a different XMP identification (`pdfaid:part` 4 with
-the `F` revision), PDF 2.0 based rules, and its own validation - not a Factur-X-specific addition. PDF/A-3 is the
-container the specification names first, every validator and receiving system accepts, and the one the German
-and French rollouts use.
+`PdfAConformance.PdfA4F` exists now (plain attachments work with it), but `FacturXInvoice`/`PdfEmbeddingPlan`
+still require a PDF/A-3 level: the Factur-X XMP extension schema and the `fx:` properties have only been checked against
+a PDF/A-3 container, and a 4f Factur-X file needs its own validation (the XMP `pdfaid:rev`, no Info dictionary to
+mirror). PDF/A-3 is the container the specification names first, every validator and receiving system accepts, and the
+one the German and French rollouts use.

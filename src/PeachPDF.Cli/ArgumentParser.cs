@@ -299,6 +299,9 @@ internal static class ArgumentParser
         ["3a"] = PdfAConformance.PdfA3A,
         ["3b"] = PdfAConformance.PdfA3B,
         ["3u"] = PdfAConformance.PdfA3U,
+        ["4"] = PdfAConformance.PdfA4,
+        ["4e"] = PdfAConformance.PdfA4E,
+        ["4f"] = PdfAConformance.PdfA4F,
     };
 
     private static void ParsePdfVersion(CliOptions options, string? value)

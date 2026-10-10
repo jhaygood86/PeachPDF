@@ -543,7 +543,7 @@ var config = new PdfGenerateConfig
 
 Set `JxlPassthrough = true` (default `false`) with `PdfVersion.Pdf20` to embed an opaque, upright, non-animated gray or RGB JPEG XL image as its original bytes under a `/JXLDecode` filter, instead of decoding it and recompressing the pixels. No PDF standard defines a JPEG XL filter yet: the filter name and image dictionary follow the only open-source design published so far, so **no shipping PDF reader opens such a file today**. A JPEG XL image with alpha, animation or CMYK, a sideways orientation, or any image under `ImageCompression.Lossy`, takes the normal raster path. The image is embedded at its natural size and is never downscaled. The [`peachpdf`](cli.md) tool exposes this as `--jxl-passthrough`.
 
-`PdfVersion.Pdf20` is incompatible with `PdfAConformance` set to anything other than `PdfAConformance.None` — PeachPDF doesn't implement PDF/A-4 (the PDF-2.0-based PDF/A level), and every PDF/A level it does implement is defined against PDF 1.4 or 1.7. Requesting both throws.
+`PdfVersion.Pdf20` is incompatible with every PDF/A and PDF/X level except the two that are defined against PDF 2.0: PDF/A-4 (`PdfA4`, `PdfA4E`, `PdfA4F`) and PDF/X-6 (`X6`). Asking for any earlier level together with an explicit `PdfVersion.Pdf20` throws. Conversely, requesting PDF/A-4 or PDF/X-6 selects PDF 2.0 by itself as long as you never set `PdfVersion`; setting it to `Pdf17` explicitly alongside one of them throws.
 
 ## Enabling interactive PDF forms
 
@@ -597,10 +597,21 @@ var config = new PdfGenerateConfig
 | PDF/A-1 | `PdfA1B`, `PdfA1A` | Based on PDF 1.4. **Forbids PDF transparency groups entirely** — see below. |
 | PDF/A-2 | `PdfA2B`, `PdfA2U`, `PdfA2A` | Based on PDF 1.7. Permits transparency. |
 | PDF/A-3 | `PdfA3B`, `PdfA3U`, `PdfA3A` | Same as PDF/A-2, plus permission to embed arbitrary files — see [Embedding files](#embedding-files-pdfa-3-attachments). |
+| PDF/A-4 | `PdfA4`, `PdfA4E`, `PdfA4F` | Based on PDF 2.0, which is selected automatically. Has no A/B/U levels; `E` is the engineering variant and `F` also permits embedded files. Permits transparency. See [PDF/A-4](#pdfa-4) below. |
 
 If you don't have a specific requirement for PDF/A-1 or PDF/A-3, `PdfA2B` (or `PdfA2U`, effectively free once you're already targeting 2B — see below) is the least restrictive, most broadly useful choice.
 
 `U` levels cost nothing extra over the matching `B` level: every embedded font already carries a `ToUnicode` CMap, so the guaranteed-text-extraction requirement is already met.
+
+### PDF/A-4
+
+PDF/A-4 (ISO 19005-4) differs from the earlier parts in ways PeachPDF handles for you:
+
+- The file is PDF 2.0 (`%PDF-2.0`), and `BrotliCompression` and `JxlPassthrough` are switched off, because the standard allows only the filters ISO 32000-2 defines.
+- The XMP packet carries `pdfaid:part` = 4 and `pdfaid:rev` = 2020. `pdfaid:conformance` appears only for `PdfA4E` (`E`) and `PdfA4F` (`F`), never for plain `PdfA4`.
+- The trailer has no `/Info` dictionary: the title, author, creation date and the rest live in the XMP packet. A creation date is required, as for every PDF/A level.
+- There is no accessible level, so no tagging or language is forced on the document; `EnableTaggedPdf` still works as usual.
+- Embedded files are allowed only with `PdfA4F`, and `PdfA4F` requires at least one: requesting an attachment under `PdfA4` or `PdfA4E`, or `PdfA4F` with none, throws. Factur-X / ZUGFeRD still requires a PDF/A-3 level.
 
 ### PDF/A-1 and transparency
 
@@ -728,7 +739,7 @@ Add further files — a purchase order, a timesheet — to `PdfGenerateConfig.At
 
 Like `Attachments` and `PdfAConformance`, `FacturX` is a whole-document property: when several `AddPdfPages`/`AddPages` calls build one document — or a declarative document has several pages — every call must specify the same invoice.
 
-The [showcase](showcase.html) has two complete, validated examples, built with the declarative API and `ZUGFeRD-csharp`: an EN 16931 invoice between companies and an XRechnung invoice to a public body. Only the Factur-X 1.0x / ZUGFeRD 2.1-and-later XMP schema (`fx`) is supported, not the legacy ZUGFeRD 1.0 and 2.0 ones, and the container is always PDF/A-3: the specification also allows PDF/A-4f, but PeachPDF has no PDF/A-4 support.
+The [showcase](showcase.html) has two complete, validated examples, built with the declarative API and `ZUGFeRD-csharp`: an EN 16931 invoice between companies and an XRechnung invoice to a public body. Only the Factur-X 1.0x / ZUGFeRD 2.1-and-later XMP schema (`fx`) is supported, not the legacy ZUGFeRD 1.0 and 2.0 ones, and the container is always PDF/A-3: the specification also allows PDF/A-4f, but PeachPDF only writes the PDF/A-3 container.
 
 ### Color and ICC profiles
 
@@ -852,7 +863,11 @@ var config = new PdfGenerateConfig
 | `X3` | ICC-managed color permitted — an RGB- or Gray-tagged color may stay in its own space | Forbidden | 1.4 |
 | `X4` | ICC-managed color permitted | Permitted | 1.6 |
 
-`X4` is the modern, most commonly requested level and the least restrictive of the three — if you don't have a specific requirement for `X1a`/`X3`, start there. Each level's PDF version header, and its `GTS_PDFXVersion`/`GTS_PDFXConformance` identification (in both the document information dictionary and, for `X4`, its XMP metadata — the mechanism ISO 15930-7 names as primary for that level) are set automatically; nothing further to configure.
+| `X6` | ICC-managed color permitted | Permitted | 2.0 |
+
+`X6` (ISO 15930-9, based on PDF 2.0) is selected like `X4` but identifies itself in XMP only (`pdfxid:GTS_PDFXVersion` = `PDF/X-6`), with no keys in the document information dictionary, and it selects PDF 2.0 automatically. Only the complete-exchange flavor is supported: PDF/X-6p and PDF/X-6n, whose output-intent profile lives outside the file, are not. Like PDF/A-4 it uses only the stream filters ISO 32000-2 defines, so [`BrotliCompression` and `JxlPassthrough`](#pdf-20-output) are switched off for it.
+
+`X4` is the modern, most commonly requested level among the PDF 1.x ones, and the least restrictive of those three — if you don't have a specific requirement for `X1a`/`X3`, start there. Each level's PDF version header, and its `GTS_PDFXVersion`/`GTS_PDFXConformance` identification (in both the document information dictionary and, for `X4`, its XMP metadata — the mechanism ISO 15930-7 names as primary for that level) are set automatically; nothing further to configure.
 
 ### X1a and X3: no live transparency
 
