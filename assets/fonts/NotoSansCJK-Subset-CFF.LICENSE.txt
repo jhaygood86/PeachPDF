@@ -1,0 +1,11 @@
+NotoSansCJK-Subset-CFF.cff.gz is a subset CFF program from Noto Sans CJK SC,
+Copyright 2014-2021 Adobe (http://www.adobe.com/), licensed under the SIL Open
+Font License, Version 1.1 (OFL-1.1).
+
+The fixture is the embedded CID-keyed CFF extracted from the after-subset PDF
+in the evidence release for PeachPDF PR #1660. It keeps the glyphs and
+subroutines used by the example document and is bundled solely to make the CFF
+subsetter tests deterministic across operating systems.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://github.com/notofonts/noto-cjk

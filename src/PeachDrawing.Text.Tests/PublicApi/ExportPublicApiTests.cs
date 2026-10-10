@@ -1,5 +1,6 @@
 using PeachDrawing.Text;
 using PeachDrawing.Text.Export;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
 
@@ -81,6 +82,20 @@ namespace PeachDrawing.Text.Tests.PublicApi
             Assert.True(exported.HasCffOutlines);
             Assert.False(exported.IsSubset);
             Assert.Equal(File.ReadAllBytes(BundledFonts.Otf), exported.Data.ToArray());
+        }
+
+        [Fact]
+        public void ExportSubset_OfCidKeyedCff_RewritesAndReturnsTheCffTable()
+        {
+            var face = Face(Path.Combine(AppContext.BaseDirectory, "HintingCffCid.otf"));
+
+            var exported = TypefaceExporter.ExportSubset(face, [0], keepCharacterMap: false);
+            var subset = new CffTable(exported.Data.ToArray(), tableStart: 0);
+
+            Assert.True(exported.HasCffOutlines);
+            Assert.True(exported.IsSubset);
+            Assert.True(subset.IsCidKeyed);
+            Assert.True(subset.IsSupported);
         }
 
         [Fact]
