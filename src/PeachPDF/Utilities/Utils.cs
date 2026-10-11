@@ -23,7 +23,7 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from WinForms point to core point.
         /// </summary>
-        public static PaintPoint ToPixels(XPoint p, double pixelsPerPoint)
+        public static PaintPoint ToPixels(PaintPoint p, double pixelsPerPoint)
         {
             return new PaintPoint(p.X * pixelsPerPoint, p.Y * pixelsPerPoint);
         }
@@ -31,9 +31,9 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from WinForms point to core point.
         /// </summary>
-        public static XPoint[] ToPoints(PaintPoint[] points, double pixelsPerPoint)
+        public static PaintPoint[] ToPoints(PaintPoint[] points, double pixelsPerPoint)
         {
-            XPoint[] myPoints = new XPoint[points.Length];
+            PaintPoint[] myPoints = new PaintPoint[points.Length];
             for (int i = 0; i < points.Length; i++)
                 myPoints[i] = ToPoints(points[i], pixelsPerPoint);
             return myPoints;
@@ -42,15 +42,15 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from core point to WinForms point.
         /// </summary>
-        public static XPoint ToPoints(PaintPoint p, double pixelsPerPoint)
+        public static PaintPoint ToPoints(PaintPoint p, double pixelsPerPoint)
         {
-            return new XPoint(p.X / pixelsPerPoint, p.Y / pixelsPerPoint);
+            return new PaintPoint(p.X / pixelsPerPoint, p.Y / pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms size to core size.
         /// </summary>
-        public static PeachDrawing.Core.Size ToPixels(XSize s, double pixelsPerPoint)
+        public static PeachDrawing.Core.Size ToPixels(Size s, double pixelsPerPoint)
         {
             return new PeachDrawing.Core.Size(s.Width * pixelsPerPoint, s.Height * pixelsPerPoint);
         }
@@ -58,15 +58,15 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from core size to WinForms size.
         /// </summary>
-        public static XSize ToPoints(PeachDrawing.Core.Size s, double pixelsPerPoint)
+        public static Size ToPoints(PeachDrawing.Core.Size s, double pixelsPerPoint)
         {
-            return new XSize(s.Width / pixelsPerPoint, s.Height / pixelsPerPoint);
+            return new Size(s.Width / pixelsPerPoint, s.Height / pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms rectangle to core rectangle.
         /// </summary>
-        public static Rect ToPixels(XRect r, double pixelsPerPoint)
+        public static Rect ToPixels(Rect r, double pixelsPerPoint)
         {
             return new Rect(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
         }
@@ -74,9 +74,9 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from core rectangle to WinForms rectangle.
         /// </summary>
-        public static XRect ToPoints(Rect r, double pixelsPerPoint)
+        public static Rect ToPoints(Rect r, double pixelsPerPoint)
         {
-            return new XRect(r.X / pixelsPerPoint, r.Y / pixelsPerPoint, r.Width / pixelsPerPoint, r.Height / pixelsPerPoint);
+            return new Rect(r.X / pixelsPerPoint, r.Y / pixelsPerPoint, r.Width / pixelsPerPoint, r.Height / pixelsPerPoint);
         }
 
         /// <summary>

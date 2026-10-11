@@ -49,19 +49,19 @@ namespace PeachPDF.PDF.Drawing
 
         public CoreGraphicsPath()
         {
-            _points = new List<XPoint>();
+            _points = new List<PaintPoint>();
             _types = new List<byte>();
         }
 
         public CoreGraphicsPath(int capacity)
         {
-            _points = new List<XPoint>(capacity);
+            _points = new List<PaintPoint>(capacity);
             _types = new List<byte>(capacity);
         }
 
         public CoreGraphicsPath(CoreGraphicsPath path)
         {
-            _points = new List<XPoint>(path._points);
+            _points = new List<PaintPoint>(path._points);
             _types = new List<byte>(path._types);
         }
 
@@ -77,26 +77,26 @@ namespace PeachPDF.PDF.Drawing
 
         public void MoveTo(double x, double y)
         {
-            _points.Add(new XPoint(x, y));
+            _points.Add(new PaintPoint(x, y));
             _types.Add(PathPointTypeStart);
         }
 
         public void LineTo(double x, double y, bool closeSubpath)
         {
-            if (_points.Count > 0 && _points[_points.Count - 1].Equals(new XPoint(x, y)))
+            if (_points.Count > 0 && _points[_points.Count - 1].Equals(new PaintPoint(x, y)))
                 return;
 
-            _points.Add(new XPoint(x, y));
+            _points.Add(new PaintPoint(x, y));
             _types.Add((byte)(PathPointTypeLine | (closeSubpath ? PathPointTypeCloseSubpath : 0)));
         }
 
         public void BezierTo(double x1, double y1, double x2, double y2, double x3, double y3, bool closeSubpath)
         {
-            _points.Add(new XPoint(x1, y1));
+            _points.Add(new PaintPoint(x1, y1));
             _types.Add(PathPointTypeBezier);
-            _points.Add(new XPoint(x2, y2));
+            _points.Add(new PaintPoint(x2, y2));
             _types.Add(PathPointTypeBezier);
-            _points.Add(new XPoint(x3, y3));
+            _points.Add(new PaintPoint(x3, y3));
             _types.Add((byte)(PathPointTypeBezier | (closeSubpath ? PathPointTypeCloseSubpath : 0)));
         }
 
@@ -229,7 +229,7 @@ namespace PeachPDF.PDF.Drawing
         public void AddArc(double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
             XMatrix matrix = XMatrix.Identity;
-            List<XPoint> points = GeometryHelper.BezierCurveFromArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, ref matrix);
+            List<PaintPoint> points = GeometryHelper.BezierCurveFromArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, ref matrix);
             int count = points.Count;
             Debug.Assert((count + 2) % 3 == 0);
 
@@ -238,9 +238,9 @@ namespace PeachPDF.PDF.Drawing
                 BezierTo(points[idx].X, points[idx].Y, points[idx + 1].X, points[idx + 1].Y, points[idx + 2].X, points[idx + 2].Y, false);
         }
 
-        public void AddArc(XPoint point1, XPoint point2, XSize size, double rotationAngle, bool isLargeArg, XSweepDirection sweepDirection)
+        public void AddArc(PaintPoint point1, PaintPoint point2, Size size, double rotationAngle, bool isLargeArg, XSweepDirection sweepDirection)
         {
-            List<XPoint> points = GeometryHelper.BezierCurveFromArc(point1, point2, size, rotationAngle, isLargeArg,
+            List<PaintPoint> points = GeometryHelper.BezierCurveFromArc(point1, point2, size, rotationAngle, isLargeArg,
                 sweepDirection == XSweepDirection.Clockwise, PathStart.MoveTo1st);
             int count = points.Count;
             Debug.Assert((count + 2) % 3 == 0);
@@ -250,7 +250,7 @@ namespace PeachPDF.PDF.Drawing
                 BezierTo(points[idx].X, points[idx].Y, points[idx + 1].X, points[idx + 1].Y, points[idx + 2].X, points[idx + 2].Y, false);
         }
 
-        public void AddCurve(XPoint[] points, double tension)
+        public void AddCurve(PaintPoint[] points, double tension)
         {
             int count = points.Length;
             if (count < 2)
@@ -288,7 +288,7 @@ namespace PeachPDF.PDF.Drawing
         //        x2, y2, closeSubpath);
         //}
 
-        void ToCurveSegment(XPoint pt0, XPoint pt1, XPoint pt2, XPoint pt3, double tension3)
+        void ToCurveSegment(PaintPoint pt0, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, double tension3)
         {
             BezierTo(
                 pt1.X + tension3 * (pt2.X - pt0.X), pt1.Y + tension3 * (pt2.Y - pt0.Y),
@@ -386,9 +386,9 @@ namespace PeachPDF.PDF.Drawing
         /// (<see cref="ClipToRect(double,double,double,double)"/>) only ever needs a *filled* area to
         /// clip, so every yielded polygon is treated as implicitly closed regardless of that flag.
         /// </summary>
-        private IEnumerable<List<XPoint>> EnumerateFlattenedContours()
+        private IEnumerable<List<PaintPoint>> EnumerateFlattenedContours()
         {
-            List<XPoint>? current = null;
+            List<PaintPoint>? current = null;
             var i = 0;
             while (i < _points.Count)
             {
@@ -428,18 +428,18 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the path points in GDI+ style.
         /// </summary>
-        public XPoint[] PathPoints { get { return _points.ToArray(); } }
+        public PaintPoint[] PathPoints { get { return _points.ToArray(); } }
 
         /// <summary>
         /// Gets the path types in GDI+ style.
         /// </summary>
         public byte[] PathTypes { get { return _types.ToArray(); } }
 
-        internal ReadOnlySpan<XPoint> PathPointsSpan => CollectionsMarshal.AsSpan(_points);
+        internal ReadOnlySpan<PaintPoint> PathPointsSpan => CollectionsMarshal.AsSpan(_points);
 
         internal ReadOnlySpan<byte> PathTypesSpan => CollectionsMarshal.AsSpan(_types);
 
-        readonly List<XPoint> _points;
+        readonly List<PaintPoint> _points;
         readonly List<byte> _types;
     }
 }

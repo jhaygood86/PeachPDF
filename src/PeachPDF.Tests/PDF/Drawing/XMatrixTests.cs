@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Tests.PdfEngineTests.Drawing
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             translate.TranslateAppend(5, 5);
 
             var combined = scale * translate;
-            var point = combined.Transform(new XPoint(1, 1));
+            var point = combined.Transform(new PaintPoint(1, 1));
 
             // Scale first, then translate (matches Multiply/operator* semantics).
             Assert.Equal(7, point.X, precision: 8);
@@ -61,8 +62,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             m2.ScaleAppend(2, 2);
             m2.Prepend(translation);
 
-            var p1 = m1.Transform(new XPoint(1, 0));
-            var p2 = m2.Transform(new XPoint(1, 0));
+            var p1 = m1.Transform(new PaintPoint(1, 0));
+            var p2 = m2.Transform(new PaintPoint(1, 0));
 
             // Append applies the scale first, then the translation: (1,0) -> (2,0) -> (7,0).
             Assert.Equal(7, p1.X, precision: 8);
@@ -76,7 +77,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.TranslateAppend(3, 4);
 
-            var p = m.Transform(new XPoint(1, 1));
+            var p = m.Transform(new PaintPoint(1, 1));
 
             Assert.Equal(4, p.X, precision: 8);
             Assert.Equal(5, p.Y, precision: 8);
@@ -89,7 +90,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             m.ScaleAppend(2, 2);
             m.TranslatePrepend(3, 4);
 
-            var p = m.Transform(new XPoint(0, 0));
+            var p = m.Transform(new PaintPoint(0, 0));
 
             Assert.Equal(6, p.X, precision: 8);
             Assert.Equal(8, p.Y, precision: 8);
@@ -104,8 +105,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var prepend = XMatrix.Identity;
             prepend.Translate(3, 4, XMatrixOrder.Prepend);
 
-            Assert.Equal(new XPoint(4, 5), append.Transform(new XPoint(1, 1)));
-            Assert.Equal(new XPoint(4, 5), prepend.Transform(new XPoint(1, 1)));
+            Assert.Equal(new PaintPoint(4, 5), append.Transform(new PaintPoint(1, 1)));
+            Assert.Equal(new PaintPoint(4, 5), prepend.Transform(new PaintPoint(1, 1)));
         }
 
         [Fact]
@@ -114,7 +115,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.ScaleAppend(2, 3);
 
-            var p = m.Transform(new XPoint(2, 2));
+            var p = m.Transform(new PaintPoint(2, 2));
 
             Assert.Equal(4, p.X, precision: 8);
             Assert.Equal(6, p.Y, precision: 8);
@@ -126,7 +127,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.ScaleAppend(2.0);
 
-            var p = m.Transform(new XPoint(2, 3));
+            var p = m.Transform(new PaintPoint(2, 3));
 
             Assert.Equal(4, p.X, precision: 8);
             Assert.Equal(6, p.Y, precision: 8);
@@ -138,7 +139,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.Scale(2, 3, XMatrixOrder.Append);
 
-            var p = m.Transform(new XPoint(2, 2));
+            var p = m.Transform(new PaintPoint(2, 2));
 
             Assert.Equal(4, p.X, precision: 8);
             Assert.Equal(6, p.Y, precision: 8);
@@ -150,7 +151,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.ScaleAtAppend(2, 2, 1, 1);
 
-            var p = m.Transform(new XPoint(1, 1));
+            var p = m.Transform(new PaintPoint(1, 1));
 
             // The center point should remain fixed under the scale.
             Assert.Equal(1, p.X, precision: 8);
@@ -163,7 +164,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.RotateAppend(90);
 
-            var p = m.Transform(new XPoint(1, 0));
+            var p = m.Transform(new PaintPoint(1, 0));
 
             Assert.Equal(0, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);
@@ -175,7 +176,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.Rotate(90, XMatrixOrder.Append);
 
-            var p = m.Transform(new XPoint(1, 0));
+            var p = m.Transform(new PaintPoint(1, 0));
 
             Assert.Equal(0, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);
@@ -187,7 +188,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.RotateAtAppend(90, 1, 1);
 
-            var p = m.Transform(new XPoint(1, 1));
+            var p = m.Transform(new PaintPoint(1, 1));
 
             // Rotating about the same point leaves it fixed.
             Assert.Equal(1, p.X, precision: 8);
@@ -198,9 +199,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void RotateAtAppend_WithXPointOverload()
         {
             var m = XMatrix.Identity;
-            m.RotateAtAppend(90, new XPoint(1, 1));
+            m.RotateAtAppend(90, new PaintPoint(1, 1));
 
-            var p = m.Transform(new XPoint(1, 1));
+            var p = m.Transform(new PaintPoint(1, 1));
 
             Assert.Equal(1, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);
@@ -210,9 +211,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void RotateAtPrepend_WithXPointOverload()
         {
             var m = XMatrix.Identity;
-            m.RotateAtPrepend(90, new XPoint(0, 0));
+            m.RotateAtPrepend(90, new PaintPoint(0, 0));
 
-            var p = m.Transform(new XPoint(1, 0));
+            var p = m.Transform(new PaintPoint(1, 0));
 
             Assert.Equal(0, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);
@@ -222,9 +223,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void RotateAt_WithOrderParameter()
         {
             var m = XMatrix.Identity;
-            m.RotateAt(90, new XPoint(0, 0), XMatrixOrder.Append);
+            m.RotateAt(90, new PaintPoint(0, 0), XMatrixOrder.Append);
 
-            var p = m.Transform(new XPoint(1, 0));
+            var p = m.Transform(new PaintPoint(1, 0));
 
             Assert.Equal(0, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);
@@ -236,7 +237,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.ShearAppend(0, 0);
 
-            Assert.Equal(new XPoint(1, 1), m.Transform(new XPoint(1, 1)));
+            Assert.Equal(new PaintPoint(1, 1), m.Transform(new PaintPoint(1, 1)));
         }
 
         [Fact]
@@ -245,7 +246,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.Shear(0, 0, XMatrixOrder.Append);
 
-            Assert.Equal(new XPoint(1, 1), m.Transform(new XPoint(1, 1)));
+            Assert.Equal(new PaintPoint(1, 1), m.Transform(new PaintPoint(1, 1)));
         }
 
         [Fact]
@@ -254,7 +255,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var m = XMatrix.Identity;
             m.ShearPrepend(0, 0);
 
-            Assert.Equal(new XPoint(1, 1), m.Transform(new XPoint(1, 1)));
+            Assert.Equal(new PaintPoint(1, 1), m.Transform(new PaintPoint(1, 1)));
         }
 
         [Fact]
@@ -266,8 +267,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var prependMatrix = XMatrix.Identity;
             prependMatrix.SkewPrepend(0, 0);
 
-            Assert.Equal(new XPoint(3, 4), appendMatrix.Transform(new XPoint(3, 4)));
-            Assert.Equal(new XPoint(3, 4), prependMatrix.Transform(new XPoint(3, 4)));
+            Assert.Equal(new PaintPoint(3, 4), appendMatrix.Transform(new PaintPoint(3, 4)));
+            Assert.Equal(new PaintPoint(3, 4), prependMatrix.Transform(new PaintPoint(3, 4)));
         }
 
         [Fact]
@@ -275,19 +276,19 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var m = XMatrix.Identity;
             m.TranslateAppend(1, 1);
-            var points = new[] { new XPoint(0, 0), new XPoint(1, 1) };
+            var points = new[] { new PaintPoint(0, 0), new PaintPoint(1, 1) };
 
             m.Transform(points);
 
-            Assert.Equal(new XPoint(1, 1), points[0]);
-            Assert.Equal(new XPoint(2, 2), points[1]);
+            Assert.Equal(new PaintPoint(1, 1), points[0]);
+            Assert.Equal(new PaintPoint(2, 2), points[1]);
         }
 
         [Fact]
         public void Transform_NullPointArray_DoesNotThrow()
         {
             var m = XMatrix.Identity;
-            XPoint[]? points = null;
+            PaintPoint[]? points = null;
 
             m.Transform(points!);
         }
@@ -295,12 +296,12 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void TransformPoints_OnIdentity_LeavesPointsUnchanged()
         {
-            var points = new[] { new XPoint(1, 2), new XPoint(3, 4) };
+            var points = new[] { new PaintPoint(1, 2), new PaintPoint(3, 4) };
 
             XMatrix.Identity.TransformPoints(points);
 
-            Assert.Equal(new XPoint(1, 2), points[0]);
-            Assert.Equal(new XPoint(3, 4), points[1]);
+            Assert.Equal(new PaintPoint(1, 2), points[0]);
+            Assert.Equal(new PaintPoint(3, 4), points[1]);
         }
 
         [Fact]
@@ -317,11 +318,11 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var m = XMatrix.Identity;
             m.TranslateAppend(1, 1);
-            var points = new[] { new XPoint(0, 0) };
+            var points = new[] { new PaintPoint(0, 0) };
 
             m.TransformPoints(points);
 
-            Assert.Equal(new XPoint(1, 1), points[0]);
+            Assert.Equal(new PaintPoint(1, 1), points[0]);
         }
 
         [Fact]
@@ -396,7 +397,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             m.TranslateAppend(5, 5);
             m.Invert();
 
-            var p = m.Transform(new XPoint(5, 5));
+            var p = m.Transform(new PaintPoint(5, 5));
 
             Assert.Equal(0, p.X, precision: 8);
             Assert.Equal(0, p.Y, precision: 8);
@@ -409,7 +410,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             m.ScaleAppend(2, 4);
             m.Invert();
 
-            var p = m.Transform(new XPoint(2, 4));
+            var p = m.Transform(new PaintPoint(2, 4));
 
             Assert.Equal(1, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);
@@ -423,7 +424,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             m.TranslateAppend(4, 4);
             m.Invert();
 
-            var p = m.Transform(new XPoint(6, 6));
+            var p = m.Transform(new PaintPoint(6, 6));
 
             Assert.Equal(1, p.X, precision: 8);
             Assert.Equal(1, p.Y, precision: 8);

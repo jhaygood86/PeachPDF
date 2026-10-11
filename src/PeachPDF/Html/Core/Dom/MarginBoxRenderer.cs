@@ -33,7 +33,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public static async Task Render(
             XGraphics g,
-            XSize pageSize,
+            Size pageSize,
             double marginLeft,
             double marginTop,
             double marginRight,
@@ -300,7 +300,7 @@ namespace PeachPDF.Html.Core.Dom
         /// The height of this box's containing block — the percentage basis for the top and bottom
         /// edges, which is a DIFFERENT number per css-page-3 §6. See <see cref="MarginAreaHeight"/>.
         /// </param>
-        internal static XRect ApplyBoxModel(XRect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
+        internal static Rect ApplyBoxModel(Rect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt)
         {
             var (left, right) = BoxModelExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
@@ -315,7 +315,7 @@ namespace PeachPDF.Html.Core.Dom
         /// border-box</c> layer positions/clips against exactly this, and border itself paints at this
         /// rect's own four edges (see <see cref="PaintBorder"/>).
         /// </summary>
-        internal static XRect ApplyMarginOnly(XRect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
+        internal static Rect ApplyMarginOnly(Rect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt)
         {
             var (left, right) = MarginExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
@@ -329,7 +329,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>background-origin</c>/<c>-clip</c> positioning/clip area (CSS Backgrounds 3 §3.9/§3.10) -
         /// distinct from the border-box now that a margin box's own border can be non-zero (#943).
         /// </summary>
-        internal static XRect ApplyMarginAndBorder(XRect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
+        internal static Rect ApplyMarginAndBorder(Rect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt)
         {
             var (marginLeft, marginRight) = MarginExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
@@ -342,18 +342,18 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Shared box-model rect shrink - <see cref="ApplyBoxModel"/>/<see cref="ApplyMarginOnly"/>/
         /// <see cref="ApplyMarginAndBorder"/> differ only in which extents they resolve before calling
-        /// this. <c>XRect</c> refuses a negative extent; a caller's own positive-size guard then skips
+        /// this. <c>Rect</c> refuses a negative extent; a caller's own positive-size guard then skips
         /// the box, which is what an over-padded/over-bordered box should do anyway. Promoted to
         /// internal so <c>PdfGenerator</c> can derive the page box's own border-box/padding-box/
         /// content-box rects from the same primitive (issue #1147) instead of re-deriving the shrink
         /// arithmetic a second time.
         /// </summary>
-        internal static XRect Shrink(XRect rect, double left, double top, double right, double bottom)
+        internal static Rect Shrink(Rect rect, double left, double top, double right, double bottom)
         {
             if (left == 0 && right == 0 && top == 0 && bottom == 0)
                 return rect;
 
-            return new XRect(rect.X + left, rect.Y + top,
+            return new Rect(rect.X + left, rect.Y + top,
                 Math.Max(0, rect.Width - left - right),
                 Math.Max(0, rect.Height - top - bottom));
         }
@@ -364,7 +364,7 @@ namespace PeachPDF.Html.Core.Dom
         /// resolves against. A left or right column is as wide as that page margin; a corner is as wide
         /// as the margin it sits in; a top or bottom row spans the content band.
         /// </summary>
-        internal static double MarginAreaWidth(string name, XSize page, double mL, double mR) => name switch
+        internal static double MarginAreaWidth(string name, Size page, double mL, double mR) => name switch
         {
             "top-left-corner" or "bottom-left-corner" or "left-top" or "left-middle" or "left-bottom" => mL,
             "top-right-corner" or "bottom-right-corner" or "right-top" or "right-middle" or "right-bottom" => mR,
@@ -378,7 +378,7 @@ namespace PeachPDF.Html.Core.Dom
         /// A top or bottom row is as tall as that page margin; a corner is as tall as the margin it sits
         /// in; a left or right column spans the content band's height.
         /// </summary>
-        internal static double MarginAreaHeight(string name, XSize page, double mT, double mB) => name switch
+        internal static double MarginAreaHeight(string name, Size page, double mT, double mB) => name switch
         {
             "top-left-corner" or "top-right-corner" or "top-left" or "top-center" or "top-right" => mT,
             "bottom-left-corner" or "bottom-right-corner" or "bottom-left" or "bottom-center" or "bottom-right" => mB,
@@ -449,7 +449,7 @@ namespace PeachPDF.Html.Core.Dom
         /// neighboring fragment to mitre into (#943's own flagged open question).
         /// </summary>
         internal static async Task PaintBackgroundAndBorder(
-            XGraphics g, XRect outerRect, XSize pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
+            XGraphics g, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
             RenderContext adapter, HtmlContainerInt htmlContainer,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
@@ -483,7 +483,7 @@ namespace PeachPDF.Html.Core.Dom
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
 
-            Rect ToPixelRect(XRect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
+            Rect ToPixelRect(Rect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
 
             var borderBoxPx = ToPixelRect(borderBoxRect);
             var paddingBoxPx = ToPixelRect(paddingBoxRect);
@@ -610,7 +610,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which <paramref name="htmlContainer"/>'s root box's own <see cref="CssBox.GetRemHeight"/>
         /// already correctly is.
         /// </summary>
-        private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RenderContext adapter,
+        private static void PaintImage(XGraphics g, CssImage image, Rect rect, string positionList, RenderContext adapter,
             HtmlContainerInt htmlContainer, double? emSizePt)
         {
             // Root is only ever null before the document's initial layout, which has already run by
@@ -809,7 +809,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>vmin</c>/<c>vmax</c>, and their logical/small/large/dynamic variants) have no page context
         /// here, resolve to null, and the box sizes as <c>auto</c>.
         /// </summary>
-        internal static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB,
+        internal static Rect GetMarginBoxRect(string name, Size page, double mL, double mT, double mR, double mB,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle, double remPt)
         {
             var contentLeft   = mL;
@@ -892,30 +892,30 @@ namespace PeachPDF.Html.Core.Dom
             return name switch
             {
                 // ── top row ──
-                "top-left-corner"   => new XRect(0,              0, mL,  mT),
-                "top-left"          => new XRect(contentLeft,    0, tL,  mT),
-                "top-center"        => new XRect(contentLeft + tL, 0, tC, mT),
-                "top-right"         => new XRect(contentLeft + tL + tC, 0, tR, mT),
-                "top-right-corner"  => new XRect(contentRight,   0, mR,  mT),
+                "top-left-corner"   => new Rect(0,              0, mL,  mT),
+                "top-left"          => new Rect(contentLeft,    0, tL,  mT),
+                "top-center"        => new Rect(contentLeft + tL, 0, tC, mT),
+                "top-right"         => new Rect(contentLeft + tL + tC, 0, tR, mT),
+                "top-right-corner"  => new Rect(contentRight,   0, mR,  mT),
 
                 // ── right column ──
-                "right-top"         => new XRect(contentRight, contentTop,          mR, rT),
-                "right-middle"      => new XRect(contentRight, contentTop + rT,     mR, rM),
-                "right-bottom"      => new XRect(contentRight, contentTop + rT + rM, mR, rB),
+                "right-top"         => new Rect(contentRight, contentTop,          mR, rT),
+                "right-middle"      => new Rect(contentRight, contentTop + rT,     mR, rM),
+                "right-bottom"      => new Rect(contentRight, contentTop + rT + rM, mR, rB),
 
                 // ── bottom row ──
-                "bottom-right-corner" => new XRect(contentRight,              contentBottom, mR,  mB),
-                "bottom-right"        => new XRect(contentLeft + bL + bC,     contentBottom, bR,  mB),
-                "bottom-center"       => new XRect(contentLeft + bL,          contentBottom, bC,  mB),
-                "bottom-left"         => new XRect(contentLeft,               contentBottom, bL,  mB),
-                "bottom-left-corner"  => new XRect(0,                         contentBottom, mL,  mB),
+                "bottom-right-corner" => new Rect(contentRight,              contentBottom, mR,  mB),
+                "bottom-right"        => new Rect(contentLeft + bL + bC,     contentBottom, bR,  mB),
+                "bottom-center"       => new Rect(contentLeft + bL,          contentBottom, bC,  mB),
+                "bottom-left"         => new Rect(contentLeft,               contentBottom, bL,  mB),
+                "bottom-left-corner"  => new Rect(0,                         contentBottom, mL,  mB),
 
                 // ── left column ──
-                "left-top"          => new XRect(0, contentTop,          mL, lT),
-                "left-middle"       => new XRect(0, contentTop + lT,     mL, lM),
-                "left-bottom"       => new XRect(0, contentTop + lT + lM, mL, lB),
+                "left-top"          => new Rect(0, contentTop,          mL, lT),
+                "left-middle"       => new Rect(0, contentTop + lT,     mL, lM),
+                "left-bottom"       => new Rect(0, contentTop + lT + lM, mL, lB),
 
-                _ => XRect.Empty,
+                _ => Rect.Empty,
             };
         }
 

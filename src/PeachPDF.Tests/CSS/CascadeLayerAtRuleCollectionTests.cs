@@ -119,7 +119,7 @@ public class CascadeLayerAtRuleCollectionTests
         var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(adapter);
 
-        var size = new XSize(595, 842);
+        var size = new Size(595, 842);
         container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         await container.SetHtml(html, null);

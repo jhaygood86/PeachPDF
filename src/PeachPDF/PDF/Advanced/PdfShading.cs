@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Rendering;
 using PeachPDF.PDF.Internal;
@@ -117,11 +118,11 @@ namespace PeachPDF.PDF.Advanced
             else
                 Elements[Keys.ColorSpace] = new PdfName("/DeviceCMYK");
 
-            XPoint p1 = renderer.WorldToView(brush._center1);
-            XPoint p2 = renderer.WorldToView(brush._center2);
+            PaintPoint p1 = renderer.WorldToView(brush._center1);
+            PaintPoint p2 = renderer.WorldToView(brush._center2);
 
-            var rv1 = renderer.WorldToView(new XPoint(brush._r1 + brush._center1.X, brush._center1.Y));
-            var rv2 = renderer.WorldToView(new XPoint(brush._r2 + brush._center2.X, brush._center2.Y));
+            var rv1 = renderer.WorldToView(new PaintPoint(brush._r1 + brush._center1.X, brush._center1.Y));
+            var rv2 = renderer.WorldToView(new PaintPoint(brush._r2 + brush._center2.X, brush._center2.Y));
 
             var dx1 = rv1.X - p1.X;
             var dy1 = rv1.Y - p1.Y;
@@ -157,9 +158,9 @@ namespace PeachPDF.PDF.Advanced
                 Elements[Keys.ColorSpace] = new PdfName("/DeviceCMYK");
             Elements[Keys.Extend] = new PdfLiteral(brush.IsRepeating ? "[false false]" : "[true true]");
 
-            XPoint center_v = renderer.WorldToView(brush._center1);
-            XPoint rightEdge_v = renderer.WorldToView(new XPoint(brush._center1.X + brush._radiusX, brush._center1.Y));
-            XPoint topEdge_v = renderer.WorldToView(new XPoint(brush._center1.X, brush._center1.Y - brush._radiusY));
+            PaintPoint center_v = renderer.WorldToView(brush._center1);
+            PaintPoint rightEdge_v = renderer.WorldToView(new PaintPoint(brush._center1.X + brush._radiusX, brush._center1.Y));
+            PaintPoint topEdge_v = renderer.WorldToView(new PaintPoint(brush._center1.X, brush._center1.Y - brush._radiusY));
 
             double rx_v = Math.Abs(rightEdge_v.X - center_v.X);
             double ry_v = Math.Abs(topEdge_v.Y - center_v.Y);
@@ -173,17 +174,17 @@ namespace PeachPDF.PDF.Advanced
             double unitFocalX = 0, unitFocalY = 0;
             // The first stop's circle: its radius in the coordinate space the /Coords below are written in.
             double focalR = 0;
-            XPoint focal_v = renderer.WorldToView(brush._focalCenter);
+            PaintPoint focal_v = renderer.WorldToView(brush._focalCenter);
 
             if (brush._transform is { } gradientTransform && brush._radiusX > 0 && brush._radiusY > 0)
             {
                 // A rotated/skewed gradientTransform: the ellipse is the unit circle carried through
                 // (radii, center) and then the transform, i.e. a general 2x2 that no pair of axis-aligned
                 // radii can state.
-                XPoint Map(double u, double v) => renderer.WorldToView(gradientTransform.Transform(
-                    new XPoint(brush._center1.X + u * brush._radiusX, brush._center1.Y + v * brush._radiusY)));
+                PaintPoint Map(double u, double v) => renderer.WorldToView(gradientTransform.Transform(
+                    new PaintPoint(brush._center1.X + u * brush._radiusX, brush._center1.Y + v * brush._radiusY)));
 
-                XPoint o = Map(0, 0), ux = Map(1, 0), uy = Map(0, 1);
+                PaintPoint o = Map(0, 0), ux = Map(1, 0), uy = Map(0, 1);
                 unitMatrix = new XMatrix(ux.X - o.X, ux.Y - o.Y, uy.X - o.X, uy.Y - o.Y, o.X, o.Y);
                 unitFocalX = (brush._focalCenter.X - brush._center1.X) / brush._radiusX;
                 unitFocalY = (brush._focalCenter.Y - brush._center1.Y) / brush._radiusY;
@@ -365,8 +366,8 @@ namespace PeachPDF.PDF.Advanced
             double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
             if (brush._useRect)
             {
-                XPoint pt1 = renderer.WorldToView(brush._rect.TopLeft);
-                XPoint pt2 = renderer.WorldToView(brush._rect.BottomRight);
+                PaintPoint pt1 = renderer.WorldToView(new PaintPoint(brush._rect.Left, brush._rect.Top));
+                PaintPoint pt2 = renderer.WorldToView(new PaintPoint(brush._rect.Right, brush._rect.Bottom));
 
                 switch (brush._linearGradientMode)
                 {
@@ -401,8 +402,8 @@ namespace PeachPDF.PDF.Advanced
             }
             else
             {
-                XPoint pt1 = renderer.WorldToView(brush._point1);
-                XPoint pt2 = renderer.WorldToView(brush._point2);
+                PaintPoint pt1 = renderer.WorldToView(brush._point1);
+                PaintPoint pt2 = renderer.WorldToView(brush._point2);
 
                 x1 = pt1.X;
                 y1 = pt1.Y;
@@ -640,9 +641,9 @@ namespace PeachPDF.PDF.Advanced
 
         private void SetupConicFromBrush(XConicGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
-            XPoint vc = renderer.WorldToView(brush.Center);
+            PaintPoint vc = renderer.WorldToView(brush.Center);
             // Compute view-space radius by transforming a point on the x-axis
-            XPoint ve = renderer.WorldToView(new XPoint(brush.Center.X + brush.OuterRadius, brush.Center.Y));
+            PaintPoint ve = renderer.WorldToView(new PaintPoint(brush.Center.X + brush.OuterRadius, brush.Center.Y));
             double R = Math.Abs(ve.X - vc.X);
             if (R < 1e-6) R = 1.0;
 

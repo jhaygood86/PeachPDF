@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -87,7 +88,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
@@ -120,7 +121,7 @@ namespace PeachPDF.Tests.Integration
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
@@ -283,7 +284,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

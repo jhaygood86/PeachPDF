@@ -249,12 +249,12 @@ namespace PeachPDF
             ValidateAnimationProgress(config);
 
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new XSize(config.ManualPageWidth, config.ManualPageHeight);
+            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
                 // invert pagesize for landscape
-                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
@@ -300,7 +300,7 @@ namespace PeachPDF
 
             if (config.ScaleToPageSize || config.ShrinkToFit)
             {
-                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                container.MaxSize = new Size(container.PageSize.Width, 0);
                 await container.PerformLayout(measure);
 
                 var actualWidth = container.ActualSize.Width;
@@ -332,7 +332,7 @@ namespace PeachPDF
 
             if (needsRescale)
             {
-                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                container.MaxSize = new Size(container.PageSize.Width, 0);
 
                 // layout the HTML with the page width restriction to know how many pages are required
                 await container.PerformLayout(measure);
@@ -616,11 +616,11 @@ namespace PeachPDF
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
                     ? PageSizeConverter.ToSize(config.PageSize)
-                    : new XSize(config.ManualPageWidth, config.ManualPageHeight));
+                    : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             if ((pageDescriptor.OrientationOverride ?? config.PageOrientation) == PageOrientation.Landscape)
             {
-                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
@@ -673,14 +673,14 @@ namespace PeachPDF
 
             // Mirrors SetContent's own tail: the content page size is the sheet less its margins, and
             // the document origin sits at the top-left of that band.
-            var contentPageSize = new XSize(
+            var contentPageSize = new Size(
                 orgPageSize.Width - container.MarginLeft - container.MarginRight,
                 orgPageSize.Height - container.MarginTop - container.MarginBottom);
             container.PageSize = contentPageSize;
-            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
             using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
-            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
             await RenderPagesCore(document, container, config);
@@ -1036,7 +1036,7 @@ namespace PeachPDF
                 // #1147). border-box is the sheet minus this page's own margin only - background/border
                 // never extend into the margin area (margin never participates in background painting
                 // for ANY CSS box), unlike the canvas fill below, which deliberately does.
-                var sheetRectPt = new XRect(0, 0, geom.SheetWidthPt, geom.SheetHeightPt);
+                var sheetRectPt = new Rect(0, 0, geom.SheetWidthPt, geom.SheetHeightPt);
                 var borderBoxRectPt = MarginBoxRenderer.Shrink(sheetRectPt, mL, mT, mR, mB);
                 var paddingBoxRectPt = MarginBoxRenderer.Shrink(borderBoxRectPt, bL, bT, bR, bB);
                 var contentBoxRectPt = MarginBoxRenderer.Shrink(paddingBoxRectPt, pL, pT, pR, pB);
@@ -1176,7 +1176,7 @@ namespace PeachPDF
                 {
                     await MarginBoxRenderer.Render(
                         g,
-                        new XSize(page.Width, page.Height),
+                        new Size(page.Width, page.Height),
                         mL,
                         mT,
                         mR,
@@ -1202,7 +1202,7 @@ namespace PeachPDF
                 if (hasElementMarginBoxes)
                 {
                     await PaintElementMarginBoxes(g, _pdfSharpAdapter, container.HtmlContainerInt, fragmentainer.MarginBoxes,
-                        new XSize(page.Width, page.Height), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
+                        new Size(page.Width, page.Height), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
                         marginBoxBackgroundImageCache);
                 }
             }
@@ -1344,7 +1344,7 @@ namespace PeachPDF
             }
         }
 
-        internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
+        internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, Size orgPageSize)
         {
             container.MarginBottom = config.MarginBottom;
             container.MarginLeft = config.MarginLeft;
@@ -1385,9 +1385,9 @@ namespace PeachPDF
             // there is no @page { size } rule), or it would clobber that in-place correction with the
             // stale, originally-configured size.
             var sheetSize = container.CssPageSize ?? orgPageSize;
-            var pageSize = new XSize(sheetSize.Width - container.MarginLeft - container.MarginRight, sheetSize.Height - container.MarginTop - container.MarginBottom);
+            var pageSize = new Size(sheetSize.Width - container.MarginLeft - container.MarginRight, sheetSize.Height - container.MarginTop - container.MarginBottom);
             container.PageSize = pageSize;
-            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
         }
 
         /// <summary>
@@ -1431,7 +1431,7 @@ namespace PeachPDF
         /// </remarks>
         private static async Task PaintElementMarginBoxes(
             XGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
-            XSize pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
+            Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
@@ -1605,7 +1605,7 @@ namespace PeachPDF
                     // This page's own resolved height (already written into /MediaBox by the paint loop
                     // above) - reading it directly here, rather than threading a second value through,
                     // means this can never disagree with what was actually emitted for the page.
-                    var xRect = new XRect(
+                    var xRect = new Rect(
                         leftPt,
                         document.Pages[pageIndex].Height - (topPt + link.Rectangle.Height),
                         link.Rectangle.Width,
@@ -1691,7 +1691,7 @@ namespace PeachPDF
                 if (widthPt <= 0 || heightPt <= 0)
                     continue;
 
-                var xRect = new XRect(leftPt, document.Pages[pageIndex].Height - (topPt + heightPt), widthPt, heightPt);
+                var xRect = new Rect(leftPt, document.Pages[pageIndex].Height - (topPt + heightPt), widthPt, heightPt);
                 formFieldBuilder.AddField(document.Pages[pageIndex], new PdfRectangle(xRect), box, classification);
             }
         }
@@ -1732,7 +1732,7 @@ namespace PeachPDF
                         if (href.Length == 0) continue;
 
                         var rectPt = Utils.ToPoints(fragment.Rect, ppp);
-                        var xRect = new XRect(rectPt.X, document.Pages[pageIndex].Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
+                        var xRect = new Rect(rectPt.X, document.Pages[pageIndex].Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
 
                         PdfLinkAnnotation annotation;
 

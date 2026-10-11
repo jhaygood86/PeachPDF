@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -63,11 +64,11 @@ namespace PeachPDF.Tests.TestSupport
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)
-                : new XSize(config.ManualPageWidth, config.ManualPageHeight);
+                : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
-                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
             var container = new HtmlContainer(adapter);
@@ -77,7 +78,7 @@ namespace PeachPDF.Tests.TestSupport
             using var measure = XGraphics.CreateMeasureContext(
                 container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
-            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             await container.PerformLayout(measure);
 
@@ -102,11 +103,11 @@ namespace PeachPDF.Tests.TestSupport
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)
-                : new XSize(config.ManualPageWidth, config.ManualPageHeight);
+                : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
-                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
             var container = new HtmlContainer(adapter);
@@ -124,7 +125,7 @@ namespace PeachPDF.Tests.TestSupport
 
             if (config.ScaleToPageSize || config.ShrinkToFit)
             {
-                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                container.MaxSize = new Size(container.PageSize.Width, 0);
                 await container.PerformLayout(measure);
 
                 var actualWidth = container.ActualSize.Width;
@@ -155,7 +156,7 @@ namespace PeachPDF.Tests.TestSupport
 
             if (needsRescale)
             {
-                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                container.MaxSize = new Size(container.PageSize.Width, 0);
                 await container.PerformLayout(measure);
             }
 

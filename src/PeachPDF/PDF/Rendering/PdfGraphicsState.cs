@@ -314,8 +314,8 @@ namespace PeachPDF.PDF.Rendering
                     // applies the world transform and the y flip), then the view matrix. An affine map is fixed by three points.
                     XMatrix toDefault = _renderer.DefaultViewMatrix;
                     toDefault.Prepend(EffectiveCtm);
-                    XPoint Map(double x, double y) => toDefault.Transform(_renderer.WorldToView(tilingBrush.Matrix.Transform(new XPoint(x, y))));
-                    XPoint origin = Map(0, 0), unitX = Map(1, 0), unitY = Map(0, 1);
+                    PaintPoint Map(double x, double y) => toDefault.Transform(_renderer.WorldToView(tilingBrush.Matrix.Transform(new PaintPoint(x, y))));
+                    PaintPoint origin = Map(0, 0), unitX = Map(1, 0), unitY = Map(0, 1);
                     XMatrix matrix = new XMatrix(unitX.X - origin.X, unitX.Y - origin.Y, unitY.X - origin.X, unitY.Y - origin.Y, origin.X, origin.Y);
 
                     PdfTilingPattern pattern = new PdfTilingPattern(_renderer.Owner);
@@ -534,7 +534,7 @@ namespace PeachPDF.PDF.Rendering
             }
         }
 
-        public XPoint RealizedTextPosition;
+        public PaintPoint RealizedTextPosition;
 
         /// <summary>
         /// Indicates that the text transformation matrix currently skews 20° to the right.
@@ -642,7 +642,7 @@ namespace PeachPDF.PDF.Rendering
 
         #region Clip Path
 
-        public void SetAndRealizeClipRect(XRect clipRect)
+        public void SetAndRealizeClipRect(Rect clipRect)
         {
             XGraphicsPath clipPath = new XGraphicsPath();
             clipPath.AddRectangle(clipRect);

@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using System;
 using System.ComponentModel;
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
@@ -43,13 +44,13 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XLinearGradientBrush"/> class.
         /// </summary>
-        public XLinearGradientBrush(XPoint point1, XPoint point2, XColor color1, XColor color2) : base(color1, color2)
+        public XLinearGradientBrush(PaintPoint point1, PaintPoint point2, XColor color1, XColor color2) : base(color1, color2)
         {
             _point1 = point1;
             _point2 = point2;
         }
 
-        public XLinearGradientBrush(XPoint point1, XPoint point2, XColor[] colors, double[] positions) : base(colors[0], colors[colors.Length - 1])
+        public XLinearGradientBrush(PaintPoint point1, PaintPoint point2, XColor[] colors, double[] positions) : base(colors[0], colors[colors.Length - 1])
         {
             _point1 = point1;
             _point2 = point2;
@@ -61,7 +62,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XLinearGradientBrush"/> class.
         /// </summary>
-        public XLinearGradientBrush(XRect rect, XColor color1, XColor color2, XLinearGradientMode linearGradientMode) : base(color1, color2)
+        public XLinearGradientBrush(Rect rect, XColor color1, XColor color2, XLinearGradientMode linearGradientMode) : base(color1, color2)
         {
             if (!Enum.IsDefined(typeof(XLinearGradientMode), linearGradientMode))
                 throw new InvalidEnumArgumentException("linearGradientMode", (int)linearGradientMode, typeof(XLinearGradientMode));
@@ -82,8 +83,8 @@ namespace PeachPDF.PDF.Drawing
         //public XLinearGradientBrush(RectangleF rect, XColor color1, XColor color2, double angle, bool isAngleScaleable);
 
         internal bool _useRect;
-        internal XPoint _point1, _point2;
-        internal XRect _rect;
+        internal PaintPoint _point1, _point2;
+        internal Rect _rect;
         internal XLinearGradientMode _linearGradientMode;
         internal XColor[]? _colors;
         internal double[]? _positions;

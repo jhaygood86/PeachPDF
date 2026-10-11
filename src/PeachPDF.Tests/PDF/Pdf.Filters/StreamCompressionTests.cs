@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System;
 using System.IO;
 using System.IO.Compression;
@@ -119,7 +120,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf.Filters
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
             var font = TestFonts.Create("Times New Roman", 12, pdfOptions: new XPdfFontOptions(PdfFontEncoding.WinAnsi));
-            gfx.DrawString("Hello", font, XBrushes.Black, new XRect(0, 0, 200, 50), XStringFormats.TopLeft);
+            gfx.DrawString("Hello", font, XBrushes.Black, new Rect(0, 0, 200, 50), XStringFormats.TopLeft);
 
             using var stream = new MemoryStream();
             document.Save(stream);

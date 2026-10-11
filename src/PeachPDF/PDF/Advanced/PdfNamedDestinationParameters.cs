@@ -1,6 +1,7 @@
 // PDFsharp - A .NET library for processing PDF
 // See the LICENSE file in the solution root for more information.
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Internal;
 
@@ -59,9 +60,9 @@ namespace PeachPDF.PDF.Advanced
         /// Creates a PdfNamedDestinationParameters object for a named destination.
         /// Moving to this destination will move to the desired left and top value and the optional zoom value on the destination page. Null values are retained unchanged.
         /// </summary>
-        /// <param name="position">An XPoint defining the left and top value of the displayed area in PDF world space units.</param>
+        /// <param name="position">An PaintPoint defining the left and top value of the displayed area in PDF world space units.</param>
         /// <param name="zoom">Optional: The zoom value for the displayed area. 1 = 100%, 2 = 200% etc.</param>
-        public static PdfNamedDestinationParameters CreatePosition(XPoint position, double? zoom = null)
+        public static PdfNamedDestinationParameters CreatePosition(PaintPoint position, double? zoom = null)
         {
             return CreateXYZ(position.X, position.Y, zoom);
         }
@@ -114,8 +115,8 @@ namespace PeachPDF.PDF.Advanced
         /// Creates a PdfNamedDestinationParameters object for a named destination.
         /// Moving to this destination will move to the destination page. The given rectangle is fitted to the window.
         /// </summary>
-        /// <param name="rect">The XRect representing the rectangle to display in PDF world space units.</param>
-        public static PdfNamedDestinationParameters CreateFitRectangle(XRect rect)
+        /// <param name="rect">The Rect representing the rectangle to display in PDF world space units.</param>
+        public static PdfNamedDestinationParameters CreateFitRectangle(Rect rect)
         {
             return CreateFitRectangle(rect.Left, rect.Top, rect.Right, rect.Bottom);
         }
@@ -124,11 +125,13 @@ namespace PeachPDF.PDF.Advanced
         /// Creates a PdfNamedDestinationParameters object for a named destination.
         /// Moving to this destination will move to the destination page. The given rectangle is fitted to the window.
         /// </summary>
-        /// <param name="point1">The first XPoint representing the rectangle to display in PDF world space units.</param>
-        /// <param name="point2">The second XPoint representing the rectangle to display in PDF world space units.</param>
-        public static PdfNamedDestinationParameters CreateFitRectangle(XPoint point1, XPoint point2)
+        /// <param name="point1">The first PaintPoint representing the rectangle to display in PDF world space units.</param>
+        /// <param name="point2">The second PaintPoint representing the rectangle to display in PDF world space units.</param>
+        public static PdfNamedDestinationParameters CreateFitRectangle(PaintPoint point1, PaintPoint point2)
         {
-            return CreateFitRectangle(new XRect(point1, point2));
+            double left = System.Math.Min(point1.X, point2.X);
+            double top = System.Math.Min(point1.Y, point2.Y);
+            return CreateFitRectangle(new Rect(left, top, System.Math.Max(point1.X, point2.X) - left, System.Math.Max(point1.Y, point2.Y) - top));
         }
 
         /// <summary>

@@ -31,13 +31,13 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             await using (var stream = File.OpenRead(fontPath))
                 await adapter.AddFont(stream, family);
 
-            var measure = XGraphics.CreateMeasureContext(new XSize(600, 600), XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(new Size(600, 600), XGraphicsUnit.Point, XPageDirection.Downwards);
             var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             var font = adapter.GetFont(family, size, PaintFontStyle.Regular)!;
             return (graphics, font);
         }
 
-        private static XPoint[] Points(GraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
+        private static PaintPoint[] Points(GraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
 
         private static int SubpathCount(GraphicsPath path)
             => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathTypes.Count(t => t == StartOfSubpath);

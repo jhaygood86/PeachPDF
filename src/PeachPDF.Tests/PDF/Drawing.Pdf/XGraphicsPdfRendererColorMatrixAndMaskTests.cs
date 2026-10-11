@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
 
         private static XForm NewTile(PdfDocument document, double size, XBrush brush)
         {
-            var form = new XForm(document, new XSize(size, size));
+            var form = new XForm(document, new Size(size, size));
             var formGfx = XGraphics.FromForm(form);
             formGfx.DrawRectangle(brush, 0, 0, size, size);
             return form;
@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var (document, gfx) = NewPage();
             var form = NewTile(document, 50, XBrushes.Red);
 
-            gfx.DrawImageWithColorMatrix(form, new XRect(10, 10, 50, 50), Brightness150);
+            gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150);
             gfx.Dispose();
 
             var text = Serialize(document);
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var (document, gfx) = NewPage();
             var form = NewTile(document, 50, XBrushes.Red);
 
-            gfx.DrawImageWithColorMatrix(form, new XRect(10, 10, 50, 50), Brightness150);
+            gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150);
             gfx.Dispose();
 
             var text = Serialize(document);
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var form = NewTile(document, 50, XBrushes.Red);
 
             var ex = Assert.Throws<NotSupportedException>(() =>
-                gfx.DrawImageWithColorMatrix(form, new XRect(10, 10, 50, 50), Grayscale));
+                gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Grayscale));
 
             Assert.Contains("color channel", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
@@ -107,7 +107,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var content = NewTile(document, 50, XBrushes.Red);
             var mask = NewTile(document, 50, XBrushes.White);
 
-            gfx.DrawImageAlphaMasked(content, mask, new XRect(10, 10, 50, 50));
+            gfx.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50));
             gfx.Dispose();
 
             var text = Serialize(document);
@@ -121,7 +121,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var content = NewTile(document, 50, XBrushes.Red);
             var mask = NewTile(document, 50, XBrushes.White);
 
-            gfx.DrawImageAlphaMasked(content, mask, new XRect(10, 10, 50, 50));
+            gfx.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50));
             gfx.Dispose();
 
             var text = Serialize(document);
@@ -135,14 +135,14 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var (documentPlain, gfxPlain) = NewPage();
             var contentPlain = NewTile(documentPlain, 50, XBrushes.Red);
             var maskPlain = NewTile(documentPlain, 50, XBrushes.White);
-            gfxPlain.DrawImageAlphaMasked(contentPlain, maskPlain, new XRect(10, 10, 50, 50));
+            gfxPlain.DrawImageAlphaMasked(contentPlain, maskPlain, new Rect(10, 10, 50, 50));
             gfxPlain.Dispose();
             var plainFunctionCount = Regex.Matches(Serialize(documentPlain), "/FunctionType 4").Count;
 
             var (documentInverted, gfxInverted) = NewPage();
             var contentInverted = NewTile(documentInverted, 50, XBrushes.Red);
             var maskInverted = NewTile(documentInverted, 50, XBrushes.White);
-            gfxInverted.DrawImageAlphaMasked(contentInverted, maskInverted, new XRect(10, 10, 50, 50), invert: true);
+            gfxInverted.DrawImageAlphaMasked(contentInverted, maskInverted, new Rect(10, 10, 50, 50), invert: true);
             gfxInverted.Dispose();
             var invertedFunctionCount = Regex.Matches(Serialize(documentInverted), "/FunctionType 4").Count;
 
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var top = NewTile(document, 50, XBrushes.Red);
             var bottom = NewTile(document, 50, XBrushes.Blue);
 
-            gfx.DrawImageBlendedOver(top, bottom, new XRect(10, 10, 50, 50), "Multiply");
+            gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Multiply");
             gfx.Dispose();
 
             var text = Serialize(document);
@@ -183,7 +183,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var bottom = NewTile(document, 50, XBrushes.Blue);
 
             Assert.Throws<PdfAConformanceException>(() =>
-                gfx.DrawImageBlendedOver(top, bottom, new XRect(10, 10, 50, 50), "Multiply"));
+                gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Multiply"));
         }
 
         [Fact]
@@ -197,7 +197,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var bottom = NewTile(document, 50, XBrushes.Blue);
 
             // Should not throw - a Normal-mode feBlend is just two ordinary Form XObject placements.
-            gfx.DrawImageBlendedOver(top, bottom, new XRect(10, 10, 50, 50), "Normal");
+            gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Normal");
         }
 
         [Fact]
@@ -210,7 +210,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var form = NewTile(document, 50, XBrushes.Red);
 
             Assert.Throws<PdfAConformanceException>(() =>
-                gfx.DrawImageWithColorMatrix(form, new XRect(10, 10, 50, 50), Brightness150));
+                gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150));
         }
 
         [Fact]
@@ -224,7 +224,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var mask = NewTile(document, 50, XBrushes.White);
 
             Assert.Throws<PdfAConformanceException>(() =>
-                gfx.DrawImageAlphaMasked(content, mask, new XRect(10, 10, 50, 50)));
+                gfx.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50)));
         }
 
         [Fact]
@@ -234,7 +234,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var top = NewTile(document, 50, XBrushes.Red);
             var bottom = NewTile(document, 50, XBrushes.Blue);
 
-            gfx.DrawImageBlendedOver(top, bottom, new XRect(10, 10, 50, 50), "Normal");
+            gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Normal");
             gfx.Dispose();
 
             var text = Serialize(document);

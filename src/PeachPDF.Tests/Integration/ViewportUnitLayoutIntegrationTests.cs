@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
-            var size = new XSize(800, 600);
+            var size = new Size(800, 600);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

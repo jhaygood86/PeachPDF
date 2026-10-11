@@ -932,7 +932,7 @@ namespace PeachPDF.Html.Core
         /// Page size (width × height) in PDF points derived from the CSS @page { size: ... } rule.
         /// Null when no size rule is present. Stored in PDF points, not internal pixel units.
         /// </summary>
-        public XSize? CssPageSize { get; set; }
+        public Size? CssPageSize { get; set; }
 
         /// <summary>
         /// All @page rules parsed from the document's stylesheets, in cascade order.
@@ -2213,7 +2213,7 @@ namespace PeachPDF.Html.Core
                 return tree;
 
             var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            var sheetSizePt = new XSize(PageSheetWidth / ppp, PageSheetHeight / ppp);
+            var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
             var hasRunningElements = _runningElements.Count > 0;

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.PDF;
@@ -84,8 +85,8 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainer(adapter);
             await container.SetHtml("<html><body><a href='https://example.com'>go</a></body></html>");
-            container.MaxSize = new XSize(600, 0);
-            using var measure = XGraphics.CreateMeasureContext(new XSize(600, 800), XGraphicsUnit.Point, XPageDirection.Downwards);
+            container.MaxSize = new Size(600, 0);
+            using var measure = XGraphics.CreateMeasureContext(new Size(600, 800), XGraphicsUnit.Point, XPageDirection.Downwards);
             await container.PerformLayout(measure);
 
             var links = container.GetLinks();

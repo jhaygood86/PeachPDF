@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -452,7 +453,7 @@ namespace PeachPDF.Html.Core
             double sheetPxHeight, sheetWidthPt, sheetHeightPt;
             if (HasSizeOverrides)
             {
-                var baseSizePt = new XSize(baseSheetPxWidth / ppp, baseSheetPxHeight / ppp);
+                var baseSizePt = new Size(baseSheetPxWidth / ppp, baseSheetPxHeight / ppp);
                 var resolved = PageRuleResolver.ResolvePageSize(rule, baseSizePt, container.PageLengthContext);
                 sheetWidthPt = resolved.Width;
                 sheetHeightPt = resolved.Height;

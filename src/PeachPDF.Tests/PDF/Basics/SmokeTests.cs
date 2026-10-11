@@ -31,14 +31,14 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
             // Draw a circle with a red pen which is 1.5 point thick.
             var r = width / 5;
             gfx.DrawEllipse(new XPen(XColors.Red, 1.5), XBrushes.White,
-                new XRect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
+                new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
             var font = TestFonts.Create("Times New Roman", 20, (PaintFontStyle.Bold | PaintFontStyle.Italic));
 
             // Draw the text.
             gfx.DrawString("Hello, World!", font, XBrushes.Black,
-                new XRect(0, 0, width, height), XStringFormats.Center);
+                new Rect(0, 0, width, height), XStringFormats.Center);
 
             // Save the document.
             using var stream = new MemoryStream();
@@ -101,21 +101,21 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
                 var font = TestFonts.Create("Times New Roman", 10, PaintFontStyle.Bold);
                 var tf = new XTextFormatter(gfx);
 
-                var rect = new XRect(40, 100, 250, 232);
+                var rect = new Rect(40, 100, 250, 232);
                 gfx.DrawRectangle(XBrushes.SeaShell, rect);
                 tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
 
-                rect = new XRect(310, 100, 250, 232);
+                rect = new Rect(310, 100, 250, 232);
                 gfx.DrawRectangle(XBrushes.SeaShell, rect);
                 tf.Alignment = XParagraphAlignment.Right;
                 tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
 
-                rect = new XRect(40, 400, 250, 232);
+                rect = new Rect(40, 400, 250, 232);
                 gfx.DrawRectangle(XBrushes.SeaShell, rect);
                 tf.Alignment = XParagraphAlignment.Center;
                 tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
 
-                rect = new XRect(310, 400, 250, 232);
+                rect = new Rect(310, 400, 250, 232);
                 gfx.DrawRectangle(XBrushes.SeaShell, rect);
                 tf.Alignment = XParagraphAlignment.Justify;
                 tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);

@@ -49,7 +49,7 @@ namespace PeachPDF
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>
-        public XPoint Location
+        public PaintPoint Location
         {
             get => Utils.ToPoints(HtmlContainerInt.Location, PixelsPerPoint);
             set => HtmlContainerInt.Location = Utils.ToPixels(value, PixelsPerPoint);
@@ -62,7 +62,7 @@ namespace PeachPDF
         /// <see cref="ActualSize"/> can be exceed the max size by layout restrictions (unwrappable line, set image size, etc.).<br/>
         /// Set zero for unlimited (width\height separately).<br/>
         /// </summary>
-        public XSize MaxSize
+        public Size MaxSize
         {
             get => Utils.ToPoints(HtmlContainerInt.MaxSize, PixelsPerPoint);
             set => HtmlContainerInt.MaxSize = Utils.ToPixels(value, PixelsPerPoint);
@@ -71,13 +71,13 @@ namespace PeachPDF
         /// <summary>
         /// The actual size of the rendered html (after layout)
         /// </summary>
-        public XSize ActualSize
+        public Size ActualSize
         {
             get => Utils.ToPoints(HtmlContainerInt.ActualSize, PixelsPerPoint);
             internal set => HtmlContainerInt.ActualSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
-        public XSize PageSize
+        public Size PageSize
         {
             get => Utils.ToPoints(HtmlContainerInt.PageSize, PixelsPerPoint);
             set => HtmlContainerInt.PageSize = Utils.ToPixels(value, PixelsPerPoint);
@@ -87,7 +87,7 @@ namespace PeachPDF
         /// Page size in PDF points derived from the CSS @page { size: ... } rule.
         /// Null when no size rule is present.
         /// </summary>
-        public XSize? CssPageSize => HtmlContainerInt.CssPageSize;
+        public Size? CssPageSize => HtmlContainerInt.CssPageSize;
 
         /// <summary>
         /// All @page rules parsed from the document's stylesheets, in cascade order.
@@ -177,7 +177,7 @@ namespace PeachPDF
         /// Get all the links in the HTML with the element rectangle and href data.
         /// </summary>
         /// <returns>collection of all the links in the HTML</returns>
-        public List<LinkElementData<XRect>> GetLinks() => GetLinks(null);
+        public List<LinkElementData<Rect>> GetLinks() => GetLinks(null);
 
         /// <summary>
         /// Same as <see cref="GetLinks()"/>, additionally collecting every bookmark-candidate box
@@ -185,14 +185,14 @@ namespace PeachPDF
         /// walk (see <see cref="Html.Core.HtmlContainerInt.GetLinks(List{CssBox}?)"/>), when a caller
         /// needs both - internal only, since the parameter type is internal.
         /// </summary>
-        internal List<LinkElementData<XRect>> GetLinks(List<CssBox>? bookmarkBoxes)
+        internal List<LinkElementData<Rect>> GetLinks(List<CssBox>? bookmarkBoxes)
         {
-            var linkElements = new List<LinkElementData<XRect>>();
+            var linkElements = new List<LinkElementData<Rect>>();
 
             foreach (var link in HtmlContainerInt.GetLinks(bookmarkBoxes))
             {
                 var href = ResolveHref(link.Href);
-                linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.ToPoints(link.Rectangle, PixelsPerPoint), link.SourceBox));
+                linkElements.Add(new LinkElementData<Rect>(link.Id, href, Utils.ToPoints(link.Rectangle, PixelsPerPoint), link.SourceBox));
             }
 
             return linkElements;
@@ -221,10 +221,10 @@ namespace PeachPDF
         /// </summary>
         /// <param name="elementId">the id of the element to get its rectangle</param>
         /// <returns>the rectangle of the element or null if not found</returns>
-        public XRect? GetElementRectangle(string elementId)
+        public Rect? GetElementRectangle(string elementId)
         {
             var r = HtmlContainerInt.GetElementRectangle(elementId);
-            return r.HasValue ? Utils.ToPoints(r.Value, PixelsPerPoint) : (XRect?)null;
+            return r.HasValue ? Utils.ToPoints(r.Value, PixelsPerPoint) : (Rect?)null;
         }
 
         /// <summary>

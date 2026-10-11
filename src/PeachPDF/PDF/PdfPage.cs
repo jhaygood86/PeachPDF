@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
 using PeachPDF;
@@ -175,7 +176,7 @@ namespace PeachPDF.PDF
                 if (!Enum.IsDefined(typeof(PageSize), value))
                     throw new InvalidEnumArgumentException("value", (int)value, typeof(PageSize));
 
-                XSize size = PageSizeConverter.ToSize(value);
+                Size size = PageSizeConverter.ToSize(value);
                 // MediaBox is always in Portrait mode (see Height, Width).
                 // So take Orientation NOT into account.
                 MediaBox = new PdfRectangle(0, 0, size.Width, size.Height);

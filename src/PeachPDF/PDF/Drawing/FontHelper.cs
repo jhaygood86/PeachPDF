@@ -43,13 +43,13 @@ namespace PeachPDF.PDF.Drawing
         /// Measure string directly from font data. The algorithm itself is
         /// <see cref="PeachDrawing.Core.TextMeasurement.Measure"/> - shared with every other
         /// backend that measures text (the raster canvas calls it directly, having no <see cref="XFont"/>
-        /// of its own to pass here) - this is just the <see cref="XSize"/> wrapping this method's own
+        /// of its own to pass here) - this is just the <see cref="Size"/> wrapping this method's own
         /// callers still expect.
         /// </summary>
-        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings features)
+        public static Size MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings features)
         {
             var size = PeachDrawing.Core.TextMeasurement.Measure(text, font.Typeface, font.Size, font.Synthesis, features);
-            return new XSize(size.Width, size.Height);
+            return new Size(size.Width, size.Height);
         }
 
         public static PaintFontStyle CreateStyle(bool isBold, bool isItalic)

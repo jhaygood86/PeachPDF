@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -29,7 +30,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 

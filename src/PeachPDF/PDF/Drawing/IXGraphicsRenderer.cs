@@ -49,7 +49,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a series of straight lines.
         /// </summary>
-        void DrawLines(XPen pen, XPoint[] points);
+        void DrawLines(XPen pen, PaintPoint[] points);
 
         /// <summary>
         /// Draws a B�zier spline.
@@ -59,12 +59,12 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a series of B�zier splines.
         /// </summary>
-        void DrawBeziers(XPen pen, XPoint[] points);
+        void DrawBeziers(XPen pen, PaintPoint[] points);
 
         /// <summary>
         /// Draws a cardinal spline.
         /// </summary>
-        void DrawCurve(XPen pen, XPoint[] points, double tension);
+        void DrawCurve(XPen pen, PaintPoint[] points, double tension);
 
         /// <summary>
         /// Draws an arc.
@@ -79,7 +79,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        void DrawRectangles(XPen? pen, XBrush? brush, XRect[] rects);
+        void DrawRectangles(XPen? pen, XBrush? brush, Rect[] rects);
 
         /// <summary>
         /// Draws a rectangle with rounded corners.
@@ -94,7 +94,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a polygon.
         /// </summary>
-        void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, FillMode fillmode);
+        void DrawPolygon(XPen? pen, XBrush? brush, PaintPoint[] points, FillMode fillmode);
 
         /// <summary>
         /// Draws a pie.
@@ -104,7 +104,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a cardinal spline.
         /// </summary>
-        void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, FillMode fillmode);
+        void DrawClosedCurve(XPen? pen, XBrush? brush, PaintPoint[] points, double tension, FillMode fillmode);
 
         /// <summary>
         /// Draws a graphical path.
@@ -136,14 +136,14 @@ namespace PeachPDF.PDF.Drawing
         /// so a reversed/mirrored RTL word's glyphs map back to their true source characters rather than
         /// whichever character occupies that position in the *painted* string.
         /// </param>
-        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null);
+        void DrawString(string s, XFont font, XBrush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null);
 
         /// <summary>
         /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
         /// addressed directly by font glyph index rather than by Unicode character - see
         /// <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s own remarks for why this exists
         /// (an OpenType MATH table's stretchy-operator glyphs, which have no Unicode mapping to shape
-        /// through the ordinary <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
+        /// through the ordinary <see cref="DrawString(string, XFont, XBrush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
         /// </summary>
         void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush);
 
@@ -151,7 +151,7 @@ namespace PeachPDF.PDF.Drawing
         /// Draws an image.
         /// </summary>
         void DrawImage(XImage image, double x, double y, double width, double height);
-        void DrawImage(XImage image, XRect destRect, XRect srcRect, XGraphicsUnit srcUnit);
+        void DrawImage(XImage image, Rect destRect, Rect srcRect, XGraphicsUnit srcUnit);
 
         #endregion
 
@@ -170,7 +170,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// 
         /// </summary>
-        void BeginContainer(XGraphicsContainer container, XRect dstrect, XRect srcrect, XGraphicsUnit unit);
+        void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect, XGraphicsUnit unit);
 
         /// <summary>
         /// 

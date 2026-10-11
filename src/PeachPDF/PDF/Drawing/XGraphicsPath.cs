@@ -66,7 +66,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds  a line segment to current figure.
         /// </summary>
-        public void AddLine(XPoint pt1, XPoint pt2)
+        public void AddLine(PaintPoint pt1, PaintPoint pt2)
         {
             AddLine(pt1.X, pt1.Y, pt2.X, pt2.Y);
         }
@@ -88,7 +88,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a series of connected line segments to current figure.
         /// </summary>
-        public void AddLines(XPoint[] points)
+        public void AddLines(PaintPoint[] points)
         {
             if (points == null)
                 throw new ArgumentNullException("points");
@@ -106,7 +106,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a cubic Bézier curve to the current figure.
         /// </summary>
-        public void AddBezier(XPoint pt1, XPoint pt2, XPoint pt3, XPoint pt4)
+        public void AddBezier(PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, PaintPoint pt4)
         {
             AddBezier(pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, pt4.X, pt4.Y);
         }
@@ -125,7 +125,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a sequence of connected cubic Bézier curves to the current figure.
         /// </summary>
-        public void AddBeziers(XPoint[] points)
+        public void AddBeziers(PaintPoint[] points)
         {
             if (points == null)
                 throw new ArgumentNullException("points");
@@ -151,7 +151,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a spline curve to the current figure.
         /// </summary>
-        public void AddCurve(XPoint[] points)
+        public void AddCurve(PaintPoint[] points)
         {
             AddCurve(points, 0.5);
         }
@@ -159,7 +159,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a spline curve to the current figure.
         /// </summary>
-        public void AddCurve(XPoint[] points, double tension)
+        public void AddCurve(PaintPoint[] points, double tension)
         {
             int count = points.Length;
             if (count < 2)
@@ -170,7 +170,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a spline curve to the current figure.
         /// </summary>
-        public void AddCurve(XPoint[] points, int offset, int numberOfSegments, double tension)
+        public void AddCurve(PaintPoint[] points, int offset, int numberOfSegments, double tension)
         {
             throw new NotImplementedException("AddCurve not yet implemented.");
         }
@@ -180,7 +180,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds an elliptical arc to the current figure.
         /// </summary>
-        public void AddArc(XRect rect, double startAngle, double sweepAngle)
+        public void AddArc(Rect rect, double startAngle, double sweepAngle)
         {
             AddArc(rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -196,7 +196,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds an elliptical arc to the current figure. The arc is specified WPF like.
         /// </summary>
-        public void AddArc(XPoint point1, XPoint point2, XSize size, double rotationAngle, bool isLargeArg, XSweepDirection sweepDirection)
+        public void AddArc(PaintPoint point1, PaintPoint point2, Size size, double rotationAngle, bool isLargeArg, XSweepDirection sweepDirection)
         {
             _corePath.AddArc(point1, point2, size, rotationAngle, isLargeArg, sweepDirection);
         }
@@ -206,7 +206,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a rectangle to this path.
         /// </summary>
-        public void AddRectangle(XRect rect)
+        public void AddRectangle(Rect rect)
         {
             _corePath.MoveTo(rect.X, rect.Y);
             _corePath.LineTo(rect.X + rect.Width, rect.Y, false);
@@ -220,7 +220,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         public void AddRectangle(double x, double y, double width, double height)
         {
-            AddRectangle(new XRect(x, y, width, height));
+            AddRectangle(new Rect(x, y, width, height));
         }
 
         // ----- AddRectangles ------------------------------------------------------------------------
@@ -228,7 +228,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a series of rectangles to this path.
         /// </summary>
-        public void AddRectangles(XRect[] rects)
+        public void AddRectangles(Rect[] rects)
         {
             int count = rects.Length;
             for (int idx = 0; idx < count; idx++)
@@ -267,7 +267,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds an ellipse to the current path.
         /// </summary>
-        public void AddEllipse(XRect rect)
+        public void AddEllipse(Rect rect)
         {
             AddEllipse(rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -294,7 +294,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a polygon to this path.
         /// </summary>
-        public void AddPolygon(XPoint[] points)
+        public void AddPolygon(PaintPoint[] points)
         {
             int count = points.Length;
             if (count == 0)
@@ -313,7 +313,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds the outline of a pie shape to this path.
         /// </summary>
-        public void AddPie(XRect rect, double startAngle, double sweepAngle)
+        public void AddPie(Rect rect, double startAngle, double sweepAngle)
         {
             AddPie(rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -331,7 +331,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a closed curve to this path.
         /// </summary>
-        public void AddClosedCurve(XPoint[] points)
+        public void AddClosedCurve(PaintPoint[] points)
         {
             AddClosedCurve(points, 0.5);
         }
@@ -339,7 +339,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Adds a closed curve to this path.
         /// </summary>
-        public void AddClosedCurve(XPoint[] points, double tension)
+        public void AddClosedCurve(PaintPoint[] points, double tension)
         {
             if (points == null)
                 throw new ArgumentNullException("points");
@@ -384,7 +384,7 @@ namespace PeachPDF.PDF.Drawing
         /// <c>GraphicsPath.ClipToRect</c>) for what "clipped" means here and why a rectangle-only clip
         /// is what this needs to support.
         /// </summary>
-        public XGraphicsPath ClipToRect(XRect rect)
+        public XGraphicsPath ClipToRect(Rect rect)
         {
             var clipped = new XGraphicsPath
             {

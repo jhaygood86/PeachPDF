@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Internal;
 using System;
 using System.Collections.Generic;
@@ -45,10 +46,10 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Creates between 1 and 5 Béziers curves from parameters specified like in GDI+.
         /// </summary>
-        public static List<XPoint> BezierCurveFromArc(double x, double y, double width, double height, double startAngle, double sweepAngle,
+        public static List<PaintPoint> BezierCurveFromArc(double x, double y, double width, double height, double startAngle, double sweepAngle,
             PathStart pathStart, ref XMatrix matrix)
         {
-            List<XPoint> points = new List<XPoint>();
+            List<PaintPoint> points = new List<PaintPoint>();
 
             // Normalize the angles.
             double α = startAngle;
@@ -145,7 +146,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Appends a Bézier curve for an arc within a full quadrant.
         /// </summary>
-        static void AppendPartialArcQuadrant(List<XPoint> points, double x, double y, double width, double height, double α, double β, PathStart pathStart, XMatrix matrix)
+        static void AppendPartialArcQuadrant(List<PaintPoint> points, double x, double y, double width, double height, double α, double β, PathStart pathStart, XMatrix matrix)
         {
             Debug.Assert(α >= 0 && α <= 360);
             Debug.Assert(β >= 0);
@@ -204,26 +205,26 @@ namespace PeachPDF.PDF.Drawing
             sinβ = Math.Sin(β);
             cosβ = Math.Cos(β);
 
-            //XPoint pt1, pt2, pt3;
+            //PaintPoint pt1, pt2, pt3;
             if (!reflect)
             {
                 // Calculation for quarter 0 and 1.
                 switch (pathStart)
                 {
                     case PathStart.MoveTo1st:
-                        points.Add(matrix.Transform(new XPoint(x0 + δx * cosα, y0 + δy * sinα)));
+                        points.Add(matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα)));
                         break;
 
                     case PathStart.LineTo1st:
-                        points.Add(matrix.Transform(new XPoint(x0 + δx * cosα, y0 + δy * sinα)));
+                        points.Add(matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα)));
                         break;
 
                     case PathStart.Ignore1st:
                         break;
                 }
-                points.Add(matrix.Transform(new XPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα))));
-                points.Add(matrix.Transform(new XPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ))));
-                points.Add(matrix.Transform(new XPoint(x0 + δx * cosβ, y0 + δy * sinβ)));
+                points.Add(matrix.Transform(new PaintPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα))));
+                points.Add(matrix.Transform(new PaintPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ))));
+                points.Add(matrix.Transform(new PaintPoint(x0 + δx * cosβ, y0 + δy * sinβ)));
             }
             else
             {
@@ -231,26 +232,26 @@ namespace PeachPDF.PDF.Drawing
                 switch (pathStart)
                 {
                     case PathStart.MoveTo1st:
-                        points.Add(matrix.Transform(new XPoint(x0 - δx * cosα, y0 - δy * sinα)));
+                        points.Add(matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα)));
                         break;
 
                     case PathStart.LineTo1st:
-                        points.Add(matrix.Transform(new XPoint(x0 - δx * cosα, y0 - δy * sinα)));
+                        points.Add(matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα)));
                         break;
 
                     case PathStart.Ignore1st:
                         break;
                 }
-                points.Add(matrix.Transform(new XPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα))));
-                points.Add(matrix.Transform(new XPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ))));
-                points.Add(matrix.Transform(new XPoint(x0 - δx * cosβ, y0 - δy * sinβ)));
+                points.Add(matrix.Transform(new PaintPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα))));
+                points.Add(matrix.Transform(new PaintPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ))));
+                points.Add(matrix.Transform(new PaintPoint(x0 - δx * cosβ, y0 - δy * sinβ)));
             }
         }
 
         /// <summary>
         /// Creates between 1 and 5 Béziers curves from parameters specified like in WPF.
         /// </summary>
-        public static List<XPoint> BezierCurveFromArc(XPoint point1, XPoint point2, XSize size,
+        public static List<PaintPoint> BezierCurveFromArc(PaintPoint point1, PaintPoint point2, Size size,
             double rotationAngle, bool isLargeArc, bool clockwise, PathStart pathStart)
         {
             // See also http://www.charlespetzold.com/blog/blog.xml from January 2, 2008: 
@@ -265,12 +266,12 @@ namespace PeachPDF.PDF.Drawing
             XMatrix matrix = new XMatrix();
             matrix.RotateAppend(-rotationAngle);
             matrix.ScaleAppend(δy / δx, 1);
-            XPoint pt1 = matrix.Transform(point1);
-            XPoint pt2 = matrix.Transform(point2);
+            PaintPoint pt1 = matrix.Transform(point1);
+            PaintPoint pt2 = matrix.Transform(point2);
 
             // Get info about chord that connects both points.
-            XPoint midPoint = new XPoint((pt1.X + pt2.X) / 2, (pt1.Y + pt2.Y) / 2);
-            XVector vect = pt2 - pt1;
+            PaintPoint midPoint = new PaintPoint((pt1.X + pt2.X) / 2, (pt1.Y + pt2.Y) / 2);
+            XVector vect = new XVector(pt2.X - pt1.X, pt2.Y - pt1.Y);
             double halfChord = vect.Length / 2;
 
             // Get vector from chord to center.
@@ -290,7 +291,7 @@ namespace PeachPDF.PDF.Drawing
                 centerDistance = 0;
 
             // Calculate center point.
-            XPoint center = midPoint + centerDistance * vectRotated;
+            PaintPoint center = new PaintPoint(midPoint.X + centerDistance * vectRotated.X, midPoint.Y + centerDistance * vectRotated.Y);
 
             // Get angles from center to the two points.
             double α = Math.Atan2(pt1.Y - center.Y, pt1.X - center.X);

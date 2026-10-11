@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing.Layout;
 
 namespace PeachPDF.PDF.Drawing.Layout
@@ -47,7 +48,7 @@ namespace PeachPDF.PDF.Drawing.Layout
         /// <summary>
         /// The location relative to the upper left corner of the layout rectangle.
         /// </summary>
-        public XPoint Location { get; set; }
+        public PaintPoint Location { get; set; }
 
         /// <summary>
         /// The alignment of this line.

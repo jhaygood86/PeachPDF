@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -459,7 +460,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "TablePageBreakBottomsTestFont");
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
-            var size = new XSize(595, pageHeight);
+            var size = new Size(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MarginTop = 20;
@@ -644,7 +645,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
-            var size = new XSize(595, pageHeight);
+            var size = new Size(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MarginTop = 20;
@@ -1159,7 +1160,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
-            var size = new XSize(595, pageHeight);
+            var size = new Size(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MarginTop = marginTop;

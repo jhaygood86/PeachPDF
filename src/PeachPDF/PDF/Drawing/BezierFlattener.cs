@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.Collections.Generic;
 
 namespace PeachPDF.PDF.Drawing
@@ -32,12 +33,12 @@ namespace PeachPDF.PDF.Drawing
         /// control points <paramref name="p1"/>/<paramref name="p2"/> to <paramref name="p3"/>, to
         /// <paramref name="output"/>.
         /// </summary>
-        public static void Flatten(XPoint p0, XPoint p1, XPoint p2, XPoint p3, List<XPoint> output)
+        public static void Flatten(PaintPoint p0, PaintPoint p1, PaintPoint p2, PaintPoint p3, List<PaintPoint> output)
         {
             FlattenRecursive(p0, p1, p2, p3, output, 0);
         }
 
-        private static void FlattenRecursive(XPoint p0, XPoint p1, XPoint p2, XPoint p3, List<XPoint> output, int depth)
+        private static void FlattenRecursive(PaintPoint p0, PaintPoint p1, PaintPoint p2, PaintPoint p3, List<PaintPoint> output, int depth)
         {
             if (depth >= MaxDepth || IsFlatEnough(p0, p1, p2, p3))
             {
@@ -62,7 +63,7 @@ namespace PeachPDF.PDF.Drawing
         /// to <paramref name="p3"/> that a straight line is an adequate stand-in for the curve - the
         /// standard "distance of the control points from the chord" flatness test.
         /// </summary>
-        private static bool IsFlatEnough(XPoint p0, XPoint p1, XPoint p2, XPoint p3)
+        private static bool IsFlatEnough(PaintPoint p0, PaintPoint p1, PaintPoint p2, PaintPoint p3)
         {
             var dx = p3.X - p0.X;
             var dy = p3.Y - p0.Y;
@@ -79,7 +80,7 @@ namespace PeachPDF.PDF.Drawing
         /// cross-product-over-length-squared formula, kept squared throughout so the hot recursive path
         /// never needs a square root.
         /// </summary>
-        private static double PerpendicularDistanceSquared(XPoint point, XPoint origin, double dx, double dy)
+        private static double PerpendicularDistanceSquared(PaintPoint point, PaintPoint origin, double dx, double dy)
         {
             var lengthSquared = dx * dx + dy * dy;
             var px = point.X - origin.X;
@@ -96,6 +97,6 @@ namespace PeachPDF.PDF.Drawing
             return cross * cross / lengthSquared;
         }
 
-        private static XPoint Mid(XPoint a, XPoint b) => new((a.X + b.X) / 2, (a.Y + b.Y) / 2);
+        private static PaintPoint Mid(PaintPoint a, PaintPoint b) => new((a.X + b.X) / 2, (a.Y + b.Y) / 2);
     }
 }

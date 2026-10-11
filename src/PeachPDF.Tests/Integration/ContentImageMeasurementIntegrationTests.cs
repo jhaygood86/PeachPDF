@@ -54,10 +54,10 @@ namespace PeachPDF.Tests.Integration
 
             container.PageSize = new Size(pageWidth, 800);
             // Mirrors PdfGenerator's ShrinkToFit measurement pass: width-constrained, height open
-            // (src/PeachPDF/PdfGenerator.cs: container.MaxSize = new XSize(container.PageSize.Width, 0)).
+            // (src/PeachPDF/PdfGenerator.cs: container.MaxSize = new Size(container.PageSize.Width, 0)).
             container.MaxSize = new Size(pageWidth, 0);
 
-            var measure = XGraphics.CreateMeasureContext(new XSize(pageWidth, 800), XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(new Size(pageWidth, 800), XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
@@ -71,7 +72,7 @@ namespace PeachPDF.PDF
         /// Initializes a new instance of the PdfRectangle class with two points specifying
         /// two diagonally opposite corners.
         /// </summary>
-        public PdfRectangle(XPoint pt1, XPoint pt2)
+        public PdfRectangle(PaintPoint pt1, PaintPoint pt2)
         {
             _x1 = pt1.X;
             _y1 = pt1.Y;
@@ -82,7 +83,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Initializes a new instance of the PdfRectangle class with the specified location and size.
         /// </summary>
-        public PdfRectangle(XPoint pt, XSize size)
+        public PdfRectangle(PaintPoint pt, Size size)
         {
             _x1 = pt.X;
             _y1 = pt.Y;
@@ -91,9 +92,9 @@ namespace PeachPDF.PDF
         }
 
         /// <summary>
-        /// Initializes a new instance of the PdfRectangle class with the specified XRect.
+        /// Initializes a new instance of the PdfRectangle class with the specified Rect.
         /// </summary>
-        public PdfRectangle(XRect rect)
+        public PdfRectangle(Rect rect)
         {
             _x1 = rect.X;
             _y1 = rect.Y;
@@ -257,24 +258,24 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets or sets the coordinates of the first point of this PdfRectangle.
         /// </summary>
-        public XPoint Location
+        public PaintPoint Location
         {
-            get { return new XPoint(_x1, _y1); }
+            get { return new PaintPoint(_x1, _y1); }
         }
 
         /// <summary>
         /// Gets or sets the size of this PdfRectangle.
         /// </summary>
-        public XSize Size
+        public Size Size
         {
-            get { return new XSize(_x2 - _x1, _y2 - _y1); }
+            get { return new Size(_x2 - _x1, _y2 - _y1); }
         }
 
 
         /// <summary>
         /// Determines if the specified point is contained within this PdfRectangle.
         /// </summary>
-        public bool Contains(XPoint pt)
+        public bool Contains(PaintPoint pt)
         {
             return Contains(pt.X, pt.Y);
         }
@@ -291,7 +292,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Determines if the rectangular region represented by rect is entirely contained within this PdfRectangle.
         /// </summary>
-        public bool Contains(XRect rect)
+        public bool Contains(Rect rect)
         {
             return _x1 <= rect.X && (rect.X + rect.Width) <= _x2 &&
               _y1 <= rect.Y && (rect.Y + rect.Height) <= _y2;
@@ -307,11 +308,11 @@ namespace PeachPDF.PDF
         }
 
         /// <summary>
-        /// Returns the rectangle as an XRect object.
+        /// Returns the rectangle as an Rect object.
         /// </summary>
-        public XRect ToXRect()
+        public Rect ToXRect()
         {
-            return new XRect(_x1, _y1, Width, Height);
+            return new Rect(_x1, _y1, Width, Height);
         }
 
         /// <summary>

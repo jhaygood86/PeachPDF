@@ -175,7 +175,7 @@ namespace PeachPDF.Tests.Integration
             // end - the same consistency CssValueParser's absolute-length resolution now relies on
             // (issue #814). A harness that inflated fonts but not geometry (as this one previously did,
             // hardcoding 1.0 here) tests a combination no real PdfGenerator render can produce.
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 

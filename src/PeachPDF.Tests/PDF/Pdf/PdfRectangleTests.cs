@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 
@@ -16,7 +17,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         [Fact]
         public void Constructor_FromTwoPoints_SetsCorners()
         {
-            var rect = new PdfRectangle(new XPoint(1, 2), new XPoint(3, 4));
+            var rect = new PdfRectangle(new PaintPoint(1, 2), new PaintPoint(3, 4));
 
             Assert.Equal(1, rect.X1);
             Assert.Equal(2, rect.Y1);
@@ -27,7 +28,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         [Fact]
         public void Constructor_FromPointAndSize_ComputesSecondCorner()
         {
-            var rect = new PdfRectangle(new XPoint(1, 1), new XSize(3, 4));
+            var rect = new PdfRectangle(new PaintPoint(1, 1), new Size(3, 4));
 
             Assert.Equal(1, rect.X1);
             Assert.Equal(1, rect.Y1);
@@ -38,7 +39,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         [Fact]
         public void Constructor_FromXRect_ComputesSecondCorner()
         {
-            var rect = new PdfRectangle(new XRect(1, 1, 3, 4));
+            var rect = new PdfRectangle(new Rect(1, 1, 3, 4));
 
             Assert.Equal(1, rect.X1);
             Assert.Equal(1, rect.Y1);
@@ -60,8 +61,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var rect = new PdfRectangle(1, 2, 4, 6);
 
-            Assert.Equal(new XPoint(1, 2), rect.Location);
-            Assert.Equal(new XSize(3, 4), rect.Size);
+            Assert.Equal(new PaintPoint(1, 2), rect.Location);
+            Assert.Equal(new Size(3, 4), rect.Size);
         }
 
         [Fact]
@@ -114,9 +115,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var rect = new PdfRectangle(0, 0, 10, 10);
 
-            Assert.True(rect.Contains(new XPoint(0, 0)));
+            Assert.True(rect.Contains(new PaintPoint(0, 0)));
             Assert.True(rect.Contains(10, 10));
-            Assert.False(rect.Contains(new XPoint(11, 5)));
+            Assert.False(rect.Contains(new PaintPoint(11, 5)));
         }
 
         [Fact]
@@ -124,8 +125,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var rect = new PdfRectangle(0, 0, 10, 10);
 
-            Assert.True(rect.Contains(new XRect(1, 1, 2, 2)));
-            Assert.False(rect.Contains(new XRect(5, 5, 20, 20)));
+            Assert.True(rect.Contains(new Rect(1, 1, 2, 2)));
+            Assert.False(rect.Contains(new Rect(5, 5, 20, 20)));
         }
 
         [Fact]

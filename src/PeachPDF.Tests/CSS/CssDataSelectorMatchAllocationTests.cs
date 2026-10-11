@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -107,7 +108,7 @@ public class CssDataSelectorMatchAllocationTests
         var container = new HtmlContainerInt(adapter);
         await container.SetHtml("<!DOCTYPE html><html><body><div class='a b c'>text</div></body></html>", null);
 
-        var size = new XSize(595, 842);
+        var size = new Size(595, 842);
         container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

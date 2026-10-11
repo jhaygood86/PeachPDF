@@ -83,27 +83,27 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             }
             page.RenderContent = content;
             _renderer = new XGraphicsPdfRenderer(page, this, options);
-            _pageSizePoints = new XSize(page.Width, page.Height);
+            _pageSizePoints = new Size(page.Width, page.Height);
             switch (pageUnit)
             {
                 case XGraphicsUnit.Point:
-                    _pageSize = new XSize(page.Width, page.Height);
+                    _pageSize = new Size(page.Width, page.Height);
                     break;
 
                 case XGraphicsUnit.Inch:
-                    _pageSize = new XSize(XUnit.FromPoint(page.Width).Inch, XUnit.FromPoint(page.Height).Inch);
+                    _pageSize = new Size(XUnit.FromPoint(page.Width).Inch, XUnit.FromPoint(page.Height).Inch);
                     break;
 
                 case XGraphicsUnit.Millimeter:
-                    _pageSize = new XSize(XUnit.FromPoint(page.Width).Millimeter, XUnit.FromPoint(page.Height).Millimeter);
+                    _pageSize = new Size(XUnit.FromPoint(page.Width).Millimeter, XUnit.FromPoint(page.Height).Millimeter);
                     break;
 
                 case XGraphicsUnit.Centimeter:
-                    _pageSize = new XSize(XUnit.FromPoint(page.Width).Centimeter, XUnit.FromPoint(page.Height).Centimeter);
+                    _pageSize = new Size(XUnit.FromPoint(page.Width).Centimeter, XUnit.FromPoint(page.Height).Centimeter);
                     break;
 
                 case XGraphicsUnit.Presentation:
-                    _pageSize = new XSize(XUnit.FromPoint(page.Width).Presentation, XUnit.FromPoint(page.Height).Presentation);
+                    _pageSize = new Size(XUnit.FromPoint(page.Width).Presentation, XUnit.FromPoint(page.Height).Presentation);
                     break;
 
                 default:
@@ -115,30 +115,30 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             Initialize();
         }
 
-        XGraphics(XSize size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        XGraphics(Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
         {
             _gsStack = new GraphicsStateStack(this);
-            _pageSizePoints = new XSize(size.Width, size.Height);
+            _pageSizePoints = new Size(size.Width, size.Height);
             switch (pageUnit)
             {
                 case XGraphicsUnit.Point:
-                    _pageSize = new XSize(size.Width, size.Height);
+                    _pageSize = new Size(size.Width, size.Height);
                     break;
 
                 case XGraphicsUnit.Inch:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Inch, XUnit.FromPoint(size.Height).Inch);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Inch, XUnit.FromPoint(size.Height).Inch);
                     break;
 
                 case XGraphicsUnit.Millimeter:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Millimeter, XUnit.FromPoint(size.Height).Millimeter);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Millimeter, XUnit.FromPoint(size.Height).Millimeter);
                     break;
 
                 case XGraphicsUnit.Centimeter:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Centimeter, XUnit.FromPoint(size.Height).Centimeter);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Centimeter, XUnit.FromPoint(size.Height).Centimeter);
                     break;
 
                 case XGraphicsUnit.Presentation:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Presentation, XUnit.FromPoint(size.Height).Presentation);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Presentation, XUnit.FromPoint(size.Height).Presentation);
                     break;
 
                 default:
@@ -150,31 +150,31 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             Initialize();
         }
 
-        XGraphics(IXGraphicsRenderer renderer, XSize size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        XGraphics(IXGraphicsRenderer renderer, Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
         {
             _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
             _gsStack = new GraphicsStateStack(this);
-            _pageSizePoints = new XSize(size.Width, size.Height);
+            _pageSizePoints = new Size(size.Width, size.Height);
             switch (pageUnit)
             {
                 case XGraphicsUnit.Point:
-                    _pageSize = new XSize(size.Width, size.Height);
+                    _pageSize = new Size(size.Width, size.Height);
                     break;
 
                 case XGraphicsUnit.Inch:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Inch, XUnit.FromPoint(size.Height).Inch);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Inch, XUnit.FromPoint(size.Height).Inch);
                     break;
 
                 case XGraphicsUnit.Millimeter:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Millimeter, XUnit.FromPoint(size.Height).Millimeter);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Millimeter, XUnit.FromPoint(size.Height).Millimeter);
                     break;
 
                 case XGraphicsUnit.Centimeter:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Centimeter, XUnit.FromPoint(size.Height).Centimeter);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Centimeter, XUnit.FromPoint(size.Height).Centimeter);
                     break;
 
                 case XGraphicsUnit.Presentation:
-                    _pageSize = new XSize(XUnit.FromPoint(size.Width).Presentation, XUnit.FromPoint(size.Height).Presentation);
+                    _pageSize = new Size(XUnit.FromPoint(size.Width).Presentation, XUnit.FromPoint(size.Height).Presentation);
                     break;
 
                 default:
@@ -209,12 +209,12 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Creates the measure context. This is a graphics context created only for querying measures of text.
         /// Drawing on a measure context has no effect.
         /// </summary>
-        public static XGraphics CreateMeasureContext(XSize size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        public static XGraphics CreateMeasureContext(Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
         {
             return new XGraphics(size, pageUnit, pageDirection);
         }
 
-        public static XGraphics FromRenderer(IXGraphicsRenderer renderer, XSize size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        public static XGraphics FromRenderer(IXGraphicsRenderer renderer, Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
         {
             return new XGraphics(renderer, size, pageUnit, pageDirection);
         }
@@ -291,22 +291,22 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         void Initialize()
         {
-            _pageOrigin = new XPoint();
+            _pageOrigin = new PaintPoint();
 
             double pageHeight = _pageSize.Height;
             PdfPage targetPage = PdfPage;
-            XPoint trimOffset = new XPoint();
+            PaintPoint trimOffset = new PaintPoint();
             if (targetPage != null && targetPage.TrimMargins.AreSet)
             {
                 pageHeight += targetPage.TrimMargins.Top.Point + targetPage.TrimMargins.Bottom.Point;
-                trimOffset = new XPoint(targetPage.TrimMargins.Left.Point, targetPage.TrimMargins.Top.Point);
+                trimOffset = new PaintPoint(targetPage.TrimMargins.Left.Point, targetPage.TrimMargins.Top.Point);
             }
 
             XMatrix matrix = new XMatrix();
             if (_pageDirection != XPageDirection.Downwards)
                 matrix.Prepend(new XMatrix(1, 0, 0, -1, 0, pageHeight));
 
-            if (trimOffset != new XPoint())
+            if (trimOffset != new PaintPoint())
                 matrix.TranslatePrepend(trimOffset.X, -trimOffset.Y);
 
             DefaultViewMatrix = matrix;
@@ -387,22 +387,22 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Gets the current page origin. Setting the origin is not yet implemented.
         /// </summary>
-        public XPoint PageOrigin
+        public PaintPoint PageOrigin
         {
             get { return _pageOrigin; }
             set
             {
                 // Is there really anybody who needes to set the page origin?
-                if (value != new XPoint())
+                if (value != new PaintPoint())
                     throw new NotImplementedException("PageOrigin cannot be modified in current implementation.");
             }
         }
-        XPoint _pageOrigin;
+        PaintPoint _pageOrigin;
 
         /// <summary>
         /// Gets the current size of the page.
         /// </summary>
-        public XSize PageSize
+        public Size PageSize
         {
             get { return _pageSize; }
             //set
@@ -411,17 +411,17 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             //  throw new NotImplementedException("PageSize cannot be modified in current implementation.");
             //}
         }
-        XSize _pageSize;
-        XSize _pageSizePoints;
+        Size _pageSize;
+        Size _pageSizePoints;
 
         #region Drawing
 
         // ----- DrawLine -----------------------------------------------------------------------------
 
         /// <summary>
-        /// Draws a line connecting two XPoint structures.
+        /// Draws a line connecting two PaintPoint structures.
         /// </summary>
-        public void DrawLine(XPen pen, XPoint pt1, XPoint pt2)
+        public void DrawLine(XPen pen, PaintPoint pt1, PaintPoint pt2)
         {
             DrawLine(pen, pt1.X, pt1.Y, pt2.X, pt2.Y);
         }
@@ -435,14 +435,14 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
                 throw new ArgumentNullException("pen");
 
             if (_renderer != null)
-                _renderer.DrawLines(pen, new XPoint[] { new XPoint(x1, y1), new XPoint(x2, y2) });
+                _renderer.DrawLines(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2) });
         }
 
         // ----- DrawLines ----------------------------------------------------------------------------
         /// <summary>
         /// Draws a series of line segments that connect an array of points.
         /// </summary>
-        public void DrawLines(XPen pen, XPoint[] points)
+        public void DrawLines(XPen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -466,7 +466,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
                 throw new ArgumentNullException("value");
 
             int length = value.Length;
-            XPoint[] points = new XPoint[length / 2 + 1];
+            PaintPoint[] points = new PaintPoint[length / 2 + 1];
             points[0].X = x;
             points[0].Y = y;
             for (int idx = 0; idx < length / 2; idx++)
@@ -481,7 +481,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a B�zier spline defined by four points.
         /// </summary>
-        public void DrawBezier(XPen pen, XPoint pt1, XPoint pt2, XPoint pt3, XPoint pt4)
+        public void DrawBezier(XPen pen, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, PaintPoint pt4)
         {
             DrawBezier(pen, pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, pt4.X, pt4.Y);
         }
@@ -497,7 +497,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
 
             if (_renderer != null)
                 _renderer.DrawBeziers(pen,
-                  new XPoint[] { new XPoint(x1, y1), new XPoint(x2, y2), new XPoint(x3, y3), new XPoint(x4, y4) });
+                  new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2), new PaintPoint(x3, y3), new PaintPoint(x4, y4) });
         }
 
         // ----- DrawBeziers --------------------------------------------------------------------------
@@ -505,7 +505,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of B�zier splines from an array of points.
         /// </summary>
-        public void DrawBeziers(XPen pen, XPoint[] points)
+        public void DrawBeziers(XPen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -526,7 +526,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a cardinal spline through a specified array of points.
         /// </summary>
-        public void DrawCurve(XPen pen, XPoint[] points)
+        public void DrawCurve(XPen pen, PaintPoint[] points)
         {
             DrawCurve(pen, points, 0.5);
         }
@@ -535,9 +535,9 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Draws a cardinal spline through a specified array of point using a specified tension.
         /// The drawing begins offset from the beginning of the array.
         /// </summary>
-        public void DrawCurve(XPen pen, XPoint[] points, int offset, int numberOfSegments, double tension)
+        public void DrawCurve(XPen pen, PaintPoint[] points, int offset, int numberOfSegments, double tension)
         {
-            XPoint[] points2 = new XPoint[numberOfSegments];
+            PaintPoint[] points2 = new PaintPoint[numberOfSegments];
             Array.Copy(points, offset, points2, 0, numberOfSegments);
             DrawCurve(pen, points2, tension);
         }
@@ -545,7 +545,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a cardinal spline through a specified array of points using a specified tension. 
         /// </summary>
-        public void DrawCurve(XPen pen, XPoint[] points, double tension)
+        public void DrawCurve(XPen pen, PaintPoint[] points, double tension)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -565,7 +565,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an arc representing a portion of an ellipse.
         /// </summary>
-        public void DrawArc(XPen pen, XRect rect, double startAngle, double sweepAngle)
+        public void DrawArc(XPen pen, Rect rect, double startAngle, double sweepAngle)
         {
             DrawArc(pen, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -596,7 +596,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XPen pen, XRect rect)
+        public void DrawRectangle(XPen pen, Rect rect)
         {
             DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -623,7 +623,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XBrush brush, XRect rect)
+        public void DrawRectangle(XBrush brush, Rect rect)
         {
             DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -646,7 +646,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XPen pen, XBrush brush, XRect rect)
+        public void DrawRectangle(XPen pen, XBrush brush, Rect rect)
         {
             DrawRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -670,7 +670,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        public void DrawRectangles(XPen pen, XRect[] rectangles)
+        public void DrawRectangles(XPen pen, Rect[] rectangles)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -685,7 +685,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        public void DrawRectangles(XBrush brush, XRect[] rectangles)
+        public void DrawRectangles(XBrush brush, Rect[] rectangles)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -700,7 +700,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        public void DrawRectangles(XPen pen, XBrush brush, XRect[] rectangles)
+        public void DrawRectangles(XPen pen, XBrush brush, Rect[] rectangles)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -713,7 +713,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             {
                 for (int idx = 0; idx < count; idx++)
                 {
-                    XRect rect = rectangles[idx];
+                    Rect rect = rectangles[idx];
                     _renderer.DrawRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
                 }
             }
@@ -726,7 +726,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XPen pen, XRect rect, XSize ellipseSize)
+        public void DrawRoundedRectangle(XPen pen, Rect rect, Size ellipseSize)
         {
             DrawRoundedRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
         }
@@ -747,7 +747,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XBrush brush, XRect rect, XSize ellipseSize)
+        public void DrawRoundedRectangle(XBrush brush, Rect rect, Size ellipseSize)
         {
             DrawRoundedRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
         }
@@ -768,7 +768,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XPen pen, XBrush brush, XRect rect, XSize ellipseSize)
+        public void DrawRoundedRectangle(XPen pen, XBrush brush, Rect rect, Size ellipseSize)
         {
             DrawRoundedRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
         }
@@ -793,7 +793,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XPen pen, XRect rect)
+        public void DrawEllipse(XPen pen, Rect rect)
         {
             DrawEllipse(pen, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -821,7 +821,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XBrush brush, XRect rect)
+        public void DrawEllipse(XBrush brush, Rect rect)
         {
             DrawEllipse(brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -848,7 +848,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XPen pen, XBrush brush, XRect rect)
+        public void DrawEllipse(XPen pen, XBrush brush, Rect rect)
         {
             DrawEllipse(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -868,7 +868,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XPen pen, XPoint[] points)
+        public void DrawPolygon(XPen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -886,7 +886,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XBrush brush, XPoint[] points, FillMode fillmode)
+        public void DrawPolygon(XBrush brush, PaintPoint[] points, FillMode fillmode)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -904,7 +904,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XPen pen, XBrush brush, XPoint[] points, FillMode fillmode)
+        public void DrawPolygon(XPen pen, XBrush brush, PaintPoint[] points, FillMode fillmode)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -925,7 +925,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XPen pen, XRect rect, double startAngle, double sweepAngle)
+        public void DrawPie(XPen pen, Rect rect, double startAngle, double sweepAngle)
         {
             DrawPie(pen, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -947,7 +947,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XBrush brush, XRect rect, double startAngle, double sweepAngle)
+        public void DrawPie(XBrush brush, Rect rect, double startAngle, double sweepAngle)
         {
             DrawPie(brush, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -969,7 +969,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XPen pen, XBrush brush, XRect rect, double startAngle, double sweepAngle)
+        public void DrawPie(XPen pen, XBrush brush, Rect rect, double startAngle, double sweepAngle)
         {
             DrawPie(pen, brush, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -993,7 +993,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XPoint[] points)
+        public void DrawClosedCurve(XPen pen, PaintPoint[] points)
         {
             DrawClosedCurve(pen, null, points, FillMode.EvenOdd, 0.5);
         }
@@ -1002,7 +1002,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XPoint[] points, double tension)
+        public void DrawClosedCurve(XPen pen, PaintPoint[] points, double tension)
         {
             DrawClosedCurve(pen, null, points, FillMode.EvenOdd, tension);
         }
@@ -1012,7 +1012,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, XPoint[] points)
+        public void DrawClosedCurve(XBrush brush, PaintPoint[] points)
         {
             DrawClosedCurve(null, brush, points, FillMode.EvenOdd, 0.5);
         }
@@ -1020,7 +1020,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, XPoint[] points, FillMode fillmode)
+        public void DrawClosedCurve(XBrush brush, PaintPoint[] points, FillMode fillmode)
         {
             DrawClosedCurve(null, brush, points, fillmode, 0.5);
         }
@@ -1028,7 +1028,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, XPoint[] points, FillMode fillmode, double tension)
+        public void DrawClosedCurve(XBrush brush, PaintPoint[] points, FillMode fillmode, double tension)
         {
             DrawClosedCurve(null, brush, points, fillmode, tension);
         }
@@ -1038,7 +1038,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points)
+        public void DrawClosedCurve(XPen pen, XBrush brush, PaintPoint[] points)
         {
             DrawClosedCurve(pen, brush, points, FillMode.EvenOdd, 0.5);
         }
@@ -1046,7 +1046,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, FillMode fillmode)
+        public void DrawClosedCurve(XPen pen, XBrush brush, PaintPoint[] points, FillMode fillmode)
         {
             DrawClosedCurve(pen, brush, points, fillmode, 0.5);
         }
@@ -1054,7 +1054,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, FillMode fillmode, double tension)
+        public void DrawClosedCurve(XPen pen, XBrush brush, PaintPoint[] points, FillMode fillmode, double tension)
         {
             if (pen == null && brush == null)
             {
@@ -1131,7 +1131,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Draws the specified text string.
         /// </summary>
         /// <summary>
-        /// When true, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>
+        /// When true, <see cref="DrawString(string, XFont, XBrush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>
         /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
         /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
         /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
@@ -1144,18 +1144,18 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>The render context pixel canvases are built from when a glyph is drawn through the raster backend, or <see langword="null"/> when there is none.</summary>
         internal PeachDrawing.Core.RenderContext? RasterContext { get; set; }
 
-        public void DrawString(string s, XFont font, XBrush brush, XPoint point)
+        public void DrawString(string s, XFont font, XBrush brush, PaintPoint point)
         {
-            DrawString(s, font, brush, new XRect(point.X, point.Y, 0, 0), XStringFormats.Default);
+            DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), XStringFormats.Default);
         }
 
 
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, XPoint point, XStringFormat format)
+        public void DrawString(string s, XFont font, XBrush brush, PaintPoint point, XStringFormat format)
         {
-            DrawString(s, font, brush, new XRect(point.X, point.Y, 0, 0), format);
+            DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), format);
         }
 
         /// <summary>
@@ -1163,7 +1163,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawString(string s, XFont font, XBrush brush, double x, double y)
         {
-            DrawString(s, font, brush, new XRect(x, y, 0, 0), XStringFormats.Default);
+            DrawString(s, font, brush, new Rect(x, y, 0, 0), XStringFormats.Default);
         }
 
         /// <summary>
@@ -1171,14 +1171,14 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
-            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
+            DrawString(s, font, brush, new Rect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
         }
 
 
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle)
+        public void DrawString(string s, XFont font, XBrush brush, Rect layoutRectangle)
         {
             DrawString(s, font, brush, layoutRectangle, XStringFormats.Default);
         }
@@ -1189,7 +1189,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// see <see cref="PeachDrawing.Core.Canvas"/>'s own equivalent overload for why this
         /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string text, XFont font, XBrush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1232,7 +1232,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings? features = null)
+        public Size MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings? features = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1241,14 +1241,14 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (stringFormat == null)
                 throw new ArgumentNullException("stringFormat");
 
-            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default, features ?? ShapeSettings.Default);
+            Size size = FontHelper.MeasureString(text, font, XStringFormats.Default, features ?? ShapeSettings.Default);
             return size;
         }
 
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, ShapeSettings? features = null)
+        public Size MeasureString(string text, XFont font, ShapeSettings? features = null)
         {
             return MeasureString(text, font, XStringFormats.Default, features);
         }
@@ -1258,7 +1258,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, XPoint point)
+        public void DrawImage(XImage image, PaintPoint point)
         {
             DrawImage(image, point.X, point.Y);
         }
@@ -1285,7 +1285,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, XRect rect)
+        public void DrawImage(XImage image, Rect rect)
         {
             DrawImage(image, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -1306,12 +1306,12 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
 
         // TODO: calculate destination size
         //public void DrawImage(XImage image, double x, double y, GdiRectF srcRect, XGraphicsUnit srcUnit)
-        //public void DrawImage(XImage image, double x, double y, XRect srcRect, XGraphicsUnit srcUnit)
+        //public void DrawImage(XImage image, double x, double y, Rect srcRect, XGraphicsUnit srcUnit)
 
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, XRect destRect, XRect srcRect, XGraphicsUnit srcUnit)
+        public void DrawImage(XImage image, Rect destRect, Rect srcRect, XGraphicsUnit srcUnit)
         {
             if (image == null)
                 throw new ArgumentNullException("image");
@@ -1326,7 +1326,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         //public void DrawImage(XImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
         //public void DrawImage(XImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
 
-        void DrawMissingImageRect(XRect rect)
+        void DrawMissingImageRect(Rect rect)
         {
         }
 
@@ -1410,14 +1410,14 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public XGraphicsContainer BeginContainer()
         {
-            return BeginContainer(new XRect(0, 0, 1, 1), new XRect(0, 0, 1, 1), XGraphicsUnit.Point);
+            return BeginContainer(new Rect(0, 0, 1, 1), new Rect(0, 0, 1, 1), XGraphicsUnit.Point);
         }
 
         /// <summary>
         /// Saves a graphics container with the current state of this XGraphics and 
         /// opens and uses a new graphics container.
         /// </summary>
-        public XGraphicsContainer BeginContainer(XRect dstrect, XRect srcrect, XGraphicsUnit unit)
+        public XGraphicsContainer BeginContainer(Rect dstrect, Rect srcrect, XGraphicsUnit unit)
         {
             // TODO: unit
             if (unit != XGraphicsUnit.Point)
@@ -1572,7 +1572,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Applies the specified scaling operation to the transformation matrix of this object by 
         /// prepending it to the object's transformation matrix.
         /// </summary>
-        public void ScaleAtTransform(double scaleX, double scaleY, XPoint center)
+        public void ScaleAtTransform(double scaleX, double scaleY, PaintPoint center)
         {
             AddTransform(XMatrix.CreateScaling(scaleX, scaleY, center.X, center.Y), XMatrixOrder.Prepend);
         }
@@ -1601,7 +1601,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Applies the specified rotation operation to the transformation matrix of this object by 
         /// prepending it to the object's transformation matrix.
         /// </summary>
-        public void RotateAtTransform(double angle, XPoint point)
+        public void RotateAtTransform(double angle, PaintPoint point)
         {
             AddTransform(XMatrix.CreateRotationRadians(angle * Const.Deg2Rad, point.X, point.Y), XMatrixOrder.Prepend);
         }
@@ -1610,7 +1610,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Applies the specified rotation operation to the transformation matrix of this object by 
         /// prepending it to the object's transformation matrix.
         /// </summary>
-        public void RotateAtTransform(double angle, XPoint point, XMatrixOrder order)
+        public void RotateAtTransform(double angle, PaintPoint point, XMatrixOrder order)
         {
             AddTransform(XMatrix.CreateRotationRadians(angle * Const.Deg2Rad, point.X, point.Y), order);
         }
@@ -1658,7 +1658,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Parameter shearX specifies the horizontal skew which is measured in degrees counterclockwise from the y-axis.
         /// Parameter shearY specifies the vertical skew which is measured in degrees counterclockwise from the x-axis.
         /// </summary>
-        public void SkewAtTransform(double shearX, double shearY, XPoint center)
+        public void SkewAtTransform(double shearX, double shearY, PaintPoint center)
         {
             AddTransform(XMatrix.CreateSkewRadians(shearX * Const.Deg2Rad, shearY * Const.Deg2Rad, center.X, center.Y), XMatrixOrder.Prepend);
         }
@@ -1713,7 +1713,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Updates the clip region of this XGraphics to the intersection of the 
         /// current clip region and the specified rectangle.
         /// </summary>
-        public void IntersectClip(XRect rect)
+        public void IntersectClip(Rect rect)
         {
             XGraphicsPath path = new XGraphicsPath();
             path.AddRectangle(rect);
@@ -1827,7 +1827,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <see cref="XGraphicsPdfRenderer.DrawImageMasked"/> for why the mask must be applied this
         /// way (atomically, sharing the placement's own "cm") rather than as a separate push/pop pair.
         /// </summary>
-        internal void DrawImageMasked(XForm image, XForm maskImage, XRect destRect)
+        internal void DrawImageMasked(XForm image, XForm maskImage, Rect destRect)
         {
             (_renderer as XGraphicsPdfRenderer)?.DrawImageMasked(image, maskImage, destRect);
         }
@@ -1839,7 +1839,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <see cref="XGraphicsPdfRenderer.DrawImageWithOpacity"/> for why this differs from simply
         /// reducing the alpha of each shape painted into the tile.
         /// </summary>
-        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity, string pdfBlendModeName = "Normal")
+        internal void DrawImageWithOpacity(XForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
             (_renderer as XGraphicsPdfRenderer)?.DrawImageWithOpacity(image, destRect, opacity, pdfBlendModeName);
         }
@@ -1849,7 +1849,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// channel-independent <see cref="ColorMatrix"/> - see
         /// <see cref="XGraphicsPdfRenderer.DrawImageWithColorMatrix"/>.
         /// </summary>
-        internal void DrawImageWithColorMatrix(XForm image, XRect destRect, ColorMatrix matrix)
+        internal void DrawImageWithColorMatrix(XForm image, Rect destRect, ColorMatrix matrix)
         {
             (_renderer as XGraphicsPdfRenderer)?.DrawImageWithColorMatrix(image, destRect, matrix);
         }
@@ -1859,7 +1859,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// applied as an <c>/Alpha</c>-subtype soft mask - see
         /// <see cref="XGraphicsPdfRenderer.DrawImageAlphaMasked"/>.
         /// </summary>
-        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, XRect destRect, bool invert = false)
+        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, Rect destRect, bool invert = false)
         {
             (_renderer as XGraphicsPdfRenderer)?.DrawImageAlphaMasked(image, maskImage, destRect, invert);
         }
@@ -1868,7 +1868,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Paints <paramref name="bottom"/> then <paramref name="top"/> blended over it at
         /// <paramref name="destRect"/> - see <see cref="XGraphicsPdfRenderer.DrawImageBlendedOver"/>.
         /// </summary>
-        internal void DrawImageBlendedOver(XForm top, XForm bottom, XRect destRect, string pdfBlendModeName)
+        internal void DrawImageBlendedOver(XForm top, XForm bottom, Rect destRect, string pdfBlendModeName)
         {
             (_renderer as XGraphicsPdfRenderer)?.DrawImageBlendedOver(top, bottom, destRect, pdfBlendModeName);
         }

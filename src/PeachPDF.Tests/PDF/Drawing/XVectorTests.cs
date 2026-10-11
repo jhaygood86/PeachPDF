@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System.Globalization;
 
@@ -119,10 +120,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void AddToPoint_ReturnsPoint()
         {
             var v = new XVector(1, 2);
-            var p = new XPoint(3, 4);
+            var p = new PaintPoint(3, 4);
 
-            Assert.Equal(new XPoint(4, 6), v + p);
-            Assert.Equal(new XPoint(4, 6), XVector.Add(v, p));
+            Assert.Equal(new PaintPoint(4, 6), v + p);
+            Assert.Equal(new PaintPoint(4, 6), XVector.Add(v, p));
         }
 
         [Fact]
@@ -170,7 +171,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var v = new XVector(-2, 3);
 
-            var size = (XSize)v;
+            var size = (Size)v;
 
             Assert.Equal(2, size.Width);
             Assert.Equal(3, size.Height);
@@ -181,7 +182,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var v = new XVector(-2, 3);
 
-            var point = (XPoint)v;
+            var point = (PaintPoint)v;
 
             Assert.Equal(-2, point.X);
             Assert.Equal(3, point.Y);

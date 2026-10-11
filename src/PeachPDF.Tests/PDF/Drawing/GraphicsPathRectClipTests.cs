@@ -208,9 +208,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // IsFlatEnough's chord-based flatness test has no direction to measure control-point
             // deviation against in that case, so it falls back to raw distance from the shared point
             // instead of dividing by a zero chord length.
-            var output = new List<XPoint>();
+            var output = new List<PaintPoint>();
 
-            BezierFlattener.Flatten(new XPoint(0, 0), new XPoint(0, 5), new XPoint(5, 5), new XPoint(0, 0), output);
+            BezierFlattener.Flatten(new PaintPoint(0, 0), new PaintPoint(0, 5), new PaintPoint(5, 5), new PaintPoint(0, 0), output);
 
             Assert.NotEmpty(output);
         }

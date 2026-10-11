@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
@@ -469,7 +470,7 @@ Assert.True(tableBox.ActualBottom > pageHeight);
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, pageHeight); // A4 height by default
+            var size = new Size(595, pageHeight); // A4 height by default
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
     container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
   container.MarginTop = 20;  // Add margins to match @page CSS

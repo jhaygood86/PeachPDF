@@ -646,7 +646,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

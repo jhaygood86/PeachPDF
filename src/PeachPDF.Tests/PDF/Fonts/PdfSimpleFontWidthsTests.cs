@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -36,7 +37,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             document.Options.NoCompression = true;
             var page = document.AddPage();
             using (var gfx = XGraphics.FromPdfPage(page))
-                gfx.DrawString("Hello", font, XBrushes.Black, new XPoint(20, 40));
+                gfx.DrawString("Hello", font, XBrushes.Black, new PaintPoint(20, 40));
 
             using var stream = new MemoryStream();
             document.Save(stream);

@@ -291,11 +291,11 @@ namespace PeachPDF.PDF.Rendering
 
             if (_measuring)
             {
-                IncludeInMeasuredBounds(new XRect(left, top, width, height));
+                IncludeInMeasuredBounds(new Rect(left, top, width, height));
                 return true;
             }
 
-            _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new XRect(left, top, width, height));
+            _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new Rect(left, top, width, height));
             return true;
         }
 

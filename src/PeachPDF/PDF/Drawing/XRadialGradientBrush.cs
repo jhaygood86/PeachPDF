@@ -29,6 +29,8 @@
 
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
 
+using PeachDrawing.Core;
+
 namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
@@ -39,7 +41,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
         /// </summary>
-        public XRadialGradientBrush(XPoint center1, XPoint center2, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
+        public XRadialGradientBrush(PaintPoint center1, PaintPoint center2, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
         {
             _center1 = center1;
             _center2 = center2;
@@ -50,7 +52,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
         /// </summary>
-        public XRadialGradientBrush(XPoint center, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
+        public XRadialGradientBrush(PaintPoint center, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
         {
             _center1 = center;
             _center2 = center;
@@ -66,7 +68,7 @@ namespace PeachPDF.PDF.Drawing
         /// omitted, matching every pre-existing caller's behavior exactly. Only honored for the
         /// circular (non-ellipse) shading path - see <see cref="PeachPDF.PDF.Advanced.PdfShading"/>.
         /// </summary>
-        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, XPoint? focalCenter = null, XMatrix? transform = null)
+        public XRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, PaintPoint? focalCenter = null, XMatrix? transform = null)
             : base(colors[0], colors[colors.Length - 1])
         {
             _center1 = center;
@@ -81,8 +83,8 @@ namespace PeachPDF.PDF.Drawing
             _transform = transform;
         }
 
-        internal XPoint _center1, _center2;
-        internal XPoint _focalCenter;
+        internal PaintPoint _center1, _center2;
+        internal PaintPoint _focalCenter;
         /// <summary>Carries the center/radii geometry into world space (rotation/skew); null when already there.</summary>
         internal XMatrix? _transform;
         internal double _r1, _r2;

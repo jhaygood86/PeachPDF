@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -2011,7 +2012,7 @@ namespace PeachPDF.Tests.Integration
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
                     ? PageSizeConverter.ToSize(config.PageSize)
-                    : new XSize(config.ManualPageWidth, config.ManualPageHeight));
+                    : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             using var container = new HtmlContainer(adapter)
             {
@@ -2025,14 +2026,14 @@ namespace PeachPDF.Tests.Integration
 
             await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage);
 
-            var contentPageSize = new XSize(
+            var contentPageSize = new Size(
                 orgPageSize.Width - container.MarginLeft - container.MarginRight,
                 orgPageSize.Height - container.MarginTop - container.MarginBottom);
             container.PageSize = contentPageSize;
-            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
             using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
-            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
             var containerInt = container.HtmlContainerInt;

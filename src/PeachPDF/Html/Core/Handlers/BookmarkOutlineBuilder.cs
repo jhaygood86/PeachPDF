@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -103,7 +104,7 @@ namespace PeachPDF.Html.Core.Handlers
             // fragment untouched, so the classification below still sees it.
             var target = ResolveTargetValue(box) is { } raw ? container.ResolveHref(raw) : null;
 
-            XRect? rect;
+            Rect? rect;
             if (target is null)
             {
                 // A display:none (or otherwise unrendered) box was never actually painted -

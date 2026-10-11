@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using Microsoft.Playwright;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
@@ -345,7 +346,7 @@ isPseudoBefore: true,
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = Utilities.Utils.ToPixels(size, 1.0);
 

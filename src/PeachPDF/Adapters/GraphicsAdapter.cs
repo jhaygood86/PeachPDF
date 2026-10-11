@@ -386,7 +386,7 @@ namespace PeachPDF.Adapters
             // this second division, so it rendered correctly while its tiled neighbors visibly shrank and
             // drifted toward the page origin - reading, at a glance, as if the plain box were the one
             // that had gone wrong.
-            var form = new XForm(document, new XSize(width / PixelsPerPoint, height / PixelsPerPoint));
+            var form = new XForm(document, new Size(width / PixelsPerPoint, height / PixelsPerPoint));
             var formGraphics = XGraphics.FromForm(form);
             // releaseGraphics: true - disposing the returned tile Canvas must dispose the
             // underlying XGraphics, which is what actually calls XForm.Finish() and closes out the
@@ -594,7 +594,7 @@ namespace PeachPDF.Adapters
         {
             var xImage = ((ImageAdapter)image).Image;
             _g.DrawImage(xImage, Utils.ToPoints(rect, PixelsPerPoint),
-                new XRect(0, 0, xImage.PointWidth, xImage.PointHeight), XGraphicsUnit.Point);
+                new Rect(0, 0, xImage.PointWidth, xImage.PointHeight), XGraphicsUnit.Point);
         }
 
         /// <summary>

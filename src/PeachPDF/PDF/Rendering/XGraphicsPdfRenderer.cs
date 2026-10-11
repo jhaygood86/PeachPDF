@@ -125,7 +125,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         public void DrawLine(XPen pen, double x1, double y1, double x2, double y2)
         {
-            DrawLines(pen, new XPoint[] { new XPoint(x1, y1), new XPoint(x2, y2) });
+            DrawLines(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2) });
         }
 
         // ----- DrawLines ----------------------------------------------------------------------------
@@ -133,7 +133,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Strokes a series of connected points.
         /// </summary>
-        public void DrawLines(XPen pen, XPoint[] points)
+        public void DrawLines(XPen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -156,12 +156,12 @@ namespace PeachPDF.PDF.Rendering
 
         public void DrawBezier(XPen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4)
         {
-            DrawBeziers(pen, new XPoint[] { new XPoint(x1, y1), new XPoint(x2, y2), new XPoint(x3, y3), new XPoint(x4, y4) });
+            DrawBeziers(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2), new PaintPoint(x3, y3), new PaintPoint(x4, y4) });
         }
 
         // ----- DrawBeziers --------------------------------------------------------------------------
 
-        public void DrawBeziers(XPen pen, XPoint[] points)
+        public void DrawBeziers(XPen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -189,7 +189,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawCurve ----------------------------------------------------------------------------
 
-        public void DrawCurve(XPen pen, XPoint[] points, double tension)
+        public void DrawCurve(XPen pen, PaintPoint[] points, double tension)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -259,12 +259,12 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawRectangles -----------------------------------------------------------------------
 
-        public void DrawRectangles(XPen? pen, XBrush? brush, XRect[] rects)
+        public void DrawRectangles(XPen? pen, XBrush? brush, Rect[] rects)
         {
             int count = rects.Length;
             for (int idx = 0; idx < count; idx++)
             {
-                XRect rect = rects[idx];
+                Rect rect = rects[idx];
                 DrawRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
             }
         }
@@ -287,7 +287,7 @@ namespace PeachPDF.PDF.Rendering
             // Useful information is here http://home.t-online.de/home/Robert.Rossmair/ellipse.htm (note: link was dead on November 2, 2015)
             // or here http://www.whizkidtech.redprince.net/bezier/circle/
             // Deeper but more difficult: http://www.tinaja.com/cubic01.asp
-            XRect rect = new XRect(x, y, width, height);
+            Rect rect = new Rect(x, y, width, height);
             double δx = rect.Width / 2;
             double δy = rect.Height / 2;
             double fx = δx * Const.κ;
@@ -310,7 +310,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawPolygon --------------------------------------------------------------------------
 
-        public void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, FillMode fillmode)
+        public void DrawPolygon(XPen? pen, XBrush? brush, PaintPoint[] points, FillMode fillmode)
         {
             Realize(pen, brush);
 
@@ -339,7 +339,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawClosedCurve ----------------------------------------------------------------------
 
-        public void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, FillMode fillmode)
+        public void DrawClosedCurve(XPen? pen, XBrush? brush, PaintPoint[] points, double tension, FillMode fillmode)
         {
             int count = points.Length;
             if (count == 0)
@@ -496,7 +496,7 @@ namespace PeachPDF.PDF.Rendering
             return thousandths * fontSize / 1000 + glyphs.Count * charSpace;
         }
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
+        public void DrawString(string s, XFont font, XBrush brush, Rect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
         {
             int contentLengthAtEntry = _content.Length;
             bool isOnlySpaces = s.Length > 0 && !s.AsSpan().ContainsAnyExcept(' ');
@@ -634,7 +634,7 @@ namespace PeachPDF.PDF.Rendering
                 }
 
                 // Map absolute position to PDF world space.
-                XPoint pos = new XPoint(x, y);
+                PaintPoint pos = new PaintPoint(x, y);
                 pos = WorldToView(pos);
 
                 double verticalOffset = 0;
@@ -693,7 +693,7 @@ namespace PeachPDF.PDF.Rendering
                         // individually positioned Td+Tj instead of one Tj over the whole run - the
                         // common case (no GPOS deltas) never reaches this branch, so existing output is
                         // otherwise byte-for-byte unchanged.
-                        DrawPositionedGlyphs(shapedGlyphs, font, new XPoint(x, y + verticalOffset), laidOutEndX);
+                        DrawPositionedGlyphs(shapedGlyphs, font, new PaintPoint(x, y + verticalOffset), laidOutEndX);
                     }
                     else
                     {
@@ -801,7 +801,7 @@ namespace PeachPDF.PDF.Rendering
         /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
         /// horizontal text only.
         /// </summary>
-        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, XPoint startPos, double laidOutEndX)
+        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, PaintPoint startPos, double laidOutEndX)
         {
             const string format2 = Config.SignificantFigures4;
             double scale = font.Size / font.UnitsPerEm;
@@ -819,7 +819,7 @@ namespace PeachPDF.PDF.Rendering
                 // the same convention ColorGlyphPainter.Placement uses for its own Y offset.
                 double glyphY = pageDownwards ? penY - glyph.YOffset * scale : penY + glyph.YOffset * scale;
 
-                XPoint glyphPos = WorldToView(new XPoint(glyphX, glyphY));
+                PaintPoint glyphPos = WorldToView(new PaintPoint(glyphX, glyphY));
                 AdjustTdOffset(ref glyphPos, 0, null);
 
                 byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
@@ -845,7 +845,7 @@ namespace PeachPDF.PDF.Rendering
         /// addressed directly by font glyph index - the same per-glyph <c>Td</c>+<c>Tj</c> emission
         /// <see cref="DrawPositionedGlyphs"/> already uses, generalized to take already-absolute
         /// positions instead of shaped-run deltas relative to a pen, and to realize the font/brush
-        /// itself (its one caller, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/>,
+        /// itself (its one caller, <see cref="DrawString(string, XFont, XBrush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/>,
         /// already did that before ever reaching <see cref="DrawPositionedGlyphs"/>). No bold/italic
         /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
         /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
@@ -871,7 +871,7 @@ namespace PeachPDF.PDF.Rendering
             const string format2 = Config.SignificantFigures4;
             foreach (var glyph in glyphs)
             {
-                XPoint pos = WorldToView(new XPoint(glyph.X, glyph.Y));
+                PaintPoint pos = WorldToView(new PaintPoint(glyph.X, glyph.Y));
                 AdjustTdOffset(ref pos, 0, null);
 
                 byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
@@ -970,7 +970,7 @@ namespace PeachPDF.PDF.Rendering
         /// has. (Silently dropping srcRect here is what once made every <c>border-image</c> slice paint the
         /// entire source squashed into its own ninth of the frame.)
         /// </summary>
-        public void DrawImage(XImage image, XRect destRect, XRect srcRect, XGraphicsUnit srcUnit)
+        public void DrawImage(XImage image, Rect destRect, Rect srcRect, XGraphicsUnit srcUnit)
         {
             const string format = Config.SignificantFigures4;
 
@@ -1046,7 +1046,7 @@ namespace PeachPDF.PDF.Rendering
             RestoreState(state.InternalState);
         }
 
-        public void BeginContainer(XGraphicsContainer container, XRect dstrect, XRect srcrect, XGraphicsUnit unit)
+        public void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect, XGraphicsUnit unit)
         {
             // Before saving, the current transformation matrix must be completely realized.
             BeginGraphicMode();
@@ -1067,7 +1067,7 @@ namespace PeachPDF.PDF.Rendering
 
         #region Transformation
 
-        //public void SetPageTransform(XPageDirection direction, XPoint origion, XGraphicsUnit unit)
+        //public void SetPageTransform(XPageDirection direction, PaintPoint origion, XGraphicsUnit unit)
         //{
         //  if (_gfxStateStack.Count > 0)
         //    throw new InvalidOperationException("PageTransformation can be modified only when the graphics stack is empty.");
@@ -1367,7 +1367,7 @@ namespace PeachPDF.PDF.Rendering
             sinβ = Math.Sin(β);
             double cosβ = Math.Cos(β);
 
-            XPoint pt1, pt2, pt3;
+            PaintPoint pt1, pt2, pt3;
             const string format = Config.SignificantFigures3;
             if (!reflect)
             {
@@ -1375,21 +1375,21 @@ namespace PeachPDF.PDF.Rendering
                 switch (pathStart)
                 {
                     case PathStart.MoveTo1st:
-                        pt1 = matrix.Transform(new XPoint(x0 + δx * cosα, y0 + δy * sinα));
+                        pt1 = matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα));
                         AppendPathPoint(pt1.X, pt1.Y, 'm', format);
                         break;
 
                     case PathStart.LineTo1st:
-                        pt1 = matrix.Transform(new XPoint(x0 + δx * cosα, y0 + δy * sinα));
+                        pt1 = matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα));
                         AppendPathPoint(pt1.X, pt1.Y, 'l', format);
                         break;
 
                     case PathStart.Ignore1st:
                         break;
                 }
-                pt1 = matrix.Transform(new XPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα)));
-                pt2 = matrix.Transform(new XPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ)));
-                pt3 = matrix.Transform(new XPoint(x0 + δx * cosβ, y0 + δy * sinβ));
+                pt1 = matrix.Transform(new PaintPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα)));
+                pt2 = matrix.Transform(new PaintPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ)));
+                pt3 = matrix.Transform(new PaintPoint(x0 + δx * cosβ, y0 + δy * sinβ));
                 AppendBezier(
                   pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, format);
             }
@@ -1399,21 +1399,21 @@ namespace PeachPDF.PDF.Rendering
                 switch (pathStart)
                 {
                     case PathStart.MoveTo1st:
-                        pt1 = matrix.Transform(new XPoint(x0 - δx * cosα, y0 - δy * sinα));
+                        pt1 = matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα));
                         AppendPathPoint(pt1.X, pt1.Y, 'm', format);
                         break;
 
                     case PathStart.LineTo1st:
-                        pt1 = matrix.Transform(new XPoint(x0 - δx * cosα, y0 - δy * sinα));
+                        pt1 = matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα));
                         AppendPathPoint(pt1.X, pt1.Y, 'l', format);
                         break;
 
                     case PathStart.Ignore1st:
                         break;
                 }
-                pt1 = matrix.Transform(new XPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα)));
-                pt2 = matrix.Transform(new XPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ)));
-                pt3 = matrix.Transform(new XPoint(x0 - δx * cosβ, y0 - δy * sinβ));
+                pt1 = matrix.Transform(new PaintPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα)));
+                pt2 = matrix.Transform(new PaintPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ)));
+                pt3 = matrix.Transform(new PaintPoint(x0 - δx * cosβ, y0 - δy * sinβ));
                 AppendBezier(
                     pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, format);
             }
@@ -1422,7 +1422,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Appends a Bézier curve for a cardinal spline through pt1 and pt2.
         /// </summary>
-        void AppendCurveSegment(XPoint pt0, XPoint pt1, XPoint pt2, XPoint pt3, double tension3)
+        void AppendCurveSegment(PaintPoint pt0, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, double tension3)
         {
             AppendBezier(
                 pt1.X + tension3 * (pt2.X - pt0.X), pt1.Y + tension3 * (pt2.Y - pt0.Y),
@@ -1436,7 +1436,7 @@ namespace PeachPDF.PDF.Rendering
         internal void AppendPath(CoreGraphicsPath path)
         {
             AppendPath(path.PathPointsSpan, path.PathTypesSpan);
-            //XPoint[] points = path.PathPoints;
+            //PaintPoint[] points = path.PathPoints;
             //Byte[] types = path.PathTypes;
 
             //int count = points.Length;
@@ -1483,7 +1483,7 @@ namespace PeachPDF.PDF.Rendering
             //}
         }
 
-        void AppendPath(ReadOnlySpan<XPoint> points, ReadOnlySpan<byte> types)
+        void AppendPath(ReadOnlySpan<PaintPoint> points, ReadOnlySpan<byte> types)
         {
             int count = points.Length;
             if (count == 0)
@@ -1564,7 +1564,7 @@ namespace PeachPDF.PDF.Rendering
 
         private void AppendPathPoint(double x, double y, char operation, string format = Config.SignificantFigures4)
         {
-            XPoint result = WorldToView(new XPoint(x, y));
+            PaintPoint result = WorldToView(new PaintPoint(x, y));
             AppendPdfNumber(_content, result.X, format);
             _content.Append(' ');
             AppendPdfNumber(_content, result.Y, format);
@@ -1573,16 +1573,16 @@ namespace PeachPDF.PDF.Rendering
 
         internal void AppendFormatRect(string format, double x, double y, double width, double height)
         {
-            XPoint point1 = WorldToView(new XPoint(x, y));
+            PaintPoint point1 = WorldToView(new PaintPoint(x, y));
             _content.AppendFormat(CultureInfo.InvariantCulture, format, point1.X, point1.Y, width, height);
         }
 
         private void AppendBezier(double x1, double y1, double x2, double y2, double x3, double y3,
             string format = Config.SignificantFigures4)
         {
-            XPoint point1 = WorldToView(new XPoint(x1, y1));
-            XPoint point2 = WorldToView(new XPoint(x2, y2));
-            XPoint point3 = WorldToView(new XPoint(x3, y3));
+            PaintPoint point1 = WorldToView(new PaintPoint(x1, y1));
+            PaintPoint point2 = WorldToView(new PaintPoint(x2, y2));
+            PaintPoint point3 = WorldToView(new PaintPoint(x3, y3));
             AppendPdfNumber(_content, point1.X, format);
             _content.Append(' ');
             AppendPdfNumber(_content, point1.Y, format);
@@ -1599,9 +1599,9 @@ namespace PeachPDF.PDF.Rendering
 
         private void AppendMatrix(double x1, double y1, double x2, double y2, double x3, double y3)
         {
-            XPoint point1 = WorldToView(new XPoint(x1, y1));
-            XPoint point2 = WorldToView(new XPoint(x2, y2));
-            XPoint point3 = WorldToView(new XPoint(x3, y3));
+            PaintPoint point1 = WorldToView(new PaintPoint(x1, y1));
+            PaintPoint point2 = WorldToView(new PaintPoint(x2, y2));
+            PaintPoint point3 = WorldToView(new PaintPoint(x3, y3));
             AppendPdfNumber(_content, point1.X, Config.SignificantFigures7);
             _content.Append(' ');
             AppendPdfNumber(_content, point1.Y, Config.SignificantFigures7);
@@ -1628,21 +1628,21 @@ namespace PeachPDF.PDF.Rendering
             content.Append(value.ToString(format, CultureInfo.InvariantCulture));
         }
 
-        internal void AppendFormat(string format, XPoint point)
+        internal void AppendFormat(string format, PaintPoint point)
         {
-            XPoint result = WorldToView(point);
+            PaintPoint result = WorldToView(point);
             _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y);
         }
 
         internal void AppendFormat(string format, double x, double y, string s)
         {
-            XPoint result = WorldToView(new XPoint(x, y));
+            PaintPoint result = WorldToView(new PaintPoint(x, y));
             _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y, s);
         }
 
         internal void AppendFormatImage(string format, double x, double y, double width, double height, string name)
         {
-            XPoint result = WorldToView(new XPoint(x, y));
+            PaintPoint result = WorldToView(new PaintPoint(x, y));
             _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y, width, height, name);
         }
 
@@ -1710,16 +1710,16 @@ namespace PeachPDF.PDF.Rendering
         {
             // Take TrimBox into account.
             PageHeightPt = Size.Height;
-            XPoint trimOffset = new XPoint();
+            PaintPoint trimOffset = new PaintPoint();
             if (_page != null && _page.TrimMargins.AreSet)
             {
                 PageHeightPt += _page.TrimMargins.Top.Point + _page.TrimMargins.Bottom.Point;
-                trimOffset = new XPoint(_page.TrimMargins.Left.Point, _page.TrimMargins.Top.Point);
+                trimOffset = new PaintPoint(_page.TrimMargins.Left.Point, _page.TrimMargins.Top.Point);
             }
 
             ApplyPageUnitScale();
 
-            if (trimOffset != new XPoint())
+            if (trimOffset != new PaintPoint())
             {
                 Debug.Assert(_gfx.PageUnit == XGraphicsUnit.Point, "With TrimMargins set the page units must be Point. Ohter cases nyi.");
                 DefaultViewMatrix.TranslatePrepend(trimOffset.X, -trimOffset.Y);
@@ -1807,7 +1807,7 @@ namespace PeachPDF.PDF.Rendering
                 _streamMode = StreamMode.Text;
                 _content.Append("BT\n");
                 // Text matrix is empty after BT
-                _gfxState.RealizedTextPosition = new XPoint();
+                _gfxState.RealizedTextPosition = new PaintPoint();
                 _gfxState.ItalicSimulationOn = false;
             }
         }
@@ -1872,7 +1872,7 @@ namespace PeachPDF.PDF.Rendering
             Debug.Assert(realizedFont != null);
             realizedFont.AddShapedGlyph(glyph.GlyphIndex, sourceText);
 
-            XPoint pos = WorldToView(new XPoint(x, y));
+            PaintPoint pos = WorldToView(new PaintPoint(x, y));
             AdjustTdOffset(ref pos, 0, null);
 
             _content.AppendFormat(CultureInfo.InvariantCulture, "{0:0.####} {1:0.####} Td <", pos.X, pos.Y);
@@ -2002,13 +2002,13 @@ namespace PeachPDF.PDF.Rendering
         /// <param name="skewSinus">Non-null (the sine of the italic-simulation skew angle actually in
         /// effect - see <see cref="XFont.ObliqueSkewSinus"/>) if skewing for italic simulation is
         /// currently on; null otherwise.</param>
-        void AdjustTdOffset(ref XPoint pos, double dy, double? skewSinus)
+        void AdjustTdOffset(ref PaintPoint pos, double dy, double? skewSinus)
         {
             pos.Y += dy;
             // Reference: TABLE 5.5  Text-positioning operators / Page 406
-            XPoint posSave = pos;
+            PaintPoint posSave = pos;
             // Map from absolute to relative position.
-            pos = pos - new XVector(_gfxState.RealizedTextPosition.X, _gfxState.RealizedTextPosition.Y);
+            pos = new PaintPoint(pos.X - _gfxState.RealizedTextPosition.X, pos.Y - _gfxState.RealizedTextPosition.Y);
             if (skewSinus is { } sinus)
             {
                 // In case that italic simulation is on X must be adjusted according to Y offset. Weird but works :-)
@@ -2076,13 +2076,13 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Convert a point from Windows world space to PDF world space.
         /// </summary>
-        internal XPoint WorldToView(XPoint point)
+        internal PaintPoint WorldToView(PaintPoint point)
         {
             // If EffectiveCtm is not yet realized InverseEffectiveCtm is invalid.
             Debug.Assert(_gfxState.UnrealizedCtm.IsIdentity, "Somewhere a RealizeTransform is missing.");
             // See in #else case why this is correct.
-            XPoint pt = _gfxState.WorldTransform.Transform(point);
-            return _gfxState.InverseEffectiveCtm.Transform(new XPoint(pt.X, PageHeightPt / DefaultViewMatrix.M22 - pt.Y));
+            PaintPoint pt = _gfxState.WorldTransform.Transform(point);
+            return _gfxState.InverseEffectiveCtm.Transform(new PaintPoint(pt.X, PageHeightPt / DefaultViewMatrix.M22 - pt.Y));
         }
         #endregion
 
@@ -2115,7 +2115,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         /// <remarks>
         /// The <c>gs</c> that activates the mask is emitted INSIDE the same <c>q ... cm ... Do ... Q</c>
-        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(XImage, XRect, XRect, XGraphicsUnit)"/>'s
+        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(XImage, Rect, Rect, XGraphicsUnit)"/>'s
         /// own Form XObject placement exactly), rather than as a separate "push before / pop after"
         /// pair relying on the ambient CTM. This distinction matters: a Form XObject created via
         /// <c>XGraphics.FromForm</c> (as SVG's <c>&lt;mask&gt;</c>/<c>&lt;pattern&gt;</c> "tile"
@@ -2141,7 +2141,7 @@ namespace PeachPDF.PDF.Rendering
         /// Python's <c>pypdfium2</c>) before calling it fixed.
         /// </para>
         /// </remarks>
-        internal void DrawImageMasked(XForm image, XForm maskImage, XRect destRect)
+        internal void DrawImageMasked(XForm image, XForm maskImage, Rect destRect)
         {
             const string format = Config.SignificantFigures4;
 
@@ -2229,7 +2229,7 @@ namespace PeachPDF.PDF.Rendering
         /// the same reasoning applies here: the <c>gs</c> activating the alpha must be emitted inside the
         /// same <c>q ... cm ... Do ... Q</c> block that places <paramref name="image"/>, not separately.
         /// </remarks>
-        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity, string pdfBlendModeName = "Normal")
+        internal void DrawImageWithOpacity(XForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
             const string format = Config.SignificantFigures4;
 
@@ -2298,7 +2298,7 @@ namespace PeachPDF.PDF.Rendering
         /// silently dropping it. Do not use a MuPDF-only render to conclude a channel-independent color
         /// matrix "does nothing" - check PDFium (or a real browser/Acrobat) too.
         /// </remarks>
-        internal void DrawImageWithColorMatrix(XForm image, XRect destRect, ColorMatrix matrix)
+        internal void DrawImageWithColorMatrix(XForm image, Rect destRect, ColorMatrix matrix)
         {
             if (!matrix.IsChannelIndependent)
             {
@@ -2366,7 +2366,7 @@ namespace PeachPDF.PDF.Rendering
         /// mask's value is the group's own computed alpha, which has no colour space to speak of, so
         /// forcing DeviceGray here would be asserting a requirement the spec does not impose.
         /// </remarks>
-        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, XRect destRect, bool invert = false)
+        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, Rect destRect, bool invert = false)
         {
             const string format = Config.SignificantFigures4;
 
@@ -2430,7 +2430,7 @@ namespace PeachPDF.PDF.Rendering
         /// <c>Html.Adapters</c> in this codebase's layering, so it cannot reference
         /// <c>PaintBlendMode</c> directly (see <see cref="SetBlendMode"/>).
         /// </summary>
-        internal void DrawImageBlendedOver(XForm top, XForm bottom, XRect destRect, string pdfBlendModeName)
+        internal void DrawImageBlendedOver(XForm top, XForm bottom, Rect destRect, string pdfBlendModeName)
         {
             const string format = Config.SignificantFigures4;
 
@@ -2495,12 +2495,12 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Gets the size of this page or form.
         /// </summary>
-        internal XSize Size
+        internal Size Size
         {
             get
             {
                 if (_page != null)
-                    return new XSize(_page.Width, _page.Height);
+                    return new Size(_page.Width, _page.Height);
                 return _form.Size;
             }
         }

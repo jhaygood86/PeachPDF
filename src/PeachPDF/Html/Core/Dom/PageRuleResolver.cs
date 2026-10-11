@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -181,7 +182,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ResolvePageMargins"/> already has with its own base-margin parameters, just for
         /// one property instead of four.
         /// </summary>
-        internal static XSize ResolvePageSize(PageRule? rule, XSize baseSizePt, PageLengthContext? context = null)
+        internal static Size ResolvePageSize(PageRule? rule, Size baseSizePt, PageLengthContext? context = null)
         {
             if (rule?.Style.Size is not { Length: > 0 } sizeValue) return baseSizePt;
 

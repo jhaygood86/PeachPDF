@@ -145,9 +145,9 @@ namespace PeachPDF.Adapters
         {
             base.AddArc(x, y, radiusX, radiusY, rotationAngle, isLargeArc, sweepClockwise);
             _graphicsPath.AddArc(
-                new XPoint(_lastPoint.X, _lastPoint.Y),
-                new XPoint(x, y),
-                new XSize(radiusX, radiusY),
+                new PaintPoint(_lastPoint.X, _lastPoint.Y),
+                new PaintPoint(x, y),
+                new Size(radiusX, radiusY),
                 rotationAngle,
                 isLargeArc,
                 sweepClockwise ? XSweepDirection.Clockwise : XSweepDirection.Counterclockwise);
@@ -184,7 +184,7 @@ namespace PeachPDF.Adapters
 
         public override GraphicsPath ClipToRect(Rect rect)
         {
-            var clippedXPath = _graphicsPath.ClipToRect(new XRect(rect.X, rect.Y, rect.Width, rect.Height));
+            var clippedXPath = _graphicsPath.ClipToRect(new Rect(rect.X, rect.Y, rect.Width, rect.Height));
             return new GraphicsPathAdapter(clippedXPath);
         }
 

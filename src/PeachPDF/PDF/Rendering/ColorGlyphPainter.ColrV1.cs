@@ -88,7 +88,7 @@ namespace PeachPDF.PDF.Rendering
 
                 XGraphicsPath clipPath = BuildPath(outline, transform);
                 clipPath.FillMode = FillMode.EvenOdd;
-                clipPath.AddRectangle(new XRect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+                clipPath.AddRectangle(new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
                 _clips.Push(owner._gfx.Save());
                 owner._gfx.IntersectClip(clipPath);
                 return true;
@@ -102,7 +102,7 @@ namespace PeachPDF.PDF.Rendering
 
             public void FillRegion(Rect region, ColorGlyphPaint paint)
             {
-                var rect = new XRect(region.X, region.Y, region.Width, region.Height);
+                var rect = new Rect(region.X, region.Y, region.Width, region.Height);
 
                 // Every v1 leaf fill is bounded by its enclosing glyph clip, so accumulating these rectangles bounds all
                 // of the glyph's ink - see IncludeInMeasuredBounds.
@@ -143,16 +143,16 @@ namespace PeachPDF.PDF.Rendering
                         return new XSolidBrush(ToXColor(solid.Color));
 
                     case LinearColorGlyphPaint linear:
-                        return new XLinearGradientBrush(new XPoint(linear.Start.X, linear.Start.Y), new XPoint(linear.End.X, linear.End.Y),
+                        return new XLinearGradientBrush(new PaintPoint(linear.Start.X, linear.Start.Y), new PaintPoint(linear.End.X, linear.End.Y),
                             ToXColors(linear.Colors), [.. linear.Positions]);
 
                     case RadialColorGlyphPaint radial:
-                        return new XRadialGradientBrush(new XPoint(radial.Center.X, radial.Center.Y), radial.Radius, radial.Radius,
-                            ToXColors(radial.Colors), [.. radial.Positions], new XPoint(radial.Focal.X, radial.Focal.Y))
+                        return new XRadialGradientBrush(new PaintPoint(radial.Center.X, radial.Center.Y), radial.Radius, radial.Radius,
+                            ToXColors(radial.Colors), [.. radial.Positions], new PaintPoint(radial.Focal.X, radial.Focal.Y))
                         { FocalRadius = radial.FocalRadius };
 
                     case SweepColorGlyphPaint sweep:
-                        return new XConicGradientBrush(new XPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,
+                        return new XConicGradientBrush(new PaintPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,
                             ToXColors(sweep.Colors), [.. sweep.AnglesRadians]);
 
                     default:
@@ -183,15 +183,15 @@ namespace PeachPDF.PDF.Rendering
                 for (var ci = 0; ci < outline.Contours.Count; ci++)
                 {
                     OutlineContour contour = outline.Contours[ci];
-                    XPoint current = Map(transform, contour.Start.X, contour.Start.Y);
+                    PaintPoint current = Map(transform, contour.Start.X, contour.Start.Y);
                     for (var si = 0; si < contour.Segments.Count; si++)
                     {
                         OutlineSegment segment = contour.Segments[si];
-                        XPoint end = Map(transform, segment.End.X, segment.End.Y);
+                        PaintPoint end = Map(transform, segment.End.X, segment.End.Y);
                         if (segment.IsCubic)
                         {
-                            XPoint c1 = Map(transform, segment.Control1.X, segment.Control1.Y);
-                            XPoint c2 = Map(transform, segment.Control2.X, segment.Control2.Y);
+                            PaintPoint c1 = Map(transform, segment.Control1.X, segment.Control1.Y);
+                            PaintPoint c2 = Map(transform, segment.Control2.X, segment.Control2.Y);
                             path.AddBezier(current.X, current.Y, c1.X, c1.Y, c2.X, c2.Y, end.X, end.Y);
                         }
                         else
@@ -208,15 +208,15 @@ namespace PeachPDF.PDF.Rendering
                 return path;
             }
 
-            private static XPoint Map(Affine2x3 t, double x, double y) => new(t.XX * x + t.XY * y + t.DX, t.YX * x + t.YY * y + t.DY);
+            private static PaintPoint Map(Affine2x3 t, double x, double y) => new(t.XX * x + t.XY * y + t.DX, t.YX * x + t.YY * y + t.DY);
 
-            private static XRect WorldBounds(GlyphOutline outline, Affine2x3 t)
+            private static Rect WorldBounds(GlyphOutline outline, Affine2x3 t)
             {
                 double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
                 void Include(double x, double y)
                 {
-                    XPoint p = Map(t, x, y);
+                    PaintPoint p = Map(t, x, y);
                     if (p.X < minX) minX = p.X;
                     if (p.Y < minY) minY = p.Y;
                     if (p.X > maxX) maxX = p.X;
@@ -239,7 +239,7 @@ namespace PeachPDF.PDF.Rendering
                     }
                 }
 
-                return maxX < minX || maxY < minY ? new XRect(0, 0, 0, 0) : new XRect(minX, minY, maxX - minX, maxY - minY);
+                return maxX < minX || maxY < minY ? new Rect(0, 0, 0, 0) : new Rect(minX, minY, maxX - minX, maxY - minY);
             }
         }
     }

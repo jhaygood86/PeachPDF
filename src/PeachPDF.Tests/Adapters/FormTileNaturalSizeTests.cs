@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -22,7 +23,7 @@ namespace PeachPDF.Tests.Adapters
             using var document = new PdfDocument();
             document.AddPage();
 
-            var form = new XForm(document, new XSize(32.6518, 10.4));
+            var form = new XForm(document, new Size(32.6518, 10.4));
             var image = new ImageAdapter(form);
 
             Assert.Equal(32.6518, image.Width, 4);
@@ -39,7 +40,7 @@ namespace PeachPDF.Tests.Adapters
             using var document = new PdfDocument();
             document.AddPage();
 
-            var tile = new ImageAdapter(new XForm(document, new XSize(100, boxHeight / 4)));
+            var tile = new ImageAdapter(new XForm(document, new Size(100, boxHeight / 4)));
 
             Assert.Equal(boxHeight, tile.Height * 4, 3);
         }

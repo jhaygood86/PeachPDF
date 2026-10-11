@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -167,7 +168,7 @@ namespace PeachPDF.Tests.Integration
             // GraphicsAdapter's own scale all use the same pixelsPerPoint, so the box tree's internal
             // coordinate space is consistently inflated end to end - see
             // PixelsPerPointEmResolutionIntegrationTests.BuildAndLayout's identical rationale.
-            var size = new XSize(800, 600);
+            var size = new Size(800, 600);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 

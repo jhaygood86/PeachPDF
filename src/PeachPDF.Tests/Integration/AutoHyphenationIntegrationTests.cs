@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
@@ -119,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainer(adapter);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
-            await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new XSize(600, 800));
+            await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new Size(600, 800));
 
             Assert.Equal("en-US", container.HtmlContainerInt.DocumentLanguage);
         }
@@ -131,7 +132,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainer(adapter);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
-            await PdfGenerator.SetContent(container, config, "<html lang=\"is\"><body>text</body></html>", null, new XSize(600, 800));
+            await PdfGenerator.SetContent(container, config, "<html lang=\"is\"><body>text</body></html>", null, new Size(600, 800));
 
             Assert.Equal("is", container.HtmlContainerInt.DocumentLanguage);
         }
@@ -143,7 +144,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainer(adapter);
             var config = new PdfGenerateConfig();
 
-            await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new XSize(600, 800));
+            await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new Size(600, 800));
 
             Assert.Null(container.HtmlContainerInt.DocumentLanguage);
         }
@@ -175,7 +176,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

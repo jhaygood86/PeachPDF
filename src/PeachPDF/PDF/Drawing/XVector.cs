@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Internal;
 using System;
 using System.Diagnostics;
@@ -193,14 +194,14 @@ namespace PeachPDF.PDF.Drawing
             return new XVector(vector1._x - vector2._x, vector1._y - vector2._y);
         }
 
-        public static XPoint operator +(XVector vector, XPoint point)
+        public static PaintPoint operator +(XVector vector, PaintPoint point)
         {
-            return new XPoint(point.X + vector._x, point.Y + vector._y);
+            return new PaintPoint(point.X + vector._x, point.Y + vector._y);
         }
 
-        public static XPoint Add(XVector vector, XPoint point)
+        public static PaintPoint Add(XVector vector, PaintPoint point)
         {
-            return new XPoint(point.X + vector._x, point.Y + vector._y);
+            return new PaintPoint(point.X + vector._x, point.Y + vector._y);
         }
 
         public static XVector operator *(XVector vector, double scalar)
@@ -258,14 +259,14 @@ namespace PeachPDF.PDF.Drawing
             return vector1._x * vector2._y - vector1._y * vector2._x;
         }
 
-        public static explicit operator XSize(XVector vector)
+        public static explicit operator Size(XVector vector)
         {
-            return new XSize(Math.Abs(vector._x), Math.Abs(vector._y));
+            return new Size(Math.Abs(vector._x), Math.Abs(vector._y));
         }
 
-        public static explicit operator XPoint(XVector vector)
+        public static explicit operator PaintPoint(XVector vector)
         {
-            return new XPoint(vector._x, vector._y);
+            return new PaintPoint(vector._x, vector._y);
         }
 
         /// <summary>

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -71,7 +72,7 @@ public class SelectorMatchOrderIndependenceTests
         var container = new HtmlContainerInt(adapter);
         await container.SetHtml(html, null);
 
-        var size = new XSize(595, 842);
+        var size = new Size(595, 842);
         container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

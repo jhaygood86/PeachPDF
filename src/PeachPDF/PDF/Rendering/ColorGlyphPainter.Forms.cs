@@ -97,13 +97,13 @@ namespace PeachPDF.PDF.Rendering
             // One form serves every size: scale canonical world units up to this run's font size.
             double scale = _scale * _typeface.Metrics.UnitsPerEm / ColorGlyphFormCache.EmSize;
             double baselineY = _baselineY - originYOffset;
-            var destRect = new XRect(
+            var destRect = new Rect(
                 originX + cached.LeftX * scale,
                 baselineY + cached.TopY * scale,
                 cached.Form.PointWidth * scale,
                 cached.Form.PointHeight * scale);
 
-            _gfx.DrawImage(cached.Form, destRect, new XRect(0, 0, cached.Form.PointWidth, cached.Form.PointHeight),
+            _gfx.DrawImage(cached.Form, destRect, new Rect(0, 0, cached.Form.PointWidth, cached.Form.PointHeight),
                 XGraphicsUnit.Point);
             return true;
         }
@@ -124,7 +124,7 @@ namespace PeachPDF.PDF.Rendering
             right += FormPadding;
             bottom += FormPadding;
 
-            var form = new XForm(document, new XSize(right - left, bottom - top));
+            var form = new XForm(document, new Size(right - left, bottom - top));
 
             // A form's world space starts at its own top-left corner, so the glyph's baseline origin
             // sits at the negated ink offset inside it.
@@ -174,7 +174,7 @@ namespace PeachPDF.PDF.Rendering
 
             byte[] png = RasterSurfaceEncoding.EncodePng(surface, opaque: false);
             XImage image = XImage.FromStream(() => new MemoryStream(png));
-            _gfx.DrawImage(image, new XRect(0, 0, pixelWidth / RasterPixelsPerUnit, pixelHeight / RasterPixelsPerUnit));
+            _gfx.DrawImage(image, new Rect(0, 0, pixelWidth / RasterPixelsPerUnit, pixelHeight / RasterPixelsPerUnit));
             return true;
         }
 
@@ -203,7 +203,7 @@ namespace PeachPDF.PDF.Rendering
         /// Grows the measure pass's accumulated bounds to include <paramref name="rect"/>, which callers
         /// have already established is a real (non-negative) fill region.
         /// </summary>
-        private void IncludeInMeasuredBounds(XRect rect)
+        private void IncludeInMeasuredBounds(Rect rect)
         {
             if (!_hasMeasuredBounds)
             {

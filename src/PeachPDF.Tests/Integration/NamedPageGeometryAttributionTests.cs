@@ -167,7 +167,7 @@ namespace PeachPDF.Tests.Integration
 
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var measure = XGraphics.CreateMeasureContext(
-                new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
+                new Size(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
             var box = new CssBox(container.Root, null) { PageName = "tail" };
@@ -359,7 +359,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = new Size(container.PageSize.Width, 0);
 
             var measure = XGraphics.CreateMeasureContext(
-                new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
+                new Size(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, ppp);
             await container.PerformLayout(graphics);
 

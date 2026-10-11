@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void CreateMeasureContext_CreatesUsableGraphics()
         {
-            using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
 
             var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
             var size = gfx.MeasureString("Hello", font);
@@ -83,7 +83,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void MeasureString_EmptyString_ReturnsNonNegativeSize()
         {
-            using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
             var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
 
             var size = gfx.MeasureString("", font);
@@ -297,13 +297,13 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             path.MoveTo(0, 0);
             for (int i = 1; i < 1_000; i++)
                 path.LineTo(i, i, false);
-            ReadOnlySpan<XPoint> points = path.PathPointsSpan;
+            ReadOnlySpan<PaintPoint> points = path.PathPointsSpan;
             ReadOnlySpan<byte> types = path.PathTypesSpan;
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
             Assert.Equal(1_000, points.Length);
             Assert.Equal(points.Length, types.Length);
-            Assert.Equal(new XPoint(999, 999), points[^1]);
+            Assert.Equal(new PaintPoint(999, 999), points[^1]);
             Assert.Equal(0, allocated);
         }
 
@@ -377,22 +377,22 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 gfx.ScaleTransform(1.0);
                 gfx.ScaleTransform(1.0, 1.0);
                 gfx.RotateTransform(0);
-                gfx.RotateAtTransform(0, new XPoint(width / 2, height / 2));
+                gfx.RotateAtTransform(0, new PaintPoint(width / 2, height / 2));
                 gfx.ShearTransform(0, 0);
                 gfx.SkewAtTransform(0, 0, width / 2, height / 2);
                 gfx.MultiplyTransform(PeachPDF.PDF.Drawing.XMatrix.Identity);
 
                 gfx.DrawLine(pen, 0, 0, width, height);
-                gfx.DrawLines(pen, [new XPoint(0, 0), new XPoint(10, 10), new XPoint(20, 0)]);
+                gfx.DrawLines(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
                 gfx.DrawBezier(pen, 0, 0, 10, 20, 20, 20, 30, 0);
-                gfx.DrawBeziers(pen, [new XPoint(0, 0), new XPoint(10, 20), new XPoint(20, 20), new XPoint(30, 0)]);
-                gfx.DrawCurve(pen, [new XPoint(0, 0), new XPoint(10, 10), new XPoint(20, 0)]);
+                gfx.DrawBeziers(pen, [new PaintPoint(0, 0), new PaintPoint(10, 20), new PaintPoint(20, 20), new PaintPoint(30, 0)]);
+                gfx.DrawCurve(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
                 gfx.DrawArc(pen, 10, 10, 40, 40, 0, 90);
 
                 gfx.DrawRectangle(pen, 5, 5, 20, 20);
                 gfx.DrawRectangle(brush, 5, 5, 20, 20);
                 gfx.DrawRectangle(pen, brush, 5, 5, 20, 20);
-                gfx.DrawRectangles(pen, [new XRect(0, 0, 10, 10), new XRect(20, 20, 10, 10)]);
+                gfx.DrawRectangles(pen, [new Rect(0, 0, 10, 10), new Rect(20, 20, 10, 10)]);
 
                 gfx.DrawRoundedRectangle(pen, 5, 5, 30, 30, 5, 5);
                 gfx.DrawRoundedRectangle(brush, 5, 5, 30, 30, 5, 5);
@@ -402,37 +402,37 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 gfx.DrawEllipse(brush, 5, 5, 20, 20);
                 gfx.DrawEllipse(pen, brush, 5, 5, 20, 20);
 
-                gfx.DrawPolygon(pen, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)]);
-                gfx.DrawPolygon(brush, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)], FillMode.Nonzero);
-                gfx.DrawPolygon(pen, brush, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)], FillMode.Nonzero);
+                gfx.DrawPolygon(pen, [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(5, 10)]);
+                gfx.DrawPolygon(brush, [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(5, 10)], FillMode.Nonzero);
+                gfx.DrawPolygon(pen, brush, [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(5, 10)], FillMode.Nonzero);
 
                 gfx.DrawPie(pen, 5, 5, 30, 30, 0, 90);
                 gfx.DrawPie(brush, 5, 5, 30, 30, 0, 90);
                 gfx.DrawPie(pen, brush, 5, 5, 30, 30, 0, 90);
 
-                gfx.DrawClosedCurve(pen, [new XPoint(0, 0), new XPoint(10, 10), new XPoint(20, 0)]);
-                gfx.DrawClosedCurve(brush, [new XPoint(0, 0), new XPoint(10, 10), new XPoint(20, 0)]);
-                gfx.DrawClosedCurve(pen, brush, [new XPoint(0, 0), new XPoint(10, 10), new XPoint(20, 0)]);
+                gfx.DrawClosedCurve(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
+                gfx.DrawClosedCurve(brush, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
+                gfx.DrawClosedCurve(pen, brush, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
 
                 var path = new XGraphicsPath();
-                path.AddRectangle(new XRect(0, 0, 10, 10));
+                path.AddRectangle(new Rect(0, 0, 10, 10));
                 gfx.DrawPath(pen, path);
                 gfx.DrawPath(brush, path);
                 gfx.DrawPath(pen, brush, path);
 
-                gfx.DrawString("Hello, World!", font, brush, new XPoint(10, 10));
-                gfx.DrawString("Hello, World!", font, brush, new XRect(0, 0, width, height), XStringFormats.Center);
+                gfx.DrawString("Hello, World!", font, brush, new PaintPoint(10, 10));
+                gfx.DrawString("Hello, World!", font, brush, new Rect(0, 0, width, height), XStringFormats.Center);
 
                 var imgBytes = MakePngBytes();
                 using var image = XImage.FromStream(() => new MemoryStream(imgBytes));
                 gfx.DrawImage(image, 50, 50);
-                gfx.DrawImage(image, new XRect(60, 60, 20, 20));
-                gfx.DrawImage(image, new XRect(80, 80, 20, 20), new XRect(0, 0, 4, 4), XGraphicsUnit.Point);
+                gfx.DrawImage(image, new Rect(60, 60, 20, 20));
+                gfx.DrawImage(image, new Rect(80, 80, 20, 20), new Rect(0, 0, 4, 4), XGraphicsUnit.Point);
 
-                gfx.IntersectClip(new XRect(0, 0, width, height));
+                gfx.IntersectClip(new Rect(0, 0, width, height));
 
                 var innerPath = new XGraphicsPath();
-                innerPath.AddEllipse(new XRect(0, 0, 10, 10));
+                innerPath.AddEllipse(new Rect(0, 0, 10, 10));
                 gfx.IntersectClip(innerPath);
             }
 

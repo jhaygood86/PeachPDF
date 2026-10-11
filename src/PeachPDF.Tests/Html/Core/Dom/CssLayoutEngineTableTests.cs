@@ -1842,7 +1842,7 @@ Assert.NotNull(tbody);
             {
                 if (pass > 0)
                 {
-                    var measure = XGraphics.CreateMeasureContext(new XSize(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
+                    var measure = XGraphics.CreateMeasureContext(new Size(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
                     using var graphics = new GraphicsAdapter((PdfSharpAdapter)container.Adapter, measure, 1.0);
                     await container.PerformLayout(graphics);
                 }
@@ -3187,7 +3187,7 @@ Assert.NotNull(tbody);
 
           await container.SetHtml(html, null);
 
-     var size = new XSize(595, pageHeight);
+     var size = new Size(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
     container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
    container.MarginTop = 20;

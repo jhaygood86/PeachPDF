@@ -62,7 +62,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
 
             var untaggedBox = new CssBox(null, null);
             var annotation = page.AddWebLink(
-                new PdfRectangle(new PeachPDF.PDF.Drawing.XRect(0, 0, 10, 10)), "https://example.com");
+                new PdfRectangle(new PeachDrawing.Core.Rect(0, 0, 10, 10)), "https://example.com");
 
             builder.LinkAnnotationToStructureElement(untaggedBox, page, annotation);
 

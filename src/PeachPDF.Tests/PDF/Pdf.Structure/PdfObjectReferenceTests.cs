@@ -38,7 +38,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf.Structure
         {
             var doc = new PdfDocument();
             var page = doc.AddPage();
-            var annotation = page.AddWebLink(new PdfRectangle(new PeachPDF.PDF.Drawing.XRect(0, 0, 10, 10)), "https://example.com");
+            var annotation = page.AddWebLink(new PdfRectangle(new PeachDrawing.Core.Rect(0, 0, 10, 10)), "https://example.com");
             var objRef = new PdfObjectReference(doc) { Object = annotation };
             doc.Internals.AddObject(objRef);
 

@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Html.Core
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml($"<html><head><style>{css}</style></head><body>{body}</body></html>", null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
@@ -242,7 +242,7 @@ namespace PeachPDF.Tests.Html.Core
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml($"<html><body><p id=\"p\" style=\"font-family: OutlineEmojiFam, ColourFam; font-variant-emoji: unicode\">{ThumbsUp}</p></body></html>", null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);

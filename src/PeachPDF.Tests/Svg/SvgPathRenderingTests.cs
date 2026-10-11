@@ -56,7 +56,7 @@ namespace PeachPDF.Tests.Svg
 
         private sealed class RealPathRecordingGraphics : TestRecordingGraphics
         {
-            public List<XPoint[]> Paths { get; } = [];
+            public List<PaintPoint[]> Paths { get; } = [];
 
             public override GraphicsPath GetGraphicsPath() => new GraphicsPathAdapter();
 

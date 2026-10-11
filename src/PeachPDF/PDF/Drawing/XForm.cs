@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Rendering;
 using PeachPDF.PDF;
 using PeachPDF.PDF.Advanced;
@@ -78,7 +79,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         /// <param name="document">The PDF document.</param>
         /// <param name="viewBox">The view box of the page.</param>
-        public XForm(PdfDocument document, XRect viewBox)
+        public XForm(PdfDocument document, Rect viewBox)
         {
             if (viewBox.Width < 1 || viewBox.Height < 1)
                 throw new ArgumentNullException("viewBox", "The size of the XPdfForm is to small.");
@@ -101,8 +102,8 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         /// <param name="document">The PDF document.</param>
         /// <param name="size">The size of the page.</param>
-        public XForm(PdfDocument document, XSize size)
-            : this(document, new XRect(0, 0, size.Width, size.Height))
+        public XForm(PdfDocument document, Size size)
+            : this(document, new Rect(0, 0, size.Width, size.Height))
         {
             ////if (size.width < 1 || size.height < 1)
             ////  throw new ArgumentNullException("size", "The size of the XPdfForm is to small.");
@@ -115,7 +116,7 @@ namespace PeachPDF.PDF.Drawing
             ////_document = document;
             ////pdfForm = new PdfFormXObject(document, this);
             ////templateSize = size;
-            ////PdfRectangle rect = new PdfRectangle(new XPoint(), size);
+            ////PdfRectangle rect = new PdfRectangle(new PaintPoint(), size);
             ////pdfForm.Elements.SetRectangle(PdfFormXObject.Keys.BBox, rect);
         }
 
@@ -126,7 +127,7 @@ namespace PeachPDF.PDF.Drawing
         /// <param name="width">The width of the page.</param>
         /// <param name="height">The height of the page</param>
         public XForm(PdfDocument document, XUnit width, XUnit height)
-            : this(document, new XRect(0, 0, width, height))
+            : this(document, new Rect(0, 0, width, height))
         { }
 
         /// <summary>
@@ -277,21 +278,21 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Get the size of the page identified by the property PageNumber.
         /// </summary>
-        public override XSize Size
+        public override Size Size
         {
             //get { return templateSize; }
             get { return _viewBox.Size; }
         }
-        //XSize templateSize;
+        //Size templateSize;
 
         /// <summary>
         /// Gets the view box of the form.
         /// </summary>
-        public XRect ViewBox
+        public Rect ViewBox
         {
             get { return _viewBox; }
         }
-        XRect _viewBox;
+        Rect _viewBox;
 
         /// <summary>
         /// Gets 72, the horizontal resolution by design of a form object.
@@ -312,12 +313,12 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the bounding box.
         /// </summary>
-        public XRect BoundingBox
+        public Rect BoundingBox
         {
             get { return _boundingBox; }
             set { _boundingBox = value; }  // TODO: pdfForm = null
         }
-        XRect _boundingBox;
+        Rect _boundingBox;
 
         /// <summary>
         /// Gets or sets the transformation matrix.

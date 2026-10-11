@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -528,7 +529,7 @@ body { font: 9pt Arial, sans-serif; margin: 0 }
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(width, height);
+            var size = new Size(width, height);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

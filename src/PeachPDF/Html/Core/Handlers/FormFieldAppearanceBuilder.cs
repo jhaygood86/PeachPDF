@@ -66,7 +66,7 @@ namespace PeachPDF.Html.Core.Handlers
         static PdfFormXObject CreateForm(PdfDocument document, RenderContext adapter, double pixelsPerPoint,
             double widthPt, double heightPt, Action<Canvas, Rect> draw)
         {
-            var form = new XForm(document, new XSize(widthPt, heightPt));
+            var form = new XForm(document, new Size(widthPt, heightPt));
             var formGraphics = XGraphics.FromForm(form);
             using (var g = new GraphicsAdapter(adapter, formGraphics, pixelsPerPoint, releaseGraphics: true))
             {

@@ -1015,7 +1015,7 @@ namespace PeachPDF.Tests.Integration
             container.MarginBottom = 0;
             await container.SetHtml(html, null);
 
-            var size = new XSize(400, pageHeight);
+            var size = new Size(400, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize  = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 

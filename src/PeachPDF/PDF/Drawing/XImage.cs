@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.Adapters;
 using PeachPDF.PDF.Advanced;
@@ -373,9 +374,9 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the size in point of the image.
         /// </summary>
-        public virtual XSize Size
+        public virtual Size Size
         {
-            get { return new XSize(PointWidth, PointHeight); }
+            get { return new Size(PointWidth, PointHeight); }
         }
 
         /// <summary>

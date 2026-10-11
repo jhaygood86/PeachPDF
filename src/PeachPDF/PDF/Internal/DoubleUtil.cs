@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
 namespace PeachPDF.PDF.Internal
@@ -68,7 +69,7 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Indicates whether the values are so close that they can be considered as equal.
         /// </summary>
-        public static bool AreClose(XPoint point1, XPoint point2)
+        public static bool AreClose(PaintPoint point1, PaintPoint point2)
         {
             return AreClose(point1.X, point2.X) && AreClose(point1.Y, point2.Y);
         }
@@ -76,7 +77,7 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Indicates whether the values are so close that they can be considered as equal.
         /// </summary>
-        public static bool AreClose(XRect rect1, XRect rect2)
+        public static bool AreClose(Rect rect1, Rect rect2)
         {
             if (rect1.IsEmpty)
                 return rect2.IsEmpty;
@@ -87,7 +88,7 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Indicates whether the values are so close that they can be considered as equal.
         /// </summary>
-        public static bool AreClose(XSize size1, XSize size2)
+        public static bool AreClose(Size size1, Size size2)
         {
             return AreClose(size1.Width, size2.Width) && AreClose(size1.Height, size2.Height);
         }
@@ -151,7 +152,7 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Indicates whether at least one of the four rectangle values is not a number.
         /// </summary>
-        public static bool RectHasNaN(XRect r)
+        public static bool RectHasNaN(Rect r)
         {
             return IsNaN(r.X) || IsNaN(r.Y) || IsNaN(r.Height) || IsNaN(r.Width);
         }

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -150,7 +151,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
-            var size = new XSize(widthPt, heightPt);
+            var size = new Size(widthPt, heightPt);
             // Set the media inputs before the CSS tree is generated - the MediaQueryContext is built
             // during SetHtml from these values (as PdfGenerator.SetContent does).
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);

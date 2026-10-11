@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Internal;
 using System;
 using System.Diagnostics;
@@ -492,7 +493,7 @@ namespace PeachPDF.PDF.Drawing
         /// Rotates the matrix with the specified angle at the specified point.
         /// </summary>
         [Obsolete("Use RotateAtAppend or RotateAtPrepend explicitly, because in GDI+ and WPF the defaults are contrary.", true)]
-        public void RotateAt(double angle, XPoint point)
+        public void RotateAt(double angle, PaintPoint point)
         {
             throw new InvalidOperationException("Temporarily out of order.");
             //RotateAt(angle, point, XMatrixOrder.Prepend);
@@ -501,7 +502,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Appends a rotation of the specified angle at the specified point to this matrix.
         /// </summary>
-        public void RotateAtAppend(double angle, XPoint point)
+        public void RotateAtAppend(double angle, PaintPoint point)
         {
             RotateAt(angle, point, XMatrixOrder.Append);
         }
@@ -509,7 +510,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Prepends a rotation of the specified angle at the specified point to this matrix.
         /// </summary>
-        public void RotateAtPrepend(double angle, XPoint point)
+        public void RotateAtPrepend(double angle, PaintPoint point)
         {
             RotateAt(angle, point, XMatrixOrder.Prepend);
         }
@@ -517,7 +518,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Rotates the matrix with the specified angle at the specified point.
         /// </summary>
-        public void RotateAt(double angle, XPoint point, XMatrixOrder order)
+        public void RotateAt(double angle, PaintPoint point, XMatrixOrder order)
         {
             if (order == XMatrixOrder.Append)
             {
@@ -630,18 +631,18 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Transforms the specified point by this matrix and returns the result.
         /// </summary>
-        public XPoint Transform(XPoint point)
+        public PaintPoint Transform(PaintPoint point)
         {
             double x = point.X;
             double y = point.Y;
             MultiplyPoint(ref x, ref y);
-            return new XPoint(x, y);
+            return new PaintPoint(x, y);
         }
 
         /// <summary>
         /// Transforms the specified points by this matrix. 
         /// </summary>
-        public void Transform(XPoint[] points)
+        public void Transform(PaintPoint[] points)
         {
             if (points != null)
             {
@@ -660,7 +661,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Multiplies all points of the specified array with the this matrix.
         /// </summary>
-        public void TransformPoints(XPoint[] points)
+        public void TransformPoints(PaintPoint[] points)
         {
             if (points == null)
                 throw new ArgumentNullException("points");
@@ -1301,50 +1302,6 @@ namespace PeachPDF.PDF.Drawing
                         matrix._type |= XMatrixTypes.Translation;
                 }
             }
-
-            internal static void TransformRect(ref XRect rect, ref XMatrix matrix)
-            {
-                if (!rect.IsEmpty)
-                {
-                    XMatrixTypes type = matrix._type;
-                    if (type != XMatrixTypes.Identity)
-                    {
-                        if ((type & XMatrixTypes.Scaling) != XMatrixTypes.Identity)
-                        {
-                            rect.X *= matrix._m11;
-                            rect.Y *= matrix._m22;
-                            rect.Width *= matrix._m11;
-                            rect.Height *= matrix._m22;
-                            if (rect.Width < 0)
-                            {
-                                rect.X += rect.Width;
-                                rect.Width = -rect.Width;
-                            }
-                            if (rect.Height < 0)
-                            {
-                                rect.Y += rect.Height;
-                                rect.Height = -rect.Height;
-                            }
-                        }
-                        if ((type & XMatrixTypes.Translation) != XMatrixTypes.Identity)
-                        {
-                            rect.X += matrix._offsetX;
-                            rect.Y += matrix._offsetY;
-                        }
-                        if (type == XMatrixTypes.Unknown)
-                        {
-                            XPoint point1 = matrix.Transform(rect.TopLeft);
-                            XPoint point2 = matrix.Transform(rect.TopRight);
-                            XPoint point3 = matrix.Transform(rect.BottomRight);
-                            XPoint point4 = matrix.Transform(rect.BottomLeft);
-                            rect.X = Math.Min(Math.Min(point1.X, point2.X), Math.Min(point3.X, point4.X));
-                            rect.Y = Math.Min(Math.Min(point1.Y, point2.Y), Math.Min(point3.Y, point4.Y));
-                            rect.Width = Math.Max(Math.Max(point1.X, point2.X), Math.Max(point3.X, point4.X)) - rect.X;
-                            rect.Height = Math.Max(Math.Max(point1.Y, point2.Y), Math.Max(point3.Y, point4.Y)) - rect.Y;
-                        }
-                    }
-                }
-            }
         }
 
         /// <summary>
@@ -1363,7 +1320,7 @@ namespace PeachPDF.PDF.Drawing
                 const string format = Config.SignificantFigures7;
 
                 // Calculate the angle in degrees.
-                XPoint point = new XMatrix(_m11, _m12, _m21, _m22, 0, 0).Transform(new XPoint(1, 0));
+                PaintPoint point = new XMatrix(_m11, _m12, _m21, _m22, 0, 0).Transform(new PaintPoint(1, 0));
                 double φ = Math.Atan2(point.Y, point.X) / Const.Deg2Rad;
                 return String.Format(CultureInfo.InvariantCulture,
                     "matrix=({0:" + format + "}, {1:" + format + "}, {2:" + format + "}, {3:" + format + "}, {4:" + format + "}, {5:" + format + "}), φ={6:0.0#########}°",

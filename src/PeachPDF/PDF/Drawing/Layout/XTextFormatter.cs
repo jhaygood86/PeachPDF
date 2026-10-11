@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing.Layout;
 using PeachPDF.PDF.IO;
 using System;
@@ -95,12 +96,12 @@ namespace PeachPDF.PDF.Drawing.Layout
         /// <summary>
         /// Gets or sets the bounding box of the layout.
         /// </summary>
-        public XRect LayoutRectangle
+        public Rect LayoutRectangle
         {
             get { return _layoutRectangle; }
             set { _layoutRectangle = value; }
         }
-        XRect _layoutRectangle;
+        Rect _layoutRectangle;
 
         /// <summary>
         /// When true, ignore the height of text areas when rendering multiline strings
@@ -136,7 +137,7 @@ namespace PeachPDF.PDF.Drawing.Layout
         /// <param name="brush">The text brush.</param>
         /// <param name="layoutRectangle">The layout rectangle.</param>
         /// <param name="lineHeight">The line height to use, or <see langword="null"/> to derive it from the font.</param>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XUnit? lineHeight = null)
+        public void DrawString(string text, XFont font, XBrush brush, Rect layoutRectangle, XUnit? lineHeight = null)
         {
             DrawString(text, font, brush, layoutRectangle, XStringFormats.TopLeft, lineHeight);
         }
@@ -150,7 +151,7 @@ namespace PeachPDF.PDF.Drawing.Layout
         /// <param name="layoutRectangle">The layout rectangle.</param>
         /// <param name="format">The format. Must be <c>XStringFormat.TopLeft</c></param>
         /// <param name="lineHeight">The line height to use, or <see langword="null"/> to derive it from the font.</param>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, XUnit? lineHeight = null)
+        public void DrawString(string text, XFont font, XBrush brush, Rect layoutRectangle, XStringFormat format, XUnit? lineHeight = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -285,7 +286,7 @@ namespace PeachPDF.PDF.Drawing.Layout
                     double width = block.Width;
                     if ((x + width <= rectWidth || x == 0) && block.Type != BlockType.LineBreak)
                     {
-                        block.Location = new XPoint(x, y);
+                        block.Location = new PaintPoint(x, y);
                         x += width + _spaceWidth;
                     }
                     else
@@ -300,7 +301,7 @@ namespace PeachPDF.PDF.Drawing.Layout
                             block.Stop = true;
                             break;
                         }
-                        block.Location = new XPoint(0, y);
+                        block.Location = new PaintPoint(0, y);
                         x = width + _spaceWidth;
                     }
                 }
@@ -312,7 +313,7 @@ namespace PeachPDF.PDF.Drawing.Layout
             var maxY = _blocks.Max(b => b.Location.Y + _lineHeight);
             var minX = _blocks.Min(b => b.Location.X);
             var maxX = _blocks.Max(b => b.Location.X + b.Width);
-            _layoutRectangle = new XRect
+            _layoutRectangle = new Rect
             {
                 X = minX,
                 Y = minY,
@@ -347,7 +348,7 @@ namespace PeachPDF.PDF.Drawing.Layout
                 for (int idx = firstIndex; idx <= lastIndex; idx++)
                 {
                     Block block = _blocks[idx];
-                    block.Location += new XSize(dx, 0);
+                    block.Location = new PaintPoint(block.Location.X + dx, block.Location.Y);
                 }
             }
             else if (count > 1) // case: justify
@@ -356,7 +357,7 @@ namespace PeachPDF.PDF.Drawing.Layout
                 for (int idx = firstIndex + 1, i = 1; idx <= lastIndex; idx++, i++)
                 {
                     Block block = _blocks[idx];
-                    block.Location += new XSize(dx * i, 0);
+                    block.Location = new PaintPoint(block.Location.X + dx * i, block.Location.Y);
                 }
             }
         }

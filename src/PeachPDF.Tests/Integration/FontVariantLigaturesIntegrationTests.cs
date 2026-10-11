@@ -190,7 +190,7 @@ body {{ font-family: 'SS3'; width: 400px; }}
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(Wrap(body), null);
 
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
@@ -205,7 +205,7 @@ body {{ font-family: 'SS3'; width: 400px; }}
         private static GraphicsAdapter MeasureGraphics()
         {
             var adapter = new PdfSharpAdapter();
-            var size = new XSize(595, 842);
+            var size = new Size(595, 842);
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             return new GraphicsAdapter(adapter, measure, 1.0);
         }

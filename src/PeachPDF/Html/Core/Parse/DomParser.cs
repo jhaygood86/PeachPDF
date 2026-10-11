@@ -650,7 +650,7 @@ namespace PeachPDF.Html.Core.Parse
             // PixelsPerPoint-sized discrepancy between this container's own notion of its page-content
             // band height and the actual physical per-page PDF clip (PdfGenerator.AddPdfPages, resolved
             // independently via DomParser.ParseLengthToPdfPoints, which is correctly always in true
-            // points since it feeds an XRect directly). PixelsPerPoint is usually 1.0 (so this was
+            // points since it feeds an Rect directly). PixelsPerPoint is usually 1.0 (so this was
             // invisible) but ShrinkToFit/ScaleToPageSize commonly nudge it away from 1.0 by even a
             // fraction of a percent for perfectly ordinary content - enough for a box relocated to
             // "the next page's content top" by layout's own (slightly wrong) accounting to land a hair
@@ -679,7 +679,7 @@ namespace PeachPDF.Html.Core.Parse
             // HundredPercentPt for `%` - actually change between the two calls, becoming correct.
             //
             // PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
-            // caller-configured page size (an XSize, true points) from PageSize (an Size,
+            // caller-configured page size (an Size, true points) from PageSize (an Size,
             // PixelsPerPoint-scaled internal pixel space, per HtmlContainerInt.PageSize's own doc
             // comment) - nothing between PdfGenerator.SetContent assigning it and this point mutates it,
             // so this is the same comparison PdfGenerator.AddPdfPages used to make one layer up, just
@@ -795,21 +795,21 @@ namespace PeachPDF.Html.Core.Parse
             }
         }
 
-        private static readonly FrozenDictionary<string, XSize> NamedPageSizes = new Dictionary<string, XSize>(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, Size> NamedPageSizes = new Dictionary<string, Size>(StringComparer.OrdinalIgnoreCase)
         {
-            { "a0",      new XSize(2383.94, 3370.39) },
-            { "a1",      new XSize(1683.78, 2383.94) },
-            { "a2",      new XSize(1190.55, 1683.78) },
-            { "a3",      new XSize(841.89,  1190.55) },
-            { "a4",      new XSize(595.28,   841.89) },
-            { "a5",      new XSize(419.53,   595.28) },
-            { "a6",      new XSize(297.64,   419.53) },
-            { "b4",      new XSize(708.66,  1000.63) },
-            { "b5",      new XSize(498.90,   708.66) },
-            { "letter",  new XSize(612,       792)   },
-            { "legal",   new XSize(612,      1008)   },
-            { "ledger",  new XSize(1224,      792)   },
-            { "tabloid", new XSize(792,      1224)   },
+            { "a0",      new Size(2383.94, 3370.39) },
+            { "a1",      new Size(1683.78, 2383.94) },
+            { "a2",      new Size(1190.55, 1683.78) },
+            { "a3",      new Size(841.89,  1190.55) },
+            { "a4",      new Size(595.28,   841.89) },
+            { "a5",      new Size(419.53,   595.28) },
+            { "a6",      new Size(297.64,   419.53) },
+            { "b4",      new Size(708.66,  1000.63) },
+            { "b5",      new Size(498.90,   708.66) },
+            { "letter",  new Size(612,       792)   },
+            { "legal",   new Size(612,      1008)   },
+            { "ledger",  new Size(1224,      792)   },
+            { "tabloid", new Size(792,      1224)   },
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -820,7 +820,7 @@ namespace PeachPDF.Html.Core.Parse
         /// fallback via <see cref="Dom.PageRuleResolver.ResolvePageSize"/>), used both as the "no size
         /// declared" fallback and as the size a bare orientation keyword rotates.
         /// </summary>
-        internal static XSize? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context, XSize baseSizePt)
+        internal static Size? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context, Size baseSizePt)
         {
             var parts = sizeValue.Trim().Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
@@ -831,7 +831,7 @@ namespace PeachPDF.Html.Core.Parse
             // not match it is invalid as a whole and must be dropped (CSS Syntax §9), not partially
             // honored - so any token that is present but not a valid component invalidates the whole
             // declaration (issue #163), rather than being silently skipped.
-            XSize? namedSize = null;
+            Size? namedSize = null;
             bool? landscape = null;
             double? firstLength = null, secondLength = null;
             var invalid = false;
@@ -879,14 +879,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 var size = namedSize.Value;
                 if (landscape == true && size.Width < size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 else if (landscape == false && size.Width > size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 return size;
             }
 
             if (firstLength.HasValue)
-                return new XSize(firstLength.Value, secondLength ?? firstLength.Value);
+                return new Size(firstLength.Value, secondLength ?? firstLength.Value);
 
             if (landscape.HasValue)
             {
@@ -901,9 +901,9 @@ namespace PeachPDF.Html.Core.Parse
                 // correctly does nothing.
                 var size = baseSizePt;
                 if (landscape.Value && size.Width < size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 else if (!landscape.Value && size.Width > size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 return size;
             }
 

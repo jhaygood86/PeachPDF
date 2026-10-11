@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -465,7 +466,7 @@ thead { display: table-header-group; }
 await container.SetHtml(html, null);
 
             // Configure page size
-  var size = new XSize(595, pageHeight);
+  var size = new Size(595, pageHeight);
          container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
           container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
        container.MarginTop = 20;

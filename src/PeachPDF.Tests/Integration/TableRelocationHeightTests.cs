@@ -31,7 +31,7 @@ public class TableRelocationHeightTests
         var container = new HtmlContainerInt(adapter) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
         await container.SetHtml(html, null);
 
-        var size = new XSize(400, 300);
+        var size = new Size(400, 300);
         container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
