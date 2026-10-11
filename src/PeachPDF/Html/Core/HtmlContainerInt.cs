@@ -1480,7 +1480,7 @@ namespace PeachPDF.Html.Core
                 {
                     foreach (var child in shell.ContentChildren)
                     {
-                        if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                        if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None || DomUtils.IsUnderNoVisibleArea(child)) continue;
 
                         linkElements.Add(new LinkElementData<Rect>(shell.GetAttribute("id"), shell.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(child.Rectangles, child.Bounds), shell));
                     }
@@ -4741,6 +4741,19 @@ namespace PeachPDF.Html.Core
         /// <c>PdfGenerator.AddPdfPages</c> once the loop is done.
         /// </remarks>
         internal PeachPDF.ClipReport ClipReport { get; } = new();
+
+        private HashSet<CssBox>? _notRenderedBoxes;
+
+        /// <summary>
+        /// Records that the painter drew nothing for <paramref name="box"/> because its transform leaves it no visible area (css-transforms-1
+        /// §"Transform Rendering"). The collectors that read the box tree after painting (links, form widgets) leave a recorded box and
+        /// everything under it out, so an annotation is never written over paper nothing was drawn on. The painter is the one place that knows
+        /// what it culled - the subtree's extent, the projection a perspective applies - which a box-tree rule would have to guess at.
+        /// </summary>
+        internal void NoteNotRendered(CssBox box) => (_notRenderedBoxes ??= new HashSet<CssBox>(ReferenceEqualityComparer.Instance)).Add(box);
+
+        /// <summary>Whether the painter recorded <paramref name="box"/> with <see cref="NoteNotRendered"/>.</summary>
+        internal bool IsNotRendered(CssBox box) => _notRenderedBoxes?.Contains(box) == true;
 
         /// <summary>
         /// The page/viewport rect, in the same fragmentainer-local coordinate space every painted

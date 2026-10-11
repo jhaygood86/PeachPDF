@@ -115,18 +115,61 @@ namespace PeachPDF.Html.Core.Paint
             return det3 != 0 && det2 / det3 < 0;
         }
 
+        /// <summary>
+        /// Whether <paramref name="source"/>, mapped through <paramref name="map"/>, lands as a sliver thinner than
+        /// <see cref="MinVisibleThickness"/> - a plane turned edge-on to the viewer, whose image a renderer would still stroke as a hairline.
+        /// The projective counterpart of <see cref="HasVisibleThickness"/>: the thickness is the image's area over its longest extent (its
+        /// diameter), measured on the part of it in front of the eye. An image wholly behind the viewer has no polygon and is not a sliver
+        /// (the caller already drops it).
+        /// </summary>
+        internal static bool ProjectsToSliver(in Homography map, Rect source)
+        {
+            var polygon = map.ProjectRectangle(source.Left, source.Top, source.Right, source.Bottom);
+            if (polygon.Count < 3)
+                return false;
+
+            double twiceArea = 0, diameterSquared = 0;
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                var (x, y) = polygon[i];
+                var (nextX, nextY) = polygon[(i + 1) % polygon.Count];
+                twiceArea += x * nextY - nextX * y;
+
+                for (var j = i + 1; j < polygon.Count; j++)
+                {
+                    var (otherX, otherY) = polygon[j];
+                    diameterSquared = Math.Max(diameterSquared, (x - otherX) * (x - otherX) + (y - otherY) * (y - otherY));
+                }
+            }
+
+            return diameterSquared <= 0 || Math.Abs(twiceArea) / 2 / Math.Sqrt(diameterSquared) < MinVisibleThickness;
+        }
+
         private bool PaintProjective(Canvas g, BoxFragment fragment, ProjectiveWarp warp)
         {
             var box = fragment.Box;
             if (warp.Hidden)
+            {
+                NoteNotRendered(box);
                 return true; // backface-visibility: hidden and turned away, or behind the viewer: nothing to paint
+            }
 
             if (SubtreeExtent(fragment) is not { } extent)
                 return true;
 
             var source = Inflate(extent, SubtreeBleed(fragment));
             if (!warp.Map.TryProjectRectangleBounds(source.Left, source.Top, source.Right, source.Bottom, out var minX, out var minY, out var maxX, out var maxY))
+            {
+                NoteNotRendered(box);
                 return true; // wholly behind the viewer
+            }
+
+            // Edge-on: nothing worth a bitmap, and no text layer to supply over one that is not there.
+            if (ProjectsToSliver(warp.Map, source))
+            {
+                NoteNotRendered(box);
+                return true;
+            }
 
             var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
             if (destination.Width <= 0 || destination.Height <= 0)

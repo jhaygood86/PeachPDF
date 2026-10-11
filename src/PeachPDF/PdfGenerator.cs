@@ -1781,6 +1781,12 @@ namespace PeachPDF
         /// </summary>
         private static IEnumerable<(BoxFragment Fragment, CssBox Box)> FindLinkFragments(BoxFragment fragment)
         {
+            // Not drawn (a transform that leaves no visible area), so not clickable - the same rule the main-tree collectors apply.
+            if (DomUtils.LeavesNoVisibleArea(fragment.Box))
+            {
+                yield break;
+            }
+
             if (fragment.Box is { IsClickable: true, Visibility.Value: Visibility.Visible })
             {
                 yield return (fragment, fragment.Box);
