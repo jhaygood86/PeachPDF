@@ -494,17 +494,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
         Guid _guid = Guid.NewGuid();
 
-        internal DocumentHandle Handle
-        {
-            get
-            {
-                if (_handle == null)
-                    _handle = new DocumentHandle(this);
-                return _handle;
-            }
-        }
-        DocumentHandle _handle = null!;
-
         /// <summary>
         /// Returns a value indicating whether the document was newly created or opened from an existing document.
         /// Returns true if the document was opened with the PdfReader.Open function, false otherwise.
@@ -865,64 +854,5 @@ namespace PeachPDF.PdfSharpCore.Pdf
         internal Stream _outStream = null!;
 
         internal DateTime _creation;
-
-        /// <summary>
-        /// Gets the ThreadLocalStorage object. It is used for caching objects that should created
-        /// only once.
-        /// </summary>
-        internal static ThreadLocalStorage Tls
-        {
-            get { return tls ?? (tls = new ThreadLocalStorage()); }
-        }
-        [ThreadStatic]
-        static ThreadLocalStorage tls = null!;
-
-        [DebuggerDisplay("(ID={ID}, alive={IsAlive})")]
-        internal class DocumentHandle
-        {
-            public DocumentHandle(PdfDocument document)
-            {
-                _weakRef = new WeakReference(document);
-                ID = document._guid.ToString("B").ToUpper();
-            }
-
-            public bool IsAlive
-            {
-                get { return _weakRef.IsAlive; }
-            }
-
-            public PdfDocument Target
-            {
-                get { return _weakRef.Target as PdfDocument; }
-            }
-            readonly WeakReference _weakRef;
-
-            public string ID;
-
-            public override bool Equals(object? obj)
-            {
-                DocumentHandle handle = obj as DocumentHandle;
-                if (!ReferenceEquals(handle, null))
-                    return ID == handle.ID;
-                return false;
-            }
-
-            public override int GetHashCode()
-            {
-                return ID.GetHashCode();
-            }
-
-            public static bool operator ==(DocumentHandle left, DocumentHandle right)
-            {
-                if (ReferenceEquals(left, null))
-                    return ReferenceEquals(right, null);
-                return left.Equals(right);
-            }
-
-            public static bool operator !=(DocumentHandle left, DocumentHandle right)
-            {
-                return !(left == right);
-            }
-        }
     }
 }

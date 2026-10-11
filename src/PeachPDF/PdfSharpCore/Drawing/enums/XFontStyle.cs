@@ -40,32 +40,32 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Normal text.
         /// </summary>
-        Regular = XGdiFontStyle.Regular,
+        Regular = 0,
 
         /// <summary>
         /// Bold text.
         /// </summary>
-        Bold = XGdiFontStyle.Bold,
+        Bold = 1,
 
         /// <summary>
         /// Italic text.
         /// </summary>
-        Italic = XGdiFontStyle.Italic,
+        Italic = 2,
 
         /// <summary>
         /// Bold and italic text. 
         /// </summary>
-        BoldItalic = XGdiFontStyle.BoldItalic,
+        BoldItalic = 3,
 
         /// <summary>
         /// Underlined text.
         /// </summary>
-        Underline = XGdiFontStyle.Underline,
+        Underline = 4,
 
         /// <summary>
         /// Text with a line through the middle.
         /// </summary>
-        Strikeout = XGdiFontStyle.Strikeout,
+        Strikeout = 8,
 
         // Additional flags:
         // BoldSimulation

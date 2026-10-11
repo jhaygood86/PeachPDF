@@ -27,9 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
-using System.Globalization;
 
 namespace PeachPDF.PdfSharpCore.Internal
 {
@@ -49,35 +47,6 @@ namespace PeachPDF.PdfSharpCore.Internal
             set { _notImplementedBehaviour = value; }
         }
         static NotImplementedBehaviour _notImplementedBehaviour;
-    }
-
-    internal static class ParserDiagnostics
-    {
-        public static void ThrowParserException(string message)
-        {
-            throw new PdfReaderException(message);
-        }
-
-        public static void ThrowParserException(string message, Exception innerException)
-        {
-            throw new PdfReaderException(message, innerException);
-        }
-
-        public static void HandleUnexpectedCharacter(char ch)
-        {
-            // Hex formatting does not work with type char. It must be casted to integer.
-            string message = string.Format(CultureInfo.InvariantCulture,
-                "Unexpected character '0x{0:x4}' in PDF stream. The file may be corrupted. " +
-                "If you think this is a bug in PDFsharp, please send us your PDF file.", (int)ch);
-            ThrowParserException(message);
-        }
-        public static void HandleUnexpectedToken(string token)
-        {
-            string message = string.Format(CultureInfo.InvariantCulture,
-                "Unexpected token '{0}' in PDF stream. The file may be corrupted. " +
-                "If you think this is a bug in PDFsharp, please send us your PDF file.", token);
-            ThrowParserException(message);
-        }
     }
 
 }

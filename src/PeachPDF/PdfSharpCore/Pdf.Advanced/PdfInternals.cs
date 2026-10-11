@@ -120,18 +120,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
-        /// Maps the specified external object to the substitute object in this document.
-        /// Returns null if no such object exists.
-        /// </summary>
-        public PdfObject MapExternalObject(PdfObject externalObject)
-        {
-            PdfFormXObjectTable table = _document.FormTable;
-            PdfImportedObjectTable iot = table.GetImportedObjectTable(externalObject.Owner);
-            PdfReference reference = iot[externalObject.ObjectID];
-            return reference == null ? null : reference.Value;
-        }
-
-        /// <summary>
         /// Returns the PdfReference of the specified object, or null, if the object is not in the
         /// document's object table.
         /// </summary>

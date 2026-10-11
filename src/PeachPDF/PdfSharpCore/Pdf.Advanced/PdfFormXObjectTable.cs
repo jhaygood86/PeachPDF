@@ -37,17 +37,12 @@ using System.Diagnostics;
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
-    /// Contains all external PDF files from which PdfFormXObjects are imported into the current document.
+    /// Creates the PdfFormXObject for each form drawn into the current document.
     /// </summary>
     internal sealed class PdfFormXObjectTable : PdfResourceTable
     {
-        // The name PdfFormXObjectTable is technically not correct, because in contrast to PdfFontTable
-        // or PdfImageTable this class holds no PdfFormXObject objects. Actually it holds instances of
-        // the class ImportedObjectTable, one for each external document. The PdfFormXObject instances
-        // are not cached, because they hold a transformation matrix that make them unique. If the user
-        // wants to use a particual page of a PdfFormXObject more than once, he must reuse the object
-        // before he changes the PageNumber or the transformation matrix. In other words this class
-        // caches the indirect objects of an external form, not the form itself.
+        // Holds no PdfFormXObject objects: they are not cached, because each holds a transformation matrix
+        // that makes it unique. This class only creates the PdfFormXObject for a form on demand.
 
         /// <summary>
         /// Initializes a new instance of this class, which is a singleton for each document.
@@ -77,72 +72,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Debug.Assert(form.GetType() == typeof(XForm));
             form._pdfForm = new PdfFormXObject(Owner, form);
             return form._pdfForm;
-        }
-
-        /// <summary>
-        /// Gets the imported object table.
-        /// </summary>
-        public PdfImportedObjectTable GetImportedObjectTable(PdfDocument document)
-        {
-            if (document == null)
-                throw new ArgumentNullException("document");
-
-            // Is the external PDF file from which is imported already known for the current document?
-            Selector selector = new Selector(document);
-            PdfImportedObjectTable importedObjectTable;
-            if (!_forms.TryGetValue(selector, out importedObjectTable))
-            {
-                // Create new table for document.
-                importedObjectTable = new PdfImportedObjectTable(Owner, document);
-                _forms[selector] = importedObjectTable;
-            }
-            return importedObjectTable;
-        }
-
-        /// <summary>
-        /// Map from Selector to PdfImportedObjectTable.
-        /// </summary>
-        readonly Dictionary<Selector, PdfImportedObjectTable> _forms = new Dictionary<Selector, PdfImportedObjectTable>();
-
-        /// <summary>
-        /// A collection of information that uniquely identifies a particular ImportedObjectTable.
-        /// </summary>
-        internal class Selector
-        {
-            /// <summary>
-            /// Initializes a new instance of FormSelector from an XPdfForm.
-            /// </summary>
-            public Selector(XForm form)
-            {
-                // HACK: just use full path to identify
-                _path = form._path.ToLowerInvariant();
-            }
-
-            public Selector(PdfDocument document)
-            {
-                _path = "*" + document.Guid.ToString("B");
-                _path = _path.ToLowerInvariant();
-            }
-
-            public string Path
-            {
-                get { return _path; }
-                set { _path = value; }
-            }
-            string _path;
-
-            public override bool Equals(object? obj)
-            {
-                Selector selector = obj as Selector;
-                if (obj == null)
-                    return false;
-                return _path == selector._path; ;
-            }
-
-            public override int GetHashCode()
-            {
-                return _path.GetHashCode();
-            }
         }
     }
 }
