@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.Integration
             container.Location = new PaintPoint(0, 0);
             container.MaxSize = new Size(500, 0);
 
-            var measure = XGraphics.CreateMeasureContext(new Size(500, 500), XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(new Size(500, 500));
             using (var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0))
             {
                 await container.PerformLayout(measureGraphics);

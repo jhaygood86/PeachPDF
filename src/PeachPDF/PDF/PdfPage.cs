@@ -263,7 +263,7 @@ namespace PeachPDF.PDF
         /// Gets or sets the height of the page. If orientation is Landscape, this function applies to
         /// the width.
         /// </summary>
-        public XUnit Height
+        public double Height
         {
             get
             {
@@ -285,7 +285,7 @@ namespace PeachPDF.PDF
         /// Gets or sets the width of the page. If orientation is Landscape, this function applies to
         /// the height.
         /// </summary>
-        public XUnit Width
+        public double Width
         {
             get
             {
@@ -606,15 +606,15 @@ namespace PeachPDF.PDF
                 // /ArtBox[8.50394 8.50394 603.78 850.394] 3 3 213 300
                 // /TrimBox[8.50394 8.50394 603.78 850.394]
 
-                double width = _trimMargins.Left.Point + Width.Point + _trimMargins.Right.Point;
-                double height = _trimMargins.Top.Point + Height.Point + _trimMargins.Bottom.Point;
+                double width = _trimMargins.Left + Width + _trimMargins.Right;
+                double height = _trimMargins.Top + Height + _trimMargins.Bottom;
 
                 MediaBox = new PdfRectangle(0, 0, width, height);
                 CropBox = new PdfRectangle(0, 0, width, height);
                 BleedBox = new PdfRectangle(0, 0, width, height);
 
-                PdfRectangle rect = new PdfRectangle(_trimMargins.Left.Point, _trimMargins.Top.Point,
-                  width - _trimMargins.Right.Point, height - _trimMargins.Bottom.Point);
+                PdfRectangle rect = new PdfRectangle(_trimMargins.Left, _trimMargins.Top,
+                  width - _trimMargins.Right, height - _trimMargins.Bottom);
                 TrimBox = rect;
                 ArtBox = rect.Clone();
             }

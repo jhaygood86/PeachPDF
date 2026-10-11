@@ -65,10 +65,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
             landscape.Width = 841.89;
             landscape.Height = 595.28;
 
-            Assert.Equal(595.28, portrait.Width.Point, 2);
-            Assert.Equal(841.89, portrait.Height.Point, 2);
-            Assert.Equal(841.89, landscape.Width.Point, 2);
-            Assert.Equal(595.28, landscape.Height.Point, 2);
+            Assert.Equal(595.28, portrait.Width, 2);
+            Assert.Equal(841.89, portrait.Height, 2);
+            Assert.Equal(841.89, landscape.Width, 2);
+            Assert.Equal(595.28, landscape.Height, 2);
         }
 
         [Fact]

@@ -542,50 +542,26 @@ namespace PeachPDF.PDF.Rendering
                     x += rect.Width - width;
                     break;
             }
-            if (Gfx.PageDirection == XPageDirection.Downwards)
+            switch (format.LineAlignment)
             {
-                switch (format.LineAlignment)
-                {
-                    case XLineAlignment.Near:
-                        y += cyAscent;
-                        break;
+                case XLineAlignment.Near:
+                    y += cyAscent;
+                    break;
 
-                    case XLineAlignment.Center:
-                        // TODO: Use CapHeight. PDFlib also uses 3/4 of ascent
-                        y += (cyAscent * 3 / 4) / 2 + rect.Height / 2;
-                        break;
+                case XLineAlignment.Center:
+                    // TODO: Use CapHeight. PDFlib also uses 3/4 of ascent
+                    y += (cyAscent * 3 / 4) / 2 + rect.Height / 2;
+                    break;
 
-                    case XLineAlignment.Far:
-                        y += -cyDescent + rect.Height;
-                        break;
+                case XLineAlignment.Far:
+                    y += -cyDescent + rect.Height;
+                    break;
 
-                    case XLineAlignment.BaseLine:
-                        // Nothing to do.
-                        break;
-                }
+                case XLineAlignment.BaseLine:
+                    // Nothing to do.
+                    break;
             }
-            else
-            {
-                switch (format.LineAlignment)
-                {
-                    case XLineAlignment.Near:
-                        y += cyDescent;
-                        break;
-
-                    case XLineAlignment.Center:
-                        // TODO: Use CapHeight. PDFlib also uses 3/4 of ascent
-                        y += -(cyAscent * 3 / 4) / 2 + rect.Height / 2;
-                        break;
-
-                    case XLineAlignment.Far:
-                        y += -cyAscent + rect.Height;
-                        break;
-
-                    case XLineAlignment.BaseLine:
-                        // Nothing to do.
-                        break;
-                }
-            }
+            
 
             const string format2 = Config.SignificantFigures4;
 
@@ -599,7 +575,7 @@ namespace PeachPDF.PDF.Rendering
                 // font-palette (index + entry overrides), when present, selects the CPAL palette.
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, font, brush, x, y,
-                    letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
+                    letterSpacing, paletteIndex, fontPalette?.Overrides);
                 colorPainter.Paint(s, colorGlyphs!, logicalText);
             }
             else
@@ -711,9 +687,7 @@ namespace PeachPDF.PDF.Rendering
                 double underlinePosition = lineSpace * metrics.UnderlinePosition / font.CellSpace;
                 double underlineThickness = lineSpace * metrics.UnderlineThickness / font.CellSpace;
                 //DrawRectangle(null, brush, x, y - underlinePosition, width, underlineThickness);
-                double underlineRectY = Gfx.PageDirection == XPageDirection.Downwards
-                    ? y - underlinePosition
-                    : y + underlinePosition - underlineThickness;
+                double underlineRectY = y - underlinePosition;
                 DrawRectangle(null, brush, x, underlineRectY, width, underlineThickness);
             }
 
@@ -722,9 +696,7 @@ namespace PeachPDF.PDF.Rendering
                 double strikeoutPosition = lineSpace * metrics.StrikeoutPosition / font.CellSpace;
                 double strikeoutSize = lineSpace * metrics.StrikeoutThickness / font.CellSpace;
                 //DrawRectangle(null, brush, x, y - strikeoutPosition - strikeoutSize, width, strikeoutSize);
-                double strikeoutRectY = Gfx.PageDirection == XPageDirection.Downwards
-                    ? y - strikeoutPosition
-                    : y + strikeoutPosition - strikeoutSize;
+                double strikeoutRectY = y - strikeoutPosition;
                 DrawRectangle(null, brush, x, strikeoutRectY, width, strikeoutSize);
             }
         }
@@ -806,7 +778,6 @@ namespace PeachPDF.PDF.Rendering
         {
             const string format2 = Config.SignificantFigures4;
             double scale = font.Size / font.UnitsPerEm;
-            bool pageDownwards = Gfx.PageDirection == XPageDirection.Downwards;
 
             double penX = startPos.X;
             double penY = startPos.Y;
@@ -818,7 +789,7 @@ namespace PeachPDF.PDF.Rendering
                 // Font em-square is y-up; a downwards page is y-down, so a positive OpenType YOffset
                 // (moves a glyph up in font space) subtracts in downwards-page Y, adds otherwise -
                 // the same convention ColorGlyphPainter.Placement uses for its own Y offset.
-                double glyphY = pageDownwards ? penY - glyph.YOffset * scale : penY + glyph.YOffset * scale;
+                double glyphY = penY - glyph.YOffset * scale;
 
                 PaintPoint glyphPos = WorldToView(new PaintPoint(glyphX, glyphY));
                 AdjustTdOffset(ref glyphPos, 0, null);
@@ -923,16 +894,9 @@ namespace PeachPDF.PDF.Rendering
             string name = Realize(image, width, height);
             if (!(image is XForm))
             {
-                if (_gfx.PageDirection == XPageDirection.Downwards)
-                {
-                    AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                        x, y + height, width, height, name);
-                }
-                else
-                {
-                    AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                        x, y, width, height, name);
-                }
+                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
+                    x, y + height, width, height, name);
+                
             }
             else
             {
@@ -948,16 +912,9 @@ namespace PeachPDF.PDF.Rendering
 
                 if (cx != 0 && cy != 0)
                 {
-                    if (_gfx.PageDirection == XPageDirection.Downwards)
-                    {
-                        AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm 100 Tz {4} Do Q\n",
-                            x, y + height, cx, cy, name);
-                    }
-                    else
-                    {
-                        AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                            x, y, cx, cy, name);
-                    }
+                    AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm 100 Tz {4} Do Q\n",
+                        x, y + height, cx, cy, name);
+                    
                 }
             }
         }
@@ -971,7 +928,7 @@ namespace PeachPDF.PDF.Rendering
         /// has. (Silently dropping srcRect here is what once made every <c>border-image</c> slice paint the
         /// entire source squashed into its own ninth of the frame.)
         /// </summary>
-        public void DrawImage(XImage image, Rect destRect, Rect srcRect, XGraphicsUnit srcUnit)
+        public void DrawImage(XImage image, Rect destRect, Rect srcRect)
         {
             const string format = Config.SignificantFigures4;
 
@@ -983,16 +940,9 @@ namespace PeachPDF.PDF.Rendering
             string name = Realize(image, width, height);
             if (!(image is XForm))
             {
-                if (_gfx.PageDirection == XPageDirection.Downwards)
-                {
-                    AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do\nQ\n",
-                        x, y + height, width, height, name);
-                }
-                else
-                {
-                    AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                        x, y, width, height, name);
-                }
+                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do\nQ\n",
+                    x, y + height, width, height, name);
+                
             }
             else
             {
@@ -1008,16 +958,9 @@ namespace PeachPDF.PDF.Rendering
 
                 if (cx != 0 && cy != 0)
                 {
-                    if (_gfx.PageDirection == XPageDirection.Downwards)
-                    {
-                        AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                            x, y + height, cx, cy, name);
-                    }
-                    else
-                    {
-                        AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                            x, y, cx, cy, name);
-                    }
+                    AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
+                        x, y + height, cx, cy, name);
+                    
                 }
             }
         }
@@ -1047,7 +990,7 @@ namespace PeachPDF.PDF.Rendering
             RestoreState(state.InternalState);
         }
 
-        public void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect, XGraphicsUnit unit)
+        public void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect)
         {
             // Before saving, the current transformation matrix must be completely realized.
             BeginGraphicMode();
@@ -1068,7 +1011,7 @@ namespace PeachPDF.PDF.Rendering
 
         #region Transformation
 
-        //public void SetPageTransform(XPageDirection direction, PaintPoint origion, XGraphicsUnit unit)
+        //public void SetPageTransform(XPageDirection direction, PaintPoint origion)
         //{
         //  if (_gfxStateStack.Count > 0)
         //    throw new InvalidOperationException("PageTransformation can be modified only when the graphics stack is empty.");
@@ -1701,10 +1644,7 @@ namespace PeachPDF.PDF.Rendering
             // In PDFsharp 1.4 I implement a revised technique that does not need text mirroring any more.
 
             DefaultViewMatrix = Matrix3x2.Identity;
-            if (_gfx.PageDirection == XPageDirection.Downwards)
-                BeginPageDownwards();
-            else
-                BeginPageUpwards();
+            BeginPageDownwards();
         }
 
         void BeginPageDownwards()
@@ -1714,15 +1654,13 @@ namespace PeachPDF.PDF.Rendering
             PaintPoint trimOffset = new PaintPoint();
             if (_page != null && _page.TrimMargins.AreSet)
             {
-                PageHeightPt += _page.TrimMargins.Top.Point + _page.TrimMargins.Bottom.Point;
-                trimOffset = new PaintPoint(_page.TrimMargins.Left.Point, _page.TrimMargins.Top.Point);
+                PageHeightPt += _page.TrimMargins.Top + _page.TrimMargins.Bottom;
+                trimOffset = new PaintPoint(_page.TrimMargins.Left, _page.TrimMargins.Top);
             }
 
-            ApplyPageUnitScale();
 
             if (trimOffset != new PaintPoint())
             {
-                Debug.Assert(_gfx.PageUnit == XGraphicsUnit.Point, "With TrimMargins set the page units must be Point. Ohter cases nyi.");
                 DefaultViewMatrix = PdfMatrix.Translation(trimOffset.X, -trimOffset.Y) * DefaultViewMatrix;
             }
 
@@ -1738,35 +1676,6 @@ namespace PeachPDF.PDF.Rendering
                 AppendFormatArgs("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
                              cm.M11, cm.M12, cm.M21, cm.M22, cm.M31, cm.M32);
             }
-        }
-
-        void BeginPageUpwards()
-        {
-            ApplyPageUnitScale();
-
-            // Save initial graphic state.
-            SaveState();
-            // Set page transformation.
-            Matrix3x2 cm = DefaultViewMatrix;
-            AppendMatrix(cm.M11, cm.M12, cm.M21, cm.M22, cm.M31, cm.M32);
-        }
-
-        /// <summary>
-        /// Scales DefaultViewMatrix from the current XGraphics page unit to points, in place.
-        /// </summary>
-        void ApplyPageUnitScale()
-        {
-            double factor = _gfx.PageUnit switch
-            {
-                XGraphicsUnit.Presentation => XUnit.PresentationFactor,
-                XGraphicsUnit.Inch => XUnit.InchFactor,
-                XGraphicsUnit.Millimeter => XUnit.MillimeterFactor,
-                XGraphicsUnit.Centimeter => XUnit.CentimeterFactor,
-                _ => 1.0, // XGraphicsUnit.Point - factor is 1.
-            };
-
-            if (factor != 1.0)
-                DefaultViewMatrix = PdfMatrix.Scaling(factor, factor) * DefaultViewMatrix;
         }
 
         /// <summary>
@@ -2116,7 +2025,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         /// <remarks>
         /// The <c>gs</c> that activates the mask is emitted INSIDE the same <c>q ... cm ... Do ... Q</c>
-        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(XImage, Rect, Rect, XGraphicsUnit)"/>'s
+        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(XImage, Rect, Rect)"/>'s
         /// own Form XObject placement exactly), rather than as a separate "push before / pop after"
         /// pair relying on the ambient CTM. This distinction matters: a Form XObject created via
         /// <c>XGraphics.FromForm</c> (as SVG's <c>&lt;mask&gt;</c>/<c>&lt;pattern&gt;</c> "tile"
@@ -2200,16 +2109,9 @@ namespace PeachPDF.PDF.Rendering
             if (cx == 0 || cy == 0)
                 return;
 
-            if (_gfx.PageDirection == XPageDirection.Downwards)
-            {
-                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
-                    x, y + height, cx, cy, name);
-            }
-            else
-            {
-                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
-                    x, y, cx, cy, name);
-            }
+            AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                x, y + height, cx, cy, name);
+            
         }
 
         /// <summary>
@@ -2269,9 +2171,7 @@ namespace PeachPDF.PDF.Rendering
             double cx = width / image.PointWidth;
             double cy = height / image.PointHeight;
 
-            // XGraphics.PageDirection can only ever be Downwards in this fork (the setter throws for
-            // any other value - see XGraphics.PageDirection), unlike DrawImageMasked just above (which
-            // predates that constraint being tightened) - so there's only one placement to emit here.
+            // The page is always laid out downwards, so there is only one placement to emit here.
             AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
                 x, y + height, cx, cy, name);
         }

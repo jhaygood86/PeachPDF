@@ -484,7 +484,7 @@ h2, h3 { margin: 6pt 0; }
             container.MarginTop = 20;
             container.MarginBottom = 20;
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.TestSupport
 
         internal InkAwareRecordingGraphics(PdfSharpAdapter adapter, double pixelsPerPoint = 1.0)
         {
-            _measure = XGraphics.CreateMeasureContext(new Size(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
+            _measure = XGraphics.CreateMeasureContext(new Size(595, 842));
             _real = new GraphicsAdapter(adapter, _measure, pixelsPerPoint);
         }
 

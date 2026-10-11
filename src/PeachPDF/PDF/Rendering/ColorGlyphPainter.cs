@@ -45,7 +45,7 @@ namespace PeachPDF.PDF.Rendering
         private readonly double _baselineY;
 
         public ColorGlyphPainter(XGraphicsPdfRenderer renderer, XFont font,
-            XBrush brush, double baselineX, double baselineY, double letterSpacing, XPageDirection pageDirection,
+            XBrush brush, double baselineX, double baselineY, double letterSpacing,
             int paletteIndex = 0, IReadOnlyDictionary<int, XColor>? overrides = null)
         {
             _renderer = renderer;
@@ -55,7 +55,7 @@ namespace PeachPDF.PDF.Rendering
             _textBrush = brush;
             _scale = font.Size / _typeface.Metrics.UnitsPerEm;
             _letterSpacing = letterSpacing;
-            _pageDownwards = pageDirection == XPageDirection.Downwards;
+            _pageDownwards = true;
             _foreground = brush is XSolidBrush solid ? solid.PaintColor : XColors.Black;
             _paletteIndex = paletteIndex;
             _overrides = overrides is { Count: > 0 } ? overrides : null;

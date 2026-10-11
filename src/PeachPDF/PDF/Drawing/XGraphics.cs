@@ -52,7 +52,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Initializes a new instance of the XGraphics class for drawing on a PDF page.
         /// </summary>
-        XGraphics(PdfPage page, XGraphicsPdfPageOptions options, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        XGraphics(PdfPage page, XGraphicsPdfPageOptions options)
         {
             if (page == null)
                 throw new ArgumentNullException("page");
@@ -85,104 +85,16 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             page.RenderContent = content;
             _renderer = new XGraphicsPdfRenderer(page, this, options);
             _pageSizePoints = new Size(page.Width, page.Height);
-            switch (pageUnit)
-            {
-                case XGraphicsUnit.Point:
-                    _pageSize = new Size(page.Width, page.Height);
-                    break;
-
-                case XGraphicsUnit.Inch:
-                    _pageSize = new Size(XUnit.FromPoint(page.Width).Inch, XUnit.FromPoint(page.Height).Inch);
-                    break;
-
-                case XGraphicsUnit.Millimeter:
-                    _pageSize = new Size(XUnit.FromPoint(page.Width).Millimeter, XUnit.FromPoint(page.Height).Millimeter);
-                    break;
-
-                case XGraphicsUnit.Centimeter:
-                    _pageSize = new Size(XUnit.FromPoint(page.Width).Centimeter, XUnit.FromPoint(page.Height).Centimeter);
-                    break;
-
-                case XGraphicsUnit.Presentation:
-                    _pageSize = new Size(XUnit.FromPoint(page.Width).Presentation, XUnit.FromPoint(page.Height).Presentation);
-                    break;
-
-                default:
-                    throw new NotImplementedException("unit");
-            }
-            _pageUnit = pageUnit;
-            _pageDirection = pageDirection;
+            _pageSize = new Size(page.Width, page.Height);
 
             Initialize();
         }
 
-        XGraphics(Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        XGraphics(Size size)
         {
             _gsStack = new GraphicsStateStack(this);
             _pageSizePoints = new Size(size.Width, size.Height);
-            switch (pageUnit)
-            {
-                case XGraphicsUnit.Point:
-                    _pageSize = new Size(size.Width, size.Height);
-                    break;
-
-                case XGraphicsUnit.Inch:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Inch, XUnit.FromPoint(size.Height).Inch);
-                    break;
-
-                case XGraphicsUnit.Millimeter:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Millimeter, XUnit.FromPoint(size.Height).Millimeter);
-                    break;
-
-                case XGraphicsUnit.Centimeter:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Centimeter, XUnit.FromPoint(size.Height).Centimeter);
-                    break;
-
-                case XGraphicsUnit.Presentation:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Presentation, XUnit.FromPoint(size.Height).Presentation);
-                    break;
-
-                default:
-                    throw new NotImplementedException("unit");
-            }
-            _pageUnit = pageUnit;
-            _pageDirection = pageDirection;
-
-            Initialize();
-        }
-
-        XGraphics(IXGraphicsRenderer renderer, Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
-        {
-            _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
-            _gsStack = new GraphicsStateStack(this);
-            _pageSizePoints = new Size(size.Width, size.Height);
-            switch (pageUnit)
-            {
-                case XGraphicsUnit.Point:
-                    _pageSize = new Size(size.Width, size.Height);
-                    break;
-
-                case XGraphicsUnit.Inch:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Inch, XUnit.FromPoint(size.Height).Inch);
-                    break;
-
-                case XGraphicsUnit.Millimeter:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Millimeter, XUnit.FromPoint(size.Height).Millimeter);
-                    break;
-
-                case XGraphicsUnit.Centimeter:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Centimeter, XUnit.FromPoint(size.Height).Centimeter);
-                    break;
-
-                case XGraphicsUnit.Presentation:
-                    _pageSize = new Size(XUnit.FromPoint(size.Width).Presentation, XUnit.FromPoint(size.Height).Presentation);
-                    break;
-
-                default:
-                    throw new NotImplementedException($"{nameof(pageUnit)}: {pageUnit}");
-            }
-            _pageUnit = pageUnit;
-            _pageDirection = pageDirection;
+            _pageSize = new Size(size.Width, size.Height);
 
             Initialize();
         }
@@ -210,14 +122,9 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Creates the measure context. This is a graphics context created only for querying measures of text.
         /// Drawing on a measure context has no effect.
         /// </summary>
-        public static XGraphics CreateMeasureContext(Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
+        public static XGraphics CreateMeasureContext(Size size)
         {
-            return new XGraphics(size, pageUnit, pageDirection);
-        }
-
-        public static XGraphics FromRenderer(IXGraphicsRenderer renderer, Size size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
-        {
-            return new XGraphics(renderer, size, pageUnit, pageDirection);
+            return new XGraphics(size);
         }
 
         /// <summary>
@@ -225,23 +132,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public static XGraphics FromPdfPage(PdfPage page)
         {
-            return new XGraphics(page, XGraphicsPdfPageOptions.Append, XGraphicsUnit.Point, XPageDirection.Downwards);
-        }
-
-        /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
-        /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page, XGraphicsUnit unit)
-        {
-            return new XGraphics(page, XGraphicsPdfPageOptions.Append, unit, XPageDirection.Downwards);
-        }
-
-        /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
-        /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page, XPageDirection pageDirection)
-        {
-            return new XGraphics(page, XGraphicsPdfPageOptions.Append, XGraphicsUnit.Point, pageDirection);
+            return new XGraphics(page, XGraphicsPdfPageOptions.Append);
         }
 
         /// <summary>
@@ -249,31 +140,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public static XGraphics FromPdfPage(PdfPage page, XGraphicsPdfPageOptions options)
         {
-            return new XGraphics(page, options, XGraphicsUnit.Point, XPageDirection.Downwards);
-        }
-
-        /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
-        /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page, XGraphicsPdfPageOptions options, XPageDirection pageDirection)
-        {
-            return new XGraphics(page, options, XGraphicsUnit.Point, pageDirection);
-        }
-
-        /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
-        /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page, XGraphicsPdfPageOptions options, XGraphicsUnit unit)
-        {
-            return new XGraphics(page, options, unit, XPageDirection.Downwards);
-        }
-
-        /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
-        /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page, XGraphicsPdfPageOptions options, XGraphicsUnit unit, XPageDirection pageDirection)
-        {
-            return new XGraphics(page, options, unit, pageDirection);
+            return new XGraphics(page, options);
         }
 
         /// <summary>
@@ -299,14 +166,11 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             PaintPoint trimOffset = new PaintPoint();
             if (targetPage != null && targetPage.TrimMargins.AreSet)
             {
-                pageHeight += targetPage.TrimMargins.Top.Point + targetPage.TrimMargins.Bottom.Point;
-                trimOffset = new PaintPoint(targetPage.TrimMargins.Left.Point, targetPage.TrimMargins.Top.Point);
+                pageHeight += targetPage.TrimMargins.Top + targetPage.TrimMargins.Bottom;
+                trimOffset = new PaintPoint(targetPage.TrimMargins.Left, targetPage.TrimMargins.Top);
             }
 
             Matrix3x2 matrix = Matrix3x2.Identity;
-            if (_pageDirection != XPageDirection.Downwards)
-                matrix = PdfMatrix.Create(1, 0, 0, -1, 0, pageHeight) * matrix;
-
             if (trimOffset != new PaintPoint())
                 matrix = PdfMatrix.Translation(trimOffset.X, -trimOffset.Y) * matrix;
 
@@ -353,37 +217,6 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             set { _muh = value; }
         }
         PdfFontEncoding _muh;
-
-        /// <summary>
-        /// Gets or sets the unit of measure used for page coordinates.
-        /// CURRENTLY ONLY POINT IS IMPLEMENTED.
-        /// </summary>
-        public XGraphicsUnit PageUnit
-        {
-            get { return _pageUnit; }
-            //set
-            //{
-            //  // TODO: other page units
-            //  if (value != XGraphicsUnit.Point)
-            //    throw new NotImplementedException("PageUnit must be XGraphicsUnit.Point in current implementation.");
-            //}
-        }
-        readonly XGraphicsUnit _pageUnit;
-
-        /// <summary>
-        /// Gets or sets the a value indicating in which direction y-value grow.
-        /// </summary>
-        public XPageDirection PageDirection
-        {
-            get { return _pageDirection; }
-            set
-            {
-                // Is there really anybody who needes the concept of XPageDirection.Upwards?
-                if (value != XPageDirection.Downwards)
-                    throw new NotImplementedException("PageDirection must be XPageDirection.Downwards in current implementation.");
-            }
-        }
-        readonly XPageDirection _pageDirection;
 
         /// <summary>
         /// Gets the current page origin. Setting the origin is not yet implemented.
@@ -1306,13 +1139,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         }
 
         // TODO: calculate destination size
-        //public void DrawImage(XImage image, double x, double y, GdiRectF srcRect, XGraphicsUnit srcUnit)
-        //public void DrawImage(XImage image, double x, double y, Rect srcRect, XGraphicsUnit srcUnit)
+        //public void DrawImage(XImage image, double x, double y, GdiRectF srcRect)
+        //public void DrawImage(XImage image, double x, double y, Rect srcRect)
 
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, Rect destRect, Rect srcRect, XGraphicsUnit srcUnit)
+        public void DrawImage(XImage image, Rect destRect, Rect srcRect)
         {
             if (image == null)
                 throw new ArgumentNullException("image");
@@ -1320,7 +1153,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             CheckXPdfFormConsistence(image);
 
             if (_renderer != null)
-                _renderer.DrawImage(image, destRect, srcRect, srcUnit);
+                _renderer.DrawImage(image, destRect, srcRect);
         }
 
         //TODO?
@@ -1411,19 +1244,15 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public XGraphicsContainer BeginContainer()
         {
-            return BeginContainer(new Rect(0, 0, 1, 1), new Rect(0, 0, 1, 1), XGraphicsUnit.Point);
+            return BeginContainer(new Rect(0, 0, 1, 1), new Rect(0, 0, 1, 1));
         }
 
         /// <summary>
         /// Saves a graphics container with the current state of this XGraphics and 
         /// opens and uses a new graphics container.
         /// </summary>
-        public XGraphicsContainer BeginContainer(Rect dstrect, Rect srcrect, XGraphicsUnit unit)
+        public XGraphicsContainer BeginContainer(Rect dstrect, Rect srcrect)
         {
-            // TODO: unit
-            if (unit != XGraphicsUnit.Point)
-                throw new ArgumentException("The current implementation supports XGraphicsUnit.Point only.", "unit");
-
             XGraphicsContainer xContainer = null;
             xContainer = new XGraphicsContainer();
 
@@ -1433,7 +1262,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             _gsStack.Push(iState);
 
             if (_renderer != null)
-                _renderer.BeginContainer(xContainer, dstrect, srcrect, unit);
+                _renderer.BeginContainer(xContainer, dstrect, srcrect);
 
             Matrix3x2 matrix = Matrix3x2.Identity;
             double scaleX = dstrect.Width / srcrect.Width;

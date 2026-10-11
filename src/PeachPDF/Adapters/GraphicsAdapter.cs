@@ -594,7 +594,7 @@ namespace PeachPDF.Adapters
         {
             var xImage = ((ImageAdapter)image).Image;
             _g.DrawImage(xImage, Utils.ToPoints(rect, PixelsPerPoint),
-                new Rect(0, 0, xImage.PointWidth, xImage.PointHeight), XGraphicsUnit.Point);
+                new Rect(0, 0, xImage.PointWidth, xImage.PointHeight));
         }
 
         /// <summary>

@@ -465,7 +465,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MarginTop = 20;
             container.MarginBottom = 20;
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
             // First layout pass
@@ -650,7 +650,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MarginTop = 20;
             container.MarginBottom = 20;
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
             await container.PerformLayout(graphics);
@@ -1165,7 +1165,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MarginTop = marginTop;
             container.MarginBottom = marginBottom;
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
             Assert.NotNull(container.Root);

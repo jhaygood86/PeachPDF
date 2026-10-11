@@ -52,8 +52,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var gfx = XGraphics.FromPdfPage(page);
 
             // Draw two lines with a red default pen.
-            var width = page.Width.Point;
-            var height = page.Height.Point;
+            var width = page.Width;
+            var height = page.Height;
             gfx.DrawLine(XPens.Red, 0, 0, width, height);
             gfx.DrawLine(XPens.Red, width, 0, 0, height);
 

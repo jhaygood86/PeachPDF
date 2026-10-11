@@ -284,7 +284,7 @@ namespace PeachPDF
                 orgPageSize = container.CssPageSize.Value;
             }
 
-            var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(container.PageSize);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
@@ -326,7 +326,7 @@ namespace PeachPDF
                     await SetContent(container, config, html, cssData, orgPageSize);
 
                     measure?.Dispose();
-                    measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+                    measure = XGraphics.CreateMeasureContext(container.PageSize);
                 }
             }
 
@@ -679,7 +679,7 @@ namespace PeachPDF
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var measure = XGraphics.CreateMeasureContext(orgPageSize);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 

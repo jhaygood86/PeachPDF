@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             await using (var stream = File.OpenRead(fontPath))
                 await adapter.AddFont(stream, family);
 
-            var measure = XGraphics.CreateMeasureContext(new Size(600, 600), XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(new Size(600, 600));
             var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             var font = adapter.GetFont(family, size, PaintFontStyle.Regular)!;
             return (graphics, font);

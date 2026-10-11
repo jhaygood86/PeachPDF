@@ -350,7 +350,7 @@ isPseudoBefore: true,
             container.PageSize = Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

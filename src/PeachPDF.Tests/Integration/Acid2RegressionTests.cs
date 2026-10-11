@@ -888,7 +888,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PeachPDF.PDF.Drawing.XGraphics.CreateMeasureContext(
-                size, PeachPDF.PDF.Drawing.XGraphicsUnit.Point, PeachPDF.PDF.Drawing.XPageDirection.Downwards);
+                size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

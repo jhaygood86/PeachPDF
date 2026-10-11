@@ -103,8 +103,7 @@ namespace PeachPDF.PDF.Rendering
                 cached.Form.PointWidth * scale,
                 cached.Form.PointHeight * scale);
 
-            _gfx.DrawImage(cached.Form, destRect, new Rect(0, 0, cached.Form.PointWidth, cached.Form.PointHeight),
-                XGraphicsUnit.Point);
+            _gfx.DrawImage(cached.Form, destRect, new Rect(0, 0, cached.Form.PointWidth, cached.Form.PointHeight));
             return true;
         }
 

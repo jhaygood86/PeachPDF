@@ -524,7 +524,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser("font-size: 16px;");
             var adapter = new PdfSharpAdapter();
-            var measure = XGraphics.CreateMeasureContext(new Size(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(new Size(595, 842));
             using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
 
             var width = CssUtils.WhiteSpace(graphics, box);
@@ -1309,7 +1309,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
@@ -1363,7 +1363,7 @@ div {{ width: 200px; height: 100px; {css} }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = XGraphics.CreateMeasureContext(size);
             using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

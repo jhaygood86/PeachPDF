@@ -526,10 +526,7 @@ namespace PeachPDF.PDF.Rendering
             string fontName = _renderer.GetFontName(font, out _realizedFont);
             if (fontName != _realizedFontName || _realizedFontSize != font.Size)
             {
-                if (_renderer.Gfx.PageDirection == XPageDirection.Downwards)
-                    _renderer.AppendFormatFont("{0} {1:" + format + "} Tf\n", fontName, font.Size);
-                else
-                    _renderer.AppendFormatFont("{0} {1:" + format + "} Tf\n", fontName, font.Size);
+                _renderer.AppendFormatFont("{0} {1:" + format + "} Tf\n", fontName, font.Size);
                 _realizedFontName = fontName;
                 _realizedFontSize = font.Size;
             }
@@ -597,13 +594,11 @@ namespace PeachPDF.PDF.Rendering
         public void AddTransform(Matrix3x2 value)
         {
             Matrix3x2 transform = value;
-            if (_renderer.Gfx.PageDirection == XPageDirection.Downwards)
-            {
-                // Take chirality into account and
-                // invert the direction of rotation.
-                transform.M12 = -value.M12;
-                transform.M21 = -value.M21;
-            }
+            // Take chirality into account and
+            // invert the direction of rotation.
+            transform.M12 = -value.M12;
+            transform.M21 = -value.M21;
+            
             UnrealizedCtm = transform * UnrealizedCtm;
 
             WorldTransform = value * WorldTransform;

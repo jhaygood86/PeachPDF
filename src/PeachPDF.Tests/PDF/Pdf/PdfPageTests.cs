@@ -75,7 +75,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
 
             page.Height = 500;
 
-            Assert.Equal(500, page.Height.Point, 3);
+            Assert.Equal(500, page.Height, 3);
             Assert.Equal(PageSize.Undefined, page.Size);
         }
 
@@ -87,7 +87,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
 
             page.Width = 400;
 
-            Assert.Equal(400, page.Width.Point, 3);
+            Assert.Equal(400, page.Width, 3);
             Assert.Equal(PageSize.Undefined, page.Size);
         }
 
@@ -161,10 +161,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
 
             page.TrimMargins.All = 10;
 
-            Assert.Equal(10, page.TrimMargins.Left.Point, 3);
-            Assert.Equal(10, page.TrimMargins.Right.Point, 3);
-            Assert.Equal(10, page.TrimMargins.Top.Point, 3);
-            Assert.Equal(10, page.TrimMargins.Bottom.Point, 3);
+            Assert.Equal(10, page.TrimMargins.Left, 3);
+            Assert.Equal(10, page.TrimMargins.Right, 3);
+            Assert.Equal(10, page.TrimMargins.Top, 3);
+            Assert.Equal(10, page.TrimMargins.Bottom, 3);
         }
 
         [Fact]

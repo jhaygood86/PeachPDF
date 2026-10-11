@@ -54,7 +54,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Sets all four crop margins simultaneously.
         /// </summary>
-        public XUnit All
+        public double All
         {
             set
             {
@@ -68,49 +68,49 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets or sets the left crop margin.
         /// </summary>
-        public XUnit Left
+        public double Left
         {
             get { return _left; }
             set { _left = value; }
         }
-        XUnit _left;
+        double _left;
 
         /// <summary>
         /// Gets or sets the right crop margin.
         /// </summary>
-        public XUnit Right
+        public double Right
         {
             get { return _right; }
             set { _right = value; }
         }
-        XUnit _right;
+        double _right;
 
         /// <summary>
         /// Gets or sets the top crop margin.
         /// </summary>
-        public XUnit Top
+        public double Top
         {
             get { return _top; }
             set { _top = value; }
         }
-        XUnit _top;
+        double _top;
 
         /// <summary>
         /// Gets or sets the bottom crop margin.
         /// </summary>
-        public XUnit Bottom
+        public double Bottom
         {
             get { return _bottom; }
             set { _bottom = value; }
         }
-        XUnit _bottom;
+        double _bottom;
 
         /// <summary>
         /// Gets a value indicating whether this instance has at least one margin with a value other than zero.
         /// </summary>
         public bool AreSet
         {
-            get { return _left.Value != 0 || _right.Value != 0 || _top.Value != 0 || _bottom.Value != 0; }
+            get { return _left != 0 || _right != 0 || _top != 0 || _bottom != 0; }
         }
     }
 }

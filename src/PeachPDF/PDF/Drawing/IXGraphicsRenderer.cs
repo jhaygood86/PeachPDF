@@ -152,7 +152,7 @@ namespace PeachPDF.PDF.Drawing
         /// Draws an image.
         /// </summary>
         void DrawImage(XImage image, double x, double y, double width, double height);
-        void DrawImage(XImage image, Rect destRect, Rect srcRect, XGraphicsUnit srcUnit);
+        void DrawImage(XImage image, Rect destRect, Rect srcRect);
 
         #endregion
 
@@ -171,7 +171,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// 
         /// </summary>
-        void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect, XGraphicsUnit unit);
+        void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect);
 
         /// <summary>
         /// 

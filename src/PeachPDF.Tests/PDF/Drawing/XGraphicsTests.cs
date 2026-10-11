@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var (_, page) = NewPage();
 
-            using var gfx = XGraphics.FromPdfPage(page, XPageDirection.Downwards);
+            using var gfx = XGraphics.FromPdfPage(page);
 
             Assert.NotNull(gfx);
         }
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void CreateMeasureContext_CreatesUsableGraphics()
         {
-            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200));
 
             var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
             var size = gfx.MeasureString("Hello", font);
@@ -84,7 +84,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void MeasureString_EmptyString_ReturnsNonNegativeSize()
         {
-            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200));
             var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
 
             var size = gfx.MeasureString("", font);
@@ -183,9 +183,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             document.Options.CompressContentStreams = false;
 
-#pragma warning disable CS0618
-            using (var gfx = XGraphics.FromPdfPage(page, XPageDirection.Upwards))
-#pragma warning restore CS0618
+            using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var path = new XGraphicsPath();
                 path.AddMove(1.23456, 2.34567);
@@ -202,8 +200,11 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             document.Save(stream);
             string pdf = Encoding.Latin1.GetString(stream.ToArray());
 
+            // The page is laid out downwards, so each y is measured from the top edge of the page.
+            static string Format(double value) => value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+            double pageHeight = page.Height;
             Assert.Contains(
-                "1.2346 -2.3457 m\n3.4568 -4.5679 5.6789 -6.7891 7.8912 -8.9123 c\nh\n",
+                $"1.2346 {Format(pageHeight - 2.34567)} m\n3.4568 {Format(pageHeight - 4.56789)} 5.6789 {Format(pageHeight - 6.78912)} 7.8912 {Format(pageHeight - 8.91234)} c\nh\n",
                 pdf);
         }
 
@@ -309,43 +310,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         }
 
         [Fact]
-        public void FromPdfPage_UpwardsDirection_DrawsSuccessfully()
-        {
-            var (document, page) = NewPage();
-            // XPageDirection.Upwards is marked obsolete ("not implemented - yagni") but the constructor
-            // accepts it without validation (only the PageDirection property setter rejects it after
-            // construction) - covers XGraphicsPdfRenderer.BeginPageUpwards, which is otherwise dead.
-#pragma warning disable CS0618
-            using (var gfx = XGraphics.FromPdfPage(page, XPageDirection.Upwards))
-#pragma warning restore CS0618
-            {
-                gfx.DrawLine(XPens.Black, 0, 0, 10, 10);
-            }
-
-            using var stream = new MemoryStream();
-            document.Save(stream);
-            Assert.True(stream.Length > 0);
-        }
-
-        [Theory]
-        [InlineData((int)XGraphicsUnit.Inch)]
-        [InlineData((int)XGraphicsUnit.Millimeter)]
-        [InlineData((int)XGraphicsUnit.Centimeter)]
-        [InlineData((int)XGraphicsUnit.Presentation)]
-        public void FromPdfPage_NonPointPageUnit_ScalesPageTransform(int unitValue)
-        {
-            var (document, page) = NewPage();
-            using (var gfx = XGraphics.FromPdfPage(page, (XGraphicsUnit)unitValue))
-            {
-                gfx.DrawLine(XPens.Black, 0, 0, 1, 1);
-            }
-
-            using var stream = new MemoryStream();
-            document.Save(stream);
-            Assert.True(stream.Length > 0);
-        }
-
-        [Fact]
         public void FromPdfPage_WithTrimMargins_OffsetsPageTransform()
         {
             var (document, page) = NewPage();
@@ -365,8 +329,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void DrawEverything_ProducesNonEmptySavedDocument()
         {
             var (document, page) = NewPage();
-            var width = page.Width.Point;
-            var height = page.Height.Point;
+            var width = page.Width;
+            var height = page.Height;
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
@@ -422,7 +386,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 using var image = XImage.FromStream(() => new MemoryStream(imgBytes));
                 gfx.DrawImage(image, 50, 50);
                 gfx.DrawImage(image, new Rect(60, 60, 20, 20));
-                gfx.DrawImage(image, new Rect(80, 80, 20, 20), new Rect(0, 0, 4, 4), XGraphicsUnit.Point);
+                gfx.DrawImage(image, new Rect(80, 80, 20, 20), new Rect(0, 0, 4, 4));
 
                 gfx.IntersectClip(new Rect(0, 0, width, height));
 

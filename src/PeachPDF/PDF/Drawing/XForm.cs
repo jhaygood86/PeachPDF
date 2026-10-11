@@ -127,7 +127,7 @@ namespace PeachPDF.PDF.Drawing
         /// <param name="document">The PDF document.</param>
         /// <param name="width">The width of the page.</param>
         /// <param name="height">The height of the page</param>
-        public XForm(PdfDocument document, XUnit width, XUnit height)
+        public XForm(PdfDocument document, double width, double height)
             : this(document, new Rect(0, 0, width, height))
         { }
 

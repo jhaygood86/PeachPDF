@@ -1085,8 +1085,8 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            Assert.Equal(600, document.PdfDocument.Pages[0].Width.Point, 1);
-            Assert.Equal(400, document.PdfDocument.Pages[0].Height.Point, 1);
+            Assert.Equal(600, document.PdfDocument.Pages[0].Width, 1);
+            Assert.Equal(400, document.PdfDocument.Pages[0].Height, 1);
         }
 
         // ─── Remaining container decorators / image overloads ──────────────────────────────────────
@@ -2032,7 +2032,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var measure = XGraphics.CreateMeasureContext(orgPageSize);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 

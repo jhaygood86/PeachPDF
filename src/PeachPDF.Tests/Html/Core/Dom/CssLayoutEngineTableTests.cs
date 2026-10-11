@@ -1842,7 +1842,7 @@ Assert.NotNull(tbody);
             {
                 if (pass > 0)
                 {
-                    var measure = XGraphics.CreateMeasureContext(new Size(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
+                    var measure = XGraphics.CreateMeasureContext(new Size(595, 842));
                     using var graphics = new GraphicsAdapter((PdfSharpAdapter)container.Adapter, measure, 1.0);
                     await container.PerformLayout(graphics);
                 }
@@ -3193,7 +3193,7 @@ Assert.NotNull(tbody);
    container.MarginTop = 20;
         container.MarginBottom = 20;
 
-   var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+   var measure = XGraphics.CreateMeasureContext(size);
 using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

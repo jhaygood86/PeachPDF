@@ -237,8 +237,8 @@ namespace PeachPDF.Tests.Integration
                 doc.Page(page => page.Content(c => c.Text("Hello")));
             });
 
-            Assert.Equal(300, document.PdfDocument.Pages[0].Width.Point, 1);
-            Assert.Equal(500, document.PdfDocument.Pages[0].Height.Point, 1);
+            Assert.Equal(300, document.PdfDocument.Pages[0].Width, 1);
+            Assert.Equal(500, document.PdfDocument.Pages[0].Height, 1);
         }
 
         [Fact]
@@ -909,7 +909,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var measure = XGraphics.CreateMeasureContext(orgPageSize);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
