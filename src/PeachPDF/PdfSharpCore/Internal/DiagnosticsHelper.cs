@@ -28,7 +28,6 @@
 #endregion
 
 using System;
-using System.Diagnostics;
 
 namespace PeachPDF.PdfSharpCore.Internal
 {
@@ -43,10 +42,7 @@ namespace PeachPDF.PdfSharpCore.Internal
             switch (Diagnostics.NotImplementedBehaviour)
             {
                 case NotImplementedBehaviour.DoNothing:
-                    break;
-
                 case NotImplementedBehaviour.Log:
-                    Logger.Log(text);
                     break;
 
                 case NotImplementedBehaviour.Throw:
@@ -67,49 +63,6 @@ namespace PeachPDF.PdfSharpCore.Internal
         public static void ThrowNotImplementedException(string message)
         {
             throw new NotImplementedException(message);
-        }
-    }
-
-    internal static class Logger
-    {
-        public static void Log(string format, params object[] args)
-        {
-            Debug.WriteLine("Log...");
-        }
-    }
-
-    class Logging
-    {
-
-    }
-
-    class Tracing
-    {
-        [Conditional("DEBUG")]
-        public void Foo()
-        { }
-    }
-
-    /// <summary>
-    /// Helper class around the Debugger class.
-    /// </summary>
-    internal static class DebugBreak
-    {
-        /// <summary>
-        /// Call Debugger.Break() if a debugger is attached.
-        /// </summary>
-        public static void Break()
-        {
-            Break(false);
-        }
-
-        /// <summary>
-        /// Call Debugger.Break() if a debugger is attached or when always is set to true.
-        /// </summary>
-        public static void Break(bool always)
-        {
-            if (always || Debugger.IsAttached)
-                Debugger.Break();
         }
     }
 }

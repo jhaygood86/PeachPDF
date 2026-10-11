@@ -48,9 +48,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
         public PdfWriter(Stream pdfStream)
         {
             _stream = pdfStream;
-#if DEBUG
-            _layout = PdfWriterLayout.Verbose;
-#endif
         }
 
         public void Close(bool closeUnderlyingStream)

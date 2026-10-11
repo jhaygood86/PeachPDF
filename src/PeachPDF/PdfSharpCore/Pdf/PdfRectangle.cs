@@ -270,15 +270,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return new XSize(_x2 - _x1, _y2 - _y1); }
         }
 
-#if GDI
-        /// <summary>
-        /// Determines if the specified point is contained within this PdfRectangle.
-        /// </summary>
-        public bool Contains(PointF pt)
-        {
-            return Contains(pt.X, pt.Y);
-        }
-#endif
 
         /// <summary>
         /// Determines if the specified point is contained within this PdfRectangle.
@@ -355,99 +346,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
         }
 
-#if false // This object is considered as immutable.
-    //    /// <summary>
-    //    /// Adjusts the location of this PdfRectangle by the specified amount.
-    //    /// </summary>
-    //    public void Offset(PointF pos)
-    //    {
-    //      Offset(pos.X, pos.Y);
-    //    }
-    //
-    //    /// <summary>
-    //    /// Adjusts the location of this PdfRectangle by the specified amount.
-    //    /// </summary>
-    //    public void Offset(double x, double y)
-    //    {
-    //      _x1 += x;
-    //      _y1 += y;
-    //      _x2 += x;
-    //      _y2 += y;
-    //    }
-    //
-    //    /// <summary>
-    //    /// Inflates this PdfRectangle by the specified amount.
-    //    /// </summary>
-    //    public void Inflate(double x, double y)
-    //    {
-    //      _x1 -= x;
-    //      _y1 -= y;
-    //      _x2 += x;
-    //      _y2 += y;
-    //    }
-    //
-    //    /// <summary>
-    //    /// Inflates this PdfRectangle by the specified amount.
-    //    /// </summary>
-    //    public void Inflate(SizeF size)
-    //    {
-    //      Inflate(size.Width, size.Height);
-    //    }
-    //
-    //    /// <summary>
-    //    /// Creates and returns an inflated copy of the specified PdfRectangle.
-    //    /// </summary>
-    //    public static PdfRectangle Inflate(PdfRectangle rect, double x, double y)
-    //    {
-    //      rect.Inflate(x, y);
-    //      return rect;
-    //    }
-    //
-    //    /// <summary>
-    //    /// Replaces this PdfRectangle with the intersection of itself and the specified PdfRectangle.
-    //    /// </summary>
-    //    public void Intersect(PdfRectangle rect)
-    //    {
-    //      PdfRectangle rect2 = PdfRectangle.Intersect(rect, this);
-    //      _x1 = rect2.x1;
-    //      _y1 = rect2.y1;
-    //      _x2 = rect2.x2;
-    //      _y2 = rect2.y2;
-    //    }
-    //
-    //    /// <summary>
-    //    /// Returns a PdfRectangle that represents the intersection of two rectangles. If there is no intersection,
-    //    /// an empty PdfRectangle is returned.
-    //    /// </summary>
-    //    public static PdfRectangle Intersect(PdfRectangle rect1, PdfRectangle rect2)
-    //    {
-    //      double xx1 = Math.Max(rect1.x1, rect2.x1);
-    //      double xx2 = Math.Min(rect1.x2, rect2.x2);
-    //      double yy1 = Math.Max(rect1.y1, rect2.y1);
-    //      double yy2 = Math.Min(rect1.y2, rect2.y2);
-    //      if (xx2 >= xx1 && yy2 >= yy1)
-    //        return new PdfRectangle(xx1, yy1, xx2, yy2);
-    //      return PdfRectangle.Empty;
-    //    }
-    //
-    //    /// <summary>
-    //    /// Determines if this rectangle intersects with the specified PdfRectangle.
-    //    /// </summary>
-    //    public bool IntersectsWith(PdfRectangle rect)
-    //    {
-    //      return rect.x1 < _x2 && _x1 < rect.x2 && rect.y1 < _y2 && _y1 < rect.y2;
-    //    }
-    //
-    //    /// <summary>
-    //    /// Creates the smallest rectangle that can contain both of two specified rectangles.
-    //    /// </summary>
-    //    public static PdfRectangle Union(PdfRectangle rect1, PdfRectangle rect2)
-    //    {
-    //      return new PdfRectangle(
-    //        Math.Min(rect1.x1, rect2.x1), Math.Max(rect1.x2, rect2.x2),
-    //        Math.Min(rect1.y1, rect2.y1), Math.Max(rect1.y2, rect2.y2));
-    //    }
-#endif
 
         /// <summary>
         /// Represents an empty PdfRectangle.

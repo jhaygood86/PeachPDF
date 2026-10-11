@@ -29,13 +29,4 @@
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
-#if true_  // Not yet used.
-    /// <summary>
-    /// TODO
-    /// </summary>
-    internal static class PdfPageInterals
-    {
-        // TODO
-    }
-#endif
 }

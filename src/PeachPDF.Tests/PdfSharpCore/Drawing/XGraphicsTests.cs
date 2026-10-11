@@ -69,20 +69,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         }
 
         [Fact]
-        public void FromImage_IsUnimplementedStub_AlwaysReturnsNull()
-        {
-            // XGraphics.FromImage(XImage, XGraphicsUnit) has an empty `if (bmImage != null) { }`
-            // body and unconditionally `return null;` -- it is an unimplemented stub regardless of
-            // the image passed in. Real, pre-existing behavior; documented here rather than fixed.
-            var bytes = MakePngBytes();
-            using var image = XImage.FromStream(() => new MemoryStream(bytes));
-
-            var gfx = XGraphics.FromImage(image);
-
-            Assert.Null(gfx);
-        }
-
-        [Fact]
         public void CreateMeasureContext_CreatesUsableGraphics()
         {
             using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);

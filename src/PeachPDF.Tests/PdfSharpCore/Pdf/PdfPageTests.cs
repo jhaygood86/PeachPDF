@@ -266,24 +266,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
-        public void CustomValues_DefaultsToNonNull()
-        {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-
-            Assert.NotNull(page.CustomValues);
-        }
-
-        [Fact]
-        public void CustomValues_SetNonNull_Throws()
-        {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-
-            Assert.Throws<ArgumentException>(() => page.CustomValues = new PdfCustomValues());
-        }
-
-        [Fact]
         public void Resources_IsNotNull()
         {
             var doc = new PdfDocument();

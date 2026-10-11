@@ -30,7 +30,6 @@
 #nullable disable warnings
 
 // With this define each iref object gets a unique number (uid) to make them distinguishable in the debugger
-#define UNIQUE_IREF_
 
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -73,9 +72,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 throw new InvalidOperationException("Must not create iref for an object that already has one.");
             _value = pdfObject;
             pdfObject.Reference = this;
-#if UNIQUE_IREF && DEBUG
-            _uid = ++s_counter;
-#endif
         }
 
         /// <summary>
@@ -85,9 +81,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             _objectID = objectID;
             _position = position;
-#if UNIQUE_IREF && DEBUG
-            _uid = ++s_counter;
-#endif
         }
 
         /// <summary>
@@ -237,9 +230,5 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
         }
 
-#if UNIQUE_IREF && DEBUG
-        static int s_counter = 0;
-        int _uid;
-#endif
     }
 }

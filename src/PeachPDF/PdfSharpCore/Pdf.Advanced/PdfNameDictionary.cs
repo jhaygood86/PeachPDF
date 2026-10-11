@@ -81,18 +81,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             destIndex--;
             PdfPage dest = Owner.Pages[destIndex];
 
-#if true
             PdfArray destination = new PdfArray(Owner,
                 new PdfLiteral("{0} 0 R {1}", dest.ObjectNumber, parameters));
             _dests.AddName(destinationName, destination);
-#else
-// Insert reference to destination dictionary instead of inserting the destination array directly.
-            PdfArray destination = new PdfArray(Owner, new PdfLiteral("{0} 0 R {1}", dest.ObjectNumber, parameters));
-            PdfDictionary destinationDict = new PdfDictionary(Owner);
-            destinationDict.Elements.SetObject("/D", destination);
-            Owner.Internals.AddObject(destinationDict);
-            _dests.AddName(destinationName, destinationDict.Reference);
-#endif
         }
 
         PdfNameTreeNode? _dests;

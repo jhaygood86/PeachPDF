@@ -56,36 +56,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         readonly CultureInfo _cultureInfo;
 
-#if DEBUG_
-        static public void Test()
-        {
-            int kcc = XKnownColorTable.colorTable.Length;
-
-            for (int idx = 0; idx < kcc; idx++)
-            {
-                uint argb = XKnownColorTable.colorTable[idx];
-                ColorResourceInfo info = GetColorInfo((XKnownColor)idx);
-                if ((int)info.KnownColor == -1)
-                {
-                    kcc.GetType();
-                }
-                else
-                {
-                    if (argb != info.Argb)
-                    {
-                        kcc.GetType();
-                    }
-                }
-            }
-
-            for (int idx = 0; idx < colorInfos.Length; idx++)
-            {
-                ColorResourceInfo c2 = colorInfos[idx];
-                if (c2.Argb != c2.PaintColor.Rgb)
-                    c2.GetType();
-            }
-        }
-#endif
 
         /// <summary>
         /// Gets a known color from an ARGB value. Throws an ArgumentException if the value is not a known color.

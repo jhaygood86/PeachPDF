@@ -459,27 +459,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         #endregion
 
         /// <summary>
-        /// Gets or sets the custom values.
-        /// </summary>
-        public PdfCustomValues CustomValues
-        {
-            get
-            {
-                if (_customValues == null)
-                    _customValues = PdfCustomValues.Get(Elements);
-                return _customValues;
-            }
-            set
-            {
-                if (value != null)
-                    throw new ArgumentException("Only null is allowed to clear all custom values.");
-                PdfCustomValues.Remove(Elements);
-                _customValues = null;
-            }
-        }
-        PdfCustomValues _customValues = null!;
-
-        /// <summary>
         /// Gets the PdfResources object of this page.
         /// </summary>
         public PdfResources Resources
@@ -576,7 +555,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (_orientation == PageOrientation.Landscape && Math.Abs(Rotate / 90) % 2 == 0)
                 MediaBox = new PdfRectangle(mediaBox.X1, mediaBox.Y1, mediaBox.Y2, mediaBox.X2);
 
-#if true
             // Add transparency group to prevent rendering problems of Adobe viewer.
             // TransparencyUsed is set incrementally during painting by whichever content actually
             // required a transparency group (opacity < 1, a semi-transparent fill/stroke/gradient
@@ -603,13 +581,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 //False is default: group.Elements["/I"] = new PdfBoolean(false);
                 //False is default: group.Elements["/K"] = new PdfBoolean(false);
             }
-#endif
 
-#if DEBUG_
-            PdfItem item = Elements["/MediaBox"];
-            if (item != null)
-                item.GetType();
-#endif
             base.WriteObject(writer);
 
             if (_orientation == PageOrientation.Landscape)

@@ -125,14 +125,6 @@ namespace PeachPDF.PdfSharpCore
         /// </summary>
         public const string VersionPrerelease = "beta3b"; // "" for stable Release, e.g. "beta" or "rc.1.2" for Prerelease. // Also used for NuGet Version.
 
-#if DEBUG
-        /// <summary>
-        /// The calculated build number.
-        /// </summary>
-// ReSharper disable RedundantNameQualifier
-        public static int BuildNumber = (System.DateTime.Now - new System.DateTime(2005, 1, 1)).Days;
-        // ReSharper restore RedundantNameQualifier
-#endif
 
         /// <summary>
         /// E.g. "2005-01-01", for use in NuGet Script.

@@ -68,13 +68,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             // set the value of the reference to this.
             if (obj._iref != null)
                 obj._iref.Value = this;
-#if DEBUG_  // BUG
-            else
-            {
-                // If this occurs it is an internal error
-                Debug.Assert(false, "Object type transformation must not be done with direct objects");
-            }
-#endif
         }
 
         /// <summary>
@@ -96,36 +89,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             return obj;
         }
 
-#if true_  // works, but may lead to other problems that I cannot assess
-        /// <summary>
-        /// Determines whether the specified object is equal to the current PdfObject.
-        /// </summary>
-        public override bool Equals(object? obj)
-        {
-            if (obj is PdfObject)
-            {
-                PdfObject other = (PdfObject)obj;
-                // Take object type transformation into account
-                if (_iref != null && other._iref != null)
-                {
-                    Debug.Assert(_iref.Value != null, "iref without value.");
-                    Debug.Assert(other.iref.Value != null, "iref without value.");
-                    return Object.ReferenceEquals(_iref.Value, other.iref.Value);
-                }
-            }
-            return base.Equals(obj);
-        }
-
-        public override int GetHashCode()
-        {
-            if (_iref != null)
-            {
-                Debug.Assert(_iref.Value != null, "iref without value.");
-                return _iref.GetHashCode();
-            }
-            return base.GetHashCode();
-        }
-#endif
 
         /// <summary>
         /// Sets the object and generation number.

@@ -44,18 +44,6 @@ using System;
 namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
 {
     /// <summary>
-    /// Holds information about the current state of the XGraphics object.
-    /// </summary>
-    [Flags]
-    enum InternalGraphicsMode
-    {
-        DrawingGdiGraphics,
-        DrawingPdfContent,
-        DrawingBitmap,
-    }
-
-
-    /// <summary>
     /// Represents a drawing surface for a fixed size page.
     /// </summary>
     internal sealed class XGraphics : IDisposable
@@ -299,29 +287,6 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PdfSharpCore.Drawing.XForm object.
-        /// </summary>
-        public static XGraphics FromImage(XImage image)
-        {
-            return FromImage(image, XGraphicsUnit.Point);
-        }
-
-        /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PdfSharpCore.Drawing.XImage object.
-        /// </summary>
-        public static XGraphics FromImage(XImage image, XGraphicsUnit unit)
-        {
-            if (image == null)
-                throw new ArgumentNullException("image");
-
-            XBitmapImage bmImage = image as XBitmapImage;
-            if (bmImage != null)
-            {
-            }
-            return null;
-        }
-
-        /// <summary>
         /// Internal setup.
         /// </summary>
         void Initialize()
@@ -361,16 +326,6 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
             if (!_disposed)
             {
                 _disposed = true;
-                if (disposing)
-                {
-                    // Dispose managed resources.
-                    if (_associatedImage != null)
-                    {
-                        _associatedImage.DisassociateWithGraphics(this);
-                        _associatedImage = null;
-                    }
-                }
-
                 if (_form != null)
                     _form.Finish();
 
@@ -1811,49 +1766,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 _renderer.WriteComment(comment);
         }
 
-        /// <summary>
-        /// Permits access to internal data.
-        /// </summary>
-        public XGraphicsInternals Internals
-        {
-            get { return _internals ?? (_internals = new XGraphicsInternals(this)); }
-        }
-        XGraphicsInternals _internals = null!;
-
-        /// <summary>
-        /// (Under construction. May change in future versions.)
-        /// </summary>
-        public SpaceTransformer Transformer
-        {
-            get { return _transformer ?? (_transformer = new SpaceTransformer(this)); }
-        }
-        SpaceTransformer _transformer = null!;
-
         #endregion
 
         // --------------------------------------------------------------------------------------------
-
-        internal void DisassociateImage()
-        {
-            if (_associatedImage == null)
-                throw new InvalidOperationException("No image associated.");
-
-            Dispose();
-        }
-
-        internal InternalGraphicsMode InternalGraphicsMode
-        {
-            get { return _internalGraphicsMode; }
-            set { _internalGraphicsMode = value; }
-        }
-        InternalGraphicsMode _internalGraphicsMode;
-
-        internal XImage AssociatedImage
-        {
-            get { return _associatedImage; }
-            set { _associatedImage = value; }
-        }
-        XImage _associatedImage = null!;
 
         /// <summary>
         /// The transformation matrix from the XGraphics page space to the Graphics world space.
@@ -2008,60 +1923,6 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         internal void EndVariableText()
         {
             (_renderer as XGraphicsPdfRenderer)?.EndVariableText();
-        }
-
-        /// <summary>
-        /// Provides access to internal data structures of the XGraphics class.
-        /// </summary>
-        internal class XGraphicsInternals
-        {
-            internal XGraphicsInternals(XGraphics gfx)
-            {
-                _gfx = gfx;
-            }
-            readonly XGraphics _gfx;
-        }
-
-        /// <summary>
-        /// (This class is under construction.)
-        /// Currently used in MigraDoc
-        /// </summary>
-        internal class SpaceTransformer
-        {
-            internal SpaceTransformer(XGraphics gfx)
-            {
-                _gfx = gfx;
-            }
-            readonly XGraphics _gfx;
-
-            /// <summary>
-            /// Gets the smallest rectangle in default page space units that completely encloses the specified rect
-            /// in world space units.
-            /// </summary>
-            public XRect WorldToDefaultPage(XRect rect)
-            {
-                XPoint[] points = new XPoint[4];
-                points[0] = new XPoint(rect.X, rect.Y);
-                points[1] = new XPoint(rect.X + rect.Width, rect.Y);
-                points[2] = new XPoint(rect.X, rect.Y + rect.Height);
-                points[3] = new XPoint(rect.X + rect.Width, rect.Y + rect.Height);
-
-                XMatrix matrix = _gfx.Transform;
-                matrix.TransformPoints(points);
-
-                double height = _gfx.PageSize.Height;
-                points[0].Y = height - points[0].Y;
-                points[1].Y = height - points[1].Y;
-                points[2].Y = height - points[2].Y;
-                points[3].Y = height - points[3].Y;
-
-                double xmin = Math.Min(Math.Min(points[0].X, points[1].X), Math.Min(points[2].X, points[3].X));
-                double xmax = Math.Max(Math.Max(points[0].X, points[1].X), Math.Max(points[2].X, points[3].X));
-                double ymin = Math.Min(Math.Min(points[0].Y, points[1].Y), Math.Min(points[2].Y, points[3].Y));
-                double ymax = Math.Max(Math.Max(points[0].Y, points[1].Y), Math.Max(points[2].Y, points[3].Y));
-
-                return new XRect(xmin, ymin, xmax - xmin, ymax - ymin);
-            }
         }
     }
 }

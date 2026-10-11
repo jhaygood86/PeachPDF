@@ -484,14 +484,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
-        /// Grants access to internal objects of this class.
-        /// </summary>
-        public XGraphicsPathInternals Internals
-        {
-            get { return new XGraphicsPathInternals(this); }
-        }
-
-        /// <summary>
         /// Gets access to underlying Core graphics path.
         /// </summary>
         internal CoreGraphicsPath _corePath;

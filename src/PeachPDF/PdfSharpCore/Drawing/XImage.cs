@@ -60,8 +60,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         // XImage                           <-- ImageSource
         //   XForm
         //   PdfForm
-        //   XBitmapSource               <-- BitmapSource
-        //     XBitmapImage             <-- BitmapImage
 
         // ???
         //public bool Disposed
@@ -421,36 +419,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _format; }
         }
         XImageFormat _format = null!;
-
-        internal void AssociateWithGraphics(XGraphics gfx)
-        {
-            if (_associatedGraphics != null)
-                throw new InvalidOperationException("XImage already associated with XGraphics.");
-            _associatedGraphics = null;
-        }
-
-        internal void DisassociateWithGraphics()
-        {
-            if (_associatedGraphics == null)
-                throw new InvalidOperationException("XImage not associated with XGraphics.");
-            _associatedGraphics.DisassociateImage();
-
-            Debug.Assert(_associatedGraphics == null);
-        }
-
-        internal void DisassociateWithGraphics(XGraphics gfx)
-        {
-            if (_associatedGraphics != gfx)
-                throw new InvalidOperationException("XImage not associated with XGraphics.");
-            _associatedGraphics = null;
-        }
-
-        internal XGraphics AssociatedGraphics
-        {
-            get { return _associatedGraphics; }
-            set { _associatedGraphics = value; }
-        }
-        XGraphics _associatedGraphics = null!;
 
         /// <summary>
         /// If path starts with '*' the image is created from a stream and the path is a GUID.

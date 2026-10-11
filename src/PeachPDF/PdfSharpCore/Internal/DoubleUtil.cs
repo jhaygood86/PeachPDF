@@ -29,7 +29,6 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
-using System.Runtime.InteropServices;
 namespace PeachPDF.PdfSharpCore.Internal
 {
     /// <summary>
@@ -146,13 +145,7 @@ namespace PeachPDF.PdfSharpCore.Internal
         /// </summary>
         public static bool IsNaN(double value)
         {
-            NanUnion t = new NanUnion();
-            t.DoubleValue = value;
-
-            ulong exp = t.UintValue & 0xfff0000000000000;
-            ulong man = t.UintValue & 0x000fffffffffffff;
-
-            return (exp == 0x7ff0000000000000 || exp == 0xfff0000000000000) && (man != 0);
+            return double.IsNaN(value);
         }
 
         /// <summary>
@@ -185,15 +178,6 @@ namespace PeachPDF.PdfSharpCore.Internal
         public static int DoubleToInt(double value)
         {
             return 0 < value ? (int)(value + 0.5) : (int)(value - 0.5);
-        }
-
-        [StructLayout(LayoutKind.Explicit)]
-        struct NanUnion
-        {
-            [FieldOffset(0)]
-            internal double DoubleValue;
-            [FieldOffset(0)]
-            internal readonly ulong UintValue;
         }
     }
 }

@@ -66,10 +66,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// </summary>
         public void Add(PdfReference iref)
         {
-#if DEBUG
-            if (iref.ObjectID.ObjectNumber == 948)
-                GetType();
-#endif
             if (iref.ObjectID.IsEmpty)
                 iref.ObjectID = new PdfObjectID(GetNewObjectNumber());
 
@@ -220,52 +216,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // TODO: Is this really so easy?
             PdfReference[] irefs = TransitiveClosure(_document._trailer);
 
-#if DEBUG
-            // Have any two objects the same ID?
-            Dictionary<int, int> ids = new Dictionary<int, int>();
-            foreach (PdfObjectID objID in ObjectTable.Keys)
-            {
-                ids.Add(objID.ObjectNumber, 0);
-            }
-
-            // Have any two irefs the same value?
-            //Dictionary<int, int> ids = new Dictionary<int, int>();
-            ids.Clear();
-            foreach (PdfReference iref in ObjectTable.Values)
-            {
-                ids.Add(iref.ObjectNumber, 0);
-            }
-
-            //
-            Dictionary<PdfReference, int> refs = new Dictionary<PdfReference, int>();
-            foreach (PdfReference iref in irefs)
-            {
-                refs.Add(iref, 0);
-            }
-            foreach (PdfReference value in ObjectTable.Values)
-            {
-                if (!refs.ContainsKey(value))
-                    value.GetType();
-            }
-
-            foreach (PdfReference iref in ObjectTable.Values)
-            {
-                if (iref.Value == null)
-                    GetType();
-                Debug.Assert(iref.Value != null);
-            }
-
-            foreach (PdfReference iref in irefs)
-            {
-                if (!ObjectTable.ContainsKey(iref.ObjectID))
-                    GetType();
-                Debug.Assert(ObjectTable.ContainsKey(iref.ObjectID));
-
-                if (iref.Value == null)
-                    GetType();
-                Debug.Assert(iref.Value != null);
-            }
-#endif
 
             _maxObjectNumber = 0;
             ObjectTable.Clear();
@@ -292,10 +242,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             for (int idx = 0; idx < count; idx++)
             {
                 PdfReference iref = irefs[idx];
-#if DEBUG_
-                if (iref.ObjectNumber == 1108)
-                    GetType();
-#endif
                 iref.ObjectID = new PdfObjectID(idx + 1);
                 // Rehash with new number.
                 ObjectTable.Add(iref.ObjectID, iref);
@@ -329,7 +275,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             int count = collection.Count;
             PdfReference[] irefs = new PdfReference[count];
             collection.CopyTo(irefs, 0);
-#if true
             for (int i = 0; i < count; i++)
                 for (int j = 0; j < count; j++)
                     if (i != j)
@@ -343,7 +288,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                         Debug.Assert(ReferenceEquals(irefs[i].Document, irefs[j].Document));
                         GetType();
                     }
-#endif
         }
 
         ///// <summary>
@@ -407,21 +351,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfReference[] irefs = new PdfReference[count];
             collection.CopyTo(irefs, 0);
 
-#if true_
-            for (int i = 0; i < count; i++)
-                for (int j = 0; j < count; j++)
-                    if (i != j)
-                    {
-                        Debug.Assert(ReferenceEquals(irefs[i].Document, _document));
-                        Debug.Assert(irefs[i] != irefs[j]);
-                        Debug.Assert(!ReferenceEquals(irefs[i], irefs[j]));
-                        Debug.Assert(!ReferenceEquals(irefs[i].Value, irefs[j].Value));
-                        Debug.Assert(!Equals(irefs[i].ObjectID, irefs[j].Value.ObjectID));
-                        Debug.Assert(irefs[i].ObjectNumber != irefs[j].Value.ObjectNumber);
-                        Debug.Assert(ReferenceEquals(irefs[i].Document, irefs[j].Document));
-                        GetType();
-                    }
-#endif
             return irefs;
         }
 

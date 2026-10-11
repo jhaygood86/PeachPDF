@@ -594,10 +594,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         public void AddTransform(XMatrix value, XMatrixOrder matrixOrder)
         {
             // TODO: User matrixOrder
-#if DEBUG
-            if (matrixOrder == XMatrixOrder.Append)
-                throw new NotImplementedException("XMatrixOrder.Append");
-#endif
             XMatrix transform = value;
             if (_renderer.Gfx.PageDirection == XPageDirection.Downwards)
             {

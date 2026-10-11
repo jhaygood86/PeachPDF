@@ -98,17 +98,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
-        public void CustomValues_IsAccessible()
-        {
-            var doc = new PdfDocument();
-
-            // No custom values set yet; accessing the property must not throw.
-            var ex = Record.Exception(() => doc.CustomValues);
-
-            Assert.Null(ex);
-        }
-
-        [Fact]
         public void Internals_IsNotNull()
         {
             var doc = new PdfDocument();

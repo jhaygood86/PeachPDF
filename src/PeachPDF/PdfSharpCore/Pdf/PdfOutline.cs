@@ -480,9 +480,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
         internal override void WriteObject(PdfWriter writer)
         {
-#if DEBUG
-            writer.WriteRaw("% Title = " + FilterUnicode(Title) + "\n");
-#endif
             // TODO: Proof that there is nothing to do here.
             bool hasKids = HasChildren;
             if (_parent != null || hasKids)
@@ -500,15 +497,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
         }
 
-#if DEBUG
-        private string FilterUnicode(string text)
-        {
-            StringBuilder result = new StringBuilder();
-            foreach (char ch in text)
-                result.Append((uint)ch < 256 ? ch : '?');
-            return result.ToString();
-        }
-#endif
 
         /// <summary>
         /// Predefined keys of this dictionary.

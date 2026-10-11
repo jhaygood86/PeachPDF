@@ -29,7 +29,6 @@
 
 #nullable disable warnings
 
-#define ITALIC_SIMULATION
 
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
@@ -651,7 +650,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     && TryShowAtPen(x, y + verticalOffset, text, font, contentLengthAtEntry);
                 if (!shownAtPen)
                 {
-#if ITALIC_SIMULATION
                 // A declared "oblique <angle>" (see XFont.ObliqueSkewSinus) drives the exact shear amount;
                 // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
                 // sin(20°) approximation this renderer has always used.
@@ -704,10 +702,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                         RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                     }
                 }
-#else
-                AdjustTextMatrix(ref pos);
-                AppendFormat2("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
-#endif
                 }
             }
 
@@ -1546,11 +1540,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         internal void AppendFormatArgs(string format, params object[] args)
         {
             _content.AppendFormat(CultureInfo.InvariantCulture, format, args);
-#if DEBUG
-            string dummy = _content.ToString();
-            dummy = dummy.Substring(Math.Max(0, dummy.Length - 100));
-            dummy.GetType();
-#endif
         }
 
         internal void AppendFormatString(string format, string s)
@@ -2091,36 +2080,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             // If EffectiveCtm is not yet realized InverseEffectiveCtm is invalid.
             Debug.Assert(_gfxState.UnrealizedCtm.IsIdentity, "Somewhere a RealizeTransform is missing.");
-#if true
             // See in #else case why this is correct.
             XPoint pt = _gfxState.WorldTransform.Transform(point);
             return _gfxState.InverseEffectiveCtm.Transform(new XPoint(pt.X, PageHeightPt / DefaultViewMatrix.M22 - pt.Y));
-#else
-            // Get inverted PDF world transform matrix.
-            XMatrix invers = _gfxState.EffectiveCtm;
-            invers.Invert();
-
-            // Apply transform in Windows world space.
-            XPoint pt1 = _gfxState.WorldTransform.Transform(point);
-#if true
-            // Do the transformation (see #else case) in one step.
-            XPoint pt2 = new XPoint(pt1.X, PageHeightPt / DefaultViewMatrix.M22 - pt1.Y);
-#else
-            // Replicable version
-
-            // Apply default transformation.
-            pt1.X = pt1.X * DefaultViewMatrix.M11;
-            pt1.Y = pt1.Y * DefaultViewMatrix.M22;
-
-            // Convert from Windows space to PDF space.
-            XPoint pt2 = new XPoint(pt1.X, PageHeightPt - pt1.Y);
-
-            pt2.X = pt2.X / DefaultViewMatrix.M11;
-            pt2.Y = pt2.Y / DefaultViewMatrix.M22;
-#endif
-            XPoint pt3 = invers.Transform(pt2);
-            return pt3;
-#endif
         }
         #endregion
 

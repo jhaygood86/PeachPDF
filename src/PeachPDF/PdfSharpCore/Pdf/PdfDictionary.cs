@@ -195,22 +195,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
             //int count = Elements.Count;
             PdfName[] keys = Elements.KeyNames;
 
-#if DEBUG
             // TODO: automatically set length
             if (_stream != null)
                 Debug.Assert(Elements.ContainsKey(PdfStream.Keys.Length), "Dictionary has a stream but no length is set.");
-#endif
 
-#if DEBUG
-            // Sort keys for debugging purposes. Comparing PDF files with for example programms like
-            // Araxis Merge is easier with sorted keys.
-            if (writer.Layout == PdfWriterLayout.Verbose)
-            {
-                List<PdfName> list = new List<PdfName>(keys);
-                list.Sort(PdfName.Comparer);
-                list.CopyTo(keys, 0);
-            }
-#endif
 
             foreach (PdfName key in keys)
                 WriteDictionaryElement(writer, key);
@@ -228,15 +216,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (key == null)
                 throw new ArgumentNullException("key");
             PdfItem item = Elements[key];
-#if DEBUG
-            // TODO: simplify PDFsharp
-            if (item is PdfObject && ((PdfObject)item).IsIndirect)
-            {
-                // Replace an indirect object by its Reference.
-                item = ((PdfObject)item).Reference;
-                Debug.Assert(false, "Check when we come here.");
-            }
-#endif
             key.WriteObject(writer);
             item.WriteObject(writer);
             writer.NewLine();
@@ -1218,23 +1197,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 {
                     if (value == null)
                         throw new ArgumentNullException("value");
-#if DEBUG_
-                    if (key == "/MediaBox")
-                        key.GetType();
-
-                    //if (value is PdfObject)
-                    //{
-                    //  PdfObject obj = (PdfObject)value;
-                    //  if (obj.Reference != null)
-                    //    throw new ArgumentException("An object with an indirect reference cannot be a direct value. Try to set an indirect refernece.");
-                    //}
-                    if (value is PdfDictionary)
-                    {
-                        PdfDictionary dict = (PdfDictionary)value;
-                        if (dict._stream != null)
-                            throw new ArgumentException("A dictionary with stream cannot be a direct value.");
-                    }
-#endif
                     PdfObject obj = value as PdfObject;
                     if (obj != null && obj.IsIndirect)
                         value = obj.Reference;
@@ -1253,15 +1215,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     if (value == null)
                         throw new ArgumentNullException("value");
 
-#if DEBUG
-                    PdfDictionary dictionary = value as PdfDictionary;
-                    if (dictionary != null)
-                    {
-                        PdfDictionary dict = dictionary;
-                        if (dict._stream != null)
-                            throw new ArgumentException("A dictionary with stream cannot be a direct value.");
-                    }
-#endif
 
                     PdfObject obj = value as PdfObject;
                     if (obj != null && obj.IsIndirect)
@@ -1697,14 +1650,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get
             {
-#if true
                 return String.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
                     ObjectID.DebuggerDisplay,
                     Elements.Count,
                     _elements.DebuggerDisplay);
-#else
-                return String.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])=", ObjectID.DebuggerDisplay, _elements.DebuggerDisplay);
-#endif
             }
         }
     }

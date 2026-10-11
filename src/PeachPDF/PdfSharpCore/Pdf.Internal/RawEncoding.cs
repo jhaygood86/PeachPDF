@@ -79,10 +79,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         {
             for (int count = charCount; count > 0; charIndex++, byteIndex++, count--)
             {
-#if DEBUG_
-                if ((uint) chars[charIndex] > 255)
-                    Debug-Break.Break(true);
-#endif
                 //Debug.Assert((uint)chars[charIndex] < 256, "Raw string contains invalid character with a value > 255.");
                 bytes[byteIndex] = (byte)chars[charIndex];
                 //#warning Here is a HACK that must not be ignored!
