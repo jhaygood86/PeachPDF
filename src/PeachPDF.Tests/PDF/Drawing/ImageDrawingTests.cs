@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
@@ -60,7 +61,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             gfx.DrawEllipse(new XPen(XColors.Red, 1.5), XBrushes.White, new XRect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
-            var font = TestFonts.Create("Arial", 20, XFontStyle.BoldItalic);
+            var font = TestFonts.Create("Arial", 20, (PaintFontStyle.Bold | PaintFontStyle.Italic));
 
             // Draw the text.
             gfx.DrawString("Hello, World!", font, XBrushes.Black,

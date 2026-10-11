@@ -184,7 +184,7 @@ namespace PeachPDF.PDF.Rendering
                     points[idx + 1].X, points[idx + 1].Y,
                     points[idx + 2].X, points[idx + 2].Y);
 
-            AppendStrokeFill(pen, null, XFillMode.Alternate, false);
+            AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
         }
 
         // ----- DrawCurve ----------------------------------------------------------------------------
@@ -220,7 +220,7 @@ namespace PeachPDF.PDF.Rendering
                     AppendCurveSegment(points[idx - 1], points[idx], points[idx + 1], points[idx + 2], tension);
                 AppendCurveSegment(points[count - 3], points[count - 2], points[count - 1], points[count - 1], tension);
             }
-            AppendStrokeFill(pen, null, XFillMode.Alternate, false);
+            AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
         }
 
         // ----- DrawArc ------------------------------------------------------------------------------
@@ -233,7 +233,7 @@ namespace PeachPDF.PDF.Rendering
             Realize(pen);
 
             AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, new XMatrix());
-            AppendStrokeFill(pen, null, XFillMode.Alternate, false);
+            AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
         }
 
         // ----- DrawRectangle ------------------------------------------------------------------------
@@ -305,12 +305,12 @@ namespace PeachPDF.PDF.Rendering
               x0 - δx, y0 - fy, x0 - fx, y0 - δy, x0, y0 - δy);
             AppendBezier(
               x0 + fx, y0 - δy, x0 + δx, y0 - fy, x0 + δx, y0);
-            AppendStrokeFill(pen, brush, XFillMode.Winding, true);
+            AppendStrokeFill(pen, brush, FillMode.Nonzero, true);
         }
 
         // ----- DrawPolygon --------------------------------------------------------------------------
 
-        public void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, XFillMode fillmode)
+        public void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, FillMode fillmode)
         {
             Realize(pen, brush);
 
@@ -334,12 +334,12 @@ namespace PeachPDF.PDF.Rendering
 
             AppendPathPoint(x + width / 2, y + height / 2, 'm');
             AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.LineTo1st, new XMatrix());
-            AppendStrokeFill(pen, brush, XFillMode.Alternate, true);
+            AppendStrokeFill(pen, brush, FillMode.EvenOdd, true);
         }
 
         // ----- DrawClosedCurve ----------------------------------------------------------------------
 
-        public void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, XFillMode fillmode)
+        public void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, FillMode fillmode)
         {
             int count = points.Length;
             if (count == 0)
@@ -507,12 +507,12 @@ namespace PeachPDF.PDF.Rendering
             double cyAscent = lineSpace * font.CellAscent / font.CellSpace;
             double cyDescent = lineSpace * font.CellDescent / font.CellSpace;
 
-            //bool bold = (font.Style & XFontStyle.Bold) != 0;
-            //bool italic = (font.Style & XFontStyle.Italic) != 0;
+            //bool bold = (font.Style & PaintFontStyle.Bold) != 0;
+            //bool italic = (font.Style & PaintFontStyle.Italic) != 0;
             bool italicSimulation = (font.Synthesis & SyntheticStyle.Italic) != 0;
             bool boldSimulation = (font.Synthesis & SyntheticStyle.Bold) != 0;
-            bool strikeout = (font.Style & XFontStyle.Strikeout) != 0;
-            bool underline = (font.Style & XFontStyle.Underline) != 0;
+            bool strikeout = (font.Style & PaintFontStyle.Strikeout) != 0;
+            bool underline = (font.Style & PaintFontStyle.Underline) != 0;
 
             // Merely reading the typeface does not realize/embed the color font below.
             TypefaceMetrics metrics = font.Typeface.Metrics;
@@ -1646,12 +1646,12 @@ namespace PeachPDF.PDF.Rendering
             _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y, width, height, name);
         }
 
-        void AppendStrokeFill(XPen pen, XBrush brush, XFillMode fillMode, bool closePath)
+        void AppendStrokeFill(XPen pen, XBrush brush, FillMode fillMode, bool closePath)
         {
             if (closePath)
                 _content.Append("h ");
 
-            if (fillMode == XFillMode.Winding)
+            if (fillMode == FillMode.Nonzero)
             {
                 if (pen != null && brush != null)
                     _content.Append("B\n");

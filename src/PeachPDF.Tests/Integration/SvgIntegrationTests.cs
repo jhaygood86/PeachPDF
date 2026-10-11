@@ -286,7 +286,7 @@ namespace PeachPDF.Tests.Integration
         public async Task InlineSvg_StrokeMiterlimit_RendersPdfMOperator_GatedByLinejoinNotLinecap()
         {
             // Regression test for a PdfGraphicsState.RealizePen bug: the "M" operator's emission was
-            // gated on _realizedLineCap instead of _realizedLineJoin (XLineCap.Flat and XLineJoin.Miter
+            // gated on _realizedLineCap instead of _realizedLineJoin (LineCap.Butt and LineJoin.Miter
             // are both numeric 0, so the mistake was invisible whenever line-cap happened to be the
             // default "butt"). Using a non-default stroke-linecap here with the default (miter)
             // stroke-linejoin proves "M" is genuinely keyed off line-join.

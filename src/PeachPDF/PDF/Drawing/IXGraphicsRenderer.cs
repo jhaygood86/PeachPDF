@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
 
 namespace PeachPDF.PDF.Drawing
@@ -93,7 +94,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a polygon.
         /// </summary>
-        void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, XFillMode fillmode);
+        void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, FillMode fillmode);
 
         /// <summary>
         /// Draws a pie.
@@ -103,7 +104,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a cardinal spline.
         /// </summary>
-        void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, XFillMode fillmode);
+        void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, FillMode fillmode);
 
         /// <summary>
         /// Draws a graphical path.

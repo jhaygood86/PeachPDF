@@ -178,8 +178,8 @@ namespace PeachPDF.Adapters
 
         public override FillMode FillMode
         {
-            get => _graphicsPath.FillMode == XFillMode.Winding ? FillMode.Nonzero : FillMode.EvenOdd;
-            set => _graphicsPath.FillMode = value == FillMode.Nonzero ? XFillMode.Winding : XFillMode.Alternate;
+            get => _graphicsPath.FillMode;
+            set => _graphicsPath.FillMode = value;
         }
 
         public override GraphicsPath ClipToRect(Rect rect)

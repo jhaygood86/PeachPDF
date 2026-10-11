@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void FontFromAMatchedWeight_CarriesTheEmSizeAndStyle()
         {
-            var font = TestFonts.Create("Times New Roman", 12, XFontStyle.Regular, weight: 700);
+            var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular, weight: 700);
 
             Assert.NotNull(font);
             Assert.Equal(12, font.Size);
@@ -24,7 +25,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void FontFromAMatchedWeightAndWidth_ConstructsSuccessfully()
         {
-            var font = TestFonts.Create("Times New Roman", 14, XFontStyle.Italic, weight: 400, stretch: 3);
+            var font = TestFonts.Create("Times New Roman", 14, PaintFontStyle.Italic, weight: 400, stretch: 3);
 
             Assert.NotNull(font);
             Assert.Equal(14, font.Size);
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 family = fontSet.AddStream(stream, new AddOptions { FamilyName = "RegularOnly-" + Guid.NewGuid().ToString("N") });
 
             Assert.True(family.TryMatch(new TypefaceQuery(700, TypefaceQuery.NormalWidth, IsItalic: true), out var match));
-            var font = new XFont(12, XFontStyle.BoldItalic, new XPdfFontOptions(PdfFontEncoding.Unicode), match);
+            var font = new XFont(12, (PaintFontStyle.Bold | PaintFontStyle.Italic), new XPdfFontOptions(PdfFontEncoding.Unicode), match);
 
             // The bundled fixture is a regular, upright face, so both bold and italic have to be synthesized.
             Assert.Equal(SyntheticStyle.BoldItalic, match.Synthesis);

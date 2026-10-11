@@ -29,6 +29,7 @@
 
 // #??? Clean up
 
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachPDF.PDF;
 using PeachPDF.PDF.Drawing;
@@ -58,7 +59,7 @@ namespace PeachPDF.PDF.Drawing
         /// needed, with no bearing on face selection. Null (the common case: <c>italic</c>, bare <c>oblique</c>, or no
         /// synthesis needed) falls back to the renderer's fixed default skew.
         /// </param>
-        public XFont(double emSize, XFontStyle style, XPdfFontOptions pdfOptions, TypefaceMatch match, double? obliqueSkewSinus = null)
+        public XFont(double emSize, PaintFontStyle style, XPdfFontOptions pdfOptions, TypefaceMatch match, double? obliqueSkewSinus = null)
         {
             _emSize = emSize;
             _style = style;
@@ -112,11 +113,11 @@ namespace PeachPDF.PDF.Drawing
         /// Gets style information for this Font object.
         /// </summary>
         [Browsable(false)]
-        public XFontStyle Style
+        public PaintFontStyle Style
         {
             get { return _style; }
         }
-        readonly XFontStyle _style;
+        readonly PaintFontStyle _style;
 
         /// <summary>
         /// The sine of a declared CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c>, when the requesting box's
@@ -131,7 +132,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         public bool Bold
         {
-            get { return (_style & XFontStyle.Bold) == XFontStyle.Bold; }
+            get { return (_style & PaintFontStyle.Bold) == PaintFontStyle.Bold; }
         }
 
         /// <summary>
@@ -139,7 +140,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         public bool Italic
         {
-            get { return (_style & XFontStyle.Italic) == XFontStyle.Italic; }
+            get { return (_style & PaintFontStyle.Italic) == PaintFontStyle.Italic; }
         }
 
         /// <summary>
@@ -147,7 +148,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         public bool Strikeout
         {
-            get { return (_style & XFontStyle.Strikeout) == XFontStyle.Strikeout; }
+            get { return (_style & PaintFontStyle.Strikeout) == PaintFontStyle.Strikeout; }
         }
 
         /// <summary>
@@ -155,7 +156,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         public bool Underline
         {
-            get { return (_style & XFontStyle.Underline) == XFontStyle.Underline; }
+            get { return (_style & PaintFontStyle.Underline) == PaintFontStyle.Underline; }
         }
 
         /// <summary>

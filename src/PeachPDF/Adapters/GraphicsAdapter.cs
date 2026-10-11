@@ -687,7 +687,7 @@ namespace PeachPDF.Adapters
                         return;
                 }
 
-                _g.DrawPolygon(ToXBrush(brush), Utils.Convert(points, PixelsPerPoint), XFillMode.Winding);
+                _g.DrawPolygon(ToXBrush(brush), Utils.Convert(points, PixelsPerPoint), FillMode.Nonzero);
             }
         }
 
@@ -848,50 +848,29 @@ namespace PeachPDF.Adapters
                 : new XPen(ToXBrush(pen.Paint), pen.Width);
 
             xPen.MiterLimit = pen.MiterLimit;
-            xPen.LineCap = pen.LineCap switch
-            {
-                LineCap.Round => XLineCap.Round,
-                LineCap.Square => XLineCap.Square,
-                _ => XLineCap.Flat,
-            };
-            xPen.LineJoin = pen.LineJoin switch
-            {
-                LineJoin.Round => XLineJoin.Round,
-                LineJoin.Bevel => XLineJoin.Bevel,
-                _ => XLineJoin.Miter,
-            };
+            xPen.LineCap = pen.LineCap;
+            xPen.LineJoin = pen.LineJoin;
+            xPen.DashStyle = pen.DashStyle;
 
-            switch (pen.DashStyle)
+            if (pen.DashStyle == DashStyle.Dash && pen.Width < 2)
             {
-                case DashStyle.Solid:
-                    xPen.DashStyle = XDashStyle.Solid;
-                    break;
-                case DashStyle.Dash:
-                    xPen.DashStyle = XDashStyle.Dash;
-                    if (pen.Width < 2)
-                        xPen.DashPattern = [4, 4]; // better looking
-                    break;
-                case DashStyle.Dot:
-                    xPen.DashStyle = XDashStyle.Dot;
-                    break;
-                case DashStyle.DashDot:
-                    xPen.DashStyle = XDashStyle.DashDot;
-                    break;
-                case DashStyle.DashDotDot:
-                    xPen.DashStyle = XDashStyle.DashDotDot;
-                    break;
-                case DashStyle.Custom when pen.Width > 0:
+                xPen.DashPattern = [4, 4]; // better looking
+            }
+            else if (pen.DashStyle == DashStyle.Custom)
+            {
+                if (pen.Width > 0)
+                {
                     // XPen's custom dash array is expressed as multiples of pen width (a GDI+ convention -
                     // see PdfGraphicsState.RealizePen, which multiplies each entry by pen._width when
                     // writing the PDF "d" operator), whereas SVG's stroke-dasharray/stroke-dashoffset are
                     // absolute user-space lengths - normalize by dividing through by the pen's width.
-                    xPen.DashStyle = XDashStyle.Custom;
                     xPen.DashPattern = pen.DashPattern.Select(v => v / pen.Width).ToArray();
                     xPen.DashOffset = pen.DashOffset / pen.Width;
-                    break;
-                default:
-                    xPen.DashStyle = XDashStyle.Solid;
-                    break;
+                }
+                else
+                {
+                    xPen.DashStyle = DashStyle.Solid;
+                }
             }
 
             return xPen;

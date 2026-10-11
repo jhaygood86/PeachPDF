@@ -219,12 +219,12 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the current fill mode (alternate or winding).
         /// </summary>
-        XFillMode FillMode
+        FillMode FillMode
         {
             get { return _fillMode; }
             set { _fillMode = value; }
         }
-        XFillMode _fillMode;
+        FillMode _fillMode = FillMode.EvenOdd; // The default is even-odd, which is not the enum default (Nonzero = 0).
 
         public void AddArc(double x, double y, double width, double height, double startAngle, double sweepAngle)
         {

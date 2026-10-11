@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Internal;
 using System;
 
@@ -414,9 +415,9 @@ namespace PeachPDF.PDF.Drawing
         // --------------------------------------------------------------------------------------------
 
         /// <summary>
-        /// Gets or sets an XFillMode that determines how the interiors of shapes are filled.
+        /// Gets or sets an FillMode that determines how the interiors of shapes are filled.
         /// </summary>
-        public XFillMode FillMode
+        public FillMode FillMode
         {
             get { return _fillMode; }
             set
@@ -426,7 +427,7 @@ namespace PeachPDF.PDF.Drawing
             }
         }
 
-        private XFillMode _fillMode;
+        private FillMode _fillMode = FillMode.EvenOdd; // The default is even-odd, which is not the enum default (Nonzero = 0).
 
         // --------------------------------------------------------------------------------------------
 

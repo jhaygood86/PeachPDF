@@ -275,8 +275,8 @@ namespace PeachPDF.Adapters
 
         private FontAdapter MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
-            var fontStyle = ToXFontStyle(style);
-            var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
+            var fontStyle = WithoutSynthesisSwitches(style);
+            var isItalic = (fontStyle & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
             var match = _fontSet.MatchOrFallback(family, QueryFor(weight, stretch, isItalic, null, size, obliqueSkewSinus, variations));
             return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
@@ -296,8 +296,9 @@ namespace PeachPDF.Adapters
                 FontVariationSettingsResolver.ToAxes(variations, size / PixelsPerPoint / PeachPDF.CSS.Length.PointsPerPx),
                 obliqueSkewSinus);
 
-        /// <summary>The style bits <see cref="XFontStyle"/> understands: the synthesis switches are not part of it.</summary>
-        private static XFontStyle ToXFontStyle(PaintFontStyle style) => (XFontStyle)((int)style & 0xF);
+        /// <summary>The style bits the PDF font layer understands: the synthesis switches are not part of it.</summary>
+        private static PaintFontStyle WithoutSynthesisSwitches(PaintFontStyle style)
+            => style & ~(PaintFontStyle.NoSyntheticBold | PaintFontStyle.NoSyntheticItalic);
 
         /// <summary>
         /// Drops from a match's synthesis whatever <c>font-synthesis-weight</c>/<c>-style: none</c> forbade
@@ -311,7 +312,7 @@ namespace PeachPDF.Adapters
             return synthesis == match.Synthesis ? match : match with { Synthesis = synthesis };
         }
 
-        private FontAdapter CreateFontAdapter(double size, XFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
+        private FontAdapter CreateFontAdapter(double size, PaintFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
         {
             // A face with a slant axis draws the oblique itself, so the renderer must not shear it as well.
             if (obliqueSkewSinus is not null && match.Typeface.Axes.Any(a => a.Tag == AxisTags.Slant))
@@ -325,8 +326,8 @@ namespace PeachPDF.Adapters
 
         protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
-            var fontStyle = ToXFontStyle(style);
-            var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
+            var fontStyle = WithoutSynthesisSwitches(style);
+            var isItalic = (fontStyle & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
             // A null here tells the caller to try the next family in the stack: never build an XFont for a family
             // that can't render this codepoint.
@@ -344,8 +345,8 @@ namespace PeachPDF.Adapters
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;
 
-            var fontStyle = ToXFontStyle(style);
-            var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
+            var fontStyle = WithoutSynthesisSwitches(style);
+            var isItalic = (fontStyle & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
             try
             {

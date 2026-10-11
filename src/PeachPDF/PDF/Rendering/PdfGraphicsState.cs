@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 using PeachPDF.PDF.Advanced;
@@ -89,7 +90,7 @@ namespace PeachPDF.PDF.Rendering
         int _realizedLineCap = -1;
         int _realizedLineJoin = -1;
         double _realizedMiterLimit = -1;
-        XDashStyle _realizedDashStyle = (XDashStyle)(-1);
+        DashStyle _realizedDashStyle = (DashStyle)(-1);
         string _realizedDashPattern = null!;
         XColor _realizedStrokeColor = XColor.Empty;
         bool _realizedStrokeOverPrint;
@@ -123,7 +124,7 @@ namespace PeachPDF.PDF.Rendering
                 _realizedLineJoin = (int)pen._lineJoin;
             }
 
-            if (_realizedLineJoin == (int)XLineJoin.Miter)
+            if (_realizedLineJoin == (int)LineJoin.Miter)
             {
                 if (_realizedMiterLimit != (int)pen._miterLimit && (int)pen._miterLimit != 0)
                 {
@@ -132,39 +133,39 @@ namespace PeachPDF.PDF.Rendering
                 }
             }
 
-            if (_realizedDashStyle != pen._dashStyle || pen._dashStyle == XDashStyle.Custom)
+            if (_realizedDashStyle != pen._dashStyle || pen._dashStyle == DashStyle.Custom)
             {
                 double dot = pen.Width;
                 double dash = 3 * dot;
 
                 // Line width 0 is not recommended but valid.
-                XDashStyle dashStyle = pen.DashStyle;
+                DashStyle dashStyle = pen.DashStyle;
                 if (dot == 0)
-                    dashStyle = XDashStyle.Solid;
+                    dashStyle = DashStyle.Solid;
 
                 switch (dashStyle)
                 {
-                    case XDashStyle.Solid:
+                    case DashStyle.Solid:
                         _renderer.Append("[]0 d\n");
                         break;
 
-                    case XDashStyle.Dash:
+                    case DashStyle.Dash:
                         _renderer.AppendFormatArgs("[{0:" + frmt2 + "} {1:" + frmt2 + "}]0 d\n", dash, dot);
                         break;
 
-                    case XDashStyle.Dot:
+                    case DashStyle.Dot:
                         _renderer.AppendFormatArgs("[{0:" + frmt2 + "}]0 d\n", dot);
                         break;
 
-                    case XDashStyle.DashDot:
+                    case DashStyle.DashDot:
                         _renderer.AppendFormatArgs("[{0:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "}]0 d\n", dash, dot);
                         break;
 
-                    case XDashStyle.DashDotDot:
+                    case DashStyle.DashDotDot:
                         _renderer.AppendFormatArgs("[{0:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "}]0 d\n", dash, dot);
                         break;
 
-                    case XDashStyle.Custom:
+                    case DashStyle.Custom:
                         {
                             StringBuilder pdf = new StringBuilder("[", 256);
                             int len = pen._dashPattern == null ? 0 : pen._dashPattern.Length;
@@ -658,7 +659,7 @@ namespace PeachPDF.PDF.Rendering
             _renderer.BeginGraphicMode();
             RealizeCtm();
             _renderer.AppendPath(clipPath._corePath);
-            _renderer.Append(clipPath.FillMode == XFillMode.Winding ? "W n\n" : "W* n\n");
+            _renderer.Append(clipPath.FillMode == FillMode.Nonzero ? "W n\n" : "W* n\n");
         }
 
         #endregion

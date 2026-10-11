@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
 
 namespace PeachPDF.PDF.Drawing
@@ -51,9 +52,9 @@ namespace PeachPDF.PDF.Drawing
             return new XSize(size.Width, size.Height);
         }
 
-        public static XFontStyle CreateStyle(bool isBold, bool isItalic)
+        public static PaintFontStyle CreateStyle(bool isBold, bool isItalic)
         {
-            return (isBold ? XFontStyle.Bold : 0) | (isItalic ? XFontStyle.Italic : 0);
+            return (isBold ? PaintFontStyle.Bold : 0) | (isItalic ? PaintFontStyle.Italic : 0);
         }
     }
 }

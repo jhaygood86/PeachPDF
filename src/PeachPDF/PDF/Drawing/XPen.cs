@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using System;
 
 namespace PeachPDF.PDF.Drawing
@@ -57,9 +58,9 @@ namespace PeachPDF.PDF.Drawing
         {
             _color = color;
             _width = width;
-            _lineJoin = XLineJoin.Miter;
-            _lineCap = XLineCap.Flat;
-            _dashStyle = XDashStyle.Solid;
+            _lineJoin = LineJoin.Miter;
+            _lineCap = LineCap.Butt;
+            _dashStyle = DashStyle.Solid;
             _dashOffset = 0f;
             _immutable = immutable;
         }
@@ -81,9 +82,9 @@ namespace PeachPDF.PDF.Drawing
         {
             _brush = brush;
             _width = width;
-            _lineJoin = XLineJoin.Miter;
-            _lineCap = XLineCap.Flat;
-            _dashStyle = XDashStyle.Solid;
+            _lineJoin = LineJoin.Miter;
+            _lineCap = LineCap.Butt;
+            _dashStyle = DashStyle.Solid;
             _dashOffset = 0f;
             _immutable = immutable;
         }
@@ -162,7 +163,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the line join.
         /// </summary>
-        public XLineJoin LineJoin
+        public LineJoin LineJoin
         {
             get { return _lineJoin; }
             set
@@ -173,12 +174,12 @@ namespace PeachPDF.PDF.Drawing
                 _lineJoin = value;
             }
         }
-        internal XLineJoin _lineJoin;
+        internal LineJoin _lineJoin;
 
         /// <summary>
         /// Gets or sets the line cap.
         /// </summary>
-        public XLineCap LineCap
+        public LineCap LineCap
         {
             get { return _lineCap; }
             set
@@ -189,7 +190,7 @@ namespace PeachPDF.PDF.Drawing
                 _lineCap = value;
             }
         }
-        internal XLineCap _lineCap;
+        internal LineCap _lineCap;
 
         /// <summary>
         /// Gets or sets the miter limit.
@@ -210,7 +211,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the dash style.
         /// </summary>
-        public XDashStyle DashStyle
+        public DashStyle DashStyle
         {
             get { return _dashStyle; }
             set
@@ -221,7 +222,7 @@ namespace PeachPDF.PDF.Drawing
                 _dashStyle = value;
             }
         }
-        internal XDashStyle _dashStyle;
+        internal DashStyle _dashStyle;
 
         /// <summary>
         /// Gets or sets the dash offset.
@@ -277,7 +278,7 @@ namespace PeachPDF.PDF.Drawing
                     throw new ArgumentException("Dash pattern values must not all be zero.");
 
                 _dirty = true;
-                _dashStyle = XDashStyle.Custom;
+                _dashStyle = DashStyle.Custom;
                 _dashPattern = (double[])value.Clone();
             }
         }

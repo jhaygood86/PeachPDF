@@ -878,7 +878,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
                 throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
 
             if (_renderer != null)
-                _renderer.DrawPolygon(pen, null, points, XFillMode.Alternate);  // XFillMode is ignored
+                _renderer.DrawPolygon(pen, null, points, FillMode.EvenOdd);  // FillMode is ignored
         }
 
         // ----- fill -----
@@ -886,7 +886,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XBrush brush, XPoint[] points, XFillMode fillmode)
+        public void DrawPolygon(XBrush brush, XPoint[] points, FillMode fillmode)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -904,7 +904,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XPen pen, XBrush brush, XPoint[] points, XFillMode fillmode)
+        public void DrawPolygon(XPen pen, XBrush brush, XPoint[] points, FillMode fillmode)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -995,7 +995,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawClosedCurve(XPen pen, XPoint[] points)
         {
-            DrawClosedCurve(pen, null, points, XFillMode.Alternate, 0.5);
+            DrawClosedCurve(pen, null, points, FillMode.EvenOdd, 0.5);
         }
 
 
@@ -1004,7 +1004,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawClosedCurve(XPen pen, XPoint[] points, double tension)
         {
-            DrawClosedCurve(pen, null, points, XFillMode.Alternate, tension);
+            DrawClosedCurve(pen, null, points, FillMode.EvenOdd, tension);
         }
 
         // ----- fill -----
@@ -1014,13 +1014,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawClosedCurve(XBrush brush, XPoint[] points)
         {
-            DrawClosedCurve(null, brush, points, XFillMode.Alternate, 0.5);
+            DrawClosedCurve(null, brush, points, FillMode.EvenOdd, 0.5);
         }
 
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, XPoint[] points, XFillMode fillmode)
+        public void DrawClosedCurve(XBrush brush, XPoint[] points, FillMode fillmode)
         {
             DrawClosedCurve(null, brush, points, fillmode, 0.5);
         }
@@ -1028,7 +1028,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, XPoint[] points, XFillMode fillmode, double tension)
+        public void DrawClosedCurve(XBrush brush, XPoint[] points, FillMode fillmode, double tension)
         {
             DrawClosedCurve(null, brush, points, fillmode, tension);
         }
@@ -1040,13 +1040,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points)
         {
-            DrawClosedCurve(pen, brush, points, XFillMode.Alternate, 0.5);
+            DrawClosedCurve(pen, brush, points, FillMode.EvenOdd, 0.5);
         }
 
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, XFillMode fillmode)
+        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, FillMode fillmode)
         {
             DrawClosedCurve(pen, brush, points, fillmode, 0.5);
         }
@@ -1054,7 +1054,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, XFillMode fillmode, double tension)
+        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, FillMode fillmode, double tension)
         {
             if (pen == null && brush == null)
             {

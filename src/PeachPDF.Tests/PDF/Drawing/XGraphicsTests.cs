@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -72,7 +73,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
 
-            var font = TestFonts.Create("Times New Roman", 12, XFontStyle.Regular);
+            var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
             var size = gfx.MeasureString("Hello", font);
 
             Assert.True(size.Width > 0);
@@ -83,7 +84,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void MeasureString_EmptyString_ReturnsNonNegativeSize()
         {
             using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
-            var font = TestFonts.Create("Times New Roman", 12, XFontStyle.Regular);
+            var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
 
             var size = gfx.MeasureString("", font);
 
@@ -370,7 +371,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             {
                 var pen = new XPen(XColors.Red, 1.5);
                 var brush = XBrushes.Blue;
-                var font = TestFonts.Create("Times New Roman", 14, XFontStyle.Bold);
+                var font = TestFonts.Create("Times New Roman", 14, PaintFontStyle.Bold);
 
                 gfx.TranslateTransform(1, 1);
                 gfx.ScaleTransform(1.0);
@@ -402,8 +403,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 gfx.DrawEllipse(pen, brush, 5, 5, 20, 20);
 
                 gfx.DrawPolygon(pen, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)]);
-                gfx.DrawPolygon(brush, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)], XFillMode.Winding);
-                gfx.DrawPolygon(pen, brush, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)], XFillMode.Winding);
+                gfx.DrawPolygon(brush, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)], FillMode.Nonzero);
+                gfx.DrawPolygon(pen, brush, [new XPoint(0, 0), new XPoint(10, 0), new XPoint(5, 10)], FillMode.Nonzero);
 
                 gfx.DrawPie(pen, 5, 5, 30, 30, 0, 90);
                 gfx.DrawPie(brush, 5, 5, 30, 30, 0, 90);

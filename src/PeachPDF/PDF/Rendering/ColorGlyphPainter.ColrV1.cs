@@ -87,7 +87,7 @@ namespace PeachPDF.PDF.Rendering
                 }
 
                 XGraphicsPath clipPath = BuildPath(outline, transform);
-                clipPath.FillMode = XFillMode.Alternate;
+                clipPath.FillMode = FillMode.EvenOdd;
                 clipPath.AddRectangle(new XRect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
                 _clips.Push(owner._gfx.Save());
                 owner._gfx.IntersectClip(clipPath);
@@ -112,7 +112,7 @@ namespace PeachPDF.PDF.Rendering
                     return;
                 }
 
-                var path = new XGraphicsPath { FillMode = XFillMode.Winding };
+                var path = new XGraphicsPath { FillMode = FillMode.Nonzero };
                 path.AddRectangle(rect);
                 owner._gfx.DrawPath(ToBrush(paint), path);
             }
@@ -178,7 +178,7 @@ namespace PeachPDF.PDF.Rendering
                         pointCount += contour.Segments[si].IsCubic ? 3 : 1;
                 }
 
-                var path = new XGraphicsPath(pointCount) { FillMode = XFillMode.Winding };
+                var path = new XGraphicsPath(pointCount) { FillMode = FillMode.Nonzero };
 
                 for (var ci = 0; ci < outline.Contours.Count; ci++)
                 {

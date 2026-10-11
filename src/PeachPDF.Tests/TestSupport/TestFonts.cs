@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -21,7 +22,7 @@ namespace PeachPDF.Tests.TestSupport
         public static XFont Create(
             string family,
             double emSize,
-            XFontStyle style = XFontStyle.Regular,
+            PaintFontStyle style = PaintFontStyle.Regular,
             int? weight = null,
             int stretch = TypefaceQuery.NormalWidth,
             double? obliqueSkewSinus = null,
@@ -30,8 +31,8 @@ namespace PeachPDF.Tests.TestSupport
         {
             fontSet ??= new FontSet();
 
-            var isItalic = (style & XFontStyle.Italic) == XFontStyle.Italic;
-            var effectiveWeight = weight ?? ((style & XFontStyle.Bold) == XFontStyle.Bold ? TypefaceQuery.BoldWeight : TypefaceQuery.NormalWeight);
+            var isItalic = (style & PaintFontStyle.Italic) == PaintFontStyle.Italic;
+            var effectiveWeight = weight ?? ((style & PaintFontStyle.Bold) == PaintFontStyle.Bold ? TypefaceQuery.BoldWeight : TypefaceQuery.NormalWeight);
             var match = fontSet.MatchOrFallback(family, new TypefaceQuery(effectiveWeight, stretch, isItalic));
 
             return new XFont(emSize, style, pdfOptions ?? new XPdfFontOptions(GlobalFontSettings.DefaultFontEncoding), match, obliqueSkewSinus);
