@@ -85,7 +85,8 @@ retrofitted with `?`/`!` annotations file by file).
 * **`#nullable disable`** on every file, since the port is C# 5-era code with no nullable annotations and
   retrofitting them file-by-file would risk changing behavior for no benefit (this is vendored, not
   hand-maintained, code).
-* **Not ported:** the encoder (this repository never compresses Brotli at runtime), `BrotliOutputStream` and
+* **Not ported:** Google's encoder (the managed encoder under `Internal/Encoder/` is original code - see the section at the end
+  of this file), `BrotliOutputStream` and
   the encoder-facing parts of `BrotliInputStream` upstream doesn't have anyway (the decoder-only subtree has
   none), and upstream's own JUnit-derived `*Test.cs` files (this project has its own tests instead, verifying
   against the BCL decoder rather than against values transcribed from the Java tests).
@@ -118,3 +119,25 @@ is byte-for-byte identical to `System.IO.Compression.BrotliStream`'s. It also fu
 truncated and mutated byte sequences and asserts every one either decodes correctly or throws within a bounded
 time (never hangs), since this is the same recipe the accepted-gaps/recent-fixes conventions ask for real
 correctness evidence rather than "it compiles and looks right".
+
+## The encoder (original code, not a port)
+
+`ManagedBrotliCompressor` and `Internal/Encoder/` are written for this repository, not taken from google/brotli (whose encoder is
+about 15,000 lines of C with no managed counterpart upstream). They share only the format: `Internal/Prefix.cs`'s length tables are
+the decoder's own, reused to code insert and copy lengths. What it implements, from RFC 7932:
+
+* LZ77 over a hash chain (4-byte hash; chain depth 1 to 512 by quality; lazy matching from quality 5), a window that grows with
+  the input up to 4 MB, last-distance reuse (distance code 0) and explicit distance codes otherwise.
+* One literal, one insert-and-copy and one distance prefix code per 1 MB meta-block, as "simple" codes for up to four symbols and
+  "complex" codes (run-length coded code lengths) otherwise; length-limited Huffman construction.
+* A stored (uncompressed) meta-block, followed by an empty last block, whenever a compressed one would not be smaller.
+
+What it deliberately leaves out, and what that costs (measured against .NET's native encoder on a 13 MB CJK font, a 1 MB Latin font and
+two text files): no static dictionary, no context modeling, no block splitting, no ring-buffer distance codes 1-15, no optimal parsing.
+Size is within a few percent of the native encoder at qualities 0-9 on text and about 7% worse on fonts, and smaller than Flate on fonts and
+prose from quality 3 (on C# source it ties Flate at quality 6 and wins from 9); at quality 11 the native encoder is 10-15% smaller because it does far more work. The managed encoder's quality 11
+is not "zopfli-grade": it only searches the chain deeper.
+
+Verification: every output is decoded by the BCL's `BrotliStream` and by the managed decoder and compared to the input (all 12 qualities,
+empty and tiny inputs, runs, random data, skewed alphabets, 2 to 5 distinct bytes (the simple-code shapes), a real WOFF2 font, every
+embedded `.br` resource's decoded content, inputs over several meta-blocks, and a stored block between compressed ones).

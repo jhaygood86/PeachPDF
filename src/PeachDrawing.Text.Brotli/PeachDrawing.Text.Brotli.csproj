@@ -16,7 +16,7 @@
 	<PropertyGroup>
 		<AssemblyName>PeachDrawing.Text.Brotli</AssemblyName>
 		<RootNamespace>PeachDrawing.Text.Brotli</RootNamespace>
-		<Description>A pure-managed Brotli decoder for PeachDrawing.Text's pluggable BrotliDecompression seam, for hosts (such as WebAssembly) where System.IO.Compression.BrotliStream is unavailable.</Description>
+		<Description>A pure-managed Brotli decoder and encoder for PeachDrawing.Text's pluggable BrotliDecompression and BrotliCompression seams, for hosts (such as WebAssembly) where System.IO.Compression.BrotliStream is unavailable.</Description>
 		<IsPackable>false</IsPackable>
 		<!--
 			No GenerateDocumentationFile: this project isn't published/packed (see IsPackable above), and the vendored

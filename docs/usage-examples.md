@@ -216,6 +216,7 @@ using PeachDrawing.Text.Brotli;
 if (OperatingSystem.IsBrowser())
 {
     ManagedBrotliDecompressor.Register();
+    ManagedBrotliCompressor.Register(); // only needed for the opt-in BrotliCompression PDF streams
 }
 ```
 
