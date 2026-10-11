@@ -189,6 +189,29 @@ namespace PeachPDF.Tests.Integration
             Assert.True(kidIndex < ctxIndex, "without a stacking context the z-index:-1 child paints first");
         }
 
+        [Theory]
+        [InlineData("transform:rotate(10deg)")]
+        [InlineData("opacity:0.5")]
+        public async Task StackingContextChild_OfAPositionedAutoParent_PaintsAfterTheParentsBackground(string style)
+        {
+            // A z-index:auto positioned parent paints in step 8 as if it were its own stacking context, and its
+            // background is part of that painting; a transformed or translucent child is painted in the same
+            // step, in tree order, so after it. The child used to be hoisted ahead of the parent and covered.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='parent' style='position:relative;width:150px;height:80px;background:rgb(221,221,221);'>" +
+                $"<div id='kid' style='{style};width:40px;height:40px;background:rgb(204,51,51);'></div></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var parentIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(221, 221, 221));
+            var kidIndex = rects.FindIndex(r => r.PaintColor == PaintColor.FromArgb(204, 51, 51));
+
+            Assert.True(parentIndex >= 0 && kidIndex >= 0, "one of the two boxes never painted");
+            Assert.True(parentIndex < kidIndex, "the stacking-context child must paint above its positioned parent's background");
+        }
+
         [Fact]
         public async Task PositionedAutoSiblings_PaintInTreeOrderAcrossPositionSchemes()
         {
