@@ -212,6 +212,43 @@ namespace PeachPDF.Tests.Integration
             Assert.True(parentIndex < kidIndex, "the stacking-context child must paint above its positioned parent's background");
         }
 
+        [Theory]
+        [InlineData("", false)]
+        [InlineData("display:inline-block;", true)]
+        [InlineData("float:left;", true)]
+        public async Task TransformOnAnInlineSpan_IsAppliedOnlyWhenTheSpanIsTransformable(string display, bool transformed)
+        {
+            // CSS Transforms 1 section 2: a non-replaced inline box ignores transform, so a plain span is painted
+            // untransformed (no matrix pushed, and it is not an own stacking context) while the same span made
+            // atomic or floated is transformed.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div>plain <span id='s' style='{display}background:rgb(231,111,81);transform:rotate(45deg);'>inline span</span></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            Assert.Equal(transformed, g.Log.Any(op => op is TestRecordingGraphics.PushTransformCall));
+            Assert.Equal(transformed, PeachPDF.Html.Core.Utils.DomUtils.IsStackingContextBox(FindById(root, "s")!));
+            Assert.Contains(g.Log, op => op is TestRecordingGraphics.DrawRectCall r && r.PaintColor == PaintColor.FromArgb(231, 111, 81));
+        }
+
+        [Theory]
+        [InlineData("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", true)]
+        [InlineData("nothing-here.bin", false)]
+        public async Task TransformOnAnObject_IsAppliedOnlyWhenItsResourceResolves(string data, bool transformed)
+        {
+            // A resolved <object> is a replaced element, so transformable; one that falls back to its inline
+            // content is a plain inline box, which ignores the transform.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div><object id='o' data='{data}' width='20' height='20' style='transform:rotate(10deg);'>fallback</object></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            Assert.Equal(transformed, g.Log.Any(op => op is TestRecordingGraphics.PushTransformCall));
+            Assert.Equal(transformed, FindById(root, "o")!.HasTransform);
+        }
+
         [Fact]
         public async Task PositionedAutoSiblings_PaintInTreeOrderAcrossPositionSchemes()
         {

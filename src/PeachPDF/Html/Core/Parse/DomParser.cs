@@ -3180,7 +3180,10 @@ namespace PeachPDF.Html.Core.Parse
         private static CssBox? CorrectBlockInsideInlineImp(CssBox box)
         {
             if (box.DerivedStyle.ActualDisplay == Keywords.Inline)
+            {
+                box.IsInlineBoxSplitByBlock = true;
                 box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
+            }
 
             if (box.Boxes.Count > 1 || box.Boxes[0].Boxes.Count > 1)
             {
@@ -3210,6 +3213,7 @@ namespace PeachPDF.Html.Core.Parse
             }
             else if (box.Boxes[0].DerivedStyle.ActualDisplay == Keywords.Inline)
             {
+                box.Boxes[0].IsInlineBoxSplitByBlock = true;
                 box.Boxes[0].Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 

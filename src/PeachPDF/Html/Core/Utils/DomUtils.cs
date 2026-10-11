@@ -1612,8 +1612,8 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Whether <paramref name="box"/>'s <em>used</em> <c>transform-style</c> is <c>preserve-3d</c> (CSS Transforms 2 §6.1): the computed value,
-        /// unless a grouping property forces <c>flat</c> - <c>overflow</c> other than <c>visible</c>, <c>opacity</c> below 1, a <c>filter</c>,
+        /// Whether <paramref name="box"/>'s <em>used</em> <c>transform-style</c> is <c>preserve-3d</c> (CSS Transforms 2 §6.1): the computed value
+        /// (which only applies to a transformable box), unless a grouping property forces <c>flat</c> - <c>overflow</c> other than <c>visible</c>, <c>opacity</c> below 1, a <c>filter</c>,
         /// <c>backdrop-filter</c>, <c>clip-path</c>, <c>clip</c> or a <c>mix-blend-mode</c> other than <c>normal</c>. Such a box's children are flattened into it.
         /// </summary>
         public static bool EstablishesPreserve3d(CssBox box) =>

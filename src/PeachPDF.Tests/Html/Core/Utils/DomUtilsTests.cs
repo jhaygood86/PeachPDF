@@ -351,10 +351,105 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public async Task IsStackingContextBox_Transformed_ReturnsTrue()
         {
-            var root = await Render("<div><span id='inner' style='transform: rotate(10deg);'>Text</span></div>");
-            var span = DomUtils.GetBoxById(root, "inner")!;
+            var root = await Render("<div><div id='inner' style='transform: rotate(10deg);'>Text</div></div>");
+            var box = DomUtils.GetBoxById(root, "inner")!;
 
-            Assert.True(DomUtils.IsStackingContextBox(span));
+            Assert.True(DomUtils.IsStackingContextBox(box));
+        }
+
+        [Theory]
+        [InlineData("<span id='inner' style='transform: rotate(10deg);'>Text</span>", false)]
+        [InlineData("<span id='inner' style='transform: rotate(0deg);'>Text</span>", false)]
+        [InlineData("<span id='inner' style='display: inline-block; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<span id='inner' style='float: left; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<span id='inner' style='position: absolute; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<span id='inner' style='display: block; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<img id='inner' style='transform: rotate(10deg);' width='10' height='10'>", true)]
+        public async Task IsStackingContextBox_TransformOnAnInlineBox_OnlyCountsWhenTheBoxIsTransformable(string markup, bool expected)
+        {
+            // CSS Transforms 1 section 2: a non-replaced inline box is not a transformable element, so the property
+            // neither transforms it nor makes it a stacking context. A blockified, atomic or replaced box is one.
+            var root = await Render($"<div>{markup}</div>");
+            var box = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.Equal(expected, box.DerivedStyle.IsTransformable);
+            Assert.Equal(expected, box.HasTransform);
+            Assert.Equal(expected, DomUtils.IsStackingContextBox(box));
+        }
+
+        [Theory]
+        [InlineData("<span id='inner' style='display: inline-flex; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<span id='inner' style='display: inline-grid; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<span id='inner' style='display: inline-table; transform: rotate(10deg);'>Text</span>", true)]
+        [InlineData("<object id='inner' style='transform: rotate(10deg);'>fallback</object>", false)]
+        [InlineData("<video id='inner' style='transform: rotate(10deg);'></video>", true)]
+        [InlineData("<a id='inner' style='transform: rotate(10deg);'><div>block child</div></a>", false)]
+        [InlineData("<a id='inner' style='transform: rotate(10deg);'>text <div>block child</div> more text</a>", false)]
+        [InlineData("<a id='inner' style='float: left; transform: rotate(10deg);'><div>block child</div></a>", true)]
+        [InlineData("<a id='inner' style='position: absolute; transform: rotate(10deg);'><div>block child</div></a>", true)]
+        [InlineData("<a id='inner' style='display: inline-block; transform: rotate(10deg);'><div>block child</div></a>", true)]
+        public async Task IsTransformable_AtomicInlineObjectAndInlineWrappingABlock(string markup, bool expected)
+        {
+            // An inline box that holds a block is laid out as a block here, but to the author it is still an inline
+            // box, so the transform is ignored exactly as for a span with only text in it.
+            var root = await Render($"<div>{markup}</div>");
+            var box = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.Equal(expected, box.DerivedStyle.IsTransformable);
+            Assert.Equal(expected, box.HasTransform);
+            Assert.Equal(expected, !box.ActualTransformMatrix.IsIdentity);
+            Assert.Equal(expected, DomUtils.IsStackingContextBox(box));
+        }
+
+        [Theory]
+        [InlineData("<table><tr id='inner' style='transform: rotate(10deg);'><td>x</td></tr></table>", true)]
+        [InlineData("<table><tr><td id='inner' style='transform: rotate(10deg);'>x</td></tr></table>", true)]
+        [InlineData("<table id='inner' style='transform: rotate(10deg);'><tr><td>x</td></tr></table>", true)]
+        [InlineData("<table><colgroup id='inner' style='transform: rotate(10deg);'><col></colgroup><tr><td>x</td></tr></table>", false)]
+        public async Task IsTransformable_TableInternalBoxes_FollowTheSpecList(string markup, bool expected)
+        {
+            // css-transforms-1 section 2 lists table-row, the row groups, table-cell and table-caption, and not the
+            // column boxes.
+            var root = await Render(markup);
+            var box = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.Equal(expected, box.HasTransform);
+        }
+
+        [Theory]
+        [InlineData("<span id='inner' style='perspective: 500px;'>Text</span>", false)]
+        [InlineData("<span id='inner' style='transform-style: preserve-3d;'>Text</span>", false)]
+        [InlineData("<span id='inner' style='display: inline-block; perspective: 500px;'>Text</span>", true)]
+        [InlineData("<span id='inner' style='display: inline-block; transform-style: preserve-3d;'>Text</span>", true)]
+        public async Task PerspectiveAndTransformStyle_ApplyOnlyToATransformableBox(string markup, bool expected)
+        {
+            var root = await Render($"<div>{markup}</div>");
+            var box = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.Equal(expected, box.ActualPerspective > 0 || box.IsPreserve3dRequested);
+            Assert.Equal(expected, DomUtils.IsStackingContextBox(box) || DomUtils.EstablishesPreserve3d(box));
+        }
+
+        [Theory]
+        [InlineData("<span id='inner' style='backface-visibility: hidden;'>Text</span>", false)]
+        [InlineData("<span id='inner' style='display: inline-block; backface-visibility: hidden;'>Text</span>", true)]
+        public async Task BackfaceVisibility_AppliesOnlyToATransformableBox(string markup, bool expected)
+        {
+            var root = await Render($"<div>{markup}</div>");
+
+            Assert.Equal(expected, DomUtils.GetBoxById(root, "inner")!.IsBackfaceHidden);
+        }
+
+        [Theory]
+        [InlineData("<span id='host' style='transform: rotate(10deg);'>", false)]
+        [InlineData("<span id='host' style='display: inline-block; transform: rotate(10deg);'>", true)]
+        public async Task FixedDescendant_IsContainedByATransformedBoxOnlyWhenItIsTransformable(string open, bool contained)
+        {
+            var root = await Render($"<div>{open}<span id='fixed' style='position: fixed; top: 0;'>x</span></span></div>");
+            var host = DomUtils.GetBoxById(root, "host")!;
+            var fixedBox = DomUtils.GetBoxById(root, "fixed")!;
+
+            Assert.Equal(contained ? host : null, DomUtils.ClippingContainingBlockOf(fixedBox));
         }
 
         [Theory]
@@ -365,10 +460,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("perspective: 500px")]
         public async Task IsStackingContextBox_IdentityTransformOrPerspective_ReturnsTrue(string style)
         {
-            var root = await Render($"<div><span id='inner' style='{style};'>Text</span></div>");
-            var span = DomUtils.GetBoxById(root, "inner")!;
+            var root = await Render($"<div><div id='inner' style='{style};'>Text</div></div>");
+            var box = DomUtils.GetBoxById(root, "inner")!;
 
-            Assert.True(DomUtils.IsStackingContextBox(span));
+            Assert.True(DomUtils.IsStackingContextBox(box));
         }
 
         [Fact]

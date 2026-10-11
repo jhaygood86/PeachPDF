@@ -409,22 +409,22 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => DerivedStyle.IsTransformed;
 
-        /// <summary>True when the computed <c>transform</c> is not <c>none</c>, even if its matrix is the identity.</summary>
+        /// <summary>True when the computed <c>transform</c> is not <c>none</c> on a transformable box (see <see cref="DerivedStyle.IsTransformable"/>), even if its matrix is the identity.</summary>
         public bool HasTransform => DerivedStyle.HasTransform;
 
-        /// <summary>The box-local 4x4 the transform was projected from, or null without a <c>transform</c>.</summary>
+        /// <summary>The box-local 4x4 the transform was projected from, or null without a <c>transform</c> or on a box that is not transformable.</summary>
         public System.Numerics.Matrix4x4? ActualTransform4 => DerivedStyle.ActualTransform4;
 
-        /// <summary>The <c>perspective</c> distance this box gives its children (layout units); 0 for <c>none</c>.</summary>
+        /// <summary>The <c>perspective</c> distance this box gives its children (layout units); 0 for <c>none</c> or on a box that is not transformable.</summary>
         public double ActualPerspective => DerivedStyle.ActualPerspective;
 
         /// <summary>The <c>perspective-origin</c> relative to this box's border box (layout units).</summary>
         public (double X, double Y) ActualPerspectiveOrigin => DerivedStyle.ActualPerspectiveOrigin;
 
-        /// <summary>True for <c>backface-visibility: hidden</c>.</summary>
+        /// <summary>True for <c>backface-visibility: hidden</c> on a transformable box.</summary>
         public bool IsBackfaceHidden => DerivedStyle.IsBackfaceHidden;
 
-        /// <summary>True when the computed <c>transform-style</c> is <c>preserve-3d</c> (see <c>DomUtils.EstablishesPreserve3d</c> for the used value).</summary>
+        /// <summary>True when the computed <c>transform-style</c> is <c>preserve-3d</c> on a transformable box (see <c>DomUtils.EstablishesPreserve3d</c> for the used value).</summary>
         public bool IsPreserve3dRequested => DerivedStyle.IsPreserve3dRequested;
 
         /// <summary>Lazily computes the used value of the <c>opacity</c> property, clamped to [0, 1].</summary>
