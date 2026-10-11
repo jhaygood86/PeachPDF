@@ -440,7 +440,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
 
             var matrix = dict.Elements.GetMatrix("/Matrix");
 
-            Assert.Equal(new PeachPDF.PDF.Drawing.XMatrix(), matrix);
+            Assert.Equal(System.Numerics.Matrix3x2.Identity, matrix);
         }
 
         [Fact]
@@ -458,8 +458,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
 
             var matrix = dict.Elements.GetMatrix("/Matrix");
 
-            Assert.Equal(5, matrix.OffsetX);
-            Assert.Equal(6, matrix.OffsetY);
+            Assert.Equal(5, matrix.M31);
+            Assert.Equal(6, matrix.M32);
         }
 
         [Fact]
@@ -480,7 +480,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
             // bug found via this test; documented rather than fixed here.
             var dict = new PdfDictionary();
 
-            dict.Elements.SetMatrix("/Matrix", new PeachPDF.PDF.Drawing.XMatrix());
+            dict.Elements.SetMatrix("/Matrix", System.Numerics.Matrix3x2.Identity);
 
             Assert.Throws<NotImplementedException>(() => dict.Elements.GetMatrix("/Matrix"));
         }

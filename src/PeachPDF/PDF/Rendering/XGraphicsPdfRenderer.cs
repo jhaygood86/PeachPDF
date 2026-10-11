@@ -30,6 +30,7 @@
 #nullable disable warnings
 
 
+using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
@@ -232,7 +233,7 @@ namespace PeachPDF.PDF.Rendering
 
             Realize(pen);
 
-            AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, new XMatrix());
+            AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, Matrix3x2.Identity);
             AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
         }
 
@@ -333,7 +334,7 @@ namespace PeachPDF.PDF.Rendering
             Realize(pen, brush);
 
             AppendPathPoint(x + width / 2, y + height / 2, 'm');
-            AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.LineTo1st, new XMatrix());
+            AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.LineTo1st, Matrix3x2.Identity);
             AppendStrokeFill(pen, brush, FillMode.EvenOdd, true);
         }
 
@@ -666,9 +667,9 @@ namespace PeachPDF.PDF.Rendering
                     else
                     {
                         // Italic simulation is done by skewing characters to the right.
-                        XMatrix m = new XMatrix(1, 0, skewSinus, 1, pos.X, pos.Y);
+                        Matrix3x2 m = PdfMatrix.Create(1, 0, skewSinus, 1, pos.X, pos.Y);
                         AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
-                            m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
+                            m.M11, m.M12, m.M21, m.M22, m.M31, m.M32, text);
                         _gfxState.ItalicSimulationOn = true;
                         AdjustTdOffset(ref pos, verticalOffset, null);
                         RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
@@ -678,9 +679,9 @@ namespace PeachPDF.PDF.Rendering
                 {
                     if (_gfxState.ItalicSimulationOn)
                     {
-                        XMatrix m = new XMatrix(1, 0, 0, 1, pos.X, pos.Y);
+                        Matrix3x2 m = PdfMatrix.Create(1, 0, 0, 1, pos.X, pos.Y);
                         AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
-                            m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
+                            m.M11, m.M12, m.M21, m.M22, m.M31, m.M32, text);
                         _gfxState.ItalicSimulationOn = false;
                         AdjustTdOffset(ref pos, verticalOffset, null);
                         RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
@@ -1075,7 +1076,7 @@ namespace PeachPDF.PDF.Rendering
         //  throw new NotImplementedException("SetPageTransform");
         //}
 
-        public XMatrix Transform
+        public Matrix3x2 Transform
         {
             get
             {
@@ -1085,9 +1086,9 @@ namespace PeachPDF.PDF.Rendering
             }
         }
 
-        public void AddTransform(XMatrix value, XMatrixOrder matrixOrder)
+        public void AddTransform(Matrix3x2 value)
         {
-            _gfxState.AddTransform(value, matrixOrder);
+            _gfxState.AddTransform(value);
         }
 
         #endregion
@@ -1148,7 +1149,7 @@ namespace PeachPDF.PDF.Rendering
 
             // Save InternalGraphicsState and transformation of the current graphical state.
             InternalGraphicsState state = _gfxState.InternalState;
-            XMatrix ctm = _gfxState.EffectiveCtm;
+            Matrix3x2 ctm = _gfxState.EffectiveCtm;
             // Empty clip path by switching back to the previous state.
             RestoreState();
             SaveState();
@@ -1190,7 +1191,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Appends one or up to five Bézier curves that interpolate the arc.
         /// </summary>
-        void AppendPartialArc(double x, double y, double width, double height, double startAngle, double sweepAngle, PathStart pathStart, XMatrix matrix)
+        void AppendPartialArc(double x, double y, double width, double height, double startAngle, double sweepAngle, PathStart pathStart, Matrix3x2 matrix)
         {
             var (α, β, smallAngle, clockwise) = NormalizeArcAngles(startAngle, sweepAngle);
 
@@ -1256,7 +1257,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Appends the Bézier curve(s) for the current quadrant of AppendPartialArc's do/while loop.
         /// </summary>
-        void AppendArcQuadrantSegment(double x, double y, double width, double height, double α, double β, PathStart pathStart, XMatrix matrix,
+        void AppendArcQuadrantSegment(double x, double y, double width, double height, double α, double β, PathStart pathStart, Matrix3x2 matrix,
             int currentQuadrant, int startQuadrant, int endQuadrant, bool firstLoop, bool clockwise)
         {
             if (currentQuadrant == startQuadrant && firstLoop)
@@ -1308,7 +1309,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Appends a Bézier curve for an arc within a quadrant.
         /// </summary>
-        void AppendPartialArcQuadrant(double x, double y, double width, double height, double α, double β, PathStart pathStart, XMatrix matrix)
+        void AppendPartialArcQuadrant(double x, double y, double width, double height, double α, double β, PathStart pathStart, Matrix3x2 matrix)
         {
             Debug.Assert(α >= 0 && α <= 360);
             Debug.Assert(β >= 0);
@@ -1699,7 +1700,7 @@ namespace PeachPDF.PDF.Rendering
             // generated with PeachPDF.PDF.
             // In PDFsharp 1.4 I implement a revised technique that does not need text mirroring any more.
 
-            DefaultViewMatrix = new XMatrix();
+            DefaultViewMatrix = Matrix3x2.Identity;
             if (_gfx.PageDirection == XPageDirection.Downwards)
                 BeginPageDownwards();
             else
@@ -1722,7 +1723,7 @@ namespace PeachPDF.PDF.Rendering
             if (trimOffset != new PaintPoint())
             {
                 Debug.Assert(_gfx.PageUnit == XGraphicsUnit.Point, "With TrimMargins set the page units must be Point. Ohter cases nyi.");
-                DefaultViewMatrix.TranslatePrepend(trimOffset.X, -trimOffset.Y);
+                DefaultViewMatrix = PdfMatrix.Translation(trimOffset.X, -trimOffset.Y) * DefaultViewMatrix;
             }
 
             // Save initial graphic state.
@@ -1733,9 +1734,9 @@ namespace PeachPDF.PDF.Rendering
             {
                 Debug.Assert(_gfxState.RealizedCtm.IsIdentity);
                 const string format = Config.SignificantFigures7;
-                double[] cm = DefaultViewMatrix.GetElements();
+                Matrix3x2 cm = DefaultViewMatrix;
                 AppendFormatArgs("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
-                             cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
+                             cm.M11, cm.M12, cm.M21, cm.M22, cm.M31, cm.M32);
             }
         }
 
@@ -1746,8 +1747,8 @@ namespace PeachPDF.PDF.Rendering
             // Save initial graphic state.
             SaveState();
             // Set page transformation.
-            double[] cm = DefaultViewMatrix.GetElements();
-            AppendMatrix(cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
+            Matrix3x2 cm = DefaultViewMatrix;
+            AppendMatrix(cm.M11, cm.M12, cm.M21, cm.M22, cm.M31, cm.M32);
         }
 
         /// <summary>
@@ -1765,7 +1766,7 @@ namespace PeachPDF.PDF.Rendering
             };
 
             if (factor != 1.0)
-                DefaultViewMatrix.ScalePrepend(factor);
+                DefaultViewMatrix = PdfMatrix.Scaling(factor, factor) * DefaultViewMatrix;
         }
 
         /// <summary>
@@ -2618,6 +2619,6 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// The final transformation from the world space to the default page space.
         /// </summary>
-        public XMatrix DefaultViewMatrix;
+        public Matrix3x2 DefaultViewMatrix = Matrix3x2.Identity;
     }
 }

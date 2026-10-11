@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Rendering;
@@ -62,7 +63,7 @@ namespace PeachPDF.PDF.Advanced
                 throw new ArgumentException("Unsupoorted XGradientBrush: " + brush);
         }
 
-        internal XMatrix? EllipsePatternMatrix { get; private set; }
+        internal Matrix3x2? EllipsePatternMatrix { get; private set; }
 
         /// <summary>
         /// Resolves a shading's own effective <see cref="PdfColorMode"/> from the stop colors it's
@@ -170,7 +171,7 @@ namespace PeachPDF.PDF.Advanced
 
             // Set for a shading whose /Coords are the unit circle (focal point included) and whose real
             // position, size and orientation ride in this matrix; shared with the alpha soft mask below.
-            XMatrix? unitMatrix = null;
+            Matrix3x2? unitMatrix = null;
             double unitFocalX = 0, unitFocalY = 0;
             // The first stop's circle: its radius in the coordinate space the /Coords below are written in.
             double focalR = 0;
@@ -185,7 +186,7 @@ namespace PeachPDF.PDF.Advanced
                     new PaintPoint(brush._center1.X + u * brush._radiusX, brush._center1.Y + v * brush._radiusY)));
 
                 PaintPoint o = Map(0, 0), ux = Map(1, 0), uy = Map(0, 1);
-                unitMatrix = new XMatrix(ux.X - o.X, ux.Y - o.Y, uy.X - o.X, uy.Y - o.Y, o.X, o.Y);
+                unitMatrix = PdfMatrix.Create(ux.X - o.X, ux.Y - o.Y, uy.X - o.X, uy.Y - o.Y, o.X, o.Y);
                 unitFocalX = (brush._focalCenter.X - brush._center1.X) / brush._radiusX;
                 unitFocalY = (brush._focalCenter.Y - brush._center1.Y) / brush._radiusY;
                 var focalLen = Math.Sqrt(unitFocalX * unitFocalX + unitFocalY * unitFocalY);
@@ -215,7 +216,7 @@ namespace PeachPDF.PDF.Advanced
             {
                 // Ellipse: unit circle at origin; pattern matrix applies scale + translate
                 Elements[Keys.Coords] = new PdfLiteral("[0 0 0 0 0 1]");
-                EllipsePatternMatrix = new XMatrix(rx_v, 0, 0, ry_v, center_v.X, center_v.Y);
+                EllipsePatternMatrix = PdfMatrix.Create(rx_v, 0, 0, ry_v, center_v.X, center_v.Y);
             }
 
             XColor[] colors = brush._colors!;
@@ -243,7 +244,7 @@ namespace PeachPDF.PDF.Advanced
 
         private void BuildRadialAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions,
             double cx, double cy, double rx, double ry, bool isEllipse, bool isRepeating = false,
-            XMatrix? unitMatrix = null, double unitFocalX = 0, double unitFocalY = 0,
+            Matrix3x2? unitMatrix = null, double unitFocalX = 0, double unitFocalY = 0,
             double focalViewX = double.NaN, double focalViewY = double.NaN, double focalRadius = 0)
         {
             bool hasVaryingAlpha = false;
@@ -303,7 +304,7 @@ namespace PeachPDF.PDF.Advanced
                 formXObj.Elements["/Matrix"] = new PdfLiteral(string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
                     "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "} {5:" + fmt + "}]",
-                    um.M11, um.M12, um.M21, um.M22, um.OffsetX, um.OffsetY));
+                    um.M11, um.M12, um.M21, um.M22, um.M31, um.M32));
             }
             else if (isEllipse)
             {

@@ -28,6 +28,7 @@
 #endregion
 
 using PeachDrawing.Core;
+using PeachDrawing.Text.Outlines;
 using PeachPDF.PDF.Internal;
 using System;
 using System.Collections.Generic;
@@ -47,7 +48,7 @@ namespace PeachPDF.PDF.Drawing
         /// Creates between 1 and 5 Béziers curves from parameters specified like in GDI+.
         /// </summary>
         public static List<PaintPoint> BezierCurveFromArc(double x, double y, double width, double height, double startAngle, double sweepAngle,
-            PathStart pathStart, ref XMatrix matrix)
+            PathStart pathStart, Affine2x3 matrix)
         {
             List<PaintPoint> points = new List<PaintPoint>();
 
@@ -146,7 +147,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Appends a Bézier curve for an arc within a full quadrant.
         /// </summary>
-        static void AppendPartialArcQuadrant(List<PaintPoint> points, double x, double y, double width, double height, double α, double β, PathStart pathStart, XMatrix matrix)
+        static void AppendPartialArcQuadrant(List<PaintPoint> points, double x, double y, double width, double height, double α, double β, PathStart pathStart, Affine2x3 matrix)
         {
             Debug.Assert(α >= 0 && α <= 360);
             Debug.Assert(β >= 0);
@@ -212,19 +213,19 @@ namespace PeachPDF.PDF.Drawing
                 switch (pathStart)
                 {
                     case PathStart.MoveTo1st:
-                        points.Add(matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα)));
+                        points.Add(Apply(matrix, new PaintPoint(x0 + δx * cosα, y0 + δy * sinα)));
                         break;
 
                     case PathStart.LineTo1st:
-                        points.Add(matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα)));
+                        points.Add(Apply(matrix, new PaintPoint(x0 + δx * cosα, y0 + δy * sinα)));
                         break;
 
                     case PathStart.Ignore1st:
                         break;
                 }
-                points.Add(matrix.Transform(new PaintPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα))));
-                points.Add(matrix.Transform(new PaintPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ))));
-                points.Add(matrix.Transform(new PaintPoint(x0 + δx * cosβ, y0 + δy * sinβ)));
+                points.Add(Apply(matrix, new PaintPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα))));
+                points.Add(Apply(matrix, new PaintPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ))));
+                points.Add(Apply(matrix, new PaintPoint(x0 + δx * cosβ, y0 + δy * sinβ)));
             }
             else
             {
@@ -232,19 +233,19 @@ namespace PeachPDF.PDF.Drawing
                 switch (pathStart)
                 {
                     case PathStart.MoveTo1st:
-                        points.Add(matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα)));
+                        points.Add(Apply(matrix, new PaintPoint(x0 - δx * cosα, y0 - δy * sinα)));
                         break;
 
                     case PathStart.LineTo1st:
-                        points.Add(matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα)));
+                        points.Add(Apply(matrix, new PaintPoint(x0 - δx * cosα, y0 - δy * sinα)));
                         break;
 
                     case PathStart.Ignore1st:
                         break;
                 }
-                points.Add(matrix.Transform(new PaintPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα))));
-                points.Add(matrix.Transform(new PaintPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ))));
-                points.Add(matrix.Transform(new PaintPoint(x0 - δx * cosβ, y0 - δy * sinβ)));
+                points.Add(Apply(matrix, new PaintPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα))));
+                points.Add(Apply(matrix, new PaintPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ))));
+                points.Add(Apply(matrix, new PaintPoint(x0 - δx * cosβ, y0 - δy * sinβ)));
             }
         }
 
@@ -262,28 +263,42 @@ namespace PeachPDF.PDF.Drawing
             double factor = δy / δx;
             bool isCounterclockwise = !clockwise;
 
-            // Adjust for different radii and rotation angle.
-            XMatrix matrix = new XMatrix();
-            matrix.RotateAppend(-rotationAngle);
-            matrix.ScaleAppend(δy / δx, 1);
-            PaintPoint pt1 = matrix.Transform(point1);
-            PaintPoint pt2 = matrix.Transform(point2);
+            // Adjust for different radii and rotation angle: rotate by -rotationAngle, then scale x by δy / δx.
+            double scaleX = δy / δx;
+            double rotation = -rotationAngle % 360.0 * Const.Deg2Rad;
+            double cos = Math.Cos(rotation);
+            double sin = Math.Sin(rotation);
+            Affine2x3 matrix = new(cos * scaleX, sin, -sin * scaleX, cos, 0, 0);
+            PaintPoint pt1 = Apply(matrix, point1);
+            PaintPoint pt2 = Apply(matrix, point2);
 
             // Get info about chord that connects both points.
             PaintPoint midPoint = new PaintPoint((pt1.X + pt2.X) / 2, (pt1.Y + pt2.Y) / 2);
-            XVector vect = new XVector(pt2.X - pt1.X, pt2.Y - pt1.Y);
-            double halfChord = vect.Length / 2;
+            double chordX = pt2.X - pt1.X;
+            double chordY = pt2.Y - pt1.Y;
+            double halfChord = Math.Sqrt(chordX * chordX + chordY * chordY) / 2;
 
-            // Get vector from chord to center.
-            XVector vectRotated;
+            // Get the unit vector from the chord to the center.
+            double normalX, normalY;
 
             // (comparing two Booleans here!)
             if (isLargeArc == isCounterclockwise)
-                vectRotated = new XVector(-vect.Y, vect.X);
+            {
+                normalX = -chordY;
+                normalY = chordX;
+            }
             else
-                vectRotated = new XVector(vect.Y, -vect.X);
+            {
+                normalX = chordY;
+                normalY = -chordX;
+            }
 
-            vectRotated.Normalize();
+            double largest = Math.Max(Math.Abs(normalX), Math.Abs(normalY));
+            normalX /= largest;
+            normalY /= largest;
+            double normalLength = Math.Sqrt(normalX * normalX + normalY * normalY);
+            normalX /= normalLength;
+            normalY /= normalLength;
 
             // Distance from chord to center.
             double centerDistance = Math.Sqrt(δy * δy - halfChord * halfChord);
@@ -291,7 +306,7 @@ namespace PeachPDF.PDF.Drawing
                 centerDistance = 0;
 
             // Calculate center point.
-            PaintPoint center = new PaintPoint(midPoint.X + centerDistance * vectRotated.X, midPoint.Y + centerDistance * vectRotated.Y);
+            PaintPoint center = new PaintPoint(midPoint.X + centerDistance * normalX, midPoint.Y + centerDistance * normalY);
 
             // Get angles from center to the two points.
             double α = Math.Atan2(pt1.Y - center.Y, pt1.X - center.X);
@@ -304,11 +319,35 @@ namespace PeachPDF.PDF.Drawing
                 sweepAngle -= 2 * Math.PI;
 
             // Invert matrix for final point calculation.
-            matrix.Invert();
+            matrix = Invert(matrix);
 
             // Let the algorithm of GDI+ DrawArc to Bézier curves do the rest of the job
             return BezierCurveFromArc(center.X - δx * factor, center.Y - δy, 2 * δx * factor, 2 * δy,
-              α / Calc.Deg2Rad, sweepAngle / Calc.Deg2Rad, pathStart, ref matrix);
+              α / Calc.Deg2Rad, sweepAngle / Calc.Deg2Rad, pathStart, matrix);
+        }
+
+        private static PaintPoint Apply(Affine2x3 matrix, PaintPoint point)
+            => new(point.X * matrix.XX + point.Y * matrix.XY + matrix.DX,
+                   point.X * matrix.YX + point.Y * matrix.YY + matrix.DY);
+
+        /// <summary>
+        /// The inverse of an arc's rotate-and-scale matrix. A pure scaling inverts element by element, which is
+        /// exact where the general formula is not.
+        /// </summary>
+        private static Affine2x3 Invert(Affine2x3 matrix)
+        {
+            if (matrix.YX == 0 && matrix.XY == 0 && matrix.DX == 0 && matrix.DY == 0)
+                return new Affine2x3(1.0 / matrix.XX, 0, 0, 1.0 / matrix.YY, 0, 0);
+
+            double determinant = matrix.XX * matrix.YY - matrix.YX * matrix.XY;
+            double inverse = 1.0 / determinant;
+            return new Affine2x3(
+                matrix.YY * inverse,
+                -matrix.YX * inverse,
+                -matrix.XY * inverse,
+                matrix.XX * inverse,
+                (matrix.XY * matrix.DY - matrix.DX * matrix.YY) * inverse,
+                (matrix.DX * matrix.YX - matrix.XX * matrix.DY) * inverse);
         }
     }
 }

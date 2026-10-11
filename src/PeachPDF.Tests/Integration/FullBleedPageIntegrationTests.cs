@@ -57,7 +57,7 @@ namespace PeachPDF.Tests.Integration
             // "50 60 612 792 re" land, after that cm, exactly on the physical (0,0)-(612,792)
             // sheet - i.e. genuine 4-edge coverage, not just a color token somewhere.
             var plate = new Regex(
-                @"1 -0 -0 1 -50 -60 cm[\s\S]{0,220}?0\.078\d* 0\.157\d* 0\.235\d* rg[\s\S]{0,40}?50 60 612(\.\d+)? 792(\.\d+)? re\s*\n?f");
+                @"1 0 0 1 -50 -60 cm[\s\S]{0,220}?0\.078\d* 0\.157\d* 0\.235\d* rg[\s\S]{0,40}?50 60 612(\.\d+)? 792(\.\d+)? re\s*\n?f");
             Assert.Matches(plate, pdfText);
         }
     }

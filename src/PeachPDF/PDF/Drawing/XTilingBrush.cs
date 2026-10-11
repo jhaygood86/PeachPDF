@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
@@ -11,7 +13,7 @@ namespace PeachPDF.PDF.Drawing
         /// <param name="cellHeight">the cell's height in points</param>
         /// <param name="matrix">maps brush space (top-left origin, y down, in points) onto the user space the brush is painted in</param>
         /// <param name="interpolate">for an image tile, whether a viewer may smooth it when scaling; null keeps the image's own setting</param>
-        public XTilingBrush(XImage tile, double cellWidth, double cellHeight, XMatrix matrix, bool? interpolate = null)
+        public XTilingBrush(XImage tile, double cellWidth, double cellHeight, Matrix3x2 matrix, bool? interpolate = null)
         {
             Tile = tile;
             Interpolate = interpolate;
@@ -28,6 +30,6 @@ namespace PeachPDF.PDF.Drawing
 
         public double CellHeight { get; }
 
-        public XMatrix Matrix { get; }
+        public Matrix3x2 Matrix { get; }
     }
 }

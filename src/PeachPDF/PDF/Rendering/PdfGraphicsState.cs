@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -312,11 +313,11 @@ namespace PeachPDF.PDF.Rendering
                     // The renderer writes y-up coordinates and keeps user transforms in its world transform, so the map is found the way a
                     // gradient's coordinates are: three points of the brush's space go through the brush matrix, then WorldToView (which
                     // applies the world transform and the y flip), then the view matrix. An affine map is fixed by three points.
-                    XMatrix toDefault = _renderer.DefaultViewMatrix;
-                    toDefault.Prepend(EffectiveCtm);
+                    Matrix3x2 toDefault = _renderer.DefaultViewMatrix;
+                    toDefault = EffectiveCtm * toDefault;
                     PaintPoint Map(double x, double y) => toDefault.Transform(_renderer.WorldToView(tilingBrush.Matrix.Transform(new PaintPoint(x, y))));
                     PaintPoint origin = Map(0, 0), unitX = Map(1, 0), unitY = Map(0, 1);
-                    XMatrix matrix = new XMatrix(unitX.X - origin.X, unitX.Y - origin.Y, unitY.X - origin.X, unitY.Y - origin.Y, origin.X, origin.Y);
+                    Matrix3x2 matrix = PdfMatrix.Create(unitX.X - origin.X, unitX.Y - origin.Y, unitY.X - origin.X, unitY.Y - origin.Y, origin.X, origin.Y);
 
                     PdfTilingPattern pattern = new PdfTilingPattern(_renderer.Owner);
                     pattern.SetupFromBrush(tilingBrush, matrix);
@@ -346,8 +347,8 @@ namespace PeachPDF.PDF.Rendering
                 else if (brush is XBaseGradientBrush gradientBrush)
                 {
                     Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
-                    XMatrix matrix = _renderer.DefaultViewMatrix;
-                    matrix.Prepend(EffectiveCtm);
+                    Matrix3x2 matrix = _renderer.DefaultViewMatrix;
+                    matrix = EffectiveCtm * matrix;
                     PdfShadingPattern pattern = new PdfShadingPattern(_renderer.Owner);
                     pattern.SetupFromBrush(gradientBrush, matrix, _renderer);
                     string name = _renderer.Resources.AddPattern(pattern);
@@ -548,36 +549,36 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// The already realized part of the current transformation matrix.
         /// </summary>
-        public XMatrix RealizedCtm;
+        public Matrix3x2 RealizedCtm = Matrix3x2.Identity;
 
         /// <summary>
         /// The not yet realized part of the current transformation matrix.
         /// </summary>
-        public XMatrix UnrealizedCtm;
+        public Matrix3x2 UnrealizedCtm = Matrix3x2.Identity;
 
         /// <summary>
         /// Product of RealizedCtm and UnrealizedCtm.
         /// </summary>
-        public XMatrix EffectiveCtm;
+        public Matrix3x2 EffectiveCtm = Matrix3x2.Identity;
 
         /// <summary>
         /// Inverse of EffectiveCtm used for transformation.
         /// </summary>
-        public XMatrix InverseEffectiveCtm;
+        public Matrix3x2 InverseEffectiveCtm = Matrix3x2.Identity;
 
-        public XMatrix WorldTransform;
+        public Matrix3x2 WorldTransform = Matrix3x2.Identity;
 
         ///// <summary>
         ///// The world transform in PDF world space.
         ///// </summary>
-        //public XMatrix EffectiveCtm
+        //public Matrix3x2 EffectiveCtm
         //{
         //  get
         //  {
         //    //if (MustRealizeCtm)
         //    if (!UnrealizedCtm.IsIdentity)
         //    {
-        //      XMatrix matrix = RealizedCtm;
+        //      Matrix3x2 matrix = RealizedCtm;
         //      matrix.Prepend(UnrealizedCtm);
         //      return matrix;
         //    }
@@ -585,7 +586,7 @@ namespace PeachPDF.PDF.Rendering
         //  }
         //  //set
         //  //{
-        //  //  XMatrix matrix = realizedCtm;
+        //  //  Matrix3x2 matrix = realizedCtm;
         //  //  matrix.Invert();
         //  //  matrix.Prepend(value);
         //  //  unrealizedCtm = matrix;
@@ -593,10 +594,9 @@ namespace PeachPDF.PDF.Rendering
         //  //}
         //}
 
-        public void AddTransform(XMatrix value, XMatrixOrder matrixOrder)
+        public void AddTransform(Matrix3x2 value)
         {
-            // TODO: User matrixOrder
-            XMatrix transform = value;
+            Matrix3x2 transform = value;
             if (_renderer.Gfx.PageDirection == XPageDirection.Downwards)
             {
                 // Take chirality into account and
@@ -604,9 +604,9 @@ namespace PeachPDF.PDF.Rendering
                 transform.M12 = -value.M12;
                 transform.M21 = -value.M21;
             }
-            UnrealizedCtm.Prepend(transform);
+            UnrealizedCtm = transform * UnrealizedCtm;
 
-            WorldTransform.Prepend(value);
+            WorldTransform = value * WorldTransform;
         }
 
         /// <summary>
@@ -621,21 +621,17 @@ namespace PeachPDF.PDF.Rendering
 
                 const string format = Config.SignificantFigures7;
 
-                double[] matrix = UnrealizedCtm.GetElements();
+                Matrix3x2 matrix = UnrealizedCtm;
                 // Use up to six decimal digits to prevent round up problems.
                 _renderer.AppendFormatArgs("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm\n",
-                    matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+                    matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.M31, matrix.M32);
 
-                RealizedCtm.Prepend(UnrealizedCtm);
-                UnrealizedCtm = new XMatrix();
+                RealizedCtm = UnrealizedCtm * RealizedCtm;
+                UnrealizedCtm = Matrix3x2.Identity;
                 EffectiveCtm = RealizedCtm;
                 // A cumulative CTM can collapse (nested tiny scales, each invertible on its own) and has no inverse then; nothing
                 // painted under it is visible, so fall back to identity rather than abort the document.
-                InverseEffectiveCtm = EffectiveCtm;
-                if (InverseEffectiveCtm.HasInverse)
-                    InverseEffectiveCtm.Invert();
-                else
-                    InverseEffectiveCtm = new XMatrix();
+                InverseEffectiveCtm = EffectiveCtm.TryInvert(out var inverse) ? inverse : Matrix3x2.Identity;
             }
         }
         #endregion

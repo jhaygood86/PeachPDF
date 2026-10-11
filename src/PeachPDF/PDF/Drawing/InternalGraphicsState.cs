@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
+
 namespace PeachPDF.PDF.Drawing
 {
     // In GDI+ the functions Save/Restore, BeginContainer/EndContainer, Transform, SetClip and ResetClip
@@ -85,12 +87,12 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the current transformation matrix.
         /// </summary>
-        public XMatrix Transform
+        public Matrix3x2 Transform
         {
             get { return _transform; }
             set { _transform = value; }
         }
-        XMatrix _transform;
+        Matrix3x2 _transform = Matrix3x2.Identity;
 
         /// <summary>
         /// Called after this instanced was pushed on the internal graphics stack.

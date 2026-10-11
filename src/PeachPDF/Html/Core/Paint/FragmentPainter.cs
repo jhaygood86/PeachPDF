@@ -222,7 +222,7 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Whether <paramref name="matrix"/> can be pushed onto the canvas: finite, with a determinant the PDF writer's CTM inversion
-        /// (<c>XMatrix.HasInverse</c>, which treats anything under ten times double epsilon as zero) will accept. The cut-off is a
+        /// (<c>Matrix3x2.HasInverse</c>, which treats anything under ten times double epsilon as zero) will accept. The cut-off is a
         /// little looser than the writer's, so a single matrix this lets through is never one the writer rejects on its own; a scale small
         /// enough to fall between the two has no visible area anyway. It is a per-element check: the writer inverts the cumulative CTM, which
         /// it tolerates being singular (<c>PdfGraphicsState.RealizeCtm</c>). Computed in double, since the float determinant of a small

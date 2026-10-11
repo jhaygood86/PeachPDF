@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Rendering;
 using System;
@@ -53,7 +54,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfExtGState? AlphaExtGState { get; private set; }
 
-        internal void SetupFromBrush(XBaseGradientBrush brush, XMatrix matrix, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(XBaseGradientBrush brush, Matrix3x2 matrix, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -82,7 +83,7 @@ namespace PeachPDF.PDF.Advanced
                 // viewBox scale or a CSS transform it placed the shading in raw page coordinates,
                 // usually off the page entirely, leaving the shape filled with the flat /Extend color.
                 if (shading.EllipsePatternMatrix is { } ellipseMatrix)
-                    matrix.Prepend(ellipseMatrix);
+                    matrix = ellipseMatrix * matrix;
 
                 Elements.SetMatrix(Keys.Matrix, matrix);
             }
@@ -93,7 +94,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Setups the shading pattern from the specified brush.
         /// </summary>
-        internal void SetupFromBrush(XLinearGradientBrush brush, XMatrix matrix, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(XLinearGradientBrush brush, Matrix3x2 matrix, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");

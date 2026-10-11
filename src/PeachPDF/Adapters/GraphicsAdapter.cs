@@ -159,7 +159,7 @@ namespace PeachPDF.Adapters
             _accumulated = matrix.Then(_accumulated);
 
             _g.Save();
-            _g.MultiplyTransform(new XMatrix(
+            _g.MultiplyTransform(PdfMatrix.Create(
                 matrix.M11, matrix.M12, matrix.M21, matrix.M22,
                 matrix.M31 / PixelsPerPoint, matrix.M32 / PixelsPerPoint));
         }
@@ -715,7 +715,7 @@ namespace PeachPDF.Adapters
                 radial.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 radial.Stops.Select(s => s.Position).ToArray(),
                 Utils.ToPoints(radial.Focus, PixelsPerPoint),
-                radial.Transform is { } rt ? new XMatrix(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
+                radial.Transform is { } rt ? PdfMatrix.Create(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
             { IsRepeating = radial.Spread == GradientSpread.Repeat, FocalRadius = radial.FocusRadius / PixelsPerPoint },
             ConicGradientBrush conic => new XConicGradientBrush(
                 Utils.ToPoints(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
@@ -802,7 +802,7 @@ namespace PeachPDF.Adapters
 
             // Cell size and the translation are in layout units; the linear part of a transform is unit-free. See ToXBrush's gradients.
             var m = tile.Transform;
-            var matrix = new XMatrix(m.M11, m.M12, m.M21, m.M22, m.M31 / PixelsPerPoint, m.M32 / PixelsPerPoint);
+            var matrix = PdfMatrix.Create(m.M11, m.M12, m.M21, m.M22, m.M31 / PixelsPerPoint, m.M32 / PixelsPerPoint);
             bool? interpolate = tile.Sampling switch
             {
                 ImageSampling.Nearest or ImageSampling.Pixelated => false,

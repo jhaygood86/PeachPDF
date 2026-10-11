@@ -29,6 +29,7 @@
 
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
 
+using System.Numerics;
 using PeachDrawing.Core;
 
 namespace PeachPDF.PDF.Drawing
@@ -68,7 +69,7 @@ namespace PeachPDF.PDF.Drawing
         /// omitted, matching every pre-existing caller's behavior exactly. Only honored for the
         /// circular (non-ellipse) shading path - see <see cref="PeachPDF.PDF.Advanced.PdfShading"/>.
         /// </summary>
-        public XRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, PaintPoint? focalCenter = null, XMatrix? transform = null)
+        public XRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
             : base(colors[0], colors[colors.Length - 1])
         {
             _center1 = center;
@@ -86,7 +87,7 @@ namespace PeachPDF.PDF.Drawing
         internal PaintPoint _center1, _center2;
         internal PaintPoint _focalCenter;
         /// <summary>Carries the center/radii geometry into world space (rotation/skew); null when already there.</summary>
-        internal XMatrix? _transform;
+        internal Matrix3x2? _transform;
         internal double _r1, _r2;
         internal double _radiusX, _radiusY;
         internal XColor[]? _colors;

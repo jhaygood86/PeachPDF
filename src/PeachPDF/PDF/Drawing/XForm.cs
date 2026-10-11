@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Rendering;
 using PeachPDF.PDF;
@@ -323,7 +324,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the transformation matrix.
         /// </summary>
-        public virtual XMatrix Transform
+        public virtual Matrix3x2 Transform
         {
             get { return _transform; }
             set
@@ -333,7 +334,7 @@ namespace PeachPDF.PDF.Drawing
                 _transform = value;
             }
         }
-        internal XMatrix _transform;
+        internal Matrix3x2 _transform = Matrix3x2.Identity;
 
         internal PdfResources Resources
         {

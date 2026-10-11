@@ -28,6 +28,8 @@
 #endregion
 
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
+using System.Numerics;
+
 namespace PeachPDF.PDF.Drawing
 {
     internal class XBaseGradientBrush : XBrush
@@ -40,84 +42,12 @@ namespace PeachPDF.PDF.Drawing
         }
 
         /// <summary>
-        /// Gets or sets an XMatrix that defines a local geometric transform for this LinearGradientBrush.
+        /// Gets or sets an Matrix3x2 that defines a local geometric transform for this LinearGradientBrush.
         /// </summary>
-        public XMatrix Transform
+        public Matrix3x2 Transform
         {
             get { return _matrix; }
             set { _matrix = value; }
-        }
-
-        /// <summary>
-        /// Translates the brush with the specified offset.
-        /// </summary>
-        public void TranslateTransform(double dx, double dy)
-        {
-            _matrix.TranslatePrepend(dx, dy);
-        }
-
-        /// <summary>
-        /// Translates the brush with the specified offset.
-        /// </summary>
-        public void TranslateTransform(double dx, double dy, XMatrixOrder order)
-        {
-            _matrix.Translate(dx, dy, order);
-        }
-
-        /// <summary>
-        /// Scales the brush with the specified scalars.
-        /// </summary>
-        public void ScaleTransform(double sx, double sy)
-        {
-            _matrix.ScalePrepend(sx, sy);
-        }
-
-        /// <summary>
-        /// Scales the brush with the specified scalars.
-        /// </summary>
-        public void ScaleTransform(double sx, double sy, XMatrixOrder order)
-        {
-            _matrix.Scale(sx, sy, order);
-        }
-
-        /// <summary>
-        /// Rotates the brush with the specified angle.
-        /// </summary>
-        public void RotateTransform(double angle)
-        {
-            _matrix.RotatePrepend(angle);
-        }
-
-        /// <summary>
-        /// Rotates the brush with the specified angle.
-        /// </summary>
-        public void RotateTransform(double angle, XMatrixOrder order)
-        {
-            _matrix.Rotate(angle, order);
-        }
-
-        /// <summary>
-        /// Multiply the brush transformation matrix with the specified matrix.
-        /// </summary>
-        public void MultiplyTransform(XMatrix matrix)
-        {
-            _matrix.Prepend(matrix);
-        }
-
-        /// <summary>
-        /// Multiply the brush transformation matrix with the specified matrix.
-        /// </summary>
-        public void MultiplyTransform(XMatrix matrix, XMatrixOrder order)
-        {
-            _matrix.Multiply(matrix, order);
-        }
-
-        /// <summary>
-        /// Resets the brush transformation matrix with identity matrix.
-        /// </summary>
-        public void ResetTransform()
-        {
-            _matrix = new XMatrix();
         }
 
         //public void SetBlendTriangularShape(double focus);
@@ -136,7 +66,7 @@ namespace PeachPDF.PDF.Drawing
         //private bool interpolationColorsWasSet;
 
         internal XColor _color1, _color2;
-        internal XMatrix _matrix;
+        internal Matrix3x2 _matrix = Matrix3x2.Identity;
 
     }
 }

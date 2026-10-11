@@ -1,3 +1,4 @@
+using System.Numerics;
 using PeachDrawing.Core;
 using System.IO;
 using System.Text;
@@ -98,7 +99,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using var gfx = XGraphics.FromPdfPage(page);
 
             var state = gfx.Save();
-            gfx.RotateTransform(45);
+            gfx.MultiplyTransform(Matrix3x2.CreateRotation(MathF.PI / 4));
             gfx.Restore(state);
 
             using var stream = new MemoryStream();
@@ -374,13 +375,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 var font = TestFonts.Create("Times New Roman", 14, PaintFontStyle.Bold);
 
                 gfx.TranslateTransform(1, 1);
-                gfx.ScaleTransform(1.0);
-                gfx.ScaleTransform(1.0, 1.0);
-                gfx.RotateTransform(0);
-                gfx.RotateAtTransform(0, new PaintPoint(width / 2, height / 2));
-                gfx.ShearTransform(0, 0);
-                gfx.SkewAtTransform(0, 0, width / 2, height / 2);
-                gfx.MultiplyTransform(PeachPDF.PDF.Drawing.XMatrix.Identity);
+                gfx.MultiplyTransform(Matrix3x2.Identity);
 
                 gfx.DrawLine(pen, 0, 0, width, height);
                 gfx.DrawLines(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);

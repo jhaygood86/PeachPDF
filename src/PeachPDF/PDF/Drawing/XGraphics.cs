@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using System.Numerics;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Rendering;
@@ -302,15 +303,15 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
                 trimOffset = new PaintPoint(targetPage.TrimMargins.Left.Point, targetPage.TrimMargins.Top.Point);
             }
 
-            XMatrix matrix = new XMatrix();
+            Matrix3x2 matrix = Matrix3x2.Identity;
             if (_pageDirection != XPageDirection.Downwards)
-                matrix.Prepend(new XMatrix(1, 0, 0, -1, 0, pageHeight));
+                matrix = PdfMatrix.Create(1, 0, 0, -1, 0, pageHeight) * matrix;
 
             if (trimOffset != new PaintPoint())
-                matrix.TranslatePrepend(trimOffset.X, -trimOffset.Y);
+                matrix = PdfMatrix.Translation(trimOffset.X, -trimOffset.Y) * matrix;
 
             DefaultViewMatrix = matrix;
-            _transform = new XMatrix();
+            _transform = Matrix3x2.Identity;
         }
 
         /// <summary>
@@ -1434,13 +1435,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (_renderer != null)
                 _renderer.BeginContainer(xContainer, dstrect, srcrect, unit);
 
-            XMatrix matrix = new XMatrix();
+            Matrix3x2 matrix = Matrix3x2.Identity;
             double scaleX = dstrect.Width / srcrect.Width;
             double scaleY = dstrect.Height / srcrect.Height;
-            matrix.TranslatePrepend(-srcrect.X, -srcrect.Y);
-            matrix.ScalePrepend(scaleX, scaleY);
-            matrix.TranslatePrepend(dstrect.X / scaleX, dstrect.Y / scaleY);
-            AddTransform(matrix, XMatrixOrder.Prepend);
+            matrix = PdfMatrix.Translation(-srcrect.X, -srcrect.Y) * matrix;
+            matrix = PdfMatrix.Scaling(scaleX, scaleY) * matrix;
+            matrix = PdfMatrix.Translation(dstrect.X / scaleX, dstrect.Y / scaleY) * matrix;
+            AddTransform(matrix);
 
             return xContainer;
         }
@@ -1500,183 +1501,19 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         #region Transformation
 
         /// <summary>
-        /// Applies the specified translation operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
+        /// Multiplies the transformation matrix of this object and specified matrix.
+        /// </summary>
+        public void MultiplyTransform(Matrix3x2 matrix)
+        {
+            AddTransform(matrix);
+        }
+
+        /// <summary>
+        /// Translates the coordinate system by prepending a translation to the transformation matrix of this object.
         /// </summary>
         public void TranslateTransform(double dx, double dy)
         {
-            AddTransform(XMatrix.CreateTranslation(dx, dy), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified translation operation to the transformation matrix of this object
-        /// in the specified order.
-        /// </summary>
-        public void TranslateTransform(double dx, double dy, XMatrixOrder order)
-        {
-            XMatrix matrix = new XMatrix();
-            matrix.TranslatePrepend(dx, dy);
-            AddTransform(matrix, order);
-        }
-
-        /// <summary>
-        /// Applies the specified scaling operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        public void ScaleTransform(double scaleX, double scaleY)
-        {
-            AddTransform(XMatrix.CreateScaling(scaleX, scaleY), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified scaling operation to the transformation matrix of this object
-        /// in the specified order.
-        /// </summary>
-        public void ScaleTransform(double scaleX, double scaleY, XMatrixOrder order)
-        {
-            XMatrix matrix = new XMatrix();
-            matrix.ScalePrepend(scaleX, scaleY);
-            AddTransform(matrix, order);
-        }
-
-        /// <summary>
-        /// Applies the specified scaling operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        // ReSharper disable once InconsistentNaming
-        public void ScaleTransform(double scaleXY)
-        {
-            ScaleTransform(scaleXY, scaleXY);
-        }
-
-        /// <summary>
-        /// Applies the specified scaling operation to the transformation matrix of this object
-        /// in the specified order.
-        /// </summary>
-        // ReSharper disable once InconsistentNaming
-        public void ScaleTransform(double scaleXY, XMatrixOrder order)
-        {
-            ScaleTransform(scaleXY, scaleXY, order);
-        }
-
-        /// <summary>
-        /// Applies the specified scaling operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        public void ScaleAtTransform(double scaleX, double scaleY, double centerX, double centerY)
-        {
-            AddTransform(XMatrix.CreateScaling(scaleX, scaleY, centerX, centerY), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified scaling operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        public void ScaleAtTransform(double scaleX, double scaleY, PaintPoint center)
-        {
-            AddTransform(XMatrix.CreateScaling(scaleX, scaleY, center.X, center.Y), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified rotation operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        public void RotateTransform(double angle)
-        {
-            AddTransform(XMatrix.CreateRotationRadians(angle * Const.Deg2Rad), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified rotation operation to the transformation matrix of this object
-        /// in the specified order. The angle unit of measure is degree.
-        /// </summary>
-        public void RotateTransform(double angle, XMatrixOrder order)
-        {
-            XMatrix matrix = new XMatrix();
-            matrix.RotatePrepend(angle);
-            AddTransform(matrix, order);
-        }
-
-        /// <summary>
-        /// Applies the specified rotation operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        public void RotateAtTransform(double angle, PaintPoint point)
-        {
-            AddTransform(XMatrix.CreateRotationRadians(angle * Const.Deg2Rad, point.X, point.Y), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified rotation operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// </summary>
-        public void RotateAtTransform(double angle, PaintPoint point, XMatrixOrder order)
-        {
-            AddTransform(XMatrix.CreateRotationRadians(angle * Const.Deg2Rad, point.X, point.Y), order);
-        }
-
-        /// <summary>
-        /// Applies the specified shearing operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// ShearTransform is a synonym for SkewAtTransform.
-        /// Parameter shearX specifies the horizontal skew which is measured in degrees counterclockwise from the y-axis.
-        /// Parameter shearY specifies the vertical skew which is measured in degrees counterclockwise from the x-axis.
-        /// </summary>
-        public void ShearTransform(double shearX, double shearY)
-        {
-            AddTransform(XMatrix.CreateSkewRadians(shearX * Const.Deg2Rad, shearY * Const.Deg2Rad), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified shearing operation to the transformation matrix of this object
-        /// in the specified order.
-        /// ShearTransform is a synonym for SkewAtTransform.
-        /// Parameter shearX specifies the horizontal skew which is measured in degrees counterclockwise from the y-axis.
-        /// Parameter shearY specifies the vertical skew which is measured in degrees counterclockwise from the x-axis.
-        /// </summary>
-        public void ShearTransform(double shearX, double shearY, XMatrixOrder order)
-        {
-            AddTransform(XMatrix.CreateSkewRadians(shearX * Const.Deg2Rad, shearY * Const.Deg2Rad), order);
-        }
-
-        /// <summary>
-        /// Applies the specified shearing operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// ShearTransform is a synonym for SkewAtTransform.
-        /// Parameter shearX specifies the horizontal skew which is measured in degrees counterclockwise from the y-axis.
-        /// Parameter shearY specifies the vertical skew which is measured in degrees counterclockwise from the x-axis.
-        /// </summary>
-        public void SkewAtTransform(double shearX, double shearY, double centerX, double centerY)
-        {
-            AddTransform(XMatrix.CreateSkewRadians(shearX * Const.Deg2Rad, shearY * Const.Deg2Rad, centerX, centerY), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Applies the specified shearing operation to the transformation matrix of this object by 
-        /// prepending it to the object's transformation matrix.
-        /// ShearTransform is a synonym for SkewAtTransform.
-        /// Parameter shearX specifies the horizontal skew which is measured in degrees counterclockwise from the y-axis.
-        /// Parameter shearY specifies the vertical skew which is measured in degrees counterclockwise from the x-axis.
-        /// </summary>
-        public void SkewAtTransform(double shearX, double shearY, PaintPoint center)
-        {
-            AddTransform(XMatrix.CreateSkewRadians(shearX * Const.Deg2Rad, shearY * Const.Deg2Rad, center.X, center.Y), XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Multiplies the transformation matrix of this object and specified matrix.
-        /// </summary>
-        public void MultiplyTransform(XMatrix matrix)
-        {
-            AddTransform(matrix, XMatrixOrder.Prepend);
-        }
-
-        /// <summary>
-        /// Multiplies the transformation matrix of this object and specified matrix in the specified order.
-        /// </summary>
-        public void MultiplyTransform(XMatrix matrix, XMatrixOrder order)
-        {
-            AddTransform(matrix, order);
+            AddTransform(PdfMatrix.Translation(dx, dy));
         }
 
         /// <summary>
@@ -1684,7 +1521,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// The transformation matrix canot be set. Insted use Save/Restore or BeginContainer/EndContainer to
         /// save the state before Transform is called and later restore to the previous transform.
         /// </summary>
-        public XMatrix Transform
+        public Matrix3x2 Transform
         {
             get { return _transform; }
         }
@@ -1692,15 +1529,11 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Applies a new transformation to the current transformation matrix.
         /// </summary>
-        void AddTransform(XMatrix transform, XMatrixOrder order)
+        void AddTransform(Matrix3x2 transform)
         {
-            XMatrix matrix = _transform;
-            matrix.Multiply(transform, order);
-            _transform = matrix;
-            matrix = DefaultViewMatrix;
-            matrix.Multiply(_transform, XMatrixOrder.Prepend);
+            _transform = transform * _transform;
             if (_renderer != null)
-                _renderer.AddTransform(transform, XMatrixOrder.Prepend);
+                _renderer.AddTransform(transform);
         }
 
         #endregion
@@ -1775,7 +1608,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// (The name 'default view matrix' comes from Microsoft OS/2 Presentation Manager. I choose
         /// this name because I have no better one.)
         /// </summary>
-        internal XMatrix DefaultViewMatrix;
+        internal Matrix3x2 DefaultViewMatrix = Matrix3x2.Identity;
 
         /// <summary>
         /// Indicates whether to send drawing operations to _gfx or _dc.
@@ -1792,7 +1625,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// The transformation matrix from XGraphics world space to page unit space.
         /// </summary>
-        XMatrix _transform;
+        Matrix3x2 _transform = Matrix3x2.Identity;
 
         /// <summary>
         /// The graphics state stack.

@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Diagnostics;
@@ -522,14 +523,14 @@ namespace PeachPDF.PDF.Internal
         }
 
         /// <summary>
-        /// Converts an XMatrix into a string with up to 4 decimal digits and a decimal point.
+        /// Converts an Matrix3x2 into a string with up to 4 decimal digits and a decimal point.
         /// </summary>
-        public static string ToString(XMatrix matrix)
+        public static string ToString(Matrix3x2 matrix)
         {
             const string format = Config.SignificantFigures4;
             return String.Format(CultureInfo.InvariantCulture,
                 "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "}",
-                matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.OffsetX, matrix.OffsetY);
+                matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.M31, matrix.M32);
         }
     }
 }

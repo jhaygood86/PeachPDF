@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Filters;
@@ -747,12 +748,12 @@ namespace PeachPDF.PDF
                 _elements[key] = rect;
             }
 
-            /// Converts the specified value to XMatrix.
+            /// Converts the specified value to Matrix3x2.
             /// If the value does not exist, the function returns an identity matrix.
             /// If the value is not convertible, the function throws an InvalidCastException.
-            public XMatrix GetMatrix(string key, bool create)
+            public Matrix3x2 GetMatrix(string key, bool create)
             {
-                XMatrix value = new XMatrix();
+                Matrix3x2 value = Matrix3x2.Identity;
                 object obj = this[key];
                 if (obj == null)
                 {
@@ -767,7 +768,7 @@ namespace PeachPDF.PDF
                 PdfArray array = obj as PdfArray;
                 if (array != null && array.Elements.Count == 6)
                 {
-                    value = new XMatrix(array.Elements.GetReal(0), array.Elements.GetReal(1), array.Elements.GetReal(2),
+                    value = PdfMatrix.Create(array.Elements.GetReal(0), array.Elements.GetReal(1), array.Elements.GetReal(2),
                       array.Elements.GetReal(3), array.Elements.GetReal(4), array.Elements.GetReal(5));
                 }
                 else if (obj is PdfLiteral)
@@ -779,10 +780,10 @@ namespace PeachPDF.PDF
                 return value;
             }
 
-            /// Converts the specified value to XMatrix.
+            /// Converts the specified value to Matrix3x2.
             /// If the value does not exist, the function returns an identity matrix.
             /// If the value is not convertible, the function throws an InvalidCastException.
-            public XMatrix GetMatrix(string key)
+            public Matrix3x2 GetMatrix(string key)
             {
                 return GetMatrix(key, false);
             }
@@ -790,7 +791,7 @@ namespace PeachPDF.PDF
             /// <summary>
             /// Sets the entry to a direct matrix value, represented by an array with six values.
             /// </summary>
-            public void SetMatrix(string key, XMatrix matrix)
+            public void SetMatrix(string key, Matrix3x2 matrix)
             {
                 _elements[key] = PdfLiteral.FromMatrix(matrix);
             }

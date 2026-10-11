@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using System;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Internal;
@@ -52,7 +53,7 @@ namespace PeachPDF.PDF.Advanced
         /// Sets this pattern up to repeat <paramref name="brush"/>'s form. <paramref name="matrix"/> maps pattern space (the brush's own
         /// top-left-origin, y-down space, in points) onto the page's default coordinate system.
         /// </summary>
-        internal void SetupFromBrush(XTilingBrush brush, XMatrix matrix)
+        internal void SetupFromBrush(XTilingBrush brush, Matrix3x2 matrix)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -106,7 +107,7 @@ namespace PeachPDF.PDF.Advanced
         ///// <summary>
         ///// Setups the shading pattern from the specified brush.
         ///// </summary>
-        //public void SetupFromBrush(XLinearGradientBrush brush, XMatrix matrix)
+        //public void SetupFromBrush(XLinearGradientBrush brush, Matrix3x2 matrix)
         //{
         //  if (brush == null)
         //    throw new ArgumentNullException("brush");

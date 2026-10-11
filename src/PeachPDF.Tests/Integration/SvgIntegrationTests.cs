@@ -448,12 +448,8 @@ namespace PeachPDF.Tests.Integration
 
             var pdfText = await GetPdfText(html);
 
-            // The off-diagonal components print as "-0" rather than "0" here: they're the product of
-            // a literal 0 in the SVG-local matrix with the page's own negative Y-flip scale further up
-            // the transform stack, and IEEE 754 float multiplication propagates the sign of that
-            // negative factor through a zero product - a harmless, pre-existing formatting quirk
-            // unrelated to this feature, not a bug in the SVG transform math itself.
-            Assert.Contains("0.375 -0 -0 0.75 ", pdfText);
+            // The off-diagonal components are a literal 0 in the SVG-local matrix, so they print as plain "0".
+            Assert.Contains("0.375 0 0 0.75 ", pdfText);
         }
 
         [Fact]

@@ -1,3 +1,4 @@
+using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -242,7 +243,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 255, 0);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
-            gfx.ScaleTransform(2.0, 2.0);
+            gfx.MultiplyTransform(Matrix3x2.CreateScale(2f, 2f));
             // 20pt destRect under a 2x active transform -> 40pt true on-page size -> 40 / 0.75 = 53.33px, rounds to 53.
             gfx.DrawImage(xImage, 0, 0, 20, 20);
 
@@ -266,7 +267,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 255, 255);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
-            gfx.ScaleTransform(3.0, 1.0);
+            gfx.MultiplyTransform(Matrix3x2.CreateScale(3f, 1f));
             // x: 20pt * 3 = 60pt -> 60 / 0.75 = 80px. y: 20pt * 1 = 20pt -> 20 / 0.75 = 26.67px, rounds to 27.
             gfx.DrawImage(xImage, 0, 0, 20, 20);
 

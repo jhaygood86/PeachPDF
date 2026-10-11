@@ -26,7 +26,9 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+using System.Numerics;
 using PeachDrawing.Core;
+using PeachDrawing.Text.Outlines;
 using PeachDrawing.Core.Geometry;
 using System;
 using System.Collections.Generic;
@@ -228,8 +230,7 @@ namespace PeachPDF.PDF.Drawing
 
         public void AddArc(double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
-            XMatrix matrix = XMatrix.Identity;
-            List<PaintPoint> points = GeometryHelper.BezierCurveFromArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, ref matrix);
+            List<PaintPoint> points = GeometryHelper.BezierCurveFromArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, Affine2x3.Identity);
             int count = points.Count;
             Debug.Assert((count + 2) % 3 == 0);
 
@@ -302,7 +303,7 @@ namespace PeachPDF.PDF.Drawing
         /// segments (see AddArc), so transforming the control points is an exact transform of the whole
         /// geometry for any affine matrix.
         /// </summary>
-        public void Transform(XMatrix matrix)
+        public void Transform(Matrix3x2 matrix)
         {
             for (int i = 0; i < _points.Count; i++)
                 _points[i] = matrix.Transform(_points[i]);

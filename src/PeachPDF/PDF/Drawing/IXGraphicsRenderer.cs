@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
 
@@ -184,9 +185,9 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the transformation matrix.
         /// </summary>
-        //XMatrix Transform {get; set;}
+        //Matrix3x2 Transform {get; set;}
 
-        void AddTransform(XMatrix transform, XMatrixOrder matrixOrder);
+        void AddTransform(Matrix3x2 transform);
 
         #endregion
 

@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Internal;
 using PeachPDF.PDF.IO;
@@ -63,9 +64,9 @@ namespace PeachPDF.PDF
         }
 
         /// <summary>
-        /// Creates a literal from an XMatrix
+        /// Creates a literal from an Matrix3x2
         /// </summary>
-        public static PdfLiteral FromMatrix(XMatrix matrix)
+        public static PdfLiteral FromMatrix(Matrix3x2 matrix)
         {
             return new PdfLiteral("[" + PdfEncoders.ToString(matrix) + "]");
         }

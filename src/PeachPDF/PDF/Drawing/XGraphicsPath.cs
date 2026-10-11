@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Internal;
 using System;
@@ -373,7 +374,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Applies an affine transform to every point in the path.
         /// </summary>
-        public void Transform(XMatrix matrix)
+        public void Transform(Matrix3x2 matrix)
         {
             _corePath.Transform(matrix);
         }
@@ -442,7 +443,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Converts each curve in this XGraphicsPath into a sequence of connected line segments. 
         /// </summary>
-        public void Flatten(XMatrix matrix)
+        public void Flatten(Matrix3x2 matrix)
         {
             // Just do nothing.
         }
@@ -450,7 +451,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Converts each curve in this XGraphicsPath into a sequence of connected line segments. 
         /// </summary>
-        public void Flatten(XMatrix matrix, double flatness)
+        public void Flatten(Matrix3x2 matrix, double flatness)
         {
             // Just do nothing.
         }
@@ -470,7 +471,7 @@ namespace PeachPDF.PDF.Drawing
         /// Replaces this path with curves that enclose the area that is filled when this path is drawn 
         /// by the specified pen.
         /// </summary>
-        public void Widen(XPen pen, XMatrix matrix)
+        public void Widen(XPen pen, Matrix3x2 matrix)
         {
             // Just do nothing.
         }
@@ -479,7 +480,7 @@ namespace PeachPDF.PDF.Drawing
         /// Replaces this path with curves that enclose the area that is filled when this path is drawn 
         /// by the specified pen.
         /// </summary>
-        public void Widen(XPen pen, XMatrix matrix, double flatness)
+        public void Widen(XPen pen, Matrix3x2 matrix, double flatness)
         {
             // Just do nothing.
         }
