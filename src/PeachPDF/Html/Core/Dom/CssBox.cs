@@ -546,6 +546,13 @@ namespace PeachPDF.Html.Core.Dom
         internal bool IsReplacedBlockWrapper { get; set; }
 
         /// <summary>
+        /// Whether this was a <c>display: inline</c> box that <c>DomParser.CorrectBlockInsideInline</c> rewrote to
+        /// <c>block</c> because it holds a block-level child. The rewrite is how this engine lays the split out; to
+        /// the author it is still an inline box, which is what <see cref="DerivedStyle.IsTransformable"/> asks.
+        /// </summary>
+        internal bool IsInlineBoxSplitByBlock { get; set; }
+
+        /// <summary>
         /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
         /// at least one <c>background-image</c>/gradient layer) - used by
         /// <c>HtmlContainerInt.ResolveCanvasBackground</c> to decide, per CSS Backgrounds 3 §2.11.2,

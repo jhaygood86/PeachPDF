@@ -3,6 +3,7 @@ using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -678,7 +679,9 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_actualTransformComputed)
                 {
-                    (_actualTransformMatrix, _actualTransform4) = CssValueParser.ParseTransformFull(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner);
+                    (_actualTransformMatrix, _actualTransform4) = IsTransformable
+                        ? CssValueParser.ParseTransformFull(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner)
+                        : (Matrix3x2.Identity, null);
                     _actualTransformComputed = true;
                 }
                 return _actualTransformMatrix;
@@ -698,13 +701,36 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// Whether <c>transform</c>, <c>perspective</c> and <c>transform-style</c> can apply to this box at all: CSS
+        /// Transforms 1 §2 limits them to transformable elements - block-level and atomic inline-level boxes, and
+        /// table rows, row groups, cells and captions - so a non-replaced <c>display: inline</c> box (a plain
+        /// <c>&lt;span&gt;</c> or <c>&lt;a&gt;</c>) and a table column or column group ignore them, and neither paint
+        /// transformed nor become a stacking context or a containing block because of them.
+        /// <see cref="ActualDisplay"/> is already blockified for a float, which is what makes a floated span
+        /// transformable. An inline box the parser rewrote to <c>block</c> only because it holds a block child
+        /// (<see cref="CssBox.IsInlineBoxSplitByBlock"/>) is still an inline box, as in a browser. An
+        /// <c>&lt;object&gt;</c> is replaced - so transformable - once its resource has resolved, which
+        /// <c>CssBoxObject.EnsureResolved</c> settles when the box is measured, before its own layout. The answers
+        /// derived from this are cached on first read; the only reader that runs during layout
+        /// (<c>DomUtils.ClippingContainingBlockOf</c>) asks about ancestors that are already measured, and the rest run
+        /// once layout has finished. A <c>&lt;video&gt;</c> is always replaced in a browser, though here it is a plain
+        /// container until it has a <c>poster</c>, so it is counted regardless (its transform then applies to the inline
+        /// container holding its fallback content).
+        /// </summary>
+        public bool IsTransformable =>
+            Owner is CssBoxVideo || MonolithicContent.IsReplaced(Owner)
+            || (ActualDisplay is not (Keywords.Inline or Keywords.TableColumn or Keywords.TableColumnGroup)
+                && !Owner.IsInlineBoxSplitByBlock);
+
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => !ActualTransformMatrix.IsIdentity;
 
         /// <summary>
         /// True when the computed <c>transform</c> is anything other than <c>none</c>, identity matrices
-        /// (<c>translateZ(0)</c>, <c>scale(1)</c>) included. This, not <see cref="IsTransformed"/>, is what
-        /// CSS Transforms 1 §2 keys the containing block for positioned descendants on.
+        /// (<c>translateZ(0)</c>, <c>scale(1)</c>) included, on a box that <see cref="IsTransformable"/>. This, not
+        /// <see cref="IsTransformed"/>, is what CSS Transforms 1 §2 keys the containing block for positioned
+        /// descendants on.
         /// </summary>
         public bool HasTransform
         {
@@ -714,7 +740,8 @@ namespace PeachPDF.Html.Core.Dom
                 if (_hasTransform is { } cached) return cached;
 
                 var value = Style.VisualEffects.Transform;
-                var has = !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+                var has = IsTransformable
+                    && !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
                 _hasTransform = has;
                 return has;
             }
@@ -732,7 +759,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (double.IsNaN(_actualPerspective))
                 {
                     var value = Style.VisualEffects.Perspective;
-                    _actualPerspective = string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                    _actualPerspective = !IsTransformable || string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
                         ? 0
                         : Math.Max(0, CssValueParser.ParseLength(value, 0, Owner));
                 }
@@ -751,13 +778,13 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        /// <summary>True when <c>backface-visibility: hidden</c>: the box is not painted while it faces away from the viewer.</summary>
+        /// <summary>True when <c>backface-visibility: hidden</c> on a <see cref="IsTransformable"/> box: it is not painted while it faces away from the viewer.</summary>
         public bool IsBackfaceHidden =>
-            Style.VisualEffects.BackfaceVisibility.Value == BackfaceVisibilityMode.Hidden;
+            Style.VisualEffects.BackfaceVisibility.Value == BackfaceVisibilityMode.Hidden && IsTransformable;
 
         /// <summary>True when the computed <c>transform-style</c> is <c>preserve-3d</c>. The <em>used</em> value also depends on the grouping properties that force <c>flat</c>: see <c>DomUtils.EstablishesPreserve3d</c>.</summary>
         public bool IsPreserve3dRequested =>
-            Style.VisualEffects.TransformStyle.Value == TransformStyleMode.Preserve3d;
+            Style.VisualEffects.TransformStyle.Value == TransformStyleMode.Preserve3d && IsTransformable;
 
         internal void InvalidateTransform()
         {
