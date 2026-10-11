@@ -88,8 +88,8 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
             var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
@@ -121,8 +121,8 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
             var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
@@ -284,8 +284,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);

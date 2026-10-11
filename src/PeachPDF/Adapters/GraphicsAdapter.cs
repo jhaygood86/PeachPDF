@@ -115,7 +115,7 @@ namespace PeachPDF.Adapters
         {
             _clipStack.Push(rect);
             _g.Save();
-            _g.IntersectClip(Utils.Convert(rect, PixelsPerPoint));
+            _g.IntersectClip(Utils.ToPoints(rect, PixelsPerPoint));
         }
 
         public override void PushClip(GraphicsPath path)
@@ -202,7 +202,7 @@ namespace PeachPDF.Adapters
         {
             var realFont = ((FontAdapter)font).Font;
             var size = _g.MeasureString(str, realFont, _stringFormat, features ?? ShapeSettings.Default);
-            return Utils.Convert(size, PixelsPerPoint);
+            return Utils.ToPixels(size, PixelsPerPoint);
         }
 
         public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null)
@@ -231,7 +231,7 @@ namespace PeachPDF.Adapters
             // colour-space guards a real colour would pass through.
             var xBrush = ToXBrush(_adapter.GetSolidBrush(InvisibleText ? PaintColor.Black : color));
             _g.InvisibleText = InvisibleText;
-            var xPoint = Utils.Convert(point, PixelsPerPoint);
+            var xPoint = Utils.ToPoints(point, PixelsPerPoint);
 
             // Realized via the PDF `Tc` character-spacing operator (XGraphicsPdfRenderer/
             // PdfGraphicsState) rather than drawing character-by-character - `Tc` applies additively to
@@ -259,7 +259,7 @@ namespace PeachPDF.Adapters
             for (var i = 0; i < glyphs.Count; i++)
             {
                 var glyph = glyphs[i];
-                var point = Utils.Convert(new PaintPoint(glyph.X, glyph.Y), PixelsPerPoint);
+                var point = Utils.ToPoints(new PaintPoint(glyph.X, glyph.Y), PixelsPerPoint);
                 positioned[i] = (glyph.GlyphIndex, point.X, point.Y);
             }
 
@@ -440,37 +440,37 @@ namespace PeachPDF.Adapters
             // The image is placed at the surface's own snapped layout rectangle, converted to points once here
             // (the same division every other draw call makes), so its physical size is exact.
             var richBlack = _g.Owner?.Options.ColorOptions?.BlackGeneration == ColorBlackGeneration.UseRichBlack;
-            _g.DrawImage(RasterEmbedding.ToXImage(surface, asCmyk, richBlack), Utils.Convert(surface.LayoutRect, PixelsPerPoint));
+            _g.DrawImage(RasterEmbedding.ToXImage(surface, asCmyk, richBlack), Utils.ToPoints(surface.LayoutRect, PixelsPerPoint));
         }
 
         public override void DrawImageMasked(Image image, Image maskImage, Rect destRect)
         {
             if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
-                _g.DrawImageMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint));
+                _g.DrawImageMasked(imageForm, maskForm, Utils.ToPoints(destRect, PixelsPerPoint));
         }
 
         public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal)
         {
             if (((ImageAdapter)image).Image is XForm imageForm)
-                _g.DrawImageWithOpacity(imageForm, Utils.Convert(destRect, PixelsPerPoint), opacity, blendMode.ToString());
+                _g.DrawImageWithOpacity(imageForm, Utils.ToPoints(destRect, PixelsPerPoint), opacity, blendMode.ToString());
         }
 
         public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
         {
             if (((ImageAdapter)image).Image is XForm imageForm)
-                _g.DrawImageWithColorMatrix(imageForm, Utils.Convert(destRect, PixelsPerPoint), matrix);
+                _g.DrawImageWithColorMatrix(imageForm, Utils.ToPoints(destRect, PixelsPerPoint), matrix);
         }
 
         public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false)
         {
             if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
-                _g.DrawImageAlphaMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint), invert);
+                _g.DrawImageAlphaMasked(imageForm, maskForm, Utils.ToPoints(destRect, PixelsPerPoint), invert);
         }
 
         public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
         {
             if (((ImageAdapter)top).Image is XForm topForm && ((ImageAdapter)bottom).Image is XForm bottomForm)
-                _g.DrawImageBlendedOver(topForm, bottomForm, Utils.Convert(destRect, PixelsPerPoint), blendMode.ToString());
+                _g.DrawImageBlendedOver(topForm, bottomForm, Utils.ToPoints(destRect, PixelsPerPoint), blendMode.ToString());
         }
 
         public override void BeginMarkedContent(string structureType, int mcid)
@@ -593,7 +593,7 @@ namespace PeachPDF.Adapters
         private void DrawWhole(Image image, Rect rect)
         {
             var xImage = ((ImageAdapter)image).Image;
-            _g.DrawImage(xImage, Utils.Convert(rect, PixelsPerPoint),
+            _g.DrawImage(xImage, Utils.ToPoints(rect, PixelsPerPoint),
                 new XRect(0, 0, xImage.PointWidth, xImage.PointHeight), XGraphicsUnit.Point);
         }
 
@@ -630,7 +630,7 @@ namespace PeachPDF.Adapters
 
         public override void DrawImage(Image image, Rect destRect)
         {
-            _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect, PixelsPerPoint));
+            _g.DrawImage(((ImageAdapter)image).Image, Utils.ToPoints(destRect, PixelsPerPoint));
         }
 
         public override void DrawPath(Pen pen, GraphicsPath path)
@@ -687,7 +687,7 @@ namespace PeachPDF.Adapters
                         return;
                 }
 
-                _g.DrawPolygon(ToXBrush(brush), Utils.Convert(points, PixelsPerPoint), FillMode.Nonzero);
+                _g.DrawPolygon(ToXBrush(brush), Utils.ToPoints(points, PixelsPerPoint), FillMode.Nonzero);
             }
         }
 
@@ -706,19 +706,19 @@ namespace PeachPDF.Adapters
         {
             SolidBrush solid => ToXSolidBrush(solid.PaintColor),
             LinearGradientBrush linear => new XLinearGradientBrush(
-                Utils.Convert(linear.Start, PixelsPerPoint), Utils.Convert(linear.End, PixelsPerPoint),
+                Utils.ToPoints(linear.Start, PixelsPerPoint), Utils.ToPoints(linear.End, PixelsPerPoint),
                 linear.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 linear.Stops.Select(s => s.Position).ToArray())
             { IsRepeating = linear.Spread == GradientSpread.Repeat },
             RadialGradientBrush radial => new XRadialGradientBrush(
-                Utils.Convert(radial.Center, PixelsPerPoint), radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint,
+                Utils.ToPoints(radial.Center, PixelsPerPoint), radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint,
                 radial.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 radial.Stops.Select(s => s.Position).ToArray(),
-                Utils.Convert(radial.Focus, PixelsPerPoint),
+                Utils.ToPoints(radial.Focus, PixelsPerPoint),
                 radial.Transform is { } rt ? new XMatrix(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
             { IsRepeating = radial.Spread == GradientSpread.Repeat, FocalRadius = radial.FocusRadius / PixelsPerPoint },
             ConicGradientBrush conic => new XConicGradientBrush(
-                Utils.Convert(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
+                Utils.ToPoints(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
                 conic.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 conic.AnglesRadians.ToArray()),
             TileBrush tile => ToXTilingBrush(tile),

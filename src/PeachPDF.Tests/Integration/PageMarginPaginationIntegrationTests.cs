@@ -198,9 +198,9 @@ namespace PeachPDF.Tests.Integration
             container.MarginRight = 0;
 
             var contentSize = new XSize(612, rawPageHeight - marginTop - marginBottom);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(contentSize, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(contentSize, 1.0);
-            container.Location = PeachPDF.Utilities.Utils.Convert(new XPoint(0, marginTop), 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(contentSize, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(contentSize, 1.0);
+            container.Location = PeachPDF.Utilities.Utils.ToPixels(new XPoint(0, marginTop), 1.0);
 
             var measure = XGraphics.CreateMeasureContext(new XSize(612, rawPageHeight), XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);

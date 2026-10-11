@@ -51,8 +51,8 @@ namespace PeachPDF
         /// </summary>
         public XPoint Location
         {
-            get => Utils.Convert(HtmlContainerInt.Location, PixelsPerPoint);
-            set => HtmlContainerInt.Location = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.Location, PixelsPerPoint);
+            set => HtmlContainerInt.Location = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -64,8 +64,8 @@ namespace PeachPDF
         /// </summary>
         public XSize MaxSize
         {
-            get => Utils.Convert(HtmlContainerInt.MaxSize, PixelsPerPoint);
-            set => HtmlContainerInt.MaxSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.MaxSize, PixelsPerPoint);
+            set => HtmlContainerInt.MaxSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -73,14 +73,14 @@ namespace PeachPDF
         /// </summary>
         public XSize ActualSize
         {
-            get => Utils.Convert(HtmlContainerInt.ActualSize, PixelsPerPoint);
-            internal set => HtmlContainerInt.ActualSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.ActualSize, PixelsPerPoint);
+            internal set => HtmlContainerInt.ActualSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         public XSize PageSize
         {
-            get => Utils.Convert(HtmlContainerInt.PageSize, PixelsPerPoint);
-            set => HtmlContainerInt.PageSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.PageSize, PixelsPerPoint);
+            set => HtmlContainerInt.PageSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -192,7 +192,7 @@ namespace PeachPDF
             foreach (var link in HtmlContainerInt.GetLinks(bookmarkBoxes))
             {
                 var href = ResolveHref(link.Href);
-                linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.Convert(link.Rectangle, PixelsPerPoint), link.SourceBox));
+                linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.ToPoints(link.Rectangle, PixelsPerPoint), link.SourceBox));
             }
 
             return linkElements;
@@ -224,7 +224,7 @@ namespace PeachPDF
         public XRect? GetElementRectangle(string elementId)
         {
             var r = HtmlContainerInt.GetElementRectangle(elementId);
-            return r.HasValue ? Utils.Convert(r.Value, PixelsPerPoint) : (XRect?)null;
+            return r.HasValue ? Utils.ToPoints(r.Value, PixelsPerPoint) : (XRect?)null;
         }
 
         /// <summary>

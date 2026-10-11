@@ -688,9 +688,9 @@ namespace PeachPDF.Html.Core.Parse
             // Utils namespace would otherwise shadow the unqualified "Utils" name ahead of the `using
             // PeachPDF.Utilities;` import.
             if (htmlContainer.CssPageSize is { } cssPageSize &&
-                cssPageSize != PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint))
+                cssPageSize != PeachPDF.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint))
             {
-                htmlContainer.PageSize = PeachPDF.Utilities.Utils.Convert(cssPageSize, pixelsPerPoint);
+                htmlContainer.PageSize = PeachPDF.Utilities.Utils.ToPixels(cssPageSize, pixelsPerPoint);
                 ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                     allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
             }
@@ -789,7 +789,7 @@ namespace PeachPDF.Html.Core.Parse
                     // "otherwise-configured size" (for a bare orientation keyword to rotate) is the
                     // caller-configured PdfGenerateConfig size, reconstructed the same way the retry
                     // check above does.
-                    var baseSizePt = PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint);
+                    var baseSizePt = PeachPDF.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint);
                     htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, baseSizePt);
                 }
             }

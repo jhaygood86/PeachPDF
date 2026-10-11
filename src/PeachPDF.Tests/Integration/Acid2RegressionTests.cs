@@ -884,8 +884,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new PeachPDF.PDF.Drawing.XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PeachPDF.PDF.Drawing.XGraphics.CreateMeasureContext(
                 size, PeachPDF.PDF.Drawing.XGraphicsUnit.Point, PeachPDF.PDF.Drawing.XPageDirection.Downwards);

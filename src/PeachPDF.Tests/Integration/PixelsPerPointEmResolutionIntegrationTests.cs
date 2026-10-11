@@ -176,8 +176,8 @@ namespace PeachPDF.Tests.Integration
             // (issue #814). A harness that inflated fonts but not geometry (as this one previously did,
             // hardcoding 1.0 here) tests a combination no real PdfGenerator render can produce.
             var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);

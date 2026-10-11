@@ -470,8 +470,8 @@ Assert.True(tableBox.ActualBottom > pageHeight);
             await container.SetHtml(html, null);
 
             var size = new XSize(595, pageHeight); // A4 height by default
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-    container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+    container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
   container.MarginTop = 20;  // Add margins to match @page CSS
     container.MarginBottom = 20;
 

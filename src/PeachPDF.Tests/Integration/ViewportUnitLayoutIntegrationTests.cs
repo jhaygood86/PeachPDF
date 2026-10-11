@@ -177,8 +177,8 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
 
             var size = new XSize(800, 600);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             await container.SetHtml(html, null);
 

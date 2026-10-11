@@ -3188,8 +3188,8 @@ Assert.NotNull(tbody);
           await container.SetHtml(html, null);
 
      var size = new XSize(595, pageHeight);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-    container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+    container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
    container.MarginTop = 20;
         container.MarginBottom = 20;
 

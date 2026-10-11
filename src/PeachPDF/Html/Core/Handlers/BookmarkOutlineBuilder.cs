@@ -116,7 +116,7 @@ namespace PeachPDF.Html.Core.Handlers
                 // A display:contents element has no geometry of its own: its content's is where it points.
                 var geometryBox = DomUtils.ResolveGeometryBox(box);
                 var ownRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
-                rect = PeachPDF.Utilities.Utils.Convert(ownRect, ppp);
+                rect = PeachPDF.Utilities.Utils.ToPoints(ownRect, ppp);
             }
             else if (target.Length > 1 && target[0] == '#')
             {

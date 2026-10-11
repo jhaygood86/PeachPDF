@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.TestSupport
             };
 
             var sheet = new XSize(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.Convert(sheet, pixelsPerPoint);
+            container.PageSize = Utilities.Utils.ToPixels(sheet, pixelsPerPoint);
 
             await container.SetHtml(html, null);
 
@@ -82,9 +82,9 @@ namespace PeachPDF.Tests.TestSupport
             // puts the root box above the first page's band and makes pagination nonsense.
             var band = new XSize(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.Convert(band, pixelsPerPoint);
-            container.MaxSize = Utilities.Utils.Convert(band, pixelsPerPoint);
-            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
+            container.PageSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
+            container.MaxSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
+            container.Location = Utilities.Utils.ToPixels(new XPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
             var measure = XGraphics.CreateMeasureContext(sheet, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
@@ -129,15 +129,15 @@ namespace PeachPDF.Tests.TestSupport
             };
 
             var sheet = new XSize(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.Convert(sheet, 1.0);
+            container.PageSize = Utilities.Utils.ToPixels(sheet, 1.0);
 
             await container.SetHtml(html, null);
 
             var band = new XSize(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.Convert(band, 1.0);
-            container.MaxSize = Utilities.Utils.Convert(band, 1.0);
-            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), 1.0);
+            container.PageSize = Utilities.Utils.ToPixels(band, 1.0);
+            container.MaxSize = Utilities.Utils.ToPixels(band, 1.0);
+            container.Location = Utilities.Utils.ToPixels(new XPoint(container.MarginLeft, container.MarginTop), 1.0);
 
             var measure = XGraphics.CreateMeasureContext(sheet, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);

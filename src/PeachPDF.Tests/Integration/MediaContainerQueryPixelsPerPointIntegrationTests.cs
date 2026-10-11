@@ -168,8 +168,8 @@ namespace PeachPDF.Tests.Integration
             // coordinate space is consistently inflated end to end - see
             // PixelsPerPointEmResolutionIntegrationTests.BuildAndLayout's identical rationale.
             var size = new XSize(800, 600);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);

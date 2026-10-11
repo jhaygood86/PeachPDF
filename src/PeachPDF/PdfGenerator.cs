@@ -1041,9 +1041,9 @@ namespace PeachPDF
                 var paddingBoxRectPt = MarginBoxRenderer.Shrink(borderBoxRectPt, bL, bT, bR, bB);
                 var contentBoxRectPt = MarginBoxRenderer.Shrink(paddingBoxRectPt, pL, pT, pR, pB);
 
-                var borderBoxRect = Utils.Convert(borderBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
-                var paddingBoxRect = Utils.Convert(paddingBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
-                var contentBoxRect = Utils.Convert(contentBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+                var borderBoxRect = Utils.ToPixels(borderBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+                var paddingBoxRect = Utils.ToPixels(paddingBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+                var contentBoxRect = Utils.ToPixels(contentBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
 
                 Rect ResolvePagePositioningRect(string value) => value switch
                 {
@@ -1731,7 +1731,7 @@ namespace PeachPDF
                         var href = box.HtmlTag?.TryGetAttribute("href") ?? "";
                         if (href.Length == 0) continue;
 
-                        var rectPt = Utils.Convert(fragment.Rect, ppp);
+                        var rectPt = Utils.ToPoints(fragment.Rect, ppp);
                         var xRect = new XRect(rectPt.X, document.Pages[pageIndex].Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
 
                         PdfLinkAnnotation annotation;

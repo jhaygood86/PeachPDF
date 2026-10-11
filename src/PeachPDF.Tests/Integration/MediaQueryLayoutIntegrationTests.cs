@@ -153,8 +153,8 @@ namespace PeachPDF.Tests.Integration
             var size = new XSize(widthPt, heightPt);
             // Set the media inputs before the CSS tree is generated - the MediaQueryContext is built
             // during SetHtml from these values (as PdfGenerator.SetContent does).
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.PreferredColorScheme = scheme;
 
             await container.SetHtml(html, null);
