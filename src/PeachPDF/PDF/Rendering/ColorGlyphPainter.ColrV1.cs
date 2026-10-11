@@ -26,12 +26,11 @@ namespace PeachPDF.PDF.Rendering
         private PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter Shared => _shared ??= new PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter(
             _typeface, _scale * _typeface.Metrics.UnitsPerEm, ToPaintColor(_foreground), _pageDownwards, _paletteIndex, ToPaintOverrides(_overrides));
 
-        private static PaintColor ToPaintColor(XColor color) =>
-            PaintColor.FromArgb((int)Math.Round(color.A * 255), color.R, color.G, color.B);
+        private static PaintColor ToPaintColor(PaintColor color) => color.ToRgbColor();
 
-        private static XColor ToXColor(PaintColor color) => XColor.FromArgb(color.A, color.R, color.G, color.B);
+        private static PaintColor ToXColor(PaintColor color) => PaintColor.FromArgb(color.A, color.R, color.G, color.B);
 
-        private static Dictionary<int, PaintColor>? ToPaintOverrides(IReadOnlyDictionary<int, XColor>? overrides)
+        private static Dictionary<int, PaintColor>? ToPaintOverrides(IReadOnlyDictionary<int, PaintColor>? overrides)
         {
             if (overrides is not { Count: > 0 })
                 return null;
@@ -160,9 +159,9 @@ namespace PeachPDF.PDF.Rendering
                 }
             }
 
-            private static XColor[] ToXColors(IReadOnlyList<PaintColor> colors)
+            private static PaintColor[] ToXColors(IReadOnlyList<PaintColor> colors)
             {
-                var converted = new XColor[colors.Count];
+                var converted = new PaintColor[colors.Count];
                 for (int i = 0; i < converted.Length; i++)
                     converted[i] = ToXColor(colors[i]);
                 return converted;

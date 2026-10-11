@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -241,7 +242,7 @@ namespace PeachPDF.Tests.Integration
                 },
             };
 
-            // Just needs to succeed without throwing - a Gray destination's XColor.FromGrayScale
+            // Just needs to succeed without throwing - a Gray destination's PdfColors.FromGrayScale
             // constructor doesn't preserve alpha, which is a documented, narrow, low-priority gap
             // (Gray output-intent/conversion-target profiles are unusual for CMYK-oriented print
             // workflows) rather than something worth a content-stream assertion here.

@@ -1043,7 +1043,7 @@ namespace PeachPDF.Html.Core.Dom
             return XBrushes.Black;
         }
 
-        private static XColor? ParseColor(string value)
+        private static PaintColor? ParseColor(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return null;
@@ -1059,13 +1059,13 @@ namespace PeachPDF.Html.Core.Dom
                     double.TryParse(parts[1].Trim(), out var gg) &&
                     double.TryParse(parts[2].Trim(), out var b))
                 {
-                    return XColor.FromArgb((int)r, (int)gg, (int)b);
+                    return PaintColor.FromArgb((int)r, (int)gg, (int)b);
                 }
             }
 
             if (value.StartsWith("#"))
             {
-                try { return XColor.FromArgb(int.Parse(value.Substring(1), System.Globalization.NumberStyles.HexNumber)); }
+                try { return PdfColors.FromPackedArgb(int.Parse(value.Substring(1), System.Globalization.NumberStyles.HexNumber)); }
                 catch { }
             }
 

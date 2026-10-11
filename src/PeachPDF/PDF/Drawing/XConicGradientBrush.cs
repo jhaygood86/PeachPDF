@@ -4,7 +4,7 @@ namespace PeachPDF.PDF.Drawing
 {
     internal sealed class XConicGradientBrush : XBaseGradientBrush
     {
-        public XConicGradientBrush(PaintPoint center, double outerRadius, XColor[] colors, double[] anglesRad)
+        public XConicGradientBrush(PaintPoint center, double outerRadius, PaintColor[] colors, double[] anglesRad)
             : base(colors[0], colors[colors.Length - 1])
         {
             Center = center;
@@ -15,7 +15,7 @@ namespace PeachPDF.PDF.Drawing
 
         internal PaintPoint Center;
         internal double OuterRadius;
-        internal XColor[] Colors;
+        internal PaintColor[] Colors;
         internal double[] AnglesRad; // radians; 0 = 12 o'clock, increases clockwise (CSS convention)
     }
 }

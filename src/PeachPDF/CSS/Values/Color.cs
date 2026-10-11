@@ -1,5 +1,6 @@
 #nullable disable
 
+using PeachDrawing.Core;
 using System;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -440,7 +441,7 @@ namespace PeachPDF.CSS
         /// <see cref="R"/>/<see cref="G"/>/<see cref="B"/> are meaningless when this is true.
         /// </summary>
         public bool IsDeviceCmyk => _isDeviceCmyk;
-        // Named to match XColor's own C/M/Y/K properties (the eventual PDF backend representation) -
+        // Named to match PaintColor's own C/M/Y/K properties (the eventual PDF backend representation) -
         // "Magenta" would collide with Color's own Magenta named-color static field above.
         public float C => _cyan;
         public float M => _magenta;

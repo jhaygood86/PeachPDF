@@ -80,19 +80,6 @@ namespace PeachPDF.Utilities
         }
 
         /// <summary>
-        /// Convert from core color to WinForms color. A CSS <c>device-cmyk()</c>-authored
-        /// <see cref="PaintColor"/> (<see cref="PaintColor.IsCmyk"/>) is carried through as a real CMYK
-        /// <see cref="XColor"/> - no RGB approximation is computed for one; every solid brush/pen in the
-        /// paint pipeline funnels through this one method, so this is the only place that needs to branch.
-        /// </summary>
-        public static XColor Convert(PaintColor c)
-        {
-            return c.IsCmyk
-                ? XColor.FromCmyk(c.A / 255.0, c.C, c.M, c.Y, c.K)
-                : XColor.FromArgb(c.A, c.R, c.G, c.B);
-        }
-
-        /// <summary>
         /// Convert from WinForms color to core color.
         /// </summary>
         public static PaintColor Convert(System.Drawing.Color c)

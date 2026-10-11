@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
 
@@ -174,7 +175,7 @@ namespace PeachPDF.PDF.Annotations
         /// has an alpha value other than 1, it is ignored. Use property Opacity to get or set the
         /// opacity of an annotation.
         /// </summary>
-        public XColor PaintColor
+        public PaintColor PaintColor
         {
             get
             {
@@ -185,18 +186,19 @@ namespace PeachPDF.PDF.Annotations
                     if (array.Elements.Count == 3)
                     {
                         // TODO: an array.GetColor() function may be useful here
-                        return XColor.FromArgb(
+                        return PaintColor.FromArgb(
                             (int)(array.Elements.GetReal(0) * 255),
                             (int)(array.Elements.GetReal(1) * 255),
                             (int)(array.Elements.GetReal(2) * 255));
                     }
                 }
-                return XColors.Black;
+                return PaintColor.Black;
             }
             set
             {
                 // TODO: an array.SetColor(clr) function may be useful here
-                PdfArray array = new PdfArray(Owner, new PdfReal[] { new PdfReal(value.R / 255.0), new PdfReal(value.G / 255.0), new PdfReal(value.B / 255.0) });
+                var (red, green, blue) = value.ToRgb();
+                PdfArray array = new PdfArray(Owner, new PdfReal[] { new PdfReal(red / 255.0), new PdfReal(green / 255.0), new PdfReal(blue / 255.0) });
                 Elements[Keys.C] = array;
                 Elements.SetDateTime(Keys.M, DateTime.Now);
             }

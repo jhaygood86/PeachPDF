@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections;
@@ -138,7 +139,7 @@ namespace PeachPDF.PDF
         /// <param name="opened">Specifies whether the node is displayed expanded (opened) or collapsed.</param>
         /// <param name="style">The font style used to draw the outline text.</param>
         /// <param name="textColor">The color used to draw the outline text.</param>
-        public PdfOutline Add(string title, PdfPage destinationPage, bool opened, PdfOutlineStyle style, XColor textColor)
+        public PdfOutline Add(string title, PdfPage destinationPage, bool opened, PdfOutlineStyle style, PaintColor textColor)
         {
             PdfOutline outline = new PdfOutline(title, destinationPage, opened, style, textColor);
             Add(outline);

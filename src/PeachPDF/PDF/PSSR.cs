@@ -270,47 +270,6 @@ namespace PeachPDF.PDF
             get { return "Unexpected token in PDF file. The PDF file may be corrupt. If it is not, please send us the file for service."; }
         }
 
-        public static string InappropriateColorSpace(PdfColorMode colorMode, XColorSpace colorSpace)
-        {
-            string mode;
-            switch (colorMode)
-            {
-                case PdfColorMode.Rgb:
-                    mode = "RGB";
-                    break;
-
-                case PdfColorMode.Cmyk:
-                    mode = "CMYK";
-                    break;
-
-                default:
-                    mode = "(undefined)";
-                    break;
-            }
-
-            string space;
-            switch (colorSpace)
-            {
-                case XColorSpace.Rgb:
-                    space = "RGB";
-                    break;
-
-                case XColorSpace.Cmyk:
-                    space = "CMYK";
-                    break;
-
-                case XColorSpace.GrayScale:
-                    space = "grayscale";
-                    break;
-
-                default:
-                    space = "(undefined)";
-                    break;
-            }
-            return String.Format("The document requires color mode {0}, but a color is defined using {1}. " +
-              "Use only colors that match the color mode of the PDF document", mode, space);
-        }
-
         public static string CannotGetGlyphTypeface(string fontName)
         {
             return Format("Cannot get a matching glyph typeface for font '{0}'.", fontName);

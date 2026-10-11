@@ -42,7 +42,7 @@ namespace PeachPDF.Adapters
         public bool TryPaint(Typeface typeface, ushort glyph, SvgGlyph svg, double fontSize, double originX, double baselineY,
             PaintColor foreground, int paletteIndex, IReadOnlyDictionary<int, PaintColor>? overrides)
         {
-            var xForeground = XColor.FromArgb(foreground.A, foreground.R, foreground.G, foreground.B);
+            var xForeground = PaintColor.FromArgb(foreground.A, foreground.R, foreground.G, foreground.B);
             var xOverrides = overrides is null ? null : ToXColorOverrides(overrides);
             var key = new ColorGlyphFormCache.Selector(typeface, glyph, paletteIndex, xForeground, xOverrides);
             if (!_documents.TryGetValue(key, out var document))
@@ -71,11 +71,11 @@ namespace PeachPDF.Adapters
             return true;
         }
 
-        private static Dictionary<int, XColor> ToXColorOverrides(IReadOnlyDictionary<int, PaintColor> overrides)
+        private static Dictionary<int, PaintColor> ToXColorOverrides(IReadOnlyDictionary<int, PaintColor> overrides)
         {
-            var result = new Dictionary<int, XColor>(overrides.Count);
+            var result = new Dictionary<int, PaintColor>(overrides.Count);
             foreach (var (entry, colour) in overrides)
-                result[entry] = XColor.FromArgb(colour.A, colour.R, colour.G, colour.B);
+                result[entry] = PaintColor.FromArgb(colour.A, colour.R, colour.G, colour.B);
 
             return result;
         }

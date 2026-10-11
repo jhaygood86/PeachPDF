@@ -268,16 +268,16 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// Converts a resolved <see cref="FontPalette"/> (adapter layer, <see cref="PaintColor"/> overrides) into the
-        /// backend <see cref="XGlyphPalette"/> (<see cref="XColor"/> overrides). Null passes straight through.
+        /// backend <see cref="XGlyphPalette"/> (<see cref="PaintColor"/> overrides). Null passes straight through.
         /// </summary>
         private static XGlyphPalette? ToGlyphPalette(FontPalette? palette)
         {
             if (palette is null)
                 return null;
 
-            var overrides = new Dictionary<int, XColor>(palette.Overrides.Count);
+            var overrides = new Dictionary<int, PaintColor>(palette.Overrides.Count);
             foreach (var (entryIndex, color) in palette.Overrides)
-                overrides[entryIndex] = XColor.FromArgb(color.A, color.R, color.G, color.B);
+                overrides[entryIndex] = PaintColor.FromArgb(color.A, color.R, color.G, color.B);
 
             return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
@@ -707,19 +707,19 @@ namespace PeachPDF.Adapters
             SolidBrush solid => ToXSolidBrush(solid.PaintColor),
             LinearGradientBrush linear => new XLinearGradientBrush(
                 Utils.ToPoints(linear.Start, PixelsPerPoint), Utils.ToPoints(linear.End, PixelsPerPoint),
-                linear.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
+                linear.Stops.Select(s => s.PaintColor).ToArray(),
                 linear.Stops.Select(s => s.Position).ToArray())
             { IsRepeating = linear.Spread == GradientSpread.Repeat },
             RadialGradientBrush radial => new XRadialGradientBrush(
                 Utils.ToPoints(radial.Center, PixelsPerPoint), radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint,
-                radial.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
+                radial.Stops.Select(s => s.PaintColor).ToArray(),
                 radial.Stops.Select(s => s.Position).ToArray(),
                 Utils.ToPoints(radial.Focus, PixelsPerPoint),
                 radial.Transform is { } rt ? PdfMatrix.Create(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
             { IsRepeating = radial.Spread == GradientSpread.Repeat, FocalRadius = radial.FocusRadius / PixelsPerPoint },
             ConicGradientBrush conic => new XConicGradientBrush(
                 Utils.ToPoints(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
-                conic.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
+                conic.Stops.Select(s => s.PaintColor).ToArray(),
                 conic.AnglesRadians.ToArray()),
             TileBrush tile => ToXTilingBrush(tile),
             HatchBrush hatch => hatch.ToTileBrush(this) is { } hatchTile
@@ -823,7 +823,7 @@ namespace PeachPDF.Adapters
                 return XBrushes.Black;
             if (color.A < 1)
                 return XBrushes.Transparent;
-            return new XSolidBrush(Utils.Convert(color));
+            return new XSolidBrush(color);
         }
 
         /// <summary>
@@ -831,10 +831,10 @@ namespace PeachPDF.Adapters
         /// PDF-specific half of what <c>PenAdapter</c> used to do directly.
         /// </summary>
         /// <remarks>
-        /// A solid-colour pen goes through <see cref="XPen"/>'s <c>XColor</c> constructor rather than its
+        /// A solid-colour pen goes through <see cref="XPen"/>'s <c>PaintColor</c> constructor rather than its
         /// <c>XBrush</c> one, and must: <c>PdfGraphicsState.RealizePen</c> (the PDF writer's own
         /// stroke-alpha/colour realization) reads <c>pen.PaintColor</c> - the <c>_color</c> field the
-        /// <c>XColor</c> constructor sets - not anything derived from <c>pen.Brush</c>, so a solid pen
+        /// <c>PaintColor</c> constructor sets - not anything derived from <c>pen.Brush</c>, so a solid pen
         /// built via the brush constructor would keep <c>_color</c>'s default (opaque) value and silently
         /// lose the colour's real alpha (e.g. from an SVG <c>stroke-opacity</c>). Only a gradient-painted
         /// pen (<see cref="RenderContext.GetPen(Brush)"/>, e.g. SVG <c>stroke="url(#gradient)"</c>) needs the
@@ -844,7 +844,7 @@ namespace PeachPDF.Adapters
         private XPen ToXPen(Pen pen)
         {
             var xPen = pen.Paint is SolidBrush solid
-                ? new XPen(Utils.Convert(solid.PaintColor), pen.Width)
+                ? new XPen(solid.PaintColor, pen.Width)
                 : new XPen(ToXBrush(pen.Paint), pen.Width);
 
             xPen.MiterLimit = pen.MiterLimit;

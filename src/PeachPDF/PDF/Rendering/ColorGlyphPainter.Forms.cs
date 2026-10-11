@@ -51,8 +51,8 @@ namespace PeachPDF.PDF.Rendering
         /// text, so it carries no <see cref="XFont"/>: the selectable text object belongs to the page,
         /// not to the artwork.
         /// </summary>
-        private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, Typeface typeface, XColor foreground,
-            int paletteIndex, IReadOnlyDictionary<int, XColor>? overrides, double originX, double originY, RenderContext? rasterContext = null)
+        private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, Typeface typeface, PaintColor foreground,
+            int paletteIndex, IReadOnlyDictionary<int, PaintColor>? overrides, double originX, double originY, RenderContext? rasterContext = null)
         {
             _rasterContext = rasterContext;
             _renderer = formRenderer;

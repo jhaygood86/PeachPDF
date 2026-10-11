@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
+
 namespace PeachPDF.PDF
 {
     /// <summary>
@@ -35,7 +37,7 @@ namespace PeachPDF.PDF
     internal enum PdfColorMode
     {
         /// <summary>
-        /// All color values are written as specified in the XColor objects they come from.
+        /// All color values are written as specified in the PaintColor objects they come from.
         /// </summary>
         Undefined,
 

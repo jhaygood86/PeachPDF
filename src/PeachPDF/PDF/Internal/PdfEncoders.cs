@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using System;
@@ -495,28 +496,32 @@ namespace PeachPDF.PDF.Internal
         }
 
         /// <summary>
-        /// Converts an XColor into a string with up to 3 decimal digits and a decimal point.
+        /// Converts an PaintColor into a string with up to 3 decimal digits and a decimal point.
         /// </summary>
-        public static string ToString(XColor color, PdfColorMode colorMode, bool withAlpha = false)
+        public static string ToString(PaintColor color, PdfColorMode colorMode, bool withAlpha = false)
         {
             const string format = Config.SignificantFigures3;
 
             // If not defined let color decide
             if (colorMode == PdfColorMode.Undefined)
-                colorMode = color.ColorSpace == XColorSpace.Cmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
+                colorMode = color.IsCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
 
             switch (colorMode)
             {
                 case PdfColorMode.Cmyk:
-                    return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}",
-                      color.C, color.M, color.Y, color.K);
+                    {
+                        var (cyan, magenta, yellow, black) = color.ToCmyk();
+                        return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}",
+                          cyan, magenta, yellow, black);
+                    }
 
                 default:
                     {
+                        var (red, green, blue) = color.ToRgb();
                         if (withAlpha)
-                            return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}", color.R / 255.0, color.G / 255.0, color.B / 255.0, color.A);
+                            return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}", red / 255.0, green / 255.0, blue / 255.0, color.Opacity());
                         else
-                            return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "}", color.R / 255.0, color.G / 255.0, color.B / 255.0);
+                            return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "}", red / 255.0, green / 255.0, blue / 255.0);
 
                     }
             }

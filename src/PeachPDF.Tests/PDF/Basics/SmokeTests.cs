@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
 
             // Draw a circle with a red pen which is 1.5 point thick.
             var r = width / 5;
-            gfx.DrawEllipse(new XPen(XColors.Red, 1.5), XBrushes.White,
+            gfx.DrawEllipse(new XPen(PaintColor.FromArgb(255, 0, 0), 1.5), XBrushes.White,
                 new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.

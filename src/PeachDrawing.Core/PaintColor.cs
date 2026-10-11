@@ -130,7 +130,7 @@ namespace PeachDrawing.Core
         /// </summary>
         public bool IsCmyk => _isCmyk;
 
-        // Named to match PeachPDF.CSS.Color and XColor's own C/M/Y/K properties, the same names all the
+        // Named to match PeachPDF.CSS.Color and PaintColor's own C/M/Y/K properties, the same names all the
         // way down the pipeline from CSS parsing to the PDF backend.
         /// <summary>The cyan component, in <c>[0, 1]</c>. Meaningless unless <see cref="IsCmyk"/> is true.</summary>
         public float C => _cyan;

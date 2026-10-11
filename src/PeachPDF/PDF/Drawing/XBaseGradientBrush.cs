@@ -28,13 +28,14 @@
 #endregion
 
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
+using PeachDrawing.Core;
 using System.Numerics;
 
 namespace PeachPDF.PDF.Drawing
 {
     internal class XBaseGradientBrush : XBrush
     {
-        protected XBaseGradientBrush(XColor color1, XColor color2)
+        protected XBaseGradientBrush(PaintColor color1, PaintColor color2)
         {
             _color1 = color1;
             _color2 = color2;
@@ -60,12 +61,12 @@ namespace PeachPDF.PDF.Drawing
         //public Blend Blend { get; set; }
         //public bool GammaCorrection { get; set; }
         //public ColorBlend InterpolationColors { get; set; }
-        //public XColor[] LinearColors { get; set; }
+        //public PaintColor[] LinearColors { get; set; }
         //public RectangleF Rectangle { get; }
         //public WrapMode WrapMode { get; set; }
         //private bool interpolationColorsWasSet;
 
-        internal XColor _color1, _color2;
+        internal PaintColor _color1, _color2;
         internal Matrix3x2 _matrix = Matrix3x2.Identity;
 
     }

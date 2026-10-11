@@ -1,5 +1,6 @@
 #nullable enable
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.PDF.Advanced
@@ -28,10 +29,10 @@ namespace PeachPDF.PDF.Advanced
         /// <see cref="PdfXConformanceException"/> - there is no correct-by-construction way to turn an
         /// arbitrary hue into CMYK without a real color-managed conversion PeachPDF doesn't have yet.
         /// </summary>
-        internal static XColor RequireAllowedOrConvert(PdfDocument document, XColor color, string featureDescription)
+        internal static PaintColor RequireAllowedOrConvert(PdfDocument document, PaintColor color, string featureDescription)
         {
             if (document.Options.PdfXConformance != PdfXConformance.X1a) return color;
-            if (color.ColorSpace == XColorSpace.Cmyk) return color;
+            if (color.IsCmyk) return color;
 
             if (color.R == color.G && color.G == color.B)
             {
@@ -45,7 +46,7 @@ namespace PeachPDF.PDF.Advanced
                 "PdfXConformance.X3 or PdfXConformance.X4, both of which permit ICC-managed RGB.");
         }
 
-        private static XColor ConvertAchromaticToCmyk(XColor color, ColorBlackGeneration blackGeneration)
+        private static PaintColor ConvertAchromaticToCmyk(PaintColor color, ColorBlackGeneration blackGeneration)
         {
             // R == G == B (checked by the caller): the fraction of the way from white (0) to black (1).
             double darkness = 1.0 - color.R / 255.0;
@@ -54,10 +55,10 @@ namespace PeachPDF.PDF.Advanced
             {
                 // A commonly-cited rich-black recipe, scaled by darkness so lighter grays stay close to
                 // neutral and only true black gets the full CMY+K ink coverage.
-                return XColor.FromCmyk(color.A, 0.60 * darkness, 0.40 * darkness, 0.40 * darkness, darkness);
+                return PdfColors.FromCmyk(color.Opacity(), 0.60 * darkness, 0.40 * darkness, 0.40 * darkness, darkness);
             }
 
-            return XColor.FromCmyk(color.A, 0, 0, 0, darkness);
+            return PdfColors.FromCmyk(color.Opacity(), 0, 0, 0, darkness);
         }
     }
 }

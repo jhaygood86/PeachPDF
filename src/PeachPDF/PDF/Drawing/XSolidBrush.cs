@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using System;
 
 namespace PeachPDF.PDF.Drawing
@@ -45,11 +46,11 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XSolidBrush"/> class.
         /// </summary>
-        public XSolidBrush(XColor color)
+        public XSolidBrush(PaintColor color)
             : this(color, false)
         { }
 
-        internal XSolidBrush(XColor color, bool immutable)
+        internal XSolidBrush(PaintColor color, bool immutable)
         {
             _color = color;
             _immutable = immutable;
@@ -66,7 +67,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the color of this brush.
         /// </summary>
-        public XColor PaintColor
+        public PaintColor PaintColor
         {
             get { return _color; }
             set
@@ -76,7 +77,7 @@ namespace PeachPDF.PDF.Drawing
                 _color = value;
             }
         }
-        internal XColor _color;
+        internal PaintColor _color;
 
         /// <summary>
         /// Gets or sets a value indicating whether the brush enables overprint when used in a PDF document.

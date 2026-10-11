@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 
@@ -19,7 +20,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
             var destinationType = (PdfPageDestinationType)destinationTypeValue;
             var doc = new PdfDocument();
             var page = doc.AddPage();
-            var outline = doc.Outlines.Add("Chapter", page, true, PdfOutlineStyle.Bold, XColors.Red);
+            var outline = doc.Outlines.Add("Chapter", page, true, PdfOutlineStyle.Bold, PaintColor.FromArgb(255, 0, 0));
             outline.PageDestinationType = destinationType;
             outline.Left = 1;
             outline.Top = 2;

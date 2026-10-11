@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 
@@ -45,9 +46,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
             var doc = new PdfDocument();
             var page = doc.AddPage();
 
-            var outline = doc.Outlines.Add("Chapter", page, false, PdfOutlineStyle.Regular, XColors.Red);
+            var outline = doc.Outlines.Add("Chapter", page, false, PdfOutlineStyle.Regular, PaintColor.FromArgb(255, 0, 0));
 
-            Assert.Equal(XColors.Red, outline.TextColor);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0), outline.TextColor);
         }
 
         [Fact]

@@ -153,7 +153,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var pen = new XPen(XColors.Black, 1);
+                var pen = new XPen(PaintColor.Black, 1);
                 gfx.DrawArc(pen, 10, 10, 40, 40, 30, 270);
             }
 
@@ -168,7 +168,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var pen = new XPen(XColors.Black, 1);
+                var pen = new XPen(PaintColor.Black, 1);
                 gfx.DrawArc(pen, 10, 10, 40, 40, 30, -270);
             }
 
@@ -334,7 +334,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var pen = new XPen(XColors.Red, 1.5);
+                var pen = new XPen(PaintColor.FromArgb(255, 0, 0), 1.5);
                 var brush = XBrushes.Blue;
                 var font = TestFonts.Create("Times New Roman", 14, PaintFontStyle.Bold);
 
@@ -405,7 +405,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void DrawRectangle_ZeroAlphaBrushAsFirstFillAfterStateReset_EmitsConstantAlphaExtGState()
         {
             // Regression test: PdfGraphicsState's fill-alpha tracking field (_realizedFillColor)
-            // starts out as XColor.Empty (A == 0) both on a freshly constructed renderer and right
+            // starts out as PaintColor.Empty (A == 0) both on a freshly constructed renderer and right
             // after a q/Save() that hasn't realized any fill color yet. RealizeFillColor's alpha-change
             // check used to compare _realizedFillColor.A != color.A with no IsEmpty guard - so a first
             // fill whose own alpha is genuinely 0 evaluated "0 != 0" as false and silently skipped
@@ -417,7 +417,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var state = gfx.Save();
-                var brush = new XSolidBrush(XColor.FromArgb(0, 255, 0, 0));
+                var brush = new XSolidBrush(PaintColor.FromArgb(0, 255, 0, 0));
                 gfx.DrawRectangle(brush, 10, 10, 20, 20);
                 gfx.Restore(state);
             }
@@ -439,14 +439,14 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // Stroke-side twin of DrawRectangle_ZeroAlphaBrushAsFirstFillAfterStateReset_EmitsConstantAlphaExtGState:
             // RealizePen's alpha-change check has the same _realizedStrokeColor.A != strokeAlpha
             // comparison, with the same missing-IsEmpty-guard defect for a fresh/reset
-            // _realizedStrokeColor (== XColor.Empty, A == 0).
+            // _realizedStrokeColor (== PaintColor.Empty, A == 0).
             var (document, page) = NewPage();
             document.Options.CompressContentStreams = false;
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var state = gfx.Save();
-                var pen = new XPen(XColor.FromArgb(0, 0, 0, 0), 2);
+                var pen = new XPen(PaintColor.FromArgb(0, 0, 0, 0), 2);
                 gfx.DrawLine(pen, 10, 10, 30, 30);
                 gfx.Restore(state);
             }

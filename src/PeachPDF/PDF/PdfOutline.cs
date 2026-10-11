@@ -31,6 +31,7 @@
 
 // Review: Under construction - StL/14-10-05
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
@@ -75,7 +76,7 @@ namespace PeachPDF.PDF
         /// <param name="opened">Specifies whether the node is displayed expanded (opened) or collapsed.</param>
         /// <param name="style">The font style used to draw the outline text.</param>
         /// <param name="textColor">The color used to draw the outline text.</param>
-        public PdfOutline(string title, PdfPage destinationPage, bool opened, PdfOutlineStyle style, XColor textColor)
+        public PdfOutline(string title, PdfPage destinationPage, bool opened, PdfOutlineStyle style, PaintColor textColor)
         {
             Title = title;
             DestinationPage = destinationPage;
@@ -306,12 +307,12 @@ namespace PeachPDF.PDF
         /// Gets or sets the color of the text.
         /// </summary>
         /// <value>The color of the text.</value>
-        public XColor TextColor
+        public PaintColor TextColor
         {
             get { return _textColor; }
             set { _textColor = value; }
         }
-        XColor _textColor;
+        PaintColor _textColor;
 
         /// <summary>
         /// Gets a value indicating whether this outline object has child items.
@@ -394,7 +395,7 @@ namespace PeachPDF.PDF
                     if (hasKids)
                         Elements[Keys.Count] = new PdfInteger((_opened ? 1 : -1) * _visibleDescendantCount);
 
-                    if (_textColor != XColor.Empty && Owner.HasVersion("1.4"))
+                    if (_textColor != PaintColor.Empty && Owner.HasVersion("1.4"))
                         Elements[Keys.C] = new PdfLiteral("[{0}]", PdfEncoders.ToString(_textColor, PdfColorMode.Rgb));
 
                     // if (Style != PdfOutlineStyle.Regular && Document.HasVersion("1.4"))

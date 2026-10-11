@@ -70,18 +70,18 @@ namespace PeachPDF.PDF.Advanced
         /// actually given, rather than the document's own <see cref="PdfDocumentOptions.ColorMode"/> (which
         /// defaults to <see cref="PdfColorMode.Undefined"/> - always <c>/DeviceRGB</c> for a shading if read
         /// directly, even when every stop is CMYK-tagged). <see cref="PdfColorMode.Cmyk"/> iff every color's
-        /// <see cref="XColor.ColorSpace"/> is <see cref="XColorSpace.Cmyk"/>, else <see cref="PdfColorMode.Rgb"/>.
+        /// <see cref="PaintColor.IsCmyk"/> is true, else <see cref="PdfColorMode.Rgb"/>.
         /// Throws if the colors are a genuine mix of the two spaces - defense in depth mirroring
         /// <c>RenderContext.RejectMixedColorSpaceGradientStops</c>, which already rejects that case before a
         /// brush is ever constructed, so this should never fire in practice.
         /// </summary>
-        private static PdfColorMode ResolveShadingColorMode(IReadOnlyList<XColor> colors)
+        private static PdfColorMode ResolveShadingColorMode(IReadOnlyList<PaintColor> colors)
         {
             var anyCmyk = false;
             var anyNonCmyk = false;
             foreach (var c in colors)
             {
-                if (c.ColorSpace == XColorSpace.Cmyk) anyCmyk = true;
+                if (c.IsCmyk) anyCmyk = true;
                 else anyNonCmyk = true;
             }
 
@@ -108,8 +108,8 @@ namespace PeachPDF.PDF.Advanced
 
             // Legacy 2-color path
             PdfColorMode colorMode = ResolveShadingColorMode([brush._color1, brush._color2]);
-            XColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
-            XColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
+            PaintColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
+            PaintColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
 
             PdfDictionary function = new PdfDictionary();
 
@@ -219,7 +219,7 @@ namespace PeachPDF.PDF.Advanced
                 EllipsePatternMatrix = PdfMatrix.Create(rx_v, 0, 0, ry_v, center_v.X, center_v.Y);
             }
 
-            XColor[] colors = brush._colors!;
+            PaintColor[] colors = brush._colors!;
             double[]? positions = brush._positions;
 
             if (positions != null && RequiresStitchingFunction(positions))
@@ -227,8 +227,8 @@ namespace PeachPDF.PDF.Advanced
             else
             {
                 var fn = new PdfDictionary();
-                XColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[0]);
-                XColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[colors.Length - 1]);
+                PaintColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[0]);
+                PaintColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[colors.Length - 1]);
                 fn.Elements["/FunctionType"] = new PdfInteger(2);
                 fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
                 fn.Elements["/C0"] = new PdfLiteral("[" + PdfEncoders.ToString(c0, colorMode) + "]");
@@ -242,7 +242,7 @@ namespace PeachPDF.PDF.Advanced
                 focal_v.X, focal_v.Y, focalR);
         }
 
-        private void BuildRadialAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions,
+        private void BuildRadialAlphaExtGStateIfNeeded(PaintColor[] colors, double[]? positions,
             double cx, double cy, double rx, double ry, bool isEllipse, bool isRepeating = false,
             Matrix3x2? unitMatrix = null, double unitFocalX = 0, double unitFocalY = 0,
             double focalViewX = double.NaN, double focalViewY = double.NaN, double focalRadius = 0)
@@ -250,7 +250,7 @@ namespace PeachPDF.PDF.Advanced
             bool hasVaryingAlpha = false;
             for (int i = 0; i < colors.Length; i++)
             {
-                if (colors[i].A < 0.9995) { hasVaryingAlpha = true; break; }
+                if (colors[i].Opacity() < 0.9995) { hasVaryingAlpha = true; break; }
             }
             if (!hasVaryingAlpha) return;
 
@@ -262,8 +262,8 @@ namespace PeachPDF.PDF.Advanced
                 alphaFn = new PdfDictionary();
                 alphaFn.Elements["/FunctionType"] = new PdfInteger(2);
                 alphaFn.Elements["/Domain"] = new PdfLiteral("[0 1]");
-                alphaFn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[0].A) + "]");
-                alphaFn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[colors.Length - 1].A) + "]");
+                alphaFn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[0].Opacity()) + "]");
+                alphaFn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[colors.Length - 1].Opacity()) + "]");
                 alphaFn.Elements["/N"] = new PdfInteger(1);
             }
 
@@ -351,10 +351,10 @@ namespace PeachPDF.PDF.Advanced
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
-            XColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
+            PaintColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
             PdfColorMode colorMode = ResolveShadingColorMode(allColors);
-            XColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
-            XColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
+            PaintColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
+            PaintColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
 
             PdfDictionary function = new PdfDictionary();
 
@@ -439,12 +439,12 @@ namespace PeachPDF.PDF.Advanced
             BuildAlphaExtGStateIfNeeded(allColors, allPositions, x1, y1, x2, y2, brush.IsRepeating);
         }
 
-        private void BuildAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions, double x1, double y1, double x2, double y2, bool isRepeating = false)
+        private void BuildAlphaExtGStateIfNeeded(PaintColor[] colors, double[]? positions, double x1, double y1, double x2, double y2, bool isRepeating = false)
         {
             bool hasVaryingAlpha = false;
             for (int i = 0; i < colors.Length; i++)
             {
-                if (colors[i].A < 0.9995)
+                if (colors[i].Opacity() < 0.9995)
                 {
                     hasVaryingAlpha = true;
                     break;
@@ -461,8 +461,8 @@ namespace PeachPDF.PDF.Advanced
                 alphaFn = new PdfDictionary();
                 alphaFn.Elements["/FunctionType"] = new PdfInteger(2);
                 alphaFn.Elements["/Domain"] = new PdfLiteral("[0 1]");
-                alphaFn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[0].A) + "]");
-                alphaFn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[colors.Length - 1].A) + "]");
+                alphaFn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[0].Opacity()) + "]");
+                alphaFn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[colors.Length - 1].Opacity()) + "]");
                 alphaFn.Elements["/N"] = new PdfInteger(1);
             }
 
@@ -583,7 +583,7 @@ namespace PeachPDF.PDF.Advanced
             return encode.ToString();
         }
 
-        private static PdfDictionary BuildAlphaStitchingFunction(XColor[] colors, double[] positions)
+        private static PdfDictionary BuildAlphaStitchingFunction(PaintColor[] colors, double[] positions)
         {
             var segments = BuildStitchSegments(positions);
             var stitching = new PdfDictionary();
@@ -598,8 +598,8 @@ namespace PeachPDF.PDF.Advanced
                 var fn = new PdfDictionary();
                 fn.Elements["/FunctionType"] = new PdfInteger(2);
                 fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
-                fn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[seg.LeftIndex].A) + "]");
-                fn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[seg.RightIndex].A) + "]");
+                fn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[seg.LeftIndex].Opacity()) + "]");
+                fn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[seg.RightIndex].Opacity()) + "]");
                 fn.Elements["/N"] = new PdfInteger(1);
                 functions.Elements.Add(fn);
             }
@@ -610,7 +610,7 @@ namespace PeachPDF.PDF.Advanced
         private static string AlphaToString(double a) =>
             a.ToString("0.###", CultureInfo.InvariantCulture);
 
-        private static PdfDictionary BuildStitchingFunction(XColor[] colors, double[] positions, PdfColorMode colorMode)
+        private static PdfDictionary BuildStitchingFunction(PaintColor[] colors, double[] positions, PdfColorMode colorMode)
         {
             var segments = BuildStitchSegments(positions);
             var stitching = new PdfDictionary();
@@ -624,8 +624,8 @@ namespace PeachPDF.PDF.Advanced
             var functions = new PdfArray();
             foreach (var seg in segments)
             {
-                XColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[seg.LeftIndex]);
-                XColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[seg.RightIndex]);
+                PaintColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[seg.LeftIndex]);
+                PaintColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[seg.RightIndex]);
                 var fn = new PdfDictionary();
                 fn.Elements["/FunctionType"] = new PdfInteger(2);
                 fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
@@ -651,7 +651,7 @@ namespace PeachPDF.PDF.Advanced
             double xMin = vc.X - R, xMax = vc.X + R;
             double yMin = vc.Y - R, yMax = vc.Y + R;
 
-            XColor[] colors = brush.Colors;
+            PaintColor[] colors = brush.Colors;
             double[] angles = brush.AnglesRad;
 
             PdfColorMode colorMode = ResolveShadingColorMode(colors);
@@ -678,7 +678,7 @@ namespace PeachPDF.PDF.Advanced
             BuildConicAlphaExtGStateIfNeeded(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax);
         }
 
-        private static byte[] BuildConicMeshData(XColor[] colors, double[] angles,
+        private static byte[] BuildConicMeshData(PaintColor[] colors, double[] angles,
             double cx, double cy, double R,
             double xMin, double xMax, double yMin, double yMax,
             bool cmyk, bool alphaOnly)
@@ -688,7 +688,7 @@ namespace PeachPDF.PDF.Advanced
             for (int s = 0; s < colors.Length - 1; s++)
             {
                 double a1 = angles[s], a2 = angles[s + 1];
-                XColor c1 = colors[s], c2 = colors[s + 1];
+                PaintColor c1 = colors[s], c2 = colors[s + 1];
                 int nTri = Math.Max(1, (int)Math.Ceiling(Math.Abs(a2 - a1) * (180.0 / Math.PI)));
                 if (nTri > 180) nTri = 180;
 
@@ -699,8 +699,8 @@ namespace PeachPDF.PDF.Advanced
                     double θA = a1 + (a2 - a1) * tA;
                     double θB = a1 + (a2 - a1) * tB;
 
-                    XColor colorA = cmyk ? LerpXColorCmyk(c1, c2, tA) : LerpXColor(c1, c2, tA);
-                    XColor colorB = cmyk ? LerpXColorCmyk(c1, c2, tB) : LerpXColor(c1, c2, tB);
+                    PaintColor colorA = cmyk ? LerpXColorCmyk(c1, c2, tA) : LerpXColor(c1, c2, tA);
+                    PaintColor colorB = cmyk ? LerpXColorCmyk(c1, c2, tB) : LerpXColor(c1, c2, tB);
 
                     // In PDF view space: 0=top, clockwise ↔ x=sin(θ), y=+cos(θ)
                     double oAX = cx + R * Math.Sin(θA);
@@ -718,7 +718,7 @@ namespace PeachPDF.PDF.Advanced
         }
 
         private static void AppendConicVertex(System.Collections.Generic.List<byte> data, int flag,
-            double x, double y, XColor color,
+            double x, double y, PaintColor color,
             double xMin, double xMax, double yMin, double yMax,
             bool cmyk, bool alphaOnly)
         {
@@ -727,20 +727,22 @@ namespace PeachPDF.PDF.Advanced
             AppendUInt32BE(data, EncodeCoordinate(y, yMin, yMax));
             if (alphaOnly)
             {
-                data.Add((byte)Math.Round(color.A * 255));
+                data.Add(color.A);
             }
             else if (cmyk)
             {
-                data.Add((byte)Math.Round(Math.Clamp(color.C, 0, 1) * 255));
-                data.Add((byte)Math.Round(Math.Clamp(color.M, 0, 1) * 255));
-                data.Add((byte)Math.Round(Math.Clamp(color.Y, 0, 1) * 255));
-                data.Add((byte)Math.Round(Math.Clamp(color.K, 0, 1) * 255));
+                var (cyan, magenta, yellow, black) = color.ToCmyk();
+                data.Add((byte)Math.Round(Math.Clamp(cyan, 0, 1) * 255));
+                data.Add((byte)Math.Round(Math.Clamp(magenta, 0, 1) * 255));
+                data.Add((byte)Math.Round(Math.Clamp(yellow, 0, 1) * 255));
+                data.Add((byte)Math.Round(Math.Clamp(black, 0, 1) * 255));
             }
             else
             {
-                data.Add(color.R);
-                data.Add(color.G);
-                data.Add(color.B);
+                var (red, green, blue) = color.ToRgb();
+                data.Add(red);
+                data.Add(green);
+                data.Add(blue);
             }
         }
 
@@ -759,39 +761,43 @@ namespace PeachPDF.PDF.Advanced
             data.Add((byte)(value & 0xFF));
         }
 
-        private static XColor LerpXColor(XColor a, XColor b, double t)
+        private static PaintColor LerpXColor(PaintColor a, PaintColor b, double t)
         {
             t = Math.Clamp(t, 0.0, 1.0);
-            return XColor.FromArgb(
-                (int)Math.Round(a.A * 255 + t * (b.A - a.A) * 255),
-                (int)Math.Round(a.R + t * (b.R - a.R)),
-                (int)Math.Round(a.G + t * (b.G - a.G)),
-                (int)Math.Round(a.B + t * (b.B - a.B)));
+            var (aRed, aGreen, aBlue) = a.ToRgb();
+            var (bRed, bGreen, bBlue) = b.ToRgb();
+            return PaintColor.FromArgb(
+                (int)Math.Round(a.Opacity() * 255 + t * (b.Opacity() - a.Opacity()) * 255),
+                (int)Math.Round(aRed + t * (bRed - aRed)),
+                (int)Math.Round(aGreen + t * (bGreen - aGreen)),
+                (int)Math.Round(aBlue + t * (bBlue - aBlue)));
         }
 
         /// <summary>
         /// CMYK counterpart of <see cref="LerpXColor"/> - interpolates C/M/Y/K directly rather than R/G/B
-        /// (meaningless for a CMYK-tagged <see cref="XColor"/>), used for a conic gradient whose stops are
+        /// (meaningless for a CMYK-tagged <see cref="PaintColor"/>), used for a conic gradient whose stops are
         /// all CMYK-tagged (see <see cref="ResolveShadingColorMode"/>).
         /// </summary>
-        private static XColor LerpXColorCmyk(XColor a, XColor b, double t)
+        private static PaintColor LerpXColorCmyk(PaintColor a, PaintColor b, double t)
         {
             t = Math.Clamp(t, 0.0, 1.0);
-            return XColor.FromCmyk(
-                a.A + t * (b.A - a.A),
-                a.C + t * (b.C - a.C),
-                a.M + t * (b.M - a.M),
-                a.Y + t * (b.Y - a.Y),
-                a.K + t * (b.K - a.K));
+            var (aCyan, aMagenta, aYellow, aBlack) = a.ToCmyk();
+            var (bCyan, bMagenta, bYellow, bBlack) = b.ToCmyk();
+            return PdfColors.FromCmyk(
+                a.Opacity() + t * (b.Opacity() - a.Opacity()),
+                aCyan + t * (bCyan - aCyan),
+                aMagenta + t * (bMagenta - aMagenta),
+                aYellow + t * (bYellow - aYellow),
+                aBlack + t * (bBlack - aBlack));
         }
 
-        private void BuildConicAlphaExtGStateIfNeeded(XColor[] colors, double[] angles,
+        private void BuildConicAlphaExtGStateIfNeeded(PaintColor[] colors, double[] angles,
             double cx, double cy, double R,
             double xMin, double xMax, double yMin, double yMax)
         {
             bool hasAlpha = false;
             foreach (var c in colors)
-                if (c.A < 0.9995) { hasAlpha = true; break; }
+                if (c.Opacity() < 0.9995) { hasAlpha = true; break; }
             if (!hasAlpha) return;
 
             // cmyk is irrelevant here - alphaOnly:true means AppendConicVertex only ever writes the 1-byte

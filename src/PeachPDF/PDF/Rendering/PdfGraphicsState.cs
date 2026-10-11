@@ -93,14 +93,14 @@ namespace PeachPDF.PDF.Rendering
         double _realizedMiterLimit = -1;
         DashStyle _realizedDashStyle = (DashStyle)(-1);
         string _realizedDashPattern = null!;
-        XColor _realizedStrokeColor = XColor.Empty;
+        PaintColor _realizedStrokeColor = PaintColor.Empty;
         bool _realizedStrokeOverPrint;
 
         public void RealizePen(XPen pen, PdfColorMode colorMode)
         {
             const string frmt2 = Config.SignificantFigures2;
             const string format = Config.SignificantFigures3;
-            XColor color = pen.PaintColor;
+            PaintColor color = pen.PaintColor;
             bool overPrint = pen.Overprint;
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
             color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
@@ -212,8 +212,8 @@ namespace PeachPDF.PDF.Rendering
                 // stroke color may itself have been CMYK - a ColorSpace mismatch alone must force a
                 // re-emit even if the two colors' derived .Rgb values happen to coincide, since the
                 // operator itself ('RG' vs 'K') needs to change, not just the numbers.
-                if (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.ColorSpace != color.ColorSpace ||
-                    _realizedStrokeColor.Rgb != color.Rgb)
+                if (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.IsCmyk != color.IsCmyk ||
+                    _realizedStrokeColor.PackedRgb() != color.PackedRgb())
                 {
                     _renderer.Append(PdfEncoders.ToString(color, PdfColorMode.Rgb));
                     _renderer.Append(" RG\n");
@@ -235,9 +235,9 @@ namespace PeachPDF.PDF.Rendering
             // alpha must stay fully opaque. Driving /CA from color.A here would emit /CA 0 and make the
             // whole brush stroke invisible whenever the previously realized stroke alpha wasn't already
             // 0 (e.g. right after any opaque solid stroke).
-            double strokeAlpha = pen.Brush != null ? 1.0 : color.A;
+            double strokeAlpha = pen.Brush != null ? 1.0 : color.Opacity();
 
-            if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.A != strokeAlpha || _realizedStrokeOverPrint != overPrint))
+            if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.Opacity() != strokeAlpha || _realizedStrokeOverPrint != overPrint))
             {
                 // The IsEmpty guard mirrors RealizeFillColor's identical fix: a fresh PdfGraphicsState,
                 // or right after a brush stroke resets _realizedStrokeColor to Empty (line 247 below),
@@ -261,7 +261,7 @@ namespace PeachPDF.PDF.Rendering
             // invalidate the tracked stroke color (as RealizeBrush already does for the fill side) so a
             // following solid stroke re-establishes its own DeviceRGB/CMYK color instead of reusing this
             // pattern. Solid strokes keep tracking their realized color for the dedup above.
-            _realizedStrokeColor = pen.Brush != null ? XColor.Empty : color;
+            _realizedStrokeColor = pen.Brush != null ? PaintColor.Empty : color;
             _realizedStrokeOverPrint = overPrint;
         }
 
@@ -269,7 +269,7 @@ namespace PeachPDF.PDF.Rendering
 
         #region Fill
 
-        XColor _realizedFillColor = XColor.Empty;
+        PaintColor _realizedFillColor = PaintColor.Empty;
         bool _realizedNonStrokeOverPrint;
 
         public void RealizeBrush(XBrush brush, PdfColorMode colorMode, int renderingMode, double fontEmSize, bool isForPen = false)
@@ -283,7 +283,7 @@ namespace PeachPDF.PDF.Rendering
             XSolidBrush solidBrush = brush as XSolidBrush;
             if (solidBrush != null)
             {
-                XColor color = solidBrush.PaintColor;
+                PaintColor color = solidBrush.PaintColor;
                 bool overPrint = solidBrush.Overprint;
 
                 if (renderingMode == 0)
@@ -294,7 +294,7 @@ namespace PeachPDF.PDF.Rendering
                 {
                     // Come here in case of bold simulation.
                     RealizeFillColor(color, false, colorMode);
-                    //color = XColors.Green;
+                    //color = PaintColor.FromArgb(0, 128, 0);
                     RealizePen(new XPen(color, fontEmSize * Const.BoldEmphasis), colorMode);
                 }
                 else
@@ -326,9 +326,7 @@ namespace PeachPDF.PDF.Rendering
                     // The ambient fill alpha left by the last solid fill would otherwise carry over onto the pattern; see the gradient branch.
                     if (!isForPen)
                     {
-                        XColor resetColor = _realizedFillColor;
-                        resetColor.A = 1;
-                        RealizeFillColor(resetColor, false, colorMode);
+                        RealizeFillColor(_realizedFillColor.WithOpacity(1), false, colorMode);
                     }
 
                     if (isForPen)
@@ -342,7 +340,7 @@ namespace PeachPDF.PDF.Rendering
                         _renderer.AppendFormatString("{0} scn\n", name);
                     }
 
-                    _realizedFillColor = XColor.Empty;
+                    _realizedFillColor = PaintColor.Empty;
                 }
                 else if (brush is XBaseGradientBrush gradientBrush)
                 {
@@ -374,9 +372,7 @@ namespace PeachPDF.PDF.Rendering
                         // RealizeNonStrokeTransparency would otherwise carry over
                         // _realizedNonStrokeOverPrint, the ambient overprint flag left by that same last
                         // solid-color fill.
-                        XColor resetColor = _realizedFillColor;
-                        resetColor.A = 1;
-                        RealizeFillColor(resetColor, false, colorMode);
+                        RealizeFillColor(_realizedFillColor.WithOpacity(1), false, colorMode);
                     }
 
                     if (isForPen)
@@ -390,7 +386,7 @@ namespace PeachPDF.PDF.Rendering
                         _renderer.AppendFormatString("{0} scn\n", name);
                     }
                     // Invalidate fill color.
-                    _realizedFillColor = XColor.Empty;
+                    _realizedFillColor = PaintColor.Empty;
                 }
             }
         }
@@ -399,19 +395,19 @@ namespace PeachPDF.PDF.Rendering
         /// Resolves what space a color actually writes in for a given document <paramref name="colorMode"/> -
         /// <see cref="PdfColorMode.Undefined"/> (a mixed-color-space document: PDF permits both
         /// <c>rg</c>/<c>RG</c> and <c>k</c>/<c>K</c> operators in the same content stream) defers to the
-        /// color's own <see cref="XColor.ColorSpace"/>, matching <see cref="PdfEncoders.ToString(XColor, PdfColorMode, bool)"/>'s
+        /// color's own <see cref="PaintColor.IsCmyk"/>, matching <see cref="PdfEncoders.ToString(PaintColor, PdfColorMode, bool)"/>'s
         /// own per-color dispatch - <see cref="RealizeFillColor"/>/<see cref="RealizePen"/> must resolve
         /// the same way, or a device-cmyk()-authored color would fall through their <c>!= Cmyk</c> branch
-        /// (true for Undefined) and get force-written as RGB despite <see cref="ColorSpaceHelper.EnsureColorMode(PdfColorMode, XColor)"/>
+        /// (true for Undefined) and get force-written as RGB despite <see cref="ColorSpaceHelper.EnsureColorMode(PdfColorMode, PaintColor)"/>
         /// leaving it untouched under Undefined.
         /// </summary>
-        private static PdfColorMode ResolveEffectiveColorMode(PdfColorMode colorMode, XColor color)
+        private static PdfColorMode ResolveEffectiveColorMode(PdfColorMode colorMode, PaintColor color)
         {
             if (colorMode != PdfColorMode.Undefined) return colorMode;
-            return color.ColorSpace == XColorSpace.Cmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
+            return color.IsCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
         }
 
-        private void RealizeFillColor(XColor color, bool overPrint, PdfColorMode colorMode)
+        private void RealizeFillColor(PaintColor color, bool overPrint, PdfColorMode colorMode)
         {
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
             color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
@@ -424,8 +420,8 @@ namespace PeachPDF.PDF.Rendering
                 // fill color may itself have been CMYK - a ColorSpace mismatch alone must force a
                 // re-emit even if the two colors' derived .Rgb values happen to coincide, since the
                 // operator itself ('rg' vs 'k') needs to change, not just the numbers.
-                if (_realizedFillColor.IsEmpty || _realizedFillColor.ColorSpace != color.ColorSpace ||
-                    _realizedFillColor.Rgb != color.Rgb)
+                if (_realizedFillColor.IsEmpty || _realizedFillColor.IsCmyk != color.IsCmyk ||
+                    _realizedFillColor.PackedRgb() != color.PackedRgb())
                 {
                     _renderer.Append(PdfEncoders.ToString(color, PdfColorMode.Rgb));
                     _renderer.Append(" rg\n");
@@ -440,24 +436,24 @@ namespace PeachPDF.PDF.Rendering
                 }
             }
 
-            if (_renderer.Owner.Version >= 14 && (_realizedFillColor.IsEmpty || _realizedFillColor.A != color.A || _realizedNonStrokeOverPrint != overPrint))
+            if (_renderer.Owner.Version >= 14 && (_realizedFillColor.IsEmpty || _realizedFillColor.Opacity() != color.Opacity() || _realizedNonStrokeOverPrint != overPrint))
             {
                 // The IsEmpty guard mirrors the RGB-change check above: a fresh PdfGraphicsState (new
                 // renderer/form, or right after RealizeBrush's gradient-pattern branch invalidates the
-                // fill color) starts with _realizedFillColor == XColor.Empty, whose A is 0. Without this
+                // fill color) starts with _realizedFillColor == PaintColor.Empty, whose A is 0. Without this
                 // guard, a fill whose own alpha is genuinely 0 right after such a reset evaluates
                 // "0 != 0" as false and skips emitting /ca, leaving the PDF's actual alpha at whatever
                 // the enclosing graphics state had (often opaque) instead of fully transparent.
                 //
                 // Must create transparency group - checked before any object/resource is built, so a
                 // PDF/A-1 rejection never leaves a partially-built ExtGState behind.
-                if (color.A < 1)
+                if (color.Opacity() < 1)
                 {
                     PdfATransparencyGuard.RequireAllowed(_renderer.Owner, _renderer._page,
                         "A fill with alpha less than 1 (CSS/SVG fill-opacity or a semi-transparent fill color)");
                 }
 
-                PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateNonStroke(color.A, overPrint);
+                PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateNonStroke(color.Opacity(), overPrint);
                 string gs = _renderer.Resources.AddExtGState(extGState);
                 _renderer.AppendFormatString("{0} gs\n", gs);
             }
@@ -467,9 +463,7 @@ namespace PeachPDF.PDF.Rendering
 
         internal void RealizeNonStrokeTransparency(double transparency, PdfColorMode colorMode)
         {
-            XColor color = _realizedFillColor;
-            color.A = transparency;
-            RealizeFillColor(color, _realizedNonStrokeOverPrint, colorMode);
+            RealizeFillColor(_realizedFillColor.WithOpacity(transparency), _realizedNonStrokeOverPrint, colorMode);
         }
 
         #endregion

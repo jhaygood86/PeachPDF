@@ -37,16 +37,16 @@ namespace PeachPDF.PDF.Rendering
         private readonly double _scale;         // design units -> world units
         private readonly double _letterSpacing; // world units
         private readonly bool _pageDownwards;
-        private readonly XColor _foreground;
+        private readonly PaintColor _foreground;
         private readonly int _paletteIndex;     // selected CPAL palette (CSS font-palette), default 0
-        private readonly IReadOnlyDictionary<int, XColor>? _overrides; // CPAL entry index -> override color
+        private readonly IReadOnlyDictionary<int, PaintColor>? _overrides; // CPAL entry index -> override color
 
         private readonly double _baselineX;
         private readonly double _baselineY;
 
         public ColorGlyphPainter(XGraphicsPdfRenderer renderer, XFont font,
             XBrush brush, double baselineX, double baselineY, double letterSpacing,
-            int paletteIndex = 0, IReadOnlyDictionary<int, XColor>? overrides = null)
+            int paletteIndex = 0, IReadOnlyDictionary<int, PaintColor>? overrides = null)
         {
             _renderer = renderer;
             _gfx = renderer.Gfx;
@@ -56,7 +56,7 @@ namespace PeachPDF.PDF.Rendering
             _scale = font.Size / _typeface.Metrics.UnitsPerEm;
             _letterSpacing = letterSpacing;
             _pageDownwards = true;
-            _foreground = brush is XSolidBrush solid ? solid.PaintColor : XColors.Black;
+            _foreground = brush is XSolidBrush solid ? solid.PaintColor : PaintColor.Black;
             _paletteIndex = paletteIndex;
             _overrides = overrides is { Count: > 0 } ? overrides : null;
             _baselineX = baselineX;
@@ -315,13 +315,13 @@ namespace PeachPDF.PDF.Rendering
             }
 
             double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
-            var foreground = PaintColor.FromArgb((int)System.Math.Round(_foreground.A * 255), _foreground.R, _foreground.G, _foreground.B);
+            var foreground = _foreground.ToRgbColor();
             Dictionary<int, PaintColor>? overrides = null;
             if (_overrides is { Count: > 0 })
             {
                 overrides = new Dictionary<int, PaintColor>(_overrides.Count);
                 foreach (var (entry, colour) in _overrides)
-                    overrides[entry] = PaintColor.FromArgb((int)System.Math.Round(colour.A * 255), colour.R, colour.G, colour.B);
+                    overrides[entry] = colour.ToRgbColor();
             }
 
             return painter.TryPaint(_typeface, (ushort)glyphId, svg, _font.Size, originX, baselineY, foreground, _paletteIndex, overrides);

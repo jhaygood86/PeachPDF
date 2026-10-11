@@ -42,7 +42,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
         /// </summary>
-        public XRadialGradientBrush(PaintPoint center1, PaintPoint center2, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
+        public XRadialGradientBrush(PaintPoint center1, PaintPoint center2, double r1, double r2, PaintColor color1, PaintColor color2) : base(color1, color2)
         {
             _center1 = center1;
             _center2 = center2;
@@ -53,7 +53,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
         /// </summary>
-        public XRadialGradientBrush(PaintPoint center, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
+        public XRadialGradientBrush(PaintPoint center, double r1, double r2, PaintColor color1, PaintColor color2) : base(color1, color2)
         {
             _center1 = center;
             _center2 = center;
@@ -69,7 +69,7 @@ namespace PeachPDF.PDF.Drawing
         /// omitted, matching every pre-existing caller's behavior exactly. Only honored for the
         /// circular (non-ellipse) shading path - see <see cref="PeachPDF.PDF.Advanced.PdfShading"/>.
         /// </summary>
-        public XRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
+        public XRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, PaintColor[] colors, double[] positions, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
             : base(colors[0], colors[colors.Length - 1])
         {
             _center1 = center;
@@ -90,7 +90,7 @@ namespace PeachPDF.PDF.Drawing
         internal Matrix3x2? _transform;
         internal double _r1, _r2;
         internal double _radiusX, _radiusY;
-        internal XColor[]? _colors;
+        internal PaintColor[]? _colors;
         internal double[]? _positions;
         internal bool IsRepeating;
         /// <summary>The radius of the circle around the focal point the first stop fills (0 is a point), in the units of the radii above.</summary>

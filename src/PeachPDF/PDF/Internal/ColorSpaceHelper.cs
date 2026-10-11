@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
 
@@ -40,13 +41,13 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Checks whether a color mode and a color match.
         /// </summary>
-        public static XColor EnsureColorMode(PdfColorMode colorMode, XColor color)
+        public static PaintColor EnsureColorMode(PdfColorMode colorMode, PaintColor color)
         {
-            if (colorMode == PdfColorMode.Rgb && color.ColorSpace != XColorSpace.Rgb)
-                return XColor.FromArgb((int)(color.A * 255), color.R, color.G, color.B);
+            if (colorMode == PdfColorMode.Rgb && color.IsCmyk)
+                return color.ToRgbColor();
 
-            if (colorMode == PdfColorMode.Cmyk && color.ColorSpace != XColorSpace.Cmyk)
-                return XColor.FromCmyk(color.A, color.C, color.M, color.Y, color.K);
+            if (colorMode == PdfColorMode.Cmyk && !color.IsCmyk)
+                return color.ToCmykColor();
 
             return color;
         }
@@ -54,7 +55,7 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Checks whether the color mode of a document and a color match.
         /// </summary>
-        public static XColor EnsureColorMode(PdfDocument document, XColor color)
+        public static PaintColor EnsureColorMode(PdfDocument document, PaintColor color)
         {
             if (document == null)
                 throw new ArgumentNullException("document");
@@ -65,9 +66,9 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Determines whether two colors are equal referring to their CMYK color values.
         /// </summary>
-        public static bool IsEqualCmyk(XColor x, XColor y)
+        public static bool IsEqualCmyk(PaintColor x, PaintColor y)
         {
-            if (x.ColorSpace != XColorSpace.Cmyk || y.ColorSpace != XColorSpace.Cmyk)
+            if (!x.IsCmyk || !y.IsCmyk)
                 return false;
             return x.C == y.C && x.M == y.M && x.Y == y.Y && x.K == y.K;
         }

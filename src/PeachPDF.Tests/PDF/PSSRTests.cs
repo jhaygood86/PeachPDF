@@ -143,22 +143,5 @@ namespace PeachPDF.Tests.PdfEngineTests
             Assert.NotNull(PSSR.ResMngr);
         }
 
-        [Fact]
-        public void InappropriateColorSpace_NamesBothModeAndSpace()
-        {
-            var message = PSSR.InappropriateColorSpace(PeachPDF.PDF.PdfColorMode.Rgb, XColorSpace.Cmyk);
-
-            Assert.Contains("RGB", message);
-            Assert.Contains("CMYK", message);
-        }
-
-        [Fact]
-        public void InappropriateColorSpace_UndefinedMode_UsesPlaceholder()
-        {
-            var message = PSSR.InappropriateColorSpace(PeachPDF.PDF.PdfColorMode.Undefined, XColorSpace.GrayScale);
-
-            Assert.Contains("(undefined)", message);
-            Assert.Contains("grayscale", message);
-        }
     }
 }

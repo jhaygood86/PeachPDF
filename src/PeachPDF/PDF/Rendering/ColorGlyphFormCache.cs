@@ -16,6 +16,7 @@
 //
 #endregion
 
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
@@ -64,11 +65,11 @@ namespace PeachPDF.PDF.Rendering
             private readonly int _glyphId;
             private readonly int _paletteIndex;
             private readonly uint _foreground;
-            private readonly IReadOnlyDictionary<int, XColor>? _overrides;
+            private readonly IReadOnlyDictionary<int, PaintColor>? _overrides;
             private readonly int _overridesHash;
 
-            public Selector(Typeface typeface, int glyphId, int paletteIndex, XColor foreground,
-                IReadOnlyDictionary<int, XColor>? overrides)
+            public Selector(Typeface typeface, int glyphId, int paletteIndex, PaintColor foreground,
+                IReadOnlyDictionary<int, PaintColor>? overrides)
             {
                 _typeface = typeface;
                 _glyphId = glyphId;
@@ -98,22 +99,22 @@ namespace PeachPDF.PDF.Rendering
             /// <c>DrawString</c> (see <c>GraphicsAdapter.ToGlyphPalette</c>), so identity comparison would
             /// dedupe nothing - compare by value, order-independently, the way a dictionary itself is equal.
             /// </summary>
-            private static bool OverridesEqual(IReadOnlyDictionary<int, XColor>? left, IReadOnlyDictionary<int, XColor>? right)
+            private static bool OverridesEqual(IReadOnlyDictionary<int, PaintColor>? left, IReadOnlyDictionary<int, PaintColor>? right)
             {
                 if (ReferenceEquals(left, right))
                     return true;
                 if (left is null || right is null || left.Count != right.Count)
                     return false;
 
-                foreach ((int entry, XColor color) in left)
+                foreach ((int entry, PaintColor color) in left)
                 {
-                    if (!right.TryGetValue(entry, out XColor other) || ToArgb(other) != ToArgb(color))
+                    if (!right.TryGetValue(entry, out PaintColor other) || ToArgb(other) != ToArgb(color))
                         return false;
                 }
                 return true;
             }
 
-            private static int HashOverrides(IReadOnlyDictionary<int, XColor>? overrides)
+            private static int HashOverrides(IReadOnlyDictionary<int, PaintColor>? overrides)
             {
                 if (overrides is null)
                     return 0;
@@ -121,17 +122,17 @@ namespace PeachPDF.PDF.Rendering
                 // XOR-combined so enumeration order (which a dictionary does not promise) cannot change
                 // the hash of two equal override sets.
                 int hash = overrides.Count;
-                foreach ((int entry, XColor color) in overrides)
+                foreach ((int entry, PaintColor color) in overrides)
                     hash ^= HashCode.Combine(entry, ToArgb(color));
                 return hash;
             }
 
             /// <summary>
             /// Packs a color into its 8-bit-per-channel ARGB form - the resolution the PDF content
-            /// stream itself keeps, so two <see cref="XColor"/> values that write identically never
+            /// stream itself keeps, so two <see cref="PaintColor"/> values that write identically never
             /// split into two forms over a floating-point difference the output cannot show.
             /// </summary>
-            private static uint ToArgb(XColor color) => color.Argb;
+            private static uint ToArgb(PaintColor color) => ((uint)color.A << 24) | color.PackedRgb();
         }
     }
 }

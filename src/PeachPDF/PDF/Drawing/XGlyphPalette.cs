@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.Collections.Generic;
 
 namespace PeachPDF.PDF.Drawing
@@ -9,7 +10,7 @@ namespace PeachPDF.PDF.Drawing
     /// </summary>
     internal sealed class XGlyphPalette
     {
-        public XGlyphPalette(int basePaletteIndex, IReadOnlyDictionary<int, XColor> overrides)
+        public XGlyphPalette(int basePaletteIndex, IReadOnlyDictionary<int, PaintColor> overrides)
         {
             BasePaletteIndex = basePaletteIndex;
             Overrides = overrides;
@@ -19,6 +20,6 @@ namespace PeachPDF.PDF.Drawing
         public int BasePaletteIndex { get; }
 
         /// <summary>Per-entry color overrides (CPAL entry index → color); empty when there are none.</summary>
-        public IReadOnlyDictionary<int, XColor> Overrides { get; }
+        public IReadOnlyDictionary<int, PaintColor> Overrides { get; }
     }
 }

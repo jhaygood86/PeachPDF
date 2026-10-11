@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using System.Collections.Generic;
 using System.IO;
@@ -28,17 +29,17 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             return match.Typeface;
         }
 
-        private static Dictionary<int, XColor> Overrides(params (int Entry, XColor PaintColor)[] entries)
+        private static Dictionary<int, PaintColor> Overrides(params (int Entry, PaintColor PaintColor)[] entries)
         {
-            var map = new Dictionary<int, XColor>();
-            foreach ((int entry, XColor color) in entries)
+            var map = new Dictionary<int, PaintColor>();
+            foreach ((int entry, PaintColor color) in entries)
                 map[entry] = color;
             return map;
         }
 
         private static ColorGlyphFormCache.Selector Key(Typeface descriptor, int glyphId = 7,
-            int paletteIndex = 0, XColor? foreground = null, IReadOnlyDictionary<int, XColor>? overrides = null)
-            => new(descriptor, glyphId, paletteIndex, foreground ?? XColors.Black, overrides);
+            int paletteIndex = 0, PaintColor? foreground = null, IReadOnlyDictionary<int, PaintColor>? overrides = null)
+            => new(descriptor, glyphId, paletteIndex, foreground ?? PaintColor.Black, overrides);
 
         [Fact]
         public void SameGlyphSameStyling_IsTheSameKey()
@@ -57,7 +58,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
 
             Assert.NotEqual(Key(descriptor), Key(descriptor, glyphId: 8));
             Assert.NotEqual(Key(descriptor), Key(descriptor, paletteIndex: 1));
-            Assert.NotEqual(Key(descriptor), Key(descriptor, foreground: XColors.Red));
+            Assert.NotEqual(Key(descriptor), Key(descriptor, foreground: PaintColor.FromArgb(255, 0, 0)));
         }
 
         [Fact]
@@ -80,8 +81,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             // The resolved font-palette reaches the backend as a fresh dictionary per text run, so this
             // is the case that decides whether font-palette output dedupes at all.
             var descriptor = Descriptor(BundledFonts.ColorV0);
-            var left = Overrides((0, XColors.Lime), (4, XColors.Blue));
-            var right = Overrides((4, XColors.Blue), (0, XColors.Lime)); // same pairs, inserted the other way round
+            var left = Overrides((0, PaintColor.FromArgb(0, 255, 0)), (4, PaintColor.FromArgb(0, 0, 255)));
+            var right = Overrides((4, PaintColor.FromArgb(0, 0, 255)), (0, PaintColor.FromArgb(0, 255, 0))); // same pairs, inserted the other way round
 
             Assert.Equal(Key(descriptor, overrides: left), Key(descriptor, overrides: right));
             Assert.Equal(Key(descriptor, overrides: left).GetHashCode(), Key(descriptor, overrides: right).GetHashCode());
@@ -93,8 +94,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var descriptor = Descriptor(BundledFonts.ColorV0);
 
             Assert.NotEqual(
-                Key(descriptor, overrides: Overrides((0, XColors.Lime))),
-                Key(descriptor, overrides: Overrides((0, XColors.Blue))));
+                Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 255, 0)))),
+                Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 0, 255)))));
         }
 
         [Fact]
@@ -103,8 +104,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var descriptor = Descriptor(BundledFonts.ColorV0);
 
             Assert.NotEqual(
-                Key(descriptor, overrides: Overrides((0, XColors.Lime))),
-                Key(descriptor, overrides: Overrides((4, XColors.Lime))));
+                Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 255, 0)))),
+                Key(descriptor, overrides: Overrides((4, PaintColor.FromArgb(0, 255, 0)))));
         }
 
         [Fact]
@@ -113,8 +114,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var descriptor = Descriptor(BundledFonts.ColorV0);
 
             Assert.NotEqual(
-                Key(descriptor, overrides: Overrides((0, XColors.Lime))),
-                Key(descriptor, overrides: Overrides((0, XColors.Lime), (4, XColors.Blue))));
+                Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 255, 0)))),
+                Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 255, 0)), (4, PaintColor.FromArgb(0, 0, 255)))));
         }
 
         [Fact]
@@ -122,20 +123,20 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         {
             var descriptor = Descriptor(BundledFonts.ColorV0);
 
-            Assert.NotEqual(Key(descriptor), Key(descriptor, overrides: Overrides((0, XColors.Lime))));
-            Assert.NotEqual(Key(descriptor, overrides: Overrides((0, XColors.Lime))), Key(descriptor));
+            Assert.NotEqual(Key(descriptor), Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 255, 0)))));
+            Assert.NotEqual(Key(descriptor, overrides: Overrides((0, PaintColor.FromArgb(0, 255, 0)))), Key(descriptor));
         }
 
         [Fact]
         public void ColorsThatWriteIdentically_AreTheSameKey()
         {
             // The key compares colors at the 8-bit-per-channel resolution the content stream itself
-            // keeps, so two XColor values the output cannot tell apart never split into two forms.
+            // keeps, so two PaintColor values the output cannot tell apart never split into two forms.
             var descriptor = Descriptor(BundledFonts.ColorV0);
 
             Assert.Equal(
-                Key(descriptor, foreground: XColor.FromArgb(255, 18, 52, 86)),
-                Key(descriptor, foreground: XColor.FromArgb(255, 18, 52, 86)));
+                Key(descriptor, foreground: PaintColor.FromArgb(255, 18, 52, 86)),
+                Key(descriptor, foreground: PaintColor.FromArgb(255, 18, 52, 86)));
         }
 
         [Fact]

@@ -43,18 +43,18 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XPen"/> class.
         /// </summary>
-        public XPen(XColor color)
+        public XPen(PaintColor color)
             : this(color, 1, false)
         { }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="XPen"/> class.
         /// </summary>
-        public XPen(XColor color, double width)
+        public XPen(PaintColor color, double width)
             : this(color, width, false)
         { }
 
-        internal XPen(XColor color, double width, bool immutable)
+        internal XPen(PaintColor color, double width, bool immutable)
         {
             _color = color;
             _width = width;
@@ -122,7 +122,7 @@ namespace PeachPDF.PDF.Drawing
                     throw new ArgumentException(PSSR.CannotChangeImmutableObject("XPen"));
                 _dirty = _dirty || _brush != value;
                 _brush = value;
-                _color = XColor.Empty;
+                _color = PaintColor.Empty;
             }
         }
         internal XBrush _brush = null!;
@@ -130,7 +130,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the color.
         /// </summary>
-        public XColor PaintColor
+        public PaintColor PaintColor
         {
             get { return _color; }
             set
@@ -142,7 +142,7 @@ namespace PeachPDF.PDF.Drawing
                 _brush = null;
             }
         }
-        internal XColor _color;
+        internal PaintColor _color;
 
         /// <summary>
         /// Gets or sets the width.
