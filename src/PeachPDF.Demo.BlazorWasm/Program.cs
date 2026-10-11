@@ -14,9 +14,14 @@ using PeachPDF.Demo.BlazorWasm.Services;
 // for a host that isn't exclusively a browser build (Register() is itself harmless anywhere - the seam only ever
 // takes effect where the BCL's own decoder would otherwise throw - but the gate documents *why* a WASM app wants
 // this rather than leaving a reader to wonder).
+//
+// The managed encoder is registered for the same reason on the way out: PeachPDF's opt-in /BrotliDecode streams
+// (PdfGenerateConfig.BrotliCompression) fall back to Flate on a host with no Brotli encoder, so a browser build that
+// wants them registers one.
 if (OperatingSystem.IsBrowser())
 {
     ManagedBrotliDecompressor.Register();
+    ManagedBrotliCompressor.Register();
 }
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);

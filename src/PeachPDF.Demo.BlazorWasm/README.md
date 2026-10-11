@@ -43,7 +43,9 @@ web or to a local file resolves to nothing.
   hyphenation/dictionary-line-breaking data and WOFF2 font tables alike — uses it wherever the runtime's own
   `BrotliStream` would otherwise throw. `hyphens: auto` hyphenates normally, Thai/Lao/Khmer/Burmese text wraps at
   dictionary word boundaries, and a WOFF2 `@font-face` in an uploaded document loads like any other font. See
-  `PeachDrawing.Text.Brotli`'s own `PORTING-NOTES.md` for exactly what was ported and verified. The demo's own UI
+  `PeachDrawing.Text.Brotli`'s own `PORTING-NOTES.md` for exactly what was ported and verified. The same package's managed Brotli
+  encoder is registered too, so `PdfGenerateConfig.BrotliCompression` (opt-in) produces real `/BrotliDecode` streams in the browser
+  instead of falling back to Flate. The demo's own UI
   text still uses the bundled Liberation faces as WOFF 1.0 (about 2.3 MB for the twelve against WOFF2's 1.6 MB): that
   is a size/provenance choice, not a limitation, since re-doing the OFL round-trip verification
   `convert_liberation_webfonts.py` requires was not worth it for this demo's UI text.

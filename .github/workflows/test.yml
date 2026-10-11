@@ -153,12 +153,12 @@ jobs:
     # ---- small ------------------------------------------------------------------------------
 
     # Each project writes into the same coverage directory so the per-OS diff-coverage gate covers
-    # PeachPDF.Cli, PeachDrawing.Core, PeachDrawing and the source generator too. Every
+    # PeachPDF.Cli, PeachDrawing.Core, PeachDrawing, the source generator and the managed Brotli codec too. Every
     # project is built once up front so the test steps can use --no-build.
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachPDF.SourceGenerators.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachPDF.SourceGenerators.Tests', 'PeachDrawing.Text.Brotli.Tests') {
           dotnet build "src/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -180,6 +180,12 @@ jobs:
     - name: Test source generators
       if: matrix.suite == 'small'
       run: dotnet test src/PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=source-generators-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    # The managed Brotli decoder and encoder (PeachDrawing.Text.Brotli): the encoder's output is decoded by both the BCL and
+    # the managed decoder, so a bitstream error in either shows up here.
+    - name: Test managed Brotli
+      if: matrix.suite == 'small'
+      run: dotnet test src/PeachDrawing.Text.Brotli.Tests/PeachDrawing.Text.Brotli.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=brotli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     # ---- artifacts --------------------------------------------------------------------------
 
