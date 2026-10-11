@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
 using System;
 
 namespace PeachPDF.Adapters;
@@ -8,7 +8,7 @@ namespace PeachPDF.Adapters;
 /// <summary>
 /// Answers "would painting this need PDF transparency?" by painting it into a scratch page that is never saved, with the
 /// transparency guard recording instead of throwing. It exists so the answer comes from the very code that decides what the writer
-/// emits (<see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfATransparencyGuard"/> is the single choke point), rather than from a second
+/// emits (<see cref="PeachPDF.PDF.Advanced.PdfATransparencyGuard"/> is the single choke point), rather than from a second
 /// list of constructs that would drift from it.
 /// </summary>
 /// <remarks>

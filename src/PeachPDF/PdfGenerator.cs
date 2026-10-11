@@ -27,11 +27,10 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Layout;
 using PeachPDF.Network;
 using PeachPDF.Utilities;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Annotations;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -354,9 +353,9 @@ namespace PeachPDF
         /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>)
         /// and the declarative document-building path (<see cref="AddPages"/>) - <see cref="RenderPagesCore"/> reads <paramref name="config"/>
         /// directly for its own validation/XMP/OutputIntent writing, but the paint-time *enforcement* of
-        /// PDF/A/PDF/X construct restrictions (<see cref="PdfSharpCore.Drawing.Pdf.PdfGraphicsState"/>'s
-        /// color-mode resolution, <see cref="PdfSharpCore.Pdf.Advanced.PdfXColorSpaceGuard"/>,
-        /// <see cref="PdfSharpCore.Pdf.Advanced.PdfColorConversionGuard"/>, <see cref="PdfSharpCore.Pdf.Advanced.PdfATransparencyGuard"/>)
+        /// PDF/A/PDF/X construct restrictions (<see cref="PDF.Rendering.PdfGraphicsState"/>'s
+        /// color-mode resolution, <see cref="PDF.Advanced.PdfXColorSpaceGuard"/>,
+        /// <see cref="PDF.Advanced.PdfColorConversionGuard"/>, <see cref="PDF.Advanced.PdfATransparencyGuard"/>)
         /// all read <c>document.PdfDocument.Options.*</c> instead, so a caller that skipped this method
         /// would get a document whose <c>/OutputIntents</c>/XMP conformance claim is real but whose actual
         /// content is completely unenforced against it - exactly the bug this method's extraction fixes.

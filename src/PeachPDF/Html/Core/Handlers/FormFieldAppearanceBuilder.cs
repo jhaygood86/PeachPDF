@@ -4,9 +4,9 @@ using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Paint.Content;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
 
 namespace PeachPDF.Html.Core.Handlers
 {

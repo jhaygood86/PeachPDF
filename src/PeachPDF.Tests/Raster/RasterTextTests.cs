@@ -1,7 +1,7 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
             var font = f.Font(PaintFontStyle.Regular);
-            var pdf = new PdfSharpCore.Drawing.XGraphicsMeasureProbe(font).Width("measure me");
+            var pdf = new PDF.Drawing.XGraphicsMeasureProbe(font).Width("measure me");
 
             Assert.Equal(pdf, f.Graphics.MeasureString("measure me", font).Width, 6);
             Assert.Equal("measure me".Length, f.Graphics.CountShapedGlyphs("measure me", font));
@@ -217,7 +217,7 @@ namespace PeachPDF.Tests.Raster
     }
 }
 
-namespace PeachPDF.PdfSharpCore.Drawing
+namespace PeachPDF.PDF.Drawing
 {
     /// <summary>Test-only: measures with the same routine <c>GraphicsAdapter</c> uses (an <c>XGraphics</c> measure context).</summary>
     internal sealed class XGraphicsMeasureProbe(PeachDrawing.Core.Font font)

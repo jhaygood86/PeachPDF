@@ -4,7 +4,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -1,7 +1,7 @@
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF;
+using PeachPDF.PDF.AcroForms;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Text;

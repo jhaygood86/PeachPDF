@@ -1,8 +1,7 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System.Text.RegularExpressions;
 
 namespace PeachPDF.Tests.Integration

@@ -1,8 +1,7 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Utils;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 

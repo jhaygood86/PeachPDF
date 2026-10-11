@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System.Globalization;
 using System.IO;
 using System.Linq;

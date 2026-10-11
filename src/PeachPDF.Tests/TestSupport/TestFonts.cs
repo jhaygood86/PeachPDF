@@ -1,6 +1,6 @@
 using PeachDrawing.Text;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
 
 namespace PeachPDF.Tests.TestSupport
 {

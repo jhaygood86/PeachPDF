@@ -1,0 +1,96 @@
+#region PDFsharp - A .NET library for processing PDF
+//
+// Authors:
+//   Ben Askren
+//
+// Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
+//
+// http://www.PdfSharp.com
+// http://sourceforge.net/projects/pdfsharp
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+#endregion
+
+// ReSharper disable RedundantNameQualifier because it is required for hybrid build
+
+namespace PeachPDF.PDF.Drawing
+{
+    /// <summary>
+    /// Defines a Brush with a radial gradient.
+    /// </summary>
+    internal sealed class XRadialGradientBrush : XBaseGradientBrush
+    {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
+        /// </summary>
+        public XRadialGradientBrush(XPoint center1, XPoint center2, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
+        {
+            _center1 = center1;
+            _center2 = center2;
+            _r1 = r1;
+            _r2 = r2;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
+        /// </summary>
+        public XRadialGradientBrush(XPoint center, double r1, double r2, XColor color1, XColor color2) : base(color1, color2)
+        {
+            _center1 = center;
+            _center2 = center;
+            _r1 = r1;
+            _r2 = r2;
+        }
+
+        /// <summary>
+        /// Initializes a multi-stop radial gradient brush supporting both circle and ellipse shapes.
+        /// radiusX and radiusY may differ for ellipses. <paramref name="focalCenter"/> (e.g. from an
+        /// SVG radialGradient's <c>fx</c>/<c>fy</c>) offsets the gradient's zero-radius starting point
+        /// away from <paramref name="center"/>; defaults to <paramref name="center"/> (no offset) when
+        /// omitted, matching every pre-existing caller's behavior exactly. Only honored for the
+        /// circular (non-ellipse) shading path - see <see cref="PeachPDF.PDF.Advanced.PdfShading"/>.
+        /// </summary>
+        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, XPoint? focalCenter = null, XMatrix? transform = null)
+            : base(colors[0], colors[colors.Length - 1])
+        {
+            _center1 = center;
+            _center2 = center;
+            _r1 = 0;
+            _r2 = System.Math.Max(radiusX, radiusY);
+            _radiusX = radiusX;
+            _radiusY = radiusY;
+            _colors = colors;
+            _positions = positions;
+            _focalCenter = focalCenter ?? center;
+            _transform = transform;
+        }
+
+        internal XPoint _center1, _center2;
+        internal XPoint _focalCenter;
+        /// <summary>Carries the center/radii geometry into world space (rotation/skew); null when already there.</summary>
+        internal XMatrix? _transform;
+        internal double _r1, _r2;
+        internal double _radiusX, _radiusY;
+        internal XColor[]? _colors;
+        internal double[]? _positions;
+        internal bool IsRepeating;
+        /// <summary>The radius of the circle around the focal point the first stop fills (0 is a point), in the units of the radii above.</summary>
+        internal double FocalRadius;
+    }
+}

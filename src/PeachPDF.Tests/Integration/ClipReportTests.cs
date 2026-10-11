@@ -1,4 +1,4 @@
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System.Linq;
 using System.Threading.Tasks;
 

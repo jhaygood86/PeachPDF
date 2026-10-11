@@ -1,0 +1,1144 @@
+#region PDFsharp - A .NET library for processing PDF
+//
+// Authors:
+//   Stefan Lange
+//   Thomas H�vel
+//
+// Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
+//
+// https://www.pdfsharp.com/
+// http://sourceforge.net/projects/pdfsharp
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+// DEALINGS IN THE SOFTWARE.
+#endregion
+
+#nullable disable warnings
+
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF.Filters;
+using System;
+using System.Diagnostics;
+using System.IO;
+
+namespace PeachPDF.PDF.Advanced
+{
+    /// <summary>
+    /// Represents an image.
+    /// </summary>
+    internal sealed partial class PdfImage : PdfXObject
+    {
+        /// <summary>
+        /// Initializes a new instance of PdfImage from an XImage. When <paramref name="targetWidth"/>/
+        /// <paramref name="targetHeight"/> are given, the image is resized to that pixel size before
+        /// being embedded (see <see cref="PdfImageTable.GetImage"/>), and every <c>/Width</c>/<c>/Height</c>
+        /// this type writes uses that size rather than the image's own natural decoded size.
+        /// </summary>
+        public PdfImage(PdfDocument document, XImage image, int? targetWidth = null, int? targetHeight = null)
+            : base(document)
+        {
+            Elements.SetName(Keys.Type, "/XObject");
+            Elements.SetName(Keys.Subtype, "/Image");
+
+            _image = image;
+            _targetWidth = targetWidth;
+            _targetHeight = targetHeight;
+
+            ////// TODO: identify multiple used images. If the image already exists use the same XRef.
+            ////_defaultName = PdfImageTable.NextImageName;
+
+            switch (_image.Format.Guid.ToString("B").ToUpper())
+            {
+                // Pdf supports Jpeg, therefore we can write what we've read:
+                case "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Jpeg
+                    InitializeJpeg();
+                    break;
+
+                // All other image formats are converted to PDF bitmaps:
+                case "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Png
+                case "{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Gif
+                case "{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Tiff
+                case "{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Icon
+                    // TODO: possible optimization for PNG (do not decompress/recompress)???
+                    // TODO: try Jpeg for size optimization???
+                    InitializeNonJpeg();
+                    break;
+
+                case "{84570158-DBF0-4C6B-8368-62D6A3CA76E0}":  //XImageFormat.Pdf:
+                    Debug.Assert(false, "XPdfForm not expected here.");
+                    break;
+
+                default:
+                    Debug.Assert(false, "Unexpected image type.");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Gets the underlying XImage object.
+        /// </summary>
+        public XImage Image
+        {
+            get { return _image; }
+        }
+
+        readonly XImage _image;
+        readonly int? _targetWidth;
+        readonly int? _targetHeight;
+
+        /// <summary>
+        /// The pixel size this image is actually embedded at - <c>_targetWidth</c>/<c>_targetHeight</c>
+        /// when a resize applies, otherwise the source's own natural decoded size.
+        /// </summary>
+        int EffectiveWidth => _targetWidth ?? _image.PixelWidth;
+        int EffectiveHeight => _targetHeight ?? _image.PixelHeight;
+
+        /// <summary>
+        /// Returns 'Image'.
+        /// </summary>
+        public override string ToString()
+        {
+            return "Image";
+        }
+
+        /// <summary>
+        /// Creates the keys for a JPEG image.
+        /// </summary>
+        void InitializeJpeg()
+        {
+            // Byte-for-byte pass-through instead of the lossy re-encode below - PeachPDF has no general
+            // color management, so pass-through is the only way to guarantee a source's own color data
+            // (and embedded ICC profile, if any) reaches the PDF unchanged. Always non-null for a
+            // CMYK/YCCK source (see PeachCmykImageSourceImpl - CMYK is never resized, so this always
+            // applies for one, unconditionally); for RGB/Gray, only when there's a usable embedded ICC
+            // profile to preserve, since that's the only reason to prefer pass-through over the ordinary
+            // re-encode below for those. Only applies when no resize is requested for this embed either
+            // way: a resize can't be byte-for-byte, so an RGB/Gray source falls through to the existing
+            // lossy behavior below instead (losing the ICC profile for that specific embed, not the image
+            // itself - see issue #1085's plan notes on "guarantee full fidelity").
+            // The experimental JPEG XL pass-through outranks the JPEG one: a JXL whose payload is a recompressed
+            // JPEG carries both, and the caller asked for the JXL bytes. PdfImageTable.IsJxlPinnedToNaturalSize
+            // mirrors this exact condition so _targetWidth is null whenever it holds.
+            if (_targetWidth is null && _document.Options.UseJxlPassthrough
+                && _document.Options.ImageCompression != ImageCompression.Lossy
+                && _image.JxlPassthrough is { } jxlPassthrough)
+            {
+                EmbedJxlPassthrough(jxlPassthrough);
+                return;
+            }
+
+            if (_targetWidth is null && _image.JpegPassthrough is { } passthrough)
+            {
+                EmbedJpegPassthrough(passthrough);
+                return;
+            }
+
+            bool allowLossy = _document.Options.ImageCompression == ImageCompression.Lossy;
+
+            // An eligible PNG (opaque, not interlaced) embeds its own IDAT bytes directly - smaller and
+            // pixel-exact, and (like CmykRaster/JpegPassthrough) never resized: PdfImageTable's resize
+            // skip (IsPngPinnedToNaturalSize) guarantees _targetWidth is null whenever this fast path is
+            // about to be taken. Lossy normally forces the lossy fallback below instead - except for a
+            // source with a ColorKeyMask (tRNS-derived transparency) or AlphaIdatData (a real per-pixel
+            // alpha channel split via PngAlphaSplit, issue #1109): JPEG can't represent either at all, so
+            // Lossy simply doesn't apply to them, the same "the format can't hold this" treatment.
+            // PdfImageTable.IsPngPinnedToNaturalSize mirrors this exact condition.
+            if (_targetWidth is null && _image.PngPassthrough is { } pngPassthrough &&
+                (!allowLossy || pngPassthrough.ColorKeyMask is not null || pngPassthrough.AlphaIdatData is not null))
+            {
+                EmbedPngPassthrough(pngPassthrough);
+                return;
+            }
+
+            // Same reasoning as the PNG check above, mirrored for GIF's own /LZWDecode pass-through
+            // (issue #1110) - PdfImageTable.IsGifPinnedToNaturalSize mirrors this exact condition.
+            if (_targetWidth is null && _image.GifPassthrough is { } gifPassthrough &&
+                (!allowLossy || gifPassthrough.ColorKeyMask is not null))
+            {
+                EmbedGifPassthrough(gifPassthrough);
+                return;
+            }
+
+            // Covers PNG/BMP/GIF: a source whose own format has no lossy encoding mode at all, but that
+            // either isn't pass-through-eligible (an interlaced PNG, a small-palette/interlaced/
+            // partial-canvas GIF) or has no pass-through mechanism at all (BMP) - ImageCompression.Auto/
+            // Lossless both refuse to silently re-encode it as lossy JPEG. Auto only protects it at
+            // natural size (_targetWidth is null) - a downscaled one keeps
+            // the existing, intentional downscale-to-JPEG-at-DownscaleQuality trade-off; Lossless protects
+            // it at every size, decoding and falling into the same raw-/FlateDecode path a real alpha
+            // image already uses (ReadTrueColorMemoryBitmap resizes first when _targetWidth is set, then
+            // simply never populates a /SMask for a source with no actual transparent pixels).
+            if (!allowLossy && _image.IsLosslessSourceFormat &&
+                (_document.Options.ImageCompression == ImageCompression.Lossless || _targetWidth is null))
+            {
+                ReadTrueColorMemoryBitmap(3, 8, true);
+                return;
+            }
+
+            byte[] imageBits = null;
+
+            // A resize only ever reaches here for an image with no real alpha (PdfImageTable only
+            // resizes; whether that resize lands on the Jpeg or NonJpeg path is still decided by
+            // XImage.Initialize's Transparent check) - so DownscaleQuality applies exactly when a resize
+            // is actually happening, and leaves a full-resolution JPEG embed's own quality untouched.
+            int? qualityOverride = _targetWidth.HasValue ? _document.Options.DownscaleQuality : null;
+            using (MemoryStream memory = _image.AsJpeg(_targetWidth, _targetHeight, qualityOverride))
+            {
+                imageBits = memory.ToArray();
+            }
+
+            bool tryFlateDecode = _document.Options.UseFlateDecoderForJpegImages == PdfUseFlateDecoderForJpegImages.Automatic;
+            bool useFlateDecode = _document.Options.UseFlateDecoderForJpegImages == PdfUseFlateDecoderForJpegImages.Always;
+
+            FlateDecode fd = new FlateDecode();
+            byte[] imageDataCompressed = (useFlateDecode || tryFlateDecode) ? fd.Encode(imageBits, _document.Options.FlateEncodeMode) : null;
+            if (useFlateDecode || tryFlateDecode && imageDataCompressed.Length < imageBits.Length)
+            {
+                Stream = new PdfStream(imageDataCompressed, this);
+                Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
+                PdfArray arrayFilters = new PdfArray(_document);
+                arrayFilters.Elements.Add(new PdfName("/FlateDecode"));
+                arrayFilters.Elements.Add(new PdfName("/DCTDecode"));
+                Elements[PdfStream.Keys.Filter] = arrayFilters;
+            }
+            else
+            {
+                Stream = new PdfStream(imageBits, this);
+                Elements[PdfStream.Keys.Length] = new PdfInteger(imageBits.Length);
+                Elements[PdfStream.Keys.Filter] = new PdfName("/DCTDecode");
+            }
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+
+            // A grayscale JPEG source (decoded via its own native pixel format when it has no ICC
+            // profile to preserve via pass-through - see DecodeRgbOrGrayJpeg) re-encodes here as a
+            // genuine 1-component grayscale JPEG, not 3-component YCbCr (PeachImage's JPEG encoder
+            // branches on the source's own PixelFormat) - /ColorSpace must match, or a strict reader sees
+            // a /DeviceRGB image backed by a 1-component DCTDecode stream. _image.RgbIccProfile (issue
+            // #1106), when present, still describes what the re-encoded JPEG's own samples mean: this
+            // path only ever recompresses the already-decoded pixel bytes (optionally resized) - it
+            // never converts them into a different color space - so the source's own profile stays
+            // accurate through the re-encode the same way ReadTrueColorMemoryBitmap's own raw-bitmap
+            // embed already relies on.
+            Elements[Keys.ColorSpace] = _image.IsGrayscale
+                ? BuildDeviceOrIccColorSpace(1, "/DeviceGray", _image.RgbIccProfile)
+                : BuildDeviceOrIccColorSpace(3, "/DeviceRGB", _image.RgbIccProfile);
+        }
+
+        /// <summary>
+        /// Embeds a JPEG source via byte-for-byte pass-through: the original file bytes, unchanged, as
+        /// <c>/DCTDecode</c>, with a bare Device* or <c>/ICCBased</c> color space depending on whether an
+        /// embedded ICC profile was found, and a <c>/Decode</c> array when the source needs Adobe's
+        /// inverted-CMYK convention undone. The single choke point <see cref="InitializeJpeg"/>'s fast
+        /// path calls into - always for a CMYK/YCCK source, and for RGB/Gray only when there's a usable
+        /// embedded ICC profile to preserve.
+        /// </summary>
+        void EmbedJpegPassthrough(JpegPassthroughData data)
+        {
+            if (data.ColorSpace == JpegPassthroughColorSpace.Cmyk)
+            {
+                // A bare /DeviceCMYK image has no relationship to PeachPDF's RGB-only PDF/A output
+                // intent - only an /ICCBased CMYK image (self-describing via its own profile) is
+                // conformant, so PDF/A requires one here specifically (unlike RGB/Gray, which stays
+                // conformant with or without an ICC profile - see PdfACmykImageGuard's own remarks).
+                PdfACmykImageGuard.RequireIccProfile(_document, data.IccProfile is not null,
+                    "An embedded CMYK image without an embedded ICC profile");
+            }
+
+            Elements[Keys.ColorSpace] = BuildJpegColorSpace(data);
+
+            Stream = new PdfStream(data.Data, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(data.Data.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/DCTDecode");
+
+            if (data.NeedsInvertedDecode)
+            {
+                var decodeArray = new PdfArray(_document);
+                for (int i = 0; i < 4; i++)
+                {
+                    decodeArray.Elements.Add(new PdfInteger(1));
+                    decodeArray.Elements.Add(new PdfInteger(0));
+                }
+                Elements[Keys.Decode] = decodeArray;
+            }
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+        }
+
+        /// <summary>
+        /// Embeds a JPEG XL source byte-for-byte as an experimental <c>/JXLDecode</c> stream, following the only
+        /// open-source design that exists so far (PDFium's experimental decoder): the original file bytes, no
+        /// <c>/DecodeParms</c>, and the color space and bit depth stated by the image dictionary. Alpha never gets here
+        /// (an alpha JPEG XL is not eligible); the filter name is a placeholder until the PDF Association publishes one.
+        /// </summary>
+        void EmbedJxlPassthrough(JxlPassthroughData data)
+        {
+            var (n, deviceName) = data.ColorSpace == JpegPassthroughColorSpace.Gray ? (1, "/DeviceGray") : (3, "/DeviceRGB");
+            Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(n, deviceName, data.IccProfile);
+
+            Stream = new PdfStream(data.Data, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(data.Data.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/JXLDecode");
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(data.BitsPerComponent);
+        }
+
+        /// <summary>
+        /// Builds either a bare Device* name or an <c>/ICCBased</c> array (<c>/N</c>/<c>/Alternate</c>
+        /// matching <paramref name="data"/>'s color space, stream = its embedded ICC profile bytes) for a
+        /// pass-through embed - same shape as <see cref="PdfOutputIntent"/>'s <c>/DestOutputProfile</c>
+        /// stream.
+        /// </summary>
+        PdfItem BuildJpegColorSpace(JpegPassthroughData data)
+        {
+            var (n, deviceName) = data.ColorSpace switch
+            {
+                JpegPassthroughColorSpace.Rgb => (3, "/DeviceRGB"),
+                JpegPassthroughColorSpace.Gray => (1, "/DeviceGray"),
+                JpegPassthroughColorSpace.Cmyk => (4, "/DeviceCMYK"),
+                _ => throw new ArgumentOutOfRangeException(nameof(data)),
+            };
+
+            return BuildDeviceOrIccColorSpace(n, deviceName, data.IccProfile);
+        }
+
+        /// <summary>
+        /// Shared by <see cref="BuildJpegColorSpace"/> and <see cref="InitializeCmykRaster"/> - either a
+        /// bare Device* name, or (when <paramref name="iccProfile"/> is given) an <c>/ICCBased</c> array
+        /// referencing an indirect stream object holding the raw profile bytes, <c>/N</c> = <paramref name="n"/>,
+        /// <c>/Alternate</c> = <paramref name="deviceName"/> - same shape as <see cref="PdfOutputIntent"/>'s
+        /// <c>/DestOutputProfile</c> stream.
+        /// </summary>
+        PdfItem BuildDeviceOrIccColorSpace(int n, string deviceName, byte[]? iccProfile)
+        {
+            if (iccProfile is null)
+            {
+                return new PdfName(deviceName);
+            }
+
+            var iccStream = new PdfDictionary(_document);
+            _document.Internals.AddObject(iccStream);
+            iccStream.Elements.SetInteger("/N", n);
+            iccStream.Elements.SetName("/Alternate", deviceName);
+            iccStream.Stream = new PdfStream(iccProfile, iccStream);
+            iccStream.Elements[PdfStream.Keys.Length] = new PdfInteger(iccProfile.Length);
+
+            return new PdfArray(_document, new PdfName("/ICCBased"), iccStream.Reference);
+        }
+
+        /// <summary>
+        /// Embeds a pass-through-eligible PNG source: its own concatenated <c>IDAT</c> bytes, unchanged,
+        /// as <c>/FlateDecode</c> with a <c>/DecodeParms</c> describing PNG's own predictor/color
+        /// layout - a conformant reader reconstructs the identical pixels with no re-encoding on
+        /// PeachPDF's part. The single choke point <see cref="InitializeJpeg"/>'s fast path calls into,
+        /// mirroring <see cref="EmbedJpegPassthrough"/>'s shape closely; its color space comes from
+        /// <see cref="BuildPngColorSpace"/>, which (issue #1106) wraps the bare Device*/Indexed space in
+        /// <c>/ICCBased</c> when the source PNG carried an <c>iCCP</c> chunk PeachImage could parse. A
+        /// <c>tRNS</c>-derived <see cref="PngPassthroughData.ColorKeyMask"/>, when present, writes as a color-key
+        /// <c>/Mask</c> array - no PDF/A guard needed here, unlike an <c>/SMask</c> alpha channel: color-
+        /// key masking predates PDF's transparency model entirely and isn't restricted under any
+        /// <c>PdfAConformance</c> level. <see cref="PngPassthroughData.AlphaIdatData"/> (issue #1109),
+        /// when present, writes a child <c>/SMask</c> image object built the same way - its own
+        /// <c>/FlateDecode</c> stream with a matching PNG-predictor <c>/DecodeParms</c>, since
+        /// <c>PngAlphaSplit</c> PNG-row-filters the alpha plane exactly like a real PNG <c>IDAT</c> - and,
+        /// unlike the color-key case, does need the PDF/A transparency-group guard
+        /// <see cref="ReadTrueColorMemoryBitmap"/>'s own <c>/SMask</c> block already applies, since an
+        /// image <c>/SMask</c> is a transparency-group-requiring construct PDF/A-1 forbids.
+        /// </summary>
+        void EmbedPngPassthrough(PngPassthroughData data)
+        {
+            Elements[Keys.ColorSpace] = BuildPngColorSpace(data);
+
+            Stream = new PdfStream(data.IdatData, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(data.IdatData.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+
+            var decodeParms = new PdfDictionary(_document);
+            decodeParms.Elements.SetInteger("/Predictor", 15);
+            decodeParms.Elements.SetInteger("/Colors", data.ColorSpace == PngPassthroughColorSpace.Rgb ? 3 : 1);
+            decodeParms.Elements.SetInteger("/BitsPerComponent", data.BitDepth);
+            decodeParms.Elements.SetInteger("/Columns", EffectiveWidth);
+            Elements[PdfStream.Keys.DecodeParms] = decodeParms;
+
+            if (data.ColorKeyMask is { Length: > 0 } colorKeyMask)
+            {
+                var maskArray = new PdfArray(_document);
+                foreach (var component in colorKeyMask)
+                {
+                    maskArray.Elements.Add(new PdfInteger(component));
+                }
+                Elements[Keys.Mask] = maskArray;
+            }
+
+            if (data.AlphaIdatData is { } alphaIdatData)
+            {
+                PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
+
+                var smask = new PdfDictionary(_document);
+                smask.Elements.SetName(Keys.Type, "/XObject");
+                smask.Elements.SetName(Keys.Subtype, "/Image");
+
+                Owner._irefTable.Add(smask);
+                smask.Stream = new PdfStream(alphaIdatData, smask);
+                smask.Elements[PdfStream.Keys.Length] = new PdfInteger(alphaIdatData.Length);
+                smask.Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+
+                var alphaDecodeParms = new PdfDictionary(_document);
+                alphaDecodeParms.Elements.SetInteger("/Predictor", 15);
+                alphaDecodeParms.Elements.SetInteger("/Colors", 1);
+                alphaDecodeParms.Elements.SetInteger("/BitsPerComponent", data.AlphaBitDepth!.Value);
+                alphaDecodeParms.Elements.SetInteger("/Columns", EffectiveWidth);
+                smask.Elements[PdfStream.Keys.DecodeParms] = alphaDecodeParms;
+
+                smask.Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+                smask.Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+                smask.Elements[Keys.BitsPerComponent] = new PdfInteger(data.AlphaBitDepth.Value);
+                smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
+                if (AllowInterpolate)
+                    smask.Elements[Keys.Interpolate] = PdfBoolean.True;
+                Elements[Keys.SMask] = smask.Reference;
+            }
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(data.BitDepth);
+        }
+
+        /// <summary>
+        /// A bare <c>/DeviceGray</c>/<c>/DeviceRGB</c> name for the Gray/Rgb cases (or <c>/ICCBased</c>
+        /// when <see cref="PngPassthroughData.IccProfile"/> is present, issue #1106), or (for Palette
+        /// source PNGs) an <c>/Indexed</c> array via <see cref="BuildIndexedColorSpace"/>.
+        /// </summary>
+        PdfItem BuildPngColorSpace(PngPassthroughData data) => data.ColorSpace switch
+        {
+            PngPassthroughColorSpace.Gray => BuildDeviceOrIccColorSpace(1, "/DeviceGray", data.IccProfile),
+            PngPassthroughColorSpace.Rgb => BuildDeviceOrIccColorSpace(3, "/DeviceRGB", data.IccProfile),
+            PngPassthroughColorSpace.Indexed => BuildIndexedColorSpace(data.PaletteRgb!, data.IccProfile),
+            _ => throw new ArgumentOutOfRangeException(nameof(data)),
+        };
+
+        /// <summary>
+        /// Builds a PDF <c>/Indexed [base hival lookup]</c> color space array from a PNG's raw <c>PLTE</c>
+        /// bytes (tightly packed RGB triples) - no existing code in this codebase constructs one.
+        /// <paramref name="paletteRgb"/> becomes the lookup table via an indirect stream object, the same
+        /// shape <see cref="BuildDeviceOrIccColorSpace"/> already uses for an ICC profile - simpler and
+        /// less risky than encoding a raw binary blob as a PDF string literal for what is always a small
+        /// (&#8804;768-byte) table. <paramref name="iccProfile"/> (issue #1106), when present, makes the
+        /// base color space <c>/ICCBased</c> instead of a bare <c>/DeviceRGB</c> - a PNG's <c>iCCP</c>
+        /// describes the color space its palette entries themselves live in, so this is the base an
+        /// <c>/Indexed</c> array's lookup table is interpreted against, not a separate per-pixel concern.
+        /// Also reused by <see cref="EmbedGifPassthrough"/> for GIF's own palette (always
+        /// <paramref name="iccProfile"/>: <see langword="null"/> - GIF has no embedded-profile concept).
+        /// </summary>
+        PdfItem BuildIndexedColorSpace(byte[] paletteRgb, byte[]? iccProfile = null)
+        {
+            int hival = paletteRgb.Length / 3 - 1;
+
+            var lookupStream = new PdfDictionary(_document);
+            _document.Internals.AddObject(lookupStream);
+            lookupStream.Stream = new PdfStream(paletteRgb, lookupStream);
+            lookupStream.Elements[PdfStream.Keys.Length] = new PdfInteger(paletteRgb.Length);
+
+            return new PdfArray(_document, new PdfName("/Indexed"), BuildDeviceOrIccColorSpace(3, "/DeviceRGB", iccProfile),
+                new PdfInteger(hival), lookupStream.Reference);
+        }
+
+        /// <summary>
+        /// Embeds a pass-through-eligible GIF source as <c>/LZWDecode</c> - the same LZW code values and
+        /// code widths the GIF's own encoder produced (so no LZW decompress+recompress round trip), just
+        /// re-packed via <see cref="RepackGifLzwForPdf"/> from GIF's own bit order into PDF's. This is
+        /// <em>not</em> a literal byte-for-byte copy the way <see cref="EmbedPngPassthrough"/>'s <c>IDAT</c>
+        /// is: GIF packs LZW codes least-significant-bit-first, while PDF's <c>/LZWDecode</c> (inherited
+        /// from the classic Unix "compress" format, same as TIFF's LZW) packs them most-significant-bit-
+        /// first - the two bitstreams are binary-incompatible despite using the same code-value/code-width
+        /// algorithm, confirmed by rasterizing a naive verbatim-bytes embed with both PDFium and MuPDF and
+        /// watching both agree on the same corrupted output past the first few codes. Otherwise same shape
+        /// as <see cref="EmbedPngPassthrough"/>, reusing <see cref="BuildIndexedColorSpace"/> for the
+        /// <c>/Indexed</c> color space (a GIF's effective palette is already flat RGB triples, same layout
+        /// PNG's <c>PLTE</c> uses) and the same color-key <c>/Mask</c> array shape for a declared
+        /// transparent index.
+        /// </summary>
+        void EmbedGifPassthrough(GifPassthroughData data)
+        {
+            Elements[Keys.ColorSpace] = BuildIndexedColorSpace(data.Palette);
+
+            var pdfLzwData = RepackGifLzwForPdf(data.LzwData);
+            Stream = new PdfStream(pdfLzwData, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(pdfLzwData.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/LZWDecode");
+
+            if (data.ColorKeyMask is { Length: > 0 } colorKeyMask)
+            {
+                var maskArray = new PdfArray(_document);
+                foreach (var component in colorKeyMask)
+                {
+                    maskArray.Elements.Add(new PdfInteger(component));
+                }
+                Elements[Keys.Mask] = maskArray;
+            }
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+        }
+
+        /// <summary>
+        /// Re-packs a GIF frame's LZW-compressed bytes (bit-packed least-significant-bit-first, GIF's own
+        /// convention - see <see cref="EmbedGifPassthrough"/>'s own remarks) into PDF <c>/LZWDecode</c>'s
+        /// bit-packing convention (most-significant-bit-first). Preserves the exact same sequence of code
+        /// values and code widths GIF's own encoder chose - both conventions grow from 9 to 12 bits using
+        /// the identical "early change" trigger (widen the moment the code table becomes full for the
+        /// current width, confirmed against PeachImage's own <c>GifLzwEncoder</c>/<c>GifLzwDecoder</c>
+        /// source, matching PDF's own default <c>/EarlyChange 1</c>) - so this only ever needs to track
+        /// that shared code-table-size bookkeeping to find code boundaries, never PeachImage's actual
+        /// prefix/suffix dictionary contents (no pixel decode happens here). Hardcodes GIF's Clear/End
+        /// codes at 256/257 (start code width 9) rather than deriving them from a <c>MinCodeSize</c>
+        /// parameter, since <see cref="ImageSource.IImageSource.GifPassthrough"/>'s eligibility gate
+        /// already guarantees <c>MinCodeSize == 8</c> for every caller - the same fixed values PDF's
+        /// <c>/LZWDecode</c> itself always uses (it has no <c>MinCodeSize</c> concept of its own).
+        /// </summary>
+        internal static byte[] RepackGifLzwForPdf(byte[] gifLzwData)
+        {
+            const int clearCode = 256;
+            const int endCode = 257;
+            const int maxCodeTableSize = 4096;
+
+            int inBytePos = 0;
+            ulong inBitBuffer = 0;
+            int inBitCount = 0;
+            bool TryReadLsbFirst(int bits, out int code)
+            {
+                while (inBitCount < bits)
+                {
+                    if (inBytePos >= gifLzwData.Length)
+                    {
+                        code = 0;
+                        return false;
+                    }
+                    inBitBuffer |= (ulong)gifLzwData[inBytePos++] << inBitCount;
+                    inBitCount += 8;
+                }
+                code = (int)(inBitBuffer & ((1UL << bits) - 1));
+                inBitBuffer >>= bits;
+                inBitCount -= bits;
+                return true;
+            }
+
+            using var output = new MemoryStream();
+            int outBitBuffer = 0;
+            int outBitCount = 0;
+            void WriteMsbFirst(int code, int bits)
+            {
+                outBitBuffer = (outBitBuffer << bits) | code;
+                outBitCount += bits;
+                while (outBitCount >= 8)
+                {
+                    outBitCount -= 8;
+                    output.WriteByte((byte)((outBitBuffer >> outBitCount) & 0xFF));
+                }
+                outBitBuffer &= (1 << outBitCount) - 1;
+            }
+
+            // GIF and PDF/TIFF both grow code width from 9 to 12 bits using "early change" timing, but not
+            // at the *same* code count: GIF grows the moment the table becomes full for the current width
+            // (nextCode == maxCode - confirmed against PeachImage's own GifLzwEncoder/GifLzwDecoder source),
+            // while PDF/TIFF grows one code earlier (nextCode == maxCode - 1 - confirmed empirically against
+            // a real libtiff-generated LZW stream: decoding it with GIF's own trigger diverges exactly at
+            // the first width-growth boundary, decoding with this one-earlier trigger matches perfectly).
+            // So this needs two independent code-width trackers sharing one nextCode counter: readCodeSize
+            // to find code boundaries in the GIF bitstream, writeCodeSize to decide how many bits the *same*
+            // code value needs in the PDF bitstream - the two can differ for a stretch around each boundary.
+            int nextCode = endCode + 1;
+            int readCodeSize = 9, readMaxCode = 1 << 9;
+            int writeCodeSize = 9, writeMaxCode = 1 << 9;
+            int prevCode = -1;
+
+            while (TryReadLsbFirst(readCodeSize, out int code))
+            {
+                WriteMsbFirst(code, writeCodeSize);
+
+                if (code == clearCode)
+                {
+                    nextCode = endCode + 1;
+                    readCodeSize = writeCodeSize = 9;
+                    readMaxCode = writeMaxCode = 1 << 9;
+                    prevCode = -1;
+                    continue;
+                }
+
+                if (code == endCode)
+                {
+                    break;
+                }
+
+                if (prevCode != -1 && nextCode < maxCodeTableSize)
+                {
+                    nextCode++;
+                    if (nextCode == readMaxCode && readCodeSize < 12)
+                    {
+                        readCodeSize++;
+                        readMaxCode = 1 << readCodeSize;
+                    }
+                    if (nextCode == writeMaxCode - 1 && writeCodeSize < 12)
+                    {
+                        writeCodeSize++;
+                        writeMaxCode = 1 << writeCodeSize;
+                    }
+                }
+
+                prevCode = code;
+            }
+
+            if (outBitCount > 0)
+            {
+                output.WriteByte((byte)((outBitBuffer << (8 - outBitCount)) & 0xFF));
+            }
+
+            return output.ToArray();
+        }
+
+        /// <summary>
+        /// Creates the keys for a FLATE image - or, for a CMYK source with no JPEG pass-through available
+        /// (TIFF, issue #1096), routes to <see cref="InitializeCmykRaster"/> instead of the RGB-only
+        /// bitmap path below.
+        /// </summary>
+        void InitializeNonJpeg()
+        {
+            if (_image.IsCmyk)
+            {
+                InitializeCmykRaster();
+                return;
+            }
+
+            ReadTrueColorMemoryBitmap(3, 8, true);
+        }
+
+        /// <summary>
+        /// Embeds a CMYK source with no PDF-native byte-for-byte pass-through filter (TIFF today - see
+        /// <see cref="ImageSource.IImageSource.CmykRaster"/>'s own remarks) as a raw <c>/FlateDecode</c>
+        /// CMYK stream: unlike <see cref="EmbedJpegPassthrough"/>, this compresses the already-decoded
+        /// pixel buffer itself (there is no original-file-bytes pass-through option for TIFF the way
+        /// <c>/DCTDecode</c> gives JPEG), but otherwise mirrors it closely - same PDF/A ICC-profile gate,
+        /// same bare-Device*-or-<c>/ICCBased</c> color space shape.
+        /// </summary>
+        void InitializeCmykRaster()
+        {
+            var raster = _image.CmykRaster!.Value;
+
+            // Same reasoning as EmbedJpegPassthrough's identical check: a bare /DeviceCMYK image has no
+            // relationship to PeachPDF's RGB-based PDF/A output intent, so PDF/A requires an embedded ICC
+            // profile here too.
+            PdfACmykImageGuard.RequireIccProfile(_document, raster.IccProfile is not null,
+                "An embedded CMYK image without an embedded ICC profile");
+
+            Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(4, "/DeviceCMYK", raster.IccProfile);
+
+            var compressed = StreamCompression.Encode(_document.Options, raster.Data, out var rasterFilter);
+            Stream = new PdfStream(compressed, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(compressed.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName(rasterFilter);
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+        }
+
+        private static int ReadWord(byte[] ab, int offset)
+        {
+            return ab[offset] + 256 * ab[offset + 1];
+        }
+
+        private static int ReadDWord(byte[] ab, int offset)
+        {
+            return ReadWord(ab, offset) + 0x10000 * ReadWord(ab, offset + 2);
+        }
+
+        /// <summary>
+        /// Reads images that are returned from GDI+ without color palette.
+        /// </summary>
+        /// <param name="components">4 (32bpp RGB), 3 (24bpp RGB, 32bpp ARGB)</param>
+        /// <param name="bits">8</param>
+        /// <param name="hasAlpha">true (ARGB), false (RGB)</param>
+        private void ReadTrueColorMemoryBitmap(int components, int bits, bool hasAlpha)
+        {
+            int pdfVersion = Owner.Version;
+            MemoryStream memory = new MemoryStream();
+            memory = _image.AsBitmap(_targetWidth, _targetHeight);
+            // THHO4THHO Use ImageImporterBMP here to avoid redundant code.
+
+            int streamLength = (int)memory.Length;
+            Debug.Assert(streamLength > 0, "Bitmap image encoding failed.");
+            if (streamLength > 0)
+            {
+                byte[] imageBits = new byte[streamLength];
+                memory.Seek(0, SeekOrigin.Begin);
+                memory.Read(imageBits, 0, streamLength);
+                memory.Dispose();
+
+                // Must match whatever pixel size AsBitmap() above actually encoded - the BMP bytes are
+                // self-validated against these below, and they're also what ends up in /Width /Height.
+                int height = EffectiveHeight;
+                int width = EffectiveWidth;
+
+                // TODO: we could define structures for
+                //   BITMAPFILEHEADER
+                //   { BITMAPINFO }
+                //   BITMAPINFOHEADER
+                // to avoid ReadWord and ReadDWord ... (but w/o pointers this doesn't help much)
+
+                bool bigHeader = false;
+                if (ReadWord(imageBits, 0) != 0x4d42 || // "BM"
+                    ReadDWord(imageBits, 2) != streamLength ||
+                    ReadDWord(imageBits, 18) != width ||
+                    ReadDWord(imageBits, 22) != height)
+                {
+                    throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format");
+                }
+                int infoHeaderSize = ReadDWord(imageBits, 14); // sizeof BITMAPINFOHEADER
+                if (infoHeaderSize != 40 && infoHeaderSize != 108)
+                {
+                    throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format #2");
+                }
+                bigHeader = infoHeaderSize == 108;
+                if (ReadWord(imageBits, 26) != 1 ||
+                  (!hasAlpha && ReadWord(imageBits, bigHeader ? 30 : 28) != components * bits ||
+                   hasAlpha && ReadWord(imageBits, bigHeader ? 30 : 28) != (components + 1) * bits) ||
+                  bigHeader ? ReadWord(imageBits, 32) != 0 : ReadDWord(imageBits, 30) != 0)
+                {
+                    throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format #3");
+                }
+
+                int nFileOffset = ReadDWord(imageBits, 10);
+                int logicalComponents = components;
+                if (components == 4)
+                    logicalComponents = 3;
+
+                byte[] imageData = new byte[components * width * height];
+
+                bool hasMask = false;
+                bool hasAlphaMask = false;
+                byte[] alphaMask = hasAlpha ? new byte[width * height] : null;
+                MonochromeMask mask = hasAlpha ?
+                  new MonochromeMask(width, height) : null;
+
+                int nOffsetRead = 0;
+                if (logicalComponents == 3)
+                {
+                    for (int y = 0; y < height; ++y)
+                    {
+                        int nOffsetWrite = 3 * (height - 1 - y) * width;
+                        int nOffsetWriteAlpha = 0;
+                        if (hasAlpha)
+                        {
+                            mask.StartLine(y);
+                            nOffsetWriteAlpha = (height - 1 - y) * width;
+                        }
+
+                        for (int x = 0; x < width; ++x)
+                        {
+                            imageData[nOffsetWrite] = imageBits[nFileOffset + nOffsetRead + 2];
+                            imageData[nOffsetWrite + 1] = imageBits[nFileOffset + nOffsetRead + 1];
+                            imageData[nOffsetWrite + 2] = imageBits[nFileOffset + nOffsetRead];
+                            if (hasAlpha)
+                            {
+                                mask.AddPel(imageBits[nFileOffset + nOffsetRead + 3]);
+                                alphaMask[nOffsetWriteAlpha] = imageBits[nFileOffset + nOffsetRead + 3];
+                                if (!hasMask || !hasAlphaMask)
+                                {
+                                    if (imageBits[nFileOffset + nOffsetRead + 3] != 255)
+                                    {
+                                        hasMask = true;
+                                        if (imageBits[nFileOffset + nOffsetRead + 3] != 0)
+                                            hasAlphaMask = true;
+                                    }
+                                }
+                                ++nOffsetWriteAlpha;
+                            }
+                            nOffsetRead += hasAlpha ? 4 : components;
+                            nOffsetWrite += 3;
+                        }
+                        nOffsetRead = 4 * ((nOffsetRead + 3) / 4); // Align to 32 bit boundary
+                    }
+                }
+                else if (components == 1)
+                {
+                    // Grayscale
+                    throw new NotImplementedException("Image format not supported (grayscales).");
+                }
+
+                if (hasMask)
+                {
+                    // monochrome mask is either sufficient or
+                    // provided for compatibility with older reader versions
+                    byte[] maskDataCompressed = StreamCompression.Encode(_document.Options, mask.MaskData, out var maskFilter);
+                    PdfDictionary pdfMask = new PdfDictionary(_document);
+                    pdfMask.Elements.SetName(Keys.Type, "/XObject");
+                    pdfMask.Elements.SetName(Keys.Subtype, "/Image");
+
+                    Owner._irefTable.Add(pdfMask);
+                    pdfMask.Stream = new PdfStream(maskDataCompressed, pdfMask);
+                    pdfMask.Elements[PdfStream.Keys.Length] = new PdfInteger(maskDataCompressed.Length);
+                    pdfMask.Elements[PdfStream.Keys.Filter] = new PdfName(maskFilter);
+                    pdfMask.Elements[Keys.Width] = new PdfInteger(width);
+                    pdfMask.Elements[Keys.Height] = new PdfInteger(height);
+                    pdfMask.Elements[Keys.BitsPerComponent] = new PdfInteger(1);
+                    pdfMask.Elements[Keys.ImageMask] = new PdfBoolean(true);
+                    Elements[Keys.Mask] = pdfMask.Reference;
+                }
+                if (hasMask && hasAlphaMask && pdfVersion >= 14)
+                {
+                    // An image /SMask (e.g. a transparent PNG's alpha channel) is a transparency
+                    // -group-requiring construct PDF/A-1 forbids just as much as an alpha ExtGState -
+                    // checked before any mask object is built. No page-flag tracking here: unlike an
+                    // ExtGState-driven fill/stroke/opacity, an image's own /SMask is honored directly by
+                    // the imaging model without requiring the containing page to carry its own /Group.
+                    PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
+
+                    // The image provides an alpha mask (requires Arcrobat 5.0 or higher)
+                    byte[] alphaMaskCompressed = StreamCompression.Encode(_document.Options, alphaMask, out var alphaFilter);
+                    PdfDictionary smask = new PdfDictionary(_document);
+                    smask.Elements.SetName(Keys.Type, "/XObject");
+                    smask.Elements.SetName(Keys.Subtype, "/Image");
+
+                    Owner._irefTable.Add(smask);
+                    smask.Stream = new PdfStream(alphaMaskCompressed, smask);
+                    smask.Elements[PdfStream.Keys.Length] = new PdfInteger(alphaMaskCompressed.Length);
+                    smask.Elements[PdfStream.Keys.Filter] = new PdfName(alphaFilter);
+                    smask.Elements[Keys.Width] = new PdfInteger(width);
+                    smask.Elements[Keys.Height] = new PdfInteger(height);
+                    smask.Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+                    smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
+                    if (AllowInterpolate)
+                        smask.Elements[Keys.Interpolate] = PdfBoolean.True;
+                    Elements[Keys.SMask] = smask.Reference;
+                }
+
+                byte[] imageDataCompressed = StreamCompression.Encode(_document.Options, imageData, out var imageFilter);
+
+                Stream = new PdfStream(imageDataCompressed, this);
+                Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
+                Elements[PdfStream.Keys.Filter] = new PdfName(imageFilter);
+                Elements[Keys.Width] = new PdfInteger(width);
+                Elements[Keys.Height] = new PdfInteger(height);
+                Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+                // TODO: CMYK
+                // RgbIccProfile (issue #1106) is only ever non-null for a WebP/AVIF source - every other
+                // format reaching this raw-bitmap path (PNG/BMP/GIF fallback, or a lossless-source-format
+                // WebP/AVIF/TIFF under ImageCompression.Auto/Lossless) leaves it at its null default, so
+                // this stays a bare /DeviceRGB for them exactly as before.
+                Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(3, "/DeviceRGB", _image.RgbIccProfile);
+                if (AllowInterpolate)
+                    Elements[Keys.Interpolate] = PdfBoolean.True;
+            }
+        }
+
+        /// <summary>
+        /// Whether <c>/Interpolate true</c> may be written for this image. Every PDF/A part forbids an
+        /// Image dictionary's <c>Interpolate</c> key from being <c>true</c> (e.g. ISO 19005-2 §6.2.8) -
+        /// omitting the key entirely (equivalent to its spec default of <c>false</c>) is always legal,
+        /// so this simply suppresses it outright whenever PDF/A conformance is requested, regardless of
+        /// what the source image asked for.
+        /// </summary>
+        bool AllowInterpolate => _image.Interpolate && _document.Options.PdfAConformance == PdfAConformance.None;
+
+        /// <summary>
+        /// Common keys for all streams.
+        /// </summary>
+        internal sealed new class Keys : PdfXObject.Keys
+        {
+            // ReSharper disable InconsistentNaming
+
+            /// <summary>
+            /// (Optional) The type of PDF object that this dictionary describes;
+            /// if present, must be XObject for an image XObject.
+            /// </summary>
+            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            public const string Type = "/Type";
+
+            /// <summary>
+            /// (Required) The type of XObject that this dictionary describes;
+            /// must be Image for an image XObject.
+            /// </summary>
+            [KeyInfo(KeyType.Name | KeyType.Required)]
+            public const string Subtype = "/Subtype";
+
+            /// <summary>
+            /// (Required) The width of the image, in samples.
+            /// </summary>
+            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            public const string Width = "/Width";
+
+            /// <summary>
+            /// (Required) The height of the image, in samples.
+            /// </summary>
+            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            public const string Height = "/Height";
+
+            /// <summary>
+            /// (Required for images, except those that use the JPXDecode filter; not allowed for image masks)
+            /// The color space in which image samples are specified; it can be any type of color space except
+            /// Pattern. If the image uses the JPXDecode filter, this entry is optional:
+            /// � If ColorSpace is present, any color space specifications in the JPEG2000 data are ignored.
+            /// � If ColorSpace is absent, the color space specifications in the JPEG2000 data are used.
+            ///   The Decode array is also ignored unless ImageMask is true.
+            /// </summary>
+            [KeyInfo(KeyType.NameOrArray | KeyType.Required)]
+            public const string ColorSpace = "/ColorSpace";
+
+            /// <summary>
+            /// (Required except for image masks and images that use the JPXDecode filter)
+            /// The number of bits used to represent each color component. Only a single value may be specified;
+            /// the number of bits is the same for all color components. Valid values are 1, 2, 4, 8, and 
+            /// (in PDF 1.5) 16. If ImageMask is true, this entry is optional, and if specified, its value 
+            /// must be 1.
+            /// If the image stream uses a filter, the value of BitsPerComponent must be consistent with the 
+            /// size of the data samples that the filter delivers. In particular, a CCITTFaxDecode or JBIG2Decode 
+            /// filter always delivers 1-bit samples, a RunLengthDecode or DCTDecode filter delivers 8-bit samples,
+            /// and an LZWDecode or FlateDecode filter delivers samples of a specified size if a predictor function
+            /// is used.
+            /// If the image stream uses the JPXDecode filter, this entry is optional and ignored if present.
+            /// The bit depth is determined in the process of decoding the JPEG2000 image.
+            /// </summary>
+            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            public const string BitsPerComponent = "/BitsPerComponent";
+
+            /// <summary>
+            /// (Optional; PDF 1.1) The name of a color rendering intent to be used in rendering the image.
+            /// Default value: the current rendering intent in the graphics state.
+            /// </summary>
+            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            public const string Intent = "/Intent";
+
+            /// <summary>
+            /// (Optional) A flag indicating whether the image is to be treated as an image mask.
+            /// If this flag is true, the value of BitsPerComponent must be 1 and Mask and ColorSpace should
+            /// not be specified; unmasked areas are painted using the current nonstroking color.
+            /// Default value: false.
+            /// </summary>
+            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            public const string ImageMask = "/ImageMask";
+
+            /// <summary>
+            /// (Optional except for image masks; not allowed for image masks; PDF 1.3)
+            /// An image XObject defining an image mask to be applied to this image, or an array specifying 
+            /// a range of colors to be applied to it as a color key mask. If ImageMask is true, this entry
+            /// must not be present.
+            /// </summary>
+            [KeyInfo(KeyType.StreamOrArray | KeyType.Optional)]
+            public const string Mask = "/Mask";
+
+            /// <summary>
+            /// (Optional) An array of numbers describing how to map image samples into the range of values
+            /// appropriate for the image�s color space. If ImageMask is true, the array must be either
+            /// [0 1] or [1 0]; otherwise, its length must be twice the number of color components required 
+            /// by ColorSpace. If the image uses the JPXDecode filter and ImageMask is false, Decode is ignored.
+            /// Default value: see �Decode Arrays�.
+            /// </summary>
+            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            public const string Decode = "/Decode";
+
+            /// <summary>
+            /// (Optional) A flag indicating whether image interpolation is to be performed. 
+            /// Default value: false.
+            /// </summary>
+            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            public const string Interpolate = "/Interpolate";
+
+            /// <summary>
+            /// (Optional; PDF 1.3) An array of alternate image dictionaries for this image. The order of 
+            /// elements within the array has no significance. This entry may not be present in an image 
+            /// XObject that is itself an alternate image.
+            /// </summary>
+            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            public const string Alternates = "/Alternates";
+
+            /// <summary>
+            /// (Optional; PDF 1.4) A subsidiary image XObject defining a soft-mask image to be used as a 
+            /// source of mask shape or mask opacity values in the transparent imaging model. The alpha 
+            /// source parameter in the graphics state determines whether the mask values are interpreted as
+            /// shape or opacity. If present, this entry overrides the current soft mask in the graphics state,
+            /// as well as the image�s Mask entry, if any. (However, the other transparency related graphics 
+            /// state parameters � blend mode and alpha constant � remain in effect.) If SMask is absent, the 
+            /// image has no associated soft mask (although the current soft mask in the graphics state may
+            /// still apply).
+            /// </summary>
+            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            public const string SMask = "/SMask";
+
+            /// <summary>
+            /// (Optional for images that use the JPXDecode filter, meaningless otherwise; PDF 1.5)
+            /// A code specifying how soft-mask information encoded with image samples should be used:
+            /// 0 If present, encoded soft-mask image information should be ignored.
+            /// 1 The image�s data stream includes encoded soft-mask values. An application can create
+            ///   a soft-mask image from the information to be used as a source of mask shape or mask 
+            ///   opacity in the transparency imaging model.
+            /// 2 The image�s data stream includes color channels that have been preblended with a 
+            ///   background; the image data also includes an opacity channel. An application can create
+            ///   a soft-mask image with a Matte entry from the opacity channel information to be used as
+            ///   a source of mask shape or mask opacity in the transparency model. If this entry has a 
+            ///   nonzero value, SMask should not be specified.
+            /// Default value: 0.
+            /// </summary>
+            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            public const string SMaskInData = "/SMaskInData";
+
+            /// <summary>
+            /// (Required in PDF 1.0; optional otherwise) The name by which this image XObject is 
+            /// referenced in the XObject subdictionary of the current resource dictionary.
+            /// </summary>
+            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            public const string Name = "/Name";
+
+            /// <summary>
+            /// (Required if the image is a structural content item; PDF 1.3) The integer key of the 
+            /// image�s entry in the structural parent tree.
+            /// </summary>
+            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            public const string StructParent = "/StructParent";
+
+            /// <summary>
+            /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of the image�s
+            /// parent Web Capture content set.
+            /// </summary>
+            [KeyInfo(KeyType.String | KeyType.Optional)]
+            public const string ID = "/ID";
+
+            /// <summary>
+            /// (Optional; PDF 1.2) An OPI version dictionary for the image. If ImageMask is true, 
+            /// this entry is ignored.
+            /// </summary>
+            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            public const string OPI = "/OPI";
+
+            /// <summary>
+            /// (Optional; PDF 1.4) A metadata stream containing metadata for the image.
+            /// </summary>
+            [KeyInfo(KeyType.Stream | KeyType.Optional)]
+            public const string Metadata = "/Metadata";
+
+            /// <summary>
+            /// (Optional; PDF 1.5) An optional content group or optional content membership dictionary,
+            /// specifying the optional content properties for this image XObject. Before the image is
+            /// processed, its visibility is determined based on this entry. If it is determined to be 
+            /// invisible, the entire image is skipped, as if there were no Do operator to invoke it.
+            /// </summary>
+            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            public const string OC = "/OC";
+
+            // ReSharper restore InconsistentNaming
+        }
+    }
+
+    /// <summary>
+    /// Helper class for creating bitmap masks (8 pels per byte).
+    /// </summary>
+    class MonochromeMask
+    {
+        /// <summary>
+        /// Returns the bitmap mask that will be written to PDF.
+        /// </summary>
+        public byte[] MaskData
+        {
+            get { return _maskData; }
+        }
+        private readonly byte[] _maskData;
+
+        /// <summary>
+        /// Creates a bitmap mask.
+        /// </summary>
+        public MonochromeMask(int sizeX, int sizeY)
+        {
+            _sizeX = sizeX;
+            _sizeY = sizeY;
+            int byteSize = ((sizeX + 7) / 8) * sizeY;
+            _maskData = new byte[byteSize];
+            StartLine(0);
+        }
+
+        /// <summary>
+        /// Starts a new line.
+        /// </summary>
+        public void StartLine(int newCurrentLine)
+        {
+            _bitsWritten = 0;
+            _byteBuffer = 0;
+            _writeOffset = ((_sizeX + 7) / 8) * (_sizeY - 1 - newCurrentLine);
+        }
+
+        /// <summary>
+        /// Adds a pel to the current line.
+        /// </summary>
+        /// <param name="isTransparent"></param>
+        public void AddPel(bool isTransparent)
+        {
+            if (_bitsWritten < _sizeX)
+            {
+                // Mask: 0: opaque, 1: transparent (default mapping)
+                if (isTransparent)
+                    _byteBuffer = (_byteBuffer << 1) + 1;
+                else
+                    _byteBuffer = _byteBuffer << 1;
+                ++_bitsWritten;
+                if ((_bitsWritten & 7) == 0)
+                {
+                    _maskData[_writeOffset] = (byte)_byteBuffer;
+                    ++_writeOffset;
+                    _byteBuffer = 0;
+                }
+                else if (_bitsWritten == _sizeX)
+                {
+                    int n = 8 - (_bitsWritten & 7);
+                    _byteBuffer = _byteBuffer << n;
+                    _maskData[_writeOffset] = (byte)_byteBuffer;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds a pel from an alpha mask value.
+        /// </summary>
+        public void AddPel(int shade)
+        {
+            // NYI: dithering!!!
+            AddPel(shade < 128);
+        }
+
+        private readonly int _sizeX;
+        private readonly int _sizeY;
+        private int _writeOffset;
+        private int _byteBuffer;
+        private int _bitsWritten;
+    }
+}

@@ -1,7 +1,7 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -58,7 +58,7 @@ namespace PeachPDF.Tests.Integration
             // both must derive the identical true-points page-content-band height.
             var adapterDefault = new PdfSharpAdapter();
             using var containerDefault = new HtmlContainer(adapterDefault);
-            var orgPageSize = PdfSharpCore.PageSizeConverter.ToSize(config.PageSize);
+            var orgPageSize = PeachPDF.PDF.PageSizeConverter.ToSize(config.PageSize);
             await PdfGenerator.SetContent(containerDefault, config, html, null, orgPageSize);
 
             var adapterScaled = new PdfSharpAdapter { PixelsPerPoint = 1.5 };
@@ -91,7 +91,7 @@ namespace PeachPDF.Tests.Integration
             // A percentage @page margin resolves against HtmlContainer.PageSize.Width, which must
             // already be set (mirroring how a real PdfGenerator caller only sees percentage margins
             // resolve meaningfully once PageSize carries a real page width, not its unset 0 default).
-            var pageSize = new PeachPDF.PdfSharpCore.Drawing.XSize(595, 842);
+            var pageSize = new PeachPDF.PDF.Drawing.XSize(595, 842);
 
             var adapterDefault = new PdfSharpAdapter();
             using var containerDefault = new HtmlContainer(adapterDefault) { PageSize = pageSize };

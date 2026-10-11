@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System.Globalization;
 using System.IO;
 using System.Text;

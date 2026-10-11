@@ -3,7 +3,7 @@ using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -62,7 +62,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
 
             var untaggedBox = new CssBox(null, null);
             var annotation = page.AddWebLink(
-                new PdfRectangle(new PeachPDF.PdfSharpCore.Drawing.XRect(0, 0, 10, 10)), "https://example.com");
+                new PdfRectangle(new PeachPDF.PDF.Drawing.XRect(0, 0, 10, 10)), "https://example.com");
 
             builder.LinkAnnotationToStructureElement(untaggedBox, page, annotation);
 
@@ -115,11 +115,11 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             var element = builder.TryGetStructureElement(box);
             Assert.NotNull(element);
 
-            var kids = PeachPDF.PdfSharpCore.Pdf.Structure.PdfStructureElement.GetKids(element!.Elements).ToList();
+            var kids = PeachPDF.PDF.Structure.PdfStructureElement.GetKids(element!.Elements).ToList();
             // Both kids are bare MCID integers (not further struct elements), so GetKids (which
             // only surfaces dictionary kids) reports none - assert via the raw /K array instead.
             Assert.Empty(kids);
-            var array = element.Elements.GetArray(PeachPDF.PdfSharpCore.Pdf.Structure.PdfStructureElement.Keys.K);
+            var array = element.Elements.GetArray(PeachPDF.PDF.Structure.PdfStructureElement.Keys.K);
             Assert.NotNull(array);
             Assert.Equal(2, array!.Elements.Count);
         }
@@ -145,11 +145,11 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             Assert.NotNull(element);
             Assert.Same(page1, element!.Page);
 
-            var array = element.Elements.GetArray(PeachPDF.PdfSharpCore.Pdf.Structure.PdfStructureElement.Keys.K);
+            var array = element.Elements.GetArray(PeachPDF.PDF.Structure.PdfStructureElement.Keys.K);
             Assert.NotNull(array);
             Assert.Equal(2, array!.Elements.Count);
-            Assert.IsType<PeachPDF.PdfSharpCore.Pdf.Structure.PdfMarkedContentReference>(
-                ((PeachPDF.PdfSharpCore.Pdf.Advanced.PdfReference)array.Elements[1]).Value);
+            Assert.IsType<PeachPDF.PDF.Structure.PdfMarkedContentReference>(
+                ((PeachPDF.PDF.Advanced.PdfReference)array.Elements[1]).Value);
         }
 
         sealed class RecordingGraphics : Canvas

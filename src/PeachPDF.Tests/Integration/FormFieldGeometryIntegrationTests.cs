@@ -1,10 +1,10 @@
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.AcroForms;
+using PeachPDF.PDF.Annotations;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -190,7 +190,7 @@ namespace PeachPDF.Tests.Integration
         /// A field's own widget rectangle. A radio button is the one kind whose <c>/Rect</c> is not on
         /// the field itself: <c>FormFieldBuilder.AddRadioButton</c> makes the field a
         /// <see cref="PdfRadioButtonField"/> group and hangs one
-        /// <see cref="PdfSharpCore.Pdf.Annotations.PdfWidgetAnnotation"/> kid per button off it, so the
+        /// <see cref="PDF.Annotations.PdfWidgetAnnotation"/> kid per button off it, so the
         /// geometry lives on the kid.
         /// </summary>
         static PdfRectangle WidgetRect(PdfAcroField field)

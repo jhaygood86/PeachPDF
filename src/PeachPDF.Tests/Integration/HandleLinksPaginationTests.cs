@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration

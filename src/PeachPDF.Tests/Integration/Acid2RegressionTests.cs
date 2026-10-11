@@ -7,9 +7,8 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -884,12 +883,12 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            var size = new PeachPDF.PdfSharpCore.Drawing.XSize(595, 842);
+            var size = new PeachPDF.PDF.Drawing.XSize(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
 
-            var measure = PeachPDF.PdfSharpCore.Drawing.XGraphics.CreateMeasureContext(
-                size, PeachPDF.PdfSharpCore.Drawing.XGraphicsUnit.Point, PeachPDF.PdfSharpCore.Drawing.XPageDirection.Downwards);
+            var measure = PeachPDF.PDF.Drawing.XGraphics.CreateMeasureContext(
+                size, PeachPDF.PDF.Drawing.XGraphicsUnit.Point, PeachPDF.PDF.Drawing.XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

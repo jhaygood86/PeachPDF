@@ -1,8 +1,8 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 

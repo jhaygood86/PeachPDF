@@ -1,5 +1,5 @@
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Structure;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Structure;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.Integration
             var structParentsKey = page.StructParents;
 
             var parentTree = result.PdfDocument.Catalog.StructureTreeRoot.ParentTree;
-            var entry = parentTree.GetValue(structParentsKey) as PeachPDF.PdfSharpCore.Pdf.PdfArray;
+            var entry = parentTree.GetValue(structParentsKey) as PeachPDF.PDF.PdfArray;
 
             Assert.NotNull(entry);
             Assert.True(entry!.Elements.Count > 0);
@@ -189,19 +189,19 @@ namespace PeachPDF.Tests.Integration
 
             // The struct element's "/K" holds both the anonymous text child's MCID content and,
             // per this linkage, an "/OBJR" pointing at the Link annotation.
-            var rawKids = PeachPDF.PdfSharpCore.Pdf.Structure.PdfStructureElement.GetKids(link.Elements).ToList();
-            var objRef = Assert.Single(rawKids.OfType<PeachPDF.PdfSharpCore.Pdf.Structure.PdfObjectReference>());
+            var rawKids = PeachPDF.PDF.Structure.PdfStructureElement.GetKids(link.Elements).ToList();
+            var objRef = Assert.Single(rawKids.OfType<PeachPDF.PDF.Structure.PdfObjectReference>());
 
             var page = result.PdfDocument.Pages[0];
-            var annotation = Assert.IsAssignableFrom<PeachPDF.PdfSharpCore.Pdf.Annotations.PdfAnnotation>(objRef.Object);
+            var annotation = Assert.IsAssignableFrom<PeachPDF.PDF.Annotations.PdfAnnotation>(objRef.Object);
             Assert.Same(page, objRef.Page);
 
             // The annotation's own "/StructParent" resolves, via "/ParentTree", back to this same
             // "/Link" struct element - i.e. navigation works in both directions.
             var parentTree = result.PdfDocument.Catalog.StructureTreeRoot.ParentTree;
-            var entry = Assert.IsType<PeachPDF.PdfSharpCore.Pdf.PdfArray>(parentTree.GetValue(annotation.StructParent));
-            var referencedElement = Assert.IsType<PeachPDF.PdfSharpCore.Pdf.Structure.PdfStructureElement>(
-                ((PeachPDF.PdfSharpCore.Pdf.Advanced.PdfReference)entry.Elements[0]).Value);
+            var entry = Assert.IsType<PeachPDF.PDF.PdfArray>(parentTree.GetValue(annotation.StructParent));
+            var referencedElement = Assert.IsType<PeachPDF.PDF.Structure.PdfStructureElement>(
+                ((PeachPDF.PDF.Advanced.PdfReference)entry.Elements[0]).Value);
             Assert.Same(link, referencedElement);
 
             // PDF/UA requires tab order to follow structure order once a page has a

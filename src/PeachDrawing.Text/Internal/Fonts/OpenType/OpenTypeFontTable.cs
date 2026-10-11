@@ -35,7 +35,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     // TODO: Create a font driver for reading and writing OpenType font files.
 
     /// <summary>
-    /// Base class for all OpenType tables used in PeachPDF.PdfSharpCore.
+    /// Base class for all OpenType tables used in PeachPDF.PDF.
     /// </summary>
     internal class OpenTypeFontTable : ICloneable
     {

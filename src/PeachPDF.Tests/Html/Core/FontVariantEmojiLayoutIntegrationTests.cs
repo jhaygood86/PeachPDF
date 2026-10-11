@@ -3,7 +3,7 @@ using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;

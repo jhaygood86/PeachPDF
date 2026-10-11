@@ -417,7 +417,7 @@ namespace PeachPDF.Html.Core.Paint
                     g.ResumeClipping();
                 }
             }
-            catch (PeachPDF.PdfSharpCore.Pdf.Advanced.PdfConformanceException)
+            catch (PeachPDF.PDF.Advanced.PdfConformanceException)
             {
                 // A PDF/A or PDF/X conformance rejection (the document uses a feature/color that the
                 // requested conformance level forbids) is a deliberate validation failure, not an

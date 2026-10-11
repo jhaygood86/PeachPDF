@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Tests.Adapters
 {

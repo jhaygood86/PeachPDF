@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF;
+using PeachPDF.PDF.AcroForms;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Annotations;
 
 namespace PeachPDF.Tests.Integration
 {

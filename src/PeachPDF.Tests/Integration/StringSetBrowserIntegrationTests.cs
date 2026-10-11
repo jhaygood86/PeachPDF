@@ -4,7 +4,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Text;
 
 namespace PeachPDF.Tests.Integration
@@ -142,7 +142,7 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             // Perform layout to trigger string-set evaluation
-            var size = new PdfSharpCore.Drawing.XSize(595, 842); // A4 size
+            var size = new PDF.Drawing.XSize(595, 842); // A4 size
             container.PageSize = Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = Utilities.Utils.Convert(size, 1.0);
 

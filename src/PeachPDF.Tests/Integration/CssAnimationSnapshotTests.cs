@@ -3,7 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -984,7 +984,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>The widths of every <c>re</c> rectangle in a page's content stream, read from the live object graph.</summary>
-        private static IEnumerable<double> RectangleWidths(PeachPDF.PdfSharpCore.Pdf.PdfDocument document, int page)
+        private static IEnumerable<double> RectangleWidths(PeachPDF.PDF.PdfDocument document, int page)
         {
             using var bytes = new System.IO.MemoryStream();
 

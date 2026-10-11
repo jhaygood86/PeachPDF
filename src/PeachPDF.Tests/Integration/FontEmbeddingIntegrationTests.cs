@@ -1,7 +1,6 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Utils;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;

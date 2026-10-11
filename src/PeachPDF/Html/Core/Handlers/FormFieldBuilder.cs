@@ -3,9 +3,9 @@ using System.Globalization;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF;
+using PeachPDF.PDF.AcroForms;
+using PeachPDF.PDF.Annotations;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -295,7 +295,7 @@ namespace PeachPDF.Html.Core.Handlers
             acroForm.AddField(field);
         }
 
-        static void SetNormalAppearance(PdfAnnotation annotation, PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject appearance)
+        static void SetNormalAppearance(PdfAnnotation annotation, PeachPDF.PDF.Advanced.PdfFormXObject appearance)
         {
             var ap = new PdfDictionary(annotation.Owner);
             ap.Elements.SetReference("/N", appearance);
@@ -303,7 +303,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         static void SetTwoStateAppearance(PdfAnnotation annotation, string onValue,
-            PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject onAppearance, PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject offAppearance)
+            PeachPDF.PDF.Advanced.PdfFormXObject onAppearance, PeachPDF.PDF.Advanced.PdfFormXObject offAppearance)
         {
             var states = new PdfDictionary(annotation.Owner);
             states.Elements.SetReference("/" + onValue, onAppearance);

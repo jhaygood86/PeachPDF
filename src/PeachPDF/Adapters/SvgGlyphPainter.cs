@@ -1,8 +1,8 @@
 ﻿using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Drawing.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF.Rendering;
 using PeachPDF.Svg;
 using System.Collections.Generic;
 

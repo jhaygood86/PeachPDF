@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Utilities
 {

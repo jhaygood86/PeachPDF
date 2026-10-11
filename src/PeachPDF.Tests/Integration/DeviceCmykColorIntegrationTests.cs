@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration
     /// End-to-end coverage for issue #1083/#1084: a CSS <c>device-cmyk()</c> color reaches the PDF as a
     /// real <c>k</c>/<c>K</c> CMYK fill/stroke operator - not approximated or silently dropped - while an
     /// ordinary RGB-authored color in the same document still emits <c>rg</c>/<c>RG</c> unchanged (PDF's
-    /// mixed-color-space document support, <see cref="PeachPDF.PdfSharpCore.Pdf.enums.PdfColorMode.Undefined"/>
+    /// mixed-color-space document support, <see cref="PeachPDF.PDF.enums.PdfColorMode.Undefined"/>
     /// - see <c>PdfGenerator.RenderPagesCore</c>). This is a structural/value check on the actual emitted
     /// operator and its numbers (not just token presence), per this repo's own content-stream-substring
     /// pitfall warning.

@@ -1,4 +1,4 @@
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;

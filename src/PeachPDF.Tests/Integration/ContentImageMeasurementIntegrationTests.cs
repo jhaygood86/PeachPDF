@@ -1,7 +1,7 @@
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Text;
 using System.Threading.Tasks;

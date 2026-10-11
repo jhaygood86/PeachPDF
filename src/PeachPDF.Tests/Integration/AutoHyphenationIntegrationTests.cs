@@ -2,7 +2,7 @@ using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachDrawing.Text.Unicode;
 using System.Linq;
 using System.Threading.Tasks;

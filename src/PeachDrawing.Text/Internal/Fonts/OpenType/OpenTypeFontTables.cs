@@ -51,7 +51,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     }
 
     /// <summary>
-    /// Only Symbol and Unicode is used by PeachPDF.PdfSharpCore.
+    /// Only Symbol and Unicode is used by PeachPDF.PDF.
     /// </summary>
     internal enum WinEncodingId
     {
@@ -59,7 +59,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     }
 
     /// <summary>
-    /// Only Symbol and Unicode is used by PeachPDF.PdfSharpCore.
+    /// Only Symbol and Unicode is used by PeachPDF.PDF.
     /// </summary>
     internal enum AppleEncodingId
     {

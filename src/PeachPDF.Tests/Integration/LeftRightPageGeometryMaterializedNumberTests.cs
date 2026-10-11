@@ -1,7 +1,6 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;

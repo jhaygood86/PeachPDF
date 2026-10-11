@@ -1,7 +1,7 @@
 using System.Linq;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.IO;

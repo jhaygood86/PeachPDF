@@ -5,7 +5,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;

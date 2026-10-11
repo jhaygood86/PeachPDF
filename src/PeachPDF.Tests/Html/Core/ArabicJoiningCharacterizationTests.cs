@@ -1,8 +1,8 @@
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;

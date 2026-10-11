@@ -5,10 +5,9 @@ using PeachPDF;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF.Advanced;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration

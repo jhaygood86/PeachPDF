@@ -2,7 +2,7 @@
 using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using ScottPlot;
 using System.Diagnostics;
 using System.Globalization;

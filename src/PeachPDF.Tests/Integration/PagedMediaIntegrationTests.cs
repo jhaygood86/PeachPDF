@@ -1,5 +1,5 @@
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.IO;
 using System.Linq;

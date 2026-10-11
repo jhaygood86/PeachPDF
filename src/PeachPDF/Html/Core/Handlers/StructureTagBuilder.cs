@@ -1,10 +1,10 @@
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
-using PeachPDF.PdfSharpCore.Pdf.Structure;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Annotations;
+using PeachPDF.PDF.Structure;
 using System;
 using System.Collections.Generic;
 using System.Text;

@@ -6,8 +6,8 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
