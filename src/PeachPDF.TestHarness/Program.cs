@@ -10618,6 +10618,24 @@ await SaveShowcaseAsync("object_fit", "Images & Replaced Content", "object-fit &
     "markers making each fit and crop obvious.",
     objectFitHtml, pdfConfig);
 
+// ── <embed>: a void replaced element sized by width/height ───────────────────────────
+var embedPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+var embedSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40'%3E%3Crect width='80' height='40' fill='%232a9d8f'/%3E%3C/svg%3E";
+var embedHtml =
+    "<!DOCTYPE html><html><head><style>body{font-family:sans-serif;padding:16px} p{margin:12px 0}</style></head><body>" +
+    "<h2>&lt;embed&gt;</h2>" +
+    $"<p>PNG: <embed width=\"80\" height=\"40\" src=\"{embedPng}\"> after</p>" +
+    $"<p>SVG: <embed width=\"80\" height=\"40\" type=\"image/svg+xml\" src=\"{embedSvg}\"> after</p>" +
+    $"<p>Transformed: <embed width=\"80\" height=\"40\" src=\"{embedSvg}\" style=\"transform:rotate(10deg)\"> after</p>" +
+    "<p>No resource: <embed width=\"80\" height=\"40\" style=\"background:#ccc\"> after</p>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("embed_element", "Images & Replaced Content", "The embed element",
+    "<embed> as a void replaced element: an image or SVG src is drawn at the size given by width/height, " +
+    "a transform applies to it, and an embed with no drawable resource still reserves its box. " +
+    "The text after each embed stays in the paragraph.",
+    embedHtml, pdfConfig);
+
 // ── image-rendering: how a raster image is resampled ────────────────────────────────────
 var pixelArt = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAUUlEQVR4nGP8//8/Awj8PisGYUABq/ErRhDNhE0SWYwJxlAJ4oRLwtggOcZfZ0QxdCMDsBXIutFNgZuArujOuu8QBSBfYHMkzCdgK2BewuZNAH4iJnECnYKiAAAAAElFTkSuQmCC";
 static string RenderingCell(string img, string mode, string note) =>
