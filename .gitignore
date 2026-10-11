@@ -411,7 +411,7 @@ FodyWeavers.xsd
 
 # ...but those two patterns are about FILES. Without this they also match any DIRECTORY whose name
 # ends in .pdf/.html - on a case-insensitive filesystem (Windows, macOS) that is the real source
-# directory src/PeachPDF/PdfSharpCore/Drawing.Pdf (and its test-side twin). git then refuses to
+# directory src/PeachPDF.Tests/PDF/Drawing.Pdf. git then refuses to
 # recurse into it at all, so every new file added there is silently invisible to `git status` and
 # cannot be re-included from inside, since a negation cannot reach into an excluded directory.
 !*.pdf/
