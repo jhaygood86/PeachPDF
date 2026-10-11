@@ -436,10 +436,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Attachment_WithoutPdfA_RaisesThePdfVersionTo17_ButNoAttachmentLeavesItAlone()
         {
-            var plain = await new PdfGenerator().GeneratePdf(SimpleHtml, PageSize.A4);
+            var plain = await new PdfGenerator().GeneratePdf(SimpleHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf17 });
             Assert.Equal(14, plain.PdfDocument.Version);
 
-            var config = new PdfGenerateConfig { PageSize = PageSize.A4 };
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf17 };
             config.Attachments.Add(Csv());
             var withFile = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 

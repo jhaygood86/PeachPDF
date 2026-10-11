@@ -9,15 +9,23 @@ namespace PeachPDF.Tests.Integration
         const string SimpleHtml = "<html><body><p>Hello</p></body></html>";
 
         [Fact]
-        public async Task Default_Pdf17_KeepsHistoricalVersion14()
+        public async Task Default_IsPdf20()
         {
-            // PdfVersion.Pdf17 is a no-op relative to PeachPDF's historical default (the document's own
-            // constructor already starts at 14, and nothing bumps it unless something explicitly asks
-            // for 1.7 or 2.0) - this pins that default down so a future change can't silently regress it.
             var config = new PdfGenerateConfig { PageSize = PageSize.A4 };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.Equal(PdfVersion.Pdf17, config.PdfVersion);
+            Assert.Equal(PdfVersion.Pdf20, config.PdfVersion);
+            Assert.Equal(20, result.PdfDocument.Version);
+        }
+
+        [Fact]
+        public async Task ExplicitPdf17_KeepsTheHistoricalVersion14()
+        {
+            // PdfVersion.Pdf17 asks for PeachPDF's pre-PDF-2.0 output: the document's own constructor starts at 14, and
+            // nothing bumps it unless a feature or a PDF/A or PDF/X level needs a later one.
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf17 };
+            var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
+
             Assert.Equal(14, result.PdfDocument.Version);
         }
 
@@ -50,6 +58,7 @@ namespace PeachPDF.Tests.Integration
             var config = new PdfGenerateConfig
             {
                 PageSize = PageSize.A4,
+                PdfVersion = PdfVersion.Pdf17,
                 CompressContentStreams = false,
             };
             var pdfText = await GetPdfText(SimpleHtml, config);

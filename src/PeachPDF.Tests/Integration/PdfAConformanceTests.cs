@@ -16,13 +16,13 @@ namespace PeachPDF.Tests.Integration
         const string SimpleHtml = "<html><body><p>Hello</p></body></html>";
 
         [Fact]
-        public async Task None_Default_NoOutputIntentNoMetadataNoVersionBump()
+        public async Task None_Default_NoOutputIntentNoMetadata_AndTheDefaultPdf20Version()
         {
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, PageSize.A4);
 
             Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"));
             Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/Metadata"));
-            Assert.Equal(14, result.PdfDocument.Version);
+            Assert.Equal(20, result.PdfDocument.Version);
         }
 
         [Fact]

@@ -413,7 +413,15 @@ namespace PeachPDF
             // not something to silently pick a winner for.
             var requiresPdf20 = config.PdfAConformance is PdfAConformance.PdfA4 or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F
                 || config.PdfXConformance == PdfXConformance.X6;
-            var requestedVersion = requiresPdf20 && !config.PdfVersionExplicit ? PdfVersion.Pdf20 : config.PdfVersion;
+            // PdfVersion defaults to Pdf20, so a caller who never set it and asks for an earlier PDF/A or PDF/X level gets
+            // the PDF 1.x file that level is defined against, rather than a contradiction to resolve.
+            var requestsEarlierLevel = !requiresPdf20
+                && (config.PdfAConformance != PdfAConformance.None || config.PdfXConformance != PdfXConformance.None);
+            var requestedVersion = config.PdfVersionExplicit
+                ? config.PdfVersion
+                : requiresPdf20 ? PdfVersion.Pdf20
+                : requestsEarlierLevel ? PdfVersion.Pdf17
+                : config.PdfVersion;
 
             if (requiresPdf20 && requestedVersion != PdfVersion.Pdf20)
             {
