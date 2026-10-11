@@ -53,6 +53,7 @@ namespace PeachPDF.Html.Core
             /* The spec also gives [hidden=until-found i]:not(embed) content-visibility: hidden, which
                PeachPDF has no property for: until-found content stays visible, which is what a static
                page wants. */
+            embed           { display: inline-block }
             embed[hidden]   { display: inline; height: 0; width: 0 }
             input[type=hidden i]
                             { display: none !important }

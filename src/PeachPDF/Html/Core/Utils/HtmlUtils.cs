@@ -26,9 +26,9 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         private static readonly FrozenSet<string> _list = new HashSet<string>
         {
-            "area", "base", "basefont", "br", "col",
+            "area", "base", "basefont", "br", "col", "embed",
             "frame", "hr", "img", "input", "isindex",
-            "link", "meta", "param", "source", "track"
+            "link", "meta", "param", "source", "track", "wbr"
         }.ToFrozenSet();
 
         /// <summary>
