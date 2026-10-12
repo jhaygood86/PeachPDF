@@ -451,7 +451,7 @@ internal sealed class PdfWriter
             _stream.Position = _commentPosition + 150;
             WriteRaw("Pages: " + document.Pages.Count.ToString(CultureInfo.InvariantCulture));
             _stream.Position = _commentPosition + 200;
-            WriteRaw("Objects: " + document._irefTable.ObjectTable.Count.ToString(CultureInfo.InvariantCulture));
+            WriteRaw("Objects: " + document._irefTable.Count.ToString(CultureInfo.InvariantCulture));
         }
     }
 
