@@ -93,7 +93,7 @@ internal sealed partial class PdfImage : PdfXObject
         // Byte-for-byte pass-through instead of the lossy re-encode below - PeachPDF has no general
         // color management, so pass-through is the only way to guarantee a source's own color data
         // (and embedded ICC profile, if any) reaches the PDF unchanged. Always non-null for a
-        // CMYK/YCCK source (see PeachCmykImageSourceImpl - CMYK is never resized, so this always
+        // CMYK/YCCK source (see CmykRasterImageSource - CMYK is never resized, so this always
         // applies for one, unconditionally); for RGB/Gray, only when there's a usable embedded ICC
         // profile to preserve, since that's the only reason to prefer pass-through over the ordinary
         // re-encode below for those. Only applies when no resize is requested for this embed either

@@ -348,24 +348,24 @@ internal abstract class ImageSource
     /// <c>PeachPDF.Svg.SvgTreeBuilder.DecodeRasterImage</c> catch exactly that type to treat a
     /// broken image as a non-fatal, unresolved replaced element rather than aborting the render.
     /// </remarks>
-    protected abstract IImageSource FromFileImpl(string path, int? quality = 75);
-    /// <inheritdoc cref="FromFileImpl"/>
-    protected abstract IImageSource FromBinaryImpl(string name, Func<byte[]> imageSource, int? quality = 75);
-    /// <inheritdoc cref="FromFileImpl"/>
-    protected abstract IImageSource FromStreamImpl(string name, Func<Stream> imageStream, int? quality = 75);
+    protected abstract IImageSource CreateFromFile(string path, int? quality = 75);
+    /// <inheritdoc cref="CreateFromFile"/>
+    protected abstract IImageSource CreateFromBinary(string name, Func<byte[]> imageSource, int? quality = 75);
+    /// <inheritdoc cref="CreateFromFile"/>
+    protected abstract IImageSource CreateFromStream(string name, Func<Stream> imageStream, int? quality = 75);
 
     public static IImageSource FromFile(string path, int? quality = 75)
     {
-        return ImageSourceImpl.FromFileImpl(path, quality);
+        return ImageSourceImpl.CreateFromFile(path, quality);
     }
 
     public static IImageSource FromBinary(string name, Func<byte[]> imageSource, int? quality = 75)
     {
-        return ImageSourceImpl.FromBinaryImpl(name, imageSource, quality);
+        return ImageSourceImpl.CreateFromBinary(name, imageSource, quality);
     }
 
     public static IImageSource FromStream(string name, Func<Stream> imageStream, int? quality = 75)
     {
-        return ImageSourceImpl.FromStreamImpl(name, imageStream, quality);
+        return ImageSourceImpl.CreateFromStream(name, imageStream, quality);
     }
 }

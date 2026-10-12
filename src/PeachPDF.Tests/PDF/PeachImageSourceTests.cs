@@ -143,7 +143,7 @@ namespace PeachPDF.Tests.PdfEngineTests
             // (issue #1109) regardless of whether any pixel is actually translucent - PngAlphaSplit
             // doesn't inspect pixel values, only structural eligibility (color type/bit depth/interlace).
             // Transparent is false for it, same as the existing opaque/chroma-key pass-through precedent
-            // (PeachPngPassthroughImageSourceImpl) - alpha is carried via PngPassthroughData.AlphaIdatData
+            // (PngPassthroughImageSource) - alpha is carried via PngPassthroughData.AlphaIdatData
             // and embedded as a child /SMask directly, not via the Transparent-driven PdfImageFormat.Png
             // route. See FromBinary_InterlacedAlphaPng_IsNotAlphaSplitEligible_StillTransparent below for
             // the still-Transparent=true fallback case.
