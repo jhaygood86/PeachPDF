@@ -4,7 +4,9 @@
 
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Filters;
+using PeachPDF.PDF.Internal;
 using System;
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
 
@@ -150,12 +152,12 @@ internal sealed partial class PdfImage : PdfXObject
         // natural size (_targetWidth is null) - a downscaled one keeps
         // the existing, intentional downscale-to-JPEG-at-DownscaleQuality trade-off; Lossless protects
         // it at every size, decoding and falling into the same raw-/FlateDecode path a real alpha
-        // image already uses (ReadTrueColorMemoryBitmap resizes first when _targetWidth is set, then
+        // image already uses (ReadBgraBitmap resizes first when _targetWidth is set, then
         // simply never populates a /SMask for a source with no actual transparent pixels).
         if (!allowLossy && _image.IsLosslessSourceFormat &&
             (_document.Options.ImageCompression == ImageCompression.Lossless || _targetWidth is null))
         {
-            ReadTrueColorMemoryBitmap(3, 8, true);
+            ReadBgraBitmap();
             return;
         }
 
@@ -204,7 +206,7 @@ internal sealed partial class PdfImage : PdfXObject
         // #1106), when present, still describes what the re-encoded JPEG's own samples mean: this
         // path only ever recompresses the already-decoded pixel bytes (optionally resized) - it
         // never converts them into a different color space - so the source's own profile stays
-        // accurate through the re-encode the same way ReadTrueColorMemoryBitmap's own raw-bitmap
+        // accurate through the re-encode the same way ReadBgraBitmap's own raw-bitmap
         // embed already relies on.
         Elements[Keys.ColorSpace] = _image.IsGrayscale
             ? BuildDeviceOrIccColorSpace(1, "/DeviceGray", _image.RgbIccProfile)
@@ -336,7 +338,7 @@ internal sealed partial class PdfImage : PdfXObject
     /// <c>/FlateDecode</c> stream with a matching PNG-predictor <c>/DecodeParms</c>, since
     /// <c>PngAlphaSplit</c> PNG-row-filters the alpha plane exactly like a real PNG <c>IDAT</c> - and,
     /// unlike the color-key case, does need the PDF/A transparency-group guard
-    /// <see cref="ReadTrueColorMemoryBitmap"/>'s own <c>/SMask</c> block already applies, since an
+    /// <see cref="ReadBgraBitmap"/>'s own <c>/SMask</c> block already applies, since an
     /// image <c>/SMask</c> is a transparency-group-requiring construct PDF/A-1 forbids.
     /// </summary>
     void EmbedPngPassthrough(PngPassthroughData data)
@@ -608,7 +610,7 @@ internal sealed partial class PdfImage : PdfXObject
             return;
         }
 
-        ReadTrueColorMemoryBitmap(3, 8, true);
+        ReadBgraBitmap();
     }
 
     /// <summary>
@@ -643,193 +645,140 @@ internal sealed partial class PdfImage : PdfXObject
         Elements[Keys.BitsPerComponent] = new PdfInteger(8);
     }
 
-    private static int ReadWord(byte[] ab, int offset)
-    {
-        return ab[offset] + 256 * ab[offset + 1];
-    }
-
-    private static int ReadDWord(byte[] ab, int offset)
-    {
-        return ReadWord(ab, offset) + 0x10000 * ReadWord(ab, offset + 2);
-    }
-
     /// <summary>
-    /// Reads images that are returned from GDI+ without color palette.
+    /// Embeds the image as raw 8-bit RGB samples, taken from the 32-bit BGRA bitmap the image source encodes. A 1-bit
+    /// <c>/Mask</c> is added when any pixel is transparent, and an <c>/SMask</c> when any pixel is partly transparent.
     /// </summary>
-    /// <param name="components">4 (32bpp RGB), 3 (24bpp RGB, 32bpp ARGB)</param>
-    /// <param name="bits">8</param>
-    /// <param name="hasAlpha">true (ARGB), false (RGB)</param>
-    private void ReadTrueColorMemoryBitmap(int components, int bits, bool hasAlpha)
+    private void ReadBgraBitmap()
     {
         int pdfVersion = Owner.Version;
-        MemoryStream memory = new MemoryStream();
-        memory = _image.AsBitmap(_targetWidth, _targetHeight);
+        using MemoryStream memory = _image.AsBitmap(_targetWidth, _targetHeight);
         // THHO4THHO Use ImageImporterBMP here to avoid redundant code.
 
         int streamLength = (int)memory.Length;
         Debug.Assert(streamLength > 0, "Bitmap image encoding failed.");
-        if (streamLength > 0)
+        if (streamLength <= 0)
+            return;
+
+        ReadOnlySpan<byte> bitmap = memory.TryGetBuffer(out ArraySegment<byte> buffer)
+            ? buffer.AsSpan(0, streamLength)
+            : memory.ToArray();
+
+        // Must match whatever pixel size AsBitmap() above actually encoded - the BMP bytes are
+        // self-validated against these below, and they're also what ends up in /Width /Height.
+        int height = EffectiveHeight;
+        int width = EffectiveWidth;
+
+        if (BinaryPrimitives.ReadUInt16LittleEndian(bitmap) != 0x4d42 || // "BM"
+            BinaryPrimitives.ReadInt32LittleEndian(bitmap[2..]) != streamLength ||
+            BinaryPrimitives.ReadInt32LittleEndian(bitmap[18..]) != width ||
+            BinaryPrimitives.ReadInt32LittleEndian(bitmap[22..]) != height)
         {
-            byte[] imageBits = new byte[streamLength];
-            memory.Seek(0, SeekOrigin.Begin);
-            memory.Read(imageBits, 0, streamLength);
-            memory.Dispose();
-
-            // Must match whatever pixel size AsBitmap() above actually encoded - the BMP bytes are
-            // self-validated against these below, and they're also what ends up in /Width /Height.
-            int height = EffectiveHeight;
-            int width = EffectiveWidth;
-
-            // TODO: we could define structures for
-            //   BITMAPFILEHEADER
-            //   { BITMAPINFO }
-            //   BITMAPINFOHEADER
-            // to avoid ReadWord and ReadDWord ... (but w/o pointers this doesn't help much)
-
-            bool bigHeader = false;
-            if (ReadWord(imageBits, 0) != 0x4d42 || // "BM"
-                ReadDWord(imageBits, 2) != streamLength ||
-                ReadDWord(imageBits, 18) != width ||
-                ReadDWord(imageBits, 22) != height)
-            {
-                throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format");
-            }
-            int infoHeaderSize = ReadDWord(imageBits, 14); // sizeof BITMAPINFOHEADER
-            if (infoHeaderSize != 40 && infoHeaderSize != 108)
-            {
-                throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format #2");
-            }
-            bigHeader = infoHeaderSize == 108;
-            if (ReadWord(imageBits, 26) != 1 ||
-              (!hasAlpha && ReadWord(imageBits, bigHeader ? 30 : 28) != components * bits ||
-               hasAlpha && ReadWord(imageBits, bigHeader ? 30 : 28) != (components + 1) * bits) ||
-              bigHeader ? ReadWord(imageBits, 32) != 0 : ReadDWord(imageBits, 30) != 0)
-            {
-                throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format #3");
-            }
-
-            int nFileOffset = ReadDWord(imageBits, 10);
-            int logicalComponents = components;
-            if (components == 4)
-                logicalComponents = 3;
-
-            byte[] imageData = new byte[components * width * height];
-
-            bool hasMask = false;
-            bool hasAlphaMask = false;
-            byte[] alphaMask = hasAlpha ? new byte[width * height] : null;
-            MonochromeMask mask = hasAlpha ?
-              new MonochromeMask(width, height) : null;
-
-            int nOffsetRead = 0;
-            if (logicalComponents == 3)
-            {
-                for (int y = 0; y < height; ++y)
-                {
-                    int nOffsetWrite = 3 * (height - 1 - y) * width;
-                    int nOffsetWriteAlpha = 0;
-                    if (hasAlpha)
-                    {
-                        mask.StartLine(y);
-                        nOffsetWriteAlpha = (height - 1 - y) * width;
-                    }
-
-                    for (int x = 0; x < width; ++x)
-                    {
-                        imageData[nOffsetWrite] = imageBits[nFileOffset + nOffsetRead + 2];
-                        imageData[nOffsetWrite + 1] = imageBits[nFileOffset + nOffsetRead + 1];
-                        imageData[nOffsetWrite + 2] = imageBits[nFileOffset + nOffsetRead];
-                        if (hasAlpha)
-                        {
-                            mask.AddPel(imageBits[nFileOffset + nOffsetRead + 3]);
-                            alphaMask[nOffsetWriteAlpha] = imageBits[nFileOffset + nOffsetRead + 3];
-                            if (!hasMask || !hasAlphaMask)
-                            {
-                                if (imageBits[nFileOffset + nOffsetRead + 3] != 255)
-                                {
-                                    hasMask = true;
-                                    if (imageBits[nFileOffset + nOffsetRead + 3] != 0)
-                                        hasAlphaMask = true;
-                                }
-                            }
-                            ++nOffsetWriteAlpha;
-                        }
-                        nOffsetRead += hasAlpha ? 4 : components;
-                        nOffsetWrite += 3;
-                    }
-                    nOffsetRead = 4 * ((nOffsetRead + 3) / 4); // Align to 32 bit boundary
-                }
-            }
-            else if (components == 1)
-            {
-                // Grayscale
-                throw new NotImplementedException("Image format not supported (grayscales).");
-            }
-
-            if (hasMask)
-            {
-                // monochrome mask is either sufficient or
-                // provided for compatibility with older reader versions
-                byte[] maskDataCompressed = StreamCompression.Encode(_document.Options, mask.MaskData, out var maskFilter);
-                PdfDictionary pdfMask = new PdfDictionary(_document);
-                pdfMask.Elements.SetName(Keys.Type, "/XObject");
-                pdfMask.Elements.SetName(Keys.Subtype, "/Image");
-
-                Owner._irefTable.Add(pdfMask);
-                pdfMask.Stream = new PdfStream(maskDataCompressed, pdfMask);
-                pdfMask.Elements[PdfStream.Keys.Length] = new PdfInteger(maskDataCompressed.Length);
-                pdfMask.Elements[PdfStream.Keys.Filter] = new PdfName(maskFilter);
-                pdfMask.Elements[Keys.Width] = new PdfInteger(width);
-                pdfMask.Elements[Keys.Height] = new PdfInteger(height);
-                pdfMask.Elements[Keys.BitsPerComponent] = new PdfInteger(1);
-                pdfMask.Elements[Keys.ImageMask] = new PdfBoolean(true);
-                Elements[Keys.Mask] = pdfMask.Reference;
-            }
-            if (hasMask && hasAlphaMask && pdfVersion >= 14)
-            {
-                // An image /SMask (e.g. a transparent PNG's alpha channel) is a transparency
-                // -group-requiring construct PDF/A-1 forbids just as much as an alpha ExtGState -
-                // checked before any mask object is built. No page-flag tracking here: unlike an
-                // ExtGState-driven fill/stroke/opacity, an image's own /SMask is honored directly by
-                // the imaging model without requiring the containing page to carry its own /Group.
-                PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
-
-                // The image provides an alpha mask (requires Arcrobat 5.0 or higher)
-                byte[] alphaMaskCompressed = StreamCompression.Encode(_document.Options, alphaMask, out var alphaFilter);
-                PdfDictionary smask = new PdfDictionary(_document);
-                smask.Elements.SetName(Keys.Type, "/XObject");
-                smask.Elements.SetName(Keys.Subtype, "/Image");
-
-                Owner._irefTable.Add(smask);
-                smask.Stream = new PdfStream(alphaMaskCompressed, smask);
-                smask.Elements[PdfStream.Keys.Length] = new PdfInteger(alphaMaskCompressed.Length);
-                smask.Elements[PdfStream.Keys.Filter] = new PdfName(alphaFilter);
-                smask.Elements[Keys.Width] = new PdfInteger(width);
-                smask.Elements[Keys.Height] = new PdfInteger(height);
-                smask.Elements[Keys.BitsPerComponent] = new PdfInteger(8);
-                smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
-                if (AllowInterpolate)
-                    smask.Elements[Keys.Interpolate] = PdfBoolean.True;
-                Elements[Keys.SMask] = smask.Reference;
-            }
-
-            byte[] imageDataCompressed = StreamCompression.Encode(_document.Options, imageData, out var imageFilter);
-
-            Stream = new PdfStream(imageDataCompressed, this);
-            Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
-            Elements[PdfStream.Keys.Filter] = new PdfName(imageFilter);
-            Elements[Keys.Width] = new PdfInteger(width);
-            Elements[Keys.Height] = new PdfInteger(height);
-            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
-            // TODO: CMYK
-            // RgbIccProfile (issue #1106) is only ever non-null for a WebP/AVIF source - every other
-            // format reaching this raw-bitmap path (PNG/BMP/GIF fallback, or a lossless-source-format
-            // WebP/AVIF/TIFF under ImageCompression.Auto/Lossless) leaves it at its null default, so
-            // this stays a bare /DeviceRGB for them exactly as before.
-            Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(3, "/DeviceRGB", _image.RgbIccProfile);
-            if (AllowInterpolate)
-                Elements[Keys.Interpolate] = PdfBoolean.True;
+            throw new NotImplementedException("ReadBgraBitmap: unsupported format");
         }
+
+        int infoHeaderSize = BinaryPrimitives.ReadInt32LittleEndian(bitmap[14..]); // sizeof BITMAPINFOHEADER
+        if (infoHeaderSize != 40 && infoHeaderSize != 108)
+        {
+            throw new NotImplementedException("ReadBgraBitmap: unsupported format #2");
+        }
+
+        // Both header versions hold the plane and bit counts at the same offsets. The 40-byte one must be uncompressed;
+        // the 108-byte one may declare bit fields, which only reorder channels the source already writes as BGRA.
+        bool bigHeader = infoHeaderSize == 108;
+        if (BinaryPrimitives.ReadUInt16LittleEndian(bitmap[26..]) != 1 ||
+            BinaryPrimitives.ReadUInt16LittleEndian(bitmap[28..]) != 32 ||
+            (bigHeader
+                ? BinaryPrimitives.ReadUInt16LittleEndian(bitmap[32..]) != 0
+                : BinaryPrimitives.ReadInt32LittleEndian(bitmap[30..]) != 0))
+        {
+            throw new NotImplementedException("ReadBgraBitmap: unsupported format #3");
+        }
+
+        ReadOnlySpan<byte> pixels = bitmap[BinaryPrimitives.ReadInt32LittleEndian(bitmap[10..])..];
+        int stride = 4 * width;
+
+        byte[] imageData = new byte[3 * width * height];
+        byte[] alphaMask = new byte[width * height];
+        int maskStride = (width + 7) / 8;
+        byte[] maskData = new byte[maskStride * height];
+
+        bool hasMask = false;
+        bool hasAlphaMask = false;
+
+        // A BMP stores its rows bottom-up; the PDF samples are top-down.
+        for (int y = 0; y < height; ++y)
+        {
+            int row = height - 1 - y;
+            Span<byte> alphaRow = alphaMask.AsSpan(row * width, width);
+            BgraPixels.SplitRow(pixels.Slice(y * stride, stride), imageData.AsSpan(3 * row * width, 3 * width), alphaRow);
+            BgraPixels.PackTransparency(alphaRow, maskData.AsSpan(row * maskStride, maskStride));
+            BgraPixels.Classify(alphaRow, ref hasMask, ref hasAlphaMask);
+        }
+
+        if (hasMask)
+        {
+            // monochrome mask is either sufficient or
+            // provided for compatibility with older reader versions
+            byte[] maskDataCompressed = StreamCompression.Encode(_document.Options, maskData, out var maskFilter);
+            PdfDictionary pdfMask = new PdfDictionary(_document);
+            pdfMask.Elements.SetName(Keys.Type, "/XObject");
+            pdfMask.Elements.SetName(Keys.Subtype, "/Image");
+
+            Owner._irefTable.Add(pdfMask);
+            pdfMask.Stream = new PdfStream(maskDataCompressed, pdfMask);
+            pdfMask.Elements[PdfStream.Keys.Length] = new PdfInteger(maskDataCompressed.Length);
+            pdfMask.Elements[PdfStream.Keys.Filter] = new PdfName(maskFilter);
+            pdfMask.Elements[Keys.Width] = new PdfInteger(width);
+            pdfMask.Elements[Keys.Height] = new PdfInteger(height);
+            pdfMask.Elements[Keys.BitsPerComponent] = new PdfInteger(1);
+            pdfMask.Elements[Keys.ImageMask] = new PdfBoolean(true);
+            Elements[Keys.Mask] = pdfMask.Reference;
+        }
+        if (hasMask && hasAlphaMask && pdfVersion >= 14)
+        {
+            // An image /SMask (e.g. a transparent PNG's alpha channel) is a transparency
+            // -group-requiring construct PDF/A-1 forbids just as much as an alpha ExtGState -
+            // checked before any mask object is built. No page-flag tracking here: unlike an
+            // ExtGState-driven fill/stroke/opacity, an image's own /SMask is honored directly by
+            // the imaging model without requiring the containing page to carry its own /Group.
+            PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
+
+            // The image provides an alpha mask (requires Arcrobat 5.0 or higher)
+            byte[] alphaMaskCompressed = StreamCompression.Encode(_document.Options, alphaMask, out var alphaFilter);
+            PdfDictionary smask = new PdfDictionary(_document);
+            smask.Elements.SetName(Keys.Type, "/XObject");
+            smask.Elements.SetName(Keys.Subtype, "/Image");
+
+            Owner._irefTable.Add(smask);
+            smask.Stream = new PdfStream(alphaMaskCompressed, smask);
+            smask.Elements[PdfStream.Keys.Length] = new PdfInteger(alphaMaskCompressed.Length);
+            smask.Elements[PdfStream.Keys.Filter] = new PdfName(alphaFilter);
+            smask.Elements[Keys.Width] = new PdfInteger(width);
+            smask.Elements[Keys.Height] = new PdfInteger(height);
+            smask.Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+            smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
+            if (AllowInterpolate)
+                smask.Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.SMask] = smask.Reference;
+        }
+
+        byte[] imageDataCompressed = StreamCompression.Encode(_document.Options, imageData, out var imageFilter);
+
+        Stream = new PdfStream(imageDataCompressed, this);
+        Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
+        Elements[PdfStream.Keys.Filter] = new PdfName(imageFilter);
+        Elements[Keys.Width] = new PdfInteger(width);
+        Elements[Keys.Height] = new PdfInteger(height);
+        Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+        // TODO: CMYK
+        // RgbIccProfile (issue #1106) is only ever non-null for a WebP/AVIF source - every other
+        // format reaching this raw-bitmap path (PNG/BMP/GIF fallback, or a lossless-source-format
+        // WebP/AVIF/TIFF under ImageCompression.Auto/Lossless) leaves it at its null default, so
+        // this stays a bare /DeviceRGB for them exactly as before.
+        Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(3, "/DeviceRGB", _image.RgbIccProfile);
+        if (AllowInterpolate)
+            Elements[Keys.Interpolate] = PdfBoolean.True;
     }
 
     /// <summary>
@@ -1027,82 +976,4 @@ internal sealed partial class PdfImage : PdfXObject
 
         // ReSharper restore InconsistentNaming
     }
-}
-
-/// <summary>
-/// Helper class for creating bitmap masks (8 pels per byte).
-/// </summary>
-internal class MonochromeMask
-{
-    /// <summary>
-    /// Returns the bitmap mask that will be written to PDF.
-    /// </summary>
-    public byte[] MaskData => _maskData;
-    private readonly byte[] _maskData;
-
-    /// <summary>
-    /// Creates a bitmap mask.
-    /// </summary>
-    public MonochromeMask(int sizeX, int sizeY)
-    {
-        _sizeX = sizeX;
-        _sizeY = sizeY;
-        int byteSize = ((sizeX + 7) / 8) * sizeY;
-        _maskData = new byte[byteSize];
-        StartLine(0);
-    }
-
-    /// <summary>
-    /// Starts a new line.
-    /// </summary>
-    public void StartLine(int newCurrentLine)
-    {
-        _bitsWritten = 0;
-        _byteBuffer = 0;
-        _writeOffset = ((_sizeX + 7) / 8) * (_sizeY - 1 - newCurrentLine);
-    }
-
-    /// <summary>
-    /// Adds a pel to the current line.
-    /// </summary>
-    /// <param name="isTransparent"></param>
-    public void AddPel(bool isTransparent)
-    {
-        if (_bitsWritten < _sizeX)
-        {
-            // Mask: 0: opaque, 1: transparent (default mapping)
-            if (isTransparent)
-                _byteBuffer = (_byteBuffer << 1) + 1;
-            else
-                _byteBuffer = _byteBuffer << 1;
-            ++_bitsWritten;
-            if ((_bitsWritten & 7) == 0)
-            {
-                _maskData[_writeOffset] = (byte)_byteBuffer;
-                ++_writeOffset;
-                _byteBuffer = 0;
-            }
-            else if (_bitsWritten == _sizeX)
-            {
-                int n = 8 - (_bitsWritten & 7);
-                _byteBuffer = _byteBuffer << n;
-                _maskData[_writeOffset] = (byte)_byteBuffer;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Adds a pel from an alpha mask value.
-    /// </summary>
-    public void AddPel(int shade)
-    {
-        // NYI: dithering!!!
-        AddPel(shade < 128);
-    }
-
-    private readonly int _sizeX;
-    private readonly int _sizeY;
-    private int _writeOffset;
-    private int _byteBuffer;
-    private int _bitsWritten;
 }
