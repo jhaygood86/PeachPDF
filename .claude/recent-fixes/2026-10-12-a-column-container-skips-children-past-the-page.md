@@ -49,8 +49,9 @@ Two things that look like the same optimisation and are not:
   and 127 pages and 3-column, `break-inside: avoid` and `column-span: all` variants (PyMuPDF `get_text("words")` + `get_drawings()`).
 - Release CLI, matched two-column prose: 4,800 paragraphs 24s -> 15s; the 12,000-paragraph / 1,272-page document ~179s -> 58s
   (with the continuation fix underneath it).
-- `MulticolUnheldChildrenTests`: every word of a 240-paragraph, headings-with-`break-after: avoid` document claimed by exactly
-  one fragment; skips counted (0 -> thousands); box visits per page well under the whole document. The two counting tests
+- `MulticolUnheldChildrenTests`: no word of a 240-paragraph, headings-with-`break-after: avoid` document is lost (each is claimed
+  by at least one fragment; exactly one would be the stronger claim, but a carried heading is claimed by two pages with or
+  without this change - #1719); skips counted (0 -> thousands); box visits per page well under the whole document. The two counting tests
   fail without the change.
 - Full suite green on net8.0 in Release; whole solution `-t:Rebuild` has 0 warnings.
 
