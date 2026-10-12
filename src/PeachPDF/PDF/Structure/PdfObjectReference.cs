@@ -25,7 +25,7 @@ internal sealed class PdfObjectReference : PdfDictionary
     /// </summary>
     public PdfPage Page
     {
-        get { return (PdfPage)Elements.GetDictionary(Keys.Pg); }
+        get => (PdfPage)Elements.GetDictionary(Keys.Pg);
         set { Elements.SetReference(Keys.Pg, value); }
     }
 
@@ -34,7 +34,7 @@ internal sealed class PdfObjectReference : PdfDictionary
     /// </summary>
     public PdfAnnotation Object
     {
-        get { return (PdfAnnotation)Elements.GetDictionary(Keys.Obj); }
+        get => (PdfAnnotation)Elements.GetDictionary(Keys.Obj);
         set { Elements.SetReference(Keys.Obj, value); }
     }
 

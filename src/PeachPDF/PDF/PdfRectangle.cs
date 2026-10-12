@@ -80,14 +80,14 @@ internal sealed class PdfRectangle : PdfItem
     /// </summary>
     internal PdfRectangle(PdfItem item)
     {
-        if (item == null || item is PdfNull)
+        if (item is null || item is PdfNull)
             return;
 
         if (item is PdfReference)
             item = ((PdfReference)item).Value;
 
         PdfArray array = item as PdfArray;
-        if (array == null)
+        if (array is null)
             throw new InvalidOperationException("Unexpected token in PDF file. The PDF file may be corrupt. If it is not, please send us the file for service.");
 
         _x1 = array.Elements.GetReal(0);
@@ -119,7 +119,7 @@ internal sealed class PdfRectangle : PdfItem
     public bool IsEmpty
     {
         // ReSharper disable CompareOfFloatsByEqualityOperator
-        get { return _x1 == 0 && _y1 == 0 && _x2 == 0 && _y2 == 0; }
+        get => _x1 == 0 && _y1 == 0 && _x2 == 0 && _y2 == 0;
         // ReSharper restore CompareOfFloatsByEqualityOperator
     }
 
@@ -130,7 +130,7 @@ internal sealed class PdfRectangle : PdfItem
     {
         // ReSharper disable CompareOfFloatsByEqualityOperator
         PdfRectangle rectangle = obj as PdfRectangle;
-        if (rectangle != null)
+        if (rectangle is not null)
         {
             PdfRectangle rect = rectangle;
             return rect._x1 == _x1 && rect._y1 == _y1 && rect._x2 == _x2 && rect._y2 == _y2;
@@ -158,13 +158,13 @@ internal sealed class PdfRectangle : PdfItem
     {
         // ReSharper disable CompareOfFloatsByEqualityOperator
         // use: if (Object.ReferenceEquals(left, null))
-        if ((object)left != null)
+        if ((object)left is not null)
         {
-            if ((object)right != null)
+            if ((object)right is not null)
                 return left._x1 == right._x1 && left._y1 == right._y1 && left._x2 == right._x2 && left._y2 == right._y2;
             return false;
         }
-        return (object)right == null;
+        return (object)right is null;
         // ReSharper restore CompareOfFloatsByEqualityOperator
     }
 
@@ -179,70 +179,46 @@ internal sealed class PdfRectangle : PdfItem
     /// <summary>
     /// Gets or sets the x-coordinate of the first corner of this PdfRectangle.
     /// </summary>
-    public double X1
-    {
-        get { return _x1; }
-    }
+    public double X1 => _x1;
     readonly double _x1;
 
     /// <summary>
     /// Gets or sets the y-coordinate of the first corner of this PdfRectangle.
     /// </summary>
-    public double Y1
-    {
-        get { return _y1; }
-    }
+    public double Y1 => _y1;
     readonly double _y1;
 
     /// <summary>
     /// Gets or sets the x-coordinate of the second corner of this PdfRectangle.
     /// </summary>
-    public double X2
-    {
-        get { return _x2; }
-    }
+    public double X2 => _x2;
     readonly double _x2;
 
     /// <summary>
     /// Gets or sets the y-coordinate of the second corner of this PdfRectangle.
     /// </summary>
-    public double Y2
-    {
-        get { return _y2; }
-    }
+    public double Y2 => _y2;
     readonly double _y2;
 
     /// <summary>
     /// Gets X2 - X1.
     /// </summary>
-    public double Width
-    {
-        get { return _x2 - _x1; }
-    }
+    public double Width => _x2 - _x1;
 
     /// <summary>
     /// Gets Y2 - Y1.
     /// </summary>
-    public double Height
-    {
-        get { return _y2 - _y1; }
-    }
+    public double Height => _y2 - _y1;
 
     /// <summary>
     /// Gets or sets the coordinates of the first point of this PdfRectangle.
     /// </summary>
-    public PaintPoint Location
-    {
-        get { return new PaintPoint(_x1, _y1); }
-    }
+    public PaintPoint Location => new PaintPoint(_x1, _y1);
 
     /// <summary>
     /// Gets or sets the size of this PdfRectangle.
     /// </summary>
-    public Size Size
-    {
-        get { return new Size(_x2 - _x1, _y2 - _y1); }
-    }
+    public Size Size => new Size(_x2 - _x1, _y2 - _y1);
 
     /// <summary>
     /// Determines if the specified point is contained within this PdfRectangle.

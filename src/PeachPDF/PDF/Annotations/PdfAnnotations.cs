@@ -64,10 +64,7 @@ internal sealed class PdfAnnotations : PdfArray
     /// <summary>
     /// Gets the number of annotations in this collection.
     /// </summary>
-    public int Count
-    {
-        get { return Elements.Count; }
-    }
+    public int Count => Elements.Count;
 
     /// <summary>
     /// Gets the <see cref="PeachPDF.PDF.Annotations.PdfAnnotation"/> at the specified index.
@@ -79,7 +76,7 @@ internal sealed class PdfAnnotations : PdfArray
             PdfReference iref;
             PdfDictionary dict;
             PdfItem item = Elements[index];
-            if ((iref = item as PdfReference) != null)
+            if ((iref = item as PdfReference) is not null)
             {
                 Debug.Assert(iref.Value is PdfDictionary, "Reference to dictionary expected.");
                 dict = (PdfDictionary)iref.Value;
@@ -114,8 +111,8 @@ internal sealed class PdfAnnotations : PdfArray
     /// </summary>
     internal PdfPage Page
     {
-        get { return _page; }
-        set { _page = value; }
+        get => _page;
+        set => _page = value;
     }
     PdfPage _page = null!;
 
@@ -125,13 +122,13 @@ internal sealed class PdfAnnotations : PdfArray
     internal static void FixImportedAnnotation(PdfPage page)
     {
         PdfArray annots = page.Elements.GetArray(PdfPage.Keys.Annots);
-        if (annots != null)
+        if (annots is not null)
         {
             int count = annots.Elements.Count;
             for (int idx = 0; idx < count; idx++)
             {
                 PdfDictionary annot = annots.Elements.GetDictionary(idx);
-                if (annot != null && annot.Elements.ContainsKey("/P"))
+                if (annot is not null && annot.Elements.ContainsKey("/P"))
                     annot.Elements["/P"] = page.Reference;
             }
         }
@@ -164,12 +161,12 @@ internal sealed class PdfAnnotations : PdfArray
 
         public PdfItem/*PdfAnnotation*/ Current
         {
-            get { return _annotations[_index]; }
+            get => _annotations[_index];
         }
 
         object IEnumerator.Current
         {
-            get { return Current; }
+            get => Current;
         }
 
         public bool MoveNext()

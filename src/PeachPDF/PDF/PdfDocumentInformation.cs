@@ -25,7 +25,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public string Title
     {
-        get { return Elements.GetString(Keys.Title); }
+        get => Elements.GetString(Keys.Title);
         set { Elements.SetString(Keys.Title, value, PdfStringEncoding.Unicode); }
     }
 
@@ -34,7 +34,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public string Author
     {
-        get { return Elements.GetString(Keys.Author); }
+        get => Elements.GetString(Keys.Author);
         set { Elements.SetString(Keys.Author, value, PdfStringEncoding.Unicode); }
     }
 
@@ -43,7 +43,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public string Subject
     {
-        get { return Elements.GetString(Keys.Subject); }
+        get => Elements.GetString(Keys.Subject);
         set { Elements.SetString(Keys.Subject, value, PdfStringEncoding.Unicode); }
     }
 
@@ -52,7 +52,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public string Keywords
     {
-        get { return Elements.GetString(Keys.Keywords); }
+        get => Elements.GetString(Keys.Keywords);
         set { Elements.SetString(Keys.Keywords, value, PdfStringEncoding.Unicode); }
     }
 
@@ -61,7 +61,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public string Creator
     {
-        get { return Elements.GetString(Keys.Creator); }
+        get => Elements.GetString(Keys.Creator);
         set { Elements.SetString(Keys.Creator, value, PdfStringEncoding.Unicode); }
     }
 
@@ -70,7 +70,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public string Producer
     {
-        get { return Elements.GetString(Keys.Producer); }
+        get => Elements.GetString(Keys.Producer);
         internal set { Elements.SetString(Keys.Producer, value, PdfStringEncoding.Unicode); }
     }
 
@@ -80,7 +80,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public DateTime CreationDate
     {
-        get { return Elements.GetDateTime(Keys.CreationDate, DateTime.MinValue); }
+        get => Elements.GetDateTime(Keys.CreationDate, DateTime.MinValue);
         set { Elements.SetDateTime(Keys.CreationDate, value); }
     }
 
@@ -90,7 +90,7 @@ internal sealed class PdfDocumentInformation : PdfDictionary
     /// </summary>
     public DateTime ModificationDate
     {
-        get { return Elements.GetDateTime(Keys.ModDate, DateTime.MinValue); }
+        get => Elements.GetDateTime(Keys.ModDate, DateTime.MinValue);
         set { Elements.SetDateTime(Keys.ModDate, value); }
     }
 
@@ -163,18 +163,12 @@ internal sealed class PdfDocumentInformation : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

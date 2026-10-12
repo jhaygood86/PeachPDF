@@ -15,10 +15,7 @@ internal sealed class PdfAcroForm : PdfDictionary
     }
 
     /// <summary>The document's top-level fields ("/Fields") - one entry per text/checkbox/radio-group/combo field; a radio group's own widget kids are not listed here.</summary>
-    public PdfArray Fields
-    {
-        get { return _fields ??= (PdfArray)Elements.GetValue(Keys.Fields, ValueCreationFlags.CreateIndirect); }
-    }
+    public PdfArray Fields => _fields ??= (PdfArray)Elements.GetValue(Keys.Fields, ValueCreationFlags.CreateIndirect);
     PdfArray _fields = null!;
 
     /// <summary>Appends a top-level field.</summary>
@@ -31,15 +28,12 @@ internal sealed class PdfAcroForm : PdfDictionary
     /// <summary>The default appearance string ("/DA") every field's own "/DA" (absent) falls back to.</summary>
     public string DefaultAppearance
     {
-        get { return Elements.GetString(Keys.DA); }
+        get => Elements.GetString(Keys.DA);
         set { Elements.SetString(Keys.DA, value, PdfStringEncoding.WinAnsiEncoding); }
     }
 
     /// <summary>The default resource dictionary ("/DR") - the shared Helvetica font resource every field's "/DA" and generated appearance stream references.</summary>
-    public PdfDictionary DefaultResources
-    {
-        get { return _defaultResources ??= (PdfDictionary)Elements.GetValue(Keys.DR, ValueCreationFlags.Create); }
-    }
+    public PdfDictionary DefaultResources => _defaultResources ??= (PdfDictionary)Elements.GetValue(Keys.DR, ValueCreationFlags.Create);
     PdfDictionary _defaultResources = null!;
 
     /// <summary>

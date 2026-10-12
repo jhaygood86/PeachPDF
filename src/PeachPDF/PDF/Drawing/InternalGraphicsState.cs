@@ -56,8 +56,8 @@ internal class InternalGraphicsState
     /// </summary>
     public Matrix3x2 Transform
     {
-        get { return _transform; }
-        set { _transform = value; }
+        get => _transform;
+        set => _transform = value;
     }
     Matrix3x2 _transform = Matrix3x2.Identity;
 

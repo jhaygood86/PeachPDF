@@ -59,7 +59,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
             throw new ArgumentNullException("viewBox", "The size of the PdfForm is to small.");
         // I must tie the PdfForm to a document immediately, because otherwise I would have no place where
         // to store the resources.
-        if (document == null)
+        if (document is null)
             throw new ArgumentNullException("document", "An PdfForm template must be associated with a document at creation time.");
 
         _formState = FormState.Created;
@@ -167,7 +167,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
         Gfx.Dispose();
         Gfx = null;
 
-        if (PdfRenderer != null)
+        if (PdfRenderer is not null)
         {
             //pdfForm.CreateStream(PdfEncoders.LatinOneByteEncoding.GetBytes(PdfRenderer.GetContent()));
             PdfRenderer.Close();
@@ -185,10 +185,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// <summary>
     /// Gets the owning document.
     /// </summary>
-    internal PdfDocument Owner
-    {
-        get { return _document; }
-    }
+    internal PdfDocument Owner => _document;
     PdfDocument _document = null!;
 
     /// <summary>
@@ -198,7 +195,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     {
         get
         {
-            if (_document == null)
+            if (_document is null)
                 return PdfColorMode.Undefined;
             return _document.Options.ColorMode;
         }
@@ -207,10 +204,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// <summary>
     /// Gets a value indicating whether this instance is a template.
     /// </summary>
-    internal bool IsTemplate
-    {
-        get { return _formState != FormState.NotATemplate; }
-    }
+    internal bool IsTemplate => _formState != FormState.NotATemplate;
     internal FormState _formState;
 
     /// <summary>
@@ -219,7 +213,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     public override double PointWidth
     {
         //get { return templateSize.width; }
-        get { return _viewBox.Width; }
+        get => _viewBox.Width;
     }
 
     /// <summary>
@@ -228,7 +222,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     public override double PointHeight
     {
         //get { return templateSize.height; }
-        get { return _viewBox.Height; }
+        get => _viewBox.Height;
     }
 
     /// <summary>
@@ -237,7 +231,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     public override int PixelWidth
     {
         //get { return (int)templateSize.width; }
-        get { return (int)_viewBox.Width; }
+        get => (int)_viewBox.Width;
     }
 
     /// <summary>
@@ -246,7 +240,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     public override int PixelHeight
     {
         //get { return (int)templateSize.height; }
-        get { return (int)_viewBox.Height; }
+        get => (int)_viewBox.Height;
     }
 
     /// <summary>
@@ -255,41 +249,32 @@ internal class PdfForm : PdfRasterImage, IContentStream
     public override Size Size
     {
         //get { return templateSize; }
-        get { return _viewBox.Size; }
+        get => _viewBox.Size;
     }
     //Size templateSize;
 
     /// <summary>
     /// Gets the view box of the form.
     /// </summary>
-    public Rect ViewBox
-    {
-        get { return _viewBox; }
-    }
+    public Rect ViewBox => _viewBox;
     Rect _viewBox;
 
     /// <summary>
     /// Gets 72, the horizontal resolution by design of a form object.
     /// </summary>
-    public override double HorizontalResolution
-    {
-        get { return 72; }
-    }
+    public override double HorizontalResolution => 72;
 
     /// <summary>
     /// Gets 72 always, the vertical resolution by design of a form object.
     /// </summary>
-    public override double VerticalResolution
-    {
-        get { return 72; }
-    }
+    public override double VerticalResolution => 72;
 
     /// <summary>
     /// Gets or sets the bounding box.
     /// </summary>
     public Rect BoundingBox
     {
-        get { return _boundingBox; }
+        get => _boundingBox;
         set { _boundingBox = value; }  // TODO: pdfForm = null
     }
     Rect _boundingBox;
@@ -299,7 +284,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// </summary>
     public virtual Matrix3x2 Transform
     {
-        get { return _transform; }
+        get => _transform;
         set
         {
             if (_formState == FormState.Finished)
@@ -327,7 +312,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// </summary>
     PdfResources IContentStream.Resources
     {
-        get { return Resources; }
+        get => Resources;
     }
 
     /// <summary>
@@ -337,7 +322,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     {
         Debug.Assert(IsTemplate, "This function is for form templates only.");
         pdfFont = _document.FontTable.GetFont(font);
-        Debug.Assert(pdfFont != null);
+        Debug.Assert(pdfFont is not null);
         string name = Resources.AddFont(pdfFont);
         return name;
     }
@@ -356,7 +341,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
         Debug.Assert(IsTemplate, "This function is for form templates only.");
         pdfFont = _document.FontTable.TryGetFont(idName);
         string name = null;
-        if (pdfFont != null)
+        if (pdfFont is not null)
             name = Resources.AddFont(pdfFont);
         return name;
     }
@@ -368,7 +353,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     {
         Debug.Assert(IsTemplate, "This function is for form templates only.");
         global::PeachPDF.PDF.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
-        Debug.Assert(pdfImage != null);
+        Debug.Assert(pdfImage is not null);
         string name = Resources.AddImage(pdfImage);
         return name;
     }
@@ -386,7 +371,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
         get
         {
             Debug.Assert(IsTemplate, "This function is for form templates only.");
-            if (_pdfForm.Reference == null)
+            if (_pdfForm.Reference is null)
                 _document._irefTable.Add(_pdfForm);
             return _pdfForm;
         }
@@ -399,7 +384,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     {
         Debug.Assert(IsTemplate, "This function is for form templates only.");
         PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
-        Debug.Assert(pdfForm != null);
+        Debug.Assert(pdfForm is not null);
         string name = Resources.AddForm(pdfForm);
         return name;
     }

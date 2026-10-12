@@ -119,11 +119,11 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         // "If neither the Border nor the BS entry is present, the border is drawn as a solid line with a width of 1 point."
         // After this issue was fixed in newer Reader versions older PDFsharp created documents show an ugly solid border.
         // The following hack fixes this by specifying a 0 width border.
-        if (Elements[PdfAnnotation.Keys.BS] == null)
+        if (Elements[PdfAnnotation.Keys.BS] is null)
             Elements[PdfAnnotation.Keys.BS] = new PdfLiteral("<</Type/Border/W 0>>");
 
         // May be superfluous. See comment above.
-        if (Elements[PdfAnnotation.Keys.Border] == null)
+        if (Elements[PdfAnnotation.Keys.Border] is null)
             Elements[PdfAnnotation.Keys.Border] = new PdfLiteral("[0 0 0]");
 
         switch (_linkType)
@@ -204,18 +204,12 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

@@ -125,8 +125,8 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     public object Tag
     {
-        get { return _tag; }
-        set { _tag = value; }
+        get => _tag;
+        set => _tag = value;
     }
     object _tag = null!;
 
@@ -136,8 +136,8 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     string Name
     {
-        get { return _name; }
-        set { _name = value; }
+        get => _name;
+        set => _name = value;
     }
     string _name = NewName();
 
@@ -153,7 +153,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     internal bool CanModify
     {
         //get {return _state == DocumentState.Created || _state == DocumentState.Modifyable;}
-        get { return true; }
+        get => true;
     }
 
     /// <summary>
@@ -164,7 +164,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         if (!CanModify)
             throw new InvalidOperationException("The document cannot be modified.");
 
-        if (_outStream != null)
+        if (_outStream is not null)
         {
             PdfWriter writer = new PdfWriter(_outStream);
             try
@@ -213,14 +213,14 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         }
         finally
         {
-            if (stream != null)
+            if (stream is not null)
             {
                 if (closeStream)
                     stream.Dispose();
                 else
                     stream.Position = 0; // Reset the stream position if the stream is kept open.
             }
-            if (writer != null)
+            if (writer is not null)
                 writer.Close(closeStream);
         }
     }
@@ -240,9 +240,9 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     void DoSave(PdfWriter writer)
     {
-        if (_pages == null || _pages.Count == 0)
+        if (_pages is null || _pages.Count == 0)
         {
-            if (_outStream != null)
+            if (_outStream is not null)
             {
                 // Give feedback if the wrong constructor was used.
                 throw new InvalidOperationException("Cannot save a PDF document with no pages. Do not use \"public PdfDocument(string filename)\" or \"public PdfDocument(Stream outputStream)\" if you want to open an existing PDF document from a file or stream; use PdfReader.Open() for that purpose.");
@@ -291,7 +291,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         }
         finally
         {
-            if (writer != null)
+            if (writer is not null)
             {
                 writer.Stream.Flush();
                 // DO NOT CLOSE WRITER HERE
@@ -310,7 +310,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         string pdfSharpProducer = PdfProductInfo.Producer;
 
         // Set Creator if value is undefined.
-        if (info.Elements[PdfDocumentInformation.Keys.Creator] == null)
+        if (info.Elements[PdfDocumentInformation.Keys.Creator] is null)
             info.Creator = pdfSharpProducer;
 
         string producer = info.Producer;
@@ -319,7 +319,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         info.Elements.SetString(PdfDocumentInformation.Keys.Producer, producer);
 
         // Prepare used fonts.
-        if (_fontTable != null)
+        if (_fontTable is not null)
             _fontTable.PrepareForSave();
 
         // Let catalog do the rest.
@@ -352,7 +352,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         get
         {
-            if (_options == null)
+            if (_options is null)
                 _options = new PdfDocumentOptions(this);
             return _options;
         }
@@ -366,7 +366,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         get
         {
-            if (_settings == null)
+            if (_settings is null)
                 _settings = new PdfDocumentSettings(this);
             return _settings;
         }
@@ -377,10 +377,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// NYI Indicates whether large objects are written immediately to the output stream to relieve
     /// memory consumption.
     /// </summary>
-    internal bool EarlyWrite
-    {
-        get { return false; }
-    }
+    internal bool EarlyWrite => false;
 
     /// <summary>
     /// Gets or sets the PDF version number. Return value 14 e.g. means PDF 1.4 / Acrobat 5 etc.
@@ -390,7 +387,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     public int Version
     {
-        get { return _version; }
+        get => _version;
         set
         {
             if (!CanModify)
@@ -420,46 +417,31 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// <summary>
     /// Gets the file size of the document.
     /// </summary>
-    public long FileSize
-    {
-        get { return _fileSize; }
-    }
+    public long FileSize => _fileSize;
     internal long _fileSize; // TODO: make private
 
     /// <summary>
     /// Gets the full qualified file name if the document was read form a file, or an empty string otherwise.
     /// </summary>
-    public string FullPath
-    {
-        get { return _fullPath; }
-    }
+    public string FullPath => _fullPath;
     internal string _fullPath = String.Empty; // TODO: make private
 
     /// <summary>
     /// Gets a Guid that uniquely identifies this instance of PdfDocument.
     /// </summary>
-    public Guid Guid
-    {
-        get { return _guid; }
-    }
+    public Guid Guid => _guid;
     Guid _guid = Guid.NewGuid();
 
     /// <summary>
     /// Returns a value indicating whether the document was newly created or opened from an existing document.
     /// Returns true if the document was opened with the PdfReader.Open function, false otherwise.
     /// </summary>
-    public bool IsImported
-    {
-        get { return (_state & DocumentState.Imported) != 0; }
-    }
+    public bool IsImported => (_state & DocumentState.Imported) != 0;
 
     /// <summary>
     /// Returns a value indicating whether the document is read only or can be modified.
     /// </summary>
-    public bool IsReadOnly
-    {
-        get { return (_openMode != PdfDocumentOpenMode.Modify); }
-    }
+    public bool IsReadOnly => (_openMode != PdfDocumentOpenMode.Modify);
 
     internal Exception DocumentNotImported()
     {
@@ -473,7 +455,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         get
         {
-            if (_info == null)
+            if (_info is null)
                 _info = _trailer.Info;
             return _info;
         }
@@ -487,7 +469,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         get
         {
-            if (_pages == null)
+            if (_pages is null)
                 _pages = Catalog.Pages;
             return _pages;
         }
@@ -499,7 +481,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     public PdfPageLayout PageLayout
     {
-        get { return Catalog.PageLayout; }
+        get => Catalog.PageLayout;
         set
         {
             if (!CanModify)
@@ -513,7 +495,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     public PdfPageMode PageMode
     {
-        get { return Catalog.PageMode; }
+        get => Catalog.PageMode;
         set
         {
             if (!CanModify)
@@ -525,26 +507,20 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// <summary>
     /// Gets the viewer preferences of this document.
     /// </summary>
-    public PdfViewerPreferences ViewerPreferences
-    {
-        get { return Catalog.ViewerPreferences; }
-    }
+    public PdfViewerPreferences ViewerPreferences => Catalog.ViewerPreferences;
 
     /// <summary>
     /// Gets the root of the outline (or bookmark) tree.
     /// </summary>
-    public PdfOutlineCollection Outlines
-    {
-        get { return Catalog.Outlines; }
-    }
+    public PdfOutlineCollection Outlines => Catalog.Outlines;
 
     /// <summary>
     /// Gets or sets the default language of the document.
     /// </summary>
     public string Language
     {
-        get { return Catalog.Language; }
-        set { Catalog.Language = value; }
+        get => Catalog.Language;
+        set => Catalog.Language = value;
         //get { return Catalog.Elements.GetString(PdfCatalog.Keys.Lang); }
         //set { Catalog.Elements.SetString(PdfCatalog.Keys.Lang, value); }
     }
@@ -552,10 +528,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// <summary>
     /// Gets the document font table that holds all fonts used in the current document.
     /// </summary>
-    internal PdfFontTable FontTable
-    {
-        get { return _fontTable ?? (_fontTable = new PdfFontTable(this)); }
-    }
+    internal PdfFontTable FontTable => _fontTable ?? (_fontTable = new PdfFontTable(this));
     PdfFontTable _fontTable = null!;
 
     /// <summary>
@@ -565,7 +538,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         get
         {
-            if (_imageTable == null)
+            if (_imageTable is null)
                 _imageTable = new PdfImageTable(this);
             return _imageTable;
         }
@@ -577,7 +550,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     internal PdfFormXObjectTable FormTable  // TODO: Rename to ExternalDocumentTable.
     {
-        get { return _formTable ?? (_formTable = new PdfFormXObjectTable(this)); }
+        get => _formTable ?? (_formTable = new PdfFormXObjectTable(this));
     }
     PdfFormXObjectTable _formTable = null!;
 
@@ -586,38 +559,26 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// COLR/CPAL glyph used in the current document, so a repeated color glyph is drawn once and
     /// referenced thereafter.
     /// </summary>
-    internal ColorGlyphFormCache ColorGlyphTable
-    {
-        get { return _colorGlyphTable ?? (_colorGlyphTable = new ColorGlyphFormCache()); }
-    }
+    internal ColorGlyphFormCache ColorGlyphTable => _colorGlyphTable ?? (_colorGlyphTable = new ColorGlyphFormCache());
     ColorGlyphFormCache _colorGlyphTable = null!;
 
     /// <summary>
     /// Gets the document ExtGState table that holds all form state objects used in the current document.
     /// </summary>
-    internal PdfExtGStateTable ExtGStateTable
-    {
-        get { return _extGStateTable ?? (_extGStateTable = new PdfExtGStateTable(this)); }
-    }
+    internal PdfExtGStateTable ExtGStateTable => _extGStateTable ?? (_extGStateTable = new PdfExtGStateTable(this));
     PdfExtGStateTable _extGStateTable = null!;
 
     /// <summary>
     /// Gets the PdfCatalog of the current document.
     /// </summary>
-    internal PdfCatalog Catalog
-    {
-        get { return _catalog ?? (_catalog = _trailer.Root); }
-    }
+    internal PdfCatalog Catalog => _catalog ?? (_catalog = _trailer.Root);
     PdfCatalog _catalog = null!;  // never changes if once created
 
     /// <summary>
     /// Gets the PdfInternals object of this document, that grants access to some internal structures
     /// which are not part of the public interface of PdfDocument.
     /// </summary>
-    public new PdfInternals Internals
-    {
-        get { return _internals ?? (_internals = new PdfInternals(this)); }
-    }
+    public new PdfInternals Internals => _internals ?? (_internals = new PdfInternals(this));
     PdfInternals _internals = null!;
 
     /// <summary>
@@ -708,7 +669,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             sb.Append('|').Append(DescribeItem(xObject.Elements["/Interpolate"]));
 
             var softMask = xObject.Elements.GetDictionary("/SMask");
-            sb.Append('|').Append(softMask != null ? ComputeIdentity(softMask) : "«none»");
+            sb.Append('|').Append(softMask is not null ? ComputeIdentity(softMask) : "«none»");
 
             return sb.ToString();
         }
@@ -734,7 +695,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
                 case PdfDictionary dict:
                     // A referenced stream object (e.g. an /ICCBased profile) - its bytes are what
                     // matters for identity, not which object number holds them.
-                    return dict.Stream != null ? ComputeMD5(dict.Stream.Value) : "«dict»";
+                    return dict.Stream is not null ? ComputeMD5(dict.Stream.Value) : "«dict»";
                 default:
                     return item.ToString() ?? "«null»";
             }
@@ -747,7 +708,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             doc.Pages.Cast<PdfPage>()
                 .Select(page => page.Elements.GetDictionary("/Resources"))
                 .Select(resources => resources?.Elements?.GetDictionary("/XObject"))
-                .Where(xObjects => xObjects?.Elements != null)
+                .Where(xObjects => xObjects?.Elements is not null)
                 .SelectMany(xObjects =>
                     from item in xObjects.Elements
                     let xObject = (item.Value as PdfReference)?.Value as PdfDictionary

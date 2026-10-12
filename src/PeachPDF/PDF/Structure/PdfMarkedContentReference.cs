@@ -23,7 +23,7 @@ internal sealed class PdfMarkedContentReference : PdfDictionary
     /// </summary>
     public PdfPage Page
     {
-        get { return (PdfPage)Elements.GetDictionary(Keys.Pg); }
+        get => (PdfPage)Elements.GetDictionary(Keys.Pg);
         set { Elements.SetReference(Keys.Pg, value); }
     }
 
@@ -32,7 +32,7 @@ internal sealed class PdfMarkedContentReference : PdfDictionary
     /// </summary>
     public int Mcid
     {
-        get { return Elements.GetInteger(Keys.MCID); }
+        get => Elements.GetInteger(Keys.MCID);
         set { Elements.SetInteger(Keys.MCID, value); }
     }
 

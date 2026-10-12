@@ -30,7 +30,7 @@ internal sealed class PdfRadioButtonField : PdfAcroField
     /// <summary>The export value ("/V") of the currently-selected button in the group, or "/Off" when none is checked.</summary>
     public string Value
     {
-        get { return Elements.GetName(Keys.V); }
+        get => Elements.GetName(Keys.V);
         set { Elements.SetName(Keys.V, value); }
     }
 
@@ -44,7 +44,7 @@ internal sealed class PdfRadioButtonField : PdfAcroField
         _kids.Add(widget);
 
         var array = Elements.GetArray(Keys.Kids);
-        if (array == null)
+        if (array is null)
         {
             array = new PdfArray(Owner);
             Elements.SetObject(Keys.Kids, array);

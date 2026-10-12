@@ -120,18 +120,12 @@ internal sealed class PdfOutputIntent : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ??= CreateMeta(typeof(Keys)); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

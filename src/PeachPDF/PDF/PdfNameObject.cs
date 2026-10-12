@@ -30,8 +30,7 @@ internal sealed class PdfNameObject : PdfObject
     public PdfNameObject(PdfDocument document, string value)
         : base(document)
     {
-        if (value == null)
-            throw new ArgumentNullException("value");
+        ArgumentNullException.ThrowIfNull(value);
         if (value.Length == 0 || value[0] != '/')
             throw new ArgumentException("A PDF name must start with a slash (/).");
 
@@ -59,8 +58,8 @@ internal sealed class PdfNameObject : PdfObject
     /// </summary>
     public string Value
     {
-        get { return _value; }
-        set { _value = value; }
+        get => _value;
+        set => _value = value;
     }
     string _value;
 

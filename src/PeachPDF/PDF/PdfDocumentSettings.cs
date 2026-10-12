@@ -17,15 +17,15 @@ internal sealed class PdfDocumentSettings
     {
         get
         {
-            if (_trimMargins == null)
+            if (_trimMargins is null)
                 _trimMargins = new TrimMargins();
             return _trimMargins;
         }
         set
         {
-            if (_trimMargins == null)
+            if (_trimMargins is null)
                 _trimMargins = new TrimMargins();
-            if (value != null)
+            if (value is not null)
             {
                 _trimMargins.Left = value.Left;
                 _trimMargins.Right = value.Right;

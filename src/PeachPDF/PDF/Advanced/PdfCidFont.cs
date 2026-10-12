@@ -73,7 +73,7 @@ internal class PdfCidFont : PdfFont
 
     public string BaseFont
     {
-        get { return Elements.GetName(Keys.BaseFont); }
+        get => Elements.GetName(Keys.BaseFont);
         set { Elements.SetName(Keys.BaseFont, value); }
     }
 
@@ -217,18 +217,12 @@ internal class PdfCidFont : PdfFont
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        internal static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

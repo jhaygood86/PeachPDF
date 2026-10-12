@@ -20,7 +20,7 @@ internal sealed class PdfMarkInformation : PdfDictionary
     /// </summary>
     public bool Marked
     {
-        get { return Elements.GetBoolean(Keys.Marked); }
+        get => Elements.GetBoolean(Keys.Marked);
         set { Elements.SetBoolean(Keys.Marked, value); }
     }
 

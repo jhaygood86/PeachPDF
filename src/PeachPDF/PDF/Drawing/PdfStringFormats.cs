@@ -11,10 +11,7 @@ internal static class PdfStringFormats
     /// Gets a new PdfStringFormat object that aligns the text left on the base line.
     /// This is the same as BaseLineLeft.
     /// </summary>
-    public static PdfStringFormat Default
-    {
-        get { return BaseLineLeft; }
-    }
+    public static PdfStringFormat Default => BaseLineLeft;
 
     /// <summary>
     /// Gets a new PdfStringFormat object that aligns the text left on the base line.

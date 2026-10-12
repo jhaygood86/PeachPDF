@@ -25,7 +25,7 @@ internal class PdfWriter
 
     public void Close(bool closeUnderlyingStream)
     {
-        if (_stream != null && closeUnderlyingStream)
+        if (_stream is not null && closeUnderlyingStream)
             _stream.Dispose();
         _stream = null;
     }
@@ -35,25 +35,22 @@ internal class PdfWriter
         Close(true);
     }
 
-    public long Position
-    {
-        get { return _stream.Position; }
-    }
+    public long Position => _stream.Position;
 
     /// <summary>
     /// Gets or sets the kind of layout.
     /// </summary>
     public PdfWriterLayout Layout
     {
-        get { return _layout; }
-        set { _layout = value; }
+        get => _layout;
+        set => _layout = value;
     }
     PdfWriterLayout _layout;
 
     public PdfWriterOptions Options
     {
-        get { return _options; }
-        set { _options = value; }
+        get => _options;
+        set => _options = value;
     }
     PdfWriterOptions _options;
 
@@ -415,7 +412,7 @@ internal class PdfWriter
 
     public void Write(byte[] bytes)
     {
-        if (bytes == null || bytes.Length == 0)
+        if (bytes is null || bytes.Length == 0)
             return;
 
         _stream.Write(bytes, 0, bytes.Length);
@@ -485,8 +482,8 @@ internal class PdfWriter
     /// </summary>
     internal int Indent
     {
-        get { return _indent; }
-        set { _indent = value; }
+        get => _indent;
+        set => _indent = value;
     }
     int _indent = 2;
     int _writeIndent;
@@ -520,7 +517,7 @@ internal class PdfWriter
     /// </summary>
     string IndentBlanks
     {
-        get { return new string(' ', _writeIndent); }
+        get => new string(' ', _writeIndent);
     }
 
     void WriteIndent()
@@ -588,10 +585,7 @@ internal class PdfWriter
     /// <summary>
     /// Gets the underlying stream.
     /// </summary>
-    internal Stream Stream
-    {
-        get { return _stream; }
-    }
+    internal Stream Stream => _stream;
     Stream _stream;
 
     class StackItem
@@ -605,6 +599,6 @@ internal class PdfWriter
         public bool HasStream;
     }
 
-    readonly List<StackItem> _stack = new List<StackItem>();
+    readonly List<StackItem> _stack = [];
     int _commentPosition;
 }

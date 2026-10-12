@@ -42,7 +42,7 @@ internal class PdfEmbeddedFile : PdfDictionary
 
     public string MimeType
     {
-        get { return Elements.GetName(Keys.Subtype); }
+        get => Elements.GetName(Keys.Subtype);
         set { Elements.SetName(Keys.Subtype, value); }
     }
 
@@ -77,7 +77,7 @@ internal class PdfEmbeddedFile : PdfDictionary
     internal override void WriteObject(PdfWriter writer)
     {
         // Same write-time pattern PdfContent uses; the Filter check makes a second Save() a no-op.
-        if (CompressOnWrite && Stream != null && Elements.GetName(Keys.Filter).Length == 0)
+        if (CompressOnWrite && Stream is not null && Elements.GetName(Keys.Filter).Length == 0)
         {
             Stream.Value = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
             Elements.SetName(Keys.Filter, filterName);
@@ -156,18 +156,12 @@ internal class PdfEmbeddedFile : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return meta ??= CreateMeta(typeof(Keys)); }
-        }
+        internal static PdfDictionaryMetadata Meta => meta ??= CreateMeta(typeof(Keys));
         static PdfDictionaryMetadata meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

@@ -31,7 +31,7 @@ internal sealed class PdfFormXObjectTable : PdfResourceTable
     public PdfFormXObject GetForm(PdfForm form)
     {
         // If the form already has a PdfFormXObject, return it.
-        if (form._pdfForm != null)
+        if (form._pdfForm is not null)
         {
             Debug.Assert(form.IsTemplate, "An PdfForm must not have a PdfFormXObject.");
             if (ReferenceEquals(form._pdfForm.Owner, Owner))

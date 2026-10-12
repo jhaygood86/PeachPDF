@@ -17,26 +17,17 @@ internal class PdfObjectInternals
     /// <summary>
     /// Gets the object identifier. Returns PdfObjectId.Empty for direct objects.
     /// </summary>
-    public PdfObjectId ObjectId
-    {
-        get { return _obj.ObjectId; }
-    }
+    public PdfObjectId ObjectId => _obj.ObjectId;
 
     /// <summary>
     /// Gets the object number.
     /// </summary>
-    public int ObjectNumber
-    {
-        get { return _obj.ObjectId.ObjectNumber; }
-    }
+    public int ObjectNumber => _obj.ObjectId.ObjectNumber;
 
     /// <summary>
     /// Gets the generation number.
     /// </summary>
-    public int GenerationNumber
-    {
-        get { return _obj.ObjectId.GenerationNumber; }
-    }
+    public int GenerationNumber => _obj.ObjectId.GenerationNumber;
 
     /// <summary>
     /// Gets the name of the current type.

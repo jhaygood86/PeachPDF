@@ -29,8 +29,8 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
 
     internal bool IsUnderConstruction
     {
-        get { return _isUnderConstruction; }
-        set { _isUnderConstruction = value; }
+        get => _isUnderConstruction;
+        set => _isUnderConstruction = value;
     }
     bool _isUnderConstruction;
 
@@ -54,7 +54,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     /// </summary>
     public void Add(PdfObject value)
     {
-        if (value.Owner == null)
+        if (value.Owner is null)
             value.Document = _document;
         else
             Debug.Assert(value.Owner == _document);
@@ -232,7 +232,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         foreach (PdfReference iref in ObjectTable.Values)
         {
             Debug.Assert(!ht1.ContainsKey(iref), "Duplicate iref.");
-            Debug.Assert(iref.Value != null);
+            Debug.Assert(iref.Value is not null);
             ht1.Add(iref, null);
         }
 
@@ -340,9 +340,9 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             IEnumerable enumerable;
             PdfDictionary dict;
             PdfArray array;
-            if ((dict = pdfObject as PdfDictionary) != null)
+            if ((dict = pdfObject as PdfDictionary) is not null)
                 enumerable = dict.Elements.Values;
-            else if ((array = pdfObject as PdfArray) != null)
+            else if ((array = pdfObject as PdfArray) is not null)
                 enumerable = array.Elements;
             else
             {
@@ -353,21 +353,21 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             foreach (PdfItem item in enumerable)
             {
                 PdfReference iref = item as PdfReference;
-                if (iref != null)
+                if (iref is not null)
                 {
                     if (!ReferenceEquals(iref.Document, _document))
                         Debug.WriteLine(String.Format("Bad iref: {0}", iref.ObjectId.ToString()));
-                    Debug.Assert(ReferenceEquals(iref.Document, _document) || iref.Document == null, "External object detected!");
+                    Debug.Assert(ReferenceEquals(iref.Document, _document) || iref.Document is null, "External object detected!");
 
                     if (!objects.ContainsKey(iref))
                     {
                         PdfObject value = iref.Value;
-                        if (iref.Document != null)
+                        if (iref.Document is not null)
                         {
-                            if (value == null)
+                            if (value is null)
                             {
                                 iref = ObjectTable[iref.ObjectId];
-                                Debug.Assert(iref.Value != null);
+                                Debug.Assert(iref.Value is not null);
                                 value = iref.Value;
                             }
                             Debug.Assert(ReferenceEquals(iref.Document, _document));
@@ -380,7 +380,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
                 else
                 {
                     PdfObject nestedObject = item as PdfObject;
-                    if (nestedObject != null && (nestedObject is PdfDictionary || nestedObject is PdfArray))
+                    if (nestedObject is not null && (nestedObject is PdfDictionary || nestedObject is PdfArray))
                         stack.Push(nestedObject);
                 }
             }
@@ -394,7 +394,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     {
         get
         {
-            if (_deadObject == null)
+            if (_deadObject is null)
             {
                 _deadObject = new PdfDictionary(_document);
                 Add(_deadObject);

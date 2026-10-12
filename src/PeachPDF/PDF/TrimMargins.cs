@@ -43,8 +43,8 @@ internal sealed class TrimMargins
     /// </summary>
     public double Left
     {
-        get { return _left; }
-        set { _left = value; }
+        get => _left;
+        set => _left = value;
     }
     double _left;
 
@@ -53,8 +53,8 @@ internal sealed class TrimMargins
     /// </summary>
     public double Right
     {
-        get { return _right; }
-        set { _right = value; }
+        get => _right;
+        set => _right = value;
     }
     double _right;
 
@@ -63,8 +63,8 @@ internal sealed class TrimMargins
     /// </summary>
     public double Top
     {
-        get { return _top; }
-        set { _top = value; }
+        get => _top;
+        set => _top = value;
     }
     double _top;
 
@@ -73,16 +73,13 @@ internal sealed class TrimMargins
     /// </summary>
     public double Bottom
     {
-        get { return _bottom; }
-        set { _bottom = value; }
+        get => _bottom;
+        set => _bottom = value;
     }
     double _bottom;
 
     /// <summary>
     /// Gets a value indicating whether this instance has at least one margin with a value other than zero.
     /// </summary>
-    public bool AreSet
-    {
-        get { return _left != 0 || _right != 0 || _top != 0 || _bottom != 0; }
-    }
+    public bool AreSet => _left != 0 || _right != 0 || _top != 0 || _bottom != 0;
 }

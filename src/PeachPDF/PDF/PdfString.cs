@@ -148,31 +148,19 @@ internal sealed class PdfString : PdfItem
     /// <summary>
     /// Gets the number of characters in this string.
     /// </summary>
-    public int Length
-    {
-        get { return _value == null ? 0 : _value.Length; }
-    }
+    public int Length => _value is null ? 0 : _value.Length;
 
     /// <summary>
     /// Gets the encoding.
     /// </summary>
-    public PdfStringEncoding Encoding
-    {
-        get { return (PdfStringEncoding)(_flags & PdfStringFlags.EncodingMask); }
-    }
+    public PdfStringEncoding Encoding => (PdfStringEncoding)(_flags & PdfStringFlags.EncodingMask);
 
     /// <summary>
     /// Gets a value indicating whether the string is a hexadecimal literal.
     /// </summary>
-    public bool HexLiteral
-    {
-        get { return (_flags & PdfStringFlags.HexLiteral) != 0; }
-    }
+    public bool HexLiteral => (_flags & PdfStringFlags.HexLiteral) != 0;
 
-    internal PdfStringFlags Flags
-    {
-        get { return _flags; }
-    }
+    internal PdfStringFlags Flags => _flags;
     readonly PdfStringFlags _flags;
 
     /// <summary>
@@ -181,7 +169,7 @@ internal sealed class PdfString : PdfItem
     public string Value
     {
         // This class must behave like a value type. Therefore it cannot be changed (like System.String).
-        get { return _value ?? ""; }
+        get => _value ?? "";
     }
     string _value = null!;
 
@@ -190,7 +178,7 @@ internal sealed class PdfString : PdfItem
     /// </summary>
     internal byte[] EncryptionValue
     {
-        get { return _value == null ? new byte[0] : GetBytesFromEncoding(); }
+        get => _value is null ? new byte[0] : GetBytesFromEncoding();
         // BUG: May lead to trouble with the value semantics of PdfString
         set
         {

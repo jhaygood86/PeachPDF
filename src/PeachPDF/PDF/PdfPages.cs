@@ -30,10 +30,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// <summary>
     /// Gets the number of pages.
     /// </summary>
-    public int Count
-    {
-        get { return PagesArray.Elements.Count; }
-    }
+    public int Count => PagesArray.Elements.Count;
 
     /// <summary>
     /// Gets the page with the specified index.
@@ -61,10 +58,10 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
         foreach (PdfItem item in PagesArray)
         {
             PdfReference reference = item as PdfReference;
-            if (reference != null)
+            if (reference is not null)
             {
                 PdfDictionary dictionary = reference.Value as PdfDictionary;
-                if (dictionary != null && dictionary.ObjectId == id)
+                if (dictionary is not null && dictionary.ObjectId == id)
                 {
                     page = dictionary as PdfPage ?? new PdfPage(dictionary);
                     break;
@@ -100,8 +97,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// </summary>
     public PdfPage Insert(int index, PdfPage page)
     {
-        if (page == null)
-            throw new ArgumentNullException("page");
+        ArgumentNullException.ThrowIfNull(page);
 
         // Is the page already owned by this document?
         if (page.Owner == Owner)
@@ -131,7 +127,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
         }
 
         // All new page insertions come here.
-        if (page.Owner == null)
+        if (page.Owner is null)
         {
             // Case: New page was newly created and inserted now.
             page.Document = Owner;
@@ -198,7 +194,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     {
         get
         {
-            if (_pagesArray == null)
+            if (_pagesArray is null)
                 _pagesArray = (PdfArray)Elements.GetValue(Keys.Kids, ValueCreationFlags.Create);
             return _pagesArray;
         }
@@ -260,7 +256,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
 
         object IEnumerator.Current
         {
-            get { return Current; }
+            get => Current;
         }
 
         public PdfPage Current
@@ -319,18 +315,12 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

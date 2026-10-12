@@ -104,8 +104,7 @@ internal class PdfRasterImage : IDisposable
     /// <param name="stream">The stream containing a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, JPEG XL, or PDF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
     public static PdfRasterImage FromStream(Func<Stream> stream)
     {
-        if (stream == null)
-            throw new ArgumentNullException("stream");
+        ArgumentNullException.ThrowIfNull(stream);
 
         // TODO: Check PDF stream.
         //if (PdfReader.TestPdfFile(path) > 0)
@@ -129,14 +128,14 @@ internal class PdfRasterImage : IDisposable
 
     internal PdfImageState PdfImageState
     {
-        get { return _xImageState; }
-        set { _xImageState = value; }
+        get => _xImageState;
+        set => _xImageState = value;
     }
     PdfImageState _xImageState;
 
     internal void Initialize()
     {
-        if (_source != null)
+        if (_source is not null)
         {
             //We always get a jpeg from an image source
             if (_source.JpegPassthrough is not null)
@@ -302,94 +301,52 @@ internal class PdfRasterImage : IDisposable
     /// <summary>
     /// Gets the width of the image in point.
     /// </summary>
-    public virtual double PointWidth
-    {
-        get
-        {
-            return _source.Width * 72 / 96.0;
-        }
-    }
+    public virtual double PointWidth => _source.Width * 72 / 96.0;
 
     /// <summary>
     /// Gets the height of the image in point.
     /// </summary>
-    public virtual double PointHeight
-    {
-        get
-        {
-            return _source.Height * 72 / 96.0;
-        }
-    }
+    public virtual double PointHeight => _source.Height * 72 / 96.0;
 
     /// <summary>
     /// Gets the width of the image in pixels.
     /// </summary>
-    public virtual int PixelWidth
-    {
-        get
-        {
-            return _source.Width;
-        }
-    }
+    public virtual int PixelWidth => _source.Width;
 
     /// <summary>
     /// Gets the height of the image in pixels.
     /// </summary>
-    public virtual int PixelHeight
-    {
-        get
-        {
-            return _source.Height;
-        }
-    }
+    public virtual int PixelHeight => _source.Height;
 
     /// <summary>
     /// Gets the size in point of the image.
     /// </summary>
-    public virtual Size Size
-    {
-        get { return new Size(PointWidth, PointHeight); }
-    }
+    public virtual Size Size => new Size(PointWidth, PointHeight);
 
     /// <summary>
     /// Gets the horizontal resolution of the image.
     /// </summary>
-    public virtual double HorizontalResolution
-    {
-        get
-        {
-            return 96;
-        }
-    }
+    public virtual double HorizontalResolution => 96;
 
     /// <summary>
     /// Gets the vertical resolution of the image.
     /// </summary>
-    public virtual double VerticalResolution
-    {
-        get
-        {
-            return 96;
-        }
-    }
+    public virtual double VerticalResolution => 96;
 
     /// <summary>
     /// Gets or sets a flag indicating whether image interpolation is to be performed. 
     /// </summary>
     public virtual bool Interpolate
     {
-        get { return _interpolate; }
-        set { _interpolate = value; }
+        get => _interpolate;
+        set => _interpolate = value;
     }
     bool _interpolate = true;
 
     /// <summary>
     /// Gets the format of the image.
     /// </summary>
-    public PdfImageFormat Format
-    {
-        get { return _format; }
-    }
+    public PdfImageFormat Format => _format;
     PdfImageFormat _format = null!;
 
     /// <summary>

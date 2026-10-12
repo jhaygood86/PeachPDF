@@ -33,7 +33,7 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// </summary>
     public string StructureType
     {
-        get { return Elements.GetName(Keys.S); }
+        get => Elements.GetName(Keys.S);
         set { Elements.SetName(Keys.S, value); }
     }
 
@@ -43,7 +43,7 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// </summary>
     public PdfDictionary Parent
     {
-        get { return Elements.GetDictionary(Keys.P); }
+        get => Elements.GetDictionary(Keys.P);
         set { Elements.SetReference(Keys.P, value); }
     }
 
@@ -52,7 +52,7 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// </summary>
     public PdfPage Page
     {
-        get { return (PdfPage)Elements.GetDictionary(Keys.Pg); }
+        get => (PdfPage)Elements.GetDictionary(Keys.Pg);
         set { Elements.SetReference(Keys.Pg, value); }
     }
 
@@ -61,7 +61,7 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// </summary>
     public string AlternateText
     {
-        get { return Elements.GetString(Keys.Alt); }
+        get => Elements.GetString(Keys.Alt);
         set { Elements.SetString(Keys.Alt, value); }
     }
 
@@ -77,7 +77,7 @@ internal sealed class PdfStructureElement : PdfDictionary
             Owner.Internals.AddObject(fileSpecification);
 
         var array = Elements.GetArray(Keys.AF);
-        if (array == null)
+        if (array is null)
         {
             array = new PdfArray(Owner);
             Elements[Keys.AF] = array;
@@ -92,11 +92,11 @@ internal sealed class PdfStructureElement : PdfDictionary
     public void AppendKid(PdfItem kid)
     {
         var array = Elements.GetArray(Keys.K);
-        if (array == null)
+        if (array is null)
         {
             var existing = Elements.GetObject(Keys.K);
             array = new PdfArray(Owner);
-            if (existing != null)
+            if (existing is not null)
                 array.Elements.Add(existing);
             Elements.SetObject(Keys.K, array);
         }
@@ -127,14 +127,14 @@ internal sealed class PdfStructureElement : PdfDictionary
             foreach (var item in array.Elements)
             {
                 var dict = GetPdfDictionary(item);
-                if (dict != null)
+                if (dict is not null)
                     yield return dict;
             }
         }
         else
         {
             var dict = GetPdfDictionary(k);
-            if (dict != null)
+            if (dict is not null)
                 yield return dict;
         }
     }

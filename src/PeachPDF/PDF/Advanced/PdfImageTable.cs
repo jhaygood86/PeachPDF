@@ -38,7 +38,7 @@ internal sealed class PdfImageTable : PdfResourceTable
             // GetPlainSelector's own remarks on why "unconditionally" still has to check Interpolate).
             selector = GetPlainSelector(image);
         }
-        else if (image._lastSizedSelector != null
+        else if (image._lastSizedSelector is not null
             && image._lastSizedSelectorWidthPt == widthPt
             && image._lastSizedSelectorHeightPt == heightPt
             && image._lastSizedSelector.Interpolate == image.Interpolate)
@@ -85,7 +85,7 @@ internal sealed class PdfImageTable : PdfResourceTable
     /// </summary>
     private static ImageSelector GetPlainSelector(PdfRasterImage image)
     {
-        if (image._selector == null || image._selector.Interpolate != image.Interpolate)
+        if (image._selector is null || image._selector.Interpolate != image.Interpolate)
             image._selector = new ImageSelector(image);
 
         return image._selector;
@@ -226,7 +226,7 @@ internal sealed class PdfImageTable : PdfResourceTable
         {
             // HACK: implement a way to identify images when they are reused
             // TODO 4STLA Implementation that calculates MD5 hashes for images generated for the images can be found here: http://forum.pdfsharp.net/viewtopic.php?p=6959#p6959
-            if (image._path == null)
+            if (image._path is null)
                 image._path = "*" + Guid.NewGuid().ToString("B");
 
             // HACK: just use full path to identify
@@ -246,8 +246,8 @@ internal sealed class PdfImageTable : PdfResourceTable
 
         public string Path
         {
-            get { return _path; }
-            set { _path = value; }
+            get => _path;
+            set => _path = value;
         }
         string _path;
         readonly int? _targetWidth;
@@ -261,7 +261,7 @@ internal sealed class PdfImageTable : PdfResourceTable
         public override bool Equals(object? obj)
         {
             ImageSelector selector = obj as ImageSelector;
-            if (selector == null)
+            if (selector is null)
                 return false;
             return _path == selector._path
                 && _targetWidth == selector._targetWidth

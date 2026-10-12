@@ -160,10 +160,7 @@ internal sealed class PdfExtGState : PdfDictionary
         set { Elements[Keys.TR] = value; }
     }
 
-    internal string Key
-    {
-        get { return _key; }
-    }
+    internal string Key => _key;
 
     void UpdateKey()
     {
@@ -371,18 +368,12 @@ internal sealed class PdfExtGState : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        internal static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

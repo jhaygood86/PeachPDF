@@ -16,10 +16,7 @@ internal sealed class PdfImageFormat
         _guid = guid;
     }
 
-    internal Guid Guid
-    {
-        get { return _guid; }
-    }
+    internal Guid Guid => _guid;
 
     /// <summary>
     /// Determines whether the specified object is equal to the current object.
@@ -27,7 +24,7 @@ internal sealed class PdfImageFormat
     public override bool Equals(object? obj)
     {
         PdfImageFormat format = obj as PdfImageFormat;
-        if (format == null)
+        if (format is null)
             return false;
         return _guid == format._guid;
     }
@@ -43,50 +40,32 @@ internal sealed class PdfImageFormat
     /// <summary>
     /// Gets the Portable Network Graphics (PNG) image format. 
     /// </summary>
-    public static PdfImageFormat Png
-    {
-        get { return _png; }
-    }
+    public static PdfImageFormat Png => _png;
 
     /// <summary>
     /// Gets the Graphics Interchange Format (GIF) image format.
     /// </summary>
-    public static PdfImageFormat Gif
-    {
-        get { return _gif; }
-    }
+    public static PdfImageFormat Gif => _gif;
 
     /// <summary>
     /// Gets the Joint Photographic Experts Group (JPEG) image format.
     /// </summary>
-    public static PdfImageFormat Jpeg
-    {
-        get { return _jpeg; }
-    }
+    public static PdfImageFormat Jpeg => _jpeg;
 
     /// <summary>
     /// Gets the Tag Image File Format (TIFF) image format.
     /// </summary>
-    public static PdfImageFormat Tiff
-    {
-        get { return _tiff; }
-    }
+    public static PdfImageFormat Tiff => _tiff;
 
     /// <summary>
     /// Gets the Portable Document Format (PDF) image format
     /// </summary>
-    public static PdfImageFormat Pdf
-    {
-        get { return _pdf; }
-    }
+    public static PdfImageFormat Pdf => _pdf;
 
     /// <summary>
     /// Gets the Windows icon image format.
     /// </summary>
-    public static PdfImageFormat Icon
-    {
-        get { return _icon; }
-    }
+    public static PdfImageFormat Icon => _icon;
 
     readonly Guid _guid;
 

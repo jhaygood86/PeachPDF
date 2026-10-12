@@ -58,14 +58,11 @@ internal sealed class PdfGraphicsRenderer
         return _content.ToArray();
     }
 
-    public PdfPageAppendMode PageOptions
-    {
-        get { return _options; }
-    }
+    public PdfPageAppendMode PageOptions => _options;
 
     public void Close()
     {
-        if (_page != null)
+        if (_page is not null)
         {
             PdfContent content2 = _page.RenderContent;
             content2.CreateStream(GetContent());
@@ -76,7 +73,7 @@ internal sealed class PdfGraphicsRenderer
             _page.RenderContent = null;
             _page = null;
         }
-        else if (_form != null)
+        else if (_form is not null)
         {
             _form._pdfForm.CreateStream(GetContent());
             _content.Clear();
@@ -107,10 +104,8 @@ internal sealed class PdfGraphicsRenderer
     /// </summary>
     public void DrawLines(Pen pen, PaintPoint[] points)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
-        if (points == null)
-            throw new ArgumentNullException("points");
+        ArgumentNullException.ThrowIfNull(pen);
+        ArgumentNullException.ThrowIfNull(points);
 
         int count = points.Length;
         if (count == 0)
@@ -136,7 +131,7 @@ internal sealed class PdfGraphicsRenderer
 
     public void DrawRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height)
     {
-        if (pen == null && brush == null)
+        if (pen is null && brush is null)
             throw new ArgumentNullException("pen and brush");
 
         const string format = PdfNumberFormats.ThreeDecimals;
@@ -145,9 +140,9 @@ internal sealed class PdfGraphicsRenderer
         //AppendFormat123("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} re\n", x, y, width, -height);
         AppendFormatRect("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} re\n", x, y + height, width, height);
 
-        if (pen != null && brush != null)
+        if (pen is not null && brush is not null)
             _content.Append("B\n");
-        else if (pen != null)
+        else if (pen is not null)
             _content.Append("S\n");
         else
             _content.Append("f\n");
@@ -184,7 +179,7 @@ internal sealed class PdfGraphicsRenderer
 
     public void DrawPath(Pen? pen, Brush? brush, GraphicsPath path)
     {
-        if (pen == null && brush == null)
+        if (pen is null && brush is null)
             throw new ArgumentNullException("pen");
 
         Realize(pen, brush);
@@ -389,7 +384,7 @@ internal sealed class PdfGraphicsRenderer
         else
         {
             PdfFont realizedFont = _gfxState._realizedFont;
-            Debug.Assert(realizedFont != null);
+            Debug.Assert(realizedFont is not null);
             realizedFont.AddShapedText(s, features, logicalText);
 
             string text = null;
@@ -798,7 +793,7 @@ internal sealed class PdfGraphicsRenderer
 
     public void IntersectClip(GraphicsPath path)
     {
-        if (path == null)
+        if (path is null)
             throw new NotImplementedException("SetClip with no path.");
 
         // Ensure that the graphics state stack level is at least 2, because otherwise an error
@@ -1017,18 +1012,18 @@ internal sealed class PdfGraphicsRenderer
 
         if (fillMode == FillMode.Nonzero)
         {
-            if (pen != null && brush != null)
+            if (pen is not null && brush is not null)
                 _content.Append("B\n");
-            else if (pen != null)
+            else if (pen is not null)
                 _content.Append("S\n");
             else
                 _content.Append("f\n");
         }
         else
         {
-            if (pen != null && brush != null)
+            if (pen is not null && brush is not null)
                 _content.Append("B*\n");
-            else if (pen != null)
+            else if (pen is not null)
                 _content.Append("S\n");
             else
                 _content.Append("f*\n");
@@ -1069,7 +1064,7 @@ internal sealed class PdfGraphicsRenderer
         // Take TrimBox into account.
         PageHeightPt = Size.Height;
         PaintPoint trimOffset = new PaintPoint();
-        if (_page != null && _page.TrimMargins.AreSet)
+        if (_page is not null && _page.TrimMargins.AreSet)
         {
             PageHeightPt += _page.TrimMargins.Top + _page.TrimMargins.Bottom;
             trimOffset = new PaintPoint(_page.TrimMargins.Left, _page.TrimMargins.Top);
@@ -1195,7 +1190,7 @@ internal sealed class PdfGraphicsRenderer
 
         Debug.Assert(_streamMode == StreamMode.Text);
         PdfFont realizedFont = _gfxState._realizedFont;
-        Debug.Assert(realizedFont != null);
+        Debug.Assert(realizedFont is not null);
         realizedFont.AddShapedGlyph(glyph.GlyphIndex, sourceText);
 
         PaintPoint pos = WorldToView(new PaintPoint(x, y));
@@ -1282,10 +1277,10 @@ internal sealed class PdfGraphicsRenderer
         BeginGraphicMode();
         RealizeTransform();
 
-        if (pen != null)
+        if (pen is not null)
             _gfxState.RealizePen(pen, _colorMode); // page.document.Options.ColorMode);
 
-        if (brush != null)
+        if (brush is not null)
         {
             // Render mode is 0 except for bold simulation.
             _gfxState.RealizeBrush(brush, _colorMode, 0, 0); // page.document.Options.ColorMode);
@@ -1356,7 +1351,7 @@ internal sealed class PdfGraphicsRenderer
         _gfxState.RealizeNonStrokeTransparency(1, _colorMode);
 
         PdfForm form = image as PdfForm;
-        if (form != null)
+        if (form is not null)
             return GetFormName(form);
 
         // width/height is the caller's own destRect, before any transform active on the graphics
@@ -1418,16 +1413,13 @@ internal sealed class PdfGraphicsRenderer
     {
         get
         {
-            if (_page != null)
+            if (_page is not null)
                 return _page.Owner;
             return _form.Owner;
         }
     }
 
-    internal PdfGraphics Gfx
-    {
-        get { return _gfx; }
-    }
+    internal PdfGraphics Gfx => _gfx;
 
     /// <summary>
     /// Draws <paramref name="image"/> (a Form XObject, typically a rendered SVG "content" tile)
@@ -1802,7 +1794,7 @@ internal sealed class PdfGraphicsRenderer
     {
         get
         {
-            if (_page != null)
+            if (_page is not null)
                 return _page.Resources;
             return _form.Resources;
         }
@@ -1815,7 +1807,7 @@ internal sealed class PdfGraphicsRenderer
     {
         get
         {
-            if (_page != null)
+            if (_page is not null)
                 return new Size(_page.Width, _page.Height);
             return _form.Size;
         }
@@ -1826,7 +1818,7 @@ internal sealed class PdfGraphicsRenderer
     /// </summary>
     internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
     {
-        if (_page != null)
+        if (_page is not null)
             return _page.GetFontName(font, out pdfFont);
         return _form.GetFontName(font, out pdfFont);
     }
@@ -1836,7 +1828,7 @@ internal sealed class PdfGraphicsRenderer
     /// </summary>
     internal string GetImageName(PdfRasterImage image, double width, double height)
     {
-        if (_page != null)
+        if (_page is not null)
             return _page.GetImageName(image, width, height);
         return _form.GetImageName(image, width, height);
     }
@@ -1846,7 +1838,7 @@ internal sealed class PdfGraphicsRenderer
     /// </summary>
     internal string GetFormName(PdfForm form)
     {
-        if (_page != null)
+        if (_page is not null)
             return _page.GetFormName(form);
         return _form.GetFormName(form);
     }

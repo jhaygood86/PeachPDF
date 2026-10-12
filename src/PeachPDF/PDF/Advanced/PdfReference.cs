@@ -41,7 +41,7 @@ internal sealed class PdfReference : PdfItem
     /// </summary>
     public PdfReference(PdfObject pdfObject)
     {
-        if (pdfObject.Reference != null)
+        if (pdfObject.Reference is not null)
             throw new InvalidOperationException("Must not create iref for an object that already has one.");
         _value = pdfObject;
         pdfObject.Reference = this;
@@ -82,7 +82,7 @@ internal sealed class PdfReference : PdfItem
     /// </summary>
     public PdfObjectId ObjectId
     {
-        get { return _objectId; }
+        get => _objectId;
         set
         {
             // Ignore redundant invokations.
@@ -90,7 +90,7 @@ internal sealed class PdfReference : PdfItem
                 return;
 
             _objectId = value;
-            if (Document != null)
+            if (Document is not null)
             {
                 //PdfXRefTable table = Document.xrefTable;
                 //table.Remove(this);
@@ -104,26 +104,20 @@ internal sealed class PdfReference : PdfItem
     /// <summary>
     /// Gets the object number of the object identifier.
     /// </summary>
-    public int ObjectNumber
-    {
-        get { return _objectId.ObjectNumber; }
-    }
+    public int ObjectNumber => _objectId.ObjectNumber;
 
     /// <summary>
     /// Gets the generation number of the object identifier.
     /// </summary>
-    public int GenerationNumber
-    {
-        get { return _objectId.GenerationNumber; }
-    }
+    public int GenerationNumber => _objectId.GenerationNumber;
 
     /// <summary>
     /// Gets or sets the file position of the related PdfObject.
     /// </summary>
     public long Position
     {
-        get { return _position; }
-        set { _position = value; }
+        get => _position;
+        set => _position = value;
     }
     long _position;
 
@@ -139,11 +133,11 @@ internal sealed class PdfReference : PdfItem
     /// </summary>
     public PdfObject Value
     {
-        get { return _value; }
+        get => _value;
         set
         {
-            Debug.Assert(value != null, "The value of a PdfReference must never be null.");
-            Debug.Assert(value.Reference == null || ReferenceEquals(value.Reference, this), "The reference of the value must be null or this.");
+            Debug.Assert(value is not null, "The value of a PdfReference must never be null.");
+            Debug.Assert(value.Reference is null || ReferenceEquals(value.Reference, this), "The reference of the value must be null or this.");
             _value = value;
             // value must never be null
             value.Reference = this;
@@ -164,8 +158,8 @@ internal sealed class PdfReference : PdfItem
     /// </summary>
     public PdfDocument Document
     {
-        get { return _document; }
-        set { _document = value; }
+        get => _document;
+        set => _document = value;
     }
     PdfDocument _document = null!;
 
@@ -177,10 +171,7 @@ internal sealed class PdfReference : PdfItem
         return _objectId + " R";
     }
 
-    internal static PdfReferenceComparer Comparer
-    {
-        get { return new PdfReferenceComparer(); }
-    }
+    internal static PdfReferenceComparer Comparer => new PdfReferenceComparer();
 
     /// <summary>
     /// Implements a comparer that compares PdfReference objects by their PdfObjectId.
@@ -191,13 +182,13 @@ internal sealed class PdfReference : PdfItem
         {
             PdfReference l = x;
             PdfReference r = y;
-            if (l != null)
+            if (l is not null)
             {
-                if (r != null)
+                if (r is not null)
                     return l._objectId.CompareTo(r._objectId);
                 return -1;
             }
-            if (r != null)
+            if (r is not null)
                 return 1;
             return 0;
         }

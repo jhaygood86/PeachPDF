@@ -99,8 +99,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
     internal int Count
     {
-        get { return _count; }
-        set { _count = value; }
+        get => _count;
+        set => _count = value;
     }
     int _count;
 
@@ -122,7 +122,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     internal void ComputeVisibleDescendantCount()
     {
         int total = 0;
-        if (_outlines != null)
+        if (_outlines is not null)
         {
             foreach (PdfOutline child in _outlines)
             {
@@ -141,7 +141,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     internal int CountOpen()
     {
         int count = _opened ? 1 : 0;
-        if (_outlines != null)
+        if (_outlines is not null)
             count += _outlines.CountOpen();
         return count;
     }
@@ -151,7 +151,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public PdfOutline Parent
     {
-        get { return _parent; }
+        get => _parent;
         internal set { _parent = value; }
     }
     PdfOutline _parent = null!;
@@ -161,7 +161,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public string Title
     {
-        get { return Elements.GetString(Keys.Title); }
+        get => Elements.GetString(Keys.Title);
         set
         {
             PdfString s = new PdfString(value, PdfStringEncoding.Unicode);
@@ -174,8 +174,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public PdfPage DestinationPage
     {
-        get { return _destinationPage; }
-        set { _destinationPage = value; }
+        get => _destinationPage;
+        set => _destinationPage = value;
     }
     PdfPage _destinationPage = null!;
 
@@ -187,8 +187,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public string? Url
     {
-        get { return _url; }
-        set { _url = value; }
+        get => _url;
+        set => _url = value;
     }
     string? _url;
 
@@ -198,8 +198,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public double Left
     {
-        get { return _left; }
-        set { _left = value; }
+        get => _left;
+        set => _left = value;
     }
     double _left = double.NaN;
 
@@ -209,8 +209,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public double Top
     {
-        get { return _top; }
-        set { _top = value; }
+        get => _top;
+        set => _top = value;
     }
     double _top = double.NaN;
 
@@ -220,8 +220,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public double Right
     {
-        get { return _right; }
-        set { _right = value; }
+        get => _right;
+        set => _right = value;
     }
     double _right = double.NaN;
 
@@ -231,8 +231,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public double Bottom
     {
-        get { return _bottom; }
-        set { _bottom = value; }
+        get => _bottom;
+        set => _bottom = value;
     }
     double _bottom = double.NaN;
 
@@ -242,8 +242,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public double Zoom
     {
-        get { return _zoom; }
-        set { _zoom = value; }
+        get => _zoom;
+        set => _zoom = value;
     }
     double _zoom = double.NaN; // PDF teats 0 and null equally.
 
@@ -252,8 +252,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public bool Opened
     {
-        get { return _opened; }
-        set { _opened = value; }
+        get => _opened;
+        set => _opened = value;
     }
     bool _opened;
 
@@ -262,7 +262,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public PdfOutlineStyle Style
     {
-        get { return (PdfOutlineStyle)Elements.GetInteger(Keys.F); }
+        get => (PdfOutlineStyle)Elements.GetInteger(Keys.F);
         set { Elements.SetInteger(Keys.F, (int)value); }
     }
 
@@ -271,8 +271,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// </summary>
     public PdfPageDestinationType PageDestinationType
     {
-        get { return _pageDestinationType; }
-        set { _pageDestinationType = value; }
+        get => _pageDestinationType;
+        set => _pageDestinationType = value;
     }
     PdfPageDestinationType _pageDestinationType = PdfPageDestinationType.Xyz;
 
@@ -282,26 +282,20 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// <value>The color of the text.</value>
     public PaintColor TextColor
     {
-        get { return _textColor; }
-        set { _textColor = value; }
+        get => _textColor;
+        set => _textColor = value;
     }
     PaintColor _textColor;
 
     /// <summary>
     /// Gets a value indicating whether this outline object has child items.
     /// </summary>
-    public bool HasChildren
-    {
-        get { return _outlines != null && _outlines.Count > 0; }
-    }
+    public bool HasChildren => _outlines is not null && _outlines.Count > 0;
 
     /// <summary>
     /// Gets the outline collection of this node.
     /// </summary>
-    public PdfOutlineCollection Outlines
-    {
-        get { return _outlines ?? (_outlines = new PdfOutlineCollection(Owner, this)); }
-    }
+    public PdfOutlineCollection Outlines => _outlines ?? (_outlines = new PdfOutlineCollection(Owner, this));
     PdfOutlineCollection _outlines = null!;
 
     /// <summary>
@@ -311,13 +305,13 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     {
         bool hasKids = HasChildren;
         // Is something to do at all?
-        if (_parent != null || hasKids)
+        if (_parent is not null || hasKids)
         {
-            if (_parent == null)
+            if (_parent is null)
             {
                 // Case: This is the outline dictionary (the root).
                 // Reference: TABLE 8.3  Entries in the outline dictionary / Page 585
-                Debug.Assert(_outlines != null && _outlines.Count > 0 && _outlines[0] != null);
+                Debug.Assert(_outlines is not null && _outlines.Count > 0 && _outlines[0] is not null);
                 Elements[Keys.First] = _outlines[0].Reference;
                 Elements[Keys.Last] = _outlines[_outlines.Count - 1].Reference;
 
@@ -340,7 +334,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
                 // Has destination? Mutually exclusive with an /A action - a page destination always
                 // wins if both happen to be set.
-                if (DestinationPage != null)
+                if (DestinationPage is not null)
                     //Elements[Keys.Dest] = new PdfArray(Owner, DestinationPage.Reference, new PdfLiteral("/XYZ null null 0"));
                     Elements[Keys.Dest] = CreateDestArray();
                 else if (!string.IsNullOrEmpty(Url))
@@ -456,7 +450,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     {
         // TODO: Proof that there is nothing to do here.
         bool hasKids = HasChildren;
-        if (_parent != null || hasKids)
+        if (_parent is not null || hasKids)
         {
             ////// Everything done in PrepareForSave
             ////if (_parent == null)
@@ -600,10 +594,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
 
         // ReSharper restore InconsistentNaming
@@ -612,8 +603,5 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

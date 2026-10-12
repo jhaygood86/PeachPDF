@@ -57,17 +57,14 @@ internal sealed class PdfStringObject : PdfObject
     /// <summary>
     /// Gets the number of characters in this string.
     /// </summary>
-    public int Length
-    {
-        get { return _value == null ? 0 : _value.Length; }
-    }
+    public int Length => _value is null ? 0 : _value.Length;
 
     /// <summary>
     /// Gets or sets the encoding.
     /// </summary>
     public PdfStringEncoding Encoding
     {
-        get { return (PdfStringEncoding)(_flags & PdfStringFlags.EncodingMask); }
+        get => (PdfStringEncoding)(_flags & PdfStringFlags.EncodingMask);
         set { _flags = (_flags & ~PdfStringFlags.EncodingMask) | ((PdfStringFlags)value & PdfStringFlags.EncodingMask); }
     }
 
@@ -76,7 +73,7 @@ internal sealed class PdfStringObject : PdfObject
     /// </summary>
     public bool HexLiteral
     {
-        get { return (_flags & PdfStringFlags.HexLiteral) != 0; }
+        get => (_flags & PdfStringFlags.HexLiteral) != 0;
         set { _flags = value ? _flags | PdfStringFlags.HexLiteral : _flags & ~PdfStringFlags.HexLiteral; }
     }
     PdfStringFlags _flags;
@@ -86,7 +83,7 @@ internal sealed class PdfStringObject : PdfObject
     /// </summary>
     public string Value
     {
-        get { return _value ?? ""; }
+        get => _value ?? "";
         set { _value = value ?? ""; }
     }
     string _value = null!;
@@ -97,7 +94,7 @@ internal sealed class PdfStringObject : PdfObject
     internal byte[] EncryptionValue
     {
         // TODO: Unicode case is not handled!
-        get { return _value == null ? new byte[0] : PdfEncoders.LatinOneByteEncoding.GetBytes(_value); }
+        get => _value is null ? new byte[0] : PdfEncoders.LatinOneByteEncoding.GetBytes(_value);
         set { _value = PdfEncoders.LatinOneByteEncoding.GetString(value, 0, value.Length); }
     }
 

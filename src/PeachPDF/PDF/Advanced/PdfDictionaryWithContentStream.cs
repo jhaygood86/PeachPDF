@@ -41,7 +41,7 @@ internal abstract class PdfDictionaryWithContentStream : PdfDictionary, IContent
     {
         get
         {
-            if (_resources == null)
+            if (_resources is null)
                 _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create);
             return _resources;
         }
@@ -53,13 +53,13 @@ internal abstract class PdfDictionaryWithContentStream : PdfDictionary, IContent
     /// </summary>
     PdfResources IContentStream.Resources
     {
-        get { return Resources; }
+        get => Resources;
     }
 
     internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
     {
         pdfFont = _document.FontTable.GetFont(font);
-        Debug.Assert(pdfFont != null);
+        Debug.Assert(pdfFont is not null);
         string name = Resources.AddFont(pdfFont);
         return name;
     }
@@ -75,7 +75,7 @@ internal abstract class PdfDictionaryWithContentStream : PdfDictionary, IContent
     internal string GetImageName(PdfRasterImage image, double width, double height)
     {
         PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
-        Debug.Assert(pdfImage != null);
+        Debug.Assert(pdfImage is not null);
         string name = Resources.AddImage(pdfImage);
         return name;
     }
@@ -94,7 +94,7 @@ internal abstract class PdfDictionaryWithContentStream : PdfDictionary, IContent
     internal string GetFormName(PdfForm form)
     {
         PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
-        Debug.Assert(pdfForm != null);
+        Debug.Assert(pdfForm is not null);
         string name = Resources.AddForm(pdfForm);
         return name;
     }

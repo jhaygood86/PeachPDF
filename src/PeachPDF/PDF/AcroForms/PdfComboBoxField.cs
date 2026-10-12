@@ -20,7 +20,7 @@ internal sealed class PdfComboBoxField : PdfAcroField
     /// <summary>The selected option's export value ("/V").</summary>
     public string Value
     {
-        get { return Elements.GetString(Keys.V); }
+        get => Elements.GetString(Keys.V);
         set { Elements.SetString(Keys.V, value ?? string.Empty, PdfStringEncoding.WinAnsiEncoding); }
     }
 

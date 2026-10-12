@@ -28,12 +28,12 @@ internal sealed class PdfContents : PdfArray
     /// </summary>
     public PdfContent AppendContent()
     {
-        Debug.Assert(Owner != null);
+        Debug.Assert(Owner is not null);
 
         SetModified();
         PdfContent content = new PdfContent(Owner);
         Owner._irefTable.Add(content);
-        Debug.Assert(content.Reference != null);
+        Debug.Assert(content.Reference is not null);
         Elements.Add(content.Reference);
         return content;
     }
@@ -43,12 +43,12 @@ internal sealed class PdfContents : PdfArray
     /// </summary>
     public PdfContent PrependContent()
     {
-        Debug.Assert(Owner != null);
+        Debug.Assert(Owner is not null);
 
         SetModified();
         PdfContent content = new PdfContent(Owner);
         Owner._irefTable.Add(content);
-        Debug.Assert(content.Reference != null);
+        Debug.Assert(content.Reference is not null);
         Elements.Insert(0, content.Reference);
         return content;
     }
@@ -58,7 +58,7 @@ internal sealed class PdfContents : PdfArray
     /// </summary>
     PdfContent ReplaceContent(byte[] contentBytes)
     {
-        Debug.Assert(Owner != null);
+        Debug.Assert(Owner is not null);
 
         PdfContent content = new PdfContent(Owner);
 
@@ -89,7 +89,7 @@ internal sealed class PdfContents : PdfArray
                 byte[] value;
                 int length;
                 PdfContent content = (PdfContent)((PdfReference)Elements[0]).Value;
-                if (content != null && content.Stream != null)
+                if (content is not null && content.Stream is not null)
                 {
                     length = content.Stream.Length;
                     value = new byte[length + 2];
@@ -100,7 +100,7 @@ internal sealed class PdfContents : PdfArray
                     content.Elements.SetInteger("/Length", length + 2);
                 }
                 content = (PdfContent)((PdfReference)Elements[count - 1]).Value;
-                if (content != null && content.Stream != null)
+                if (content is not null && content.Stream is not null)
                 {
                     length = content.Stream.Length;
                     value = new byte[length + 3];
@@ -161,7 +161,7 @@ internal sealed class PdfContents : PdfArray
 
         object IEnumerator.Current
         {
-            get { return Current; }
+            get => Current;
         }
 
         public PdfContent Current

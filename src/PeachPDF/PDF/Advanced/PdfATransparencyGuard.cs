@@ -68,7 +68,7 @@ internal static class PdfATransparencyGuard
     internal static void RequireAllowed(PdfDocument document, PdfPage? page, string featureDescription)
     {
         RequireAllowed(document, featureDescription);
-        if (page != null)
+        if (page is not null)
             page.TransparencyUsed = true;
     }
 }

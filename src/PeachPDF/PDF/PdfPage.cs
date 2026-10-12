@@ -80,8 +80,8 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public object Tag
     {
-        get { return _tag; }
-        set { _tag = value; }
+        get => _tag;
+        set => _tag = value;
     }
     object _tag = null!;
 
@@ -102,10 +102,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// <summary>
     /// Gets a value indicating whether the page is closed.
     /// </summary>
-    internal bool IsClosed
-    {
-        get { return _closed; }
-    }
+    internal bool IsClosed => _closed;
 
     /// <summary>
     /// Gets or sets the PdfDocument this page belongs to.
@@ -116,10 +113,10 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
         {
             if (!ReferenceEquals(_document, value))
             {
-                if (_document != null)
+                if (_document is not null)
                     throw new InvalidOperationException("Cannot change document.");
                 _document = value;
-                if (Reference != null)
+                if (Reference is not null)
                     Reference.Document = value;
                 Elements[Keys.Parent] = _document.Pages.Reference;
             }
@@ -133,8 +130,8 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PageOrientation Orientation
     {
-        get { return _orientation; }
-        set { _orientation = value; }
+        get => _orientation;
+        set => _orientation = value;
     }
     PageOrientation _orientation;
 
@@ -143,7 +140,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PageSize Size
     {
-        get { return _pageSize; }
+        get => _pageSize;
         set
         {
             if (!Enum.IsDefined(typeof(PageSize), value))
@@ -165,15 +162,15 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         get
         {
-            if (_trimMargins == null)
+            if (_trimMargins is null)
                 _trimMargins = new TrimMargins();
             return _trimMargins;
         }
         set
         {
-            if (_trimMargins == null)
+            if (_trimMargins is null)
                 _trimMargins = new TrimMargins();
-            if (value != null)
+            if (value is not null)
             {
                 _trimMargins.Left = value.Left;
                 _trimMargins.Right = value.Right;
@@ -192,7 +189,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PdfRectangle MediaBox
     {
-        get { return Elements.GetRectangle(Keys.MediaBox, true); }
+        get => Elements.GetRectangle(Keys.MediaBox, true);
         set { Elements.SetRectangle(Keys.MediaBox, value); }
     }
 
@@ -201,7 +198,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PdfRectangle CropBox
     {
-        get { return Elements.GetRectangle(Keys.CropBox, true); }
+        get => Elements.GetRectangle(Keys.CropBox, true);
         set { Elements.SetRectangle(Keys.CropBox, value); }
     }
 
@@ -210,7 +207,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PdfRectangle BleedBox
     {
-        get { return Elements.GetRectangle(Keys.BleedBox, true); }
+        get => Elements.GetRectangle(Keys.BleedBox, true);
         set { Elements.SetRectangle(Keys.BleedBox, value); }
     }
 
@@ -219,7 +216,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PdfRectangle ArtBox
     {
-        get { return Elements.GetRectangle(Keys.ArtBox, true); }
+        get => Elements.GetRectangle(Keys.ArtBox, true);
         set { Elements.SetRectangle(Keys.ArtBox, value); }
     }
 
@@ -228,7 +225,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public PdfRectangle TrimBox
     {
-        get { return Elements.GetRectangle(Keys.TrimBox, true); }
+        get => Elements.GetRectangle(Keys.TrimBox, true);
         set { Elements.SetRectangle(Keys.TrimBox, value); }
     }
 
@@ -285,7 +282,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public int Rotate
     {
-        get { return _elements.GetInteger(InheritablePageKeys.Rotate); }
+        get => _elements.GetInteger(InheritablePageKeys.Rotate);
         set
         {
             if (value / 90 * 90 != value)
@@ -301,7 +298,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     internal int StructParents
     {
-        get { return _elements.GetInteger(Keys.StructParents); }
+        get => _elements.GetInteger(Keys.StructParents);
         set { _elements.SetInteger(Keys.StructParents, value); }
     }
 
@@ -314,7 +311,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     internal string Tabs
     {
-        get { return _elements.GetName(Keys.Tabs); }
+        get => _elements.GetName(Keys.Tabs);
         set { _elements.SetName(Keys.Tabs, value); }
     }
 
@@ -334,10 +331,10 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         get
         {
-            if (_contents == null)
+            if (_contents is null)
             {
                 _contents = new PdfContents(Owner);
-                Debug.Assert(_contents.Reference == null);
+                Debug.Assert(_contents.Reference is null);
                 Elements[Keys.Contents] = _contents;
             }
             return _contents;
@@ -352,13 +349,13 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         get
         {
-            if (_annotations == null)
+            if (_annotations is null)
             {
                 // Get annotations array if exists.
                 _annotations = (PdfAnnotations)Elements.GetValue(Keys.Annots);
                 _annotations.Page = this;
             }
-            return _annotations != null;
+            return _annotations is not null;
         }
     }
 
@@ -369,7 +366,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         get
         {
-            if (_annotations == null)
+            if (_annotations is null)
             {
                 // Get or create annotations array.
                 _annotations = (PdfAnnotations)Elements.GetValue(Keys.Annots, ValueCreationFlags.Create);
@@ -435,7 +432,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         get
         {
-            if (_resources == null)
+            if (_resources is null)
                 _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create); //ValueCreationFlags.CreateIndirect
             return _resources;
         }
@@ -447,7 +444,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     PdfResources IContentStream.Resources
     {
-        get { return Resources; }
+        get => Resources;
     }
 
     /// <summary>
@@ -456,7 +453,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
     {
         pdfFont = _document.FontTable.GetFont(font);
-        Debug.Assert(pdfFont != null);
+        Debug.Assert(pdfFont is not null);
         string name = Resources.AddFont(pdfFont);
         return name;
     }
@@ -474,7 +471,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         pdfFont = _document.FontTable.TryGetFont(idName);
         string name = null;
-        if (pdfFont != null)
+        if (pdfFont is not null)
             name = Resources.AddFont(pdfFont);
         return name;
     }
@@ -485,7 +482,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     internal string GetImageName(PdfRasterImage image, double width, double height)
     {
         global::PeachPDF.PDF.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
-        Debug.Assert(pdfImage != null);
+        Debug.Assert(pdfImage is not null);
         string name = Resources.AddImage(pdfImage);
         return name;
     }
@@ -504,7 +501,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     internal string GetFormName(PdfForm form)
     {
         PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
-        Debug.Assert(pdfForm != null);
+        Debug.Assert(pdfForm is not null);
         string name = Resources.AddForm(pdfForm);
         return name;
     }
@@ -793,20 +790,14 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        internal static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 
     /// <summary>
     /// Predefined keys common to PdfPage and PdfPages.

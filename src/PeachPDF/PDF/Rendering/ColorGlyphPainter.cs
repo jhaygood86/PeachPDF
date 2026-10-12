@@ -150,7 +150,7 @@ internal sealed partial class ColorGlyphPainter
 
         // Matches CharacterMapInfo.AddShapedText's contract: logicalText differs only when it is a
         // positionally-aligned source for an already bidi-transformed display string.
-        string source = logicalText != null && logicalText.Length == text.Length && logicalText != text
+        string source = logicalText is not null && logicalText.Length == text.Length && logicalText != text
             ? logicalText
             : text;
 

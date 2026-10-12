@@ -70,9 +70,9 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     protected PdfDictionary(PdfDictionary dict)
         : base(dict)
     {
-        if (dict._elements != null)
+        if (dict._elements is not null)
             dict._elements.ChangeOwner(this);
-        if (dict._stream != null)
+        if (dict._stream is not null)
             dict._stream.ChangeOwner(this);
     }
 
@@ -93,7 +93,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     protected override object Copy()
     {
         PdfDictionary dict = (PdfDictionary)base.Copy();
-        if (dict._elements != null)
+        if (dict._elements is not null)
         {
             dict._elements = dict._elements.Clone();
             dict._elements.ChangeOwner(dict);
@@ -101,7 +101,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             foreach (PdfName name in names)
             {
                 PdfObject obj = dict._elements[name] as PdfObject;
-                if (obj != null)
+                if (obj is not null)
                 {
                     obj = obj.Clone();
                     // Recall that obj.Document is now null.
@@ -109,7 +109,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                 }
             }
         }
-        if (dict._stream != null)
+        if (dict._stream is not null)
         {
             dict._stream = dict._stream.Clone();
             dict._stream.ChangeOwner(dict);
@@ -120,10 +120,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     /// <summary>
     /// Gets the dictionary containing the elements of this dictionary.
     /// </summary>
-    public DictionaryElements Elements
-    {
-        get { return _elements ?? (_elements = new DictionaryElements(this)); }
-    }
+    public DictionaryElements Elements => _elements ?? (_elements = new DictionaryElements(this));
 
     /// <summary>
     /// The elements of the dictionary.
@@ -170,12 +167,12 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         PdfName[] keys = Elements.KeyNames;
 
         // TODO: automatically set length
-        if (_stream != null)
+        if (_stream is not null)
             Debug.Assert(Elements.ContainsKey(PdfStream.Keys.Length), "Dictionary has a stream but no length is set.");
 
         foreach (PdfName key in keys)
             WriteDictionaryElement(writer, key);
-        if (Stream != null)
+        if (Stream is not null)
             WriteDictionaryStream(writer);
         writer.WriteEndObject();
     }
@@ -186,8 +183,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     /// </summary>
     internal virtual void WriteDictionaryElement(PdfWriter writer, PdfName key)
     {
-        if (key == null)
-            throw new ArgumentNullException("key");
+        ArgumentNullException.ThrowIfNull(key);
         PdfItem item = Elements[key];
         key.WriteObject(writer);
         item.WriteObject(writer);
@@ -209,8 +205,8 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     /// </summary>
     public PdfStream Stream
     {
-        get { return _stream; }
-        set { _stream = value; }
+        get => _stream;
+        set => _stream = value;
     }
     PdfStream _stream = null!;
 
@@ -220,7 +216,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     /// </summary>
     public PdfStream CreateStream(byte[] value)
     {
-        if (_stream != null)
+        if (_stream is not null)
             throw new InvalidOperationException("The dictionary already has a stream.");
 
         _stream = new PdfStream(value, this);
@@ -232,10 +228,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     /// <summary>
     /// When overridden in a derived class, gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal virtual PdfDictionaryMetadata Meta
-    {
-        get { return null; }
-    }
+    internal virtual PdfDictionaryMetadata Meta => null;
 
     /// <summary>
     /// Represents the interface to the elements of a PDF dictionary.
@@ -270,7 +263,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         internal void ChangeOwner(PdfDictionary ownerDictionary)
         {
-            if (_ownerDictionary != null)
+            if (_ownerDictionary is not null)
             {
                 // ???
             }
@@ -285,10 +278,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// <summary>
         /// Gets the dictionary to which this elements object belongs to.
         /// </summary>
-        internal PdfDictionary Owner
-        {
-            get { return _ownerDictionary; }
-        }
+        internal PdfDictionary Owner => _ownerDictionary;
 
         /// <summary>
         /// Converts the specified value to boolean.
@@ -298,7 +288,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         public bool GetBoolean(string key, bool create)
         {
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = new PdfBoolean();
@@ -309,11 +299,11 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                 obj = ((PdfReference)obj).Value;
 
             PdfBoolean boolean = obj as PdfBoolean;
-            if (boolean != null)
+            if (boolean is not null)
                 return boolean.Value;
 
             PdfBooleanObject booleanObject = obj as PdfBooleanObject;
-            if (booleanObject != null)
+            if (booleanObject is not null)
                 return booleanObject.Value;
             throw new InvalidCastException("GetBoolean: Object is not a boolean.");
         }
@@ -335,7 +325,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             value = false;
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
                 return false;
             if (obj is PdfReference)
                 obj = ((PdfReference)obj).Value;
@@ -360,7 +350,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         public int GetInteger(string key, bool create)
         {
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = new PdfInteger();
@@ -371,19 +361,19 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                 return 0;
 
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfInteger integer = obj as PdfInteger;
-            if (integer != null)
+            if (integer is not null)
                 return integer.Value;
 
             PdfIntegerObject integerObject = obj as PdfIntegerObject;
-            if (integerObject != null)
+            if (integerObject is not null)
                 return integerObject.Value;
 
             PdfUInteger uinteger = obj as PdfUInteger;
-            if (uinteger != null)
+            if (uinteger is not null)
                 return (int)uinteger.Value;
             throw new InvalidCastException("GetInteger: Object is not an integer.");
         }
@@ -405,7 +395,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             value = 0;
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
                 return false;
             if (obj is PdfNull)
                 return false;
@@ -433,7 +423,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         public double GetReal(string key, bool create)
         {
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = new PdfReal();
@@ -441,23 +431,23 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             }
 
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfReal real = obj as PdfReal;
-            if (real != null)
+            if (real is not null)
                 return real.Value;
 
             PdfRealObject realObject = obj as PdfRealObject;
-            if (realObject != null)
+            if (realObject is not null)
                 return realObject.Value;
 
             PdfInteger integer = obj as PdfInteger;
-            if (integer != null)
+            if (integer is not null)
                 return integer.Value;
 
             PdfIntegerObject integerObject = obj as PdfIntegerObject;
-            if (integerObject != null)
+            if (integerObject is not null)
                 return integerObject.Value;
 
             throw new InvalidCastException("GetReal: Object is not a number.");
@@ -480,7 +470,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             value = 0;
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
                 return false;
             if (obj is PdfReference r)
                 obj = r.Value;
@@ -506,7 +496,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         public string GetString(string key, bool create)
         {
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = new PdfString();
@@ -514,23 +504,23 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             }
 
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfString str = obj as PdfString;
-            if (str != null)
+            if (str is not null)
                 return str.Value;
 
             PdfStringObject strObject = obj as PdfStringObject;
-            if (strObject != null)
+            if (strObject is not null)
                 return strObject.Value;
 
             PdfName name = obj as PdfName;
-            if (name != null)
+            if (name is not null)
                 return name.Value;
 
             PdfNameObject nameObject = obj as PdfNameObject;
-            if (nameObject != null)
+            if (nameObject is not null)
                 return nameObject.Value;
 
             throw new InvalidCastException("GetString: Object is not a string.");
@@ -552,36 +542,36 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             value = null;
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
                 return false;
 
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfString str = obj as PdfString;
-            if (str != null)
+            if (str is not null)
             {
                 value = str.Value;
                 return true;
             }
 
             PdfStringObject strObject = obj as PdfStringObject;
-            if (strObject != null)
+            if (strObject is not null)
             {
                 value = strObject.Value;
                 return true;
             }
 
             PdfName name = obj as PdfName;
-            if (name != null)
+            if (name is not null)
             {
                 value = name.Value;
                 return true;
             }
 
             PdfNameObject nameObject = obj as PdfNameObject;
-            if (nameObject != null)
+            if (nameObject is not null)
             {
                 value = nameObject.Value;
                 return true;
@@ -613,7 +603,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         public string GetName(string key)
         {
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 //if (create)
                 //  this[key] = new Pdf();
@@ -621,15 +611,15 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             }
 
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfName name = obj as PdfName;
-            if (name != null)
+            if (name is not null)
                 return name.Value;
 
             PdfNameObject nameObject = obj as PdfNameObject;
-            if (nameObject != null)
+            if (nameObject is not null)
                 return nameObject.Value;
 
             throw new InvalidCastException("GetName: Object is not a name.");
@@ -641,8 +631,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void SetName(string key, string value)
         {
-            if (value == null)
-                throw new ArgumentNullException("value");
+            ArgumentNullException.ThrowIfNull(value);
 
             if (value.Length == 0 || value[0] != '/')
                 value = "/" + value;
@@ -659,7 +648,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             PdfRectangle value = new PdfRectangle();
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = value = new PdfRectangle();
@@ -669,7 +658,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                 obj = ((PdfReference)obj).Value;
 
             PdfArray array = obj as PdfArray;
-            if (array != null && array.Elements.Count == 4)
+            if (array is not null && array.Elements.Count == 4)
             {
                 value = new PdfRectangle(array.Elements.GetReal(0), array.Elements.GetReal(1),
                   array.Elements.GetReal(2), array.Elements.GetReal(3));
@@ -697,12 +686,12 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             value = new PdfRectangle();
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
                 return false;
             if (obj is PdfReference r)
                 obj = r.Value;
             PdfArray array = obj as PdfArray;
-            if (array != null && array.Elements.Count == 4)
+            if (array is not null && array.Elements.Count == 4)
             {
                 value = new PdfRectangle(array.Elements.GetReal(0), array.Elements.GetReal(1),
                     array.Elements.GetReal(2), array.Elements.GetReal(3));
@@ -727,18 +716,18 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             Matrix3x2 value = Matrix3x2.Identity;
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = new PdfLiteral("[1 0 0 1 0 0]");  // cannot be parsed, implement a PdfMatrix...
                 return value;
             }
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfArray array = obj as PdfArray;
-            if (array != null && array.Elements.Count == 6)
+            if (array is not null && array.Elements.Count == 6)
             {
                 value = PdfMatrix.Create(array.Elements.GetReal(0), array.Elements.GetReal(1), array.Elements.GetReal(2),
                   array.Elements.GetReal(3), array.Elements.GetReal(4), array.Elements.GetReal(5));
@@ -776,27 +765,27 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         public DateTime GetDateTime(string key, DateTime defaultValue)
         {
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 return defaultValue;
             }
 
             PdfReference reference = obj as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 obj = reference.Value;
 
             PdfDate date = obj as PdfDate;
-            if (date != null)
+            if (date is not null)
                 return date.Value;
 
             string strDate;
             PdfString pdfString = obj as PdfString;
-            if (pdfString != null)
+            if (pdfString is not null)
                 strDate = pdfString.Value;
             else
             {
                 PdfStringObject stringObject = obj as PdfStringObject;
-                if (stringObject != null)
+                if (stringObject is not null)
                     strDate = stringObject.Value;
                 else
                     throw new InvalidCastException("GetDateTime: Object is not a string or date.");
@@ -819,7 +808,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                 throw new ArgumentException("defaultValue");
 
             object obj = this[key];
-            if (obj == null)
+            if (obj is null)
             {
                 if (create)
                     this[key] = new PdfName(defaultValue.ToString());
@@ -849,7 +838,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             PdfItem value = this[key];
 
-            if (value == null)
+            if (value is null)
                 return options == ValueCreationFlags.None ? null : CreateMissingValue(key, options);
 
             if (value is PdfReference iref)
@@ -898,9 +887,9 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             PdfItem value = iref.Value ?? throw new InvalidOperationException("Indirect reference without value.");
 
             Type type = GetValueType(key);
-            Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
+            Debug.Assert(type is not null, "No value type specified in meta information. Please send this file to PDFsharp support.");
 
-            if (type == null || type == value.GetType())
+            if (type is null || type == value.GetType())
                 return value;
 
             if (typeof(PdfDictionary).IsAssignableFrom(type))
@@ -923,7 +912,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             Debug.Assert(!dict.IsIndirect);
 
             Type type = GetValueType(key);
-            Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
+            Debug.Assert(type is not null, "No value type specified in meta information. Please send this file to PDFsharp support.");
             return dict.GetType() != type ? CreateDictionary(type, dict) : dict;
         }
 
@@ -933,7 +922,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
 
             // This is more complicated. If type is null do nothing.
             Type type = GetValueType(key);
-            return type != null && type != array.GetType() ? CreateArray(type, array) : array;
+            return type is not null && type != array.GetType() ? CreateArray(type, array) : array;
         }
 
         /// <summary>
@@ -952,10 +941,10 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             Type type = null;
             PdfDictionaryMetadata meta = _ownerDictionary.Meta;
-            if (meta != null)
+            if (meta is not null)
             {
                 PdfKeyDescriptor kd = meta[key];
-                if (kd != null)
+                if (kd is not null)
                     type = kd.GetValueType();
                 //else
                 //    Debug.WriteLine("Warning: Key not descriptor table: " + key);  // TODO: check what this means...
@@ -968,7 +957,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         PdfArray CreateArray([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type type, PdfArray oldArray)
         {
             PdfArray array = null;
-            if (oldArray == null)
+            if (oldArray is null)
             {
                 var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 foreach (var ctorInfo in ctorInfos)
@@ -980,7 +969,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                         break;
                     }
                 }
-                Debug.Assert(array != null, "No appropriate constructor found for type: " + type.Name);
+                Debug.Assert(array is not null, "No appropriate constructor found for type: " + type.Name);
             }
             else
             {
@@ -994,7 +983,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                         break;
                     }
                 }
-                Debug.Assert(array != null, "No appropriate constructor found for type: " + type.Name);
+                Debug.Assert(array is not null, "No appropriate constructor found for type: " + type.Name);
             }
             return array;
         }
@@ -1003,7 +992,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         Type type, PdfDictionary oldDictionary)
         {
             PdfDictionary dict = null;
-            if (oldDictionary == null)
+            if (oldDictionary is null)
             {
                 var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 foreach (var ctorInfo in ctorInfos)
@@ -1015,7 +1004,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                         break;
                     }
                 }
-                Debug.Assert(dict != null, "No appropriate constructor found for type: " + type.Name);
+                Debug.Assert(dict is not null, "No appropriate constructor found for type: " + type.Name);
             }
             else
             {
@@ -1029,7 +1018,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
                         break;
                     }
                 }
-                Debug.Assert(dict != null, "No appropriate constructor found for type: " + type.Name);
+                Debug.Assert(dict is not null, "No appropriate constructor found for type: " + type.Name);
             }
             return dict;
         }
@@ -1039,7 +1028,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void SetValue(string key, PdfItem value)
         {
-            Debug.Assert((value is PdfObject && ((PdfObject)value).Reference == null) | !(value is PdfObject),
+            Debug.Assert((value is PdfObject && ((PdfObject)value).Reference is null) | !(value is PdfObject),
                 "You try to set an indirect object directly into a dictionary.");
 
             // HACK?
@@ -1066,7 +1055,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             PdfItem item = this[key];
             PdfReference reference = item as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 return reference.Value;
             return item as PdfObject;
         }
@@ -1104,7 +1093,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void SetObject(string key, PdfObject obj)
         {
-            if (obj.Reference != null)
+            if (obj.Reference is not null)
                 throw new ArgumentException("PdfObject must not be an indirect object.", "obj");
             this[key] = obj;
         }
@@ -1115,7 +1104,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void SetReference(string key, PdfObject obj)
         {
-            if (obj.Reference == null)
+            if (obj.Reference is null)
                 throw new ArgumentException("PdfObject must be an indirect object.", "obj");
             this[key] = obj.Reference;
         }
@@ -1125,18 +1114,14 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void SetReference(string key, PdfReference iref)
         {
-            if (iref == null)
-                throw new ArgumentNullException("iref");
+            ArgumentNullException.ThrowIfNull(iref);
             this[key] = iref;
         }
 
         /// <summary>
         /// Gets a value indicating whether the <see cref="T:System.Collections.IDictionary"></see> object is read-only.
         /// </summary>
-        public bool IsReadOnly
-        {
-            get { return false; }
-        }
+        public bool IsReadOnly => false;
 
         /// <summary>
         /// Returns an <see cref="T:System.Collections.IDictionaryEnumerator"></see> object for the <see cref="T:System.Collections.IDictionary"></see> object.
@@ -1166,10 +1151,9 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             }
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException("value");
+                ArgumentNullException.ThrowIfNull(value);
                 PdfObject obj = value as PdfObject;
-                if (obj != null && obj.IsIndirect)
+                if (obj is not null && obj.IsIndirect)
                     value = obj.Reference;
                 _elements[key] = value;
             }
@@ -1180,14 +1164,13 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public PdfItem this[PdfName key]
         {
-            get { return this[key.Value]; }
+            get => this[key.Value];
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException("value");
+                ArgumentNullException.ThrowIfNull(value);
 
                 PdfObject obj = value as PdfObject;
-                if (obj != null && obj.IsIndirect)
+                if (obj is not null && obj.IsIndirect)
                     value = obj.Reference;
                 _elements[key.Value] = value;
             }
@@ -1255,7 +1238,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
 
             // If object is indirect automatically convert value to reference.
             PdfObject obj = value as PdfObject;
-            if (obj != null && obj.IsIndirect)
+            if (obj is not null && obj.IsIndirect)
                 value = obj.Reference;
 
             _elements.Add(key, value);
@@ -1330,26 +1313,17 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// <summary>
         /// Return false.
         /// </summary>
-        public bool IsFixedSize
-        {
-            get { return false; }
-        }
+        public bool IsFixedSize => false;
 
         /// <summary>
         /// Return false.
         /// </summary>
-        public bool IsSynchronized
-        {
-            get { return false; }
-        }
+        public bool IsSynchronized => false;
 
         /// <summary>
         /// Gets the number of elements contained in the dictionary.
         /// </summary>
-        public int Count
-        {
-            get { return _elements.Count; }
-        }
+        public int Count => _elements.Count;
 
         /// <summary>
         /// Copies the elements of the dictionary to an array, starting at a particular index.
@@ -1362,10 +1336,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// <summary>
         /// The current implementation returns null.
         /// </summary>
-        public object SyncRoot
-        {
-            get { return null; }
-        }
+        public object SyncRoot => null;
 
         /// <summary>
         /// Gets the DebuggerDisplayAttribute text.
@@ -1411,8 +1382,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     {
         internal PdfStream(PdfDictionary ownerDictionary)
         {
-            if (ownerDictionary == null)
-                throw new ArgumentNullException("ownerDictionary");
+            ArgumentNullException.ThrowIfNull(ownerDictionary);
             _ownerDictionary = ownerDictionary;
         }
 
@@ -1432,7 +1402,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         {
             PdfStream stream = (PdfStream)MemberwiseClone();
             stream._ownerDictionary = null;
-            if (stream._value != null)
+            if (stream._value is not null)
             {
                 stream._value = new byte[stream._value.Length];
                 _value.CopyTo(stream._value, 0);
@@ -1445,7 +1415,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         internal void ChangeOwner(PdfDictionary dict)
         {
-            if (_ownerDictionary != null)
+            if (_ownerDictionary is not null)
             {
                 // ???
             }
@@ -1465,10 +1435,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// <summary>
         /// Gets the length of the stream, i.e. the actual number of bytes in the stream.
         /// </summary>
-        public int Length
-        {
-            get { return _value != null ? _value.Length : 0; }
-        }
+        public int Length => _value is not null ? _value.Length : 0;
 
         /// <summary>
         /// Get or sets the bytes of the stream as they are, i.e. if one or more filters exist the bytes are
@@ -1476,11 +1443,10 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public byte[] Value
         {
-            get { return _value; }
+            get => _value;
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException("value");
+                ArgumentNullException.ThrowIfNull(value);
                 _value = value;
                 _ownerDictionary.Elements.SetInteger(Keys.Length, value.Length);
             }
@@ -1493,7 +1459,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void Zip()
         {
-            if (_value == null)
+            if (_value is null)
                 return;
 
             if (!_ownerDictionary.Elements.ContainsKey(Keys.Filter))
@@ -1509,7 +1475,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public override string ToString()
         {
-            if (_value == null)
+            if (_value is null)
                 return "«null»";
 
             return PdfEncoders.LatinOneByteEncoding.GetString(_value, 0, _value.Length);

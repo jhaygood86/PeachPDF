@@ -32,7 +32,7 @@ internal class PdfStringFormat
     /// </summary>
     public PdfStringAlignment Alignment
     {
-        get { return _alignment; }
+        get => _alignment;
         set
         {
             _alignment = value;
@@ -52,7 +52,7 @@ internal class PdfStringFormat
     /// </summary>
     public PdfLineAlignment LineAlignment
     {
-        get { return _lineAlignment; }
+        get => _lineAlignment;
         set
         {
             _lineAlignment = value;

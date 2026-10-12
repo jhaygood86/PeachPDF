@@ -27,38 +27,32 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public string FirstDocumentId
     {
-        get { return _document._trailer.GetDocumentId(0); }
+        get => _document._trailer.GetDocumentId(0);
         set { _document._trailer.SetDocumentId(0, value); }
     }
 
     /// <summary>
     /// Gets the first document identifier as GUID.
     /// </summary>
-    public Guid FirstDocumentGuid
-    {
-        get { return GuidFromString(_document._trailer.GetDocumentId(0)); }
-    }
+    public Guid FirstDocumentGuid => GuidFromString(_document._trailer.GetDocumentId(0));
 
     /// <summary>
     /// Gets or sets the second document identifier.
     /// </summary>
     public string SecondDocumentId
     {
-        get { return _document._trailer.GetDocumentId(1); }
+        get => _document._trailer.GetDocumentId(1);
         set { _document._trailer.SetDocumentId(1, value); }
     }
 
     /// <summary>
     /// Gets the first document identifier as GUID.
     /// </summary>
-    public Guid SecondDocumentGuid
-    {
-        get { return GuidFromString(_document._trailer.GetDocumentId(0)); }
-    }
+    public Guid SecondDocumentGuid => GuidFromString(_document._trailer.GetDocumentId(0));
 
     Guid GuidFromString(string id)
     {
-        if (id == null || id.Length != 16)
+        if (id is null || id.Length != 16)
             return Guid.Empty;
 
         StringBuilder guid = new StringBuilder();
@@ -71,18 +65,12 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// <summary>
     /// Gets the catalog dictionary.
     /// </summary>
-    public PdfCatalog Catalog
-    {
-        get { return _document.Catalog; }
-    }
+    public PdfCatalog Catalog => _document.Catalog;
 
     /// <summary>
     /// Gets the ExtGStateTable object.
     /// </summary>
-    public PdfExtGStateTable ExtGStateTable
-    {
-        get { return _document.ExtGStateTable; }
-    }
+    public PdfExtGStateTable ExtGStateTable => _document.ExtGStateTable;
 
     /// <summary>
     /// Returns the object with the specified Identifier, or null, if no such object exists.
@@ -98,8 +86,7 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public static PdfReference GetReference(PdfObject obj)
     {
-        if (obj == null)
-            throw new ArgumentNullException("obj");
+        ArgumentNullException.ThrowIfNull(obj);
         return obj.Reference;
     }
 
@@ -108,8 +95,7 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public static PdfObjectId GetObjectId(PdfObject obj)
     {
-        if (obj == null)
-            throw new ArgumentNullException("obj");
+        ArgumentNullException.ThrowIfNull(obj);
         return obj.ObjectId;
     }
 
@@ -118,8 +104,7 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public static int GetObjectNumber(PdfObject obj)
     {
-        if (obj == null)
-            throw new ArgumentNullException("obj");
+        ArgumentNullException.ThrowIfNull(obj);
         return obj.ObjectNumber;
     }
 
@@ -128,8 +113,7 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public static int GenerationNumber(PdfObject obj)
     {
-        if (obj == null)
-            throw new ArgumentNullException("obj");
+        ArgumentNullException.ThrowIfNull(obj);
         return obj.GenerationNumber;
     }
 
@@ -152,9 +136,8 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public void AddObject(PdfObject obj)
     {
-        if (obj == null)
-            throw new ArgumentNullException("obj");
-        if (obj.Owner == null)
+        ArgumentNullException.ThrowIfNull(obj);
+        if (obj.Owner is null)
             obj.Document = _document;
         else if (obj.Owner != _document)
             throw new InvalidOperationException("Object does not belong to this document.");
@@ -166,9 +149,8 @@ internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInternals e
     /// </summary>
     public void RemoveObject(PdfObject obj)
     {
-        if (obj == null)
-            throw new ArgumentNullException("obj");
-        if (obj.Reference == null)
+        ArgumentNullException.ThrowIfNull(obj);
+        if (obj.Reference is null)
             throw new InvalidOperationException("Only indirect objects can be removed.");
         if (obj.Owner != _document)
             throw new InvalidOperationException("Object does not belong to this document.");

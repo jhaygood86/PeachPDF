@@ -30,10 +30,7 @@ internal sealed class PdfStructureTreeRoot : PdfDictionary
     /// The number tree mapping page /StructParents (and annotation /StructParent) keys to
     /// their owning structure elements.
     /// </summary>
-    public PdfNumberTreeNode ParentTree
-    {
-        get { return _parentTree ??= (PdfNumberTreeNode)Elements.GetValue(Keys.ParentTree, ValueCreationFlags.CreateIndirect); }
-    }
+    public PdfNumberTreeNode ParentTree => _parentTree ??= (PdfNumberTreeNode)Elements.GetValue(Keys.ParentTree, ValueCreationFlags.CreateIndirect);
     PdfNumberTreeNode _parentTree = null!;
 
     /// <summary>
@@ -43,7 +40,7 @@ internal sealed class PdfStructureTreeRoot : PdfDictionary
     /// </summary>
     public int ParentTreeNextKey
     {
-        get { return Elements.GetInteger(Keys.ParentTreeNextKey); }
+        get => Elements.GetInteger(Keys.ParentTreeNextKey);
         set { Elements.SetInteger(Keys.ParentTreeNextKey, value); }
     }
 

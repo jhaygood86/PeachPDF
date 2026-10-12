@@ -103,17 +103,14 @@ internal sealed class PdfFontDescriptor : PdfDictionary
     /// </summary>
     public string FontName
     {
-        get { return Elements.GetName(Keys.FontName); }
+        get => Elements.GetName(Keys.FontName);
         set { Elements.SetName(Keys.FontName, value); }
     }
 
     /// <summary>
     /// Gets a value indicating whether this instance is symbol font.
     /// </summary>
-    public bool IsSymbolFont
-    {
-        get { return _isSymbolFont; }
-    }
+    public bool IsSymbolFont => _isSymbolFont;
     bool _isSymbolFont;
 
             PdfFontDescriptorFlags FlagsFromMetrics(TypefaceMetrics metrics)
@@ -320,7 +317,7 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         {
             get
             {
-                if (_meta == null)
+                if (_meta is null)
                     _meta = CreateMeta(typeof(Keys));
                 return _meta;
             }
@@ -331,8 +328,5 @@ internal sealed class PdfFontDescriptor : PdfDictionary
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

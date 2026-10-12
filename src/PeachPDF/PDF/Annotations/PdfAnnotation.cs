@@ -56,7 +56,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     public PdfAnnotationFlags Flags
     {
-        get { return (PdfAnnotationFlags)Elements.GetInteger(Keys.F); }
+        get => (PdfAnnotationFlags)Elements.GetInteger(Keys.F);
         set
         {
             Elements.SetInteger(Keys.F, (int)value);
@@ -69,8 +69,8 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     public PdfAnnotations Parent
     {
-        get { return _parent; }
-        set { _parent = value; }
+        get => _parent;
+        set => _parent = value;
     }
     PdfAnnotations _parent = null!;
 
@@ -80,7 +80,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     public PdfRectangle Rectangle
     {
-        get { return Elements.GetRectangle(Keys.Rect, true); }
+        get => Elements.GetRectangle(Keys.Rect, true);
         set
         {
             Elements.SetRectangle(Keys.Rect, value);
@@ -95,7 +95,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     internal int StructParent
     {
-        get { return Elements.GetInteger(Keys.StructParent); }
+        get => Elements.GetInteger(Keys.StructParent);
         set { Elements.SetInteger(Keys.StructParent, value); }
     }
 
@@ -106,7 +106,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     public string Title
     {
-        get { return Elements.GetString(Keys.T, true); }
+        get => Elements.GetString(Keys.T, true);
         set
         {
             Elements.SetString(Keys.T, value);
@@ -120,7 +120,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     public string Subject
     {
-        get { return Elements.GetString(Keys.Subj, true); }
+        get => Elements.GetString(Keys.Subj, true);
         set
         {
             Elements.SetString(Keys.Subj, value);
@@ -135,7 +135,7 @@ internal abstract class PdfAnnotation : PdfDictionary
     /// </summary>
     public string Contents
     {
-        get { return Elements.GetString(Keys.Contents, true); }
+        get => Elements.GetString(Keys.Contents, true);
         set
         {
             Elements.SetString(Keys.Contents, value);
@@ -154,7 +154,7 @@ internal abstract class PdfAnnotation : PdfDictionary
         {
             PdfItem item = Elements[Keys.C];
             PdfArray array = item as PdfArray;
-            if (array != null)  // TODO: check for iref?
+            if (array is not null)  // TODO: check for iref?
             {
                 if (array.Elements.Count == 3)
                 {

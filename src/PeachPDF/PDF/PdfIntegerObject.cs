@@ -41,7 +41,7 @@ internal sealed class PdfIntegerObject : PdfNumberObject
     /// </summary>
     public int Value
     {
-        get { return _value; }
+        get => _value;
         //set {_value = value;}
     }
     readonly int _value;

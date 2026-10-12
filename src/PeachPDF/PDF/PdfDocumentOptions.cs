@@ -20,8 +20,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public PdfColorMode ColorMode
     {
-        get { return _colorMode; }
-        set { _colorMode = value; }
+        get => _colorMode;
+        set => _colorMode = value;
     }
     PdfColorMode _colorMode = PdfColorMode.Rgb;
 
@@ -30,8 +30,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool CompressContentStreams
     {
-        get { return _compressContentStreams; }
-        set { _compressContentStreams = value; }
+        get => _compressContentStreams;
+        set => _compressContentStreams = value;
     }
     bool _compressContentStreams = true;
 
@@ -40,8 +40,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool NoCompression
     {
-        get { return _noCompression; }
-        set { _noCompression = value; }
+        get => _noCompression;
+        set => _noCompression = value;
     }
     bool _noCompression;
 
@@ -50,8 +50,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public PdfFlateEncodeMode FlateEncodeMode
     {
-        get { return _flateEncodeMode; }
-        set { _flateEncodeMode = value; }
+        get => _flateEncodeMode;
+        set => _flateEncodeMode = value;
     }
     PdfFlateEncodeMode _flateEncodeMode = PdfFlateEncodeMode.Default;
 
@@ -61,8 +61,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool BrotliCompression
     {
-        get { return _brotliCompression; }
-        set { _brotliCompression = value; }
+        get => _brotliCompression;
+        set => _brotliCompression = value;
     }
     bool _brotliCompression;
 
@@ -71,10 +71,7 @@ internal sealed class PdfDocumentOptions
     /// <see cref="BrotliCompression"/> request, force-disabled unless the document is PDF 2.0 (the only version that
     /// defines the filter).
     /// </summary>
-    public bool UseBrotli
-    {
-        get { return _brotliCompression && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly; }
-    }
+    public bool UseBrotli => _brotliCompression && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly;
 
     /// <summary>
     /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.JxlPassthrough"/> - see there for behavior. The request alone;
@@ -82,32 +79,23 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool JxlPassthrough
     {
-        get { return _jxlPassthrough; }
-        set { _jxlPassthrough = value; }
+        get => _jxlPassthrough;
+        set => _jxlPassthrough = value;
     }
     bool _jxlPassthrough;
 
     /// <summary>Whether an eligible JPEG XL image embeds as <c>/JXLDecode</c>: the request, and only for a PDF 2.0 document.</summary>
-    public bool UseJxlPassthrough
-    {
-        get { return _jxlPassthrough && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly; }
-    }
+    public bool UseJxlPassthrough => _jxlPassthrough && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly;
 
     /// <summary>
     /// Whether the document may only use the stream filters listed in ISO 32000-2 Table 6, which excludes the
     /// <c>/BrotliDecode</c> and <c>/JXLDecode</c> extensions: required by PDF/A-4 (ISO 19005-4, 6.1.6.2) and applied to
     /// PDF/X-6 as well.
     /// </summary>
-    public bool StandardFiltersOnly
-    {
-        get { return IsPdfA4 || PdfXConformance == PeachPDF.PdfXConformance.X6; }
-    }
+    public bool StandardFiltersOnly => IsPdfA4 || PdfXConformance == PeachPDF.PdfXConformance.X6;
 
     /// <summary>Whether the document claims one of the PDF/A-4 levels.</summary>
-    public bool IsPdfA4
-    {
-        get { return PdfAConformance is PeachPDF.PdfAConformance.PdfA4 or PeachPDF.PdfAConformance.PdfA4E or PeachPDF.PdfAConformance.PdfA4F; }
-    }
+    public bool IsPdfA4 => PdfAConformance is PeachPDF.PdfAConformance.PdfA4 or PeachPDF.PdfAConformance.PdfA4E or PeachPDF.PdfAConformance.PdfA4F;
 
     /// <summary>
     /// Gets or sets a value indicating whether to compress bilevel images using CCITT compression.
@@ -116,8 +104,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool EnableCcittCompressionForBilevelImages
     {
-        get { return _enableCcittCompressionForBilevelImages; }
-        set { _enableCcittCompressionForBilevelImages = value; }
+        get => _enableCcittCompressionForBilevelImages;
+        set => _enableCcittCompressionForBilevelImages = value;
     }
     bool _enableCcittCompressionForBilevelImages = false;
 
@@ -126,8 +114,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public PdfUseFlateDecoderForJpegImages UseFlateDecoderForJpegImages
     {
-        get { return _useFlateDecoderForJpegImages; }
-        set { _useFlateDecoderForJpegImages = value; }
+        get => _useFlateDecoderForJpegImages;
+        set => _useFlateDecoderForJpegImages = value;
     }
     PdfUseFlateDecoderForJpegImages _useFlateDecoderForJpegImages = PdfUseFlateDecoderForJpegImages.Never;
 
@@ -142,8 +130,8 @@ internal sealed class PdfDocumentOptions
 
     public bool DownscaleImages
     {
-        get { return _downscaleImages; }
-        set { _downscaleImages = value; }
+        get => _downscaleImages;
+        set => _downscaleImages = value;
     }
     bool _downscaleImages = true;
 
@@ -152,8 +140,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public int DownscaleQuality
     {
-        get { return _downscaleQuality; }
-        set { _downscaleQuality = value; }
+        get => _downscaleQuality;
+        set => _downscaleQuality = value;
     }
     int _downscaleQuality = 70;
 
@@ -162,8 +150,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public double MaximumDownscaleMultiplier
     {
-        get { return _maximumDownscaleMultiplier; }
-        set { _maximumDownscaleMultiplier = value; }
+        get => _maximumDownscaleMultiplier;
+        set => _maximumDownscaleMultiplier = value;
     }
     double _maximumDownscaleMultiplier = 1.0;
 
@@ -172,8 +160,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public ImageCompression ImageCompression
     {
-        get { return _imageCompression; }
-        set { _imageCompression = value; }
+        get => _imageCompression;
+        set => _imageCompression = value;
     }
     ImageCompression _imageCompression = ImageCompression.Auto;
 
@@ -185,8 +173,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public PdfAConformance PdfAConformance
     {
-        get { return _pdfAConformance; }
-        set { _pdfAConformance = value; }
+        get => _pdfAConformance;
+        set => _pdfAConformance = value;
     }
     PdfAConformance _pdfAConformance = PdfAConformance.None;
 
@@ -201,8 +189,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool PdfAConformanceEstablished
     {
-        get { return _pdfAConformanceEstablished; }
-        set { _pdfAConformanceEstablished = value; }
+        get => _pdfAConformanceEstablished;
+        set => _pdfAConformanceEstablished = value;
     }
     bool _pdfAConformanceEstablished;
 
@@ -211,8 +199,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public PdfVersion PdfVersion
     {
-        get { return _pdfVersion; }
-        set { _pdfVersion = value; }
+        get => _pdfVersion;
+        set => _pdfVersion = value;
     }
     PdfVersion _pdfVersion = PdfVersion.Pdf17;
 
@@ -223,8 +211,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool PdfVersionEstablished
     {
-        get { return _pdfVersionEstablished; }
-        set { _pdfVersionEstablished = value; }
+        get => _pdfVersionEstablished;
+        set => _pdfVersionEstablished = value;
     }
     bool _pdfVersionEstablished;
 
@@ -236,8 +224,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public PdfXConformance PdfXConformance
     {
-        get { return _pdfXConformance; }
-        set { _pdfXConformance = value; }
+        get => _pdfXConformance;
+        set => _pdfXConformance = value;
     }
     PdfXConformance _pdfXConformance = PdfXConformance.None;
 
@@ -248,8 +236,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public bool PdfXConformanceEstablished
     {
-        get { return _pdfXConformanceEstablished; }
-        set { _pdfXConformanceEstablished = value; }
+        get => _pdfXConformanceEstablished;
+        set => _pdfXConformanceEstablished = value;
     }
     bool _pdfXConformanceEstablished;
 
@@ -258,8 +246,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     public ColorOptions? ColorOptions
     {
-        get { return _colorOptions; }
-        set { _colorOptions = value; }
+        get => _colorOptions;
+        set => _colorOptions = value;
     }
     ColorOptions? _colorOptions;
 
@@ -271,8 +259,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     internal PdfEmbeddingPlan? EmbeddingPlan
     {
-        get { return _embeddingPlan; }
-        set { _embeddingPlan = value; }
+        get => _embeddingPlan;
+        set => _embeddingPlan = value;
     }
     PdfEmbeddingPlan? _embeddingPlan;
 
@@ -283,8 +271,8 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     internal bool EmbeddingApplied
     {
-        get { return _embeddingApplied; }
-        set { _embeddingApplied = value; }
+        get => _embeddingApplied;
+        set => _embeddingApplied = value;
     }
     bool _embeddingApplied;
 }

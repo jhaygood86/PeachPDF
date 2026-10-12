@@ -26,7 +26,7 @@ internal sealed class PdfContent : PdfDictionary
     /// Initializes a new instance of the <see cref="PdfContent"/> class.
     /// </summary>
     internal PdfContent(PdfPage page)
-        : base(page != null ? page.Owner : null)
+        : base(page is not null ? page.Owner : null)
     {
         //_pageContent = new PageContent(page);
     }
@@ -41,7 +41,7 @@ internal sealed class PdfContent : PdfDictionary
             if (value)
             {
                 PdfItem filter = Elements[PdfStream.Keys.Filter];
-                if (filter == null)
+                if (filter is null)
                 {
                     byte[] bytes = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
                     Stream.Value = bytes;
@@ -61,7 +61,7 @@ internal sealed class PdfContent : PdfDictionary
         // prepended or appended. Some nasty PDF tools does not preserve the graphical state correctly.
         // Therefore we try to relieve the problem by surrounding the content stream with push/restore 
         // graphic state operation.
-        if (Stream != null)
+        if (Stream is not null)
         {
             byte[] value = Stream.Value;
             int length = value.Length;
@@ -82,15 +82,15 @@ internal sealed class PdfContent : PdfDictionary
 
     internal override void WriteObject(PdfWriter writer)
     {
-        if (_pdfRenderer != null)
+        if (_pdfRenderer is not null)
         {
             // GetContent also disposes the underlying PdfGraphics object, if one exists
             //Stream = new PdfStream(PdfEncoders.LatinOneByteEncoding.GetBytes(pdfRenderer.GetContent()), this);
             _pdfRenderer.Close();
-            Debug.Assert(_pdfRenderer == null);
+            Debug.Assert(_pdfRenderer is null);
         }
 
-        if (Stream != null)
+        if (Stream is not null)
         {
             //if (Owner.Options.CompressContentStreams)
             if (Owner.Options.CompressContentStreams && Elements.GetName("/Filter").Length == 0)
@@ -114,18 +114,12 @@ internal sealed class PdfContent : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

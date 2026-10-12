@@ -27,13 +27,12 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     PdfGraphics(PdfPage page, PdfPageAppendMode options)
     {
-        if (page == null)
-            throw new ArgumentNullException("page");
+        ArgumentNullException.ThrowIfNull(page);
 
-        if (page.Owner == null)
+        if (page.Owner is null)
             throw new ArgumentException("You cannot draw on a page that is not owned by a PdfDocument object.", "page");
 
-        if (page.RenderContent != null)
+        if (page.RenderContent is not null)
             throw new InvalidOperationException("An PdfGraphics object already exists for this page and must be disposed before a new one can be created.");
 
         if (page.Owner.IsReadOnly)
@@ -77,15 +76,14 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     PdfGraphics(PdfForm form)
     {
-        if (form == null)
-            throw new ArgumentNullException("form");
+        ArgumentNullException.ThrowIfNull(form);
 
         _form = form;
         form.AssociateGraphics(this);
 
         _gsStack = new GraphicsStateStack(this);
         _drawGraphics = false;
-        if (form.Owner != null)
+        if (form.Owner is not null)
             _renderer = new PdfGraphicsRenderer(form, this);
         _pageSize = form.Size;
         Initialize();
@@ -121,7 +119,7 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public static PdfGraphics FromForm(PdfForm form)
     {
-        if (form.Gfx != null)
+        if (form.Gfx is not null)
             return form.Gfx;
 
         return new PdfGraphics(form);
@@ -137,7 +135,7 @@ internal sealed class PdfGraphics : IDisposable
         double pageHeight = _pageSize.Height;
         PdfPage targetPage = PdfPage;
         PaintPoint trimOffset = new PaintPoint();
-        if (targetPage != null && targetPage.TrimMargins.AreSet)
+        if (targetPage is not null && targetPage.TrimMargins.AreSet)
         {
             pageHeight += targetPage.TrimMargins.Top + targetPage.TrimMargins.Bottom;
             trimOffset = new PaintPoint(targetPage.TrimMargins.Left, targetPage.TrimMargins.Top);
@@ -164,12 +162,12 @@ internal sealed class PdfGraphics : IDisposable
         if (!_disposed)
         {
             _disposed = true;
-            if (_form != null)
+            if (_form is not null)
                 _form.Finish();
 
             _drawGraphics = false;
 
-            if (_renderer != null)
+            if (_renderer is not null)
             {
                 _renderer.Close();
                 _renderer = null;
@@ -183,7 +181,7 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public PaintPoint PageOrigin
     {
-        get { return _pageOrigin; }
+        get => _pageOrigin;
         set
         {
             // Is there really anybody who needes to set the page origin?
@@ -198,7 +196,7 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public Size PageSize
     {
-        get { return _pageSize; }
+        get => _pageSize;
         //set
         //{
         //  //TODO
@@ -223,10 +221,9 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
+        ArgumentNullException.ThrowIfNull(pen);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawLines(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2) });
     }
 
@@ -236,14 +233,12 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawLines(Pen pen, PaintPoint[] points)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
-        if (points == null)
-            throw new ArgumentNullException("points");
+        ArgumentNullException.ThrowIfNull(pen);
+        ArgumentNullException.ThrowIfNull(points);
         if (points.Length < 2)
             throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawLines(pen, points);
     }
 
@@ -252,10 +247,8 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawLines(Pen pen, double x, double y, params double[] value)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
-        if (value == null)
-            throw new ArgumentNullException("value");
+        ArgumentNullException.ThrowIfNull(pen);
+        ArgumentNullException.ThrowIfNull(value);
 
         int length = value.Length;
         PaintPoint[] points = new PaintPoint[length / 2 + 1];
@@ -293,15 +286,14 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawRectangle(Pen pen, double x, double y, double width, double height)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
+        ArgumentNullException.ThrowIfNull(pen);
 
         if (_drawGraphics)
         {
 
         }
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawRectangle(pen, null, x, y, width, height);
     }
 
@@ -320,10 +312,9 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawRectangle(Brush brush, double x, double y, double width, double height)
     {
-        if (brush == null)
-            throw new ArgumentNullException("brush");
+        ArgumentNullException.ThrowIfNull(brush);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawRectangle(null, brush, x, y, width, height);
     }
 
@@ -342,10 +333,10 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawRectangle(Pen pen, Brush brush, double x, double y, double width, double height)
     {
-        if (pen == null && brush == null)
+        if (pen is null && brush is null)
             throw new ArgumentNullException("pen and brush", "Pen or Brush or both must not be null.");
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawRectangle(pen, brush, x, y, width, height);
     }
 
@@ -378,14 +369,12 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawPolygon(Pen pen, PaintPoint[] points)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
-        if (points == null)
-            throw new ArgumentNullException("points");
+        ArgumentNullException.ThrowIfNull(pen);
+        ArgumentNullException.ThrowIfNull(points);
         if (points.Length < 2)
             throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawPolygon(pen, null, points, FillMode.EvenOdd);  // FillMode is ignored
     }
 
@@ -396,14 +385,12 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawPolygon(Brush brush, PaintPoint[] points, FillMode fillmode)
     {
-        if (brush == null)
-            throw new ArgumentNullException("brush");
-        if (points == null)
-            throw new ArgumentNullException("points");
+        ArgumentNullException.ThrowIfNull(brush);
+        ArgumentNullException.ThrowIfNull(points);
         if (points.Length < 2)
             throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawPolygon(null, brush, points, fillmode);
     }
 
@@ -414,14 +401,13 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawPolygon(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode)
     {
-        if (pen == null && brush == null)
+        if (pen is null && brush is null)
             throw new ArgumentNullException("pen and brush", "Pen or Brush or both must not be null.");
-        if (points == null)
-            throw new ArgumentNullException("points");
+        ArgumentNullException.ThrowIfNull(points);
         if (points.Length < 2)
             throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawPolygon(pen, brush, points, fillmode);
     }
 
@@ -450,12 +436,10 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawPath(Pen pen, GraphicsPath path)
     {
-        if (pen == null)
-            throw new ArgumentNullException("pen");
-        if (path == null)
-            throw new ArgumentNullException("path");
+        ArgumentNullException.ThrowIfNull(pen);
+        ArgumentNullException.ThrowIfNull(path);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawPath(pen, null, path);
     }
 
@@ -466,12 +450,10 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawPath(Brush brush, GraphicsPath path)
     {
-        if (brush == null)
-            throw new ArgumentNullException("brush");
-        if (path == null)
-            throw new ArgumentNullException("path");
+        ArgumentNullException.ThrowIfNull(brush);
+        ArgumentNullException.ThrowIfNull(path);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawPath(null, brush, path);
     }
 
@@ -482,15 +464,14 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawPath(Pen pen, Brush brush, GraphicsPath path)
     {
-        if (pen == null && brush == null)
+        if (pen is null && brush is null)
         {
             // ReSharper disable once NotResolvedInText
             throw new ArgumentNullException("pen and brush", "Pen or Brush or both must not be null.");
         }
-        if (path == null)
-            throw new ArgumentNullException("path");
+        ArgumentNullException.ThrowIfNull(path);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawPath(pen, brush, path);
     }
 
@@ -558,23 +539,20 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawString(string text, TypefaceFont font, Brush brush, Rect layoutRectangle, PdfStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
     {
-        if (text == null)
-            throw new ArgumentNullException("text");
-        if (font == null)
-            throw new ArgumentNullException("font");
-        if (brush == null)
-            throw new ArgumentNullException("brush");
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(font);
+        ArgumentNullException.ThrowIfNull(brush);
 
-        if (format != null && format.LineAlignment == PdfLineAlignment.BaseLine && layoutRectangle.Height != 0)
+        if (format is not null && format.LineAlignment == PdfLineAlignment.BaseLine && layoutRectangle.Height != 0)
             throw new InvalidOperationException("DrawString: With PdfLineAlignment.BaseLine the height of the layout rectangle must be 0.");
 
         if (text.Length == 0)
             return;
 
-        if (format == null)
+        if (format is null)
             format = PdfStringFormats.Default;
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
     }
 
@@ -585,12 +563,10 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, TypefaceFont font, Brush brush)
     {
-        if (font == null)
-            throw new ArgumentNullException("font");
-        if (brush == null)
-            throw new ArgumentNullException("brush");
+        ArgumentNullException.ThrowIfNull(font);
+        ArgumentNullException.ThrowIfNull(brush);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawGlyphsAtPositions(glyphs, font, brush);
     }
 
@@ -601,12 +577,9 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public Size MeasureString(string text, TypefaceFont font, PdfStringFormat stringFormat, ShapeSettings? features = null)
     {
-        if (text == null)
-            throw new ArgumentNullException("text");
-        if (font == null)
-            throw new ArgumentNullException("font");
-        if (stringFormat == null)
-            throw new ArgumentNullException("stringFormat");
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(font);
+        ArgumentNullException.ThrowIfNull(stringFormat);
 
         Size size = FontHelper.MeasureString(text, font, PdfStringFormats.Default, features ?? ShapeSettings.Default);
         return size;
@@ -635,15 +608,14 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawImage(PdfRasterImage image, double x, double y)
     {
-        if (image == null)
-            throw new ArgumentNullException("image");
+        ArgumentNullException.ThrowIfNull(image);
 
         CheckFormConsistency(image);
 
         double width = image.PointWidth;
         double height = image.PointHeight;
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawImage(image, x, y, image.PointWidth, image.PointHeight);
         //image.Width * 72 / image.HorizontalResolution,
         //image.Height * 72 / image.HorizontalResolution);
@@ -662,12 +634,11 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawImage(PdfRasterImage image, double x, double y, double width, double height)
     {
-        if (image == null)
-            throw new ArgumentNullException("image");
+        ArgumentNullException.ThrowIfNull(image);
 
         CheckFormConsistency(image);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawImage(image, x, y, width, height);
     }
 
@@ -680,12 +651,11 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void DrawImage(PdfRasterImage image, Rect destRect, Rect srcRect)
     {
-        if (image == null)
-            throw new ArgumentNullException("image");
+        ArgumentNullException.ThrowIfNull(image);
 
         CheckFormConsistency(image);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.DrawImage(image, destRect, srcRect);
     }
 
@@ -703,15 +673,15 @@ internal sealed class PdfGraphics : IDisposable
     void CheckFormConsistency(PdfRasterImage image)
     {
         PdfForm xForm = image as PdfForm;
-        if (xForm != null)
+        if (xForm is not null)
         {
             // Force disposing of PdfGraphics that draws the content
             xForm.Finish();
 
             // ReSharper disable once MergeSequentialChecks
-            if (_renderer != null && (_renderer as PdfGraphicsRenderer) != null)
+            if (_renderer is not null && (_renderer as PdfGraphicsRenderer) is not null)
             {
-                if (xForm.Owner != null && xForm.Owner != ((PdfGraphicsRenderer)_renderer).Owner)
+                if (xForm.Owner is not null && xForm.Owner != ((PdfGraphicsRenderer)_renderer).Owner)
                     throw new InvalidOperationException(
                         "A PdfForm object is always bound to the document it was created for and cannot be drawn in the context of another document.");
 
@@ -736,7 +706,7 @@ internal sealed class PdfGraphics : IDisposable
         iState.Transform = _transform;
         _gsStack.Push(iState);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.Save(xState);
 
         return xState;
@@ -748,12 +718,11 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void Restore(PdfGraphicsStateToken state)
     {
-        if (state == null)
-            throw new ArgumentNullException("state");
+        ArgumentNullException.ThrowIfNull(state);
         _gsStack.Restore(state.InternalState);
         _transform = state.InternalState.Transform;
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.Restore(state);
     }
 
@@ -771,10 +740,7 @@ internal sealed class PdfGraphics : IDisposable
     /// Gets the current graphics state level. The default value is 0. Each call of Save or BeginContainer
     /// increased and each call of Restore or EndContainer decreased the value by 1.
     /// </summary>
-    public int GraphicsStateLevel
-    {
-        get { return _gsStack.Count; }
-    }
+    public int GraphicsStateLevel => _gsStack.Count;
 
     // --------------------------------------------------------------------------------------------
 
@@ -799,10 +765,7 @@ internal sealed class PdfGraphics : IDisposable
     /// The transformation matrix canot be set. Insted use Save/Restore or BeginContainer/EndContainer to
     /// save the state before Transform is called and later restore to the previous transform.
     /// </summary>
-    public Matrix3x2 Transform
-    {
-        get { return _transform; }
-    }
+    public Matrix3x2 Transform => _transform;
 
     /// <summary>
     /// Applies a new transformation to the current transformation matrix.
@@ -810,7 +773,7 @@ internal sealed class PdfGraphics : IDisposable
     void AddTransform(Matrix3x2 transform)
     {
         _transform = transform * _transform;
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.AddTransform(transform);
     }
 
@@ -833,10 +796,9 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void IntersectClip(GraphicsPath path)
     {
-        if (path == null)
-            throw new ArgumentNullException("path");
+        ArgumentNullException.ThrowIfNull(path);
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.IntersectClip(path);
     }
 
@@ -857,15 +819,14 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public void WriteComment(string comment)
     {
-        if (comment == null)
-            throw new ArgumentNullException("comment");
+        ArgumentNullException.ThrowIfNull(comment);
 
         if (_drawGraphics)
         {
             // TODO: Do something if metafile?
         }
 
-        if (_renderer != null)
+        if (_renderer is not null)
             _renderer.WriteComment(comment);
     }
 
@@ -909,7 +870,7 @@ internal sealed class PdfGraphics : IDisposable
         get
         {
             PdfGraphicsRenderer renderer = _renderer as PdfGraphicsRenderer;
-            return renderer != null ? renderer._page : null;
+            return renderer is not null ? renderer._page : null;
         }
     }
 

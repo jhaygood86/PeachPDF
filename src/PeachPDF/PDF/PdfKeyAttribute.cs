@@ -83,23 +83,23 @@ internal class PdfKeyAttribute : Attribute
 
     public string Version
     {
-        get { return _version; }
-        set { _version = value; }
+        get => _version;
+        set => _version = value;
     }
     string _version = "1.0";
 
     public PdfKeyType PdfKeyType
     {
-        get { return _entryType; }
-        set { _entryType = value; }
+        get => _entryType;
+        set => _entryType = value;
     }
     PdfKeyType _entryType;
 
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
     public Type ObjectType
     {
-        get { return _objectType; }
-        set { _objectType = value; }
+        get => _objectType;
+        set => _objectType = value;
     }
 
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
@@ -107,8 +107,8 @@ internal class PdfKeyAttribute : Attribute
 
     public string FixedValue
     {
-        get { return _fixedValue; }
-        set { _fixedValue = value; }
+        get => _fixedValue;
+        set => _fixedValue = value;
     }
     string _fixedValue = null!;
 }

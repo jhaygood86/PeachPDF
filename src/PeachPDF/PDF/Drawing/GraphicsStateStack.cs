@@ -15,10 +15,7 @@ internal class GraphicsStateStack
         _current = new InternalGraphicsState(gfx);
     }
 
-    public int Count
-    {
-        get { return _stack.Count; }
-    }
+    public int Count => _stack.Count;
 
     public void Push(InternalGraphicsState state)
     {

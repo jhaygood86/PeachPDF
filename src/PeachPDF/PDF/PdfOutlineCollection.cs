@@ -54,12 +54,11 @@ internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// </summary>
     public void Add(PdfOutline outline)
     {
-        if (outline == null)
-            throw new ArgumentNullException(nameof(outline));
+        ArgumentNullException.ThrowIfNull(outline);
 
         // DestinationPage is optional - an outline may instead carry a Url (written as an /A URI
         // action, see PdfOutline.PrepareForSave), or neither (no destination at all).
-        if (outline.DestinationPage != null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
+        if (outline.DestinationPage is not null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
             throw new ArgumentException("Destination page must belong to this document.");
 
         //// TODO check the parent problems...
@@ -169,8 +168,7 @@ internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// </summary>
     public void Insert(int index, PdfOutline outline)
     {
-        if (outline == null)
-            throw new ArgumentNullException(nameof(outline));
+        ArgumentNullException.ThrowIfNull(outline);
         if (index < 0 || index >= _outlines.Count)
             throw new ArgumentOutOfRangeException(nameof(index), index, "The index of an outline is out of range.");
 
@@ -203,7 +201,7 @@ internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
         {
             if (index < 0 || index >= _outlines.Count)
                 throw new ArgumentOutOfRangeException(nameof(index), index, "The index of an outline is out of range.");
-            if (value == null)
+            if (value is null)
                 throw new ArgumentOutOfRangeException(nameof(value), null, "The set value property must not be null.");
 
             AddToOutlinesTree(value);
@@ -234,12 +232,11 @@ internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
 
     void AddToOutlinesTree(PdfOutline outline)
     {
-        if (outline == null)
-            throw new ArgumentNullException(nameof(outline));
+        ArgumentNullException.ThrowIfNull(outline);
 
         // DestinationPage is optional - an outline may instead carry a Url (written as an /A URI
         // action, see PdfOutline.PrepareForSave), or neither (no destination at all).
-        if (outline.DestinationPage != null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
+        if (outline.DestinationPage is not null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
             throw new ArgumentException("Destination page must belong to this document.");
 
         // TODO check the parent problems...
@@ -267,8 +264,7 @@ internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
 
     void RemoveFromOutlinesTree(PdfOutline outline)
     {
-        if (outline == null)
-            throw new ArgumentNullException(nameof(outline));
+        ArgumentNullException.ThrowIfNull(outline);
 
         // TODO check the parent problems...
         //outline.Document = Owner;
@@ -282,5 +278,5 @@ internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// </summary>
     readonly PdfOutline _parent;
 
-    readonly List<PdfOutline> _outlines = new List<PdfOutline>();
+    readonly List<PdfOutline> _outlines = [];
 }

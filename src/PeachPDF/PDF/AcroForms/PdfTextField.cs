@@ -26,7 +26,7 @@ internal sealed class PdfTextField : PdfAcroField
     /// <summary>The field's current text value ("/V").</summary>
     public string Value
     {
-        get { return Elements.GetString(Keys.V); }
+        get => Elements.GetString(Keys.V);
         set { Elements.SetString(Keys.V, value ?? string.Empty, PdfStringEncoding.WinAnsiEncoding); }
     }
 
@@ -36,7 +36,7 @@ internal sealed class PdfTextField : PdfAcroField
     /// </summary>
     public int MaxLen
     {
-        get { return Elements.GetInteger(Keys.MaxLen); }
+        get => Elements.GetInteger(Keys.MaxLen);
         set { Elements.SetInteger(Keys.MaxLen, value); }
     }
 }

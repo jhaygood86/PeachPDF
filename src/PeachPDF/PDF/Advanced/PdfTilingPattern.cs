@@ -29,8 +29,7 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
     /// </summary>
     internal void SetupFromBrush(PdfTilingBrush brush, Matrix3x2 matrix)
     {
-        if (brush == null)
-            throw new ArgumentNullException("brush");
+        ArgumentNullException.ThrowIfNull(brush);
 
         Elements[Keys.PaintType] = new PdfInteger(1);
         Elements[Keys.TilingType] = new PdfInteger(2);
@@ -185,18 +184,12 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        internal static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

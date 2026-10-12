@@ -19,13 +19,13 @@ internal sealed class PdfNameDictionary : PdfDictionary
         : base(dictionary)
     {
         var dests = Elements.GetDictionary(Keys.Dests);
-        if (dests != null)
+        if (dests is not null)
         {
             _dests = new PdfNameTreeNode(dests);
         }
 
         var embeddedFiles = Elements.GetDictionary(Keys.EmbeddedFiles);
-        if (embeddedFiles != null)
+        if (embeddedFiles is not null)
         {
             _embeddedFiles = new PdfNameTreeNode(embeddedFiles);
         }
@@ -49,7 +49,7 @@ internal sealed class PdfNameDictionary : PdfDictionary
     /// </remarks>
     internal void AddEmbeddedFile(string name, PdfFileSpecification fileSpecification)
     {
-        if (_embeddedFiles == null)
+        if (_embeddedFiles is null)
         {
             _embeddedFiles = new PdfNameTreeNode();
             Owner.Internals.AddObject(_embeddedFiles);
@@ -67,7 +67,7 @@ internal sealed class PdfNameDictionary : PdfDictionary
 
     internal void AddNamedDestination(string destinationName, int destinationPage, PdfNamedDestinationParameters parameters)
     {
-        if (_dests == null)
+        if (_dests is null)
         {
             _dests = new PdfNameTreeNode();
             Owner.Internals.AddObject(_dests);

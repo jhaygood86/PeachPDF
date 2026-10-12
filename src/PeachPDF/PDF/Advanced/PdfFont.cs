@@ -24,42 +24,39 @@ internal class PdfFont : PdfDictionary
     {
         get
         {
-            Debug.Assert(_fontDescriptor != null);
+            Debug.Assert(_fontDescriptor is not null);
             return _fontDescriptor;
         }
-        set { _fontDescriptor = value; }
+        set => _fontDescriptor = value;
     }
     PdfFontDescriptor _fontDescriptor = null!;
 
     /// <summary>
     /// Gets a value indicating whether this instance is symbol font.
     /// </summary>
-    public bool IsSymbolFont
-    {
-        get { return _fontDescriptor.IsSymbolFont; }
-    }
+    public bool IsSymbolFont => _fontDescriptor.IsSymbolFont;
 
     internal void AddChars(string text)
     {
-        if (_characterMapInfo != null)
+        if (_characterMapInfo is not null)
             _characterMapInfo.AddChars(text);
     }
 
     internal void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
     {
-        if (_characterMapInfo != null)
+        if (_characterMapInfo is not null)
             _characterMapInfo.AddShapedText(text, features, logicalText);
     }
 
     internal void AddGlyphIndices(string glyphIndices)
     {
-        if (_characterMapInfo != null)
+        if (_characterMapInfo is not null)
             _characterMapInfo.AddGlyphIndices(glyphIndices);
     }
 
     internal void AddShapedGlyph(int glyphIndex, string sourceText)
     {
-        if (_characterMapInfo != null)
+        if (_characterMapInfo is not null)
             _characterMapInfo.AddShapedGlyph(glyphIndex, sourceText);
     }
 
@@ -68,8 +65,8 @@ internal class PdfFont : PdfDictionary
     /// </summary>
     internal CharacterMapInfo CharacterMapInfo
     {
-        get { return _characterMapInfo; }
-        set { _characterMapInfo = value; }
+        get => _characterMapInfo;
+        set => _characterMapInfo = value;
     }
     internal CharacterMapInfo _characterMapInfo = null!;
 
@@ -78,8 +75,8 @@ internal class PdfFont : PdfDictionary
     /// </summary>
     internal PdfToUnicodeMap ToUnicodeMap
     {
-        get { return _toUnicode; }
-        set { _toUnicode = value; }
+        get => _toUnicode;
+        set => _toUnicode = value;
     }
     internal PdfToUnicodeMap _toUnicode = null!;
 

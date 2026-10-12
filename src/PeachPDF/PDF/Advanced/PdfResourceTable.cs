@@ -14,17 +14,13 @@ internal class PdfResourceTable
     /// </summary>
     public PdfResourceTable(PdfDocument owner)
     {
-        if (owner == null)
-            throw new ArgumentNullException("owner");
+        ArgumentNullException.ThrowIfNull(owner);
         _owner = owner;
     }
 
     /// <summary>
     /// Gets the owning document of this resource table.
     /// </summary>
-    protected PdfDocument Owner
-    {
-        get { return _owner; }
-    }
+    protected PdfDocument Owner => _owner;
     readonly PdfDocument _owner;
 }

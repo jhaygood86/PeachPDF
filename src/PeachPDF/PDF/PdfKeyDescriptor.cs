@@ -37,44 +37,38 @@ internal sealed class PdfKeyDescriptor
     /// </summary>
     public string Version
     {
-        get { return _version; }
-        set { _version = value; }
+        get => _version;
+        set => _version = value;
     }
     string _version;
 
     public PdfKeyType PdfKeyType
     {
-        get { return _keyType; }
-        set { _keyType = value; }
+        get => _keyType;
+        set => _keyType = value;
     }
     PdfKeyType _keyType;
 
     public string KeyValue
     {
-        get { return _keyValue; }
-        set { _keyValue = value; }
+        get => _keyValue;
+        set => _keyValue = value;
     }
     string _keyValue = null!;
 
-    public string FixedValue
-    {
-        get { return _fixedValue; }
-    }
+    public string FixedValue => _fixedValue;
     readonly string _fixedValue;
 
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
     public Type ObjectType
     {
-        get { return _objectType; }
-        set { _objectType = value; }
+        get => _objectType;
+        set => _objectType = value;
     }
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
     Type _objectType;
 
-    public bool CanBeIndirect
-    {
-        get { return (_keyType & PdfKeyType.MustNotBeIndirect) == 0; }
-    }
+    public bool CanBeIndirect => (_keyType & PdfKeyType.MustNotBeIndirect) == 0;
 
     // These types are not yet used/implemented.
     static readonly FrozenSet<PdfKeyType> NotYetImplementedKeyTypes = new HashSet<PdfKeyType>
@@ -91,7 +85,7 @@ internal sealed class PdfKeyDescriptor
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
     public Type GetValueType()
     {
-        if (_objectType != null)
+        if (_objectType is not null)
             return _objectType;
 
         // If we have no ObjectType specified, use the PdfKeyType enumeration.
@@ -114,7 +108,7 @@ internal sealed class PdfKeyDescriptor
             PdfKeyType.Dictionary or PdfKeyType.Stream => typeof(PdfDictionary),
             _ => null
         };
-        if (type != null)
+        if (type is not null)
             return type;
 
         if (NotYetImplementedKeyTypes.Contains(keyType))

@@ -39,7 +39,7 @@ internal abstract class PdfObject : PdfItem
     {
         // If the object that was transformed to an instance of a derived class was an indirect object
         // set the value of the reference to this.
-        if (obj._iref != null)
+        if (obj._iref is not null)
             obj._iref.Value = this;
     }
 
@@ -72,14 +72,14 @@ internal abstract class PdfObject : PdfItem
         PdfObjectId objectId = new PdfObjectId(objectNumber, generationNumber);
 
         // TODO: check imported
-        if (_iref == null)
+        if (_iref is null)
             _iref = _document._irefTable[objectId];
-        if (_iref == null)
+        if (_iref is null)
         {
             // ReSharper disable once ObjectCreationAsStatement because the new object is set to this object
             // in the constructor of PdfReference.
             new PdfReference(this);
-            Debug.Assert(_iref != null);
+            Debug.Assert(_iref is not null);
             _iref.ObjectId = objectId;
         }
         _iref.Value = this;
@@ -89,10 +89,7 @@ internal abstract class PdfObject : PdfItem
     /// <summary>
     /// Gets the PdfDocument this object belongs to.
     /// </summary>
-    public virtual PdfDocument Owner
-    {
-        get { return _document; }
-    }
+    public virtual PdfDocument Owner => _document;
 
     /// <summary>
     /// Sets the PdfDocument this object belongs to.
@@ -103,10 +100,10 @@ internal abstract class PdfObject : PdfItem
         {
             if (!ReferenceEquals(_document, value))
             {
-                if (_document != null)
+                if (_document is not null)
                     throw new InvalidOperationException("Cannot change document.");
                 _document = value;
-                if (_iref != null)
+                if (_iref is not null)
                     _iref.Document = value;
             }
         }
@@ -119,17 +116,14 @@ internal abstract class PdfObject : PdfItem
     public bool IsIndirect
     {
         // An object is an indirect object if and only if is has an indirect reference value.
-        get { return _iref != null; }
+        get => _iref is not null;
     }
 
     /// <summary>
     /// Gets the PdfInternals object of this document, that grants access to some internal structures
     /// which are not part of the public interface of PdfDocument.
     /// </summary>
-    public PdfObjectInternals Internals
-    {
-        get { return _internals ?? (_internals = new PdfObjectInternals(this)); }
-    }
+    public PdfObjectInternals Internals => _internals ?? (_internals = new PdfObjectInternals(this));
     PdfObjectInternals _internals = null!;
 
     /// <summary>
@@ -161,33 +155,24 @@ internal abstract class PdfObject : PdfItem
     /// Gets the object identifier. Returns PdfObjectId.Empty for direct objects,
     /// i.e. never returns null.
     /// </summary>
-    internal PdfObjectId ObjectId
-    {
-        get { return _iref != null ? _iref.ObjectId : PdfObjectId.Empty; }
-    }
+    internal PdfObjectId ObjectId => _iref is not null ? _iref.ObjectId : PdfObjectId.Empty;
 
     /// <summary>
     /// Gets the object number.
     /// </summary>
-    internal int ObjectNumber
-    {
-        get { return ObjectId.ObjectNumber; }
-    }
+    internal int ObjectNumber => ObjectId.ObjectNumber;
 
     /// <summary>
     /// Gets the generation number.
     /// </summary>
-    internal int GenerationNumber
-    {
-        get { return ObjectId.GenerationNumber; }
-    }
+    internal int GenerationNumber => ObjectId.GenerationNumber;
 
     /// <summary>
     /// Gets the indirect reference of this object. If the value is null, this object is a direct object.
     /// </summary>
     public PdfReference Reference
     {
-        get { return _iref; }
+        get => _iref;
 
         // Setting the reference outside PDFsharp is not considered as a valid operation.
         internal set { _iref = value; }

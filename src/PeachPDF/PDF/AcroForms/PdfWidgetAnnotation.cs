@@ -19,14 +19,14 @@ internal sealed class PdfWidgetAnnotation : PdfAnnotation
     /// <summary>The owning <see cref="PdfRadioButtonField"/> ("/Parent") - the field's own /FT, /T and /V live there, not here. Distinct from the inherited annotation-level <see cref="PdfAnnotation.Parent"/> (the page's <see cref="PdfAnnotations"/> collection), an unrelated key.</summary>
     public PdfAcroField FieldParent
     {
-        get { return (PdfAcroField)Elements.GetDictionary(PdfAcroField.Keys.Parent); }
+        get => (PdfAcroField)Elements.GetDictionary(PdfAcroField.Keys.Parent);
         set { Elements.SetReference(PdfAcroField.Keys.Parent, value); }
     }
 
     /// <summary>This widget's own appearance state ("/AS") - "/Off" or its export value when this is the selected button in the group.</summary>
     public string AppearanceState
     {
-        get { return Elements.GetName(PdfAnnotation.Keys.AS); }
+        get => Elements.GetName(PdfAnnotation.Keys.AS);
         set { Elements.SetName(PdfAnnotation.Keys.AS, value); }
     }
 

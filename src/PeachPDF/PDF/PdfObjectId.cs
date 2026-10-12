@@ -39,28 +39,19 @@ internal struct PdfObjectId : IComparable
     /// <summary>
     /// Gets or sets the object number.
     /// </summary>
-    public int ObjectNumber
-    {
-        get { return _objectNumber; }
-    }
+    public int ObjectNumber => _objectNumber;
     readonly int _objectNumber;
 
     /// <summary>
     /// Gets or sets the generation number.
     /// </summary>
-    public int GenerationNumber
-    {
-        get { return _generationNumber; }
-    }
+    public int GenerationNumber => _generationNumber;
     readonly ushort _generationNumber;
 
     /// <summary>
     /// Indicates whether this object is an empty object identifier.
     /// </summary>
-    public bool IsEmpty
-    {
-        get { return _objectNumber == 0; }
-    }
+    public bool IsEmpty => _objectNumber == 0;
 
     /// <summary>
     /// Indicates whether this instance and a specified object are equal.
@@ -111,10 +102,7 @@ internal struct PdfObjectId : IComparable
     /// <summary>
     /// Creates an empty object identifier.
     /// </summary>
-    public static PdfObjectId Empty
-    {
-        get { return new PdfObjectId(); }
-    }
+    public static PdfObjectId Empty => new PdfObjectId();
 
     /// <summary>
     /// Compares the current object id with another object.
@@ -134,8 +122,5 @@ internal struct PdfObjectId : IComparable
     /// <summary>
     /// Gets the DebuggerDisplayAttribute text.
     /// </summary>
-    internal string DebuggerDisplay
-    {
-        get { return String.Format("id=({0})", ToString()); }
-    }
+    internal string DebuggerDisplay => String.Format("id=({0})", ToString());
 }

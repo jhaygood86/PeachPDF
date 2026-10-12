@@ -29,7 +29,7 @@ internal class PdfFileSpecification : PdfDictionary
 
     public string FileName
     {
-        get { return Elements.GetString(Keys.F); }
+        get => Elements.GetString(Keys.F);
         set { Elements.SetString(Keys.F, value); }
     }
 
@@ -39,7 +39,7 @@ internal class PdfFileSpecification : PdfDictionary
     /// </summary>
     public string UnicodeFileName
     {
-        get { return Elements.GetString(Keys.UF); }
+        get => Elements.GetString(Keys.UF);
         set { Elements.SetString(Keys.UF, value, PdfStringEncoding.Unicode); }
     }
 
@@ -49,7 +49,7 @@ internal class PdfFileSpecification : PdfDictionary
     /// </summary>
     public string Description
     {
-        get { return Elements.GetString(Keys.Desc); }
+        get => Elements.GetString(Keys.Desc);
         set
         {
             if (Ascii.IsValid(value))
@@ -69,7 +69,7 @@ internal class PdfFileSpecification : PdfDictionary
         }
         set
         {
-            if (value == null)
+            if (value is null)
             {
                 embeddedFileDictionary.Elements.Remove(Keys.F);
                 embeddedFileDictionary.Elements.Remove(Keys.UF);
@@ -95,7 +95,7 @@ internal class PdfFileSpecification : PdfDictionary
     /// </summary>
     public string AssociatedFileRelationship
     {
-        get { return Elements.GetName(Keys.AFRelationship); }
+        get => Elements.GetName(Keys.AFRelationship);
         set { Elements.SetName(Keys.AFRelationship, value); }
     }
 
@@ -165,18 +165,12 @@ internal class PdfFileSpecification : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return meta ??= CreateMeta(typeof(Keys)); }
-        }
+        internal static PdfDictionaryMetadata Meta => meta ??= CreateMeta(typeof(Keys));
         static PdfDictionaryMetadata meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

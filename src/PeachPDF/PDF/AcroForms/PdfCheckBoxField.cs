@@ -17,7 +17,7 @@ internal sealed class PdfCheckBoxField : PdfAcroField
     /// <summary>The checkbox's export value ("/V") when checked - "/Off" when unchecked.</summary>
     public string Value
     {
-        get { return Elements.GetName(Keys.V); }
+        get => Elements.GetName(Keys.V);
         set { Elements.SetName(Keys.V, value); }
     }
 }

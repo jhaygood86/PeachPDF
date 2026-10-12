@@ -64,10 +64,7 @@ internal sealed partial class PdfImage : PdfXObject
     /// <summary>
     /// Gets the underlying PdfRasterImage object.
     /// </summary>
-    public PdfRasterImage Image
-    {
-        get { return _image; }
-    }
+    public PdfRasterImage Image => _image;
 
     readonly PdfRasterImage _image;
     readonly int? _targetWidth;
@@ -1040,10 +1037,7 @@ class MonochromeMask
     /// <summary>
     /// Returns the bitmap mask that will be written to PDF.
     /// </summary>
-    public byte[] MaskData
-    {
-        get { return _maskData; }
-    }
+    public byte[] MaskData => _maskData;
     private readonly byte[] _maskData;
 
     /// <summary>

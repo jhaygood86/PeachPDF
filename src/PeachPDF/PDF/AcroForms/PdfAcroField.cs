@@ -23,7 +23,7 @@ internal abstract class PdfAcroField : PdfAnnotation
     /// <summary>The field type ("/FT") - "/Tx", "/Btn" or "/Ch".</summary>
     public string FieldType
     {
-        get { return Elements.GetName(Keys.FT); }
+        get => Elements.GetName(Keys.FT);
         set { Elements.SetName(Keys.FT, value); }
     }
 
@@ -39,14 +39,14 @@ internal abstract class PdfAcroField : PdfAnnotation
     /// <summary>The field's partial name ("/T") - this field's <c>name</c> attribute, or a generated fallback.</summary>
     public string PartialFieldName
     {
-        get { return Elements.GetString(PdfAnnotation.Keys.T); }
+        get => Elements.GetString(PdfAnnotation.Keys.T);
         set { Elements.SetString(PdfAnnotation.Keys.T, value, PdfStringEncoding.WinAnsiEncoding); }
     }
 
     /// <summary>The field flags ("/Ff") - see the FieldFlags constants on each concrete subclass. Distinct from the inherited annotation-level <see cref="PdfAnnotation.Flags"/> ("/F"), a different key entirely.</summary>
     public int FieldFlags
     {
-        get { return Elements.GetInteger(Keys.Ff); }
+        get => Elements.GetInteger(Keys.Ff);
         set { Elements.SetInteger(Keys.Ff, value); }
     }
 
@@ -57,21 +57,21 @@ internal abstract class PdfAcroField : PdfAnnotation
     /// </summary>
     public string AlternateFieldName
     {
-        get { return Elements.GetString(Keys.TU); }
+        get => Elements.GetString(Keys.TU);
         set { Elements.SetString(Keys.TU, value, PdfStringEncoding.Unicode); }
     }
 
     /// <summary>The default appearance string ("/DA") - font/size/color operators for generating a text-like appearance.</summary>
     public string DefaultAppearance
     {
-        get { return Elements.GetString(Keys.DA); }
+        get => Elements.GetString(Keys.DA);
         set { Elements.SetString(Keys.DA, value, PdfStringEncoding.WinAnsiEncoding); }
     }
 
     /// <summary>The appearance state ("/AS") selecting which subdictionary of "/AP" applies - e.g. "/Yes" or "/Off".</summary>
     public string AppearanceState
     {
-        get { return Elements.GetName(PdfAnnotation.Keys.AS); }
+        get => Elements.GetName(PdfAnnotation.Keys.AS);
         set { Elements.SetName(PdfAnnotation.Keys.AS, value); }
     }
 

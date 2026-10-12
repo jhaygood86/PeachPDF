@@ -30,8 +30,7 @@ static class ColorSpaceHelper
     /// </summary>
     public static PaintColor EnsureColorMode(PdfDocument document, PaintColor color)
     {
-        if (document == null)
-            throw new ArgumentNullException("document");
+        ArgumentNullException.ThrowIfNull(document);
 
         return EnsureColorMode(document.Options.ColorMode, color);
     }

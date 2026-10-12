@@ -18,7 +18,7 @@ internal sealed class PdfCrossReferenceStream : PdfTrailer  // Reference: 3.4.7 
     {
     }
 
-    public readonly List<CrossReferenceStreamEntry> Entries = new List<CrossReferenceStreamEntry>();
+    public readonly List<CrossReferenceStreamEntry> Entries = [];
 
     [DebuggerDisplay("{Type} {Field2} {Field3}")]
     internal struct CrossReferenceStreamEntry
@@ -107,18 +107,12 @@ internal sealed class PdfCrossReferenceStream : PdfTrailer  // Reference: 3.4.7 
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static new PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static new PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

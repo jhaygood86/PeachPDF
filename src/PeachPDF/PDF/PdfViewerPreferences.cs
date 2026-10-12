@@ -24,7 +24,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// </summary>
     public bool HideToolbar
     {
-        get { return Elements.GetBoolean(Keys.HideToolbar); }
+        get => Elements.GetBoolean(Keys.HideToolbar);
         set { Elements.SetBoolean(Keys.HideToolbar, value); }
     }
 
@@ -34,7 +34,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// </summary>
     public bool HideMenubar
     {
-        get { return Elements.GetBoolean(Keys.HideMenubar); }
+        get => Elements.GetBoolean(Keys.HideMenubar);
         set { Elements.SetBoolean(Keys.HideMenubar, value); }
     }
 
@@ -45,7 +45,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// </summary>
     public bool HideWindowUI
     {
-        get { return Elements.GetBoolean(Keys.HideWindowUI); }
+        get => Elements.GetBoolean(Keys.HideWindowUI);
         set { Elements.SetBoolean(Keys.HideWindowUI, value); }
     }
 
@@ -55,7 +55,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// </summary>
     public bool FitWindow
     {
-        get { return Elements.GetBoolean(Keys.FitWindow); }
+        get => Elements.GetBoolean(Keys.FitWindow);
         set { Elements.SetBoolean(Keys.FitWindow, value); }
     }
 
@@ -65,7 +65,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// </summary>
     public bool CenterWindow
     {
-        get { return Elements.GetBoolean(Keys.CenterWindow); }
+        get => Elements.GetBoolean(Keys.CenterWindow);
         set { Elements.SetBoolean(Keys.CenterWindow, value); }
     }
 
@@ -77,7 +77,7 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     /// </summary>
     public bool DisplayDocTitle
     {
-        get { return Elements.GetBoolean(Keys.DisplayDocTitle); }
+        get => Elements.GetBoolean(Keys.DisplayDocTitle);
         set { Elements.SetBoolean(Keys.DisplayDocTitle, value); }
     }
 
@@ -263,18 +263,12 @@ internal sealed class PdfViewerPreferences : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

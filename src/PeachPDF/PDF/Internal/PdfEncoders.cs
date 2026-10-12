@@ -18,19 +18,13 @@ internal static class PdfEncoders
     /// <summary>
     /// Gets the raw encoding.
     /// </summary>
-    public static Encoding LatinOneByteEncoding
-    {
-        get { return _rawEncoding ?? (_rawEncoding = new LatinOneByteEncoding()); }
-    }
+    public static Encoding LatinOneByteEncoding => _rawEncoding ?? (_rawEncoding = new LatinOneByteEncoding());
     static Encoding _rawEncoding = null!;
 
     /// <summary>
     /// Gets the raw Unicode encoding.
     /// </summary>
-    public static Encoding RawBigEndianUnicodeEncoding
-    {
-        get { return _rawUnicodeEncoding ?? (_rawUnicodeEncoding = new RawBigEndianUnicodeEncoding()); }
-    }
+    public static Encoding RawBigEndianUnicodeEncoding => _rawUnicodeEncoding ?? (_rawUnicodeEncoding = new RawBigEndianUnicodeEncoding());
     static Encoding _rawUnicodeEncoding = null!;
 
     /// <summary>
@@ -40,7 +34,7 @@ internal static class PdfEncoders
     {
         get
         {
-            if (_winAnsiEncoding == null)
+            if (_winAnsiEncoding is null)
             {
                 // Use own implementation in Silverlight and WinRT
                 _winAnsiEncoding = new WindowsAnsiEncoding();
@@ -53,19 +47,13 @@ internal static class PdfEncoders
     /// <summary>
     /// Gets the PDF PdfDocumentEncoding encoding.
     /// </summary>
-    public static Encoding PdfDocumentEncoding
-    {
-        get { return _docEncoding ?? (_docEncoding = new PdfDocumentEncoding()); }
-    }
+    public static Encoding PdfDocumentEncoding => _docEncoding ?? (_docEncoding = new PdfDocumentEncoding());
     static Encoding _docEncoding = null!;
 
     /// <summary>
     /// Gets the UNICODE little-endian encoding.
     /// </summary>
-    public static Encoding UnicodeEncoding
-    {
-        get { return _unicodeEncoding ?? (_unicodeEncoding = Encoding.Unicode); }
-    }
+    public static Encoding UnicodeEncoding => _unicodeEncoding ?? (_unicodeEncoding = Encoding.Unicode);
     static Encoding _unicodeEncoding = null!;
 
     ///// <summary>
@@ -128,7 +116,7 @@ internal static class PdfEncoders
     /// </summary>
     public static string ToStringLiteral(byte[] bytes, bool unicode)
     {
-        if (bytes == null || bytes.Length == 0)
+        if (bytes is null || bytes.Length == 0)
             return "()";
 
         byte[] temp = FormatStringLiteral(bytes, unicode, true, false);
@@ -175,7 +163,7 @@ internal static class PdfEncoders
     /// </summary>
     public static string ToHexStringLiteral(byte[] bytes, bool unicode)
     {
-        if (bytes == null || bytes.Length == 0)
+        if (bytes is null || bytes.Length == 0)
             return "<>";
 
         byte[] agTemp = FormatStringLiteral(bytes, unicode, true, true);
@@ -192,7 +180,7 @@ internal static class PdfEncoders
     /// <returns>The PDF bytes.</returns>
     public static byte[] FormatStringLiteral(byte[] bytes, bool unicode, bool prefix, bool hex)
     {
-        if (bytes == null || bytes.Length == 0)
+        if (bytes is null || bytes.Length == 0)
             return hex ? new byte[] { (byte)'<', (byte)'>' } : new byte[] { (byte)'(', (byte)')' };
 
         Debug.Assert(!unicode || bytes.Length % 2 == 0, "Odd number of bytes in Unicode string.");

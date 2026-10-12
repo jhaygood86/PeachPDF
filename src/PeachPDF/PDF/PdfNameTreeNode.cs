@@ -43,7 +43,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     /// </summary>
     public bool IsRoot
     {
-        get => Parent == null;
+        get => Parent is null;
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
         get
         {
             var kids = Elements.GetArray(Keys.Kids);
-            return kids != null ? kids.Elements.Count : 0;
+            return kids is not null ? kids.Elements.Count : 0;
         }
     }
 
@@ -67,7 +67,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
         {
             var names = Elements.GetArray(Keys.Names);
             // Entries are key / value pairs, so divide by 2.
-            return names != null ? names.Elements.Count / 2 : 0;
+            return names is not null ? names.Elements.Count / 2 : 0;
         }
     }
 
@@ -86,12 +86,12 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     private void Initialize()
     {
         var kids = Elements.GetArray(Keys.Kids);
-        if (kids != null)
+        if (kids is not null)
         {
             for (var i = 0; i < kids.Elements.Count; i++)
             {
                 var kidDict = kids.Elements.GetDictionary(i);
-                if (kidDict != null)
+                if (kidDict is not null)
                 {
                     var kid = new PdfNameTreeNode(kidDict) { Parent = this };
                     _kids.Add(kid);
@@ -111,7 +111,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     {
         var result = new List<string>();
         var names = Elements.GetArray(Keys.Names);
-        if (names != null)
+        if (names is not null)
         {
             for (var i = 0; i < names.Elements.Count; i += 2)
             {
@@ -136,7 +136,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     public bool ContainsName(string name, bool includeKids = false)
     {
         var names = Elements.GetArray(Keys.Names);
-        if (names != null)
+        if (names is not null)
         {
             for (var i = 0; i < names.Elements.Count; i += 2)
             {
@@ -164,7 +164,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     public PdfItem? GetValue(string name, bool includeKids = false)
     {
         var names = Elements.GetArray(Keys.Names);
-        if (names != null)
+        if (names is not null)
         {
             for (var i = 0; i < names.Elements.Count; i += 2)
             {
@@ -180,7 +180,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
             foreach (var kid in _kids)
             {
                 var value = kid.GetValue(name, true);
-                if (value != null)
+                if (value is not null)
                     return value;
             }
         }
@@ -193,7 +193,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     public void AddKid(PdfNameTreeNode kidNode)
     {
         var kids = Elements.GetArray(Keys.Kids);
-        if (kids == null)
+        if (kids is null)
         {
             kids = new PdfArray();
             Elements.SetObject(Keys.Kids, kids);
@@ -209,7 +209,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     public void AddName(string key, PdfItem value)
     {
         var names = Elements.GetArray(Keys.Names);
-        if (names == null)
+        if (names is null)
         {
             names = new PdfArray();
             Elements.SetObject(Keys.Names, names);

@@ -50,7 +50,7 @@ internal sealed class PdfCatalog : PdfDictionary
     /// </summary>
     internal PdfPageLayout PageLayout
     {
-        get { return (PdfPageLayout)Elements.GetEnumFromName(Keys.PageLayout, PdfPageLayout.SinglePage); }
+        get => (PdfPageLayout)Elements.GetEnumFromName(Keys.PageLayout, PdfPageLayout.SinglePage);
         set { Elements.SetEnumAsName(Keys.PageLayout, value); }
     }
 
@@ -59,20 +59,14 @@ internal sealed class PdfCatalog : PdfDictionary
     /// </summary>
     internal PdfPageMode PageMode
     {
-        get { return (PdfPageMode)Elements.GetEnumFromName(Keys.PageMode, PdfPageMode.UseNone); }
+        get => (PdfPageMode)Elements.GetEnumFromName(Keys.PageMode, PdfPageMode.UseNone);
         set { Elements.SetEnumAsName(Keys.PageMode, value); }
     }
 
     /// <summary>
     /// Implementation of PdfDocument.ViewerPreferences.
     /// </summary>
-    internal PdfViewerPreferences ViewerPreferences
-    {
-        get
-        {
-            return _viewerPreferences ??= (PdfViewerPreferences)Elements.GetValue(Keys.ViewerPreferences, ValueCreationFlags.CreateIndirect);
-        }
-    }
+    internal PdfViewerPreferences ViewerPreferences => _viewerPreferences ??= (PdfViewerPreferences)Elements.GetValue(Keys.ViewerPreferences, ValueCreationFlags.CreateIndirect);
     PdfViewerPreferences _viewerPreferences = null!;
 
     /// <summary>
@@ -95,10 +89,10 @@ internal sealed class PdfCatalog : PdfDictionary
     {
         get
         {
-            if (_names == null)
+            if (_names is null)
             {
                 var dict = Elements.GetDictionary(Keys.Names);
-                if (dict != null)
+                if (dict is not null)
                     _names = new PdfNameDictionary(dict);
                 else
                 {
@@ -118,10 +112,10 @@ internal sealed class PdfCatalog : PdfDictionary
     /// </summary>
     public string Language
     {
-        get { return Elements.GetString(Keys.Lang); }
+        get => Elements.GetString(Keys.Lang);
         set
         {
-            if (value == null)
+            if (value is null)
                 Elements.Remove(Keys.Lang);
             else
                 Elements.SetString(Keys.Lang, value);
@@ -133,10 +127,7 @@ internal sealed class PdfCatalog : PdfDictionary
     /// Only ever touched when tagged PDF output is enabled - untouched, this stays null and no
     /// indirect object is allocated for it.
     /// </summary>
-    internal PdfStructureTreeRoot StructureTreeRoot
-    {
-        get { return _structureTreeRoot ??= (PdfStructureTreeRoot)Elements.GetValue(Keys.StructTreeRoot, ValueCreationFlags.CreateIndirect); }
-    }
+    internal PdfStructureTreeRoot StructureTreeRoot => _structureTreeRoot ??= (PdfStructureTreeRoot)Elements.GetValue(Keys.StructTreeRoot, ValueCreationFlags.CreateIndirect);
     PdfStructureTreeRoot _structureTreeRoot = null!;
 
     /// <summary>
@@ -144,19 +135,13 @@ internal sealed class PdfCatalog : PdfDictionary
     /// Only ever touched when interactive PDF forms output is enabled - untouched, this stays
     /// null and no indirect object is allocated for it.
     /// </summary>
-    internal PdfAcroForm AcroForm
-    {
-        get { return _acroForm ??= (PdfAcroForm)Elements.GetValue(Keys.AcroForm, ValueCreationFlags.CreateIndirect); }
-    }
+    internal PdfAcroForm AcroForm => _acroForm ??= (PdfAcroForm)Elements.GetValue(Keys.AcroForm, ValueCreationFlags.CreateIndirect);
     PdfAcroForm _acroForm = null!;
 
     /// <summary>
     /// Gets the mark information dictionary ("/MarkInfo"), lazily creating it on first access.
     /// </summary>
-    internal PdfMarkInformation MarkInfo
-    {
-        get { return _markInfo ??= (PdfMarkInformation)Elements.GetValue(Keys.MarkInfo, ValueCreationFlags.CreateIndirect); }
-    }
+    internal PdfMarkInformation MarkInfo => _markInfo ??= (PdfMarkInformation)Elements.GetValue(Keys.MarkInfo, ValueCreationFlags.CreateIndirect);
     PdfMarkInformation _markInfo = null!;
 
     /// <summary>
@@ -189,7 +174,7 @@ internal sealed class PdfCatalog : PdfDictionary
         Owner.Internals.AddObject(fileSpecification);
 
         var array = Elements.GetArray(Keys.AF);
-        if (array == null)
+        if (array is null)
         {
             array = new PdfArray(Owner);
             Elements[Keys.AF] = array;
@@ -231,18 +216,18 @@ internal sealed class PdfCatalog : PdfDictionary
         _structureTreeRoot?.PrepareForSave();
         _acroForm?.PrepareForSave();
 
-        if (_outline == null || _outline.Outlines.Count <= 0) return;
+        if (_outline is null || _outline.Outlines.Count <= 0) return;
 
-        if (Elements[Keys.PageMode] == null)
+        if (Elements[Keys.PageMode] is null)
             PageMode = PdfPageMode.UseOutlines;
         _outline.PrepareForSave();
     }
 
     internal override void WriteObject(PdfWriter writer)
     {
-        if (_outline != null && _outline.Outlines.Count > 0)
+        if (_outline is not null && _outline.Outlines.Count > 0)
         {
-            if (Elements[Keys.PageMode] == null)
+            if (Elements[Keys.PageMode] is null)
                 PageMode = PdfPageMode.UseOutlines;
         }
         base.WriteObject(writer);
@@ -402,18 +387,12 @@ internal sealed class PdfCatalog : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ??= CreateMeta(typeof(Keys)); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

@@ -32,15 +32,15 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
 
     internal double DpiX
     {
-        get { return _dpiX; }
-        set { _dpiX = value; }
+        get => _dpiX;
+        set => _dpiX = value;
     }
     double _dpiX = 72;
 
     internal double DpiY
     {
-        get { return _dpiY; }
-        set { _dpiY = value; }
+        get => _dpiY;
+        set => _dpiY = value;
     }
     double _dpiY = 72;
 
@@ -51,7 +51,7 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
     {
         get
         {
-            if (_resources == null)
+            if (_resources is null)
                 _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create);
             return _resources;
         }
@@ -60,13 +60,13 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
 
     PdfResources IContentStream.Resources
     {
-        get { return Resources; }
+        get => Resources;
     }
 
     internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
     {
         pdfFont = _document.FontTable.GetFont(font);
-        Debug.Assert(pdfFont != null);
+        Debug.Assert(pdfFont is not null);
         string name = Resources.AddFont(pdfFont);
         return name;
     }
@@ -170,18 +170,12 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        internal static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

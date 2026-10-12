@@ -18,7 +18,7 @@ internal class CharacterMapInfo
 {
     public CharacterMapInfo(Typeface typeface)
     {
-        Debug.Assert(typeface != null);
+        Debug.Assert(typeface is not null);
         _typeface = typeface;
     }
     readonly Typeface _typeface;
@@ -29,7 +29,7 @@ internal class CharacterMapInfo
     /// </summary>
     public void AddChars(string text)
     {
-        if (text != null)
+        if (text is not null)
         {
             var metrics = _typeface.Metrics;
             bool symbol = metrics.IsSymbolic;
@@ -88,10 +88,10 @@ internal class CharacterMapInfo
     /// </summary>
     public void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
     {
-        if (text == null)
+        if (text is null)
             return;
 
-        var source = logicalText != null && logicalText.Length == text.Length && logicalText != text
+        var source = logicalText is not null && logicalText.Length == text.Length && logicalText != text
             ? logicalText
             : text;
 
@@ -126,7 +126,7 @@ internal class CharacterMapInfo
     /// </summary>
     public void AddGlyphIndices(string glyphIndices)
     {
-        if (glyphIndices != null)
+        if (glyphIndices is not null)
         {
             int length = glyphIndices.Length;
             for (int idx = 0; idx < length; idx++)

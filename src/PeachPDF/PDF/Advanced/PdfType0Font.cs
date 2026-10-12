@@ -49,14 +49,11 @@ internal sealed class PdfType0Font : PdfFont
 
     public string BaseFont
     {
-        get { return Elements.GetName(Keys.BaseFont); }
+        get => Elements.GetName(Keys.BaseFont);
         set { Elements.SetName(Keys.BaseFont, value); }
     }
 
-    internal PdfCidFont DescendantFont
-    {
-        get { return _descendantFont; }
-    }
+    internal PdfCidFont DescendantFont => _descendantFont;
     readonly PdfCidFont _descendantFont = null!;
 
     internal override void PrepareForSave()
@@ -66,7 +63,7 @@ internal sealed class PdfType0Font : PdfFont
         // Use GetGlyphIndices to create the widths array.
         Typeface typeface = FontDescriptor._typeface;
         StringBuilder w = new StringBuilder("[");
-        if (_characterMapInfo != null)
+        if (_characterMapInfo is not null)
         {
             int[] glyphIndices = _characterMapInfo.GetGlyphIndices();
             int count = glyphIndices.Length;
@@ -148,7 +145,7 @@ internal sealed class PdfType0Font : PdfFont
         {
             get
             {
-                if (Keys._meta == null)
+                if (Keys._meta is null)
                     Keys._meta = CreateMeta(typeof(Keys));
                 return Keys._meta = null!;
             }
@@ -159,8 +156,5 @@ internal sealed class PdfType0Font : PdfFont
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

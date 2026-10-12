@@ -248,7 +248,7 @@ internal sealed class PdfGraphicsState : ICloneable
             return;
 
         SolidBrush solidBrush = brush as SolidBrush;
-        if (solidBrush != null)
+        if (solidBrush is not null)
         {
             PaintColor color = solidBrush.PaintColor;
             const bool overPrint = false;
@@ -318,7 +318,7 @@ internal sealed class PdfGraphicsState : ICloneable
                 pattern.SetupFromBrush(brush, matrix, _renderer);
                 string name = _renderer.Resources.AddPattern(pattern);
 
-                if (pattern.AlphaExtGState != null)
+                if (pattern.AlphaExtGState is not null)
                 {
                     PdfATransparencyGuard.RequireAllowed(_renderer.Owner, _renderer._page, "A gradient with a semi-transparent color stop");
                     string gsName = _renderer.Resources.AddExtGState(pattern.AlphaExtGState);

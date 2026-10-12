@@ -29,8 +29,7 @@ internal sealed class PdfName : PdfItem
     /// </summary>
     public PdfName(string value)
     {
-        if (value == null)
-            throw new ArgumentNullException("value");
+        ArgumentNullException.ThrowIfNull(value);
         if (value.Length == 0 || value[0] != '/')
             throw new ArgumentException("A PDF name must start with a slash (/).");
 
@@ -59,7 +58,7 @@ internal sealed class PdfName : PdfItem
     public string Value
     {
         // This class must behave like a value type. Therefore it cannot be changed (like System.String).
-        get { return _value; }
+        get => _value;
     }
     readonly string _value;
 
@@ -77,7 +76,7 @@ internal sealed class PdfName : PdfItem
     public static bool operator ==(PdfName? name, string? str)
     {
         if (ReferenceEquals(name, null))
-            return str == null;
+            return str is null;
 
         return name._value == str;
     }
@@ -88,7 +87,7 @@ internal sealed class PdfName : PdfItem
     public static bool operator !=(PdfName? name, string? str)
     {
         if (ReferenceEquals(name, null))
-            return str != null;
+            return str is not null;
 
         return name._value != str;
     }
@@ -110,10 +109,7 @@ internal sealed class PdfName : PdfItem
     /// <summary>
     /// Gets the comparer for this type.
     /// </summary>
-    public static PdfNameKeyComparer Comparer
-    {
-        get { return new PdfNameKeyComparer(); }
-    }
+    public static PdfNameKeyComparer Comparer => new PdfNameKeyComparer();
 
     /// <summary>
     /// Implements a comparer that compares PdfName objects.
@@ -128,13 +124,13 @@ internal sealed class PdfName : PdfItem
         public int Compare(PdfName? l, PdfName? r)
         {
 
-            if (l != null)
+            if (l is not null)
             {
-                if (r != null)
+                if (r is not null)
                     return String.Compare(l._value, r._value, StringComparison.Ordinal);
                 return -1;
             }
-            if (r != null)
+            if (r is not null)
                 return 1;
             return 0;
         }

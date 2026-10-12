@@ -52,7 +52,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     protected PdfArray(PdfArray array)
         : base(array)
     {
-        if (array._elements != null)
+        if (array._elements is not null)
             array._elements.ChangeOwner(this);
     }
 
@@ -71,7 +71,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     protected override object Copy()
     {
         PdfArray array = (PdfArray)base.Copy();
-        if (array._elements != null)
+        if (array._elements is not null)
         {
             array._elements = array._elements.Clone();
             int count = array._elements.Count;
@@ -88,10 +88,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     /// <summary>
     /// Gets the collection containing the elements of this object.
     /// </summary>
-    public ArrayElements Elements
-    {
-        get { return _elements ?? (_elements = new ArrayElements(this)); }
-    }
+    public ArrayElements Elements => _elements ?? (_elements = new ArrayElements(this));
 
     /// <summary>
     /// Returns an enumerator that iterates through a collection.
@@ -164,7 +161,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// </summary>
         internal void ChangeOwner(PdfArray array)
         {
-            if (_ownerArray != null)
+            if (_ownerArray is not null)
             {
                 // ???
             }
@@ -188,15 +185,15 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj == null || obj is PdfNull)
+            if (obj is null || obj is PdfNull)
                 return false;
 
             PdfBoolean boolean = obj as PdfBoolean;
-            if (boolean != null)
+            if (boolean is not null)
                 return boolean.Value;
 
             PdfBooleanObject booleanObject = obj as PdfBooleanObject;
-            if (booleanObject != null)
+            if (booleanObject is not null)
                 return booleanObject.Value;
 
             throw new InvalidCastException("GetBoolean: Object is not a boolean.");
@@ -214,15 +211,15 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj == null || obj is PdfNull)
+            if (obj is null || obj is PdfNull)
                 return 0;
 
             PdfInteger integer = obj as PdfInteger;
-            if (integer != null)
+            if (integer is not null)
                 return integer.Value;
 
             PdfIntegerObject integerObject = obj as PdfIntegerObject;
-            if (integerObject != null)
+            if (integerObject is not null)
                 return integerObject.Value;
 
             throw new InvalidCastException("GetInteger: Object is not an integer.");
@@ -240,23 +237,23 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj == null || obj is PdfNull)
+            if (obj is null || obj is PdfNull)
                 return 0;
 
             PdfReal real = obj as PdfReal;
-            if (real != null)
+            if (real is not null)
                 return real.Value;
 
             PdfRealObject realObject = obj as PdfRealObject;
-            if (realObject != null)
+            if (realObject is not null)
                 return realObject.Value;
 
             PdfInteger integer = obj as PdfInteger;
-            if (integer != null)
+            if (integer is not null)
                 return integer.Value;
 
             PdfIntegerObject integerObject = obj as PdfIntegerObject;
-            if (integerObject != null)
+            if (integerObject is not null)
                 return integerObject.Value;
 
             throw new InvalidCastException("GetReal: Object is not a number.");
@@ -274,15 +271,15 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj == null || obj is PdfNull)
+            if (obj is null || obj is PdfNull)
                 return String.Empty;
 
             PdfString str = obj as PdfString;
-            if (str != null)
+            if (str is not null)
                 return str.Value;
 
             PdfStringObject strObject = obj as PdfStringObject;
-            if (strObject != null)
+            if (strObject is not null)
                 return strObject.Value;
 
             throw new InvalidCastException("GetString: Object is not a string.");
@@ -300,15 +297,15 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj == null || obj is PdfNull)
+            if (obj is null || obj is PdfNull)
                 return String.Empty;
 
             PdfName name = obj as PdfName;
-            if (name != null)
+            if (name is not null)
                 return name.Value;
 
             PdfNameObject nameObject = obj as PdfNameObject;
-            if (nameObject != null)
+            if (nameObject is not null)
                 return nameObject.Value;
 
             throw new InvalidCastException("GetName: Object is not a name.");
@@ -325,7 +322,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
 
             PdfItem item = this[index];
             PdfReference reference = item as PdfReference;
-            if (reference != null)
+            if (reference is not null)
                 return reference.Value;
 
             return item as PdfObject;
@@ -361,18 +358,12 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <summary>
         /// Gets all items of this array.
         /// </summary>
-        public PdfItem[] Items
-        {
-            get { return _elements.ToArray(); }
-        }
+        public PdfItem[] Items => _elements.ToArray();
 
         /// <summary>
         /// Returns false.
         /// </summary>
-        public bool IsReadOnly
-        {
-            get { return false; }
-        }
+        public bool IsReadOnly => false;
 
         /// <summary>
         /// Gets or sets an item at the specified index.
@@ -380,11 +371,10 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <value></value>
         public PdfItem this[int index]
         {
-            get { return _elements[index]; }
+            get => _elements[index];
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException("value");
+                ArgumentNullException.ThrowIfNull(value);
                 _elements[index] = value;
             }
         }
@@ -447,7 +437,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             //  "You try to set an indirect object directly into an array.");
 
             PdfObject obj = value as PdfObject;
-            if (obj != null && obj.IsIndirect)
+            if (obj is not null && obj.IsIndirect)
                 _elements.Add(obj.Reference);
             else
                 _elements.Add(value);
@@ -456,26 +446,17 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <summary>
         /// Returns false.
         /// </summary>
-        public bool IsFixedSize
-        {
-            get { return false; }
-        }
+        public bool IsFixedSize => false;
 
         /// <summary>
         /// Returns false.
         /// </summary>
-        public bool IsSynchronized
-        {
-            get { return false; }
-        }
+        public bool IsSynchronized => false;
 
         /// <summary>
         /// Gets the number of elements in the array.
         /// </summary>
-        public int Count
-        {
-            get { return _elements.Count; }
-        }
+        public int Count => _elements.Count;
 
         /// <summary>
         /// Copies the elements of the array to the specified array.
@@ -488,10 +469,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <summary>
         /// The current implementation return null.
         /// </summary>
-        public object SyncRoot
-        {
-            get { return null; }
-        }
+        public object SyncRoot => null;
 
         /// <summary>
         /// Returns an enumerator that iterates through the array.
@@ -528,7 +506,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     {
         get
         {
-            return String.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectId.DebuggerDisplay, _elements == null ? 0 : _elements.Count);
+            return String.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectId.DebuggerDisplay, _elements is null ? 0 : _elements.Count);
 
         }
     }

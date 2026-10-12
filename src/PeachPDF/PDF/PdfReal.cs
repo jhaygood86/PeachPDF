@@ -33,7 +33,7 @@ internal sealed class PdfReal : PdfNumber
     public double Value
     {
         // This class must behave like a value type. Therefore it cannot be changed (like System.String).
-        get { return _value; }
+        get => _value;
     }
     readonly double _value;
 

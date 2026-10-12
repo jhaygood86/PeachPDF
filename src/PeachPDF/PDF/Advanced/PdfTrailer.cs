@@ -38,7 +38,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         // /Size 10
 
         PdfReference iref = trailer.Elements.GetReference(Keys.Info);
-        if (iref != null)
+        if (iref is not null)
             Elements.SetReference(Keys.Info, iref);
 
         Elements.SetReference(Keys.Root, trailer.Elements.GetReference(Keys.Root));
@@ -46,13 +46,13 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         Elements.SetInteger(Keys.Size, trailer.Elements.GetInteger(Keys.Size));
 
         PdfArray id = trailer.Elements.GetArray(Keys.ID);
-        if (id != null)
+        if (id is not null)
             Elements.SetValue(Keys.ID, id);
     }
 
     public int Size
     {
-        get { return Elements.GetInteger(Keys.Size); }
+        get => Elements.GetInteger(Keys.Size);
         set { Elements.SetInteger(Keys.Size, value); }
     }
 
@@ -62,19 +62,13 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
     //  get {return Elements.GetInteger(Keys.Prev);}
     //}
 
-    public PdfDocumentInformation Info
-    {
-        get { return (PdfDocumentInformation)Elements.GetValue(Keys.Info, ValueCreationFlags.CreateIndirect); }
-    }
+    public PdfDocumentInformation Info => (PdfDocumentInformation)Elements.GetValue(Keys.Info, ValueCreationFlags.CreateIndirect);
 
     /// <summary>
     /// (Required; must be an indirect reference)
     /// The catalog dictionary for the PDF document contained in the file.
     /// </summary>
-    public PdfCatalog Root
-    {
-        get { return (PdfCatalog)Elements.GetValue(PdfTrailer.Keys.Root, ValueCreationFlags.CreateIndirect); }
-    }
+    public PdfCatalog Root => (PdfCatalog)Elements.GetValue(PdfTrailer.Keys.Root, ValueCreationFlags.CreateIndirect);
 
     /// <summary>
     /// Gets the first or second document identifier.
@@ -85,7 +79,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
             throw new ArgumentOutOfRangeException("index", index, "Index must be 0 or 1.");
 
         PdfArray array = Elements[Keys.ID] as PdfArray;
-        if (array == null || array.Elements.Count < 2)
+        if (array is null || array.Elements.Count < 2)
             return "";
         PdfItem item = array.Elements[index];
         if (item is PdfString)
@@ -102,7 +96,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
             throw new ArgumentOutOfRangeException("index", index, "Index must be 0 or 1.");
 
         PdfArray array = Elements[Keys.ID] as PdfArray;
-        if (array == null || array.Elements.Count < 2)
+        if (array is null || array.Elements.Count < 2)
             array = CreateNewDocumentIds();
         array.Elements[index] = new PdfString(value, PdfStringFlags.HexLiteral);
     }
@@ -136,19 +130,19 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
     {
         // /Root
         PdfReference iref = _document._trailer.Elements[Keys.Root] as PdfReference;
-        if (iref != null && iref.Value == null)
+        if (iref is not null && iref.Value is null)
         {
             iref = _document._irefTable[iref.ObjectId];
-            Debug.Assert(iref.Value != null);
+            Debug.Assert(iref.Value is not null);
             _document._trailer.Elements[Keys.Root] = iref;
         }
 
         // /Info
         iref = _document._trailer.Elements[PdfTrailer.Keys.Info] as PdfReference;
-        if (iref != null && iref.Value == null)
+        if (iref is not null && iref.Value is null)
         {
             iref = _document._irefTable[iref.ObjectId];
-            Debug.Assert(iref.Value != null);
+            Debug.Assert(iref.Value is not null);
             _document._trailer.Elements[Keys.Info] = iref;
         }
 
@@ -219,18 +213,12 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta
-        {
-            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-        }
+        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
         static PdfDictionaryMetadata _meta = null!;
     }
 
     /// <summary>
     /// Gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal override PdfDictionaryMetadata Meta
-    {
-        get { return Keys.Meta; }
-    }
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
 }

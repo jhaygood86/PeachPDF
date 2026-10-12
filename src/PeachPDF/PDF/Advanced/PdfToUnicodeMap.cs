@@ -28,8 +28,8 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
     /// </summary>
     public CharacterMapInfo CharacterMapInfo
     {
-        get { return _characterMapInfo; }
-        set { _characterMapInfo = value; }
+        get => _characterMapInfo;
+        set => _characterMapInfo = value;
     }
     CharacterMapInfo _characterMapInfo = null!;
 
@@ -101,7 +101,7 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
             Elements.Remove("/Filter");
         }
 
-        if (Stream == null)
+        if (Stream is null)
             CreateStream(bytes);
         else
         {

@@ -40,7 +40,7 @@ internal sealed class PdfBooleanObject : PdfObject
     /// </summary>
     public bool Value
     {
-        get { return _value; }
+        get => _value;
         //set { _value = value; }
     }
 
