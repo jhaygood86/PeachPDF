@@ -192,7 +192,7 @@ namespace PeachPDF
             foreach (var link in HtmlContainerInt.GetLinks(bookmarkBoxes))
             {
                 var href = ResolveHref(link.Href);
-                linkElements.Add(new LinkElementData<Rect>(link.Id, href, Utils.ToPoints(link.Rectangle, PixelsPerPoint), link.SourceBox));
+                linkElements.Add(new LinkElementData<Rect>(link.Id, href, Utils.ToPoints(link.Rectangle, PixelsPerPoint), link.SourceBox, link.GeometryBox));
             }
 
             return linkElements;

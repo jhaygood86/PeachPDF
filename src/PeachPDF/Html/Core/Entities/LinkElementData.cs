@@ -23,12 +23,13 @@ namespace PeachPDF.Html.Core.Entities
         /// <summary>
         /// Init.
         /// </summary>
-        public LinkElementData(string id, string href, T rectangle, CssBox? sourceBox = null)
+        public LinkElementData(string id, string href, T rectangle, CssBox? sourceBox = null, CssBox? geometryBox = null)
         {
             Id = id;
             Href = href;
             Rectangle = rectangle;
             SourceBox = sourceBox;
+            GeometryBox = geometryBox ?? sourceBox;
         }
 
         /// <summary>
@@ -53,6 +54,13 @@ namespace PeachPDF.Html.Core.Entities
         /// to look up this link's "/Link" structure element for "/OBJR" linkage.
         /// </summary>
         public CssBox? SourceBox { get; }
+
+        /// <summary>
+        /// The box <see cref="Rectangle"/> is the layout geometry of, which is what the painter records a placement against when a
+        /// <c>transform</c> moved it: the link's own box, the lifted child a <c>display: contents</c> link covers, or the SVG box an
+        /// SVG-sourced link was found in. Defaults to <see cref="SourceBox"/>.
+        /// </summary>
+        public CssBox? GeometryBox { get; }
 
         /// <summary>
         /// Is the link is directed to another element in the html

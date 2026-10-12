@@ -97,6 +97,16 @@ body {{ font-family: 'VC'; font-size: 24pt; }}
         }
 
         [Fact]
+        public async Task ACff2Font_IsLabelledAsAnOpenTypeFile_NotABareCff()
+        {
+            // The static CFF is written inside an OpenType file, so it must not be labelled as a bare CFF stream.
+            var pdf = Encoding.Latin1.GetString(await RenderAsync(Html("<p>ABCDEF</p>")));
+
+            Assert.Contains("/OpenType", pdf);
+            Assert.DoesNotContain("/CIDFontType0C", pdf);
+        }
+
+        [Fact]
         public async Task TwoWeights_EmbedTwoInstances_AndTheSameLocationReachedTwoWaysOnlyOne()
         {
             var fonts = EmbeddedCffFonts(await RenderAsync(Html(

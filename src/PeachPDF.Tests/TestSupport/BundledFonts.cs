@@ -298,6 +298,9 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>The reference values for <see cref="VariableCff2Test"/>: outlines and advances at a grid of locations.</summary>
         internal static string VariableCff2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.golden.json");
 
+        /// <summary>A CID-keyed CFF font in an OpenType file: the fixture whose subsetting embeds it as a bare <c>CIDFontType0C</c> stream.</summary>
+        internal static string HintingCffCid => Path.Combine(AppContext.BaseDirectory, "HintingCffCid.otf");
+
         /// <summary>
         /// A synthetic TrueType variable font with vertical metrics (see VariableVerticalTest.LICENSE.txt, made by generate_variable_fixture.py): the
         /// advance heights follow the axes through <c>VVAR</c> and the phantom points of <c>gvar</c>, and <c>MVAR</c> varies the <c>vhea</c> ascent.

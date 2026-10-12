@@ -1611,6 +1611,20 @@ namespace PeachPDF
                         link.Rectangle.Width,
                         link.Rectangle.Height);
 
+                    // A link over an element a transform moved goes where it was drawn (css-transforms-1 "Transform Rendering"), which only
+                    // the painter knows: the bounding box of the drawn shape, and the shape itself as /QuadPoints when it is not that box.
+                    PaintPoint[]? quad = null;
+                    if (link.GeometryBox is { } geometryBox && (geometryBox.HtmlContainer ?? inner).Placements.TryGet(geometryBox, slot, out var placement))
+                    {
+                        var page = document.Pages[pageIndex];
+                        var frame = new PageFrame(slotGeom.ContentLeftPt, slotGeom.ContentTopPt, inner.MarginLeft, inner.MarginTop, ppp, page.Height);
+                        var local = new Rect(link.Rectangle.Left * ppp, link.Rectangle.Top * ppp - fragmentainers[pageIndex].LocalOriginY, link.Rectangle.Width * ppp, link.Rectangle.Height * ppp);
+
+                        // Not on the page at all (moved off it, or wholly behind the viewer): nothing drawn there to click.
+                        if (!AnnotationPlacement.TryPlaceLink(placement, local, frame, page, document.Version, out xRect, out quad))
+                            continue;
+                    }
+
                     PdfLinkAnnotation annotation;
 
                     if (link.IsAnchor)
@@ -1636,6 +1650,9 @@ namespace PeachPDF
                         // create link to URL
                         annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), link.Href);
                     }
+
+                    if (quad is not null)
+                        annotation.SetQuadPoints(quad);
 
                     if (structureTagBuilder != null && link.SourceBox != null)
                     {
@@ -1692,6 +1709,29 @@ namespace PeachPDF
                     continue;
 
                 var xRect = new Rect(leftPt, document.Pages[pageIndex].Height - (topPt + heightPt), widthPt, heightPt);
+
+                // A control a transform moved sits where it was drawn: /Rect is the bounding box of the drawn shape, and the appearance
+                // (still built upright, at the control's own size) is carried onto it by the map's linear part (see AnnotationPlacement).
+                if ((box.HtmlContainer ?? inner).Placements.TryGet(box, slot, out var placement))
+                {
+                    var page = document.Pages[pageIndex];
+                    var frame = new PageFrame(slotGeom.ContentLeftPt, slotGeom.ContentTopPt, inner.MarginLeft, inner.MarginTop, ppp, page.Height);
+                    var local = new Rect(pixelRect.Left, pixelRect.Top - fragmentainers[pageIndex].LocalOriginY, pixelRect.Width, pixelRect.Height);
+
+                    // A control that was not drawn on this page (a projected plane outside the clip, or wholly behind the viewer) or was moved off
+                    // it keeps its field, though: it still holds a value and belongs to its form (a radio group would lose a member). The
+                    // widget is then an empty rectangle, so there is nothing to see or click (the /Hidden flag would fail PDF/A), or - moved
+                    // off the page - the /Rect it was drawn at, which is legal outside the page box.
+                    if (placement.Hidden || !AnnotationPlacement.TryMap(placement.Map, local, frame, out var placed))
+                    {
+                        formFieldBuilder.AddField(page, new PdfRectangle(new Rect(xRect.X, xRect.Y, 0, 0)), box, classification, new Size(widthPt, heightPt));
+                        continue;
+                    }
+
+                    formFieldBuilder.AddField(page, new PdfRectangle(placed.Bounds), box, classification, new Size(widthPt, heightPt), placed.AppearanceMatrix);
+                    continue;
+                }
+
                 formFieldBuilder.AddField(document.Pages[pageIndex], new PdfRectangle(xRect), box, classification);
             }
         }
@@ -1734,6 +1774,16 @@ namespace PeachPDF
                         var rectPt = Utils.ToPoints(fragment.Rect, ppp);
                         var xRect = new Rect(rectPt.X, document.Pages[pageIndex].Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
 
+                        // A running element's content is laid out in page coordinates, so its frame has no content-box offset to undo.
+                        PaintPoint[]? quad = null;
+                        if ((box.HtmlContainer ?? container.HtmlContainerInt).Placements.TryGet(fragment, out var placement))
+                        {
+                            var page = document.Pages[pageIndex];
+                            var frame = new PageFrame(0, 0, 0, 0, ppp, page.Height);
+                            if (!AnnotationPlacement.TryPlaceLink(placement, fragment.Rect, frame, page, document.Version, out xRect, out quad))
+                                continue;
+                        }
+
                         PdfLinkAnnotation annotation;
 
                         if (href[0] == '#')
@@ -1759,6 +1809,9 @@ namespace PeachPDF
                             annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), resolvedHref);
                         }
 
+                        if (quad is not null)
+                            annotation.SetQuadPoints(quad);
+
                         // The same source box can legitimately gain more than one annotation here (once
                         // per page its running element was selected onto) - LinkAnnotationToStructureElement
                         // is already called once per annotation in the main loop above too, so a repeat
@@ -1780,6 +1833,12 @@ namespace PeachPDF
         /// </summary>
         private static IEnumerable<(BoxFragment Fragment, CssBox Box)> FindLinkFragments(BoxFragment fragment)
         {
+            // Not drawn (a transform that leaves no visible area), so not clickable - the same rule the main-tree collectors apply.
+            if (DomUtils.LeavesNoVisibleArea(fragment.Box))
+            {
+                yield break;
+            }
+
             if (fragment.Box is { IsClickable: true, Visibility.Value: Visibility.Visible })
             {
                 yield return (fragment, fragment.Box);

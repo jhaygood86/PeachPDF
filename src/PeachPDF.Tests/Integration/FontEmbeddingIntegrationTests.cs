@@ -234,6 +234,54 @@ body {{ font-family: 'TestCffNoFormat', serif; font-size: 14pt; }}
             Assert.Contains("/OpenType", pdfText);
         }
 
+        // A CID-keyed CFF is subset to the glyphs drawn, and the stream is the bare CFF table: CIDFontType0C, not OpenType.
+        [Fact]
+        public async Task CidKeyedCffFont_IsEmbeddedAsABareCffStream_CIDFontType0C()
+        {
+            var b64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.HintingCffCid));
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestCidCff'; src: url('data:font/opentype;base64,{b64}') format('opentype'); }}
+body {{ font-family: 'TestCidCff', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello CFF</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/CIDFontType0C", pdfText);
+            // The document also carries a TrueType fallback font, which keeps its own CIDToGIDMap; only our descendant must not have one.
+            var descendant = pdfText.Split("endobj").Single(obj => obj.Contains("/CIDFontType0") && !obj.Contains("/CIDFontType0C"));
+            Assert.DoesNotContain("/CIDToGIDMap", descendant);
+        }
+
+        // A whole CFF face keeps its CIDFontType2 descendant and the Identity map: its charset does not address the glyph indices
+        // the content stream writes, so a CIDFontType0 descendant would not resolve them.
+        [Fact]
+        public async Task WholeCffFont_KeepsTheCIDFontType2Descendant()
+        {
+            var b64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Otf));
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestWholeCff'; src: url('data:font/opentype;base64,{b64}') format('opentype'); }}
+body {{ font-family: 'TestWholeCff', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello CFF</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/OpenType", pdfText);
+            Assert.Matches(@"/Subtype\s*/CIDFontType2", pdfText);
+            Assert.Matches(@"/CIDToGIDMap\s*/Identity", pdfText);
+        }
+
         // -------------------------------------------------------------------------
         // CFF: /Length1 must NOT appear on a FontFile3 stream (only valid for FontFile2)
         // -------------------------------------------------------------------------

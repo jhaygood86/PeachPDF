@@ -384,14 +384,11 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="linkBoxes">collection to add all link boxes to</param>
         public static void GetAllLinkBoxes(CssBox? box, List<CssBox> linkBoxes)
         {
-            switch (box)
-            {
-                case null:
-                    return;
-                case { IsClickable: true, Visibility.Value: Visibility.Visible }:
-                    linkBoxes.Add(box);
-                    break;
-            }
+            if (box is null || LeavesNoVisibleArea(box))
+                return;
+
+            if (box is { IsClickable: true, Visibility.Value: Visibility.Visible })
+                linkBoxes.Add(box);
 
             foreach (var childBox in box.Boxes)
             {
@@ -407,15 +404,19 @@ namespace PeachPDF.Html.Core.Utils
         /// bookmark candidacy are independent conditions; a box can be both (a linked heading).
         /// </summary>
         public static void GetAllLinkAndBookmarkBoxes(CssBox? box, List<CssBox> linkBoxes, List<CssBox> bookmarkBoxes)
+            => CollectLinkAndBookmarkBoxes(box, linkBoxes, bookmarkBoxes, linksSuppressed: false);
+
+        // linksSuppressed: true under an element whose transform leaves no visible area (LeavesNoVisibleArea) - nothing is drawn there, so
+        // nothing is clickable, but the walk still goes on for the bookmarks, which name a place in the document rather than something painted.
+        private static void CollectLinkAndBookmarkBoxes(CssBox? box, List<CssBox> linkBoxes, List<CssBox> bookmarkBoxes, bool linksSuppressed)
         {
-            switch (box)
-            {
-                case null:
-                    return;
-                case { IsClickable: true, Visibility.Value: Visibility.Visible }:
-                    linkBoxes.Add(box);
-                    break;
-            }
+            if (box is null)
+                return;
+
+            linksSuppressed = linksSuppressed || LeavesNoVisibleArea(box);
+
+            if (!linksSuppressed && box is { IsClickable: true, Visibility.Value: Visibility.Visible })
+                linkBoxes.Add(box);
 
             // BookmarkLevel is stored as its raw, already-validated none|<integer> string (see
             // bookmark-level's css-properties.json entry) - any non-"none" value is a candidate;
@@ -427,8 +428,35 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                GetAllLinkAndBookmarkBoxes(childBox, linkBoxes, bookmarkBoxes);
+                CollectLinkAndBookmarkBoxes(childBox, linkBoxes, bookmarkBoxes, linksSuppressed);
             }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> was not drawn because its <c>transform</c> leaves it, and everything under it, no visible area
+        /// (css-transforms-1 §"Transform Rendering"). The collectors that read the box tree (links, form widgets) ask here, since an
+        /// annotation over something that is not drawn is a click target on blank paper.
+        /// </summary>
+        /// <remarks>
+        /// The painter decides what it draws, so it is also the authority on what it did not: it records the boxes it culled
+        /// (<see cref="HtmlContainerInt.NoteNotRendered"/>) and this reads that record, which makes it meaningful once the document has been
+        /// painted - <c>PdfGenerator</c> collects links after the pages. What can be said without the painter is a transformation matrix
+        /// that has no inverse in 4x4, which renders nothing wherever the box sits, and that is answered either way.
+        /// </remarks>
+        public static bool LeavesNoVisibleArea(CssBox box) =>
+            box.ActualTransform4 is { } transform4 && !Paint.FragmentPainter.IsInvertible4(transform4)
+            || box.HtmlContainer?.IsNotRendered(box) == true;
+
+        /// <summary>Whether <paramref name="box"/> or one of its ancestors <see cref="LeavesNoVisibleArea"/>.</summary>
+        public static bool IsUnderNoVisibleArea(CssBox? box)
+        {
+            for (; box is not null; box = box.ParentBox)
+            {
+                if (LeavesNoVisibleArea(box))
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -440,14 +468,11 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         public static void GetAllFormFieldBoxes(CssBox? box, List<CssBox> fieldBoxes)
         {
-            switch (box)
-            {
-                case null:
-                    return;
-                case CssBoxFormField { Visibility.Value: Visibility.Visible }:
-                    fieldBoxes.Add(box);
-                    break;
-            }
+            if (box is null || LeavesNoVisibleArea(box))
+                return;
+
+            if (box is CssBoxFormField { Visibility.Value: Visibility.Visible })
+                fieldBoxes.Add(box);
 
             foreach (var childBox in box.Boxes)
             {
@@ -463,21 +488,24 @@ namespace PeachPDF.Html.Core.Utils
         /// concerned - its own descendant boxes (if any) aren't ordinary HTML content, so recursion
         /// stops there rather than continuing into <c>box.Boxes</c>.
         /// </summary>
-        public static void GetAllSvgLinks(CssBox? box, List<(Rect Rect, string Href)> linkBoxes)
+        public static void GetAllSvgLinks(CssBox? box, List<(Rect Rect, string Href, CssBox Owner)> linkBoxes)
         {
             switch (box)
             {
                 case null:
                     return;
 
+                case not null when LeavesNoVisibleArea(box):
+                    return;
+
                 case CssBoxSvg svgBox:
                     if (svgBox.GetLinkSource() is { } svgSource)
-                        SvgRenderer.CollectLinks(svgSource.Document, svgSource.Rect, linkBoxes);
+                        CollectSvgLinks(svgSource.Document, svgSource.Rect, svgBox, linkBoxes);
                     return;
 
                 case CssBoxImage imageBox:
                     if (imageBox.GetLinkSource() is { } imageSource)
-                        SvgRenderer.CollectLinks(imageSource.Document, imageSource.Rect, linkBoxes);
+                        CollectSvgLinks(imageSource.Document, imageSource.Rect, imageBox, linkBoxes);
                     return;
             }
 
@@ -485,6 +513,16 @@ namespace PeachPDF.Html.Core.Utils
             {
                 GetAllSvgLinks(childBox, linkBoxes);
             }
+        }
+
+        /// <summary>Collects the links of <paramref name="document"/> and tags each with <paramref name="owner"/>, the box it was drawn in.</summary>
+        private static void CollectSvgLinks(SvgDocument document, Rect viewportRect, CssBox owner, List<(Rect Rect, string Href, CssBox Owner)> sink)
+        {
+            var found = new List<(Rect Rect, string Href)>();
+            SvgRenderer.CollectLinks(document, viewportRect, found);
+
+            foreach (var (rect, href) in found)
+                sink.Add((rect, href, owner));
         }
 
         /// <summary>

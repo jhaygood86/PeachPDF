@@ -10618,6 +10618,24 @@ await SaveShowcaseAsync("object_fit", "Images & Replaced Content", "object-fit &
     "markers making each fit and crop obvious.",
     objectFitHtml, pdfConfig);
 
+// ── <embed>: a void replaced element sized by width/height ───────────────────────────
+var embedPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+var embedSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40'%3E%3Crect width='80' height='40' fill='%232a9d8f'/%3E%3C/svg%3E";
+var embedHtml =
+    "<!DOCTYPE html><html><head><style>body{font-family:sans-serif;padding:16px} p{margin:12px 0}</style></head><body>" +
+    "<h2>&lt;embed&gt;</h2>" +
+    $"<p>PNG: <embed width=\"80\" height=\"40\" src=\"{embedPng}\"> after</p>" +
+    $"<p>SVG: <embed width=\"80\" height=\"40\" type=\"image/svg+xml\" src=\"{embedSvg}\"> after</p>" +
+    $"<p>Transformed: <embed width=\"80\" height=\"40\" src=\"{embedSvg}\" style=\"transform:rotate(10deg)\"> after</p>" +
+    "<p>No resource: <embed width=\"80\" height=\"40\" style=\"background:#ccc\"> after</p>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("embed_element", "Images & Replaced Content", "The embed element",
+    "<embed> as a void replaced element: an image or SVG src is drawn at the size given by width/height, " +
+    "a transform applies to it, and an embed with no drawable resource still reserves its box. " +
+    "The text after each embed stays in the paragraph.",
+    embedHtml, pdfConfig);
+
 // ── image-rendering: how a raster image is resampled ────────────────────────────────────
 var pixelArt = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAUUlEQVR4nGP8//8/Awj8PisGYUABq/ErRhDNhE0SWYwJxlAJ4oRLwtggOcZfZ0QxdCMDsBXIutFNgZuArujOuu8QBSBfYHMkzCdgK2BewuZNAH4iJnECnYKiAAAAAElFTkSuQmCC";
 static string RenderingCell(string img, string mode, string note) =>
@@ -13432,6 +13450,15 @@ var interactiveFormsHtml = "<!DOCTYPE html><html><head>" + InteractiveFormsCss +
     "<div class=\"field\"><label for=\"hint\">Company</label>" +
     "<input class=\"styled-placeholder\" type=\"text\" id=\"hint\" name=\"company\" " +
     "placeholder=\"Acme Corporation\" /></div>" +
+
+    // A field and a link over a transformed element sit where the element is drawn, not where layout put it: the field's widget is the
+    // bounding box of the drawn shape with its appearance turned to match, and the link also carries the rotated outline as /QuadPoints.
+    // Hover the rotated link in a real reader: it should answer only over the turned text, not the empty corners of its box.
+    "<h2>Transformed (rotate, scale)</h2>" +
+    "<div class=\"field\" style=\"height:70pt\"><label>Rotated field</label>" +
+    "<input type=\"text\" id=\"turned\" name=\"turned\" value=\"Tilted\" style=\"transform: rotate(-12deg); width: 120pt\" />&nbsp;&nbsp;&nbsp;&nbsp;" +
+    "<input type=\"checkbox\" id=\"turned-box\" name=\"turned-box\" checked style=\"transform: rotate(20deg) scale(1.6)\" />&nbsp;&nbsp;&nbsp;&nbsp;" +
+    "<a href=\"https://example.com/\" style=\"display:inline-block; transform: rotate(8deg); padding: 3pt 8pt; background: #e9f3ff\">Rotated link</a></div>" +
 
     "</body></html>";
 
