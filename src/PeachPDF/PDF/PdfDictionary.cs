@@ -607,7 +607,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
             {
                 //if (create)
                 //  this[key] = new Pdf();
-                return String.Empty;
+                return string.Empty;
             }
 
             PdfReference reference = obj as PdfReference;
@@ -1230,7 +1230,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
         /// </summary>
         public void Add(string key, PdfItem value)
         {
-            if (String.IsNullOrEmpty(key))
+            if (string.IsNullOrEmpty(key))
                 throw new ArgumentNullException("key");
 
             if (key[0] != '/')
@@ -1580,7 +1580,7 @@ internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfIt
     {
         get
         {
-            return String.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
+            return string.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
                 ObjectId.DebuggerDisplay,
                 Elements.Count,
                 _elements.DebuggerDisplay);

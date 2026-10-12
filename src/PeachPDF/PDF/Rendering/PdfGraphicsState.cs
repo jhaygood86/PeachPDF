@@ -434,7 +434,7 @@ internal sealed class PdfGraphicsState : ICloneable
     }
 
     internal PdfFont _realizedFont = null!;
-    string _realizedFontName = String.Empty;
+    string _realizedFontName = string.Empty;
     double _realizedFontSize;
     int _realizedRenderingMode;  // Reference: TABLE 5.2  Text state operators / Page 398
     double _realizedCharSpace;  // Reference: TABLE 5.2  Text state operators / Page 398

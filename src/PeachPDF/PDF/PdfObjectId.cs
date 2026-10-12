@@ -122,5 +122,5 @@ internal struct PdfObjectId : IComparable
     /// <summary>
     /// Gets the DebuggerDisplayAttribute text.
     /// </summary>
-    internal string DebuggerDisplay => String.Format("id=({0})", ToString());
+    internal string DebuggerDisplay => string.Format("id=({0})", ToString());
 }

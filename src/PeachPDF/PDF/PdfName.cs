@@ -127,7 +127,7 @@ internal sealed class PdfName : PdfItem
             if (l is not null)
             {
                 if (r is not null)
-                    return String.Compare(l._value, r._value, StringComparison.Ordinal);
+                    return string.Compare(l._value, r._value, StringComparison.Ordinal);
                 return -1;
             }
             if (r is not null)

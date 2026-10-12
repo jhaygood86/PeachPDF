@@ -167,7 +167,7 @@ internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInte
     /// </summary>
     public PdfObject[] GetClosure(PdfObject obj)
     {
-        return GetClosure(obj, Int32.MaxValue);
+        return GetClosure(obj, int.MaxValue);
     }
 
     /// <summary>

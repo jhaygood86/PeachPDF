@@ -131,8 +131,8 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         PdfReference[] irefs = AllReferences;
 
         int count = irefs.Length;
-        writer.WriteRaw(String.Format("0 {0}\n", count + 1));
-        writer.WriteRaw(String.Format("{0:0000000000} {1:00000} {2} \n", 0, 65535, "f"));
+        writer.WriteRaw(string.Format("0 {0}\n", count + 1));
+        writer.WriteRaw(string.Format("{0:0000000000} {1:00000} {2} \n", 0, 65535, "f"));
         //PdfEncoders.WriteAnsi(stream, text);
 
         for (int idx = 0; idx < count; idx++)
@@ -140,7 +140,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             PdfReference iref = irefs[idx];
 
             // Acrobat is very pedantic; it must be exactly 20 bytes per line.
-            writer.WriteRaw(String.Format("{0:0000000000} {1:00000} {2} \n", iref.Position, iref.GenerationNumber, "n"));
+            writer.WriteRaw(string.Format("{0:0000000000} {1:00000} {2} \n", iref.Position, iref.GenerationNumber, "n"));
         }
     }
 
@@ -356,7 +356,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
                 if (iref is not null)
                 {
                     if (!ReferenceEquals(iref.Document, _document))
-                        Debug.WriteLine(String.Format("Bad iref: {0}", iref.ObjectId.ToString()));
+                        Debug.WriteLine(string.Format("Bad iref: {0}", iref.ObjectId.ToString()));
                     Debug.Assert(ReferenceEquals(iref.Document, _document) || iref.Document is null, "External object detected!");
 
                     if (!objects.ContainsKey(iref))

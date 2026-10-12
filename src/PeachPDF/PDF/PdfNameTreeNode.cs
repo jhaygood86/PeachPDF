@@ -293,7 +293,7 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     //public override string ToString()
     //{
     //    string delta = _value.ToString("zzz").Replace(':', '\'');
-    //    return String.Format("D:{0:yyyyMMddHHmmss}{1}'", _value, delta);
+    //    return string.Format("D:{0:yyyyMMddHHmmss}{1}'", _value, delta);
     //}
 
     /// <summary>
@@ -355,5 +355,5 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     string DebuggerDisplay
     // ReSharper restore UnusedMember.Local
         =>
-            String.Format("root:{0}", IsRoot);
+            string.Format("root:{0}", IsRoot);
 }

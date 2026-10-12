@@ -82,7 +82,7 @@ internal static class PdfEncoders
     /// </summary>
     public static string ToStringLiteral(string text, PdfStringEncoding encoding)
     {
-        if (String.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text))
             return "()";
 
         byte[] bytes;
@@ -128,7 +128,7 @@ internal static class PdfEncoders
     /// </summary>
     public static string ToHexStringLiteral(string text, PdfStringEncoding encoding)
     {
-        if (String.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text))
             return "<>";
 
         byte[] bytes;
@@ -444,7 +444,7 @@ internal static class PdfEncoders
     /// </summary>
     public static string Format(string format, params object[] args)
     {
-        return String.Format(CultureInfo.InvariantCulture, format, args);
+        return string.Format(CultureInfo.InvariantCulture, format, args);
     }
 
     /// <summary>
@@ -471,7 +471,7 @@ internal static class PdfEncoders
             case PdfColorMode.Cmyk:
                 {
                     var (cyan, magenta, yellow, black) = color.ToCmyk();
-                    return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}",
+                    return string.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}",
                       cyan, magenta, yellow, black);
                 }
 
@@ -479,9 +479,9 @@ internal static class PdfEncoders
                 {
                     var (red, green, blue) = color.ToRgb();
                     if (withAlpha)
-                        return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}", red / 255.0, green / 255.0, blue / 255.0, color.Opacity());
+                        return string.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}", red / 255.0, green / 255.0, blue / 255.0, color.Opacity());
                     else
-                        return String.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "}", red / 255.0, green / 255.0, blue / 255.0);
+                        return string.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "}", red / 255.0, green / 255.0, blue / 255.0);
 
                 }
         }
@@ -493,7 +493,7 @@ internal static class PdfEncoders
     public static string ToString(Matrix3x2 matrix)
     {
         const string format = PdfNumberFormats.FourDecimals;
-        return String.Format(CultureInfo.InvariantCulture,
+        return string.Format(CultureInfo.InvariantCulture,
             "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "}",
             matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.M31, matrix.M32);
     }

@@ -52,7 +52,7 @@ internal sealed class PdfLiteral : PdfItem
         // This class must behave like a value type. Therefore it cannot be changed (like System.String).
         get => _value;
     }
-    readonly string _value = String.Empty;
+    readonly string _value = string.Empty;
 
     /// <summary>
     /// Returns a string that represents the current value.

@@ -272,7 +272,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
 
             object obj = this[index];
             if (obj is null || obj is PdfNull)
-                return String.Empty;
+                return string.Empty;
 
             PdfString str = obj as PdfString;
             if (str is not null)
@@ -298,7 +298,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
 
             object obj = this[index];
             if (obj is null || obj is PdfNull)
-                return String.Empty;
+                return string.Empty;
 
             PdfName name = obj as PdfName;
             if (name is not null)
@@ -506,7 +506,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     {
         get
         {
-            return String.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectId.DebuggerDisplay, _elements is null ? 0 : _elements.Count);
+            return string.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectId.DebuggerDisplay, _elements is null ? 0 : _elements.Count);
 
         }
     }

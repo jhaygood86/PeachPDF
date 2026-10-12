@@ -266,7 +266,7 @@ internal sealed class PdfString : PdfItem
 
     static void CheckRawEncoding(string s)
     {
-        if (String.IsNullOrEmpty(s))
+        if (string.IsNullOrEmpty(s))
             return;
 
         int length = s.Length;

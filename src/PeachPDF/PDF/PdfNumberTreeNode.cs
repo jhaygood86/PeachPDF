@@ -264,5 +264,5 @@ internal sealed class PdfNumberTreeNode : PdfDictionary
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;
 
-    string DebuggerDisplay => String.Format("root:{0}", IsRoot);
+    string DebuggerDisplay => string.Format("root:{0}", IsRoot);
 }

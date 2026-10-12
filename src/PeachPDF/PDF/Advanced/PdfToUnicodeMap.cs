@@ -75,13 +75,13 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
         wrt.Write(prefix);
 
         wrt.WriteLine("1 begincodespacerange");
-        wrt.WriteLine(String.Format("<{0:X4}><{1:X4}>", lowIndex, hiIndex));
+        wrt.WriteLine(string.Format("<{0:X4}><{1:X4}>", lowIndex, hiIndex));
         wrt.WriteLine("endcodespacerange");
 
         // Sorting seems not necessary. The limit is 100 entries, we will see.
-        wrt.WriteLine(String.Format("{0} beginbfrange", glyphIndexToText.Count));
+        wrt.WriteLine(string.Format("{0} beginbfrange", glyphIndexToText.Count));
         foreach (KeyValuePair<int, string> entry in glyphIndexToText)
-            wrt.WriteLine(String.Format("<{0:X4}><{0:X4}><{1}>", entry.Key, Utf16BigEndianHex(entry.Value)));
+            wrt.WriteLine(string.Format("<{0:X4}><{0:X4}><{1}>", entry.Key, Utf16BigEndianHex(entry.Value)));
         wrt.WriteLine("endbfrange");
 
         wrt.Write(suffix);

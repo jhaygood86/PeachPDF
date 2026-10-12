@@ -342,7 +342,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
 
     internal bool HasVersion(string version)
     {
-        return String.Compare(Catalog.Version, version) >= 0;
+        return string.Compare(Catalog.Version, version) >= 0;
     }
 
     /// <summary>
@@ -424,7 +424,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// Gets the full qualified file name if the document was read form a file, or an empty string otherwise.
     /// </summary>
     public string FullPath => _fullPath;
-    internal string _fullPath = String.Empty; // TODO: make private
+    internal string _fullPath = string.Empty; // TODO: make private
 
     /// <summary>
     /// Gets a Guid that uniquely identifies this instance of PdfDocument.
