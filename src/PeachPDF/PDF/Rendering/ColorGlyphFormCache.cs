@@ -32,7 +32,7 @@ namespace PeachPDF.PDF.Rendering
     /// <param name="Form">The form holding the artwork, or null when the glyph paints nothing.</param>
     /// <param name="LeftX">The artwork box's left edge, in canonical world units relative to the baseline origin.</param>
     /// <param name="TopY">The artwork box's top edge, in canonical (y-down) world units relative to the baseline origin.</param>
-    internal readonly record struct ColorGlyphForm(XForm? Form, double LeftX, double TopY);
+    internal readonly record struct ColorGlyphForm(PdfForm? Form, double LeftX, double TopY);
 
     /// <summary>
     /// Maps a <see cref="ColorGlyphFormCache.Selector"/> to the <see cref="ColorGlyphForm"/> rendered for it.

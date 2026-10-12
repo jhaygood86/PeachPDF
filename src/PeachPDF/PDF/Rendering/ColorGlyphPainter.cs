@@ -3,7 +3,7 @@
 // Paints color-font (COLR/CPAL) glyphs as vector fills into the PDF content
 // stream. A small embedded subset is used only for invisible selectable text;
 // it never supplies the visible glyph artwork. Driven from
-// XGraphicsPdfRenderer.DrawString for fonts that report IsColorFont.
+// PdfGraphicsRenderer.DrawString for fonts that report IsColorFont.
 //
 //   - COLR v0: each base glyph is a stack of (layer glyph, palette color)
 //     outlines painted bottom-to-top (this file).
@@ -12,7 +12,7 @@
 // Glyph outlines are decoded to design-unit contours and mapped to world space
 // (the same space DrawString's baseline is in) through a Affine2x3 that starts
 // as the per-glyph placement and, for v1, composes the paint graph's own
-// transforms. Fills/clips go through the shared XGraphics, so page scaling and
+// transforms. Fills/clips go through the shared PdfGraphics, so page scaling and
 // the WorldToView mapping apply exactly as for ordinary vector content.
 //
 #endregion
@@ -29,8 +29,8 @@ namespace PeachPDF.PDF.Rendering
 {
     internal sealed partial class ColorGlyphPainter
     {
-        private readonly XGraphicsPdfRenderer _renderer;
-        private readonly XGraphics _gfx;
+        private readonly PdfGraphicsRenderer _renderer;
+        private readonly PdfGraphics _gfx;
         private readonly Typeface _typeface;
         private readonly TypefaceFont _font;
         private readonly Brush _textBrush;
@@ -44,7 +44,7 @@ namespace PeachPDF.PDF.Rendering
         private readonly double _baselineX;
         private readonly double _baselineY;
 
-        public ColorGlyphPainter(XGraphicsPdfRenderer renderer, TypefaceFont font,
+        public ColorGlyphPainter(PdfGraphicsRenderer renderer, TypefaceFont font,
             Brush brush, double baselineX, double baselineY, double letterSpacing,
             int paletteIndex = 0, IReadOnlyDictionary<int, PaintColor>? overrides = null)
         {

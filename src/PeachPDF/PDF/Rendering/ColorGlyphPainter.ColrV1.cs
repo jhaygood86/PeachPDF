@@ -45,12 +45,12 @@ namespace PeachPDF.PDF.Rendering
         private void PaintGlyph(int glyphId, double originX, double originYOffset = 0) =>
             Shared.Paint((ushort)glyphId, Placement(originX, originYOffset), new PdfTarget(this));
 
-        /// <summary>Draws the shared walker's output into this painter's XGraphics, or - during the measure pass - only accumulates its bounds.</summary>
+        /// <summary>Draws the shared walker's output into this painter's PdfGraphics, or - during the measure pass - only accumulates its bounds.</summary>
         private sealed class PdfTarget(ColorGlyphPainter owner) : IColorGlyphTarget
         {
             // One entry per PushOutlineClip: the graphics state to restore (null in the measure pass, which pushes nothing).
-            private readonly Stack<XGraphicsState?> _clips = new();
-            private readonly Stack<XGraphicsState?> _blends = new();
+            private readonly Stack<PdfGraphicsStateToken?> _clips = new();
+            private readonly Stack<PdfGraphicsStateToken?> _blends = new();
 
             public void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
             {

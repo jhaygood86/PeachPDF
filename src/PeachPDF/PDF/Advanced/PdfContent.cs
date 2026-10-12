@@ -111,7 +111,7 @@ namespace PeachPDF.PDF.Advanced
         {
             if (_pdfRenderer != null)
             {
-                // GetContent also disposes the underlying XGraphics object, if one exists
+                // GetContent also disposes the underlying PdfGraphics object, if one exists
                 //Stream = new PdfStream(PdfEncoders.RawEncoding.GetBytes(pdfRenderer.GetContent()), this);
                 _pdfRenderer.Close();
                 Debug.Assert(_pdfRenderer == null);
@@ -131,7 +131,7 @@ namespace PeachPDF.PDF.Advanced
             base.WriteObject(writer);
         }
 
-        internal XGraphicsPdfRenderer _pdfRenderer = null!;
+        internal PdfGraphicsRenderer _pdfRenderer = null!;
 
         /// <summary>
         /// Predefined keys of this dictionary.

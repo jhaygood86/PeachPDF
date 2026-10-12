@@ -28,7 +28,7 @@ namespace PeachDrawing.Text.Internal.Text
     /// reasoning applied to hyphenation.
     ///
     /// This is the single glyph-walk every text-drawing/measuring call site shares
-    /// (<c>FontHelper.MeasureString</c>, <c>XGraphicsPdfRenderer.DrawString</c>,
+    /// (<c>FontHelper.MeasureString</c>, <c>PdfGraphicsRenderer.DrawString</c>,
     /// <c>ColorGlyphPainter.Paint</c>, <c>GraphicsAdapter.GetTextOutline</c>, <c>CMapInfo</c>) -
     /// previously each re-derived "codepoint to glyph" independently.
     /// </summary>

@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// <list type="number">
     /// <item>
     /// <b>Paint-time clip escape</b>: <c>PdfGenerator.AddPdfPages</c> used to intersect the content-area
-    /// clip directly on the raw <c>XGraphics</c>, ahead of <c>Canvas</c>'s own clip-stack bookkeeping -
+    /// clip directly on the raw <c>PdfGraphics</c>, ahead of <c>Canvas</c>'s own clip-stack bookkeeping -
     /// invisible to <c>Canvas.SuspendClipping()</c>, the mechanism <c>FragmentPainter.PaintFragment</c>
     /// uses so a fixed box's own paint can reach back out to its true containing block (the page box,
     /// margins included, per CSS2.1 §10.1). <c>FragmentPainter.Paint</c> now pushes the content clip

@@ -44,7 +44,7 @@ namespace PeachPDF.PDF.Drawing
     /// Represents a graphical object that can be used to render retained graphics on it.
     /// In GDI+ it is represented by a Metafile, in WPF by a DrawingVisual, and in PDF by a Form XObjects.
     /// </summary>
-    internal class XForm : XImage, IContentStream
+    internal class PdfForm : PdfRasterImage, IContentStream
     {
         internal enum FormState
         {
@@ -59,7 +59,7 @@ namespace PeachPDF.PDF.Drawing
             Created,
 
             /// <summary>
-            /// XGraphics.FromForm() was called.
+            /// PdfGraphics.FromForm() was called.
             /// </summary>
             UnderConstruction,
 
@@ -70,24 +70,24 @@ namespace PeachPDF.PDF.Drawing
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="XForm"/> class.
+        /// Initializes a new instance of the <see cref="PdfForm"/> class.
         /// </summary>
-        protected XForm()
+        protected PdfForm()
         { }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="XForm"/> class that represents a page of a PDF document.
+        /// Initializes a new instance of the <see cref="PdfForm"/> class that represents a page of a PDF document.
         /// </summary>
         /// <param name="document">The PDF document.</param>
         /// <param name="viewBox">The view box of the page.</param>
-        public XForm(PdfDocument document, Rect viewBox)
+        public PdfForm(PdfDocument document, Rect viewBox)
         {
             if (viewBox.Width < 1 || viewBox.Height < 1)
-                throw new ArgumentNullException("viewBox", "The size of the XPdfForm is to small.");
-            // I must tie the XPdfForm to a document immediately, because otherwise I would have no place where
+                throw new ArgumentNullException("viewBox", "The size of the PdfForm is to small.");
+            // I must tie the PdfForm to a document immediately, because otherwise I would have no place where
             // to store the resources.
             if (document == null)
-                throw new ArgumentNullException("document", "An XPdfForm template must be associated with a document at creation time.");
+                throw new ArgumentNullException("document", "An PdfForm template must be associated with a document at creation time.");
 
             _formState = FormState.Created;
             _document = document;
@@ -99,19 +99,19 @@ namespace PeachPDF.PDF.Drawing
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="XForm"/> class that represents a page of a PDF document.
+        /// Initializes a new instance of the <see cref="PdfForm"/> class that represents a page of a PDF document.
         /// </summary>
         /// <param name="document">The PDF document.</param>
         /// <param name="size">The size of the page.</param>
-        public XForm(PdfDocument document, Size size)
+        public PdfForm(PdfDocument document, Size size)
             : this(document, new Rect(0, 0, size.Width, size.Height))
         {
             ////if (size.width < 1 || size.height < 1)
-            ////  throw new ArgumentNullException("size", "The size of the XPdfForm is to small.");
-            ////// I must tie the XPdfForm to a document immediately, because otherwise I would have no place where
+            ////  throw new ArgumentNullException("size", "The size of the PdfForm is to small.");
+            ////// I must tie the PdfForm to a document immediately, because otherwise I would have no place where
             ////// to store the resources.
             ////if (document == null)
-            ////  throw new ArgumentNullException("document", "An XPdfForm template must be associated with a document.");
+            ////  throw new ArgumentNullException("document", "An PdfForm template must be associated with a document.");
 
             ////_formState = FormState.Created;
             ////_document = document;
@@ -122,18 +122,18 @@ namespace PeachPDF.PDF.Drawing
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="XForm"/> class that represents a page of a PDF document.
+        /// Initializes a new instance of the <see cref="PdfForm"/> class that represents a page of a PDF document.
         /// </summary>
         /// <param name="document">The PDF document.</param>
         /// <param name="width">The width of the page.</param>
         /// <param name="height">The height of the page</param>
-        public XForm(PdfDocument document, double width, double height)
+        public PdfForm(PdfDocument document, double width, double height)
             : this(document, new Rect(0, 0, width, height))
         { }
 
         /// <summary>
         /// This function should be called when drawing the content of this form is finished.
-        /// The XGraphics object used for drawing the content is disposed by this function and 
+        /// The PdfGraphics object used for drawing the content is disposed by this function and 
         /// cannot be used for any further drawing operations.
         /// PDFsharp automatically calls this function when this form was used the first time
         /// in a DrawImage function. 
@@ -150,15 +150,15 @@ namespace PeachPDF.PDF.Drawing
         }
 
         /// <summary>
-        /// Called from XGraphics constructor that creates an instance that work on this form.
+        /// Called from PdfGraphics constructor that creates an instance that work on this form.
         /// </summary>
-        internal void AssociateGraphics(XGraphics gfx)
+        internal void AssociateGraphics(PdfGraphics gfx)
         {
             if (_formState == FormState.NotATemplate)
                 throw new NotImplementedException("The current version of PDFsharp cannot draw on an imported page.");
 
             if (_formState == FormState.UnderConstruction)
-                throw new InvalidOperationException("An XGraphics object already exists for this form.");
+                throw new InvalidOperationException("An PdfGraphics object already exists for this form.");
 
             if (_formState == FormState.Finished)
                 throw new InvalidOperationException("After drawing a form it cannot be modified anymore.");
@@ -167,7 +167,7 @@ namespace PeachPDF.PDF.Drawing
             _formState = FormState.UnderConstruction;
             Gfx = gfx;
         }
-        internal XGraphics Gfx = null!;
+        internal PdfGraphics Gfx = null!;
 
         /// <summary>
         /// Disposes this instance.
@@ -330,7 +330,7 @@ namespace PeachPDF.PDF.Drawing
             set
             {
                 if (_formState == FormState.Finished)
-                    throw new InvalidOperationException("After a XPdfForm was once drawn it must not be modified.");
+                    throw new InvalidOperationException("After a PdfForm was once drawn it must not be modified.");
                 _transform = value;
             }
         }
@@ -341,7 +341,7 @@ namespace PeachPDF.PDF.Drawing
             get
             {
                 Debug.Assert(IsTemplate, "This function is for form templates only.");
-                return PdfForm.Resources;
+                return FormXObject.Resources;
                 //if (resources == null)
                 //  resources = (PdfResources)pdfForm.Elements.GetValue(PdfFormXObject.Keys.Resources, VCF.Create); // VCF.CreateIndirect
                 //return resources;
@@ -392,7 +392,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the resource name of the specified image within this form.
         /// </summary>
-        internal string GetImageName(XImage image, double width, double height)
+        internal string GetImageName(PdfRasterImage image, double width, double height)
         {
             Debug.Assert(IsTemplate, "This function is for form templates only.");
             global::PeachPDF.PDF.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
@@ -404,12 +404,12 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetImageName(XImage image, double width, double height)
+        string IContentStream.GetImageName(PdfRasterImage image, double width, double height)
         {
             return GetImageName(image, width, height);
         }
 
-        internal PdfFormXObject PdfForm
+        internal PdfFormXObject FormXObject
         {
             get
             {
@@ -423,7 +423,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the resource name of the specified form within this form.
         /// </summary>
-        internal string GetFormName(XForm form)
+        internal string GetFormName(PdfForm form)
         {
             Debug.Assert(IsTemplate, "This function is for form templates only.");
             PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
@@ -435,18 +435,18 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetFormName(XForm form)
+        string IContentStream.GetFormName(PdfForm form)
         {
             return GetFormName(form);
         }
 
         /// <summary>
         /// The PdfFormXObject gets invalid when PageNumber or transform changed. This is because a modification
-        /// of an XPdfForm must not change objects that are already been drawn.
+        /// of an PdfForm must not change objects that are already been drawn.
         /// </summary>
         internal PdfFormXObject _pdfForm = null!;  // TODO: make private
 
-        internal XGraphicsPdfRenderer PdfRenderer = null!;
+        internal PdfGraphicsRenderer PdfRenderer = null!;
 
     }
 }

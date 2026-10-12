@@ -48,8 +48,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // Create an empty page in this document.
             var page = document.AddPage();
 
-            // Get an XGraphics object for drawing on this page.
-            var gfx = XGraphics.FromPdfPage(page);
+            // Get an PdfGraphics object for drawing on this page.
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             // Draw two lines with a red default pen.
             var width = page.Width;
@@ -66,10 +66,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
             // Draw the text.
             gfx.DrawString("Hello, World!", font, new SolidBrush(PaintColor.Black),
-                new Rect(0, 0, width, height), XStringFormats.Center);
+                new Rect(0, 0, width, height), PdfStringFormats.Center);
 
             var fullName = WriteTempPngFile();
-            var image = XImage.FromFile(fullName);
+            var image = PdfRasterImage.FromFile(fullName);
 
             gfx.DrawImage(image, 100, 100, 100, 100);
 
@@ -85,10 +85,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = MakePngBytes();
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 100, 100, 100, 100);
 
@@ -126,10 +126,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 0, 0);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             // 20pt display size, default MaximumDownscaleMultiplier (1.0): 20 / 0.75 = 26.67px, rounds to 27.
             gfx.DrawImage(xImage, 0, 0, 20, 20);
@@ -147,10 +147,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var document = new PdfDocument();
             document.Options.DownscaleImages = false;
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 0, 0);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 0, 0, 20, 20);
 
@@ -165,10 +165,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 255, 0);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 0, 0, 20, 20);   // 20 / 0.75 = 26.67px, rounds to 27
             gfx.DrawImage(xImage, 0, 0, 40, 40);   // 40 / 0.75 = 53.33px, rounds to 53
@@ -188,10 +188,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // before downscaling existed.
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 0, 255);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 0, 0, 20, 20);
             gfx.DrawImage(xImage, 50, 50, 20, 20);
@@ -204,17 +204,17 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void SameXImageAndSize_DrawnWithDifferentInterpolate_EmbedsSeparateCopies()
         {
-            // Regression guard for issue #1172's resolved-source image cache: once the same XImage can be
+            // Regression guard for issue #1172's resolved-source image cache: once the same PdfRasterImage can be
             // shared across draw sites that transiently toggle Interpolate around one draw call
             // (BackgroundImageDrawHandler forcing nearest-neighbor for a repeating tile, BorderImageDrawHandler
             // for a slice), the dedup selector must include Interpolate - otherwise whichever draw happens
             // first permanently bakes its Interpolate value into the one embed every other draw reuses.
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 100, 150, 200);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             xImage.Interpolate = false;
             gfx.DrawImage(xImage, 0, 0, 20, 20);    // 20 / 0.75 = 26.67px, rounds to 27
@@ -231,17 +231,17 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void DownscaleImages_UnderActiveTransform_AccountsForTransformScale()
         {
             // A raster image drawn while a transform (CSS `transform: scale(...)`, or an SVG viewport/
-            // element transform - both apply via the same XGraphics.PushTransform/ScaleTransform
+            // element transform - both apply via the same PdfGraphics.PushTransform/ScaleTransform
             // mechanism) is active on the graphics state ends up at destRect size * transform scale on
             // the actual page, not destRect size alone. Realize() must fold that scale in before
             // computing a downscale target, or a transformed image gets embedded too small and displays
             // visibly blurry once the transform blows it back up.
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 255, 0);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.MultiplyTransform(Matrix3x2.CreateScale(2f, 2f));
             // 20pt destRect under a 2x active transform -> 40pt true on-page size -> 40 / 0.75 = 53.33px, rounds to 53.
@@ -262,10 +262,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // Realize() must extract each axis's own scale from the CTM's basis vectors instead.
             var document = new PdfDocument();
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 255, 255);
-            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+            using var xImage = PdfRasterImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.MultiplyTransform(Matrix3x2.CreateScale(3f, 1f));
             // x: 20pt * 3 = 60pt -> 60 / 0.75 = 80px. y: 20pt * 1 = 20pt -> 20 / 0.75 = 26.67px, rounds to 27.

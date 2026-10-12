@@ -260,7 +260,7 @@ namespace PeachPDF.Adapters
 
         protected override Image ImageFromStreamInt(Stream memoryStream)
         {
-            return new ImageAdapter(XImage.FromStream(() => memoryStream));
+            return new ImageAdapter(PdfRasterImage.FromStream(() => memoryStream));
         }
 
         protected override Font CreateFontInt(string family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)

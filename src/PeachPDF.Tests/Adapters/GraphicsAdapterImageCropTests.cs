@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Adapters
     /// </summary>
     public class GraphicsAdapterImageCropTests
     {
-        private static (PdfDocument Document, XGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Adapters
             // test asserting literal page-space coordinates has to pin the size - otherwise it passes in a
             // metric region and fails on a US-region machine (as CI's runners are) purely on page height.
             page.Size = PageSize.A4;
-            var pageGfx = XGraphics.FromPdfPage(page);
+            var pageGfx = PdfGraphics.FromPdfPage(page);
             var adapter = new PdfSharpAdapter();
             var graphics = new GraphicsAdapter(adapter, pageGfx, 1.0);
             return (document, pageGfx, graphics, adapter);

@@ -114,7 +114,7 @@ namespace PeachPDF.PDF
 
         /// <summary>
         /// Closes the page. A closes page cannot be modified anymore and it is not possible to
-        /// get an XGraphics object for a closed page. Closing a page is not required, but may saves
+        /// get an PdfGraphics object for a closed page. Closing a page is not required, but may saves
         /// resources if the document has many pages. 
         /// </summary>
         public void Close()
@@ -350,7 +350,7 @@ namespace PeachPDF.PDF
         // TODO: PdfPageTransition
 
         /// <summary>
-        /// The content stream currently used by an XGraphics object for rendering.
+        /// The content stream currently used by an PdfGraphics object for rendering.
         /// </summary>
         internal PdfContent RenderContent = null!;
 
@@ -514,7 +514,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets the resource name of the specified image within this page.
         /// </summary>
-        internal string GetImageName(XImage image, double width, double height)
+        internal string GetImageName(PdfRasterImage image, double width, double height)
         {
             global::PeachPDF.PDF.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
             Debug.Assert(pdfImage != null);
@@ -525,7 +525,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetImageName(XImage image, double width, double height)
+        string IContentStream.GetImageName(PdfRasterImage image, double width, double height)
         {
             return GetImageName(image, width, height);
         }
@@ -533,7 +533,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets the resource name of the specified form within this page.
         /// </summary>
-        internal string GetFormName(XForm form)
+        internal string GetFormName(PdfForm form)
         {
             PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
             Debug.Assert(pdfForm != null);
@@ -544,7 +544,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetFormName(XForm form)
+        string IContentStream.GetFormName(PdfForm form)
         {
             return GetFormName(form);
         }
@@ -559,7 +559,7 @@ namespace PeachPDF.PDF
             // Add transparency group to prevent rendering problems of Adobe viewer.
             // TransparencyUsed is set incrementally during painting by whichever content actually
             // required a transparency group (opacity < 1, a semi-transparent fill/stroke/gradient
-            // stop, or an SVG <mask> - see PdfGraphicsState/XGraphicsPdfRenderer's calls into
+            // stop, or an SVG <mask> - see PdfGraphicsState/PdfGraphicsRenderer's calls into
             // PdfATransparencyGuard), not forced unconditionally as it used to be - a page with none
             // of those doesn't carry an unnecessary /Group, and PDF/A-1 (which forbids transparency
             // groups) becomes reachable for documents that genuinely don't use any of them.

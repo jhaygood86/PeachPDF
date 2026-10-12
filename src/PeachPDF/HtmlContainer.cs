@@ -231,7 +231,7 @@ namespace PeachPDF
         /// Measures the bounds of box and children, recursively.
         /// </summary>
         /// <param name="g">Device context to draw</param>
-        public async ValueTask PerformLayout(XGraphics g)
+        public async ValueTask PerformLayout(PdfGraphics g)
         {
             ArgumentNullException.ThrowIfNull(g);
 
@@ -244,7 +244,7 @@ namespace PeachPDF
         /// </summary>
         /// <param name="g">the device to use to render</param>
         /// <param name="fragmentainer">the page to render, from layout's fragment tree</param>
-        internal void PerformPaint(XGraphics g, FragmentainerFragment fragmentainer)
+        internal void PerformPaint(PdfGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
 

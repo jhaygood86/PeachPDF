@@ -11,7 +11,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// painter (<see cref="FormFieldFragmentPainter"/>) and a field's own generated widget
     /// appearance stream (<c>Html/Core/Handlers/FormFieldAppearanceBuilder</c>) - both need to draw
     /// the identical CSS-styled look, just onto different <see cref="Canvas"/> targets (the real
-    /// page vs. a field's own local <c>XForm</c>), so the drawing logic itself lives here once
+    /// page vs. a field's own local <c>PdfForm</c>), so the drawing logic itself lives here once
     /// rather than drifting between two independently maintained copies.
     /// </summary>
     internal static class FormFieldChrome

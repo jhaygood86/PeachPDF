@@ -160,7 +160,7 @@ namespace PeachPDF.Tests.Integration
 
             await container.SetHtml(html, null);
 
-            var measure = XGraphics.CreateMeasureContext(size);
+            var measure = PdfGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

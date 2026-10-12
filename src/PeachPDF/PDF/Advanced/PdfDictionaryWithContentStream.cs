@@ -100,7 +100,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets the resource name of the specified image within this dictionary.
         /// </summary>
-        internal string GetImageName(XImage image, double width, double height)
+        internal string GetImageName(PdfRasterImage image, double width, double height)
         {
             PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
             Debug.Assert(pdfImage != null);
@@ -111,7 +111,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetImageName(XImage image, double width, double height)
+        string IContentStream.GetImageName(PdfRasterImage image, double width, double height)
         {
             throw new NotImplementedException();
         }
@@ -119,7 +119,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets the resource name of the specified form within this dictionary.
         /// </summary>
-        internal string GetFormName(XForm form)
+        internal string GetFormName(PdfForm form)
         {
             PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
             Debug.Assert(pdfForm != null);
@@ -130,7 +130,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetFormName(XForm form)
+        string IContentStream.GetFormName(PdfForm form)
         {
             throw new NotImplementedException();
         }

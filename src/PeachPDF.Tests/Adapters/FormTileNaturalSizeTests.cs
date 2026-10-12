@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.Adapters
     /// A Form XObject tile reports the exact point size it was created at, not a whole-point count.
     /// </summary>
     /// <remarks>
-    /// <see cref="XImage.PixelWidth"/>/<see cref="XImage.PixelHeight"/> are <c>(int)</c> casts of the form's
+    /// <see cref="PdfRasterImage.PixelWidth"/>/<see cref="PdfRasterImage.PixelHeight"/> are <c>(int)</c> casts of the form's
     /// own view box, which is meaningless for vector content and destructive for a repeated one: a tiled
     /// background is placed at its natural size, so a truncation does not stay sub-point — it accumulates
     /// once per tile. Charts.css's grid lines are a <c>background-size: 100% calc(100% / 4)</c> tile at
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Adapters
             using var document = new PdfDocument();
             document.AddPage();
 
-            var form = new XForm(document, new Size(32.6518, 10.4));
+            var form = new PdfForm(document, new Size(32.6518, 10.4));
             var image = new ImageAdapter(form);
 
             Assert.Equal(32.6518, image.Width, 4);
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Adapters
             using var document = new PdfDocument();
             document.AddPage();
 
-            var tile = new ImageAdapter(new XForm(document, new Size(100, boxHeight / 4)));
+            var tile = new ImageAdapter(new PdfForm(document, new Size(100, boxHeight / 4)));
 
             Assert.Equal(boxHeight, tile.Height * 4, 3);
         }

@@ -284,7 +284,7 @@ namespace PeachPDF
                 orgPageSize = container.CssPageSize.Value;
             }
 
-            var measure = XGraphics.CreateMeasureContext(container.PageSize);
+            var measure = PdfGraphics.CreateMeasureContext(container.PageSize);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
@@ -326,7 +326,7 @@ namespace PeachPDF
                     await SetContent(container, config, html, cssData, orgPageSize);
 
                     measure?.Dispose();
-                    measure = XGraphics.CreateMeasureContext(container.PageSize);
+                    measure = PdfGraphics.CreateMeasureContext(container.PageSize);
                 }
             }
 
@@ -679,7 +679,7 @@ namespace PeachPDF
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = XGraphics.CreateMeasureContext(orgPageSize);
+            using var measure = PdfGraphics.CreateMeasureContext(orgPageSize);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
@@ -1023,7 +1023,7 @@ namespace PeachPDF
 
                 structureTagBuilder?.BeginPage(page);
 
-                using var g = XGraphics.FromPdfPage(page);
+                using var g = PdfGraphics.FromPdfPage(page);
 
                 var sheetRect = new Rect(0, 0,
                     page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint);
@@ -1117,8 +1117,8 @@ namespace PeachPDF
                 var preContentState = g.Save();
 
                 // No content-area clip pushed here (an earlier version of this method intersected one
-                // directly on the raw XGraphics, ahead of FragmentPainter.Paint's own push below) - a raw
-                // XGraphics.IntersectClip call made here is invisible to the Canvas abstraction's own
+                // directly on the raw PdfGraphics, ahead of FragmentPainter.Paint's own push below) - a raw
+                // PdfGraphics.IntersectClip call made here is invisible to the Canvas abstraction's own
                 // clip-stack bookkeeping, which is what Canvas.SuspendClipping walks to let a
                 // position: fixed box's own paint reach back out to the full page box (margins included,
                 // its actual containing block per CSS2.1 §10.1). Baking the content clip in here put it
@@ -1430,7 +1430,7 @@ namespace PeachPDF
         /// </para>
         /// </remarks>
         private static async Task PaintElementMarginBoxes(
-            XGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
+            PdfGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
@@ -1490,7 +1490,7 @@ namespace PeachPDF
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
         /// (which is an ordinary box and paints its rule through the normal border path).
         /// </summary>
-        private static void PaintFootnoteArea(XGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        private static void PaintFootnoteArea(PdfGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
@@ -1499,7 +1499,7 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(XGraphics, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
+        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(PdfGraphics, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
         /// split out so a test can drive it with a recording <see cref="Canvas"/> and assert the actual
         /// draw call sequence (which calls, in what order) rather than only that a full PDF pipeline
         /// completes without error or that a fragment holds the right data - see this repo's own testing
@@ -1509,7 +1509,7 @@ namespace PeachPDF
         {
             // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
             // wrapper), so it needs its own content-area bound - previously provided for free by a raw
-            // XGraphics.IntersectClip AddPdfPages applied ahead of this call, removed because it also
+            // PdfGraphics.IntersectClip AddPdfPages applied ahead of this call, removed because it also
             // (wrongly) bounded position: fixed content the same way; see AddPdfPages's own remarks.
             graphicsAdapter.PushClip(htmlContainer.PageClipOverride ?? htmlContainer.PageBoxRect);
 

@@ -221,11 +221,11 @@ namespace PeachPDF.Tests.Adapters
 
         private sealed class Fixture : IDisposable
         {
-            private readonly XGraphics _measure;
+            private readonly PdfGraphics _measure;
             private readonly GraphicsAdapter _graphics;
             private readonly Font _font;
 
-            private Fixture(XGraphics measure, GraphicsAdapter graphics, Font font)
+            private Fixture(PdfGraphics measure, GraphicsAdapter graphics, Font font)
             {
                 _measure = measure;
                 _graphics = graphics;
@@ -237,7 +237,7 @@ namespace PeachPDF.Tests.Adapters
                 var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
                 await BundledFonts.RegisterFont(adapter, fontPath ?? BundledFonts.Ttf, family);
 
-                var measure = XGraphics.CreateMeasureContext(new Size(595, 842));
+                var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
                 var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
                 var font = adapter.GetFont(family, 40, PaintFontStyle.Regular);

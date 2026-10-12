@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Image_UnderPdfAConformance_NeverGetsInterpolateTrue()
         {
             // ISO 19005-2 §6.2.8 (present in every PDF/A part): an Image dictionary's Interpolate key,
-            // if present, must be false - XImage.Interpolate defaults to true for every image, so this
+            // if present, must be false - PdfRasterImage.Interpolate defaults to true for every image, so this
             // would otherwise fire for any PDF/A document containing a plain <img>.
             var pngBytes = RasterPngFixture.MakeSolidRgbaPngBytes(4, 4, 255, 0, 0);
             var html = $"<html><body><img src=\"data:image/png;base64,{Convert.ToBase64String(pngBytes)}\" width=\"4\" height=\"4\" /></body></html>";

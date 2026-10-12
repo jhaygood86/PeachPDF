@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Integration
     /// since the property now renders differently). <b>That failure is the intended tripwire</b> - it
     /// is the signal to add the same <c>PdfATransparencyGuard.RequireAllowed</c> call (see
     /// <c>PdfATransparencyGuard.cs</c> and its 7 existing call sites in <c>PdfGraphicsState.cs</c>/
-    /// <c>XGraphicsPdfRenderer.cs</c>/<c>PdfImage.cs</c>) to whichever new paint path now actually
+    /// <c>PdfGraphicsRenderer.cs</c>/<c>PdfImage.cs</c>) to whichever new paint path now actually
     /// creates a transparency group, as part of that implementation work - not to just update or
     /// delete this pinned expectation.
     /// </para>

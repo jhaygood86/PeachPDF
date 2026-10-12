@@ -21,21 +21,21 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
     /// A real end-to-end visual (dual-rasterized) confirmation for the channel-independent color-matrix
     /// path is covered separately, outside the unit-test suite, since it needs Python/PDFium/MuPDF.
     /// </summary>
-    public class XGraphicsPdfRendererColorMatrixAndMaskTests
+    public class PdfGraphicsRendererColorMatrixAndMaskTests
     {
-        private static (PdfDocument Document, XGraphics Gfx) NewPage()
+        private static (PdfDocument Document, PdfGraphics Gfx) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
+            var gfx = PdfGraphics.FromPdfPage(page);
             return (document, gfx);
         }
 
-        private static XForm NewTile(PdfDocument document, double size, Brush brush)
+        private static PdfForm NewTile(PdfDocument document, double size, Brush brush)
         {
-            var form = new XForm(document, new Size(size, size));
-            var formGfx = XGraphics.FromForm(form);
+            var form = new PdfForm(document, new Size(size, size));
+            var formGfx = PdfGraphics.FromForm(form);
             formGfx.DrawRectangle(brush, 0, 0, size, size);
             return form;
         }
@@ -178,7 +178,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var document = new PdfDocument();
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
             var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
             var bottom = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(0, 0, 255)));
 
@@ -192,7 +192,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var document = new PdfDocument();
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
             var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
             var bottom = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(0, 0, 255)));
 
@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var document = new PdfDocument();
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
             var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
 
             Assert.Throws<PdfAConformanceException>(() =>
@@ -219,7 +219,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             var document = new PdfDocument();
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
             var content = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
             var mask = NewTile(document, 50, new SolidBrush(PaintColor.White));
 

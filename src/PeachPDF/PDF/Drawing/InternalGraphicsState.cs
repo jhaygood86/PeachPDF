@@ -39,7 +39,7 @@ namespace PeachPDF.PDF.Drawing
     // manages a PDF graphics state stack to calculate the desired bahaviour. It also takes into consideration
     // not to multiply with inverse matrixes when the user sets a new transformation matrix.
     // After the design works on pager I decided not to implement it because it is much to large-scale.
-    // Instead I lay down some rules how to use the XGraphics class.
+    // Instead I lay down some rules how to use the PdfGraphics class.
     //
     // * Before you set a transformation matrix save the graphics state (Save) or begin a new container
     //   (BeginContainer).
@@ -61,27 +61,21 @@ namespace PeachPDF.PDF.Drawing
     // Keeping these rules leads to easy to read code and best results in PDF output.
 
     /// <summary>
-    /// Represents the internal state of an XGraphics object.
+    /// Represents the internal state of an PdfGraphics object.
     /// Used when the state is saved and restored.
     /// </summary>
     internal class InternalGraphicsState
     {
-        public InternalGraphicsState(XGraphics gfx)
+        public InternalGraphicsState(PdfGraphics gfx)
         {
             _gfx = gfx;
         }
 
-        public InternalGraphicsState(XGraphics gfx, XGraphicsState state)
+        public InternalGraphicsState(PdfGraphics gfx, PdfGraphicsStateToken state)
         {
             _gfx = gfx;
             State = state;
             State.InternalState = this;
-        }
-
-        public InternalGraphicsState(XGraphics gfx, XGraphicsContainer container)
-        {
-            _gfx = gfx;
-            container.InternalState = this;
         }
 
         /// <summary>
@@ -111,8 +105,8 @@ namespace PeachPDF.PDF.Drawing
 
         public bool Invalid;
 
-        readonly XGraphics _gfx;
+        readonly PdfGraphics _gfx;
 
-        internal XGraphicsState State = null!;
+        internal PdfGraphicsStateToken State = null!;
     }
 }

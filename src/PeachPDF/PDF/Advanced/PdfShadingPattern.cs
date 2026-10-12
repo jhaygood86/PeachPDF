@@ -55,7 +55,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfExtGState? AlphaExtGState { get; private set; }
 
-        internal void SetupFromBrush(Brush brush, Matrix3x2 matrix, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(Brush brush, Matrix3x2 matrix, PdfGraphicsRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");

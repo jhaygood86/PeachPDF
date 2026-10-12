@@ -36,9 +36,9 @@ namespace PeachPDF.PDF.Drawing
     /// <summary>
     /// Specifies the format of the image.
     /// </summary>
-    internal sealed class XImageFormat
+    internal sealed class PdfImageFormat
     {
-        XImageFormat(Guid guid)
+        PdfImageFormat(Guid guid)
         {
             _guid = guid;
         }
@@ -53,7 +53,7 @@ namespace PeachPDF.PDF.Drawing
         /// </summary>
         public override bool Equals(object? obj)
         {
-            XImageFormat format = obj as XImageFormat;
+            PdfImageFormat format = obj as PdfImageFormat;
             if (format == null)
                 return false;
             return _guid == format._guid;
@@ -70,7 +70,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the Portable Network Graphics (PNG) image format. 
         /// </summary>
-        public static XImageFormat Png
+        public static PdfImageFormat Png
         {
             get { return _png; }
         }
@@ -78,7 +78,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the Graphics Interchange Format (GIF) image format.
         /// </summary>
-        public static XImageFormat Gif
+        public static PdfImageFormat Gif
         {
             get { return _gif; }
         }
@@ -86,7 +86,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the Joint Photographic Experts Group (JPEG) image format.
         /// </summary>
-        public static XImageFormat Jpeg
+        public static PdfImageFormat Jpeg
         {
             get { return _jpeg; }
         }
@@ -94,7 +94,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the Tag Image File Format (TIFF) image format.
         /// </summary>
-        public static XImageFormat Tiff
+        public static PdfImageFormat Tiff
         {
             get { return _tiff; }
         }
@@ -102,7 +102,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the Portable Document Format (PDF) image format
         /// </summary>
-        public static XImageFormat Pdf
+        public static PdfImageFormat Pdf
         {
             get { return _pdf; }
         }
@@ -110,7 +110,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the Windows icon image format.
         /// </summary>
-        public static XImageFormat Icon
+        public static PdfImageFormat Icon
         {
             get { return _icon; }
         }
@@ -132,12 +132,12 @@ namespace PeachPDF.PDF.Drawing
         //ImageFormat.icon = new ImageFormat(new Guid("{b96b3cb5-0728-11d3-9d7b-0000f81ef32e}"));
 
         // #??? Why Guids?
-        private static readonly XImageFormat _png = new XImageFormat(new Guid("{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"));
-        private static readonly XImageFormat _gif = new XImageFormat(new Guid("{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}"));
-        private static readonly XImageFormat _jpeg = new XImageFormat(new Guid("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"));
-        private static readonly XImageFormat _tiff = new XImageFormat(new Guid("{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}"));
-        private static readonly XImageFormat _icon = new XImageFormat(new Guid("{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}"));
+        private static readonly PdfImageFormat _png = new PdfImageFormat(new Guid("{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"));
+        private static readonly PdfImageFormat _gif = new PdfImageFormat(new Guid("{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}"));
+        private static readonly PdfImageFormat _jpeg = new PdfImageFormat(new Guid("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"));
+        private static readonly PdfImageFormat _tiff = new PdfImageFormat(new Guid("{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}"));
+        private static readonly PdfImageFormat _icon = new PdfImageFormat(new Guid("{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}"));
         // not GDI+ conform
-        private static readonly XImageFormat _pdf = new XImageFormat(new Guid("{84570158-DBF0-4C6B-8368-62D6A3CA76E0}"));
+        private static readonly PdfImageFormat _pdf = new PdfImageFormat(new Guid("{84570158-DBF0-4C6B-8368-62D6A3CA76E0}"));
     }
 }

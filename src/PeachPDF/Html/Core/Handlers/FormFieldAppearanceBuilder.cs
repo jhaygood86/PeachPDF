@@ -13,7 +13,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// <summary>
     /// Builds the "/AP /N" (and, for a two-state field, "/AP /D") appearance-stream
     /// <see cref="PdfFormXObject"/>s for interactive PDF form fields, through PeachPDF's own real
-    /// rendering pipeline (<see cref="GraphicsAdapter"/> over a fresh <see cref="XForm"/>, exactly
+    /// rendering pipeline (<see cref="GraphicsAdapter"/> over a fresh <see cref="PdfForm"/>, exactly
     /// the recipe <c>GraphicsAdapter.CreateTile</c> already uses for SVG mask/pattern tiles) rather
     /// than hand-written content-stream operators - the field's real resolved CSS border/background
     /// (<see cref="FormFieldChrome"/>, shared with the flag-on static page painter) and its real
@@ -66,13 +66,13 @@ namespace PeachPDF.Html.Core.Handlers
         static PdfFormXObject CreateForm(PdfDocument document, RenderContext adapter, double pixelsPerPoint,
             double widthPt, double heightPt, Action<Canvas, Rect> draw)
         {
-            var form = new XForm(document, new Size(widthPt, heightPt));
-            var formGraphics = XGraphics.FromForm(form);
+            var form = new PdfForm(document, new Size(widthPt, heightPt));
+            var formGraphics = PdfGraphics.FromForm(form);
             using (var g = new GraphicsAdapter(adapter, formGraphics, pixelsPerPoint, releaseGraphics: true))
             {
                 draw(g, LayoutRect(widthPt, heightPt, pixelsPerPoint));
             }
-            return form.PdfForm;
+            return form.FormXObject;
         }
 
         static Rect LayoutRect(double widthPt, double heightPt, double pixelsPerPoint) =>

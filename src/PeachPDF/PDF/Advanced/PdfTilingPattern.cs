@@ -54,7 +54,7 @@ namespace PeachPDF.PDF.Advanced
         /// Sets this pattern up to repeat <paramref name="brush"/>'s form. <paramref name="matrix"/> maps pattern space (the brush's own
         /// top-left-origin, y-down space, in points) onto the page's default coordinate system.
         /// </summary>
-        internal void SetupFromBrush(XTilingBrush brush, Matrix3x2 matrix)
+        internal void SetupFromBrush(PdfTilingBrush brush, Matrix3x2 matrix)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -68,7 +68,7 @@ namespace PeachPDF.PDF.Advanced
 
             string name;
             double cx, cy;
-            if (brush.Tile is XForm form)
+            if (brush.Tile is PdfForm form)
             {
                 form.Finish();
                 name = Resources.AddForm(_document.FormTable.GetForm(form));

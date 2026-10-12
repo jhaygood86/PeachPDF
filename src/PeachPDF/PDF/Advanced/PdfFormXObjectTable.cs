@@ -52,24 +52,24 @@ namespace PeachPDF.PDF.Advanced
         { }
 
         /// <summary>
-        /// Gets a PdfFormXObject from an XPdfForm. Because the returned objects must be unique, always
+        /// Gets a PdfFormXObject from an PdfForm. Because the returned objects must be unique, always
         /// a new instance of PdfFormXObject is created if none exists for the specified form. 
         /// </summary>
-        public PdfFormXObject GetForm(XForm form)
+        public PdfFormXObject GetForm(PdfForm form)
         {
             // If the form already has a PdfFormXObject, return it.
             if (form._pdfForm != null)
             {
-                Debug.Assert(form.IsTemplate, "An XPdfForm must not have a PdfFormXObject.");
+                Debug.Assert(form.IsTemplate, "An PdfForm must not have a PdfFormXObject.");
                 if (ReferenceEquals(form._pdfForm.Owner, Owner))
                     return form._pdfForm;
-                //throw new InvalidOperationException("Because of a current limitation of PDFsharp an XPdfForm object can be used only within one single PdfDocument.");
+                //throw new InvalidOperationException("Because of a current limitation of PDFsharp an PdfForm object can be used only within one single PdfDocument.");
 
                 // Dispose PdfFromXObject when document has changed
                 form._pdfForm = null;
             }
 
-            Debug.Assert(form.GetType() == typeof(XForm));
+            Debug.Assert(form.GetType() == typeof(PdfForm));
             form._pdfForm = new PdfFormXObject(Owner, form);
             return form._pdfForm;
         }

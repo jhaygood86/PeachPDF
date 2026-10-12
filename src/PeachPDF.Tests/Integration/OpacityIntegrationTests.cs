@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Opacity_NestedOpacityBoxes_BothComposite()
         {
-            // Exercises the CreateTile nested-tile fix (XGraphics.Owner) - a child box with its own
+            // Exercises the CreateTile nested-tile fix (PdfGraphics.Owner) - a child box with its own
             // opacity, painted from inside its already-opacity-wrapped parent's tile, must still be
             // able to create ITS OWN tile rather than silently falling back to unopaqued painting.
             var html = """
@@ -219,7 +219,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size);
+            var measure = PdfGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
@@ -251,7 +251,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size);
+            var measure = PdfGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
@@ -297,7 +297,7 @@ div {{ width: 200px; height: 100px; {css} }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size);
+            var measure = PdfGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

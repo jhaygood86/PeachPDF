@@ -42,7 +42,7 @@ using static PeachPDF.PDF.Drawing.ImageSource;
 namespace PeachPDF.PDF.Drawing
 {
     [Flags]
-    internal enum XImageState
+    internal enum PdfImageState
     {
         UsedInDrawingContext = 0x00000001,
 
@@ -53,12 +53,12 @@ namespace PeachPDF.PDF.Drawing
     /// Defines an object used to draw image files (bmp, png, jpeg, gif) and PDF forms.
     /// An abstract base class that provides functionality for the Bitmap and Metafile descended classes.
     /// </summary>
-    internal class XImage : IDisposable
+    internal class PdfRasterImage : IDisposable
     {
         // The hierarchy is adapted to WPF/Silverlight/WinRT
         //
-        // XImage                           <-- ImageSource
-        //   XForm
+        // PdfRasterImage                           <-- ImageSource
+        //   PdfForm
         //   PdfForm
 
         // ???
@@ -70,27 +70,27 @@ namespace PeachPDF.PDF.Drawing
 
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="XImage"/> class.
+        /// Initializes a new instance of the <see cref="PdfRasterImage"/> class.
         /// </summary>
-        protected XImage()
+        protected PdfRasterImage()
         { }
 
         // Useful stuff here: http://stackoverflow.com/questions/350027/setting-wpf-image-source-in-code
-        XImage(string path)
+        PdfRasterImage(string path)
         {
             ImageSource.ImageSourceImpl ??= CreateDefaultImageSourceImpl();
             _source = ImageSource.FromFile(path);
             Initialize();
         }
 
-        XImage(IImageSource imageSource)
+        PdfRasterImage(IImageSource imageSource)
         {
             _source = imageSource;
             _path = _source.Name;
             Initialize();
         }
 
-        XImage(Func<Stream> stream)
+        PdfRasterImage(Func<Stream> stream)
         {
             // Create a dummy unique path.
             _path = "*" + Guid.NewGuid().ToString("B");
@@ -99,7 +99,7 @@ namespace PeachPDF.PDF.Drawing
             Initialize();
         }
 
-        XImage(Func<byte[]> data)
+        PdfRasterImage(Func<byte[]> data)
         {
             // Create a dummy unique path.
             _path = "*" + Guid.NewGuid().ToString("B");
@@ -119,9 +119,9 @@ namespace PeachPDF.PDF.Drawing
         /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
         /// </summary>
         /// <param name="path">The path to a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, or JPEG XL file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
-        public static XImage FromFile(string path)
+        public static PdfRasterImage FromFile(string path)
         {
-            return new XImage(path);
+            return new PdfRasterImage(path);
         }
 
         /// <summary>
@@ -130,20 +130,20 @@ namespace PeachPDF.PDF.Drawing
         /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
         /// </summary>
         /// <param name="stream">The stream containing a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, JPEG XL, or PDF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
-        public static XImage FromStream(Func<Stream> stream)
+        public static PdfRasterImage FromStream(Func<Stream> stream)
         {
             if (stream == null)
                 throw new ArgumentNullException("stream");
 
             // TODO: Check PDF stream.
             //if (PdfReader.TestPdfFile(path) > 0)
-            //  return new XPdfForm(path);
-            return new XImage(stream);
+            //  return new PdfForm(path);
+            return new PdfRasterImage(stream);
         }
 
-        public static XImage FromImageSource(IImageSource imageSouce)
+        public static PdfRasterImage FromImageSource(IImageSource imageSouce)
         {
-            return new XImage(imageSouce);
+            return new PdfRasterImage(imageSouce);
         }
 
         /// <summary>
@@ -155,12 +155,12 @@ namespace PeachPDF.PDF.Drawing
             return false;
         }
 
-        internal XImageState XImageState
+        internal PdfImageState PdfImageState
         {
             get { return _xImageState; }
             set { _xImageState = value; }
         }
-        XImageState _xImageState;
+        PdfImageState _xImageState;
 
         internal void Initialize()
         {
@@ -173,13 +173,13 @@ namespace PeachPDF.PDF.Drawing
                     // Cmyk+alpha PixelFormat exists, and pass-through is JPEG-only), so it always
                     // resolves to Jpeg here - the same format any other non-alpha JPEG resolves to.
                     // PdfImage.InitializeJpeg's own JpegPassthrough fast path handles it correctly
-                    // without needing a dedicated XImageFormat/Initialize method: this check being
+                    // without needing a dedicated PdfImageFormat/Initialize method: this check being
                     // non-null already guarantees that fast path's own `_targetWidth is null &&
                     // JpegPassthrough is {}` condition holds (a JpegPassthrough source is never resized
                     // - see IsCmyk's own remarks below for the CMYK case; an ICC-carrying RGB/Gray source
                     // forfeits pass-through instead of Format when it *is* resized, handled inside
                     // InitializeJpeg itself, not here).
-                    _format = XImageFormat.Jpeg;
+                    _format = PdfImageFormat.Jpeg;
                 }
                 else if (_source.IsCmyk)
                 {
@@ -188,11 +188,11 @@ namespace PeachPDF.PDF.Drawing
                     // non-Jpeg dispatch, which checks IsCmyk itself (InitializeNonJpeg) before falling
                     // into the RGB-only bitmap path - so any of the "convert to a PDF bitmap" format
                     // GUIDs works here; Tiff is simply the accurate one.
-                    _format = XImageFormat.Tiff;
+                    _format = PdfImageFormat.Tiff;
                 }
                 else
                 {
-                    _format = _source.Transparent ? XImageFormat.Png : XImageFormat.Jpeg;
+                    _format = _source.Transparent ? PdfImageFormat.Png : PdfImageFormat.Jpeg;
                 }
             }
         }
@@ -226,7 +226,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Non-null when this image should be embedded via byte-for-byte PNG pass-through - see
         /// <see cref="IImageSource.PngPassthrough"/>. An eligible PNG is never <c>Transparent</c> (only
-        /// alpha-free color types qualify), so it already resolves to <see cref="XImageFormat.Jpeg"/>
+        /// alpha-free color types qualify), so it already resolves to <see cref="PdfImageFormat.Jpeg"/>
         /// above without needing its own branch - <see cref="PdfImage"/>'s own JPEG-dispatch
         /// fast path checks this before falling into its lossy re-encode, mirroring
         /// <see cref="JpegPassthrough"/>'s.
@@ -236,7 +236,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Non-null when this image should be embedded via GIF <c>/LZWDecode</c> pass-through - see
         /// <see cref="IImageSource.GifPassthrough"/>. Same reasoning as <see cref="PngPassthrough"/>: an
-        /// eligible GIF is never <c>Transparent</c>, so it already resolves to <see cref="XImageFormat.Jpeg"/>
+        /// eligible GIF is never <c>Transparent</c>, so it already resolves to <see cref="PdfImageFormat.Jpeg"/>
         /// above without needing its own branch.
         /// </summary>
         internal GifPassthroughData? GifPassthrough => _source.GifPassthrough;
@@ -244,7 +244,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// The original JPEG XL bytes when this source is eligible for the experimental <c>/JXLDecode</c> embed - see
         /// <see cref="IImageSource.JxlPassthrough"/>. An eligible source is opaque, so it already resolves to
-        /// <see cref="XImageFormat.Jpeg"/> above and reaches <see cref="PdfImage"/>'s JPEG initializer.
+        /// <see cref="PdfImageFormat.Jpeg"/> above and reaches <see cref="PdfImage"/>'s JPEG initializer.
         /// </summary>
         internal JxlPassthroughData? JxlPassthrough => _source.JxlPassthrough;
 
@@ -414,11 +414,11 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the format of the image.
         /// </summary>
-        public XImageFormat Format
+        public PdfImageFormat Format
         {
             get { return _format; }
         }
-        XImageFormat _format = null!;
+        PdfImageFormat _format = null!;
 
         /// <summary>
         /// If path starts with '*' the image is created from a stream and the path is a GUID.

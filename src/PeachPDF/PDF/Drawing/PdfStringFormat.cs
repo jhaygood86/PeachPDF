@@ -32,12 +32,12 @@ namespace PeachPDF.PDF.Drawing
     /// <summary>
     /// Represents the text layout information.
     /// </summary>
-    internal class XStringFormat
+    internal class PdfStringFormat
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="XStringFormat"/> class.
+        /// Initializes a new instance of the <see cref="PdfStringFormat"/> class.
         /// </summary>
-        public XStringFormat()
+        public PdfStringFormat()
         {
         }
 
@@ -57,7 +57,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets horizontal text alignment information.
         /// </summary>
-        public XStringAlignment Alignment
+        public PdfStringAlignment Alignment
         {
             get { return _alignment; }
             set
@@ -65,7 +65,7 @@ namespace PeachPDF.PDF.Drawing
                 _alignment = value;
             }
         }
-        XStringAlignment _alignment;
+        PdfStringAlignment _alignment;
 
         //public int DigitSubstitutionLanguage { get; }
         //public StringDigitSubstitute DigitSubstitutionMethod { get; }
@@ -77,7 +77,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets or sets the line alignment.
         /// </summary>
-        public XLineAlignment LineAlignment
+        public PdfLineAlignment LineAlignment
         {
             get { return _lineAlignment; }
             set
@@ -86,6 +86,6 @@ namespace PeachPDF.PDF.Drawing
 
             }
         }
-        XLineAlignment _lineAlignment;
+        PdfLineAlignment _lineAlignment;
     }
 }

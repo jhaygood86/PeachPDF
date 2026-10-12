@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Dom
         /// inherit these from their page context.
         /// </summary>
         public static async Task Render(
-            XGraphics g,
+            PdfGraphics g,
             Size pageSize,
             double marginLeft,
             double marginTop,
@@ -449,7 +449,7 @@ namespace PeachPDF.Html.Core.Dom
         /// neighboring fragment to mitre into (#943's own flagged open question).
         /// </summary>
         internal static async Task PaintBackgroundAndBorder(
-            XGraphics g, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
+            PdfGraphics g, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
             RenderContext adapter, HtmlContainerInt htmlContainer,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
@@ -610,7 +610,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which <paramref name="htmlContainer"/>'s root box's own <see cref="CssBox.GetRemHeight"/>
         /// already correctly is.
         /// </summary>
-        private static void PaintImage(XGraphics g, CssImage image, Rect rect, string positionList, RenderContext adapter,
+        private static void PaintImage(PdfGraphics g, CssImage image, Rect rect, string positionList, RenderContext adapter,
             HtmlContainerInt htmlContainer, double? emSizePt)
         {
             // Root is only ever null before the document's initial layout, which has already run by
@@ -1201,21 +1201,21 @@ namespace PeachPDF.Html.Core.Dom
             return $"{horizontal} {vertical}";
         }
 
-        private static XStringFormat BuildStringFormat(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
+        private static PdfStringFormat BuildStringFormat(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
         {
             var (textAlign, verticalAlign) = ResolveAlignment(style, pageStyle, boxName);
 
             return (textAlign, verticalAlign) switch
             {
-                ("left",   "top")    => XStringFormats.TopLeft,
-                ("left",   "bottom") => XStringFormats.BottomLeft,
-                ("left",   _)        => XStringFormats.CenterLeft,
-                ("right",  "top")    => XStringFormats.TopRight,
-                ("right",  "bottom") => XStringFormats.BottomRight,
-                ("right",  _)        => XStringFormats.CenterRight,
-                ("center", "top")    => XStringFormats.TopCenter,
-                ("center", "bottom") => XStringFormats.BottomCenter,
-                _                    => XStringFormats.Center,
+                ("left",   "top")    => PdfStringFormats.TopLeft,
+                ("left",   "bottom") => PdfStringFormats.BottomLeft,
+                ("left",   _)        => PdfStringFormats.CenterLeft,
+                ("right",  "top")    => PdfStringFormats.TopRight,
+                ("right",  "bottom") => PdfStringFormats.BottomRight,
+                ("right",  _)        => PdfStringFormats.CenterRight,
+                ("center", "top")    => PdfStringFormats.TopCenter,
+                ("center", "bottom") => PdfStringFormats.BottomCenter,
+                _                    => PdfStringFormats.Center,
             };
         }
 

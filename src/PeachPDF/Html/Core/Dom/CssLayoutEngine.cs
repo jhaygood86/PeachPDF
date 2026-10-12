@@ -1491,8 +1491,8 @@ namespace PeachPDF.Html.Core.Dom
                     // height (issue #770). Otherwise it falls back to the font's own line height
                     // (ascender + descender), not each character's individually-measured horizontal
                     // advance width: Canvas.DrawString always renders a glyph across the font's full
-                    // line-height span from its anchor (XGraphicsPdfRenderer.DrawString's
-                    // XLineAlignment.Near branch adds cyAscent above the baseline and leaves cyDescent
+                    // line-height span from its anchor (PdfGraphicsRenderer.DrawString's
+                    // PdfLineAlignment.Near branch adds cyAscent above the baseline and leaves cyDescent
                     // below it - a fixed span, independent of the specific glyph's own ink), while a
                     // codepoint's own hmtx advance width can be narrower (a real subsetted CJK font
                     // measured ~9pt advance against a ~13pt line height at the same size) - stepping by

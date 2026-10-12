@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
     /// parse-level coverage despite being fully implemented.
     ///
     /// Painting is realized via the PDF <c>Tc</c> character-spacing operator (see
-    /// <c>PdfGraphicsState.RealizeFont</c>/<c>XGraphicsPdfRenderer.DrawString</c>) rather than drawing
+    /// <c>PdfGraphicsState.RealizeFont</c>/<c>PdfGraphicsRenderer.DrawString</c>) rather than drawing
     /// character-by-character, so a letter-spaced run still reaches <see cref="Canvas.DrawString"/>
     /// as a single call - the paint-level test below asserts exactly that (one call, carrying the
     /// resolved spacing value), not N per-character calls.
@@ -227,7 +227,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size);
+            var measure = PdfGraphics.CreateMeasureContext(size);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

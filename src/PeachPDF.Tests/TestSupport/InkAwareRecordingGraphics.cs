@@ -28,19 +28,19 @@ namespace PeachPDF.Tests.TestSupport
     /// the feature — and a test that cannot fail is worse than none.
     /// </para>
     /// <para>
-    /// The delegate adapter is built over a <see cref="XGraphics.CreateMeasureContext"/> context, which is
+    /// The delegate adapter is built over a <see cref="PdfGraphics.CreateMeasureContext"/> context, which is
     /// enough: <c>GetInkCrossings</c> reads only the font's own descriptor and shaping, never the
     /// underlying page.
     /// </para>
     /// </remarks>
     internal sealed class InkAwareRecordingGraphics : TestRecordingGraphics
     {
-        private readonly XGraphics _measure;
+        private readonly PdfGraphics _measure;
         private readonly GraphicsAdapter _real;
 
         internal InkAwareRecordingGraphics(PdfSharpAdapter adapter, double pixelsPerPoint = 1.0)
         {
-            _measure = XGraphics.CreateMeasureContext(new Size(595, 842));
+            _measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
             _real = new GraphicsAdapter(adapter, _measure, pixelsPerPoint);
         }
 

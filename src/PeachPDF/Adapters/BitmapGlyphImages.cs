@@ -8,14 +8,14 @@ using System.Runtime.CompilerServices;
 namespace PeachPDF.Adapters;
 
 /// <summary>
-/// The <see cref="XImage"/> of a bitmap colour glyph (CBDT/sbix), made once per font, glyph and strike so a glyph used many times in a
+/// The <see cref="PdfRasterImage"/> of a bitmap colour glyph (CBDT/sbix), made once per font, glyph and strike so a glyph used many times in a
 /// document - a row of the same emoji - shares one image object.
 /// </summary>
 internal static class BitmapGlyphImages
 {
-    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), XImage>> Cache = new();
+    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), PdfRasterImage>> Cache = new();
 
-    public static XImage Get(Typeface typeface, int glyphId, EmbeddedBitmap glyph)
+    public static PdfRasterImage Get(Typeface typeface, int glyphId, EmbeddedBitmap glyph)
     {
         var images = Cache.GetOrCreateValue(typeface);
         lock (images)
@@ -23,7 +23,7 @@ internal static class BitmapGlyphImages
             if (!images.TryGetValue((glyphId, glyph.Ppem), out var image))
             {
                 var data = glyph.Data;
-                image = XImage.FromStream(() => new MemoryStream(data));
+                image = PdfRasterImage.FromStream(() => new MemoryStream(data));
                 images[(glyphId, glyph.Ppem)] = image;
             }
 

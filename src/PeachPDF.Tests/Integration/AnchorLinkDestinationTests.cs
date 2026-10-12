@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainer(adapter);
             await container.SetHtml("<html><body><a href='https://example.com'>go</a></body></html>");
             container.MaxSize = new Size(600, 0);
-            using var measure = XGraphics.CreateMeasureContext(new Size(600, 800));
+            using var measure = PdfGraphics.CreateMeasureContext(new Size(600, 800));
             await container.PerformLayout(measure);
 
             var links = container.GetLinks();

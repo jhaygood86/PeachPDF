@@ -20,12 +20,12 @@ namespace PeachPDF.Tests.Adapters
         private const string Png4X4 =
             "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGM8YWTEAANMcBZeDgA8MgE0GRiVCQAAAABJRU5ErkJggg==";
 
-        private static (PdfDocument Document, XGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
-            var pageGfx = XGraphics.FromPdfPage(page);
+            var pageGfx = PdfGraphics.FromPdfPage(page);
             var adapter = new PdfSharpAdapter();
             return (document, pageGfx, new GraphicsAdapter(adapter, pageGfx, 1.0), adapter);
         }
@@ -69,7 +69,7 @@ namespace PeachPDF.Tests.Adapters
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
-            var pageGfx = XGraphics.FromPdfPage(document.AddPage());
+            var pageGfx = PdfGraphics.FromPdfPage(document.AddPage());
             var adapter = new PdfSharpAdapter();
             var graphics = new GraphicsAdapter(adapter, pageGfx, 2.0);
             var brush = new TileBrush(NewTile(graphics, adapter, 40), 40, 40);

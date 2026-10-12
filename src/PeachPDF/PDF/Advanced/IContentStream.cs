@@ -40,8 +40,8 @@ namespace PeachPDF.PDF.Advanced
 
         string GetFontName(TypefaceFont font, out PdfFont pdfFont);
 
-        string GetImageName(XImage image, double width, double height);
+        string GetImageName(PdfRasterImage image, double width, double height);
 
-        string GetFormName(XForm form);
+        string GetFormName(PdfForm form);
     }
 }

@@ -501,7 +501,7 @@ namespace PeachPDF.Html.Core.Paint
         /// (<see cref="Font.HasVerticalOrigin"/> - issue #775), the anchor is nudged by
         /// <see cref="Font.GetVerticalOriginY"/> instead of staying at the plain top-of-cell position:
         /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/> always renders <paramref name="font"/>'s baseline at
-        /// <c>point.Y + font.Ascent</c> (traced through <c>XGraphicsPdfRenderer.DrawString</c>'s own
+        /// <c>point.Y + font.Ascent</c> (traced through <c>PdfGraphicsRenderer.DrawString</c>'s own
         /// <c>cyAscent</c> shift, which uses the exact same <c>Ascender</c> field <see cref="Font.Ascent"/>
         /// is built from), while the OpenType spec defines a glyph's vertical origin as a baseline-relative,
         /// Y-up design-space coordinate - so placing that origin at this cell's own pen position

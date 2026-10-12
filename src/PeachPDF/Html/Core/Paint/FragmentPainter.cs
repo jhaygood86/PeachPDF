@@ -126,7 +126,7 @@ namespace PeachPDF.Html.Core.Paint
         /// as suspension can ever reach; a second, wider clip pushed above it would be popped by the same
         /// loop and change nothing. What DOES need to be single-level is that this push go through
         /// <c>Canvas.PushClip</c> at all: an earlier version of <see cref="PdfGenerator"/> intersected
-        /// the equivalent window directly on the raw <c>XGraphics</c> object, ahead of and invisible to
+        /// the equivalent window directly on the raw <c>PdfGraphics</c> object, ahead of and invisible to
         /// this abstraction's own clip stack - <c>SuspendClipping</c> could never undo that one, so a fixed
         /// box's own geometry inside the page's margins was silently discarded on every page. See issue
         /// #880.

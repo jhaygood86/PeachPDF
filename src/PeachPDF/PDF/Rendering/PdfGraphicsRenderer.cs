@@ -54,9 +54,9 @@ namespace PeachPDF.PDF.Rendering
     /// <summary>
     /// Represents a drawing surface for PdfPages.
     /// </summary>
-    internal class XGraphicsPdfRenderer : IXGraphicsRenderer
+    internal sealed class PdfGraphicsRenderer
     {
-        public XGraphicsPdfRenderer(PdfPage page, XGraphics gfx, XGraphicsPdfPageOptions options)
+        public PdfGraphicsRenderer(PdfPage page, PdfGraphics gfx, PdfPageAppendMode options)
         {
             _page = page;
             _colorMode = page._document.Options.ColorMode;
@@ -67,7 +67,7 @@ namespace PeachPDF.PDF.Rendering
             _gfxState = new PdfGraphicsState(this);
         }
 
-        public XGraphicsPdfRenderer(XForm form, XGraphics gfx)
+        public PdfGraphicsRenderer(PdfForm form, PdfGraphics gfx)
         {
             _form = form;
             _colorMode = form.Owner.Options.ColorMode;
@@ -86,7 +86,7 @@ namespace PeachPDF.PDF.Rendering
             return _content.ToArray();
         }
 
-        public XGraphicsPdfPageOptions PageOptions
+        public PdfPageAppendMode PageOptions
         {
             get { return _options; }
         }
@@ -337,7 +337,7 @@ namespace PeachPDF.PDF.Rendering
             return thousandths * fontSize / 1000 + glyphs.Count * charSpace;
         }
 
-        public void DrawString(string s, TypefaceFont font, Brush brush, Rect rect, XStringFormat format, double letterSpacing, FontPalette? fontPalette, ShapeSettings features, string? logicalText = null)
+        public void DrawString(string s, TypefaceFont font, Brush brush, Rect rect, PdfStringFormat format, double letterSpacing, FontPalette? fontPalette, ShapeSettings features, string? logicalText = null)
         {
             int contentLengthAtEntry = _content.Length;
             bool isOnlySpaces = s.Length > 0 && !s.AsSpan().ContainsAnyExcept(' ');
@@ -355,7 +355,7 @@ namespace PeachPDF.PDF.Rendering
 
             // Merely reading the typeface does not realize/embed the color font below.
             TypefaceMetrics metrics = font.Typeface.Metrics;
-            // Invisible text (see XGraphics.InvisibleText) is always the plain outline text object, never colour artwork.
+            // Invisible text (see PdfGraphics.InvisibleText) is always the plain outline text object, never colour artwork.
             bool invisible = Gfx.InvisibleText;
             bool isColorFont = font.Typeface.HasColorGlyphs && !invisible;
             IReadOnlyList<PlacedGlyph>? colorGlyphs = isColorFont ? Shaper.Shape(font.Typeface, s, features).Glyphs : null;
@@ -368,34 +368,34 @@ namespace PeachPDF.PDF.Rendering
 
             switch (format.Alignment)
             {
-                case XStringAlignment.Near:
+                case PdfStringAlignment.Near:
                     // nothing to do
                     break;
 
-                case XStringAlignment.Center:
+                case PdfStringAlignment.Center:
                     x += (rect.Width - width) / 2;
                     break;
 
-                case XStringAlignment.Far:
+                case PdfStringAlignment.Far:
                     x += rect.Width - width;
                     break;
             }
             switch (format.LineAlignment)
             {
-                case XLineAlignment.Near:
+                case PdfLineAlignment.Near:
                     y += cyAscent;
                     break;
 
-                case XLineAlignment.Center:
+                case PdfLineAlignment.Center:
                     // TODO: Use CapHeight. PDFlib also uses 3/4 of ascent
                     y += (cyAscent * 3 / 4) / 2 + rect.Height / 2;
                     break;
 
-                case XLineAlignment.Far:
+                case PdfLineAlignment.Far:
                     y += -cyDescent + rect.Height;
                     break;
 
-                case XLineAlignment.BaseLine:
+                case PdfLineAlignment.BaseLine:
                     // Nothing to do.
                     break;
             }
@@ -630,7 +630,7 @@ namespace PeachPDF.PDF.Rendering
         /// addressed directly by font glyph index - the same per-glyph <c>Td</c>+<c>Tj</c> emission
         /// <see cref="DrawPositionedGlyphs"/> already uses, generalized to take already-absolute
         /// positions instead of shaped-run deltas relative to a pen, and to realize the font/brush
-        /// itself (its one caller, <see cref="DrawString(string, TypefaceFont, Brush, Rect, XStringFormat, double, FontPalette?, ShapeSettings, string)"/>,
+        /// itself (its one caller, <see cref="DrawString(string, TypefaceFont, Brush, Rect, PdfStringFormat, double, FontPalette?, ShapeSettings, string)"/>,
         /// already did that before ever reaching <see cref="DrawPositionedGlyphs"/>). No bold/italic
         /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
         /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
@@ -700,12 +700,12 @@ namespace PeachPDF.PDF.Rendering
         //public void DrawImage(Image image, Rectangle destRect, int srcX, int srcY, int srcWidth, int srcHeight, GraphicsUnit srcUnit, ImageAttributes imageAttrs, DrawImageAbort callback, IntPtr callbackData);
         //public void DrawImage(Image image, Rectangle destRect, float srcX, float srcY, float srcWidth, float srcHeight, GraphicsUnit srcUnit, ImageAttributes
 
-        public void DrawImage(XImage image, double x, double y, double width, double height)
+        public void DrawImage(PdfRasterImage image, double x, double y, double width, double height)
         {
             const string format = Config.SignificantFigures4;
 
             string name = Realize(image, width, height);
-            if (!(image is XForm))
+            if (!(image is PdfForm))
             {
                 AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
                     x, y + height, width, height, name);
@@ -715,7 +715,7 @@ namespace PeachPDF.PDF.Rendering
             {
                 BeginPage();
 
-                XForm form = (XForm)image;
+                PdfForm form = (PdfForm)image;
                 form.Finish();
 
                 PdfFormXObject pdfForm = Owner.FormTable.GetForm(form);
@@ -741,7 +741,7 @@ namespace PeachPDF.PDF.Rendering
         /// has. (Silently dropping srcRect here is what once made every <c>border-image</c> slice paint the
         /// entire source squashed into its own ninth of the frame.)
         /// </summary>
-        public void DrawImage(XImage image, Rect destRect, Rect srcRect)
+        public void DrawImage(PdfRasterImage image, Rect destRect, Rect srcRect)
         {
             const string format = Config.SignificantFigures4;
 
@@ -751,7 +751,7 @@ namespace PeachPDF.PDF.Rendering
             double height = destRect.Height;
 
             string name = Realize(image, width, height);
-            if (!(image is XForm))
+            if (!(image is PdfForm))
             {
                 AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do\nQ\n",
                     x, y + height, width, height, name);
@@ -761,7 +761,7 @@ namespace PeachPDF.PDF.Rendering
             {
                 BeginPage();
 
-                XForm form = (XForm)image;
+                PdfForm form = (PdfForm)image;
                 form.Finish();
 
                 PdfFormXObject pdfForm = Owner.FormTable.GetForm(form);
@@ -787,35 +787,20 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Clones the current graphics state and push it on a stack.
         /// </summary>
-        public void Save(XGraphicsState state)
+        public void Save(PdfGraphicsStateToken state)
         {
             // Before saving, the current transformation matrix must be completely realized.
             BeginGraphicMode();
             RealizeTransform();
-            // Associate the XGraphicsState with the current PdgGraphicsState.
+            // Associate the PdfGraphicsStateToken with the current PdgGraphicsState.
             _gfxState.InternalState = state.InternalState;
             SaveState();
         }
 
-        public void Restore(XGraphicsState state)
+        public void Restore(PdfGraphicsStateToken state)
         {
             BeginGraphicMode();
             RestoreState(state.InternalState);
-        }
-
-        public void BeginContainer(XGraphicsContainer container, Rect dstrect, Rect srcrect)
-        {
-            // Before saving, the current transformation matrix must be completely realized.
-            BeginGraphicMode();
-            RealizeTransform();
-            _gfxState.InternalState = container.InternalState;
-            SaveState();
-        }
-
-        public void EndContainer(XGraphicsContainer container)
-        {
-            BeginGraphicMode();
-            RestoreState(container.InternalState);
         }
 
         #endregion
@@ -1476,7 +1461,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Makes the specified image to the current graphics object.
         /// </summary>
-        string Realize(XImage image, double width, double height)
+        string Realize(PdfRasterImage image, double width, double height)
         {
             BeginPage();
             BeginGraphicMode();
@@ -1485,7 +1470,7 @@ namespace PeachPDF.PDF.Rendering
             // The transparency set for a brush also applies to images. Set opacity to 100% so image will be drawn without transparency.
             _gfxState.RealizeNonStrokeTransparency(1, _colorMode);
 
-            XForm form = image as XForm;
+            PdfForm form = image as PdfForm;
             if (form != null)
                 return GetFormName(form);
 
@@ -1555,7 +1540,7 @@ namespace PeachPDF.PDF.Rendering
             }
         }
 
-        internal XGraphics Gfx
+        internal PdfGraphics Gfx
         {
             get { return _gfx; }
         }
@@ -1571,10 +1556,10 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         /// <remarks>
         /// The <c>gs</c> that activates the mask is emitted INSIDE the same <c>q ... cm ... Do ... Q</c>
-        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(XImage, Rect, Rect)"/>'s
+        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(PdfRasterImage, Rect, Rect)"/>'s
         /// own Form XObject placement exactly), rather than as a separate "push before / pop after"
         /// pair relying on the ambient CTM. This distinction matters: a Form XObject created via
-        /// <c>XGraphics.FromForm</c> (as SVG's <c>&lt;mask&gt;</c>/<c>&lt;pattern&gt;</c> "tile"
+        /// <c>PdfGraphics.FromForm</c> (as SVG's <c>&lt;mask&gt;</c>/<c>&lt;pattern&gt;</c> "tile"
         /// rendering does) gets its own content Y-flipped relative to ITS OWN (small) height, not the
         /// page's - a coordinate convention that's only self-consistent when the form is placed via an
         /// explicit destRect (as here, and as pattern tiles already do via ordinary <c>DrawImage</c>).
@@ -1597,7 +1582,7 @@ namespace PeachPDF.PDF.Rendering
         /// Python's <c>pypdfium2</c>) before calling it fixed.
         /// </para>
         /// </remarks>
-        internal void DrawImageMasked(XForm image, XForm maskImage, Rect destRect)
+        internal void DrawImageMasked(PdfForm image, PdfForm maskImage, Rect destRect)
         {
             const string format = Config.SignificantFigures4;
 
@@ -1617,9 +1602,9 @@ namespace PeachPDF.PDF.Rendering
             PdfATransparencyGuard.RequireAllowed(Owner, _page, "An SVG <mask>");
 
             // A /Luminosity SMask's /G target must itself be a transparency group (PDF 32000-1 §11.6.4.3)
-            // - XForm/PdfFormXObject don't set this up automatically, so it's added here rather than
+            // - PdfForm/PdfFormXObject don't set this up automatically, so it's added here rather than
             // generalizing CreateTile's caller-agnostic form creation for a mask-only requirement.
-            var maskPdfForm = maskImage.PdfForm;
+            var maskPdfForm = maskImage.FormXObject;
             var maskGroup = new PdfDictionary();
             maskGroup.Elements["/S"] = new PdfName("/Transparency");
             maskGroup.Elements["/CS"] = new PdfName("/DeviceGray");
@@ -1634,7 +1619,7 @@ namespace PeachPDF.PDF.Rendering
             // being forgiving of non-conformant input, not something to rely on. Every real-world PDF
             // writer that composites masked content via a Form XObject marks that content form as an
             // isolated transparency group too, not just the /G mask target.
-            var contentPdfForm = image.PdfForm;
+            var contentPdfForm = image.FormXObject;
             var contentGroup = new PdfDictionary();
             contentGroup.Elements["/S"] = new PdfName("/Transparency");
             contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
@@ -1678,7 +1663,7 @@ namespace PeachPDF.PDF.Rendering
         /// the same reasoning applies here: the <c>gs</c> activating the alpha must be emitted inside the
         /// same <c>q ... cm ... Do ... Q</c> block that places <paramref name="image"/>, not separately.
         /// </remarks>
-        internal void DrawImageWithOpacity(XForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
+        internal void DrawImageWithOpacity(PdfForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
             const string format = Config.SignificantFigures4;
 
@@ -1701,7 +1686,7 @@ namespace PeachPDF.PDF.Rendering
             // Must be an isolated transparency group so the tile's own (possibly overlapping) content is
             // flattened once before the constant alpha below is applied to the flattened result - see
             // the remarks above and on DrawImageMasked for why plain (non-group) content wouldn't work.
-            var contentPdfForm = image.PdfForm;
+            var contentPdfForm = image.FormXObject;
             var contentGroup = new PdfDictionary();
             contentGroup.Elements["/S"] = new PdfName("/Transparency");
             contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
@@ -1736,7 +1721,7 @@ namespace PeachPDF.PDF.Rendering
         /// constructs - see <c>CLAUDE.md</c>'s Testing conventions) surfaced a real-world renderer gap
         /// worth knowing before debugging "it doesn't look filtered": a well-formed <c>invert()</c>
         /// matrix (a spec-correct <c>/TR</c>, verified structurally in
-        /// <c>XGraphicsPdfRendererColorMatrixAndMaskTests</c> and by hand against the raw PDF bytes)
+        /// <c>PdfGraphicsRendererColorMatrixAndMaskTests</c> and by hand against the raw PDF bytes)
         /// rendered correctly in PDFium (the red test rectangle came out cyan, as expected) but rendered
         /// completely UNCHANGED in MuPDF (still red) - MuPDF's rasterizer does not implement ExtGState
         /// <c>/TR</c> at all, silently treating it as absent rather than erroring. This is the mirror
@@ -1745,7 +1730,7 @@ namespace PeachPDF.PDF.Rendering
         /// silently dropping it. Do not use a MuPDF-only render to conclude a channel-independent color
         /// matrix "does nothing" - check PDFium (or a real browser/Acrobat) too.
         /// </remarks>
-        internal void DrawImageWithColorMatrix(XForm image, Rect destRect, ColorMatrix matrix)
+        internal void DrawImageWithColorMatrix(PdfForm image, Rect destRect, ColorMatrix matrix)
         {
             if (!matrix.IsChannelIndependent)
             {
@@ -1773,7 +1758,7 @@ namespace PeachPDF.PDF.Rendering
 
             PdfATransparencyGuard.RequireAllowed(Owner, _page, "CSS/SVG color-matrix filter");
 
-            var contentPdfForm = image.PdfForm;
+            var contentPdfForm = image.FormXObject;
             var contentGroup = new PdfDictionary();
             contentGroup.Elements["/S"] = new PdfName("/Transparency");
             contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
@@ -1813,7 +1798,7 @@ namespace PeachPDF.PDF.Rendering
         /// mask's value is the group's own computed alpha, which has no colour space to speak of, so
         /// forcing DeviceGray here would be asserting a requirement the spec does not impose.
         /// </remarks>
-        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, Rect destRect, bool invert = false)
+        internal void DrawImageAlphaMasked(PdfForm image, PdfForm maskImage, Rect destRect, bool invert = false)
         {
             const string format = Config.SignificantFigures4;
 
@@ -1830,7 +1815,7 @@ namespace PeachPDF.PDF.Rendering
 
             PdfATransparencyGuard.RequireAllowed(Owner, _page, "An SVG alpha mask (SourceAlpha/feComposite)");
 
-            var maskPdfForm = maskImage.PdfForm;
+            var maskPdfForm = maskImage.FormXObject;
             var maskGroup = new PdfDictionary();
             maskGroup.Elements["/S"] = new PdfName("/Transparency");
             maskGroup.Elements["/I"] = new PdfBoolean(true);
@@ -1839,7 +1824,7 @@ namespace PeachPDF.PDF.Rendering
 
             // See DrawImageMasked's remarks: the masked CONTENT form must be its own transparency group
             // too, or stricter readers (PDFium/Acrobat) silently ignore the active SMask entirely.
-            var contentPdfForm = image.PdfForm;
+            var contentPdfForm = image.FormXObject;
             var contentGroup = new PdfDictionary();
             contentGroup.Elements["/S"] = new PdfName("/Transparency");
             contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
@@ -1877,7 +1862,7 @@ namespace PeachPDF.PDF.Rendering
         /// <c>Html.Adapters</c> in this codebase's layering, so it cannot reference
         /// <c>PaintBlendMode</c> directly (see <see cref="SetBlendMode"/>).
         /// </summary>
-        internal void DrawImageBlendedOver(XForm top, XForm bottom, Rect destRect, string pdfBlendModeName)
+        internal void DrawImageBlendedOver(PdfForm top, PdfForm bottom, Rect destRect, string pdfBlendModeName)
         {
             const string format = Config.SignificantFigures4;
 
@@ -1965,7 +1950,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Gets the resource name of the specified image within this page or form.
         /// </summary>
-        internal string GetImageName(XImage image, double width, double height)
+        internal string GetImageName(PdfRasterImage image, double width, double height)
         {
             if (_page != null)
                 return _page.GetImageName(image, width, height);
@@ -1975,7 +1960,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Gets the resource name of the specified form within this page or form.
         /// </summary>
-        internal string GetFormName(XForm form)
+        internal string GetFormName(PdfForm form)
         {
             if (_page != null)
                 return _page.GetFormName(form);
@@ -1983,10 +1968,10 @@ namespace PeachPDF.PDF.Rendering
         }
 
         internal PdfPage _page = null!;
-        internal XForm _form = null!;
+        internal PdfForm _form = null!;
         internal PdfColorMode _colorMode;
-        XGraphicsPdfPageOptions _options;
-        XGraphics _gfx;
+        PdfPageAppendMode _options;
+        PdfGraphics _gfx;
         readonly PdfContentWriter _content;
 
         /// <summary>

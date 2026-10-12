@@ -46,7 +46,7 @@ namespace PeachPDF.PDF.Drawing
         /// of its own to pass here) - this is just the <see cref="Size"/> wrapping this method's own
         /// callers still expect.
         /// </summary>
-        public static Size MeasureString(string text, TypefaceFont font, XStringFormat stringFormat, ShapeSettings features)
+        public static Size MeasureString(string text, TypefaceFont font, PdfStringFormat stringFormat, ShapeSettings features)
         {
             var size = PeachDrawing.Core.TextMeasurement.Measure(text, font.Typeface, font.Size, font.SyntheticStyle, features);
             return new Size(size.Width, size.Height);

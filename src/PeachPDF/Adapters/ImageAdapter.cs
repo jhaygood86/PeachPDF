@@ -23,12 +23,12 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// the underline win-forms image.
         /// </summary>
-        private readonly XImage _image;
+        private readonly PdfRasterImage _image;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="T:System.Object"/> class.
         /// </summary>
-        public ImageAdapter(XImage image)
+        public ImageAdapter(PdfRasterImage image)
         {
             _image = image;
         }
@@ -36,7 +36,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// the underline win-forms image.
         /// </summary>
-        public XImage Image
+        public PdfRasterImage Image
         {
             get { return _image; }
         }
@@ -45,13 +45,13 @@ namespace PeachPDF.Adapters
         internal int ExifOrientation => _image.ExifOrientation;
 
         /// <summary>
-        /// This image's natural size. A raster <see cref="XImage"/> reports its pixel count, which the
-        /// caller converts; an <see cref="XForm"/> — a vector Form XObject, as
+        /// This image's natural size. A raster <see cref="PdfRasterImage"/> reports its pixel count, which the
+        /// caller converts; an <see cref="PdfForm"/> — a vector Form XObject, as
         /// <see cref="GraphicsAdapter.CreateTile"/> produces — has no pixels at all, so it reports the exact
         /// point size it was created at.
         /// </summary>
         /// <remarks>
-        /// <see cref="XImage.PixelWidth"/>/<see cref="XImage.PixelHeight"/> are <c>(int)</c> casts of a
+        /// <see cref="PdfRasterImage.PixelWidth"/>/<see cref="PdfRasterImage.PixelHeight"/> are <c>(int)</c> casts of a
         /// form's own view box, so reading them truncated a tile to whole points. A background tile is
         /// repeated at its natural size, so that error did not stay sub-point: it accumulated once per tile.
         /// Charts.css's grid lines are a <c>background-size: 100% calc(100% / 4)</c> tile, and at 32.65pt a
@@ -59,13 +59,13 @@ namespace PeachPDF.Adapters
         /// </remarks>
         public override double Width
         {
-            get { return _image is XForm form ? form.PointWidth : _image.PixelWidth; }
+            get { return _image is PdfForm form ? form.PointWidth : _image.PixelWidth; }
         }
 
         /// <inheritdoc cref="Width"/>
         public override double Height
         {
-            get { return _image is XForm form ? form.PointHeight : _image.PixelHeight; }
+            get { return _image is PdfForm form ? form.PointHeight : _image.PixelHeight; }
         }
 
         public override bool Interpolate
@@ -81,7 +81,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// Decodes via <see cref="ImageDecodeCache"/> - a decode-once-per-image cache reached through the
-        /// backend-agnostic <see cref="Image.GetPixels"/>. Null for an <see cref="XForm"/> tile (no pixels
+        /// backend-agnostic <see cref="Image.GetPixels"/>. Null for an <see cref="PdfForm"/> tile (no pixels
         /// to decode) or a source with no RGB rendition (a CMYK image PeachPDF embeds by pass-through - see
         /// <c>PeachImageSource</c>'s own remarks).
         /// </summary>

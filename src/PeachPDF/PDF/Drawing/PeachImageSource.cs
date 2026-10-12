@@ -1086,7 +1086,7 @@ namespace PeachPDF.PDF.Drawing
                 }
             }
 
-            // IImageSource doesn't declare IDisposable (XImage never disposes its IImageSource) - the
+            // IImageSource doesn't declare IDisposable (PdfRasterImage never disposes its IImageSource) - the
             // backing Image's Dispose() is itself a near no-op today (see PeachImage.Image.Dispose's
             // remarks), so nothing is actually leaked.
             public void Dispose() { }

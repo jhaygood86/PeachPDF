@@ -34,7 +34,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// The wrapped WinForms graphics object
         /// </summary>
-        private readonly XGraphics _g;
+        private readonly PdfGraphics _g;
 
         /// <summary>
         /// if to release the graphics object on dispose
@@ -65,14 +65,14 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// Used to measure and draw strings
         /// </summary>
-        private static readonly XStringFormat _stringFormat;
+        private static readonly PdfStringFormat _stringFormat;
 
         static GraphicsAdapter()
         {
-            _stringFormat = new XStringFormat
+            _stringFormat = new PdfStringFormat
             {
-                Alignment = XStringAlignment.Near,
-                LineAlignment = XLineAlignment.Near
+                Alignment = PdfStringAlignment.Near,
+                LineAlignment = PdfLineAlignment.Near
             };
         }
 
@@ -83,7 +83,7 @@ namespace PeachPDF.Adapters
         /// <param name="g">the win forms graphics object to use</param>
         /// <param name="pixelsPerPoint">The number of pixels in each point</param>
         /// <param name="releaseGraphics">optional: if to release the graphics object on dispose (default - false)</param>
-        public GraphicsAdapter(RenderContext adapter, XGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
+        public GraphicsAdapter(RenderContext adapter, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
             : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             ArgumentNullException.ThrowIfNull(g);
@@ -183,19 +183,11 @@ namespace PeachPDF.Adapters
             _g.Restore();
         }
 
-        public override object SetAntiAliasSmoothingMode()
-        {
-            var prevMode = _g.SmoothingMode;
-            _g.SmoothingMode = XSmoothingMode.AntiAlias;
-            return prevMode;
-        }
+        // Smoothing has no meaning in PDF output, so there is no state to remember or restore.
+        public override object SetAntiAliasSmoothingMode() => new object();
 
         public override void ReturnPreviousSmoothingMode(object? prevMode)
         {
-            if (prevMode != null)
-            {
-                _g.SmoothingMode = (XSmoothingMode)prevMode;
-            }
         }
 
         public override Size MeasureString(string str, Font font, ShapeSettings? features = null)
@@ -223,7 +215,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>See <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - threaded straight through to
-        /// <see cref="XGraphics.DrawString(string, TypefaceFont, Brush, double, double, XStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>,
+        /// <see cref="PdfGraphics.DrawString(string, TypefaceFont, Brush, double, double, PdfStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>,
         /// the one real PDF-writing path that acts on it.</summary>
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
@@ -233,7 +225,7 @@ namespace PeachPDF.Adapters
             _g.InvisibleText = InvisibleText;
             var xPoint = Utils.ToPoints(point, PixelsPerPoint);
 
-            // Realized via the PDF `Tc` character-spacing operator (XGraphicsPdfRenderer/
+            // Realized via the PDF `Tc` character-spacing operator (PdfGraphicsRenderer/
             // PdfGraphicsState) rather than drawing character-by-character - `Tc` applies additively to
             // every glyph shown by the one text-showing operation below, so letter-spacing needs no
             // extra draw calls and the string stays a single, contiguous, copy/paste- and
@@ -280,7 +272,7 @@ namespace PeachPDF.Adapters
                 return null;
 
             // The baseline this run is actually painted at. Deliberately recomputed here from the font's
-            // own metrics, exactly as XGraphicsPdfRenderer.DrawString does, rather than taken as
+            // own metrics, exactly as PdfGraphicsRenderer.DrawString does, rather than taken as
             // `origin.Y + Font.Ascent`: that property rounds to a whole unit (FontAdapter.Ascent), and
             // an underline's band is one unit tall at the default thickness, so borrowing the rounded
             // value would shift the band by up to half its own height and flip whether a glyph that just
@@ -342,9 +334,9 @@ namespace PeachPDF.Adapters
 
         public override (Canvas Graphics, Image Image)? CreateTile(double width, double height)
         {
-            // XForm/XGraphics.FromForm() is real, working PdfSharpCore infrastructure for drawing into
+            // PdfForm/PdfGraphics.FromForm() is real, working PdfSharpCore infrastructure for drawing into
             // a separate PDF Form XObject's own content stream (rather than the page's) - the same
-            // mechanism this method's own XGraphics (_g) is itself built on when bound to a page. XGraphics.Owner
+            // mechanism this method's own PdfGraphics (_g) is itself built on when bound to a page. PdfGraphics.Owner
             // falls back to the owning document of a Form XObject (not just a page), so this also works
             // when called recursively from inside another tile (e.g. nested opacity) - it's still null
             // outside any real page/document-paint context (e.g. a measure-only pass).
@@ -354,13 +346,13 @@ namespace PeachPDF.Adapters
 
             // width/height arrive in this adapter's own "inflated" layout-unit space (the caller always
             // sizes a tile from a layout rect - a box's own clip, a background layer's resolved size, an
-            // SVG filter region - the same space every other Canvas call operates in), but an XForm's
+            // SVG filter region - the same space every other Canvas call operates in), but an PdfForm's
             // /BBox is a real PDF construct measured in actual page points with no conversion of its own.
             // Divide by PixelsPerPoint here so the form's declared size already matches what the content
             // painted into it will occupy once ITS OWN drawing calls apply this same division (every
             // GraphicsAdapter method does, via Utils.Convert). Skipping this - as an earlier version did -
             // left the /BBox sized in undivided layout units while the content inside was already
-            // correctly point-sized; XGraphicsPdfRenderer.DrawImage's own placement scale
+            // correctly point-sized; PdfGraphicsRenderer.DrawImage's own placement scale
             // (destRect.Width / image.PointWidth) then divided the whole form by PixelsPerPoint a SECOND
             // time on top of that (image.PointWidth reading back the oversized BBox), visibly shrinking
             // and mispositioning every tiled box - opacity<1, and now filter/mix-blend-mode/SVG
@@ -370,11 +362,11 @@ namespace PeachPDF.Adapters
             // this second division, so it rendered correctly while its tiled neighbors visibly shrank and
             // drifted toward the page origin - reading, at a glance, as if the plain box were the one
             // that had gone wrong.
-            var form = new XForm(document, new Size(width / PixelsPerPoint, height / PixelsPerPoint));
-            var formGraphics = XGraphics.FromForm(form);
+            var form = new PdfForm(document, new Size(width / PixelsPerPoint, height / PixelsPerPoint));
+            var formGraphics = PdfGraphics.FromForm(form);
             // releaseGraphics: true - disposing the returned tile Canvas must dispose the
-            // underlying XGraphics, which is what actually calls XForm.Finish() and closes out the
-            // Form XObject's content stream (see XGraphics.Dispose()). Without this, the tile's
+            // underlying PdfGraphics, which is what actually calls PdfForm.Finish() and closes out the
+            // Form XObject's content stream (see PdfGraphics.Dispose()). Without this, the tile's
             // drawing commands would never get flushed into the PDF at all.
             var tileGraphics = new GraphicsAdapter(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
             // See CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only, see SeedTransform)
@@ -429,31 +421,31 @@ namespace PeachPDF.Adapters
 
         public override void DrawImageMasked(Image image, Image maskImage, Rect destRect)
         {
-            if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
+            if (((ImageAdapter)image).Image is PdfForm imageForm && ((ImageAdapter)maskImage).Image is PdfForm maskForm)
                 _g.DrawImageMasked(imageForm, maskForm, Utils.ToPoints(destRect, PixelsPerPoint));
         }
 
         public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal)
         {
-            if (((ImageAdapter)image).Image is XForm imageForm)
+            if (((ImageAdapter)image).Image is PdfForm imageForm)
                 _g.DrawImageWithOpacity(imageForm, Utils.ToPoints(destRect, PixelsPerPoint), opacity, blendMode.ToString());
         }
 
         public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
         {
-            if (((ImageAdapter)image).Image is XForm imageForm)
+            if (((ImageAdapter)image).Image is PdfForm imageForm)
                 _g.DrawImageWithColorMatrix(imageForm, Utils.ToPoints(destRect, PixelsPerPoint), matrix);
         }
 
         public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false)
         {
-            if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
+            if (((ImageAdapter)image).Image is PdfForm imageForm && ((ImageAdapter)maskImage).Image is PdfForm maskForm)
                 _g.DrawImageAlphaMasked(imageForm, maskForm, Utils.ToPoints(destRect, PixelsPerPoint), invert);
         }
 
         public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
         {
-            if (((ImageAdapter)top).Image is XForm topForm && ((ImageAdapter)bottom).Image is XForm bottomForm)
+            if (((ImageAdapter)top).Image is PdfForm topForm && ((ImageAdapter)bottom).Image is PdfForm bottomForm)
                 _g.DrawImageBlendedOver(topForm, bottomForm, Utils.ToPoints(destRect, PixelsPerPoint), blendMode.ToString());
         }
 
@@ -487,7 +479,7 @@ namespace PeachPDF.Adapters
             _probe?.Dispose();
             _probe = null;
 
-            // Graphics wrapped one after another over one XGraphics: what draws SVG glyphs goes back to the adapter that had it.
+            // Graphics wrapped one after another over one PdfGraphics: what draws SVG glyphs goes back to the adapter that had it.
             if (_g.SvgGlyphPainter is SvgGlyphPainter own && ReferenceEquals(own.Host, this))
                 _g.SvgGlyphPainter = _previousSvgGlyphPainter;
 
@@ -570,7 +562,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// Draws all of <paramref name="image"/> into <paramref name="rect"/>, through the same
-        /// <see cref="XGraphics"/> call every un-cropped draw has always used - so a whole-image draw
+        /// <see cref="PdfGraphics"/> call every un-cropped draw has always used - so a whole-image draw
         /// still emits exactly the operators it did before cropping existed, and the cropped draw's own
         /// placement emits the same shape.
         /// </summary>
@@ -596,7 +588,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// The rectangle the whole image must be drawn into so that its <paramref name="srcRect"/> portion -
         /// in the image's own natural units, as <see cref="Image.Width"/>/<see cref="Image.Height"/>
-        /// report them (pixels for a raster, points for an <see cref="XForm"/> tile) - covers
+        /// report them (pixels for a raster, points for an <see cref="PdfForm"/> tile) - covers
         /// <paramref name="destRect"/> exactly. Clipping to <paramref name="destRect"/> then leaves only
         /// that portion visible. Exposed (not private) so the arithmetic can be asserted directly.
         /// </summary>
@@ -772,7 +764,7 @@ namespace PeachPDF.Adapters
         }
 
         /// <summary>A repeating tile as a PDF tiling pattern: a tile made by <see cref="CreateTile"/> stays vector content, any other image is embedded once.</summary>
-        private XTilingBrush ToXTilingBrush(TileBrush tile)
+        private PdfTilingBrush ToXTilingBrush(TileBrush tile)
         {
             if (tile.Tile is not ImageAdapter { Image: { } image })
                 throw new NotSupportedException("A tile brush on a PDF canvas needs a tile made by this canvas or decoded by its render context.");
@@ -787,7 +779,7 @@ namespace PeachPDF.Adapters
                 _ => null,
             };
 
-            return new XTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
+            return new PdfTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
         }
 
         /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent

@@ -49,10 +49,10 @@ namespace PeachPDF.PDF.Advanced
         { }
 
         /// <summary>
-        /// Gets a PdfImage from an XImage, sized/embedded for use at the given on-page display size (PDF
+        /// Gets a PdfImage from an PdfRasterImage, sized/embedded for use at the given on-page display size (PDF
         /// points). If no matching PdfImage already exists, a new one is created.
         /// </summary>
-        public PdfImage GetImage(XImage image, double widthPt, double heightPt)
+        public PdfImage GetImage(PdfRasterImage image, double widthPt, double heightPt)
         {
             ImageSelector selector;
             int? targetWidth = null;
@@ -61,7 +61,7 @@ namespace PeachPDF.PDF.Advanced
             if (!Owner.Options.DownscaleImages)
             {
                 // No resize ever applies while downscaling is off, so the selector never depends on
-                // display size - the original single-selector-per-XImage cache, unconditionally (but see
+                // display size - the original single-selector-per-PdfRasterImage cache, unconditionally (but see
                 // GetPlainSelector's own remarks on why "unconditionally" still has to check Interpolate).
                 selector = GetPlainSelector(image);
             }
@@ -102,15 +102,15 @@ namespace PeachPDF.PDF.Advanced
         }
 
         /// <summary>
-        /// Returns <see cref="XImage._selector"/>, recomputing it first if it's missing or was built for a
-        /// different <see cref="XImage.Interpolate"/> than <paramref name="image"/> currently has. The
-        /// cached field is a plain <c>??=</c> - fine while an XImage had exactly one consumer, but an
-        /// XImage can now be shared across draw sites that transiently toggle Interpolate around one draw
+        /// Returns <see cref="PdfRasterImage._selector"/>, recomputing it first if it's missing or was built for a
+        /// different <see cref="PdfRasterImage.Interpolate"/> than <paramref name="image"/> currently has. The
+        /// cached field is a plain <c>??=</c> - fine while an PdfRasterImage had exactly one consumer, but an
+        /// PdfRasterImage can now be shared across draw sites that transiently toggle Interpolate around one draw
         /// call (a repeating background tile, a border-image slice - see ImageSelector's own remarks), so
         /// a stale cached selector built under the wrong Interpolate would otherwise wrongly identify
         /// (and merge into) a PdfImage that doesn't match the image's current Interpolate request.
         /// </summary>
-        private static ImageSelector GetPlainSelector(XImage image)
+        private static ImageSelector GetPlainSelector(PdfRasterImage image)
         {
             if (image._selector == null || image._selector.Interpolate != image.Interpolate)
                 image._selector = new ImageSelector(image);
@@ -121,14 +121,14 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Computes the pixel size to resize <paramref name="image"/> to before embedding, or
         /// <c>(null, null)</c> when no resize should happen: the image is CMYK
-        /// (<see cref="XImage.IsCmyk"/>), it's a PNG that <see cref="PdfImage.InitializeJpeg"/> is about to
+        /// (<see cref="PdfRasterImage.IsCmyk"/>), it's a PNG that <see cref="PdfImage.InitializeJpeg"/> is about to
         /// embed via byte-for-byte pass-through regardless of resize (see <see cref="IsPngPinnedToNaturalSize"/>),
         /// downscaling is off (<see cref="PdfDocumentOptions.DownscaleImages"/>), the display size isn't
         /// known/positive, or the image's natural size is already no larger than the (multiplier-adjusted)
         /// display size. Never upscales - the result is always clamped to the image's own natural pixel
         /// dimensions.
         /// </summary>
-        private (int? width, int? height) ComputeTargetPixelSize(XImage image, double widthPt, double heightPt)
+        private (int? width, int? height) ComputeTargetPixelSize(PdfRasterImage image, double widthPt, double heightPt)
         {
             // A CMYK image is always embedded at its natural pixel size, regardless of DownscaleImages or
             // display size - a CMYK JPEG embeds via byte-for-byte pass-through (PdfImage.EmbedJpegPassthrough,
@@ -141,7 +141,7 @@ namespace PeachPDF.PDF.Advanced
             if (image.IsCmyk) return (null, null);
 
             // Raster-backend output is rendered at a deliberately chosen physical resolution; resampling it
-            // to the display size would throw that resolution away (see XImage.IsRasterOutput).
+            // to the display size would throw that resolution away (see PdfRasterImage.IsRasterOutput).
             if (image.IsRasterOutput) return (null, null);
 
             if (IsJxlPinnedToNaturalSize(image)) return (null, null);
@@ -195,12 +195,12 @@ namespace PeachPDF.PDF.Advanced
         /// pass-through fast path for it regardless of <c>ImageCompression</c> (the same "the format can't
         /// hold this, so the setting doesn't apply" treatment).
         /// </remarks>
-        private bool IsJxlPinnedToNaturalSize(XImage image) =>
+        private bool IsJxlPinnedToNaturalSize(PdfRasterImage image) =>
             image.JxlPassthrough is not null
             && Owner.Options.UseJxlPassthrough
             && Owner.Options.ImageCompression != ImageCompression.Lossy;
 
-        private bool IsPngPinnedToNaturalSize(XImage image)
+        private bool IsPngPinnedToNaturalSize(PdfRasterImage image)
         {
             if (image.PngPassthrough is not { } pngPassthrough) return false;
 
@@ -213,7 +213,7 @@ namespace PeachPDF.PDF.Advanced
         }
 
         /// <summary>Same reasoning as <see cref="IsPngPinnedToNaturalSize"/>, mirrored for GIF pass-through (issue #1110).</summary>
-        private bool IsGifPinnedToNaturalSize(XImage image)
+        private bool IsGifPinnedToNaturalSize(PdfRasterImage image)
         {
             if (image.GifPassthrough is not { } gifPassthrough) return false;
 
@@ -234,8 +234,8 @@ namespace PeachPDF.PDF.Advanced
         /// A collection of information that uniquely identifies a particular PdfImage. When a resize
         /// target is in play, the target pixel size is part of the identity - the same source image used
         /// at two different display sizes embeds as two distinct PdfImages, each correctly sized, rather
-        /// than one embed at whichever size happened to be requested first. <see cref="XImage.Interpolate"/>
-        /// is part of the identity for the same reason: an <see cref="XImage"/> can now be shared across
+        /// than one embed at whichever size happened to be requested first. <see cref="PdfRasterImage.Interpolate"/>
+        /// is part of the identity for the same reason: an <see cref="PdfRasterImage"/> can now be shared across
         /// unrelated draw sites (the same decoded image referenced by more than one HTML element - see
         /// <c>PeachPDF.Html.Core.HtmlContainerInt</c>'s resolved-image cache) that each toggle it
         /// transiently around their own draw call (e.g. a repeating background tile forcing it off). Since
@@ -247,9 +247,9 @@ namespace PeachPDF.PDF.Advanced
         internal class ImageSelector
         {
             /// <summary>
-            /// Initializes a new instance of ImageSelector from an XImage, with no resize target.
+            /// Initializes a new instance of ImageSelector from an PdfRasterImage, with no resize target.
             /// </summary>
-            public ImageSelector(XImage image)
+            public ImageSelector(PdfRasterImage image)
             {
                 // HACK: implement a way to identify images when they are reused
                 // TODO 4STLA Implementation that calculates MD5 hashes for images generated for the images can be found here: http://forum.pdfsharp.net/viewtopic.php?p=6959#p6959
@@ -262,10 +262,10 @@ namespace PeachPDF.PDF.Advanced
             }
 
             /// <summary>
-            /// Initializes a new instance of ImageSelector from an XImage and the pixel size it will be
+            /// Initializes a new instance of ImageSelector from an PdfRasterImage and the pixel size it will be
             /// resized to before embedding.
             /// </summary>
-            public ImageSelector(XImage image, int? targetWidth, int? targetHeight) : this(image)
+            public ImageSelector(PdfRasterImage image, int? targetWidth, int? targetHeight) : this(image)
             {
                 _targetWidth = targetWidth;
                 _targetHeight = targetHeight;
@@ -281,7 +281,7 @@ namespace PeachPDF.PDF.Advanced
             readonly int? _targetHeight;
             readonly bool _interpolate;
 
-            /// <summary>The <see cref="XImage.Interpolate"/> value this selector was built from - read by
+            /// <summary>The <see cref="PdfRasterImage.Interpolate"/> value this selector was built from - read by
             /// <see cref="GetPlainSelector"/>/<see cref="GetImage"/> to detect a stale cached selector.</summary>
             public bool Interpolate => _interpolate;
 

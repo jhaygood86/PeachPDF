@@ -18,8 +18,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
             // Create an empty page in this document.
             var page = document.AddPage();
 
-            // Get an XGraphics object for drawing on this page.
-            var gfx = XGraphics.FromPdfPage(page);
+            // Get an PdfGraphics object for drawing on this page.
+            var gfx = PdfGraphics.FromPdfPage(page);
 
             // Draw two lines with a red default pen.
             var width = page.Width;
@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
 
             // Draw the text.
             gfx.DrawString("Hello, World!", font, new SolidBrush(PaintColor.Black),
-                new Rect(0, 0, width, height), XStringFormats.Center);
+                new Rect(0, 0, width, height), PdfStringFormats.Center);
 
             // Save the document.
             using var stream = new MemoryStream();
@@ -94,26 +94,26 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
                 // Create an empty page in this document.
                 var page = document.AddPage();
 
-                // Get an XGraphics object for drawing on this page.
-                var gfx = XGraphics.FromPdfPage(page);
+                // Get an PdfGraphics object for drawing on this page.
+                var gfx = PdfGraphics.FromPdfPage(page);
 
                 var font = TestFonts.Create("Times New Roman", 10, PaintFontStyle.Bold);
 
                 var rect = new Rect(40, 100, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, PdfStringFormats.TopLeft);
 
                 rect = new Rect(310, 100, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, PdfStringFormats.TopLeft);
 
                 rect = new Rect(40, 400, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, PdfStringFormats.TopLeft);
 
                 rect = new Rect(310, 400, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, PdfStringFormats.TopLeft);
 
                 using (var stream = new MemoryStream())
                 {

@@ -332,7 +332,7 @@ public class UnmatchableSelectorRegistrationTests
         container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-        var measure = XGraphics.CreateMeasureContext(size);
+        var measure = PdfGraphics.CreateMeasureContext(size);
         using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
         await container.PerformLayout(graphics);
 

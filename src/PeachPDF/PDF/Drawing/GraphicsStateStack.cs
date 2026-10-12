@@ -33,11 +33,11 @@ using System.Collections.Generic;
 namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
-    /// Represents a stack of XGraphicsState and XGraphicsContainer objects.
+    /// Represents a stack of PdfGraphicsStateToken and graphics container objects.
     /// </summary>
     internal class GraphicsStateStack
     {
-        public GraphicsStateStack(XGraphics gfx)
+        public GraphicsStateStack(PdfGraphics gfx)
         {
             _current = new InternalGraphicsState(gfx);
         }

@@ -52,7 +52,7 @@ namespace PeachPDF.PDF.Advanced
             : base(document)
         { }
 
-        internal void SetupFromBrush(Brush brush, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(Brush brush, PdfGraphicsRenderer renderer)
         {
             switch (brush)
             {
@@ -117,13 +117,13 @@ namespace PeachPDF.PDF.Advanced
             return anyCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
         }
 
-        internal void SetupFromBrush(RadialGradientBrush brush, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(RadialGradientBrush brush, PdfGraphicsRenderer renderer)
         {
             ArgumentNullException.ThrowIfNull(brush);
             SetupRadialMultiStop(brush, renderer);
         }
 
-        private void SetupRadialMultiStop(RadialGradientBrush brush, XGraphicsPdfRenderer renderer)
+        private void SetupRadialMultiStop(RadialGradientBrush brush, PdfGraphicsRenderer renderer)
         {
             PaintColor[] colors = StopColors(brush.Stops);
             double[] positions = StopPositions(brush.Stops);
@@ -320,7 +320,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Setups the shading from the specified brush.
         /// </summary>
-        internal void SetupFromBrush(LinearGradientBrush brush, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(LinearGradientBrush brush, PdfGraphicsRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -573,7 +573,7 @@ namespace PeachPDF.PDF.Advanced
 
         // ── Conic gradient (Type 4 Gouraud-shaded free-form triangle mesh) ──────────────────────
 
-        private void SetupConicFromBrush(ConicGradientBrush brush, XGraphicsPdfRenderer renderer)
+        private void SetupConicFromBrush(ConicGradientBrush brush, PdfGraphicsRenderer renderer)
         {
             PaintPoint vc = renderer.WorldToView(brush.Center);
             // Compute view-space radius by transforming a point on the x-axis

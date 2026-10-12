@@ -40,7 +40,7 @@ namespace PeachPDF.PDF.Advanced
     internal sealed class PdfResources : PdfDictionary
     {
         // Resource management works roughly like this:
-        // When the user creates an TypefaceFont and uses it in the XGraphics of a PdfPage, then at the first time
+        // When the user creates an TypefaceFont and uses it in the PdfGraphics of a PdfPage, then at the first time
         // a PdfFont is created and cached in the document global font table. If the user creates a new
         // TypefaceFont object for an exisisting PdfFont, the PdfFont object is reused. When the PdfFont is added
         // to the resources of a PdfPage for the first time, it is added to the page local PdfResourceMap for 

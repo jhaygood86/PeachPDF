@@ -52,11 +52,11 @@ namespace PeachPDF.PDF.Rendering
     /// </remarks>
     internal sealed class PdfGraphicsState : ICloneable
     {
-        public PdfGraphicsState(XGraphicsPdfRenderer renderer)
+        public PdfGraphicsState(PdfGraphicsRenderer renderer)
         {
             _renderer = renderer;
         }
-        readonly XGraphicsPdfRenderer _renderer;
+        readonly PdfGraphicsRenderer _renderer;
 
         public PdfGraphicsState Clone()
         {
@@ -305,7 +305,7 @@ namespace PeachPDF.PDF.Rendering
                 if (renderingMode != 0)
                     throw new InvalidOperationException("Rendering modes other than 0 can only be used with solid color brushes.");
 
-                if (brush is XTilingBrush tilingBrush)
+                if (brush is PdfTilingBrush tilingBrush)
                 {
                     Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
 
@@ -366,7 +366,7 @@ namespace PeachPDF.PDF.Rendering
                         // routinely) silently carries over and can make this fill invisible too. The
                         // stroke side already guards against the identical leak (see RealizePen's
                         // `strokeAlpha = pen.Brush != null ? 1.0 : color.A` and its own remarks) - mirror
-                        // it here for fills via the same reset Realize(XImage,...) uses. Call
+                        // it here for fills via the same reset Realize(PdfRasterImage,...) uses. Call
                         // RealizeFillColor directly (rather than RealizeNonStrokeTransparency) with an
                         // explicit overPrint:false - the pattern has no overprint of its own, and
                         // RealizeNonStrokeTransparency would otherwise carry over

@@ -5,7 +5,7 @@ namespace PeachPDF.PDF.Advanced
     /// <summary>
     /// A PDF output intent (ISO 19005 §6.2.2 / ISO 15930 / PDF 32000-1 §14.11.5) - the mechanism that
     /// makes an otherwise device-dependent <c>DeviceRGB</c>/<c>DeviceGray</c>/<c>DeviceCMYK</c> content
-    /// stream (see <see cref="PeachPDF.PDF.Rendering.XGraphicsPdfRenderer"/>) legal under
+    /// stream (see <see cref="PeachPDF.PDF.Rendering.PdfGraphicsRenderer"/>) legal under
     /// PDF/A or PDF/X: it names a device-independent ICC profile the whole document's color is defined
     /// relative to, without requiring every color operator to be rewritten as <c>/ICCBased</c>.
     /// </summary>

@@ -57,7 +57,7 @@ namespace PeachPDF.Tests.Integration
             // (src/PeachPDF/PdfGenerator.cs: container.MaxSize = new Size(container.PageSize.Width, 0)).
             container.MaxSize = new Size(pageWidth, 0);
 
-            var measure = XGraphics.CreateMeasureContext(new Size(pageWidth, 800));
+            var measure = PdfGraphics.CreateMeasureContext(new Size(pageWidth, 800));
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 

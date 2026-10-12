@@ -46,7 +46,7 @@ namespace PeachPDF.PDF.Advanced
             Elements.SetName(Keys.Subtype, "/Form");
         }
 
-        internal PdfFormXObject(PdfDocument thisDocument, XForm form)
+        internal PdfFormXObject(PdfDocument thisDocument, PdfForm form)
             : base(thisDocument)
         {
             // BUG: form is not used
@@ -104,12 +104,12 @@ namespace PeachPDF.PDF.Advanced
         }
 
 
-        string IContentStream.GetImageName(XImage image, double width, double height)
+        string IContentStream.GetImageName(PdfRasterImage image, double width, double height)
         {
             throw new NotImplementedException();
         }
 
-        string IContentStream.GetFormName(XForm form)
+        string IContentStream.GetFormName(PdfForm form)
         {
             throw new NotImplementedException();
         }

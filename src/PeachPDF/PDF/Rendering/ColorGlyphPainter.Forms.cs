@@ -29,7 +29,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Breathing room, in canonical world units, added around the measured ink box. Absorbs the
         /// content stream's own coordinate rounding at the form's edges, and gives a hairline-thin
-        /// glyph a form large enough for <see cref="XForm"/> to accept.
+        /// glyph a form large enough for <see cref="PdfForm"/> to accept.
         /// </summary>
         private const double FormPadding = 2.0;
 
@@ -51,7 +51,7 @@ namespace PeachPDF.PDF.Rendering
         /// text, so it carries no <see cref="TypefaceFont"/>: the selectable text object belongs to the page,
         /// not to the artwork.
         /// </summary>
-        private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, Typeface typeface, PaintColor foreground,
+        private ColorGlyphPainter(PdfGraphicsRenderer formRenderer, Typeface typeface, PaintColor foreground,
             int paletteIndex, IReadOnlyDictionary<int, PaintColor>? overrides, double originX, double originY, RenderContext? rasterContext = null)
         {
             _rasterContext = rasterContext;
@@ -116,18 +116,18 @@ namespace PeachPDF.PDF.Rendering
             if (!MeasureGlyphBounds(glyphId, out double left, out double top, out double right, out double bottom))
                 return default;
 
-            // The padding is also what keeps the box above XForm's one-unit minimum: a measured box is
+            // The padding is also what keeps the box above PdfForm's one-unit minimum: a measured box is
             // never negative, so both sides always add up to at least 2 * FormPadding.
             left -= FormPadding;
             top -= FormPadding;
             right += FormPadding;
             bottom += FormPadding;
 
-            var form = new XForm(document, new Size(right - left, bottom - top));
+            var form = new PdfForm(document, new Size(right - left, bottom - top));
 
             // A form's world space starts at its own top-left corner, so the glyph's baseline origin
             // sits at the negated ink offset inside it.
-            var formGraphics = XGraphics.FromForm(form);
+            var formGraphics = PdfGraphics.FromForm(form);
             try
             {
                 var painter = new ColorGlyphPainter(form.PdfRenderer, _typeface, _foreground, _paletteIndex,
@@ -137,7 +137,7 @@ namespace PeachPDF.PDF.Rendering
             }
             finally
             {
-                // Closes the form's content stream (XGraphics.Dispose -> XForm.Finish), the same
+                // Closes the form's content stream (PdfGraphics.Dispose -> PdfForm.Finish), the same
                 // ownership the tile graphics from GraphicsAdapter.CreateTile has.
                 formGraphics.Dispose();
             }
@@ -172,7 +172,7 @@ namespace PeachPDF.PDF.Rendering
             }
 
             byte[] png = RasterSurfaceEncoding.EncodePng(surface, opaque: false);
-            XImage image = XImage.FromStream(() => new MemoryStream(png));
+            PdfRasterImage image = PdfRasterImage.FromStream(() => new MemoryStream(png));
             _gfx.DrawImage(image, new Rect(0, 0, pixelWidth / RasterPixelsPerUnit, pixelHeight / RasterPixelsPerUnit));
             return true;
         }

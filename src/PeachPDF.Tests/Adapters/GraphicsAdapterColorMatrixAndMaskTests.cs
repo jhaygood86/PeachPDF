@@ -10,20 +10,20 @@ namespace PeachPDF.Tests.Adapters
 {
     /// <summary>
     /// Exercises the new tile-compositing primitives through the actual production adapter
-    /// (<see cref="GraphicsAdapter"/>) rather than the lower-level <c>XGraphics</c> calls
-    /// <c>XGraphicsPdfRendererColorMatrixAndMaskTests</c> drives directly - this is what proves the
-    /// <c>Canvas</c>-to-<c>XGraphics</c> forwarding (including the <c>PaintBlendMode</c>-to-string
-    /// crossing at this exact boundary - see <c>XGraphicsPdfRenderer.DrawImageBlendedOver</c>'s remarks)
+    /// (<see cref="GraphicsAdapter"/>) rather than the lower-level <c>PdfGraphics</c> calls
+    /// <c>PdfGraphicsRendererColorMatrixAndMaskTests</c> drives directly - this is what proves the
+    /// <c>Canvas</c>-to-<c>PdfGraphics</c> forwarding (including the <c>PaintBlendMode</c>-to-string
+    /// crossing at this exact boundary - see <c>PdfGraphicsRenderer.DrawImageBlendedOver</c>'s remarks)
     /// actually works end to end, not just that the lower-level primitive does.
     /// </summary>
     public class GraphicsAdapterColorMatrixAndMaskTests
     {
-        private static (PdfDocument Document, XGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
-            var pageGfx = XGraphics.FromPdfPage(page);
+            var pageGfx = PdfGraphics.FromPdfPage(page);
             var adapter = new PdfSharpAdapter();
             var graphics = new GraphicsAdapter(adapter, pageGfx, 1.0);
             return (document, pageGfx, graphics, adapter);
@@ -122,7 +122,7 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageWithColorMatrix_NonTileImage_IsNoOp()
         {
             // Contract shared with DrawImageMasked/DrawImageWithOpacity - a no-op if the image wasn't
-            // created via CreateTile on this same Canvas (a raster ImageAdapter, not an XForm-backed one).
+            // created via CreateTile on this same Canvas (a raster ImageAdapter, not an PdfForm-backed one).
             var (document, pageGfx, graphics, adapter) = NewPage();
             var pngBytes = PeachPDF.Tests.TestSupport.RasterPngFixture.MakeSolidRgbaPngBytes(2, 2, 255, 0, 0);
             var nonTileImage = adapter.ImageFromStream(new MemoryStream(pngBytes));

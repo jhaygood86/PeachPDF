@@ -2327,7 +2327,7 @@ namespace PeachPDF.Html.Core
                 // Bodies were laid out (and are still positioned) in document space - the coordinate
                 // space ReserveBandEnd/PageBottomOf's own reservation math needs, since it has to agree
                 // with ordinary flow content's own document-space geometry. Painting, unlike layout, gets
-                // a fresh XGraphics per page with its own page-local origin (matching how the emitter
+                // a fresh PdfGraphics per page with its own page-local origin (matching how the emitter
                 // makes every *other* fragment's rectangles fragmentainer-local - "local.Y = documentY -
                 // (PageTopOf(k) - MarginTop)", see Fragment.cs's own remarks) - MarginBoxFragment content
                 // never hits this because MarginBoxRenderer.GetMarginBoxRect computes a page-local rect

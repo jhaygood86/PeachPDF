@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// Orchestrates tagged-PDF structure-tree/MCID/ParentTree bookkeeping, driven live from the
     /// fragment paint walk (see <see cref="Paint.FragmentPainter"/>) rather than an event-interception
     /// layer around raw drawing calls - PeachPDF already fully controls its own paint walk, unlike
-    /// upstream PDFsharp's XGraphics-event-driven UAManager/StructureBuilder this reimplements the
+    /// upstream PDFsharp's PdfGraphics-event-driven UAManager/StructureBuilder this reimplements the
     /// same underlying algorithm (AddMarkedContentToStructureElement/AddToParentTree) for.
     /// Only ever constructed when <see cref="PdfGenerateConfig.EnableTaggedPdf"/> is set.
     /// </summary>

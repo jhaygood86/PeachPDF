@@ -21,18 +21,18 @@ namespace PeachPDF.Adapters
     }
 
     /// <summary>
-    /// Decodes an <see cref="XImage"/> to a premultiplied-RGBA8 <see cref="PixelBuffer"/> once and remembers
+    /// Decodes an <see cref="PdfRasterImage"/> to a premultiplied-RGBA8 <see cref="PixelBuffer"/> once and remembers
     /// the result for the image's lifetime - the cache <see cref="ImageAdapter.GetPixels"/> reads through.
-    /// This is PDF-embedding-specific (keyed on <see cref="XImage"/>) and deliberately lives here rather than
+    /// This is PDF-embedding-specific (keyed on <see cref="PdfRasterImage"/>) and deliberately lives here rather than
     /// in <c>PeachDrawing</c>: the raster backend's own pixel math (<see cref="PixelMath"/>'s premultiply
-    /// helpers) has no <see cref="XImage"/> concept at all, so the decode-and-cache step belongs on the PDF
+    /// helpers) has no <see cref="PdfRasterImage"/> concept at all, so the decode-and-cache step belongs on the PDF
     /// adapter side of that boundary, not the raster side of it.
     /// </summary>
     internal static class ImageDecodeCache
     {
-        private static readonly ConditionalWeakTable<XImage, PixelBufferBox> Cache = [];
+        private static readonly ConditionalWeakTable<PdfRasterImage, PixelBufferBox> Cache = [];
 
-        public static PixelBuffer? Get(XImage image)
+        public static PixelBuffer? Get(PdfRasterImage image)
         {
             if (Cache.TryGetValue(image, out var cached))
                 return cached.Value;

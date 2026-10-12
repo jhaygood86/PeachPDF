@@ -30,33 +30,23 @@
 namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
-    /// Specifies the alignment of a text string relative to its layout rectangle
+    /// Specifies how the content of an existing PDF page and new content is combined.
     /// </summary>
-    internal enum XLineAlignment  // same values as System.Drawing.StringAlignment (except BaseLine)
+    internal enum PdfPageAppendMode
     {
         /// <summary>
-        /// Specifies the text be aligned near the layout.
-        /// In a left-to-right layout, the near position is left. In a right-to-left layout, the near
-        /// position is right.
+        /// The new content is inserted behind the old content and any subsequent drawing in done above the existing graphic.
         /// </summary>
-        Near = 0,
+        Append,
 
         /// <summary>
-        /// Specifies that text is aligned in the center of the layout rectangle.
+        /// The new content is inserted before the old content and any subsequent drawing in done beneath the existing graphic.
         /// </summary>
-        Center = 1,
+        Prepend,
 
         /// <summary>
-        /// Specifies that text is aligned far from the origin position of the layout rectangle.
-        /// In a left-to-right layout, the far position is right. In a right-to-left layout, the far
-        /// position is left. 
+        /// The new content entirely replaces the old content and any subsequent drawing in done on a blank page.
         /// </summary>
-        Far = 2,
-
-        /// <summary>
-        /// Specifies that text is aligned relative to its base line.
-        /// With this option the layout rectangle must have a height of 0.
-        /// </summary>
-        BaseLine = 3,
+        Replace,
     }
 }

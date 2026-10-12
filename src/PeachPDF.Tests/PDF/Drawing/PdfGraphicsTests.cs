@@ -12,7 +12,7 @@ using System.Globalization;
 
 namespace PeachPDF.Tests.PdfEngineTests.Drawing
 {
-    public class XGraphicsTests
+    public class PdfGraphicsTests
     {
         static byte[] MakePngBytes(int width = 4, int height = 4) =>
             RasterPngFixture.MakeSolidRgbaPngBytes(width, height, 10, 20, 30);
@@ -27,16 +27,16 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void FromPdfPage_NullPage_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() => XGraphics.FromPdfPage(null!));
+            Assert.Throws<ArgumentNullException>(() => PdfGraphics.FromPdfPage(null!));
         }
 
         [Fact]
         public void FromPdfPage_SecondGraphicsForSamePage_Throws()
         {
             var (_, page) = NewPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
 
-            Assert.Throws<InvalidOperationException>(() => XGraphics.FromPdfPage(page));
+            Assert.Throws<InvalidOperationException>(() => PdfGraphics.FromPdfPage(page));
         }
 
         [Fact]
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var (_, page) = NewPage();
 
-            using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Replace);
+            using var gfx = PdfGraphics.FromPdfPage(page, PdfPageAppendMode.Replace);
 
             Assert.NotNull(gfx);
         }
@@ -54,7 +54,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var (_, page) = NewPage();
 
-            using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Prepend);
+            using var gfx = PdfGraphics.FromPdfPage(page, PdfPageAppendMode.Prepend);
 
             Assert.NotNull(gfx);
         }
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var (_, page) = NewPage();
 
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
 
             Assert.NotNull(gfx);
         }
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void CreateMeasureContext_CreatesUsableGraphics()
         {
-            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200));
+            using var gfx = PdfGraphics.CreateMeasureContext(new Size(200, 200));
 
             var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
             var size = gfx.MeasureString("Hello", font);
@@ -84,7 +84,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void MeasureString_EmptyString_ReturnsNonNegativeSize()
         {
-            using var gfx = XGraphics.CreateMeasureContext(new Size(200, 200));
+            using var gfx = PdfGraphics.CreateMeasureContext(new Size(200, 200));
             var font = TestFonts.Create("Times New Roman", 12, PaintFontStyle.Regular);
 
             var size = gfx.MeasureString("", font);
@@ -96,7 +96,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void Save_Restore_RoundTripsGraphicsState()
         {
             var (document, page) = NewPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
 
             var state = gfx.Save();
             gfx.MultiplyTransform(Matrix3x2.CreateRotation(MathF.PI / 4));
@@ -112,32 +112,16 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void Restore_WithoutPriorSave_Throws()
         {
             var (_, page) = NewPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
 
             Assert.Throws<InvalidOperationException>(() => gfx.Restore());
-        }
-
-        [Fact]
-        public void BeginContainer_EndContainer_Succeeds()
-        {
-            var (document, page) = NewPage();
-            using var gfx = XGraphics.FromPdfPage(page);
-
-            var container = gfx.BeginContainer();
-            gfx.DrawLine(PdfPaints.CreatePen(PaintColor.Black), 0, 0, 10, 10);
-            gfx.EndContainer(container);
-
-            using var stream = new MemoryStream();
-            gfx.Dispose();
-            document.Save(stream);
-            Assert.True(stream.Length > 0);
         }
 
         [Fact]
         public void WriteComment_DoesNotThrow()
         {
             var (_, page) = NewPage();
-            using var gfx = XGraphics.FromPdfPage(page);
+            using var gfx = PdfGraphics.FromPdfPage(page);
 
             var ex = Record.Exception(() => gfx.WriteComment("a test comment"));
 
@@ -151,7 +135,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // AppendPartialArc's smallAngle fast path and returns immediately. A wider sweep exercises
             // the do/while loop that walks multiple quadrants (AppendArcQuadrantSegment/NextQuadrant).
             var (document, page) = NewPage();
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 var pen = PdfPaints.CreatePen(PaintColor.Black, 1);
             }
@@ -165,7 +149,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         public void DrawArc_NegativeSweepGreaterThan90Degrees_TraversesMultipleQuadrantsCounterclockwise()
         {
             var (document, page) = NewPage();
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 var pen = PdfPaints.CreatePen(PaintColor.Black, 1);
             }
@@ -181,7 +165,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             document.Options.CompressContentStreams = false;
 
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 var path = new PdfGraphicsPath();
                 path.Start(1.23456, 2.34567);
@@ -210,15 +194,15 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             var content = new PdfContentWriter(100_000);
             content.Append('x');
-            XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
+            PdfGraphicsRenderer.AppendPdfNumber(content, 1.23456, "0.####");
 
             for (int i = 0; i < 10_000; i++)
-                XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
+                PdfGraphicsRenderer.AppendPdfNumber(content, 1.23456, "0.####");
 
             Assert.Equal("x1.2346" + string.Concat(Enumerable.Repeat("1.2346", 10_000)), content.ToString());
 
             var fallback = new PdfContentWriter();
-            XGraphicsPdfRenderer.AppendPdfNumber(fallback, double.MaxValue, "0.####");
+            PdfGraphicsRenderer.AppendPdfNumber(fallback, double.MaxValue, "0.####");
             Assert.Equal(double.MaxValue.ToString("0.####", CultureInfo.InvariantCulture), fallback.ToString());
         }
 
@@ -236,7 +220,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // Chunked writer: sized so the probe's warm-up and every batch fit without growing, since a
             // fresh chunk allocated mid-batch is exactly the transient this is trying not to measure.
             var content = new PdfContentWriter(600_000);
-            var body = () => XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
+            var body = () => PdfGraphicsRenderer.AppendPdfNumber(content, 1.23456, "0.####");
 
             var allocated = AllocationProbe.Bytes(body, iterations);
 
@@ -279,7 +263,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             void AppendExpectedAndActual(double value, string format)
             {
                 expected.Append(value.ToString(format, CultureInfo.InvariantCulture)).Append('\n');
-                XGraphicsPdfRenderer.AppendPdfNumber(actual, value, format);
+                PdfGraphicsRenderer.AppendPdfNumber(actual, value, format);
                 actual.Append('\n');
             }
         }
@@ -290,7 +274,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             page.TrimMargins.All = 5;
 
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 gfx.DrawLine(PdfPaints.CreatePen(PaintColor.Black), 0, 0, 10, 10);
             }
@@ -307,7 +291,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var width = page.Width;
             var height = page.Height;
 
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 var pen = PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0), 1.5);
                 var brush = new SolidBrush(PaintColor.FromArgb(0, 0, 255));
@@ -338,10 +322,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                 gfx.DrawPath(pen, brush, path);
 
                 gfx.DrawString("Hello, World!", font, brush, new PaintPoint(10, 10));
-                gfx.DrawString("Hello, World!", font, brush, new Rect(0, 0, width, height), XStringFormats.Center);
+                gfx.DrawString("Hello, World!", font, brush, new Rect(0, 0, width, height), PdfStringFormats.Center);
 
                 var imgBytes = MakePngBytes();
-                using var image = XImage.FromStream(() => new MemoryStream(imgBytes));
+                using var image = PdfRasterImage.FromStream(() => new MemoryStream(imgBytes));
                 gfx.DrawImage(image, 50, 50);
                 gfx.DrawImage(image, new Rect(60, 60, 20, 20));
                 gfx.DrawImage(image, new Rect(80, 80, 20, 20), new Rect(0, 0, 4, 4));
@@ -372,7 +356,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             document.Options.CompressContentStreams = false;
 
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 var state = gfx.Save();
                 var brush = new SolidBrush(PaintColor.FromArgb(0, 255, 0, 0));
@@ -401,7 +385,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             document.Options.CompressContentStreams = false;
 
-            using (var gfx = XGraphics.FromPdfPage(page))
+            using (var gfx = PdfGraphics.FromPdfPage(page))
             {
                 var state = gfx.Save();
                 var pen = PdfPaints.CreatePen(PaintColor.FromArgb(0, 0, 0, 0), 2);

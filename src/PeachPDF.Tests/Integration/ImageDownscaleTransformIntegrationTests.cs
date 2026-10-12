@@ -10,11 +10,11 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     // Covers DownscaleImages end-to-end through real HTML/CSS/SVG rendering, specifically the case
-    // XGraphicsPdfRenderer.Realize's CTM fold-in exists for: a raster image painted while a transform
+    // PdfGraphicsRenderer.Realize's CTM fold-in exists for: a raster image painted while a transform
     // (CSS `transform:` or an SVG element/group transform) is active on the graphics state ends up at
     // destRect size * transform scale on the actual page, not destRect size alone. See the lower-level,
     // exact-pixel-math coverage in ImageDrawingTests.DownscaleImages_UnderActiveTransform_AccountsForTransformScale
-    // for the same fix tested directly against XGraphics; this file confirms real layout/paint actually
+    // for the same fix tested directly against PdfGraphics; this file confirms real layout/paint actually
     // reaches that code for both the HTML and SVG paths.
     public class ImageDownscaleTransformIntegrationTests
     {

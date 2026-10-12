@@ -168,9 +168,9 @@ namespace PeachPDF.PDF
 
         #endregion
 
-        #region XGraphics specific messages
+        #region PdfGraphics specific messages
 
-        // ----- XGraphics ----------------------------------------------------------------------------
+        // ----- PdfGraphics ----------------------------------------------------------------------------
 
         public static string PointArrayEmpty
         {

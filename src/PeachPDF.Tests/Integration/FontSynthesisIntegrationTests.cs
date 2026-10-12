@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// End-to-end regression tests for faux-bold/italic synthesis: previously-dead
     /// <c>StyleSimulations</c>/<c>MustSimulateBold</c>/<c>MustSimulateItalic</c> plumbing in the embedded
     /// PDFsharp fork is now actually wired from <c>FontResolver.ResolveTypeface</c>'s nearest-weight/style
-    /// matching through to <c>XGraphicsPdfRenderer</c>'s already-existing fill+stroke (bold) / X-offset
+    /// matching through to <c>PdfGraphicsRenderer</c>'s already-existing fill+stroke (bold) / X-offset
     /// shear (italic) rendering. Verified via the PDF content stream's text render-mode operator (<c>Tr</c>)
     /// per PDF spec Table 5.2 - mode 2 is "fill, then stroke text," the exact, unambiguous signal bold
     /// simulation is engaged, not a fuzzy content-stream substring guess.

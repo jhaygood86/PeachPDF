@@ -47,12 +47,12 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
     /// <summary>
     /// Represents a drawing surface for a fixed size page.
     /// </summary>
-    internal sealed class XGraphics : IDisposable
+    internal sealed class PdfGraphics : IDisposable
     {
         /// <summary>
-        /// Initializes a new instance of the XGraphics class for drawing on a PDF page.
+        /// Initializes a new instance of the PdfGraphics class for drawing on a PDF page.
         /// </summary>
-        XGraphics(PdfPage page, XGraphicsPdfPageOptions options)
+        PdfGraphics(PdfPage page, PdfPageAppendMode options)
         {
             if (page == null)
                 throw new ArgumentNullException("page");
@@ -61,36 +61,36 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
                 throw new ArgumentException("You cannot draw on a page that is not owned by a PdfDocument object.", "page");
 
             if (page.RenderContent != null)
-                throw new InvalidOperationException("An XGraphics object already exists for this page and must be disposed before a new one can be created.");
+                throw new InvalidOperationException("An PdfGraphics object already exists for this page and must be disposed before a new one can be created.");
 
             if (page.Owner.IsReadOnly)
-                throw new InvalidOperationException("Cannot create XGraphics for a page of a document that cannot be modified. Use PdfDocumentOpenMode.Modify.");
+                throw new InvalidOperationException("Cannot create PdfGraphics for a page of a document that cannot be modified. Use PdfDocumentOpenMode.Modify.");
 
             _gsStack = new GraphicsStateStack(this);
             PdfContent content = null;
             switch (options)
             {
-                case XGraphicsPdfPageOptions.Replace:
+                case PdfPageAppendMode.Replace:
                     page.Contents.Elements.Clear();
-                    goto case XGraphicsPdfPageOptions.Append;
+                    goto case PdfPageAppendMode.Append;
 
-                case XGraphicsPdfPageOptions.Prepend:
+                case PdfPageAppendMode.Prepend:
                     content = page.Contents.PrependContent();
                     break;
 
-                case XGraphicsPdfPageOptions.Append:
+                case PdfPageAppendMode.Append:
                     content = page.Contents.AppendContent();
                     break;
             }
             page.RenderContent = content;
-            _renderer = new XGraphicsPdfRenderer(page, this, options);
+            _renderer = new PdfGraphicsRenderer(page, this, options);
             _pageSizePoints = new Size(page.Width, page.Height);
             _pageSize = new Size(page.Width, page.Height);
 
             Initialize();
         }
 
-        XGraphics(Size size)
+        PdfGraphics(Size size)
         {
             _gsStack = new GraphicsStateStack(this);
             _pageSizePoints = new Size(size.Width, size.Height);
@@ -100,9 +100,9 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Initializes a new instance of the XGraphics class used for drawing on a form.
+        /// Initializes a new instance of the PdfGraphics class used for drawing on a form.
         /// </summary>
-        XGraphics(XForm form)
+        PdfGraphics(PdfForm form)
         {
             if (form == null)
                 throw new ArgumentNullException("form");
@@ -113,7 +113,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             _gsStack = new GraphicsStateStack(this);
             _drawGraphics = false;
             if (form.Owner != null)
-                _renderer = new XGraphicsPdfRenderer(form, this);
+                _renderer = new PdfGraphicsRenderer(form, this);
             _pageSize = form.Size;
             Initialize();
         }
@@ -122,36 +122,36 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Creates the measure context. This is a graphics context created only for querying measures of text.
         /// Drawing on a measure context has no effect.
         /// </summary>
-        public static XGraphics CreateMeasureContext(Size size)
+        public static PdfGraphics CreateMeasureContext(Size size)
         {
-            return new XGraphics(size);
+            return new PdfGraphics(size);
         }
 
         /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
+        /// Creates a new instance of the PdfGraphics class from a PeachPDF.PDF.PdfPage object.
         /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page)
+        public static PdfGraphics FromPdfPage(PdfPage page)
         {
-            return new XGraphics(page, XGraphicsPdfPageOptions.Append);
+            return new PdfGraphics(page, PdfPageAppendMode.Append);
         }
 
         /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.PdfPage object.
+        /// Creates a new instance of the PdfGraphics class from a PeachPDF.PDF.PdfPage object.
         /// </summary>
-        public static XGraphics FromPdfPage(PdfPage page, XGraphicsPdfPageOptions options)
+        public static PdfGraphics FromPdfPage(PdfPage page, PdfPageAppendMode options)
         {
-            return new XGraphics(page, options);
+            return new PdfGraphics(page, options);
         }
 
         /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PDF.Drawing.XForm object.
+        /// Creates a new instance of the PdfGraphics class from a PeachPDF.PDF.Drawing.PdfForm object.
         /// </summary>
-        public static XGraphics FromForm(XForm form)
+        public static PdfGraphics FromForm(PdfForm form)
         {
             if (form.Gfx != null)
                 return form.Gfx;
 
-            return new XGraphics(form);
+            return new PdfGraphics(form);
         }
 
         /// <summary>
@@ -532,7 +532,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Draws the specified text string.
         /// </summary>
         /// <summary>
-        /// When true, <see cref="DrawString(string, TypefaceFont, Brush, Rect, XStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>
+        /// When true, <see cref="DrawString(string, TypefaceFont, Brush, Rect, PdfStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>
         /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
         /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
         /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
@@ -547,14 +547,14 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
 
         public void DrawString(string s, TypefaceFont font, Brush brush, PaintPoint point)
         {
-            DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), XStringFormats.Default);
+            DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), PdfStringFormats.Default);
         }
 
 
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, TypefaceFont font, Brush brush, PaintPoint point, XStringFormat format)
+        public void DrawString(string s, TypefaceFont font, Brush brush, PaintPoint point, PdfStringFormat format)
         {
             DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), format);
         }
@@ -564,13 +564,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawString(string s, TypefaceFont font, Brush brush, double x, double y)
         {
-            DrawString(s, font, brush, new Rect(x, y, 0, 0), XStringFormats.Default);
+            DrawString(s, font, brush, new Rect(x, y, 0, 0), PdfStringFormats.Default);
         }
 
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, TypefaceFont font, Brush brush, double x, double y, XStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string s, TypefaceFont font, Brush brush, double x, double y, PdfStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             DrawString(s, font, brush, new Rect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
         }
@@ -581,7 +581,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void DrawString(string s, TypefaceFont font, Brush brush, Rect layoutRectangle)
         {
-            DrawString(s, font, brush, layoutRectangle, XStringFormats.Default);
+            DrawString(s, font, brush, layoutRectangle, PdfStringFormats.Default);
         }
 
         /// <summary>
@@ -590,7 +590,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// see <see cref="PeachDrawing.Core.Canvas"/>'s own equivalent overload for why this
         /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
-        public void DrawString(string text, TypefaceFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string text, TypefaceFont font, Brush brush, Rect layoutRectangle, PdfStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -599,14 +599,14 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
-            if (format != null && format.LineAlignment == XLineAlignment.BaseLine && layoutRectangle.Height != 0)
-                throw new InvalidOperationException("DrawString: With XLineAlignment.BaseLine the height of the layout rectangle must be 0.");
+            if (format != null && format.LineAlignment == PdfLineAlignment.BaseLine && layoutRectangle.Height != 0)
+                throw new InvalidOperationException("DrawString: With PdfLineAlignment.BaseLine the height of the layout rectangle must be 0.");
 
             if (text.Length == 0)
                 return;
 
             if (format == null)
-                format = XStringFormats.Default;
+                format = PdfStringFormats.Default;
 
             if (_renderer != null)
                 _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
@@ -633,7 +633,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public Size MeasureString(string text, TypefaceFont font, XStringFormat stringFormat, ShapeSettings? features = null)
+        public Size MeasureString(string text, TypefaceFont font, PdfStringFormat stringFormat, ShapeSettings? features = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -642,7 +642,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (stringFormat == null)
                 throw new ArgumentNullException("stringFormat");
 
-            Size size = FontHelper.MeasureString(text, font, XStringFormats.Default, features ?? ShapeSettings.Default);
+            Size size = FontHelper.MeasureString(text, font, PdfStringFormats.Default, features ?? ShapeSettings.Default);
             return size;
         }
 
@@ -651,7 +651,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public Size MeasureString(string text, TypefaceFont font, ShapeSettings? features = null)
         {
-            return MeasureString(text, font, XStringFormats.Default, features);
+            return MeasureString(text, font, PdfStringFormats.Default, features);
         }
 
         // ----- DrawImage ----------------------------------------------------------------------------
@@ -659,7 +659,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, PaintPoint point)
+        public void DrawImage(PdfRasterImage image, PaintPoint point)
         {
             DrawImage(image, point.X, point.Y);
         }
@@ -667,12 +667,12 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, double x, double y)
+        public void DrawImage(PdfRasterImage image, double x, double y)
         {
             if (image == null)
                 throw new ArgumentNullException("image");
 
-            CheckXPdfFormConsistence(image);
+            CheckFormConsistency(image);
 
             double width = image.PointWidth;
             double height = image.PointHeight;
@@ -686,7 +686,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, Rect rect)
+        public void DrawImage(PdfRasterImage image, Rect rect)
         {
             DrawImage(image, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -694,64 +694,64 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, double x, double y, double width, double height)
+        public void DrawImage(PdfRasterImage image, double x, double y, double width, double height)
         {
             if (image == null)
                 throw new ArgumentNullException("image");
 
-            CheckXPdfFormConsistence(image);
+            CheckFormConsistency(image);
 
             if (_renderer != null)
                 _renderer.DrawImage(image, x, y, width, height);
         }
 
         // TODO: calculate destination size
-        //public void DrawImage(XImage image, double x, double y, GdiRectF srcRect)
-        //public void DrawImage(XImage image, double x, double y, Rect srcRect)
+        //public void DrawImage(PdfRasterImage image, double x, double y, GdiRectF srcRect)
+        //public void DrawImage(PdfRasterImage image, double x, double y, Rect srcRect)
 
         /// <summary>
         /// Draws the specified image.
         /// </summary>
-        public void DrawImage(XImage image, Rect destRect, Rect srcRect)
+        public void DrawImage(PdfRasterImage image, Rect destRect, Rect srcRect)
         {
             if (image == null)
                 throw new ArgumentNullException("image");
 
-            CheckXPdfFormConsistence(image);
+            CheckFormConsistency(image);
 
             if (_renderer != null)
                 _renderer.DrawImage(image, destRect, srcRect);
         }
 
         //TODO?
-        //public void DrawImage(XImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
-        //public void DrawImage(XImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
+        //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
+        //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
 
         void DrawMissingImageRect(Rect rect)
         {
         }
 
         /// <summary>
-        /// Checks whether drawing is allowed and disposes the XGraphics object, if necessary.
+        /// Checks whether drawing is allowed and disposes the PdfGraphics object, if necessary.
         /// </summary>
-        void CheckXPdfFormConsistence(XImage image)
+        void CheckFormConsistency(PdfRasterImage image)
         {
-            XForm xForm = image as XForm;
+            PdfForm xForm = image as PdfForm;
             if (xForm != null)
             {
-                // Force disposing of XGraphics that draws the content
+                // Force disposing of PdfGraphics that draws the content
                 xForm.Finish();
 
                 // ReSharper disable once MergeSequentialChecks
-                if (_renderer != null && (_renderer as XGraphicsPdfRenderer) != null)
+                if (_renderer != null && (_renderer as PdfGraphicsRenderer) != null)
                 {
-                    if (xForm.Owner != null && xForm.Owner != ((XGraphicsPdfRenderer)_renderer).Owner)
+                    if (xForm.Owner != null && xForm.Owner != ((PdfGraphicsRenderer)_renderer).Owner)
                         throw new InvalidOperationException(
-                            "A XPdfForm object is always bound to the document it was created for and cannot be drawn in the context of another document.");
+                            "A PdfForm object is always bound to the document it was created for and cannot be drawn in the context of another document.");
 
-                    if (xForm == ((XGraphicsPdfRenderer)_renderer)._form)
+                    if (xForm == ((PdfGraphicsRenderer)_renderer)._form)
                         throw new InvalidOperationException(
-                            "A XPdfForm cannot be drawn on itself.");
+                            "A PdfForm cannot be drawn on itself.");
                 }
             }
         }
@@ -763,13 +763,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         #region Save and Restore
 
         /// <summary>
-        /// Saves the current state of this XGraphics object and identifies the saved state with the
-        /// returned XGraphicsState object.
+        /// Saves the current state of this PdfGraphics object and identifies the saved state with the
+        /// returned PdfGraphicsStateToken object.
         /// </summary>
-        public XGraphicsState Save()
+        public PdfGraphicsStateToken Save()
         {
-            XGraphicsState xState = null;
-            xState = new XGraphicsState();
+            PdfGraphicsStateToken xState = null;
+            xState = new PdfGraphicsStateToken();
             InternalGraphicsState iState = new InternalGraphicsState(this, xState);
             iState.Transform = _transform;
             _gsStack.Push(iState);
@@ -781,10 +781,10 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Restores the state of this XGraphics object to the state represented by the specified 
-        /// XGraphicsState object.
+        /// Restores the state of this PdfGraphics object to the state represented by the specified 
+        /// PdfGraphicsStateToken object.
         /// </summary>
-        public void Restore(XGraphicsState state)
+        public void Restore(PdfGraphicsStateToken state)
         {
             if (state == null)
                 throw new ArgumentNullException("state");
@@ -796,66 +796,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Restores the state of this XGraphics object to the state before the most recently call of Save.
+        /// Restores the state of this PdfGraphics object to the state before the most recently call of Save.
         /// </summary>
         public void Restore()
         {
             if (_gsStack.Count == 0)
                 throw new InvalidOperationException("Cannot restore without preceding save operation.");
             Restore(_gsStack.Current.State);
-        }
-
-        /// <summary>
-        /// Saves a graphics container with the current state of this XGraphics and 
-        /// opens and uses a new graphics container.
-        /// </summary>
-        public XGraphicsContainer BeginContainer()
-        {
-            return BeginContainer(new Rect(0, 0, 1, 1), new Rect(0, 0, 1, 1));
-        }
-
-        /// <summary>
-        /// Saves a graphics container with the current state of this XGraphics and 
-        /// opens and uses a new graphics container.
-        /// </summary>
-        public XGraphicsContainer BeginContainer(Rect dstrect, Rect srcrect)
-        {
-            XGraphicsContainer xContainer = null;
-            xContainer = new XGraphicsContainer();
-
-            InternalGraphicsState iState = new InternalGraphicsState(this, xContainer);
-            iState.Transform = _transform;
-
-            _gsStack.Push(iState);
-
-            if (_renderer != null)
-                _renderer.BeginContainer(xContainer, dstrect, srcrect);
-
-            Matrix3x2 matrix = Matrix3x2.Identity;
-            double scaleX = dstrect.Width / srcrect.Width;
-            double scaleY = dstrect.Height / srcrect.Height;
-            matrix = PdfMatrix.Translation(-srcrect.X, -srcrect.Y) * matrix;
-            matrix = PdfMatrix.Scaling(scaleX, scaleY) * matrix;
-            matrix = PdfMatrix.Translation(dstrect.X / scaleX, dstrect.Y / scaleY) * matrix;
-            AddTransform(matrix);
-
-            return xContainer;
-        }
-
-        /// <summary>
-        /// Closes the current graphics container and restores the state of this XGraphics 
-        /// to the state saved by a call to the BeginContainer method.
-        /// </summary>
-        public void EndContainer(XGraphicsContainer container)
-        {
-            if (container == null)
-                throw new ArgumentNullException("container");
-
-            _gsStack.Restore(container.InternalState);
-            _transform = container.InternalState.Transform;
-
-            if (_renderer != null)
-                _renderer.EndContainer(container);
         }
 
         /// <summary>
@@ -866,29 +813,6 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         {
             get { return _gsStack.Count; }
         }
-
-        #endregion
-
-        // --------------------------------------------------------------------------------------------
-
-        #region Properties
-
-        /// <summary>
-        /// Gets or sets the smoothing mode.
-        /// </summary>
-        /// <value>The smoothing mode.</value>
-        public XSmoothingMode SmoothingMode
-        {
-            get
-            {
-                return _smoothingMode;
-            }
-            set
-            {
-                _smoothingMode = value;
-            }
-        }
-        XSmoothingMode _smoothingMode;
 
         #endregion
 
@@ -939,7 +863,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         #region Clipping
 
         /// <summary>
-        /// Updates the clip region of this XGraphics to the intersection of the 
+        /// Updates the clip region of this PdfGraphics to the intersection of the 
         /// current clip region and the specified rectangle.
         /// </summary>
         public void IntersectClip(Rect rect)
@@ -950,7 +874,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Updates the clip region of this XGraphics to the intersection of the 
+        /// Updates the clip region of this PdfGraphics to the intersection of the 
         /// current clip region and the specified graphical path.
         /// </summary>
         public void IntersectClip(GraphicsPath path)
@@ -1000,7 +924,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         // --------------------------------------------------------------------------------------------
 
         /// <summary>
-        /// The transformation matrix from the XGraphics page space to the Graphics world space.
+        /// The transformation matrix from the PdfGraphics page space to the Graphics world space.
         /// (The name 'default view matrix' comes from Microsoft OS/2 Presentation Manager. I choose
         /// this name because I have no better one.)
         /// </summary>
@@ -1011,15 +935,15 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         bool _drawGraphics;
 
-        readonly XForm _form = null!;
+        readonly PdfForm _form = null!;
 
         /// <summary>
-        /// Interface to an (optional) renderer. Currently it is the XGraphicsPdfRenderer, if defined.
+        /// Interface to an (optional) renderer. Currently it is the PdfGraphicsRenderer, if defined.
         /// </summary>
-        IXGraphicsRenderer _renderer = null!;
+        PdfGraphicsRenderer _renderer = null!;
 
         /// <summary>
-        /// The transformation matrix from XGraphics world space to page unit space.
+        /// The transformation matrix from PdfGraphics world space to page unit space.
         /// </summary>
         Matrix3x2 _transform = Matrix3x2.Identity;
 
@@ -1036,13 +960,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         {
             get
             {
-                XGraphicsPdfRenderer renderer = _renderer as XGraphicsPdfRenderer;
+                PdfGraphicsRenderer renderer = _renderer as PdfGraphicsRenderer;
                 return renderer != null ? renderer._page : null;
             }
         }
 
         /// <summary>
-        /// The owning <see cref="PdfDocument"/>, whether this <see cref="XGraphics"/> is bound to a real
+        /// The owning <see cref="PdfDocument"/>, whether this <see cref="PdfGraphics"/> is bound to a real
         /// page (<see cref="PdfPage"/>) or to a Form XObject (<c>FromForm</c> - as a <c>CreateTile</c>
         /// tile is). Falling back to the form's own owner is what lets a tile be created recursively from
         /// inside another tile (e.g. nested CSS/SVG group <c>opacity</c>, or opacity inside a mask/pattern
@@ -1053,72 +977,72 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
         /// applied as a luminosity soft mask, scoped to just this one placement - see
-        /// <see cref="XGraphicsPdfRenderer.DrawImageMasked"/> for why the mask must be applied this
+        /// <see cref="PdfGraphicsRenderer.DrawImageMasked"/> for why the mask must be applied this
         /// way (atomically, sharing the placement's own "cm") rather than as a separate push/pop pair.
         /// </summary>
-        internal void DrawImageMasked(XForm image, XForm maskImage, Rect destRect)
+        internal void DrawImageMasked(PdfForm image, PdfForm maskImage, Rect destRect)
         {
-            (_renderer as XGraphicsPdfRenderer)?.DrawImageMasked(image, maskImage, destRect);
+            (_renderer as PdfGraphicsRenderer)?.DrawImageMasked(image, maskImage, destRect);
         }
 
         /// <summary>
         /// Draws <paramref name="image"/> at <paramref name="destRect"/>, composited as a single
         /// flattened result at constant <paramref name="opacity"/> and (if not <c>"Normal"</c>)
         /// <paramref name="pdfBlendModeName"/> - see
-        /// <see cref="XGraphicsPdfRenderer.DrawImageWithOpacity"/> for why this differs from simply
+        /// <see cref="PdfGraphicsRenderer.DrawImageWithOpacity"/> for why this differs from simply
         /// reducing the alpha of each shape painted into the tile.
         /// </summary>
-        internal void DrawImageWithOpacity(XForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
+        internal void DrawImageWithOpacity(PdfForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
-            (_renderer as XGraphicsPdfRenderer)?.DrawImageWithOpacity(image, destRect, opacity, pdfBlendModeName);
+            (_renderer as PdfGraphicsRenderer)?.DrawImageWithOpacity(image, destRect, opacity, pdfBlendModeName);
         }
 
         /// <summary>
         /// Draws <paramref name="image"/> at <paramref name="destRect"/>, composited through a
         /// channel-independent <see cref="ColorMatrix"/> - see
-        /// <see cref="XGraphicsPdfRenderer.DrawImageWithColorMatrix"/>.
+        /// <see cref="PdfGraphicsRenderer.DrawImageWithColorMatrix"/>.
         /// </summary>
-        internal void DrawImageWithColorMatrix(XForm image, Rect destRect, ColorMatrix matrix)
+        internal void DrawImageWithColorMatrix(PdfForm image, Rect destRect, ColorMatrix matrix)
         {
-            (_renderer as XGraphicsPdfRenderer)?.DrawImageWithColorMatrix(image, destRect, matrix);
+            (_renderer as PdfGraphicsRenderer)?.DrawImageWithColorMatrix(image, destRect, matrix);
         }
 
         /// <summary>
         /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
         /// applied as an <c>/Alpha</c>-subtype soft mask - see
-        /// <see cref="XGraphicsPdfRenderer.DrawImageAlphaMasked"/>.
+        /// <see cref="PdfGraphicsRenderer.DrawImageAlphaMasked"/>.
         /// </summary>
-        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, Rect destRect, bool invert = false)
+        internal void DrawImageAlphaMasked(PdfForm image, PdfForm maskImage, Rect destRect, bool invert = false)
         {
-            (_renderer as XGraphicsPdfRenderer)?.DrawImageAlphaMasked(image, maskImage, destRect, invert);
+            (_renderer as PdfGraphicsRenderer)?.DrawImageAlphaMasked(image, maskImage, destRect, invert);
         }
 
         /// <summary>
         /// Paints <paramref name="bottom"/> then <paramref name="top"/> blended over it at
-        /// <paramref name="destRect"/> - see <see cref="XGraphicsPdfRenderer.DrawImageBlendedOver"/>.
+        /// <paramref name="destRect"/> - see <see cref="PdfGraphicsRenderer.DrawImageBlendedOver"/>.
         /// </summary>
-        internal void DrawImageBlendedOver(XForm top, XForm bottom, Rect destRect, string pdfBlendModeName)
+        internal void DrawImageBlendedOver(PdfForm top, PdfForm bottom, Rect destRect, string pdfBlendModeName)
         {
-            (_renderer as XGraphicsPdfRenderer)?.DrawImageBlendedOver(top, bottom, destRect, pdfBlendModeName);
+            (_renderer as PdfGraphicsRenderer)?.DrawImageBlendedOver(top, bottom, destRect, pdfBlendModeName);
         }
 
         /// <summary>
         /// Activates a separable/HSL PDF blend mode for subsequent painting - see
-        /// <see cref="XGraphicsPdfRenderer.SetBlendMode"/>. Scope with <see cref="Save()"/>/
-        /// <see cref="Restore(XGraphicsState)"/> so the blend mode is restored to Normal afterward.
+        /// <see cref="PdfGraphicsRenderer.SetBlendMode"/>. Scope with <see cref="Save()"/>/
+        /// <see cref="Restore(PdfGraphicsStateToken)"/> so the blend mode is restored to Normal afterward.
         /// </summary>
         internal void SetBlendMode(string pdfBlendModeName)
         {
-            (_renderer as XGraphicsPdfRenderer)?.SetBlendMode(pdfBlendModeName);
+            (_renderer as PdfGraphicsRenderer)?.SetBlendMode(pdfBlendModeName);
         }
 
         /// <summary>
         /// Begins a tagged marked-content sequence for the given structure type and marked-content
-        /// identifier - see <see cref="XGraphicsPdfRenderer.BeginMarkedContent"/>.
+        /// identifier - see <see cref="PdfGraphicsRenderer.BeginMarkedContent"/>.
         /// </summary>
         internal void BeginMarkedContent(string structureType, int mcid)
         {
-            (_renderer as XGraphicsPdfRenderer)?.BeginMarkedContent(structureType, mcid);
+            (_renderer as PdfGraphicsRenderer)?.BeginMarkedContent(structureType, mcid);
         }
 
         /// <summary>
@@ -1127,31 +1051,31 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         internal void EndMarkedContent()
         {
-            (_renderer as XGraphicsPdfRenderer)?.EndMarkedContent();
+            (_renderer as PdfGraphicsRenderer)?.EndMarkedContent();
         }
 
         /// <summary>
         /// Begins an artifact marked-content sequence - see
-        /// <see cref="XGraphicsPdfRenderer.BeginArtifact"/>.
+        /// <see cref="PdfGraphicsRenderer.BeginArtifact"/>.
         /// </summary>
         internal void BeginArtifact()
         {
-            (_renderer as XGraphicsPdfRenderer)?.BeginArtifact();
+            (_renderer as PdfGraphicsRenderer)?.BeginArtifact();
         }
 
         /// <summary>
         /// Begins the "/Tx" marked-content sequence around a form field's variable text - see
-        /// <see cref="XGraphicsPdfRenderer.BeginVariableText"/>.
+        /// <see cref="PdfGraphicsRenderer.BeginVariableText"/>.
         /// </summary>
         internal void BeginVariableText()
         {
-            (_renderer as XGraphicsPdfRenderer)?.BeginVariableText();
+            (_renderer as PdfGraphicsRenderer)?.BeginVariableText();
         }
 
         /// <summary>Closes the sequence <see cref="BeginVariableText"/> opened.</summary>
         internal void EndVariableText()
         {
-            (_renderer as XGraphicsPdfRenderer)?.EndVariableText();
+            (_renderer as PdfGraphicsRenderer)?.EndVariableText();
         }
     }
 }

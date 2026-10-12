@@ -195,7 +195,7 @@ namespace PeachPDF.Tests.Integration
                 structureTagBuilder.BeginPage(page);
             }
 
-            var measure = XGraphics.CreateMeasureContext(size);
+            var measure = PdfGraphics.CreateMeasureContext(size);
             using var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(measureGraphics);
 

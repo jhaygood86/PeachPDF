@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.TestSupport
             container.MaxSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
             container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
-            var measure = XGraphics.CreateMeasureContext(sheet);
+            var measure = PdfGraphics.CreateMeasureContext(sheet);
             using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
@@ -139,7 +139,7 @@ namespace PeachPDF.Tests.TestSupport
             container.MaxSize = Utilities.Utils.ToPixels(band, 1.0);
             container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(sheet);
+            var measure = PdfGraphics.CreateMeasureContext(sheet);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
             var results = new List<T>(passes);

@@ -44,12 +44,12 @@ namespace PeachPDF.PDF.Advanced
     internal sealed partial class PdfImage : PdfXObject
     {
         /// <summary>
-        /// Initializes a new instance of PdfImage from an XImage. When <paramref name="targetWidth"/>/
+        /// Initializes a new instance of PdfImage from an PdfRasterImage. When <paramref name="targetWidth"/>/
         /// <paramref name="targetHeight"/> are given, the image is resized to that pixel size before
         /// being embedded (see <see cref="PdfImageTable.GetImage"/>), and every <c>/Width</c>/<c>/Height</c>
         /// this type writes uses that size rather than the image's own natural decoded size.
         /// </summary>
-        public PdfImage(PdfDocument document, XImage image, int? targetWidth = null, int? targetHeight = null)
+        public PdfImage(PdfDocument document, PdfRasterImage image, int? targetWidth = null, int? targetHeight = null)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/XObject");
@@ -65,22 +65,22 @@ namespace PeachPDF.PDF.Advanced
             switch (_image.Format.Guid.ToString("B").ToUpper())
             {
                 // Pdf supports Jpeg, therefore we can write what we've read:
-                case "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Jpeg
+                case "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}":  //PdfImageFormat.Jpeg
                     InitializeJpeg();
                     break;
 
                 // All other image formats are converted to PDF bitmaps:
-                case "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Png
-                case "{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Gif
-                case "{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Tiff
-                case "{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}":  //XImageFormat.Icon
+                case "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}":  //PdfImageFormat.Png
+                case "{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}":  //PdfImageFormat.Gif
+                case "{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}":  //PdfImageFormat.Tiff
+                case "{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}":  //PdfImageFormat.Icon
                     // TODO: possible optimization for PNG (do not decompress/recompress)???
                     // TODO: try Jpeg for size optimization???
                     InitializeNonJpeg();
                     break;
 
-                case "{84570158-DBF0-4C6B-8368-62D6A3CA76E0}":  //XImageFormat.Pdf:
-                    Debug.Assert(false, "XPdfForm not expected here.");
+                case "{84570158-DBF0-4C6B-8368-62D6A3CA76E0}":  //PdfImageFormat.Pdf:
+                    Debug.Assert(false, "PdfForm not expected here.");
                     break;
 
                 default:
@@ -90,14 +90,14 @@ namespace PeachPDF.PDF.Advanced
         }
 
         /// <summary>
-        /// Gets the underlying XImage object.
+        /// Gets the underlying PdfRasterImage object.
         /// </summary>
-        public XImage Image
+        public PdfRasterImage Image
         {
             get { return _image; }
         }
 
-        readonly XImage _image;
+        readonly PdfRasterImage _image;
         readonly int? _targetWidth;
         readonly int? _targetHeight;
 
@@ -194,7 +194,7 @@ namespace PeachPDF.PDF.Advanced
 
             // A resize only ever reaches here for an image with no real alpha (PdfImageTable only
             // resizes; whether that resize lands on the Jpeg or NonJpeg path is still decided by
-            // XImage.Initialize's Transparent check) - so DownscaleQuality applies exactly when a resize
+            // PdfRasterImage.Initialize's Transparent check) - so DownscaleQuality applies exactly when a resize
             // is actually happening, and leaves a full-resolution JPEG embed's own quality untouched.
             int? qualityOverride = _targetWidth.HasValue ? _document.Options.DownscaleQuality : null;
             using (MemoryStream memory = _image.AsJpeg(_targetWidth, _targetHeight, qualityOverride))

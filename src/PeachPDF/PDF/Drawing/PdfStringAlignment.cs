@@ -27,47 +27,30 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-
 namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
-    /// Specifies whether smoothing (or antialiasing) is applied to lines and curves
-    /// and the edges of filled areas.
+    /// Specifies the alignment of a text string relative to its layout rectangle.
     /// </summary>
-    [Flags]
-    internal enum XSmoothingMode  // same values as System.Drawing.Drawing2D.SmoothingMode
+    internal enum PdfStringAlignment  // Same values as System.Drawing.StringAlignment.
     {
-        // Not used in PDF rendering process.
+        /// <summary>
+        /// Specifies the text be aligned near the layout.
+        /// In a left-to-right layout, the near position is left. In a right-to-left layout, the near
+        /// position is right.
+        /// </summary>
+        Near = 0,
 
         /// <summary>
-        /// Specifies an invalid mode.
+        /// Specifies that text is aligned in the center of the layout rectangle.
         /// </summary>
-        Invalid = -1,
+        Center = 1,
 
         /// <summary>
-        /// Specifies the default mode.
+        /// Specifies that text is aligned far from the origin position of the layout rectangle.
+        /// In a left-to-right layout, the far position is right. In a right-to-left layout, the far
+        /// position is left. 
         /// </summary>
-        Default = 0,
-
-        /// <summary>
-        /// Specifies high speed, low quality rendering.
-        /// </summary>
-        HighSpeed = 1,
-
-        /// <summary>
-        /// Specifies high quality, low speed rendering.
-        /// </summary>
-        HighQuality = 2,
-
-        /// <summary>
-        /// Specifies no antialiasing.
-        /// </summary>
-        None = 3,
-
-        /// <summary>
-        /// Specifies antialiased rendering.
-        /// </summary>
-        AntiAlias = 4,
+        Far = 2,
     }
 }
