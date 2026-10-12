@@ -38,7 +38,7 @@ namespace PeachPDF.PDF.Advanced;
 /// <summary>
 /// Represents a CIDFont dictionary.
 /// </summary>
-internal class PdfCidFont : PdfFont
+internal sealed class PdfCidFont : PdfFont
 {
     public PdfCidFont(PdfDocument document)
         : base(document)

@@ -8,7 +8,7 @@ namespace PeachPDF.PDF.Advanced;
 /// Represents an object stream that contains compressed objects.
 /// PDF 1.5.
 /// </summary>
-internal class PdfObjectStream : PdfDictionary
+internal sealed class PdfObjectStream : PdfDictionary
 {
     // Reference: 3.4.6  Object Streams / Page 100
 

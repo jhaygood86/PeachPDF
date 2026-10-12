@@ -9,7 +9,7 @@ namespace PeachPDF.PDF.Advanced;
 /// <summary>
 /// Base class for all dictionaries that map resource names to objects.
 /// </summary>
-internal class PdfResourceMap : PdfDictionary //, IEnumerable
+internal sealed class PdfResourceMap : PdfDictionary //, IEnumerable
 {
     public PdfResourceMap()
     { }
@@ -18,7 +18,7 @@ internal class PdfResourceMap : PdfDictionary //, IEnumerable
         : base(document)
     { }
 
-    protected PdfResourceMap(PdfDictionary dict)
+    internal PdfResourceMap(PdfDictionary dict)
         : base(dict)
     { }
 

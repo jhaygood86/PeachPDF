@@ -8,7 +8,7 @@ namespace PeachPDF.PDF.Drawing;
 /// <summary>
 /// Represents a stack of PdfGraphicsStateToken and graphics container objects.
 /// </summary>
-internal class GraphicsStateStack
+internal sealed class GraphicsStateStack
 {
     public GraphicsStateStack(PdfGraphics gfx)
     {

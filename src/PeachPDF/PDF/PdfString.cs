@@ -59,7 +59,7 @@ internal enum PdfStringEncoding
 /// Internal wrapper for PdfStringEncoding.
 /// </summary>
 [Flags]
-enum PdfStringFlags
+internal enum PdfStringFlags
 {
     // ReSharper disable InconsistentNaming
     LatinOneByteEncoding = 0x00,

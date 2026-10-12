@@ -10,7 +10,7 @@ namespace PeachPDF.PDF.Drawing;
 /// <summary>
 /// Bunch of functions that do not have a better place.
 /// </summary>
-static class FontHelper
+internal static class FontHelper
 {
     /// <summary>
     /// Measure string directly from font data. The algorithm itself is

@@ -37,7 +37,7 @@ namespace PeachPDF.PDF.Drawing;
 /// Represents the internal state of an PdfGraphics object.
 /// Used when the state is saved and restored.
 /// </summary>
-internal class InternalGraphicsState
+internal sealed class InternalGraphicsState
 {
     public InternalGraphicsState(PdfGraphics gfx)
     {

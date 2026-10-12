@@ -5,7 +5,7 @@ namespace PeachPDF.PDF.Advanced;
 /// <summary>
 /// Represents a PDF soft mask.
 /// </summary>
-internal class PdfSoftMask : PdfDictionary
+internal sealed class PdfSoftMask : PdfDictionary
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="PdfXObject"/> class.

@@ -15,7 +15,7 @@ namespace PeachPDF.PDF;
 /// <summary>
 /// Represents a collection of outlines.
 /// </summary>
-internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
+internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
 {
     /// <summary>
     /// Can only be created as part of PdfOutline.

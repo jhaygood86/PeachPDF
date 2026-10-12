@@ -9,7 +9,7 @@ namespace PeachPDF.PDF.Internal;
 /// <summary>
 /// Helper functions for RGB and CMYK colors.
 /// </summary>
-static class ColorSpaceHelper
+internal static class ColorSpaceHelper
 {
     /// <summary>
     /// Checks whether a color mode and a color match.

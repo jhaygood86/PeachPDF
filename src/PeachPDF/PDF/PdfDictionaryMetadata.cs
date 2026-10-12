@@ -14,7 +14,7 @@ namespace PeachPDF.PDF;
 /// <summary>
 /// Contains meta information about all keys of a PDF dictionary.
 /// </summary>
-internal class PdfDictionaryMetadata
+internal sealed class PdfDictionaryMetadata
 {
     public PdfDictionaryMetadata([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type type)
     {

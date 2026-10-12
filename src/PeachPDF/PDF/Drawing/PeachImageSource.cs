@@ -15,7 +15,7 @@ namespace PeachPDF.PDF.Drawing;
 /// <summary>
 /// The default raster image source, backed by the PeachImage NuGet package.
 /// </summary>
-internal class PeachImageSource : ImageSource
+internal sealed class PeachImageSource : ImageSource
 {
     protected override IImageSource FromBinaryImpl(string name, Func<byte[]> imageSource, int? quality = 75) =>
         Decode(name, imageSource.Invoke(), quality ?? 75);

@@ -1,3 +1,5 @@
+using System;
+
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
 namespace PeachPDF.PDF.Annotations;
@@ -5,6 +7,7 @@ namespace PeachPDF.PDF.Annotations;
 /// <summary>
 /// Specifies the annotation flags.
 /// </summary>
+[Flags]
 internal enum PdfAnnotationFlags
 {
     /// <summary>

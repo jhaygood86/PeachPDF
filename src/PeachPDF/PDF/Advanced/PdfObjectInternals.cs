@@ -6,7 +6,7 @@ namespace PeachPDF.PDF.Advanced;
 /// Provides access to the internal PDF object data structures. This class prevents the public
 /// interfaces from pollution with to much internal functions.
 /// </summary>
-internal class PdfObjectInternals
+internal sealed class PdfObjectInternals
 {
     internal PdfObjectInternals(PdfObject obj)
     {

@@ -16,7 +16,7 @@ namespace PeachPDF.PDF.IO;
 /// <summary>
 /// Represents a writer for generation of PDF streams. 
 /// </summary>
-internal class PdfWriter
+internal sealed class PdfWriter
 {
     public PdfWriter(Stream pdfStream)
     {

@@ -48,7 +48,7 @@ internal enum PdfKeyType
 /// <summary>
 /// Summary description for PdfKey.
 /// </summary>
-internal class PdfKeyAttribute : Attribute
+internal sealed class PdfKeyAttribute : Attribute
 {
     public PdfKeyAttribute()
     { }
