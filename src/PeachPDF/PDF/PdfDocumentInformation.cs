@@ -1,208 +1,180 @@
-#region PDFsharp - A .NET library for processing PDF
-//
-// Authors:
-//   Stefan Lange
-//
-// Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
-//
-// http://www.PdfSharp.com
-// http://sourceforge.net/projects/pdfsharp
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the "Software"),
-// to deal in the Software without restriction, including without limitation
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
-// DEALINGS IN THE SOFTWARE.
-#endregion
+// Derived from PDFsharp (MIT) - see LICENSE.md
 
 using System;
 
-namespace PeachPDF.PDF
+namespace PeachPDF.PDF;
+
+/// <summary>
+/// Represents the PDF document information dictionary.
+/// </summary>
+internal sealed class PdfDocumentInformation : PdfDictionary
 {
     /// <summary>
-    /// Represents the PDF document information dictionary.
+    /// Initializes a new instance of the <see cref="PdfDocumentInformation"/> class.
     /// </summary>
-    internal sealed class PdfDocumentInformation : PdfDictionary
+    public PdfDocumentInformation(PdfDocument document)
+        : base(document)
+    { }
+
+    internal PdfDocumentInformation(PdfDictionary dict)
+        : base(dict)
+    { }
+
+    /// <summary>
+    /// Gets or sets the document's title.
+    /// </summary>
+    public string Title
+    {
+        get { return Elements.GetString(Keys.Title); }
+        set { Elements.SetString(Keys.Title, value, PdfStringEncoding.Unicode); }
+    }
+
+    /// <summary>
+    /// Gets or sets the name of the person who created the document.
+    /// </summary>
+    public string Author
+    {
+        get { return Elements.GetString(Keys.Author); }
+        set { Elements.SetString(Keys.Author, value, PdfStringEncoding.Unicode); }
+    }
+
+    /// <summary>
+    /// Gets or sets the name of the subject of the document.
+    /// </summary>
+    public string Subject
+    {
+        get { return Elements.GetString(Keys.Subject); }
+        set { Elements.SetString(Keys.Subject, value, PdfStringEncoding.Unicode); }
+    }
+
+    /// <summary>
+    /// Gets or sets keywords associated with the document.
+    /// </summary>
+    public string Keywords
+    {
+        get { return Elements.GetString(Keys.Keywords); }
+        set { Elements.SetString(Keys.Keywords, value, PdfStringEncoding.Unicode); }
+    }
+
+    /// <summary>
+    /// Gets or sets the name of the application (for example, MigraDoc) that created the document.
+    /// </summary>
+    public string Creator
+    {
+        get { return Elements.GetString(Keys.Creator); }
+        set { Elements.SetString(Keys.Creator, value, PdfStringEncoding.Unicode); }
+    }
+
+    /// <summary>
+    /// Gets or sets the producer application (for example, PDFsharp).
+    /// </summary>
+    public string Producer
+    {
+        get { return Elements.GetString(Keys.Producer); }
+        internal set { Elements.SetString(Keys.Producer, value, PdfStringEncoding.Unicode); }
+    }
+
+    /// <summary>
+    /// Gets or sets the creation date of the document.
+    /// Breaking Change: If the date is not set in a PDF file DateTime.MinValue is returned.
+    /// </summary>
+    public DateTime CreationDate
+    {
+        get { return Elements.GetDateTime(Keys.CreationDate, DateTime.MinValue); }
+        set { Elements.SetDateTime(Keys.CreationDate, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the modification date of the document.
+    /// Breaking Change: If the date is not set in a PDF file DateTime.MinValue is returned.
+    /// </summary>
+    public DateTime ModificationDate
+    {
+        get { return Elements.GetDateTime(Keys.ModDate, DateTime.MinValue); }
+        set { Elements.SetDateTime(Keys.ModDate, value); }
+    }
+
+    // TODO CustomProperties and meta data
+
+    /// <summary>
+    /// Predefined keys of this dictionary.
+    /// </summary>
+    internal sealed class Keys : KeysBase
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="PdfDocumentInformation"/> class.
+        /// (Optional; PDF 1.1) The document's title.
         /// </summary>
-        public PdfDocumentInformation(PdfDocument document)
-            : base(document)
-        { }
-
-        internal PdfDocumentInformation(PdfDictionary dict)
-            : base(dict)
-        { }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string Title = "/Title";
 
         /// <summary>
-        /// Gets or sets the document's title.
+        /// (Optional) The name of the person who created the document.
         /// </summary>
-        public string Title
-        {
-            get { return Elements.GetString(Keys.Title); }
-            set { Elements.SetString(Keys.Title, value, PdfStringEncoding.Unicode); }
-        }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string Author = "/Author";
 
         /// <summary>
-        /// Gets or sets the name of the person who created the document.
+        /// (Optional; PDF 1.1) The subject of the document.
         /// </summary>
-        public string Author
-        {
-            get { return Elements.GetString(Keys.Author); }
-            set { Elements.SetString(Keys.Author, value, PdfStringEncoding.Unicode); }
-        }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string Subject = "/Subject";
 
         /// <summary>
-        /// Gets or sets the name of the subject of the document.
+        /// (Optional; PDF 1.1) Keywords associated with the document.
         /// </summary>
-        public string Subject
-        {
-            get { return Elements.GetString(Keys.Subject); }
-            set { Elements.SetString(Keys.Subject, value, PdfStringEncoding.Unicode); }
-        }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string Keywords = "/Keywords";
 
         /// <summary>
-        /// Gets or sets keywords associated with the document.
+        /// (Optional) If the document was converted to PDF from another format,
+        /// the name of the application (for example, empira MigraDoc) that created the
+        /// original document from which it was converted.
         /// </summary>
-        public string Keywords
-        {
-            get { return Elements.GetString(Keys.Keywords); }
-            set { Elements.SetString(Keys.Keywords, value, PdfStringEncoding.Unicode); }
-        }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string Creator = "/Creator";
 
         /// <summary>
-        /// Gets or sets the name of the application (for example, MigraDoc) that created the document.
+        /// (Optional) If the document was converted to PDF from another format,
+        /// the name of the application (for example, this library) that converted it to PDF.
         /// </summary>
-        public string Creator
-        {
-            get { return Elements.GetString(Keys.Creator); }
-            set { Elements.SetString(Keys.Creator, value, PdfStringEncoding.Unicode); }
-        }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string Producer = "/Producer";
 
         /// <summary>
-        /// Gets or sets the producer application (for example, PDFsharp).
+        /// (Optional) The date and time the document was created, in human-readable form.
         /// </summary>
-        public string Producer
-        {
-            get { return Elements.GetString(Keys.Producer); }
-            internal set { Elements.SetString(Keys.Producer, value, PdfStringEncoding.Unicode); }
-        }
+        [PdfKey(PdfKeyType.Date | PdfKeyType.Optional)]
+        public const string CreationDate = "/CreationDate";
 
         /// <summary>
-        /// Gets or sets the creation date of the document.
-        /// Breaking Change: If the date is not set in a PDF file DateTime.MinValue is returned.
+        /// (Required if PieceInfo is present in the document catalog; otherwise optional; PDF 1.1)
+        /// The date and time the document was most recently modified, in human-readable form.
         /// </summary>
-        public DateTime CreationDate
-        {
-            get { return Elements.GetDateTime(Keys.CreationDate, DateTime.MinValue); }
-            set { Elements.SetDateTime(Keys.CreationDate, value); }
-        }
+        [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
+        public const string ModDate = "/ModDate";
 
         /// <summary>
-        /// Gets or sets the modification date of the document.
-        /// Breaking Change: If the date is not set in a PDF file DateTime.MinValue is returned.
+        /// (Optional; PDF 1.3) A name object indicating whether the document has been modified 
+        /// to include trapping information.
         /// </summary>
-        public DateTime ModificationDate
-        {
-            get { return Elements.GetDateTime(Keys.ModDate, DateTime.MinValue); }
-            set { Elements.SetDateTime(Keys.ModDate, value); }
-        }
-
-        // TODO CustomProperties and meta data
+        [PdfKey("1.3", PdfKeyType.Name | PdfKeyType.Optional)]
+        public const string Trapped = "/Trapped";
 
         /// <summary>
-        /// Predefined keys of this dictionary.
+        /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal sealed class Keys : KeysBase
+        public static PdfDictionaryMetadata Meta
         {
-            /// <summary>
-            /// (Optional; PDF 1.1) The document's title.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string Title = "/Title";
-
-            /// <summary>
-            /// (Optional) The name of the person who created the document.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string Author = "/Author";
-
-            /// <summary>
-            /// (Optional; PDF 1.1) The subject of the document.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string Subject = "/Subject";
-
-            /// <summary>
-            /// (Optional; PDF 1.1) Keywords associated with the document.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string Keywords = "/Keywords";
-
-            /// <summary>
-            /// (Optional) If the document was converted to PDF from another format,
-            /// the name of the application (for example, empira MigraDoc) that created the
-            /// original document from which it was converted.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string Creator = "/Creator";
-
-            /// <summary>
-            /// (Optional) If the document was converted to PDF from another format,
-            /// the name of the application (for example, this library) that converted it to PDF.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string Producer = "/Producer";
-
-            /// <summary>
-            /// (Optional) The date and time the document was created, in human-readable form.
-            /// </summary>
-            [PdfKey(PdfKeyType.Date | PdfKeyType.Optional)]
-            public const string CreationDate = "/CreationDate";
-
-            /// <summary>
-            /// (Required if PieceInfo is present in the document catalog; otherwise optional; PDF 1.1)
-            /// The date and time the document was most recently modified, in human-readable form.
-            /// </summary>
-            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
-            public const string ModDate = "/ModDate";
-
-            /// <summary>
-            /// (Optional; PDF 1.3) A name object indicating whether the document has been modified 
-            /// to include trapping information.
-            /// </summary>
-            [PdfKey("1.3", PdfKeyType.Name | PdfKeyType.Optional)]
-            public const string Trapped = "/Trapped";
-
-            /// <summary>
-            /// Gets the KeysMeta for these keys.
-            /// </summary>
-            public static PdfDictionaryMetadata Meta
-            {
-                get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
-            }
-            static PdfDictionaryMetadata _meta = null!;
+            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
         }
+        static PdfDictionaryMetadata _meta = null!;
+    }
 
-        /// <summary>
-        /// Gets the KeysMeta of this dictionary type.
-        /// </summary>
-        internal override PdfDictionaryMetadata Meta
-        {
-            get { return Keys.Meta; }
-        }
+    /// <summary>
+    /// Gets the KeysMeta of this dictionary type.
+    /// </summary>
+    internal override PdfDictionaryMetadata Meta
+    {
+        get { return Keys.Meta; }
     }
 }

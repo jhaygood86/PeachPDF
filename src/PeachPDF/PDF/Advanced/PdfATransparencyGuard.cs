@@ -2,97 +2,96 @@
 
 using System;
 
-namespace PeachPDF.PDF.Advanced
+namespace PeachPDF.PDF.Advanced;
+
+/// <summary>
+/// The single choke point every PDF-transparency-group-requiring construct (a semi-transparent
+/// fill/stroke, a gradient with an alpha color stop, an SVG <c>&lt;mask&gt;</c>, or CSS/SVG
+/// <c>opacity</c> below 1) passes through on its way into the content stream - see
+/// <see cref="Rendering.PdfGraphicsState"/> and <see cref="Rendering.PdfGraphicsRenderer"/>
+/// call sites. PDF/A-1 (ISO 19005-1) and PDF/X-1a/X-3 (ISO 15930-1/4/3/6) all forbid transparency
+/// groups entirely, and PeachPDF has no flattening engine, so rather than silently emit a
+/// non-conformant file, generation rejects the document outright the moment such a construct is
+/// about to be written. (The class name predates PDF/X support and stayed as-is rather than forcing
+/// a rename across every one of its call sites - it now covers both conformance families.)
+/// </summary>
+internal static class PdfATransparencyGuard
 {
     /// <summary>
-    /// The single choke point every PDF-transparency-group-requiring construct (a semi-transparent
-    /// fill/stroke, a gradient with an alpha color stop, an SVG <c>&lt;mask&gt;</c>, or CSS/SVG
-    /// <c>opacity</c> below 1) passes through on its way into the content stream - see
-    /// <see cref="Rendering.PdfGraphicsState"/> and <see cref="Rendering.PdfGraphicsRenderer"/>
-    /// call sites. PDF/A-1 (ISO 19005-1) and PDF/X-1a/X-3 (ISO 15930-1/4/3/6) all forbid transparency
-    /// groups entirely, and PeachPDF has no flattening engine, so rather than silently emit a
-    /// non-conformant file, generation rejects the document outright the moment such a construct is
-    /// about to be written. (The class name predates PDF/X support and stayed as-is rather than forcing
-    /// a rename across every one of its call sites - it now covers both conformance families.)
+    /// Throws a <see cref="PdfAConformanceException"/> if <paramref name="document"/>'s
+    /// <see cref="PdfAConformance"/> is <see cref="PdfAConformance.PdfA1B"/> or
+    /// <see cref="PdfAConformance.PdfA1A"/> (PDF/A-2 and PDF/A-3 are based on PDF 1.7 and permit
+    /// transparency groups, so no check applies to those or <see cref="PdfAConformance.None"/>), or a
+    /// <see cref="PdfXConformanceException"/> if <see cref="PdfDocumentOptions.PdfXConformance"/> is
+    /// <see cref="PeachPDF.PdfXConformance.X1a"/> or <see cref="PeachPDF.PdfXConformance.X3"/>
+    /// (<see cref="PeachPDF.PdfXConformance.X4"/> permits transparency groups, so no check applies to
+    /// that or <see cref="PeachPDF.PdfXConformance.None"/>).
+    /// Deliberately independent of whether a page is currently attached to the calling renderer
+    /// (nested tile content - e.g. an SVG <c>&lt;pattern&gt;</c> tile - reaches this too), unlike
+    /// the separate <c>TransparencyUsed</c> page-flag bookkeeping at each call site.
     /// </summary>
-    internal static class PdfATransparencyGuard
+    internal static void RequireAllowed(PdfDocument document, string featureDescription)
     {
-        /// <summary>
-        /// Throws a <see cref="PdfAConformanceException"/> if <paramref name="document"/>'s
-        /// <see cref="PdfAConformance"/> is <see cref="PdfAConformance.PdfA1B"/> or
-        /// <see cref="PdfAConformance.PdfA1A"/> (PDF/A-2 and PDF/A-3 are based on PDF 1.7 and permit
-        /// transparency groups, so no check applies to those or <see cref="PdfAConformance.None"/>), or a
-        /// <see cref="PdfXConformanceException"/> if <see cref="PdfDocumentOptions.PdfXConformance"/> is
-        /// <see cref="PeachPDF.PdfXConformance.X1a"/> or <see cref="PeachPDF.PdfXConformance.X3"/>
-        /// (<see cref="PeachPDF.PdfXConformance.X4"/> permits transparency groups, so no check applies to
-        /// that or <see cref="PeachPDF.PdfXConformance.None"/>).
-        /// Deliberately independent of whether a page is currently attached to the calling renderer
-        /// (nested tile content - e.g. an SVG <c>&lt;pattern&gt;</c> tile - reaches this too), unlike
-        /// the separate <c>TransparencyUsed</c> page-flag bookkeeping at each call site.
-        /// </summary>
-        internal static void RequireAllowed(PdfDocument document, string featureDescription)
+        // A probe (see PeachPDF.PdfBackend.TransparencyProbe) only wants to know whether something needs transparency.
+        if (PeachPDF.PdfBackend.TransparencyProbe.Observe())
+            return;
+
+        var conformance = document.Options.PdfAConformance;
+        if (conformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A)
         {
-            // A probe (see PeachPDF.PdfBackend.TransparencyProbe) only wants to know whether something needs transparency.
-            if (PeachPDF.PdfBackend.TransparencyProbe.Observe())
-                return;
-
-            var conformance = document.Options.PdfAConformance;
-            if (conformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A)
-            {
-                throw new PdfAConformanceException(
-                    $"{featureDescription} requires a PDF transparency group, which PDF/A-1 forbids. " +
-                    "Remove this feature from the document, set PdfGenerateConfig.TransparencyPolicy to Flatten, or target " +
-                    "PdfAConformance.PdfA2B/PdfA2U/PdfA2A or PdfA3B/PdfA3U/PdfA3A instead - PDF/A-2 and PDF/A-3 both permit transparency groups.");
-            }
-
-            var xConformance = document.Options.PdfXConformance;
-            if (xConformance is PdfXConformance.X1a or PdfXConformance.X3)
-            {
-                throw new PdfXConformanceException(
-                    $"{featureDescription} requires a PDF transparency group, which PDF/X-1a and PDF/X-3 " +
-                    "forbid. Remove this feature from the document, set PdfGenerateConfig.TransparencyPolicy to Flatten, or " +
-                    "target PdfXConformance.X4 instead - PDF/X-4 permits transparency groups.");
-            }
+            throw new PdfAConformanceException(
+                $"{featureDescription} requires a PDF transparency group, which PDF/A-1 forbids. " +
+                "Remove this feature from the document, set PdfGenerateConfig.TransparencyPolicy to Flatten, or target " +
+                "PdfAConformance.PdfA2B/PdfA2U/PdfA2A or PdfA3B/PdfA3U/PdfA3A instead - PDF/A-2 and PDF/A-3 both permit transparency groups.");
         }
 
-        /// <summary>
-        /// Same as <see cref="RequireAllowed(PdfDocument, string)"/>, and additionally marks
-        /// <paramref name="page"/> as needing a page-level <c>/Group</c> (<see cref="PdfPage.TransparencyUsed"/>)
-        /// once the check passes. This is the one call every page-bound transparency-group-requiring
-        /// call site should make - pairing the reject-check with the page flag in a single call means a
-        /// future call site literally cannot set one without the other, unlike the two-line
-        /// "check-then-set" pattern this replaces. <paramref name="page"/> may be null (e.g. content
-        /// being rendered into an offscreen tile with no page of its own yet) - the PDF/A-1 check still
-        /// runs unconditionally; only the page-flag side is skipped.
-        /// </summary>
-        internal static void RequireAllowed(PdfDocument document, PdfPage? page, string featureDescription)
+        var xConformance = document.Options.PdfXConformance;
+        if (xConformance is PdfXConformance.X1a or PdfXConformance.X3)
         {
-            RequireAllowed(document, featureDescription);
-            if (page != null)
-                page.TransparencyUsed = true;
+            throw new PdfXConformanceException(
+                $"{featureDescription} requires a PDF transparency group, which PDF/X-1a and PDF/X-3 " +
+                "forbid. Remove this feature from the document, set PdfGenerateConfig.TransparencyPolicy to Flatten, or " +
+                "target PdfXConformance.X4 instead - PDF/X-4 permits transparency groups.");
         }
     }
 
     /// <summary>
-    /// Common base for <see cref="PdfAConformanceException"/> and <see cref="PdfXConformanceException"/> -
-    /// lets <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/>'s generic paint-error wrapping catch
-    /// both conformance families with one <c>catch</c> block. A plain <see cref="InvalidOperationException"/>
-    /// is still the type external callers should catch (both subclasses work polymorphically as one).
+    /// Same as <see cref="RequireAllowed(PdfDocument, string)"/>, and additionally marks
+    /// <paramref name="page"/> as needing a page-level <c>/Group</c> (<see cref="PdfPage.TransparencyUsed"/>)
+    /// once the check passes. This is the one call every page-bound transparency-group-requiring
+    /// call site should make - pairing the reject-check with the page flag in a single call means a
+    /// future call site literally cannot set one without the other, unlike the two-line
+    /// "check-then-set" pattern this replaces. <paramref name="page"/> may be null (e.g. content
+    /// being rendered into an offscreen tile with no page of its own yet) - the PDF/A-1 check still
+    /// runs unconditionally; only the page-flag side is skipped.
     /// </summary>
-    internal abstract class PdfConformanceException(string message) : InvalidOperationException(message);
-
-    /// <summary>
-    /// Thrown for any deliberate PDF/A conformance rejection raised deep in the paint pipeline - e.g.
-    /// <see cref="PdfATransparencyGuard"/> (a PDF/A-1-forbidden transparency group) or
-    /// <see cref="Rendering.PdfGraphicsRenderer"/>'s missing-glyph-coverage check (a
-    /// <c>.notdef</c> reference every PDF/A part forbids).
-    /// </summary>
-    internal sealed class PdfAConformanceException(string message) : PdfConformanceException(message);
-
-    /// <summary>
-    /// Thrown for any deliberate PDF/X conformance rejection raised deep in the paint pipeline - e.g.
-    /// <see cref="PdfATransparencyGuard"/> (a PDF/X-1a/X-3-forbidden transparency group) or
-    /// <see cref="PdfXColorSpaceGuard"/> (a PDF/X-1a-forbidden chromatic RGB color).
-    /// </summary>
-    internal sealed class PdfXConformanceException(string message) : PdfConformanceException(message);
+    internal static void RequireAllowed(PdfDocument document, PdfPage? page, string featureDescription)
+    {
+        RequireAllowed(document, featureDescription);
+        if (page != null)
+            page.TransparencyUsed = true;
+    }
 }
+
+/// <summary>
+/// Common base for <see cref="PdfAConformanceException"/> and <see cref="PdfXConformanceException"/> -
+/// lets <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/>'s generic paint-error wrapping catch
+/// both conformance families with one <c>catch</c> block. A plain <see cref="InvalidOperationException"/>
+/// is still the type external callers should catch (both subclasses work polymorphically as one).
+/// </summary>
+internal abstract class PdfConformanceException(string message) : InvalidOperationException(message);
+
+/// <summary>
+/// Thrown for any deliberate PDF/A conformance rejection raised deep in the paint pipeline - e.g.
+/// <see cref="PdfATransparencyGuard"/> (a PDF/A-1-forbidden transparency group) or
+/// <see cref="Rendering.PdfGraphicsRenderer"/>'s missing-glyph-coverage check (a
+/// <c>.notdef</c> reference every PDF/A part forbids).
+/// </summary>
+internal sealed class PdfAConformanceException(string message) : PdfConformanceException(message);
+
+/// <summary>
+/// Thrown for any deliberate PDF/X conformance rejection raised deep in the paint pipeline - e.g.
+/// <see cref="PdfATransparencyGuard"/> (a PDF/X-1a/X-3-forbidden transparency group) or
+/// <see cref="PdfXColorSpaceGuard"/> (a PDF/X-1a-forbidden chromatic RGB color).
+/// </summary>
+internal sealed class PdfXConformanceException(string message) : PdfConformanceException(message);

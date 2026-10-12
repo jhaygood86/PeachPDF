@@ -1,31 +1,4 @@
-#region PDFsharp - A .NET library for processing PDF
-//
-// Authors:
-//   Stefan Lange
-//
-// Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
-//
-// https://www.pdfsharp.com/
-// http://sourceforge.net/projects/pdfsharp
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the "Software"),
-// to deal in the Software without restriction, including without limitation
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
-// DEALINGS IN THE SOFTWARE.
-#endregion
+// Derived from PDFsharp (MIT) - see LICENSE.md
 
 #nullable disable warnings
 
@@ -35,125 +8,124 @@ using PeachPDF.PDF.IO;
 using System;
 using System.Diagnostics;
 
-namespace PeachPDF.PDF.Advanced
+namespace PeachPDF.PDF.Advanced;
+
+/// <summary>
+/// Represents the content of a page. PDFsharp supports only one content stream per page.
+/// </summary>
+internal sealed class PdfContent : PdfDictionary
 {
     /// <summary>
-    /// Represents the content of a page. PDFsharp supports only one content stream per page.
+    /// Initializes a new instance of the <see cref="PdfContent"/> class.
     /// </summary>
-    internal sealed class PdfContent : PdfDictionary
+    public PdfContent(PdfDocument document)
+        : base(document)
+    { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfContent"/> class.
+    /// </summary>
+    internal PdfContent(PdfPage page)
+        : base(page != null ? page.Owner : null)
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PdfContent"/> class.
-        /// </summary>
-        public PdfContent(PdfDocument document)
-            : base(document)
-        { }
+        //_pageContent = new PageContent(page);
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PdfContent"/> class.
-        /// </summary>
-        internal PdfContent(PdfPage page)
-            : base(page != null ? page.Owner : null)
+    /// <summary>
+    /// Sets a value indicating whether the content is compressed with the ZIP algorithm.
+    /// </summary>
+    public bool Compressed
+    {
+        set
         {
-            //_pageContent = new PageContent(page);
-        }
-
-        /// <summary>
-        /// Sets a value indicating whether the content is compressed with the ZIP algorithm.
-        /// </summary>
-        public bool Compressed
-        {
-            set
+            if (value)
             {
-                if (value)
+                PdfItem filter = Elements[PdfStream.Keys.Filter];
+                if (filter == null)
                 {
-                    PdfItem filter = Elements[PdfStream.Keys.Filter];
-                    if (filter == null)
-                    {
-                        byte[] bytes = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
-                        Stream.Value = bytes;
-                        Elements.SetInteger(PdfStream.Keys.Length, Stream.Length);
-                        Elements.SetName(PdfStream.Keys.Filter, filterName);
-                    }
+                    byte[] bytes = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
+                    Stream.Value = bytes;
+                    Elements.SetInteger(PdfStream.Keys.Length, Stream.Length);
+                    Elements.SetName(PdfStream.Keys.Filter, filterName);
                 }
             }
         }
+    }
 
-        /// <summary>
-        /// Surround content with q/Q operations if necessary.
-        /// </summary>
-        internal void PreserveGraphicsState()
+    /// <summary>
+    /// Surround content with q/Q operations if necessary.
+    /// </summary>
+    internal void PreserveGraphicsState()
+    {
+        // If a content stream is touched by PDFsharp it is typically because graphical operations are
+        // prepended or appended. Some nasty PDF tools does not preserve the graphical state correctly.
+        // Therefore we try to relieve the problem by surrounding the content stream with push/restore 
+        // graphic state operation.
+        if (Stream != null)
         {
-            // If a content stream is touched by PDFsharp it is typically because graphical operations are
-            // prepended or appended. Some nasty PDF tools does not preserve the graphical state correctly.
-            // Therefore we try to relieve the problem by surrounding the content stream with push/restore 
-            // graphic state operation.
-            if (Stream != null)
+            byte[] value = Stream.Value;
+            int length = value.Length;
+            if (length != 0 && ((value[0] != (byte)'q' || value[1] != (byte)'\n')))
             {
-                byte[] value = Stream.Value;
-                int length = value.Length;
-                if (length != 0 && ((value[0] != (byte)'q' || value[1] != (byte)'\n')))
-                {
-                    byte[] newValue = new byte[length + 2 + 3];
-                    newValue[0] = (byte)'q';
-                    newValue[1] = (byte)'\n';
-                    Array.Copy(value, 0, newValue, 2, length);
-                    newValue[length + 2] = (byte)' ';
-                    newValue[length + 3] = (byte)'Q';
-                    newValue[length + 4] = (byte)'\n';
-                    Stream.Value = newValue;
-                    Elements.SetInteger("/Length", Stream.Length);
-                }
-            }
-        }
-
-        internal override void WriteObject(PdfWriter writer)
-        {
-            if (_pdfRenderer != null)
-            {
-                // GetContent also disposes the underlying PdfGraphics object, if one exists
-                //Stream = new PdfStream(PdfEncoders.LatinOneByteEncoding.GetBytes(pdfRenderer.GetContent()), this);
-                _pdfRenderer.Close();
-                Debug.Assert(_pdfRenderer == null);
-            }
-
-            if (Stream != null)
-            {
-                //if (Owner.Options.CompressContentStreams)
-                if (Owner.Options.CompressContentStreams && Elements.GetName("/Filter").Length == 0)
-                {
-                    Stream.Value = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
-                    Elements.SetName("/Filter", filterName);
-                }
+                byte[] newValue = new byte[length + 2 + 3];
+                newValue[0] = (byte)'q';
+                newValue[1] = (byte)'\n';
+                Array.Copy(value, 0, newValue, 2, length);
+                newValue[length + 2] = (byte)' ';
+                newValue[length + 3] = (byte)'Q';
+                newValue[length + 4] = (byte)'\n';
+                Stream.Value = newValue;
                 Elements.SetInteger("/Length", Stream.Length);
             }
+        }
+    }
 
-            base.WriteObject(writer);
+    internal override void WriteObject(PdfWriter writer)
+    {
+        if (_pdfRenderer != null)
+        {
+            // GetContent also disposes the underlying PdfGraphics object, if one exists
+            //Stream = new PdfStream(PdfEncoders.LatinOneByteEncoding.GetBytes(pdfRenderer.GetContent()), this);
+            _pdfRenderer.Close();
+            Debug.Assert(_pdfRenderer == null);
         }
 
-        internal PdfGraphicsRenderer _pdfRenderer = null!;
-
-        /// <summary>
-        /// Predefined keys of this dictionary.
-        /// </summary>
-        internal sealed class Keys : PdfStream.Keys
+        if (Stream != null)
         {
-            /// <summary>
-            /// Gets the KeysMeta for these keys.
-            /// </summary>
-            public static PdfDictionaryMetadata Meta
+            //if (Owner.Options.CompressContentStreams)
+            if (Owner.Options.CompressContentStreams && Elements.GetName("/Filter").Length == 0)
             {
-                get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
+                Stream.Value = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);
+                Elements.SetName("/Filter", filterName);
             }
-            static PdfDictionaryMetadata _meta = null!;
+            Elements.SetInteger("/Length", Stream.Length);
         }
 
+        base.WriteObject(writer);
+    }
+
+    internal PdfGraphicsRenderer _pdfRenderer = null!;
+
+    /// <summary>
+    /// Predefined keys of this dictionary.
+    /// </summary>
+    internal sealed class Keys : PdfStream.Keys
+    {
         /// <summary>
-        /// Gets the KeysMeta of this dictionary type.
+        /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal override PdfDictionaryMetadata Meta
+        public static PdfDictionaryMetadata Meta
         {
-            get { return Keys.Meta; }
+            get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
         }
+        static PdfDictionaryMetadata _meta = null!;
+    }
+
+    /// <summary>
+    /// Gets the KeysMeta of this dictionary type.
+    /// </summary>
+    internal override PdfDictionaryMetadata Meta
+    {
+        get { return Keys.Meta; }
     }
 }

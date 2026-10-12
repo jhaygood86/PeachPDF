@@ -10,1086 +10,1085 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace PeachPDF.PDF.Drawing
+namespace PeachPDF.PDF.Drawing;
+
+/// <summary>
+/// The default raster image source, backed by the PeachImage NuGet package.
+/// </summary>
+internal class PeachImageSource : ImageSource
 {
-    /// <summary>
-    /// The default raster image source, backed by the PeachImage NuGet package.
-    /// </summary>
-    internal class PeachImageSource : ImageSource
+    protected override IImageSource FromBinaryImpl(string name, Func<byte[]> imageSource, int? quality = 75) =>
+        Decode(name, imageSource.Invoke(), quality ?? 75);
+
+    protected override IImageSource FromFileImpl(string path, int? quality = 75) =>
+        FromBinaryImpl(path, () => File.ReadAllBytes(path), quality);
+
+    protected override IImageSource FromStreamImpl(string name, Func<Stream> imageStream, int? quality = 75)
     {
-        protected override IImageSource FromBinaryImpl(string name, Func<byte[]> imageSource, int? quality = 75) =>
-            Decode(name, imageSource.Invoke(), quality ?? 75);
+        using var stream = imageStream.Invoke();
 
-        protected override IImageSource FromFileImpl(string path, int? quality = 75) =>
-            FromBinaryImpl(path, () => File.ReadAllBytes(path), quality);
-
-        protected override IImageSource FromStreamImpl(string name, Func<Stream> imageStream, int? quality = 75)
+        // The sole production caller (PdfRenderContext.ImageFromStreamInt) already hands in a
+        // freshly-positioned MemoryStream - reuse its buffer directly (ToArray()) rather than paying
+        // for a second full copy via CopyTo. Anything else (a non-seekable network stream, a stream
+        // already partway read) falls back to the original copy-into-a-fresh-buffer path.
+        if (stream is MemoryStream existing && existing.Position == 0)
         {
-            using var stream = imageStream.Invoke();
-
-            // The sole production caller (PdfRenderContext.ImageFromStreamInt) already hands in a
-            // freshly-positioned MemoryStream - reuse its buffer directly (ToArray()) rather than paying
-            // for a second full copy via CopyTo. Anything else (a non-seekable network stream, a stream
-            // already partway read) falls back to the original copy-into-a-fresh-buffer path.
-            if (stream is MemoryStream existing && existing.Position == 0)
-            {
-                return Decode(name, existing.ToArray(), quality ?? 75);
-            }
-
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            return Decode(name, copy.ToArray(), quality ?? 75);
+            return Decode(name, existing.ToArray(), quality ?? 75);
         }
 
-        // PeachImage 0.2.1+ guarantees Image.Load(stream, options) converts to TargetPixelFormat in one
-        // hop for every native PixelFormat any of its decoders can produce (Gray8/Rgb24/Rgba32/Cmyk32/
-        // Gray16/Rgb48/Rgba64) - see Rgba32ConversionCompletenessTests.cs in PeachImage's own repo. See
-        // DecoderOptions.TargetPixelFormat's own doc remarks for why a plain DecoderOptions (rather than
-        // a per-format subtype) is correct here even though Image.Load auto-detects the format from the
-        // stream's content, not from anything this class knows up front. Only ever used for a non-CMYK
-        // source - see Decode below, which routes a CMYK32 source away from this entirely (issue #1085:
-        // a CMYK source is never forced through Rgba32, since that naive conversion destroys print
-        // separations with no color management at all).
-        private static readonly DecoderOptions Rgba32DecoderOptions = new() { TargetPixelFormat = PixelFormat.Rgba32 };
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return Decode(name, copy.ToArray(), quality ?? 75);
+    }
 
-        private static IImageSource Decode(string name, byte[] bytes, int quality)
+    // PeachImage 0.2.1+ guarantees Image.Load(stream, options) converts to TargetPixelFormat in one
+    // hop for every native PixelFormat any of its decoders can produce (Gray8/Rgb24/Rgba32/Cmyk32/
+    // Gray16/Rgb48/Rgba64) - see Rgba32ConversionCompletenessTests.cs in PeachImage's own repo. See
+    // DecoderOptions.TargetPixelFormat's own doc remarks for why a plain DecoderOptions (rather than
+    // a per-format subtype) is correct here even though Image.Load auto-detects the format from the
+    // stream's content, not from anything this class knows up front. Only ever used for a non-CMYK
+    // source - see Decode below, which routes a CMYK32 source away from this entirely (issue #1085:
+    // a CMYK source is never forced through Rgba32, since that naive conversion destroys print
+    // separations with no color management at all).
+    private static readonly DecoderOptions Rgba32DecoderOptions = new() { TargetPixelFormat = PixelFormat.Rgba32 };
+
+    private static IImageSource Decode(string name, byte[] bytes, int quality)
+    {
+        var source = DecodeCore(name, bytes, quality, out var info);
+
+        // PeachImage never applies a file's stored orientation (JPEG/TIFF Exif, PNG eXIf, WebP EXIF, AVIF irot/imir,
+        // the JPEG XL header): pixels and dimensions are as stored and ImageInfo.Orientation reports it (EXIF values
+        // 1-8), which is surfaced for image-orientation and applied through the draw matrix, so pass-through
+        // embeds stay byte for byte. JPEG XL sets its own (DecodeJxl): a recompressed JPEG re-enters Decode as its
+        // rebuilt JPEG bytes and is oriented by that inner call from the JPEG's own Exif.
+        if (info.FormatName != "jxl" && info.Orientation != PeachImage.ImageOrientation.Normal)
         {
-            var source = DecodeCore(name, bytes, quality, out var info);
-
-            // PeachImage never applies a file's stored orientation (JPEG/TIFF Exif, PNG eXIf, WebP EXIF, AVIF irot/imir,
-            // the JPEG XL header): pixels and dimensions are as stored and ImageInfo.Orientation reports it (EXIF values
-            // 1-8), which is surfaced for image-orientation and applied through the draw matrix, so pass-through
-            // embeds stay byte for byte. JPEG XL sets its own (DecodeJxl): a recompressed JPEG re-enters Decode as its
-            // rebuilt JPEG bytes and is oriented by that inner call from the JPEG's own Exif.
-            if (info.FormatName != "jxl" && info.Orientation != PeachImage.ImageOrientation.Normal)
-            {
-                SetOrientation(source, (int)info.Orientation);
-            }
-
-            return source;
-        }
-
-        private static void SetOrientation(IImageSource source, int orientation)
-        {
-            switch (source)
-            {
-                case PeachImageSourceImpl impl: impl.ExifOrientation = orientation; break;
-                case PeachPngPassthroughImageSourceImpl png: png.ExifOrientation = orientation; break;
-                case PeachCmykImageSourceImpl cmyk: cmyk.ExifOrientation = orientation; break;
-            }
-        }
-
-        private static IImageSource DecodeCore(string name, byte[] bytes, int quality, out ImageInfo info)
-        {
-            info = default;
-            try
-            {
-                var imageInfo = Image.Identify(new MemoryStream(bytes));
-                info = imageInfo;
-
-                if (imageInfo.FormatName == "jxl")
-                {
-                    return DecodeJxl(name, bytes, quality, imageInfo);
-                }
-
-                if (imageInfo.PixelFormat == PixelFormat.Cmyk32)
-                {
-                    return DecodeCmyk(name, bytes, imageInfo);
-                }
-
-                if (imageInfo.FormatName == "jpeg")
-                {
-                    return DecodeRgbOrGrayJpeg(name, bytes, quality);
-                }
-
-                if (imageInfo.FormatName == "png")
-                {
-                    return DecodePng(name, bytes, quality);
-                }
-
-                if (imageInfo.FormatName == "gif")
-                {
-                    return DecodeGif(name, bytes, quality);
-                }
-
-                return DecodeGenericRaster(name, bytes, quality, imageInfo);
-            }
-            catch (ImageFormatException ex)
-            {
-                // ImageLoadHandler.LoadImageFromStream and SvgTreeBuilder.DecodeRasterImage both catch
-                // exactly InvalidOperationException to treat a decode failure as non-fatal (leaves the
-                // image unresolved rather than aborting the render). This normalizes PeachImage's own
-                // decode failures (unrecognized/unsupported format - e.g. TGA/PSD/HDR, which PeachImage
-                // doesn't implement, see .claude/accepted-gaps/tga-psd-hdr-unsupported.md - or malformed
-                // bytes) to that contract, rather than letting it crash the whole render.
-                throw new InvalidOperationException(ex.Message, ex);
-            }
-        }
-
-        /// <summary>
-        /// Routes a JPEG XL source. A file made by losslessly recompressing a JPEG carries the data to
-        /// rebuild that exact JPEG (<see cref="JxlJpegReconstruction"/>), so it is turned back into the
-        /// original JPEG bytes without decoding any pixels and handed to <see cref="Decode"/> again as a
-        /// plain JPEG - which means every JPEG rule (CMYK/YCCK and ICC-tagged RGB/gray byte-for-byte
-        /// <c>/DCTDecode</c> pass-through, re-encode otherwise) applies unchanged and there is no second
-        /// pass-through implementation. Any other JPEG XL file decodes to <see cref="PixelFormat.Rgba32"/>
-        /// like the other raster formats; a CMYK one (which PeachImage returns as <c>Cmyk32</c> with its
-        /// profile attached) is color-managed to sRGB first, since PDF has no pass-through filter for it.
-        /// </summary>
-        private static IImageSource DecodeJxl(string name, byte[] bytes, int quality, ImageInfo info)
-        {
-            if (JxlJpegReconstruction.TryReconstructJpeg(new MemoryStream(bytes), out var jpeg))
-            {
-                return WrapJxlPassthrough(Decode(name, jpeg, quality), bytes, info);
-            }
-
-            if (info.PixelFormat == PixelFormat.Cmyk32)
-            {
-                using var cmyk = Image.Load(new MemoryStream(bytes));
-                var srgb = cmyk.ConvertToSrgb();
-                var rgba = srgb.PixelFormat == PixelFormat.Rgba32 ? srgb : srgb.ConvertTo(PixelFormat.Rgba32);
-                var cmykSource = new PeachImageSourceImpl(name, rgba, quality, rgba.HasAlpha, jpegPassthrough: null,
-                    isLosslessSourceFormat: false, rgbIccProfile: null);
-                SetOrientation(cmykSource, (int)info.Orientation);
-                return cmykSource;
-            }
-
-            var source = DecodeGenericRaster(name, bytes, quality, info);
             SetOrientation(source, (int)info.Orientation);
-            return WrapJxlPassthrough(source, bytes, info);
         }
 
-        /// <summary>
-        /// Attaches the original JPEG XL bytes to <paramref name="decoded"/> when they can be embedded as-is: no alpha
-        /// (JXL alpha would need a separate <c>/SMask</c> and PeachImage has no JXL encoder to split it), no animation,
-        /// an upright orientation (a PDF image cannot rotate itself), and a plain 8/16-bit gray or RGB sample format.
-        /// The raster fallback stays fully intact underneath.
-        /// </summary>
-        private static IImageSource WrapJxlPassthrough(IImageSource decoded, byte[] bytes, ImageInfo info)
+        return source;
+    }
+
+    private static void SetOrientation(IImageSource source, int orientation)
+    {
+        switch (source)
         {
-            if (info.HasAlpha || info.IsAnimated || info.Orientation != ImageOrientation.Normal
-                || decoded.Transparent || decoded.IsCmyk || decoded.ExifOrientation != 1)
+            case PeachImageSourceImpl impl: impl.ExifOrientation = orientation; break;
+            case PeachPngPassthroughImageSourceImpl png: png.ExifOrientation = orientation; break;
+            case PeachCmykImageSourceImpl cmyk: cmyk.ExifOrientation = orientation; break;
+        }
+    }
+
+    private static IImageSource DecodeCore(string name, byte[] bytes, int quality, out ImageInfo info)
+    {
+        info = default;
+        try
+        {
+            var imageInfo = Image.Identify(new MemoryStream(bytes));
+            info = imageInfo;
+
+            if (imageInfo.FormatName == "jxl")
             {
-                return decoded;
+                return DecodeJxl(name, bytes, quality, imageInfo);
             }
 
-            var (colorSpace, bits) = info.PixelFormat switch
+            if (imageInfo.PixelFormat == PixelFormat.Cmyk32)
             {
-                PixelFormat.Gray8 => (JpegPassthroughColorSpace.Gray, 8),
-                PixelFormat.Gray16 => (JpegPassthroughColorSpace.Gray, 16),
-                PixelFormat.Rgb24 => (JpegPassthroughColorSpace.Rgb, 8),
-                PixelFormat.Rgb48 => (JpegPassthroughColorSpace.Rgb, 16),
-                _ => (JpegPassthroughColorSpace.Cmyk, 0),
-            };
-
-            if (bits == 0)
-            {
-                return decoded;
+                return DecodeCmyk(name, bytes, imageInfo);
             }
 
-            return new PeachJxlPassthroughImageSourceImpl(decoded, new JxlPassthroughData
+            if (imageInfo.FormatName == "jpeg")
+            {
+                return DecodeRgbOrGrayJpeg(name, bytes, quality);
+            }
+
+            if (imageInfo.FormatName == "png")
+            {
+                return DecodePng(name, bytes, quality);
+            }
+
+            if (imageInfo.FormatName == "gif")
+            {
+                return DecodeGif(name, bytes, quality);
+            }
+
+            return DecodeGenericRaster(name, bytes, quality, imageInfo);
+        }
+        catch (ImageFormatException ex)
+        {
+            // ImageLoadHandler.LoadImageFromStream and SvgTreeBuilder.DecodeRasterImage both catch
+            // exactly InvalidOperationException to treat a decode failure as non-fatal (leaves the
+            // image unresolved rather than aborting the render). This normalizes PeachImage's own
+            // decode failures (unrecognized/unsupported format - e.g. TGA/PSD/HDR, which PeachImage
+            // doesn't implement, see .claude/accepted-gaps/tga-psd-hdr-unsupported.md - or malformed
+            // bytes) to that contract, rather than letting it crash the whole render.
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+    }
+
+    /// <summary>
+    /// Routes a JPEG XL source. A file made by losslessly recompressing a JPEG carries the data to
+    /// rebuild that exact JPEG (<see cref="JxlJpegReconstruction"/>), so it is turned back into the
+    /// original JPEG bytes without decoding any pixels and handed to <see cref="Decode"/> again as a
+    /// plain JPEG - which means every JPEG rule (CMYK/YCCK and ICC-tagged RGB/gray byte-for-byte
+    /// <c>/DCTDecode</c> pass-through, re-encode otherwise) applies unchanged and there is no second
+    /// pass-through implementation. Any other JPEG XL file decodes to <see cref="PixelFormat.Rgba32"/>
+    /// like the other raster formats; a CMYK one (which PeachImage returns as <c>Cmyk32</c> with its
+    /// profile attached) is color-managed to sRGB first, since PDF has no pass-through filter for it.
+    /// </summary>
+    private static IImageSource DecodeJxl(string name, byte[] bytes, int quality, ImageInfo info)
+    {
+        if (JxlJpegReconstruction.TryReconstructJpeg(new MemoryStream(bytes), out var jpeg))
+        {
+            return WrapJxlPassthrough(Decode(name, jpeg, quality), bytes, info);
+        }
+
+        if (info.PixelFormat == PixelFormat.Cmyk32)
+        {
+            using var cmyk = Image.Load(new MemoryStream(bytes));
+            var srgb = cmyk.ConvertToSrgb();
+            var rgba = srgb.PixelFormat == PixelFormat.Rgba32 ? srgb : srgb.ConvertTo(PixelFormat.Rgba32);
+            var cmykSource = new PeachImageSourceImpl(name, rgba, quality, rgba.HasAlpha, jpegPassthrough: null,
+                isLosslessSourceFormat: false, rgbIccProfile: null);
+            SetOrientation(cmykSource, (int)info.Orientation);
+            return cmykSource;
+        }
+
+        var source = DecodeGenericRaster(name, bytes, quality, info);
+        SetOrientation(source, (int)info.Orientation);
+        return WrapJxlPassthrough(source, bytes, info);
+    }
+
+    /// <summary>
+    /// Attaches the original JPEG XL bytes to <paramref name="decoded"/> when they can be embedded as-is: no alpha
+    /// (JXL alpha would need a separate <c>/SMask</c> and PeachImage has no JXL encoder to split it), no animation,
+    /// an upright orientation (a PDF image cannot rotate itself), and a plain 8/16-bit gray or RGB sample format.
+    /// The raster fallback stays fully intact underneath.
+    /// </summary>
+    private static IImageSource WrapJxlPassthrough(IImageSource decoded, byte[] bytes, ImageInfo info)
+    {
+        if (info.HasAlpha || info.IsAnimated || info.Orientation != ImageOrientation.Normal
+            || decoded.Transparent || decoded.IsCmyk || decoded.ExifOrientation != 1)
+        {
+            return decoded;
+        }
+
+        var (colorSpace, bits) = info.PixelFormat switch
+        {
+            PixelFormat.Gray8 => (JpegPassthroughColorSpace.Gray, 8),
+            PixelFormat.Gray16 => (JpegPassthroughColorSpace.Gray, 16),
+            PixelFormat.Rgb24 => (JpegPassthroughColorSpace.Rgb, 8),
+            PixelFormat.Rgb48 => (JpegPassthroughColorSpace.Rgb, 16),
+            _ => (JpegPassthroughColorSpace.Cmyk, 0),
+        };
+
+        if (bits == 0)
+        {
+            return decoded;
+        }
+
+        return new PeachJxlPassthroughImageSourceImpl(decoded, new JxlPassthroughData
+        {
+            Data = bytes,
+            ColorSpace = colorSpace,
+            BitsPerComponent = bits,
+            IccProfile = colorSpace == JpegPassthroughColorSpace.Rgb ? decoded.RgbIccProfile : null,
+        });
+    }
+
+    /// <summary>
+    /// Routes every raster format with no dedicated pass-through mechanism of its own (BMP, WebP,
+    /// AVIF, TIFF) - decodes to <see cref="PixelFormat.Rgba32"/> like every non-pass-through format
+    /// does, and computes <see cref="ImageSource.IImageSource.IsLosslessSourceFormat"/> (issue #1107:
+    /// unconditional for BMP/GIF, conditional on <see cref="ImageInfo.IsLosslessEncoding"/> for
+    /// WebP/AVIF/TIFF/JPEG XL). For WebP/AVIF/JPEG XL specifically, also extracts a usable embedded ICC profile
+    /// (issue #1106) via a second, native (no <c>TargetPixelFormat</c>) decode purely to read
+    /// <c>Image.Metadata</c> - forcing <see cref="Rgba32DecoderOptions"/> in one hop, the way every
+    /// other call site here does, would silently lose it for an opaque source (native format Rgb24):
+    /// PeachImage's per-format pixel-format converters build a brand-new <see cref="Image"/> with an
+    /// empty <c>Metadata</c> whenever a conversion actually runs (confirmed against WebP's own
+    /// converter source - the same root cause as the JPEG ICC bug issue #1085 fixed, see
+    /// <see cref="DecodeRgbOrGrayJpeg"/>'s own remarks). Not extended to BMP/GIF/TIFF - none of the
+    /// three carry an embedded ICC profile PeachPDF has a use for here (TIFF's CMYK case already
+    /// routes through <see cref="DecodeCmykRaster"/> instead, and a CMYK TIFF's RGB counterpart isn't
+    /// in scope for issue #1106).
+    /// </summary>
+    private static IImageSource DecodeGenericRaster(string name, byte[] bytes, int quality, ImageInfo info)
+    {
+        byte[]? rgbIccProfile = null;
+        if (info.FormatName is "webp" or "avif" or "jxl")
+        {
+            using var probe = Image.Load(new MemoryStream(bytes));
+            rgbIccProfile = TryGetUsableIccProfileBytes(probe, IccColorSpace.Rgb, expectedChannelCount: 3);
+        }
+
+        // Not disposed here - PeachImageSourceImpl takes ownership of it for its whole lifetime (same
+        // as before this change; see its own Dispose() remarks on why that's a safe no-op to skip).
+        var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
+
+        bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif" ||
+            (info.FormatName is "webp" or "avif" or "tiff" or "jxl" && info.IsLosslessEncoding);
+        return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat, rgbIccProfile);
+    }
+
+    /// <summary>
+    /// Routes a CMYK32-identified source to a <see cref="PeachCmykImageSourceImpl"/>: JPEG embeds via
+    /// byte-for-byte pass-through (<see cref="DecodeCmykJpeg"/>), TIFF (issue #1096 - the only other
+    /// PeachImage codec that decodes to Cmyk32) decodes natively and embeds its raw pixel buffer
+    /// instead, since TIFF has no PDF-native pass-through filter the way JPEG's <c>/DCTDecode</c> does
+    /// (<see cref="DecodeCmykRaster"/>). Any other format reaching here (none exist today) is rejected
+    /// outright - same as every other unsupported format (TGA/PSD/HDR) - rather than given a lesser,
+    /// ICC-less embed.
+    /// </summary>
+    private static PeachCmykImageSourceImpl DecodeCmyk(string name, byte[] bytes, ImageInfo info)
+    {
+        if (info.FormatName == "jpeg")
+        {
+            return DecodeCmykJpeg(name, bytes, info);
+        }
+
+        if (info.FormatName == "tiff")
+        {
+            return DecodeCmykRaster(name, bytes, info);
+        }
+
+        throw new InvalidOperationException(
+            $"CMYK images are not supported for the '{info.FormatName}' format - it doesn't currently " +
+            "expose an embedded ICC profile, so a CMYK image in that format can't be embedded with " +
+            "guaranteed color fidelity.");
+    }
+
+    private static PeachCmykImageSourceImpl DecodeCmykJpeg(string name, byte[] bytes, ImageInfo info)
+    {
+        // Deliberately not de-inverting Adobe's inverted-CMYK convention here (KeepAdobeCmykInverted
+        // = true) - the PDF reader's own /Decode [1 0 1 0 1 0 1 0] array does that (see PdfImage's
+        // EmbedJpegPassthrough), not a silent decode-time normalization. This decode's only purpose
+        // is reaching Image.Metadata.GetIccColorProfile() - ICC chunks are only collected by
+        // PeachImage's full Decode(), not Identify() - the decoded pixel buffer itself is unused,
+        // since a CMYK JPEG always embeds via the original bytes, never a re-encode.
+        var cmykOptions = new JpegDecoderOptions { TargetPixelFormat = PixelFormat.Cmyk32, KeepAdobeCmykInverted = true };
+        using var decoded = Image.Load(new MemoryStream(bytes), cmykOptions);
+        var iccProfile = TryGetUsableIccProfileBytes(decoded, IccColorSpace.Cmyk, expectedChannelCount: 4);
+
+        var passthrough = new JpegPassthroughData
+        {
+            Data = bytes,
+            ColorSpace = JpegPassthroughColorSpace.Cmyk,
+            NeedsInvertedDecode = info.IsAdobeInvertedCmyk || info.IsYcck,
+            IccProfile = iccProfile,
+        };
+
+        return new PeachCmykImageSourceImpl(name, info.Width, info.Height, passthrough);
+    }
+
+    /// <summary>
+    /// Decodes a CMYK TIFF natively to <see cref="PixelFormat.Cmyk32"/> (never forced through
+    /// Rgba32 - see <see cref="Rgba32DecoderOptions"/>'s own remarks on why that would destroy print
+    /// separations) and copies its pixel buffer out for a raw <c>/FlateDecode</c> embed
+    /// (<see cref="PeachPDF.PDF.Advanced.PdfImage"/>'s <c>InitializeCmykRaster</c>) -
+    /// unlike JPEG, TIFF has no <c>IsAdobeInvertedCmyk</c>/<c>IsYcck</c> convention to account for
+    /// (always <see langword="false"/> for a non-JPEG source - <see cref="ImageInfo"/>'s own remarks),
+    /// so the decoded bytes are already in the standard, ready-to-embed CMYK convention.
+    /// </summary>
+    /// <summary>A CMYK image source over raw interleaved C, M, Y, K samples (255 = full ink), with no embedded profile.</summary>
+    internal static IImageSource CreateCmykRaster(string name, int width, int height, byte[] cmyk) =>
+        new PeachCmykImageSourceImpl(name, width, height, new CmykRasterData { Data = cmyk });
+
+    private static PeachCmykImageSourceImpl DecodeCmykRaster(string name, byte[] bytes, ImageInfo info)
+    {
+        var cmykOptions = new DecoderOptions { TargetPixelFormat = PixelFormat.Cmyk32 };
+        using var decoded = Image.Load(new MemoryStream(bytes), cmykOptions);
+        var iccProfile = TryGetUsableIccProfileBytes(decoded, IccColorSpace.Cmyk, expectedChannelCount: 4);
+
+        var raster = new CmykRasterData
+        {
+            Data = decoded.GetPixelSpan().ToArray(),
+            IccProfile = iccProfile,
+        };
+
+        return new PeachCmykImageSourceImpl(name, info.Width, info.Height, raster);
+    }
+
+    /// <summary>
+    /// Routes an RGB/Gray JPEG source (a 1- or 3-component JPEG - anything reaching here already
+    /// isn't CMYK32, see <see cref="Decode"/>). Decoded natively - <em>not</em> forced to
+    /// <see cref="PixelFormat.Rgba32"/> the way every other format is (<see cref="Rgba32DecoderOptions"/>)
+    /// - because PeachImage's pixel-format-conversion step (triggered whenever <c>TargetPixelFormat</c>
+    /// differs from the source's own native format) returns a <em>new</em> <see cref="Image"/> instance
+    /// whose <see cref="ImageMetadata.Profiles"/> does not carry over the original decode's - verified
+    /// empirically, not assumed (see .claude/recent-fixes for the write-up) - so forcing Rgba32 here
+    /// would silently lose any embedded ICC profile every single time, since a JPEG's native RGB/Gray
+    /// pixel format is always <see cref="PixelFormat.Rgb24"/>/<see cref="PixelFormat.Gray8"/>, never
+    /// Rgba32 (JPEG has no alpha channel at all). This isn't a problem for the embed path: JPEG's own
+    /// encoder (<c>SaveAsJpeg</c>) already accepts Gray8/Rgb24/Rgba32 source pixel data directly, and
+    /// PeachImage's resizer is pixel-format-agnostic, so nothing downstream actually needs Rgba32
+    /// specifically for a JPEG source.
+    /// </summary>
+    private static PeachImageSourceImpl DecodeRgbOrGrayJpeg(string name, byte[] bytes, int quality)
+    {
+        var decoded = Image.Load(new MemoryStream(bytes));
+
+        JpegPassthroughData? jpegPassthrough = null;
+        if (TryGetUsableRgbOrGrayIccProfile(decoded, out var iccBytes, out var colorSpace))
+        {
+            jpegPassthrough = new JpegPassthroughData
             {
                 Data = bytes,
                 ColorSpace = colorSpace,
-                BitsPerComponent = bits,
-                IccProfile = colorSpace == JpegPassthroughColorSpace.Rgb ? decoded.RgbIccProfile : null,
-            });
-        }
-
-        /// <summary>
-        /// Routes every raster format with no dedicated pass-through mechanism of its own (BMP, WebP,
-        /// AVIF, TIFF) - decodes to <see cref="PixelFormat.Rgba32"/> like every non-pass-through format
-        /// does, and computes <see cref="ImageSource.IImageSource.IsLosslessSourceFormat"/> (issue #1107:
-        /// unconditional for BMP/GIF, conditional on <see cref="ImageInfo.IsLosslessEncoding"/> for
-        /// WebP/AVIF/TIFF/JPEG XL). For WebP/AVIF/JPEG XL specifically, also extracts a usable embedded ICC profile
-        /// (issue #1106) via a second, native (no <c>TargetPixelFormat</c>) decode purely to read
-        /// <c>Image.Metadata</c> - forcing <see cref="Rgba32DecoderOptions"/> in one hop, the way every
-        /// other call site here does, would silently lose it for an opaque source (native format Rgb24):
-        /// PeachImage's per-format pixel-format converters build a brand-new <see cref="Image"/> with an
-        /// empty <c>Metadata</c> whenever a conversion actually runs (confirmed against WebP's own
-        /// converter source - the same root cause as the JPEG ICC bug issue #1085 fixed, see
-        /// <see cref="DecodeRgbOrGrayJpeg"/>'s own remarks). Not extended to BMP/GIF/TIFF - none of the
-        /// three carry an embedded ICC profile PeachPDF has a use for here (TIFF's CMYK case already
-        /// routes through <see cref="DecodeCmykRaster"/> instead, and a CMYK TIFF's RGB counterpart isn't
-        /// in scope for issue #1106).
-        /// </summary>
-        private static IImageSource DecodeGenericRaster(string name, byte[] bytes, int quality, ImageInfo info)
-        {
-            byte[]? rgbIccProfile = null;
-            if (info.FormatName is "webp" or "avif" or "jxl")
-            {
-                using var probe = Image.Load(new MemoryStream(bytes));
-                rgbIccProfile = TryGetUsableIccProfileBytes(probe, IccColorSpace.Rgb, expectedChannelCount: 3);
-            }
-
-            // Not disposed here - PeachImageSourceImpl takes ownership of it for its whole lifetime (same
-            // as before this change; see its own Dispose() remarks on why that's a safe no-op to skip).
-            var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
-
-            bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif" ||
-                (info.FormatName is "webp" or "avif" or "tiff" or "jxl" && info.IsLosslessEncoding);
-            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat, rgbIccProfile);
-        }
-
-        /// <summary>
-        /// Routes a CMYK32-identified source to a <see cref="PeachCmykImageSourceImpl"/>: JPEG embeds via
-        /// byte-for-byte pass-through (<see cref="DecodeCmykJpeg"/>), TIFF (issue #1096 - the only other
-        /// PeachImage codec that decodes to Cmyk32) decodes natively and embeds its raw pixel buffer
-        /// instead, since TIFF has no PDF-native pass-through filter the way JPEG's <c>/DCTDecode</c> does
-        /// (<see cref="DecodeCmykRaster"/>). Any other format reaching here (none exist today) is rejected
-        /// outright - same as every other unsupported format (TGA/PSD/HDR) - rather than given a lesser,
-        /// ICC-less embed.
-        /// </summary>
-        private static PeachCmykImageSourceImpl DecodeCmyk(string name, byte[] bytes, ImageInfo info)
-        {
-            if (info.FormatName == "jpeg")
-            {
-                return DecodeCmykJpeg(name, bytes, info);
-            }
-
-            if (info.FormatName == "tiff")
-            {
-                return DecodeCmykRaster(name, bytes, info);
-            }
-
-            throw new InvalidOperationException(
-                $"CMYK images are not supported for the '{info.FormatName}' format - it doesn't currently " +
-                "expose an embedded ICC profile, so a CMYK image in that format can't be embedded with " +
-                "guaranteed color fidelity.");
-        }
-
-        private static PeachCmykImageSourceImpl DecodeCmykJpeg(string name, byte[] bytes, ImageInfo info)
-        {
-            // Deliberately not de-inverting Adobe's inverted-CMYK convention here (KeepAdobeCmykInverted
-            // = true) - the PDF reader's own /Decode [1 0 1 0 1 0 1 0] array does that (see PdfImage's
-            // EmbedJpegPassthrough), not a silent decode-time normalization. This decode's only purpose
-            // is reaching Image.Metadata.GetIccColorProfile() - ICC chunks are only collected by
-            // PeachImage's full Decode(), not Identify() - the decoded pixel buffer itself is unused,
-            // since a CMYK JPEG always embeds via the original bytes, never a re-encode.
-            var cmykOptions = new JpegDecoderOptions { TargetPixelFormat = PixelFormat.Cmyk32, KeepAdobeCmykInverted = true };
-            using var decoded = Image.Load(new MemoryStream(bytes), cmykOptions);
-            var iccProfile = TryGetUsableIccProfileBytes(decoded, IccColorSpace.Cmyk, expectedChannelCount: 4);
-
-            var passthrough = new JpegPassthroughData
-            {
-                Data = bytes,
-                ColorSpace = JpegPassthroughColorSpace.Cmyk,
-                NeedsInvertedDecode = info.IsAdobeInvertedCmyk || info.IsYcck,
-                IccProfile = iccProfile,
+                NeedsInvertedDecode = false,
+                IccProfile = iccBytes,
             };
-
-            return new PeachCmykImageSourceImpl(name, info.Width, info.Height, passthrough);
         }
 
-        /// <summary>
-        /// Decodes a CMYK TIFF natively to <see cref="PixelFormat.Cmyk32"/> (never forced through
-        /// Rgba32 - see <see cref="Rgba32DecoderOptions"/>'s own remarks on why that would destroy print
-        /// separations) and copies its pixel buffer out for a raw <c>/FlateDecode</c> embed
-        /// (<see cref="PeachPDF.PDF.Advanced.PdfImage"/>'s <c>InitializeCmykRaster</c>) -
-        /// unlike JPEG, TIFF has no <c>IsAdobeInvertedCmyk</c>/<c>IsYcck</c> convention to account for
-        /// (always <see langword="false"/> for a non-JPEG source - <see cref="ImageInfo"/>'s own remarks),
-        /// so the decoded bytes are already in the standard, ready-to-embed CMYK convention.
-        /// </summary>
-        /// <summary>A CMYK image source over raw interleaved C, M, Y, K samples (255 = full ink), with no embedded profile.</summary>
-        internal static IImageSource CreateCmykRaster(string name, int width, int height, byte[] cmyk) =>
-            new PeachCmykImageSourceImpl(name, width, height, new CmykRasterData { Data = cmyk });
+        return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough);
+    }
 
-        private static PeachCmykImageSourceImpl DecodeCmykRaster(string name, byte[] bytes, ImageInfo info)
+    /// <summary>
+    /// Routes a PNG source: eligible for pass-through (see
+    /// <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks on eligibility) returns a
+    /// <see cref="PeachPngPassthroughImageSourceImpl"/> that skips the full pixel decode entirely -
+    /// genuinely cheaper than today's decode-and-re-encode, unlike the CMYK JPEG/TIFF precedents,
+    /// which still decode for unrelated reasons (ICC-profile extraction). A source with real
+    /// per-pixel alpha that <see cref="IsPassthroughEligible"/> rejects gets a second chance via
+    /// <see cref="PngAlphaSplit.TrySplit(in PngPassthroughInfo, out PngAlphaSplitInfo)"/> (issue
+    /// #1109) - that call has its own narrower eligibility (not interlaced, 8-bit color type 4/6, or
+    /// a palette source with a genuine partial-alpha <c>tRNS</c> entry) and safely returns false for
+    /// anything else, so this doesn't need to duplicate that logic here. An ineligible PNG either way
+    /// (or a malformed/inconsistent file <see cref="PngPassthrough.TryRead"/> itself rejects) falls
+    /// through to the ordinary decode path, same as before this feature existed.
+    /// </summary>
+    private static IImageSource DecodePng(string name, byte[] bytes, int quality)
+    {
+        if (PngPassthrough.TryRead(new MemoryStream(bytes), out var pngInfo))
         {
-            var cmykOptions = new DecoderOptions { TargetPixelFormat = PixelFormat.Cmyk32 };
-            using var decoded = Image.Load(new MemoryStream(bytes), cmykOptions);
-            var iccProfile = TryGetUsableIccProfileBytes(decoded, IccColorSpace.Cmyk, expectedChannelCount: 4);
-
-            var raster = new CmykRasterData
+            if (IsPassthroughEligible(pngInfo, out var colorKeyMask))
             {
-                Data = decoded.GetPixelSpan().ToArray(),
-                IccProfile = iccProfile,
-            };
-
-            return new PeachCmykImageSourceImpl(name, info.Width, info.Height, raster);
-        }
-
-        /// <summary>
-        /// Routes an RGB/Gray JPEG source (a 1- or 3-component JPEG - anything reaching here already
-        /// isn't CMYK32, see <see cref="Decode"/>). Decoded natively - <em>not</em> forced to
-        /// <see cref="PixelFormat.Rgba32"/> the way every other format is (<see cref="Rgba32DecoderOptions"/>)
-        /// - because PeachImage's pixel-format-conversion step (triggered whenever <c>TargetPixelFormat</c>
-        /// differs from the source's own native format) returns a <em>new</em> <see cref="Image"/> instance
-        /// whose <see cref="ImageMetadata.Profiles"/> does not carry over the original decode's - verified
-        /// empirically, not assumed (see .claude/recent-fixes for the write-up) - so forcing Rgba32 here
-        /// would silently lose any embedded ICC profile every single time, since a JPEG's native RGB/Gray
-        /// pixel format is always <see cref="PixelFormat.Rgb24"/>/<see cref="PixelFormat.Gray8"/>, never
-        /// Rgba32 (JPEG has no alpha channel at all). This isn't a problem for the embed path: JPEG's own
-        /// encoder (<c>SaveAsJpeg</c>) already accepts Gray8/Rgb24/Rgba32 source pixel data directly, and
-        /// PeachImage's resizer is pixel-format-agnostic, so nothing downstream actually needs Rgba32
-        /// specifically for a JPEG source.
-        /// </summary>
-        private static PeachImageSourceImpl DecodeRgbOrGrayJpeg(string name, byte[] bytes, int quality)
-        {
-            var decoded = Image.Load(new MemoryStream(bytes));
-
-            JpegPassthroughData? jpegPassthrough = null;
-            if (TryGetUsableRgbOrGrayIccProfile(decoded, out var iccBytes, out var colorSpace))
-            {
-                jpegPassthrough = new JpegPassthroughData
+                var colorSpace = pngInfo.ColorType switch
                 {
-                    Data = bytes,
-                    ColorSpace = colorSpace,
-                    NeedsInvertedDecode = false,
-                    IccProfile = iccBytes,
+                    PngColorType.Grayscale => PngPassthroughColorSpace.Gray,
+                    PngColorType.Truecolor => PngPassthroughColorSpace.Rgb,
+                    PngColorType.Palette => PngPassthroughColorSpace.Indexed,
+                    _ => throw new InvalidOperationException("Unreachable - IsPassthroughEligible already restricted ColorType to these three values."),
                 };
-            }
 
-            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough);
-        }
-
-        /// <summary>
-        /// Routes a PNG source: eligible for pass-through (see
-        /// <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks on eligibility) returns a
-        /// <see cref="PeachPngPassthroughImageSourceImpl"/> that skips the full pixel decode entirely -
-        /// genuinely cheaper than today's decode-and-re-encode, unlike the CMYK JPEG/TIFF precedents,
-        /// which still decode for unrelated reasons (ICC-profile extraction). A source with real
-        /// per-pixel alpha that <see cref="IsPassthroughEligible"/> rejects gets a second chance via
-        /// <see cref="PngAlphaSplit.TrySplit(in PngPassthroughInfo, out PngAlphaSplitInfo)"/> (issue
-        /// #1109) - that call has its own narrower eligibility (not interlaced, 8-bit color type 4/6, or
-        /// a palette source with a genuine partial-alpha <c>tRNS</c> entry) and safely returns false for
-        /// anything else, so this doesn't need to duplicate that logic here. An ineligible PNG either way
-        /// (or a malformed/inconsistent file <see cref="PngPassthrough.TryRead"/> itself rejects) falls
-        /// through to the ordinary decode path, same as before this feature existed.
-        /// </summary>
-        private static IImageSource DecodePng(string name, byte[] bytes, int quality)
-        {
-            if (PngPassthrough.TryRead(new MemoryStream(bytes), out var pngInfo))
-            {
-                if (IsPassthroughEligible(pngInfo, out var colorKeyMask))
+                var passthrough = new PngPassthroughData
                 {
-                    var colorSpace = pngInfo.ColorType switch
-                    {
-                        PngColorType.Grayscale => PngPassthroughColorSpace.Gray,
-                        PngColorType.Truecolor => PngPassthroughColorSpace.Rgb,
-                        PngColorType.Palette => PngPassthroughColorSpace.Indexed,
-                        _ => throw new InvalidOperationException("Unreachable - IsPassthroughEligible already restricted ColorType to these three values."),
-                    };
-
-                    var passthrough = new PngPassthroughData
-                    {
-                        IdatData = pngInfo.IdatData,
-                        ColorSpace = colorSpace,
-                        BitDepth = pngInfo.BitDepth,
-                        PaletteRgb = pngInfo.PaletteData,
-                        ColorKeyMask = colorKeyMask,
-                        IccProfile = GetUsablePngIccProfile(colorSpace, pngInfo.IccProfileData),
-                    };
-
-                    return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
-                }
-
-                if (PngAlphaSplit.TrySplit(in pngInfo, out var alphaSplit))
-                {
-                    var passthrough = BuildAlphaSplitPassthroughData(pngInfo, alphaSplit);
-                    return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
-                }
-            }
-
-            // An interlaced or 16-bit-per-channel-alpha PNG reaches here even when PngPassthrough.TryRead
-            // succeeded (it just failed both eligibility checks above) - pngInfo.IccProfileData is
-            // already the inflated iCCP bytes in that case, so this still preserves the profile with no
-            // extra decode, the same way the pass-through/alpha-split branches above do. When TryRead
-            // itself failed (a malformed file), pngInfo is the default struct and IccProfileData is null,
-            // which TryGetUsablePngIccProfileBytes already treats as "no profile" up front.
-            var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
-            var rgbIccProfile = TryGetUsablePngIccProfileBytes(pngInfo.IccProfileData, IccColorSpace.Rgb, expectedChannelCount: 3);
-            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true, rgbIccProfile);
-        }
-
-        /// <summary>
-        /// Builds the <see cref="PngPassthroughData"/> for an alpha-split-eligible source.
-        /// <paramref name="alphaSplit"/>.<see cref="PngAlphaSplitInfo.ColorData"/> is non-null exactly for
-        /// color type 4/6 (the de-interleaved color-only plane, replacing <paramref name="pngInfo"/>'s own
-        /// interleaved <c>IdatData</c> - see <see cref="PngPassthroughData.IdatData"/>'s own remarks) and
-        /// null for the palette case (the original indexed <c>IdatData</c>/<c>PaletteData</c> already need
-        /// no change - only the alpha plane is new). <see cref="PngPassthroughData.ColorKeyMask"/> is
-        /// always null here - a source only reaches alpha-split because it has real alpha, which
-        /// <see cref="IsPassthroughEligible"/> already ruled out being chroma-key-only. An embedded ICC
-        /// profile (issue #1106) rides along either way, same as the opaque/chroma-key branch.
-        /// </summary>
-        private static PngPassthroughData BuildAlphaSplitPassthroughData(in PngPassthroughInfo pngInfo, in PngAlphaSplitInfo alphaSplit)
-        {
-            if (alphaSplit.ColorData is { } colorData)
-            {
-                var colorSpace = alphaSplit.ColorIsRgb ? PngPassthroughColorSpace.Rgb : PngPassthroughColorSpace.Gray;
-                return new PngPassthroughData
-                {
-                    IdatData = colorData,
+                    IdatData = pngInfo.IdatData,
                     ColorSpace = colorSpace,
-                    BitDepth = alphaSplit.ColorBitDepth,
-                    AlphaIdatData = alphaSplit.AlphaData,
-                    AlphaBitDepth = alphaSplit.AlphaBitDepth,
+                    BitDepth = pngInfo.BitDepth,
+                    PaletteRgb = pngInfo.PaletteData,
+                    ColorKeyMask = colorKeyMask,
                     IccProfile = GetUsablePngIccProfile(colorSpace, pngInfo.IccProfileData),
                 };
+
+                return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
             }
 
+            if (PngAlphaSplit.TrySplit(in pngInfo, out var alphaSplit))
+            {
+                var passthrough = BuildAlphaSplitPassthroughData(pngInfo, alphaSplit);
+                return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
+            }
+        }
+
+        // An interlaced or 16-bit-per-channel-alpha PNG reaches here even when PngPassthrough.TryRead
+        // succeeded (it just failed both eligibility checks above) - pngInfo.IccProfileData is
+        // already the inflated iCCP bytes in that case, so this still preserves the profile with no
+        // extra decode, the same way the pass-through/alpha-split branches above do. When TryRead
+        // itself failed (a malformed file), pngInfo is the default struct and IccProfileData is null,
+        // which TryGetUsablePngIccProfileBytes already treats as "no profile" up front.
+        var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
+        var rgbIccProfile = TryGetUsablePngIccProfileBytes(pngInfo.IccProfileData, IccColorSpace.Rgb, expectedChannelCount: 3);
+        return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true, rgbIccProfile);
+    }
+
+    /// <summary>
+    /// Builds the <see cref="PngPassthroughData"/> for an alpha-split-eligible source.
+    /// <paramref name="alphaSplit"/>.<see cref="PngAlphaSplitInfo.ColorData"/> is non-null exactly for
+    /// color type 4/6 (the de-interleaved color-only plane, replacing <paramref name="pngInfo"/>'s own
+    /// interleaved <c>IdatData</c> - see <see cref="PngPassthroughData.IdatData"/>'s own remarks) and
+    /// null for the palette case (the original indexed <c>IdatData</c>/<c>PaletteData</c> already need
+    /// no change - only the alpha plane is new). <see cref="PngPassthroughData.ColorKeyMask"/> is
+    /// always null here - a source only reaches alpha-split because it has real alpha, which
+    /// <see cref="IsPassthroughEligible"/> already ruled out being chroma-key-only. An embedded ICC
+    /// profile (issue #1106) rides along either way, same as the opaque/chroma-key branch.
+    /// </summary>
+    private static PngPassthroughData BuildAlphaSplitPassthroughData(in PngPassthroughInfo pngInfo, in PngAlphaSplitInfo alphaSplit)
+    {
+        if (alphaSplit.ColorData is { } colorData)
+        {
+            var colorSpace = alphaSplit.ColorIsRgb ? PngPassthroughColorSpace.Rgb : PngPassthroughColorSpace.Gray;
             return new PngPassthroughData
             {
-                IdatData = pngInfo.IdatData,
-                ColorSpace = PngPassthroughColorSpace.Indexed,
-                BitDepth = pngInfo.BitDepth,
-                PaletteRgb = pngInfo.PaletteData,
+                IdatData = colorData,
+                ColorSpace = colorSpace,
+                BitDepth = alphaSplit.ColorBitDepth,
                 AlphaIdatData = alphaSplit.AlphaData,
                 AlphaBitDepth = alphaSplit.AlphaBitDepth,
-                IccProfile = GetUsablePngIccProfile(PngPassthroughColorSpace.Indexed, pngInfo.IccProfileData),
+                IccProfile = GetUsablePngIccProfile(colorSpace, pngInfo.IccProfileData),
             };
         }
 
-        /// <summary>
-        /// Validates <paramref name="rawIccProfile"/> against the ICC shape <paramref name="colorSpace"/>
-        /// implies (Gray -&gt; 1-channel Gray, Rgb/Indexed -&gt; 3-channel Rgb - an <c>/Indexed</c> PNG's
-        /// <c>iCCP</c> describes the color space its palette entries live in) via
-        /// <see cref="TryGetUsablePngIccProfileBytes"/>, shared by both <see cref="DecodePng"/>'s
-        /// opaque/chroma-key branch and <see cref="BuildAlphaSplitPassthroughData"/>.
-        /// </summary>
-        private static byte[]? GetUsablePngIccProfile(PngPassthroughColorSpace colorSpace, byte[]? rawIccProfile) =>
-            colorSpace == PngPassthroughColorSpace.Gray
-                ? TryGetUsablePngIccProfileBytes(rawIccProfile, IccColorSpace.Gray, expectedChannelCount: 1)
-                : TryGetUsablePngIccProfileBytes(rawIccProfile, IccColorSpace.Rgb, expectedChannelCount: 3);
+        return new PngPassthroughData
+        {
+            IdatData = pngInfo.IdatData,
+            ColorSpace = PngPassthroughColorSpace.Indexed,
+            BitDepth = pngInfo.BitDepth,
+            PaletteRgb = pngInfo.PaletteData,
+            AlphaIdatData = alphaSplit.AlphaData,
+            AlphaBitDepth = alphaSplit.AlphaBitDepth,
+            IccProfile = GetUsablePngIccProfile(PngPassthroughColorSpace.Indexed, pngInfo.IccProfileData),
+        };
+    }
 
-        /// <summary>
-        /// Not interlaced (PDF's <c>/DecodeParms</c> predictor has no Adam7 concept - Adam7 data can't be
-        /// used as a PDF image stream as-is) and no real per-pixel alpha channel (color type 4/6 stays on
-        /// the existing decode+<c>/SMask</c> path - see
-        /// <c>.claude/accepted-gaps/alpha-channel-png-not-passthrough.md</c>). A <c>tRNS</c> chunk doesn't
-        /// disqualify a source by itself: Grayscale/Truecolor <c>tRNS</c> is always a single exact
-        /// chroma-key value, and a Palette <c>tRNS</c> is eligible whenever every listed entry is exactly
-        /// 0 or 255 (a genuine partial-alpha palette entry can't be expressed as a binary color-key mask,
-        /// so that specific case still falls back to decode - see
-        /// <see cref="TryBuildPaletteColorKeyMask"/>). <paramref name="colorKeyMask"/> is meaningful only
-        /// when this returns <see langword="true"/>: non-null gives the PDF <c>/Mask</c> color-key array
-        /// to write (see <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks), null means
-        /// a plain opaque pass-through with no masking needed at all (either no <c>tRNS</c>, or a Palette
-        /// <c>tRNS</c> with nothing actually marked transparent). Animated (APNG) sources are still
-        /// eligible - <paramref name="pngInfo"/>'s <c>IdatData</c> is always the default image's data
-        /// regardless, the same "decode only the first/default frame" treatment every other animated
-        /// source already gets.
-        /// </summary>
-        private static bool IsPassthroughEligible(PngPassthroughInfo pngInfo, out int[]? colorKeyMask)
+    /// <summary>
+    /// Validates <paramref name="rawIccProfile"/> against the ICC shape <paramref name="colorSpace"/>
+    /// implies (Gray -&gt; 1-channel Gray, Rgb/Indexed -&gt; 3-channel Rgb - an <c>/Indexed</c> PNG's
+    /// <c>iCCP</c> describes the color space its palette entries live in) via
+    /// <see cref="TryGetUsablePngIccProfileBytes"/>, shared by both <see cref="DecodePng"/>'s
+    /// opaque/chroma-key branch and <see cref="BuildAlphaSplitPassthroughData"/>.
+    /// </summary>
+    private static byte[]? GetUsablePngIccProfile(PngPassthroughColorSpace colorSpace, byte[]? rawIccProfile) =>
+        colorSpace == PngPassthroughColorSpace.Gray
+            ? TryGetUsablePngIccProfileBytes(rawIccProfile, IccColorSpace.Gray, expectedChannelCount: 1)
+            : TryGetUsablePngIccProfileBytes(rawIccProfile, IccColorSpace.Rgb, expectedChannelCount: 3);
+
+    /// <summary>
+    /// Not interlaced (PDF's <c>/DecodeParms</c> predictor has no Adam7 concept - Adam7 data can't be
+    /// used as a PDF image stream as-is) and no real per-pixel alpha channel (color type 4/6 stays on
+    /// the existing decode+<c>/SMask</c> path - see
+    /// <c>.claude/accepted-gaps/alpha-channel-png-not-passthrough.md</c>). A <c>tRNS</c> chunk doesn't
+    /// disqualify a source by itself: Grayscale/Truecolor <c>tRNS</c> is always a single exact
+    /// chroma-key value, and a Palette <c>tRNS</c> is eligible whenever every listed entry is exactly
+    /// 0 or 255 (a genuine partial-alpha palette entry can't be expressed as a binary color-key mask,
+    /// so that specific case still falls back to decode - see
+    /// <see cref="TryBuildPaletteColorKeyMask"/>). <paramref name="colorKeyMask"/> is meaningful only
+    /// when this returns <see langword="true"/>: non-null gives the PDF <c>/Mask</c> color-key array
+    /// to write (see <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks), null means
+    /// a plain opaque pass-through with no masking needed at all (either no <c>tRNS</c>, or a Palette
+    /// <c>tRNS</c> with nothing actually marked transparent). Animated (APNG) sources are still
+    /// eligible - <paramref name="pngInfo"/>'s <c>IdatData</c> is always the default image's data
+    /// regardless, the same "decode only the first/default frame" treatment every other animated
+    /// source already gets.
+    /// </summary>
+    private static bool IsPassthroughEligible(PngPassthroughInfo pngInfo, out int[]? colorKeyMask)
+    {
+        colorKeyMask = null;
+
+        if (pngInfo.IsInterlaced) return false;
+        if (pngInfo.ColorType is not (PngColorType.Grayscale or PngColorType.Truecolor or PngColorType.Palette))
+            return false;
+        if (!pngInfo.HasTrns) return true;
+
+        switch (pngInfo.ColorType)
+        {
+            case PngColorType.Grayscale:
+                colorKeyMask = BuildChromaKeyMask(pngInfo.TrnsData!, componentCount: 1);
+                return true;
+            case PngColorType.Truecolor:
+                colorKeyMask = BuildChromaKeyMask(pngInfo.TrnsData!, componentCount: 3);
+                return true;
+            case PngColorType.Palette:
+                return TryBuildPaletteColorKeyMask(pngInfo.TrnsData!, out colorKeyMask);
+            default:
+                // Unreachable - the type check above already restricted ColorType to these three values.
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Grayscale <c>tRNS</c> is 2 bytes (one big-endian sample value); Truecolor is 6 bytes (three
+    /// big-endian sample values, R/G/B). Both are already range-limited to the image's own bit depth
+    /// by the PNG spec (an "unscaled" sample value, per the spec's own wording), so no rescaling is
+    /// needed regardless of <c>BitDepth</c> - each value is used verbatim as both the min and max of
+    /// its PDF <c>/Mask</c> color-key range, since PNG's non-alpha <c>tRNS</c> for these two color
+    /// types is already exactly PDF's chroma-key convention.
+    /// </summary>
+    private static int[] BuildChromaKeyMask(byte[] trnsData, int componentCount)
+    {
+        var mask = new int[componentCount * 2];
+        for (int i = 0; i < componentCount; i++)
+        {
+            int value = (trnsData[i * 2] << 8) | trnsData[i * 2 + 1];
+            mask[i * 2] = value;
+            mask[i * 2 + 1] = value;
+        }
+
+        return mask;
+    }
+
+    /// <summary>
+    /// <paramref name="trnsData"/>[i] is the alpha for palette entry i (an index beyond its length is
+    /// implicitly fully opaque, per the PNG spec). Returns <see langword="false"/> the moment any
+    /// entry is neither 0 nor 255 - a partial-alpha palette entry can't be expressed as a binary
+    /// color-key mask, so the whole source falls back to the existing decode+<c>/SMask</c> path.
+    /// Returns <see langword="true"/> with <paramref name="colorKeyMask"/> <see langword="null"/> when
+    /// there's nothing to mask (every listed entry is opaque) - that's still a fully valid pass-through,
+    /// just with no PDF <c>/Mask</c> key written at all.
+    /// </summary>
+    /// <remarks>
+    /// PDF's colour-key masking (ISO 32000-1 §8.9.6.4) is <c>2×n</c> integers where <c>n</c> is the
+    /// image's colour space's component count - for <c>/Indexed</c>, <c>n</c> is always 1, so the
+    /// array is exactly one <c>[min max]</c> range, not one pair per masked value (confirmed by
+    /// rasterizing a two-non-contiguous-index case with both PDFium and MuPDF: a reader only ever
+    /// consults the first pair and silently ignores the rest). A single transparent index still
+    /// produces the common <c>[i i]</c> case; several transparent indices only qualify when they're
+    /// contiguous (so one range genuinely covers exactly them, no more) - non-contiguous indices fall
+    /// back to the existing decode+<c>/SMask</c> path instead of emitting a mask that would silently
+    /// under-mask some of them.
+    /// </remarks>
+    private static bool TryBuildPaletteColorKeyMask(byte[] trnsData, out int[]? colorKeyMask)
+    {
+        List<int>? transparentIndices = null;
+        for (int i = 0; i < trnsData.Length; i++)
+        {
+            if (trnsData[i] == 0)
+            {
+                (transparentIndices ??= []).Add(i);
+            }
+            else if (trnsData[i] != 255)
+            {
+                colorKeyMask = null;
+                return false;
+            }
+        }
+
+        if (transparentIndices is null)
         {
             colorKeyMask = null;
-
-            if (pngInfo.IsInterlaced) return false;
-            if (pngInfo.ColorType is not (PngColorType.Grayscale or PngColorType.Truecolor or PngColorType.Palette))
-                return false;
-            if (!pngInfo.HasTrns) return true;
-
-            switch (pngInfo.ColorType)
-            {
-                case PngColorType.Grayscale:
-                    colorKeyMask = BuildChromaKeyMask(pngInfo.TrnsData!, componentCount: 1);
-                    return true;
-                case PngColorType.Truecolor:
-                    colorKeyMask = BuildChromaKeyMask(pngInfo.TrnsData!, componentCount: 3);
-                    return true;
-                case PngColorType.Palette:
-                    return TryBuildPaletteColorKeyMask(pngInfo.TrnsData!, out colorKeyMask);
-                default:
-                    // Unreachable - the type check above already restricted ColorType to these three values.
-                    return false;
-            }
-        }
-
-        /// <summary>
-        /// Grayscale <c>tRNS</c> is 2 bytes (one big-endian sample value); Truecolor is 6 bytes (three
-        /// big-endian sample values, R/G/B). Both are already range-limited to the image's own bit depth
-        /// by the PNG spec (an "unscaled" sample value, per the spec's own wording), so no rescaling is
-        /// needed regardless of <c>BitDepth</c> - each value is used verbatim as both the min and max of
-        /// its PDF <c>/Mask</c> color-key range, since PNG's non-alpha <c>tRNS</c> for these two color
-        /// types is already exactly PDF's chroma-key convention.
-        /// </summary>
-        private static int[] BuildChromaKeyMask(byte[] trnsData, int componentCount)
-        {
-            var mask = new int[componentCount * 2];
-            for (int i = 0; i < componentCount; i++)
-            {
-                int value = (trnsData[i * 2] << 8) | trnsData[i * 2 + 1];
-                mask[i * 2] = value;
-                mask[i * 2 + 1] = value;
-            }
-
-            return mask;
-        }
-
-        /// <summary>
-        /// <paramref name="trnsData"/>[i] is the alpha for palette entry i (an index beyond its length is
-        /// implicitly fully opaque, per the PNG spec). Returns <see langword="false"/> the moment any
-        /// entry is neither 0 nor 255 - a partial-alpha palette entry can't be expressed as a binary
-        /// color-key mask, so the whole source falls back to the existing decode+<c>/SMask</c> path.
-        /// Returns <see langword="true"/> with <paramref name="colorKeyMask"/> <see langword="null"/> when
-        /// there's nothing to mask (every listed entry is opaque) - that's still a fully valid pass-through,
-        /// just with no PDF <c>/Mask</c> key written at all.
-        /// </summary>
-        /// <remarks>
-        /// PDF's colour-key masking (ISO 32000-1 §8.9.6.4) is <c>2×n</c> integers where <c>n</c> is the
-        /// image's colour space's component count - for <c>/Indexed</c>, <c>n</c> is always 1, so the
-        /// array is exactly one <c>[min max]</c> range, not one pair per masked value (confirmed by
-        /// rasterizing a two-non-contiguous-index case with both PDFium and MuPDF: a reader only ever
-        /// consults the first pair and silently ignores the rest). A single transparent index still
-        /// produces the common <c>[i i]</c> case; several transparent indices only qualify when they're
-        /// contiguous (so one range genuinely covers exactly them, no more) - non-contiguous indices fall
-        /// back to the existing decode+<c>/SMask</c> path instead of emitting a mask that would silently
-        /// under-mask some of them.
-        /// </remarks>
-        private static bool TryBuildPaletteColorKeyMask(byte[] trnsData, out int[]? colorKeyMask)
-        {
-            List<int>? transparentIndices = null;
-            for (int i = 0; i < trnsData.Length; i++)
-            {
-                if (trnsData[i] == 0)
-                {
-                    (transparentIndices ??= []).Add(i);
-                }
-                else if (trnsData[i] != 255)
-                {
-                    colorKeyMask = null;
-                    return false;
-                }
-            }
-
-            if (transparentIndices is null)
-            {
-                colorKeyMask = null;
-                return true;
-            }
-
-            int min = transparentIndices[0];
-            int max = transparentIndices[^1];
-            if (max - min + 1 != transparentIndices.Count)
-            {
-                // Non-contiguous - a single [min max] range would also mask an opaque index in between.
-                colorKeyMask = null;
-                return false;
-            }
-
-            colorKeyMask = [min, max];
             return true;
         }
 
-        /// <summary>
-        /// Routes a GIF source: eligible for <c>/LZWDecode</c> pass-through (see
-        /// <see cref="ImageSource.IImageSource.GifPassthrough"/>'s own remarks on eligibility) returns a
-        /// <see cref="PeachGifPassthroughImageSourceImpl"/> that skips the full pixel decode entirely -
-        /// same shape as <see cref="DecodePng"/>. An ineligible GIF (interlaced, small palette, doesn't
-        /// cover the full canvas, or a malformed/inconsistent file <see cref="GifPassthrough.TryRead"/>
-        /// itself rejects) falls through to the ordinary decode path, same as before this feature existed.
-        /// </summary>
-        private static IImageSource DecodeGif(string name, byte[] bytes, int quality)
+        int min = transparentIndices[0];
+        int max = transparentIndices[^1];
+        if (max - min + 1 != transparentIndices.Count)
         {
-            if (GifPassthrough.TryRead(new MemoryStream(bytes), out var gifInfo) && IsGifPassthroughEligible(gifInfo))
-            {
-                var passthrough = new GifPassthroughData
-                {
-                    LzwData = gifInfo.LzwData,
-                    Palette = gifInfo.Palette,
-                    ColorKeyMask = gifInfo.TransparentColorIndex is int transparentIndex ? [transparentIndex, transparentIndex] : null,
-                };
-
-                return new PeachGifPassthroughImageSourceImpl(name, bytes, quality, gifInfo.Width, gifInfo.Height, passthrough);
-            }
-
-            var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
-            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true);
-        }
-
-        /// <summary>
-        /// Not interlaced (GIF's LZW compresses whatever row order it's given, so an interlaced frame's
-        /// raw bytes decompress into indices in 4-pass order, not top-to-bottom - PDF has no de-interlace
-        /// step for image data), <c>MinCodeSize == 8</c> (the hard byte-compatibility gate between GIF's
-        /// and PDF's LZW conventions - see <see cref="ImageSource.IImageSource.GifPassthrough"/>'s own
-        /// remarks), and the frame covers the full logical canvas (pass-through has no
-        /// canvas-compositing step the way the existing full decode does, so a frame offset from the
-        /// canvas origin or smaller than it can't be embedded as-is).
-        /// </summary>
-        private static bool IsGifPassthroughEligible(GifPassthroughInfo gifInfo) =>
-            !gifInfo.Interlaced &&
-            gifInfo.MinCodeSize == 8 &&
-            gifInfo.Left == 0 && gifInfo.Top == 0 &&
-            gifInfo.Width == gifInfo.CanvasWidth && gifInfo.Height == gifInfo.CanvasHeight;
-
-        /// <summary>
-        /// Returns <paramref name="image"/>'s embedded ICC profile's raw bytes, but only when it's
-        /// actually usable for <paramref name="image"/>: PeachImage's own <c>GetIccColorProfile()</c>
-        /// validates that the profile parses at all, but doesn't cross-check its declared color space or
-        /// channel count against the image it came from - a malformed/mismatched file (e.g. an RGB
-        /// profile embedded in a CMYK image) is defended against here instead.
-        /// </summary>
-        private static byte[]? TryGetUsableIccProfileBytes(Image image, IccColorSpace expectedColorSpace, int expectedChannelCount)
-        {
-            var profile = image.Metadata.GetIccColorProfile();
-            return profile is null || profile.DataColorSpace != expectedColorSpace || profile.ChannelCount != expectedChannelCount
-                ? null
-                : GetRawIccProfileBytes(image);
-        }
-
-        /// <summary>
-        /// Same idea as <see cref="TryGetUsableIccProfileBytes"/>, for the RGB/Gray case: the profile
-        /// itself declares which of the two it is, so this just tries both expected shapes in turn
-        /// rather than needing a separate "expected color space" parameter - either is a legitimate
-        /// embedded ICC profile for an RGB/Gray JPEG. <paramref name="colorSpace"/> is only meaningful
-        /// when this returns <see langword="true"/>.
-        /// </summary>
-        private static bool TryGetUsableRgbOrGrayIccProfile(Image image, out byte[]? bytes, out JpegPassthroughColorSpace colorSpace)
-        {
-            if (TryGetUsableIccProfileBytes(image, IccColorSpace.Rgb, expectedChannelCount: 3) is { } rgbBytes)
-            {
-                bytes = rgbBytes;
-                colorSpace = JpegPassthroughColorSpace.Rgb;
-                return true;
-            }
-
-            if (TryGetUsableIccProfileBytes(image, IccColorSpace.Gray, expectedChannelCount: 1) is { } grayBytes)
-            {
-                bytes = grayBytes;
-                colorSpace = JpegPassthroughColorSpace.Gray;
-                return true;
-            }
-
-            bytes = null;
-            colorSpace = default;
+            // Non-contiguous - a single [min max] range would also mask an opaque index in between.
+            colorKeyMask = null;
             return false;
         }
 
-        /// <summary>
-        /// Same idea as <see cref="TryGetUsableIccProfileBytes"/>, for a PNG pass-through source (issue
-        /// #1106): PNG pass-through never decodes to an <see cref="Image"/> at all (that's the point of
-        /// pass-through), so there's no <c>Metadata.GetIccColorProfile()</c> to call - this validates
-        /// <paramref name="rawIccProfile"/> (<see cref="PeachImage.Formats.Png.PngPassthroughInfo.IccProfileData"/>,
-        /// already inflated) directly via <see cref="IccColorProfile.TryCreate"/> instead, returning it
-        /// unchanged only when its declared shape actually matches the PNG's own color type - a
-        /// malformed/mismatched <c>iCCP</c> chunk (e.g. an RGB profile in a grayscale PNG) is defended
-        /// against the same way the JPEG/CMYK path already does.
-        /// </summary>
-        private static byte[]? TryGetUsablePngIccProfileBytes(byte[]? rawIccProfile, IccColorSpace expectedColorSpace, int expectedChannelCount)
-        {
-            if (rawIccProfile is null || !IccColorProfile.TryCreate(rawIccProfile, out var profile) || profile is null)
-                return null;
+        colorKeyMask = [min, max];
+        return true;
+    }
 
-            return profile.DataColorSpace != expectedColorSpace || profile.ChannelCount != expectedChannelCount
-                ? null
-                : rawIccProfile;
+    /// <summary>
+    /// Routes a GIF source: eligible for <c>/LZWDecode</c> pass-through (see
+    /// <see cref="ImageSource.IImageSource.GifPassthrough"/>'s own remarks on eligibility) returns a
+    /// <see cref="PeachGifPassthroughImageSourceImpl"/> that skips the full pixel decode entirely -
+    /// same shape as <see cref="DecodePng"/>. An ineligible GIF (interlaced, small palette, doesn't
+    /// cover the full canvas, or a malformed/inconsistent file <see cref="GifPassthrough.TryRead"/>
+    /// itself rejects) falls through to the ordinary decode path, same as before this feature existed.
+    /// </summary>
+    private static IImageSource DecodeGif(string name, byte[] bytes, int quality)
+    {
+        if (GifPassthrough.TryRead(new MemoryStream(bytes), out var gifInfo) && IsGifPassthroughEligible(gifInfo))
+        {
+            var passthrough = new GifPassthroughData
+            {
+                LzwData = gifInfo.LzwData,
+                Palette = gifInfo.Palette,
+                ColorKeyMask = gifInfo.TransparentColorIndex is int transparentIndex ? [transparentIndex, transparentIndex] : null,
+            };
+
+            return new PeachGifPassthroughImageSourceImpl(name, bytes, quality, gifInfo.Width, gifInfo.Height, passthrough);
         }
 
-        /// <summary>
-        /// The raw bytes behind whichever <see cref="MetadataProfileKind.Icc"/> entry
-        /// <see cref="ImageMetadata.GetIccColorProfile"/> just validated - that call only checks the
-        /// profile parses, not which raw entry it came from, so this re-finds it by kind rather than
-        /// re-parsing.
-        /// </summary>
-        private static byte[]? GetRawIccProfileBytes(Image image)
+        var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
+        return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true);
+    }
+
+    /// <summary>
+    /// Not interlaced (GIF's LZW compresses whatever row order it's given, so an interlaced frame's
+    /// raw bytes decompress into indices in 4-pass order, not top-to-bottom - PDF has no de-interlace
+    /// step for image data), <c>MinCodeSize == 8</c> (the hard byte-compatibility gate between GIF's
+    /// and PDF's LZW conventions - see <see cref="ImageSource.IImageSource.GifPassthrough"/>'s own
+    /// remarks), and the frame covers the full logical canvas (pass-through has no
+    /// canvas-compositing step the way the existing full decode does, so a frame offset from the
+    /// canvas origin or smaller than it can't be embedded as-is).
+    /// </summary>
+    private static bool IsGifPassthroughEligible(GifPassthroughInfo gifInfo) =>
+        !gifInfo.Interlaced &&
+        gifInfo.MinCodeSize == 8 &&
+        gifInfo.Left == 0 && gifInfo.Top == 0 &&
+        gifInfo.Width == gifInfo.CanvasWidth && gifInfo.Height == gifInfo.CanvasHeight;
+
+    /// <summary>
+    /// Returns <paramref name="image"/>'s embedded ICC profile's raw bytes, but only when it's
+    /// actually usable for <paramref name="image"/>: PeachImage's own <c>GetIccColorProfile()</c>
+    /// validates that the profile parses at all, but doesn't cross-check its declared color space or
+    /// channel count against the image it came from - a malformed/mismatched file (e.g. an RGB
+    /// profile embedded in a CMYK image) is defended against here instead.
+    /// </summary>
+    private static byte[]? TryGetUsableIccProfileBytes(Image image, IccColorSpace expectedColorSpace, int expectedChannelCount)
+    {
+        var profile = image.Metadata.GetIccColorProfile();
+        return profile is null || profile.DataColorSpace != expectedColorSpace || profile.ChannelCount != expectedChannelCount
+            ? null
+            : GetRawIccProfileBytes(image);
+    }
+
+    /// <summary>
+    /// Same idea as <see cref="TryGetUsableIccProfileBytes"/>, for the RGB/Gray case: the profile
+    /// itself declares which of the two it is, so this just tries both expected shapes in turn
+    /// rather than needing a separate "expected color space" parameter - either is a legitimate
+    /// embedded ICC profile for an RGB/Gray JPEG. <paramref name="colorSpace"/> is only meaningful
+    /// when this returns <see langword="true"/>.
+    /// </summary>
+    private static bool TryGetUsableRgbOrGrayIccProfile(Image image, out byte[]? bytes, out JpegPassthroughColorSpace colorSpace)
+    {
+        if (TryGetUsableIccProfileBytes(image, IccColorSpace.Rgb, expectedChannelCount: 3) is { } rgbBytes)
         {
-            foreach (var raw in image.Metadata.Profiles)
+            bytes = rgbBytes;
+            colorSpace = JpegPassthroughColorSpace.Rgb;
+            return true;
+        }
+
+        if (TryGetUsableIccProfileBytes(image, IccColorSpace.Gray, expectedChannelCount: 1) is { } grayBytes)
+        {
+            bytes = grayBytes;
+            colorSpace = JpegPassthroughColorSpace.Gray;
+            return true;
+        }
+
+        bytes = null;
+        colorSpace = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Same idea as <see cref="TryGetUsableIccProfileBytes"/>, for a PNG pass-through source (issue
+    /// #1106): PNG pass-through never decodes to an <see cref="Image"/> at all (that's the point of
+    /// pass-through), so there's no <c>Metadata.GetIccColorProfile()</c> to call - this validates
+    /// <paramref name="rawIccProfile"/> (<see cref="PeachImage.Formats.Png.PngPassthroughInfo.IccProfileData"/>,
+    /// already inflated) directly via <see cref="IccColorProfile.TryCreate"/> instead, returning it
+    /// unchanged only when its declared shape actually matches the PNG's own color type - a
+    /// malformed/mismatched <c>iCCP</c> chunk (e.g. an RGB profile in a grayscale PNG) is defended
+    /// against the same way the JPEG/CMYK path already does.
+    /// </summary>
+    private static byte[]? TryGetUsablePngIccProfileBytes(byte[]? rawIccProfile, IccColorSpace expectedColorSpace, int expectedChannelCount)
+    {
+        if (rawIccProfile is null || !IccColorProfile.TryCreate(rawIccProfile, out var profile) || profile is null)
+            return null;
+
+        return profile.DataColorSpace != expectedColorSpace || profile.ChannelCount != expectedChannelCount
+            ? null
+            : rawIccProfile;
+    }
+
+    /// <summary>
+    /// The raw bytes behind whichever <see cref="MetadataProfileKind.Icc"/> entry
+    /// <see cref="ImageMetadata.GetIccColorProfile"/> just validated - that call only checks the
+    /// profile parses, not which raw entry it came from, so this re-finds it by kind rather than
+    /// re-parsing.
+    /// </summary>
+    private static byte[]? GetRawIccProfileBytes(Image image)
+    {
+        foreach (var raw in image.Metadata.Profiles)
+        {
+            if (raw.Kind == MetadataProfileKind.Icc)
             {
-                if (raw.Kind == MetadataProfileKind.Icc)
+                return raw.Data;
+            }
+        }
+
+        // GetIccColorProfile() only returns non-null when it found and parsed exactly this kind of
+        // entry, so this is unreachable whenever a caller already checked that - kept as a safe
+        // fallback rather than an assert.
+        return null;
+    }
+
+    /// <summary>
+    /// Embeds a CMYK source - either JPEG (via <see cref="JpegPassthroughData"/>, the original file
+    /// bytes, never resized or re-encoded) or TIFF (via <see cref="CmykRasterData"/>, a raw decoded
+    /// pixel buffer - see <see cref="ImageSource.IImageSource.CmykRaster"/>'s own remarks on why
+    /// TIFF needs a different shape). Exactly one of the two constructors is ever used for a given
+    /// instance - see <c>PdfImageTable.ComputeTargetPixelSize</c>'s CMYK resize skip, which applies to
+    /// both: PeachImage has no CMYK JPEG encoder, and a raw CMYK raster embed has no resize step
+    /// either, so a CMYK source is never resized regardless of which shape it took.
+    /// </summary>
+    private sealed class PeachCmykImageSourceImpl : IImageSource, IRgbaPixelProvider
+    {
+        private readonly JpegPassthroughData? _passthrough;
+        private readonly CmykRasterData? _raster;
+
+        public int Width { get; }
+        public int Height { get; }
+        public string Name { get; }
+        public bool Transparent => false;
+        public bool IsCmyk => true;
+        public int ExifOrientation { get; set; } = 1;
+        public bool IsGrayscale => false;
+        public JpegPassthroughData? JpegPassthrough => _passthrough;
+        public CmykRasterData? CmykRaster => _raster;
+        public PngPassthroughData? PngPassthrough => null;
+        public GifPassthroughData? GifPassthrough => null;
+        public bool IsLosslessSourceFormat => false;
+        public byte[]? RgbIccProfile => null;
+
+        public PeachCmykImageSourceImpl(string name, int width, int height, JpegPassthroughData passthrough)
+        {
+            Name = name;
+            Width = width;
+            Height = height;
+            _passthrough = passthrough;
+        }
+
+        public PeachCmykImageSourceImpl(string name, int width, int height, CmykRasterData raster)
+        {
+            Name = name;
+            Width = width;
+            Height = height;
+            _raster = raster;
+        }
+
+        public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
+            throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsJpeg is never called for it.");
+
+        public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
+            throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsPdfBitmap is never called for it.");
+
+        // The PDF embed keeps CMYK exactly as authored, but a bitmap rendition of it has no colour management to keep: the
+        // usual naive conversion (r = (1 - c)(1 - k) ...) is what any raster fallback for CMYK does.
+        public bool TryGetRgba(out int width, out int height, out byte[] rgba)
+        {
+            width = Width;
+            height = Height;
+
+            if (_raster is { } raster)
+            {
+                rgba = new byte[width * height * 4];
+                for (int i = 0, j = 0; i < rgba.Length && j + 3 < raster.Data.Length; i += 4, j += 4)
                 {
-                    return raw.Data;
+                    int k = 255 - raster.Data[j + 3];
+                    rgba[i] = (byte)((255 - raster.Data[j]) * k / 255);
+                    rgba[i + 1] = (byte)((255 - raster.Data[j + 1]) * k / 255);
+                    rgba[i + 2] = (byte)((255 - raster.Data[j + 2]) * k / 255);
+                    rgba[i + 3] = 255;
+                }
+
+                return true;
+            }
+
+            if (_passthrough is { } jpeg)
+            {
+                // A CMYK JPEG: let the codec convert it to RGBA, as it does for every other source.
+                using var decoded = Image.Load(new MemoryStream(jpeg.Data), Rgba32DecoderOptions);
+                rgba = decoded.GetPixelSpan().Slice(0, width * height * 4).ToArray();
+                return true;
+            }
+
+            rgba = [];
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A PNG source eligible for byte-for-byte pass-through (see <see cref="DecodePng"/>/
+    /// <see cref="IsPassthroughEligible"/>). Unlike <see cref="PeachCmykImageSourceImpl"/> - which
+    /// genuinely has no fallback (PeachImage has no CMYK JPEG encoder) - <see cref="SaveAsJpeg"/>/
+    /// <see cref="SaveAsPdfBitmap"/> aren't unreachable here: <see cref="PeachPDF.ImageCompression.Lossy"/>
+    /// explicitly asks for a lossy JPEG re-encode even of an otherwise pass-through-eligible source,
+    /// and <c>PdfImageTable</c>'s resize skip only applies when compression isn't <c>Lossy</c> (see
+    /// its own remarks), so a resize can legitimately reach here too under that mode. The full pixel
+    /// decode is deferred until one of those is actually called rather than paid unconditionally -
+    /// under the default <see cref="PeachPDF.ImageCompression.Auto"/>/<see cref="PeachPDF.ImageCompression.Lossless"/>
+    /// modes, neither ever is, so this is genuinely cheaper than today for the common case.
+    /// </summary>
+    /// <summary>
+    /// A decoded JPEG XL source plus the original file bytes, for the experimental <c>/JXLDecode</c> embed. Delegates
+    /// every member to <see cref="_inner"/> (the same source <c>DecodeJxl</c> returned before this wrapper existed),
+    /// so a render that does not enable the passthrough is byte-identical to one without it.
+    /// </summary>
+    private sealed class PeachJxlPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
+    {
+        private readonly IImageSource _inner;
+        private readonly JxlPassthroughData _passthrough;
+
+        public PeachJxlPassthroughImageSourceImpl(IImageSource inner, JxlPassthroughData passthrough)
+        {
+            _inner = inner;
+            _passthrough = passthrough;
+        }
+
+        public int Width => _inner.Width;
+        public int Height => _inner.Height;
+        public string Name => _inner.Name;
+        public bool Transparent => _inner.Transparent;
+        public bool IsGrayscale => _inner.IsGrayscale;
+        public bool IsCmyk => _inner.IsCmyk;
+        public int ExifOrientation => _inner.ExifOrientation;
+        public JpegPassthroughData? JpegPassthrough => _inner.JpegPassthrough;
+        public CmykRasterData? CmykRaster => _inner.CmykRaster;
+        public PngPassthroughData? PngPassthrough => _inner.PngPassthrough;
+        public GifPassthroughData? GifPassthrough => _inner.GifPassthrough;
+        public bool IsLosslessSourceFormat => _inner.IsLosslessSourceFormat;
+        public byte[]? RgbIccProfile => _inner.RgbIccProfile;
+        public JxlPassthroughData? JxlPassthrough => _passthrough;
+
+        public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
+            _inner.SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
+
+        public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
+            _inner.SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+
+        public bool TryGetRgba(out int width, out int height, out byte[] rgba)
+        {
+            if (_inner is IRgbaPixelProvider provider)
+            {
+                return provider.TryGetRgba(out width, out height, out rgba);
+            }
+
+            width = height = 0;
+            rgba = [];
+            return false;
+        }
+    }
+
+    private sealed class PeachPngPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
+    {
+        private readonly byte[] _bytes;
+        private readonly int _quality;
+        private readonly PngPassthroughData _passthrough;
+        private PeachImageSourceImpl? _decodedFallback;
+
+        public int Width { get; }
+        public int Height { get; }
+        public string Name { get; }
+        public bool Transparent => false;
+        public bool IsCmyk => false;
+        public int ExifOrientation { get; set; } = 1;
+        public bool IsGrayscale => false;
+        public JpegPassthroughData? JpegPassthrough => null;
+        public CmykRasterData? CmykRaster => null;
+        public PngPassthroughData? PngPassthrough => _passthrough;
+        public GifPassthroughData? GifPassthrough => null;
+        public bool IsLosslessSourceFormat => true;
+
+        // Read by InitializeJpeg's ImageCompression.Lossy fallback (issue #1106): when Lossy forces
+        // this source through DecodedFallback's JPEG re-encode instead of EmbedPngPassthrough, the
+        // re-encoded stream's samples are still the same ones the source's own iCCP profile
+        // describes (a JPEG re-encode recompresses pixel values, it doesn't reinterpret them), so
+        // the profile the pass-through path already parsed carries over rather than being dropped.
+        public byte[]? RgbIccProfile => _passthrough.IccProfile;
+
+        public PeachPngPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, PngPassthroughData passthrough)
+        {
+            Name = name;
+            _bytes = bytes;
+            _quality = quality;
+            Width = width;
+            Height = height;
+            _passthrough = passthrough;
+        }
+
+        // Forces Rgba32 the same as any other non-JPEG format's generic decode (Decode's own
+        // Rgba32DecoderOptions) - IsGrayscale stays false for this fallback regardless of the source's
+        // own PNG color type, which is fine: unlike the JPEG grayscale bug this mirrors the shape of,
+        // decode and re-encode are consistently RGB here, so no /ColorSpace-vs-stream mismatch results,
+        // just a 3-component JPEG for what could have been a 1-component one - an acceptable size
+        // trade for what's already an explicit Lossy opt-out of the lossless default.
+        private PeachImageSourceImpl DecodedFallback() =>
+            _decodedFallback ??= new PeachImageSourceImpl(Name, Image.Load(new MemoryStream(_bytes), Rgba32DecoderOptions), _quality, transparent: false);
+
+        public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
+            DecodedFallback().SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
+
+        public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
+            DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+
+        public bool TryGetRgba(out int width, out int height, out byte[] rgba) =>
+            DecodedFallback().TryGetRgba(out width, out height, out rgba);
+    }
+
+    /// <summary>
+    /// A GIF source eligible for <c>/LZWDecode</c> pass-through (see <see cref="DecodeGif"/>/
+    /// <see cref="IsGifPassthroughEligible"/>) - same shape as
+    /// <see cref="PeachPngPassthroughImageSourceImpl"/>, including its <see cref="ImageCompression.Lossy"/>
+    /// decoded-fallback reasoning.
+    /// </summary>
+    private sealed class PeachGifPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
+    {
+        private readonly byte[] _bytes;
+        private readonly int _quality;
+        private readonly GifPassthroughData _passthrough;
+        private PeachImageSourceImpl? _decodedFallback;
+
+        public int Width { get; }
+        public int Height { get; }
+        public string Name { get; }
+        public bool Transparent => false;
+        public bool IsCmyk => false;
+        public bool IsGrayscale => false;
+        public JpegPassthroughData? JpegPassthrough => null;
+        public CmykRasterData? CmykRaster => null;
+        public PngPassthroughData? PngPassthrough => null;
+        public GifPassthroughData? GifPassthrough => _passthrough;
+        public bool IsLosslessSourceFormat => true;
+        public byte[]? RgbIccProfile => null;
+
+        public PeachGifPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, GifPassthroughData passthrough)
+        {
+            Name = name;
+            _bytes = bytes;
+            _quality = quality;
+            Width = width;
+            Height = height;
+            _passthrough = passthrough;
+        }
+
+        private PeachImageSourceImpl DecodedFallback() =>
+            _decodedFallback ??= new PeachImageSourceImpl(Name, Image.Load(new MemoryStream(_bytes), Rgba32DecoderOptions), _quality, transparent: false);
+
+        public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
+            DecodedFallback().SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
+
+        public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
+            DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+
+        public bool TryGetRgba(out int width, out int height, out byte[] rgba) =>
+            DecodedFallback().TryGetRgba(out width, out height, out rgba);
+    }
+
+    // Whether to embed losslessly (preserving alpha, via SaveAsPdfBitmap) or as lossy JPEG is
+    // decided by Image.HasAlpha - PeachImage 0.4.2+'s own record of whether the *source* declares
+    // an alpha channel (PNG color type, WebP alpha flag, GIF transparent-index declaration, BMP
+    // alpha mask, etc.), set by every codec from the source's header/chunk metadata rather than a
+    // per-pixel scan. That means a source that declares alpha but happens to be fully opaque (e.g.
+    // an RGBA-color-type PNG with alpha=255 everywhere) now takes the lossless path even though no
+    // pixel is actually translucent - a deliberate trade of "know it from the format" over "prove it
+    // from the pixels", not an oversight. See .claude/migration-notes for the behavior change this
+    // replaced: a per-pixel Vector<uint> scan of the decoded Rgba32 buffer that decided the embed
+    // path from real transparency rather than declared format capability.
+    private sealed class PeachImageSourceImpl : IImageSource, IRgbaPixelProvider
+    {
+        private readonly Image _rgba;
+        private readonly int _quality;
+        private readonly JpegPassthroughData? _jpegPassthrough;
+
+        public int Width => _rgba.Width;
+        public int Height => _rgba.Height;
+        public string Name { get; }
+        public bool Transparent { get; }
+        public bool IsCmyk => false;
+        public int ExifOrientation { get; set; } = 1;
+
+        // Only ever true for a JPEG source decoded via DecodeRgbOrGrayJpeg's native (not
+        // Rgba32-forced) path - every other format still forces Rgba32 (see Rgba32DecoderOptions'
+        // own remarks), so _rgba.PixelFormat is never Gray8 for those. Matters because SaveAsJpeg's
+        // re-encode genuinely emits a 1-component grayscale JPEG for a Gray8 source (PeachImage's
+        // FrameEncoder branches on the source's own PixelFormat), and PdfImage's resize-fallback path
+        // needs to write a matching /ColorSpace for that - see IImageSource.IsGrayscale's own remarks.
+        public bool IsGrayscale => _rgba.PixelFormat == PixelFormat.Gray8;
+        public JpegPassthroughData? JpegPassthrough => _jpegPassthrough;
+        public CmykRasterData? CmykRaster => null;
+        public PngPassthroughData? PngPassthrough => null;
+        public GifPassthroughData? GifPassthrough => null;
+
+        // True for BMP/GIF and for a PNG that decoded here because it wasn't pass-through-eligible
+        // (see DecodePng) - both callers pass this explicitly; JPEG (DecodeRgbOrGrayJpeg) leaves it at
+        // its false default, since JPEG always has a lossy encoding mode.
+        public bool IsLosslessSourceFormat { get; }
+
+        // Set only by DecodeGenericRaster for a WebP/AVIF source with a usable embedded ICC profile
+        // (issue #1106) - every other caller leaves this at its null default. See RgbIccProfile's own
+        // interface-level remarks for why this is the only format pair that ever populates it.
+        public byte[]? RgbIccProfile { get; }
+
+        public PeachImageSourceImpl(string name, Image rgba, int quality, bool transparent, JpegPassthroughData? jpegPassthrough = null, bool isLosslessSourceFormat = false, byte[]? rgbIccProfile = null)
+        {
+            Name = name;
+            _rgba = rgba;
+            _quality = quality;
+            Transparent = transparent;
+            _jpegPassthrough = jpegPassthrough;
+            IsLosslessSourceFormat = isLosslessSourceFormat;
+            RgbIccProfile = rgbIccProfile;
+        }
+
+        public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
+        {
+            // JPEG ignores the alpha channel of a Rgba32 source.
+            using var scope = new ResizeScope(_rgba, targetWidth, targetHeight);
+            scope.Source.Save(ms, "jpeg", new JpegEncoderOptions { Quality = qualityOverride ?? _quality });
+        }
+
+        public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null)
+        {
+            using var scope = new ResizeScope(_rgba, targetWidth, targetHeight);
+            scope.Source.Save(ms, "bmp", new BmpEncoderOptions());
+        }
+
+        // Resolves to either the original decoded image or a resized clone, so SaveAsJpeg/
+        // SaveAsPdfBitmap share one resize decision instead of duplicating it. Disposing a scope
+        // that didn't resize is a no-op - it never owns _rgba.
+        private readonly struct ResizeScope : IDisposable
+        {
+            public readonly Image Source;
+            private readonly bool _owned;
+
+            public ResizeScope(Image rgba, int? targetWidth, int? targetHeight)
+            {
+                if (targetWidth is int w && targetHeight is int h && (w != rgba.Width || h != rgba.Height))
+                {
+                    Source = rgba.Resize(w, h, new ResizeOptions { Filter = ResamplingFilter.Bicubic });
+                    _owned = true;
+                }
+                else
+                {
+                    Source = rgba;
+                    _owned = false;
                 }
             }
 
-            // GetIccColorProfile() only returns non-null when it found and parsed exactly this kind of
-            // entry, so this is unreachable whenever a caller already checked that - kept as a safe
-            // fallback rather than an assert.
-            return null;
+            public void Dispose()
+            {
+                if (_owned) Source.Dispose();
+            }
         }
 
-        /// <summary>
-        /// Embeds a CMYK source - either JPEG (via <see cref="JpegPassthroughData"/>, the original file
-        /// bytes, never resized or re-encoded) or TIFF (via <see cref="CmykRasterData"/>, a raw decoded
-        /// pixel buffer - see <see cref="ImageSource.IImageSource.CmykRaster"/>'s own remarks on why
-        /// TIFF needs a different shape). Exactly one of the two constructors is ever used for a given
-        /// instance - see <c>PdfImageTable.ComputeTargetPixelSize</c>'s CMYK resize skip, which applies to
-        /// both: PeachImage has no CMYK JPEG encoder, and a raw CMYK raster embed has no resize step
-        /// either, so a CMYK source is never resized regardless of which shape it took.
-        /// </summary>
-        private sealed class PeachCmykImageSourceImpl : IImageSource, IRgbaPixelProvider
+        public bool TryGetRgba(out int width, out int height, out byte[] rgba)
         {
-            private readonly JpegPassthroughData? _passthrough;
-            private readonly CmykRasterData? _raster;
+            width = _rgba.Width;
+            height = _rgba.Height;
+            var pixels = _rgba.GetPixelSpan();
+            rgba = new byte[width * height * 4];
 
-            public int Width { get; }
-            public int Height { get; }
-            public string Name { get; }
-            public bool Transparent => false;
-            public bool IsCmyk => true;
-            public int ExifOrientation { get; set; } = 1;
-            public bool IsGrayscale => false;
-            public JpegPassthroughData? JpegPassthrough => _passthrough;
-            public CmykRasterData? CmykRaster => _raster;
-            public PngPassthroughData? PngPassthrough => null;
-            public GifPassthroughData? GifPassthrough => null;
-            public bool IsLosslessSourceFormat => false;
-            public byte[]? RgbIccProfile => null;
-
-            public PeachCmykImageSourceImpl(string name, int width, int height, JpegPassthroughData passthrough)
+            switch (_rgba.PixelFormat)
             {
-                Name = name;
-                Width = width;
-                Height = height;
-                _passthrough = passthrough;
-            }
+                case PixelFormat.Rgba32:
+                    pixels.Slice(0, rgba.Length).CopyTo(rgba);
+                    return true;
 
-            public PeachCmykImageSourceImpl(string name, int width, int height, CmykRasterData raster)
-            {
-                Name = name;
-                Width = width;
-                Height = height;
-                _raster = raster;
-            }
-
-            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
-                throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsJpeg is never called for it.");
-
-            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
-                throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsPdfBitmap is never called for it.");
-
-            // The PDF embed keeps CMYK exactly as authored, but a bitmap rendition of it has no colour management to keep: the
-            // usual naive conversion (r = (1 - c)(1 - k) ...) is what any raster fallback for CMYK does.
-            public bool TryGetRgba(out int width, out int height, out byte[] rgba)
-            {
-                width = Width;
-                height = Height;
-
-                if (_raster is { } raster)
-                {
-                    rgba = new byte[width * height * 4];
-                    for (int i = 0, j = 0; i < rgba.Length && j + 3 < raster.Data.Length; i += 4, j += 4)
+                case PixelFormat.Rgb24:
+                    for (int i = 0, j = 0; i < rgba.Length; i += 4, j += 3)
                     {
-                        int k = 255 - raster.Data[j + 3];
-                        rgba[i] = (byte)((255 - raster.Data[j]) * k / 255);
-                        rgba[i + 1] = (byte)((255 - raster.Data[j + 1]) * k / 255);
-                        rgba[i + 2] = (byte)((255 - raster.Data[j + 2]) * k / 255);
+                        rgba[i] = pixels[j];
+                        rgba[i + 1] = pixels[j + 1];
+                        rgba[i + 2] = pixels[j + 2];
                         rgba[i + 3] = 255;
                     }
 
                     return true;
-                }
 
-                if (_passthrough is { } jpeg)
-                {
-                    // A CMYK JPEG: let the codec convert it to RGBA, as it does for every other source.
-                    using var decoded = Image.Load(new MemoryStream(jpeg.Data), Rgba32DecoderOptions);
-                    rgba = decoded.GetPixelSpan().Slice(0, width * height * 4).ToArray();
+                case PixelFormat.Gray8:
+                    for (int i = 0, j = 0; i < rgba.Length; i += 4, j++)
+                    {
+                        rgba[i] = rgba[i + 1] = rgba[i + 2] = pixels[j];
+                        rgba[i + 3] = 255;
+                    }
+
                     return true;
-                }
 
-                rgba = [];
-                return false;
+                default:
+                    rgba = [];
+                    return false;
             }
         }
 
-        /// <summary>
-        /// A PNG source eligible for byte-for-byte pass-through (see <see cref="DecodePng"/>/
-        /// <see cref="IsPassthroughEligible"/>). Unlike <see cref="PeachCmykImageSourceImpl"/> - which
-        /// genuinely has no fallback (PeachImage has no CMYK JPEG encoder) - <see cref="SaveAsJpeg"/>/
-        /// <see cref="SaveAsPdfBitmap"/> aren't unreachable here: <see cref="PeachPDF.ImageCompression.Lossy"/>
-        /// explicitly asks for a lossy JPEG re-encode even of an otherwise pass-through-eligible source,
-        /// and <c>PdfImageTable</c>'s resize skip only applies when compression isn't <c>Lossy</c> (see
-        /// its own remarks), so a resize can legitimately reach here too under that mode. The full pixel
-        /// decode is deferred until one of those is actually called rather than paid unconditionally -
-        /// under the default <see cref="PeachPDF.ImageCompression.Auto"/>/<see cref="PeachPDF.ImageCompression.Lossless"/>
-        /// modes, neither ever is, so this is genuinely cheaper than today for the common case.
-        /// </summary>
-        /// <summary>
-        /// A decoded JPEG XL source plus the original file bytes, for the experimental <c>/JXLDecode</c> embed. Delegates
-        /// every member to <see cref="_inner"/> (the same source <c>DecodeJxl</c> returned before this wrapper existed),
-        /// so a render that does not enable the passthrough is byte-identical to one without it.
-        /// </summary>
-        private sealed class PeachJxlPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
-        {
-            private readonly IImageSource _inner;
-            private readonly JxlPassthroughData _passthrough;
-
-            public PeachJxlPassthroughImageSourceImpl(IImageSource inner, JxlPassthroughData passthrough)
-            {
-                _inner = inner;
-                _passthrough = passthrough;
-            }
-
-            public int Width => _inner.Width;
-            public int Height => _inner.Height;
-            public string Name => _inner.Name;
-            public bool Transparent => _inner.Transparent;
-            public bool IsGrayscale => _inner.IsGrayscale;
-            public bool IsCmyk => _inner.IsCmyk;
-            public int ExifOrientation => _inner.ExifOrientation;
-            public JpegPassthroughData? JpegPassthrough => _inner.JpegPassthrough;
-            public CmykRasterData? CmykRaster => _inner.CmykRaster;
-            public PngPassthroughData? PngPassthrough => _inner.PngPassthrough;
-            public GifPassthroughData? GifPassthrough => _inner.GifPassthrough;
-            public bool IsLosslessSourceFormat => _inner.IsLosslessSourceFormat;
-            public byte[]? RgbIccProfile => _inner.RgbIccProfile;
-            public JxlPassthroughData? JxlPassthrough => _passthrough;
-
-            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
-                _inner.SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
-
-            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
-                _inner.SaveAsPdfBitmap(ms, targetWidth, targetHeight);
-
-            public bool TryGetRgba(out int width, out int height, out byte[] rgba)
-            {
-                if (_inner is IRgbaPixelProvider provider)
-                {
-                    return provider.TryGetRgba(out width, out height, out rgba);
-                }
-
-                width = height = 0;
-                rgba = [];
-                return false;
-            }
-        }
-
-        private sealed class PeachPngPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
-        {
-            private readonly byte[] _bytes;
-            private readonly int _quality;
-            private readonly PngPassthroughData _passthrough;
-            private PeachImageSourceImpl? _decodedFallback;
-
-            public int Width { get; }
-            public int Height { get; }
-            public string Name { get; }
-            public bool Transparent => false;
-            public bool IsCmyk => false;
-            public int ExifOrientation { get; set; } = 1;
-            public bool IsGrayscale => false;
-            public JpegPassthroughData? JpegPassthrough => null;
-            public CmykRasterData? CmykRaster => null;
-            public PngPassthroughData? PngPassthrough => _passthrough;
-            public GifPassthroughData? GifPassthrough => null;
-            public bool IsLosslessSourceFormat => true;
-
-            // Read by InitializeJpeg's ImageCompression.Lossy fallback (issue #1106): when Lossy forces
-            // this source through DecodedFallback's JPEG re-encode instead of EmbedPngPassthrough, the
-            // re-encoded stream's samples are still the same ones the source's own iCCP profile
-            // describes (a JPEG re-encode recompresses pixel values, it doesn't reinterpret them), so
-            // the profile the pass-through path already parsed carries over rather than being dropped.
-            public byte[]? RgbIccProfile => _passthrough.IccProfile;
-
-            public PeachPngPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, PngPassthroughData passthrough)
-            {
-                Name = name;
-                _bytes = bytes;
-                _quality = quality;
-                Width = width;
-                Height = height;
-                _passthrough = passthrough;
-            }
-
-            // Forces Rgba32 the same as any other non-JPEG format's generic decode (Decode's own
-            // Rgba32DecoderOptions) - IsGrayscale stays false for this fallback regardless of the source's
-            // own PNG color type, which is fine: unlike the JPEG grayscale bug this mirrors the shape of,
-            // decode and re-encode are consistently RGB here, so no /ColorSpace-vs-stream mismatch results,
-            // just a 3-component JPEG for what could have been a 1-component one - an acceptable size
-            // trade for what's already an explicit Lossy opt-out of the lossless default.
-            private PeachImageSourceImpl DecodedFallback() =>
-                _decodedFallback ??= new PeachImageSourceImpl(Name, Image.Load(new MemoryStream(_bytes), Rgba32DecoderOptions), _quality, transparent: false);
-
-            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
-                DecodedFallback().SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
-
-            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
-                DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
-
-            public bool TryGetRgba(out int width, out int height, out byte[] rgba) =>
-                DecodedFallback().TryGetRgba(out width, out height, out rgba);
-        }
-
-        /// <summary>
-        /// A GIF source eligible for <c>/LZWDecode</c> pass-through (see <see cref="DecodeGif"/>/
-        /// <see cref="IsGifPassthroughEligible"/>) - same shape as
-        /// <see cref="PeachPngPassthroughImageSourceImpl"/>, including its <see cref="ImageCompression.Lossy"/>
-        /// decoded-fallback reasoning.
-        /// </summary>
-        private sealed class PeachGifPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
-        {
-            private readonly byte[] _bytes;
-            private readonly int _quality;
-            private readonly GifPassthroughData _passthrough;
-            private PeachImageSourceImpl? _decodedFallback;
-
-            public int Width { get; }
-            public int Height { get; }
-            public string Name { get; }
-            public bool Transparent => false;
-            public bool IsCmyk => false;
-            public bool IsGrayscale => false;
-            public JpegPassthroughData? JpegPassthrough => null;
-            public CmykRasterData? CmykRaster => null;
-            public PngPassthroughData? PngPassthrough => null;
-            public GifPassthroughData? GifPassthrough => _passthrough;
-            public bool IsLosslessSourceFormat => true;
-            public byte[]? RgbIccProfile => null;
-
-            public PeachGifPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, GifPassthroughData passthrough)
-            {
-                Name = name;
-                _bytes = bytes;
-                _quality = quality;
-                Width = width;
-                Height = height;
-                _passthrough = passthrough;
-            }
-
-            private PeachImageSourceImpl DecodedFallback() =>
-                _decodedFallback ??= new PeachImageSourceImpl(Name, Image.Load(new MemoryStream(_bytes), Rgba32DecoderOptions), _quality, transparent: false);
-
-            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
-                DecodedFallback().SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
-
-            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
-                DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
-
-            public bool TryGetRgba(out int width, out int height, out byte[] rgba) =>
-                DecodedFallback().TryGetRgba(out width, out height, out rgba);
-        }
-
-        // Whether to embed losslessly (preserving alpha, via SaveAsPdfBitmap) or as lossy JPEG is
-        // decided by Image.HasAlpha - PeachImage 0.4.2+'s own record of whether the *source* declares
-        // an alpha channel (PNG color type, WebP alpha flag, GIF transparent-index declaration, BMP
-        // alpha mask, etc.), set by every codec from the source's header/chunk metadata rather than a
-        // per-pixel scan. That means a source that declares alpha but happens to be fully opaque (e.g.
-        // an RGBA-color-type PNG with alpha=255 everywhere) now takes the lossless path even though no
-        // pixel is actually translucent - a deliberate trade of "know it from the format" over "prove it
-        // from the pixels", not an oversight. See .claude/migration-notes for the behavior change this
-        // replaced: a per-pixel Vector<uint> scan of the decoded Rgba32 buffer that decided the embed
-        // path from real transparency rather than declared format capability.
-        private sealed class PeachImageSourceImpl : IImageSource, IRgbaPixelProvider
-        {
-            private readonly Image _rgba;
-            private readonly int _quality;
-            private readonly JpegPassthroughData? _jpegPassthrough;
-
-            public int Width => _rgba.Width;
-            public int Height => _rgba.Height;
-            public string Name { get; }
-            public bool Transparent { get; }
-            public bool IsCmyk => false;
-            public int ExifOrientation { get; set; } = 1;
-
-            // Only ever true for a JPEG source decoded via DecodeRgbOrGrayJpeg's native (not
-            // Rgba32-forced) path - every other format still forces Rgba32 (see Rgba32DecoderOptions'
-            // own remarks), so _rgba.PixelFormat is never Gray8 for those. Matters because SaveAsJpeg's
-            // re-encode genuinely emits a 1-component grayscale JPEG for a Gray8 source (PeachImage's
-            // FrameEncoder branches on the source's own PixelFormat), and PdfImage's resize-fallback path
-            // needs to write a matching /ColorSpace for that - see IImageSource.IsGrayscale's own remarks.
-            public bool IsGrayscale => _rgba.PixelFormat == PixelFormat.Gray8;
-            public JpegPassthroughData? JpegPassthrough => _jpegPassthrough;
-            public CmykRasterData? CmykRaster => null;
-            public PngPassthroughData? PngPassthrough => null;
-            public GifPassthroughData? GifPassthrough => null;
-
-            // True for BMP/GIF and for a PNG that decoded here because it wasn't pass-through-eligible
-            // (see DecodePng) - both callers pass this explicitly; JPEG (DecodeRgbOrGrayJpeg) leaves it at
-            // its false default, since JPEG always has a lossy encoding mode.
-            public bool IsLosslessSourceFormat { get; }
-
-            // Set only by DecodeGenericRaster for a WebP/AVIF source with a usable embedded ICC profile
-            // (issue #1106) - every other caller leaves this at its null default. See RgbIccProfile's own
-            // interface-level remarks for why this is the only format pair that ever populates it.
-            public byte[]? RgbIccProfile { get; }
-
-            public PeachImageSourceImpl(string name, Image rgba, int quality, bool transparent, JpegPassthroughData? jpegPassthrough = null, bool isLosslessSourceFormat = false, byte[]? rgbIccProfile = null)
-            {
-                Name = name;
-                _rgba = rgba;
-                _quality = quality;
-                Transparent = transparent;
-                _jpegPassthrough = jpegPassthrough;
-                IsLosslessSourceFormat = isLosslessSourceFormat;
-                RgbIccProfile = rgbIccProfile;
-            }
-
-            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
-            {
-                // JPEG ignores the alpha channel of a Rgba32 source.
-                using var scope = new ResizeScope(_rgba, targetWidth, targetHeight);
-                scope.Source.Save(ms, "jpeg", new JpegEncoderOptions { Quality = qualityOverride ?? _quality });
-            }
-
-            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null)
-            {
-                using var scope = new ResizeScope(_rgba, targetWidth, targetHeight);
-                scope.Source.Save(ms, "bmp", new BmpEncoderOptions());
-            }
-
-            // Resolves to either the original decoded image or a resized clone, so SaveAsJpeg/
-            // SaveAsPdfBitmap share one resize decision instead of duplicating it. Disposing a scope
-            // that didn't resize is a no-op - it never owns _rgba.
-            private readonly struct ResizeScope : IDisposable
-            {
-                public readonly Image Source;
-                private readonly bool _owned;
-
-                public ResizeScope(Image rgba, int? targetWidth, int? targetHeight)
-                {
-                    if (targetWidth is int w && targetHeight is int h && (w != rgba.Width || h != rgba.Height))
-                    {
-                        Source = rgba.Resize(w, h, new ResizeOptions { Filter = ResamplingFilter.Bicubic });
-                        _owned = true;
-                    }
-                    else
-                    {
-                        Source = rgba;
-                        _owned = false;
-                    }
-                }
-
-                public void Dispose()
-                {
-                    if (_owned) Source.Dispose();
-                }
-            }
-
-            public bool TryGetRgba(out int width, out int height, out byte[] rgba)
-            {
-                width = _rgba.Width;
-                height = _rgba.Height;
-                var pixels = _rgba.GetPixelSpan();
-                rgba = new byte[width * height * 4];
-
-                switch (_rgba.PixelFormat)
-                {
-                    case PixelFormat.Rgba32:
-                        pixels.Slice(0, rgba.Length).CopyTo(rgba);
-                        return true;
-
-                    case PixelFormat.Rgb24:
-                        for (int i = 0, j = 0; i < rgba.Length; i += 4, j += 3)
-                        {
-                            rgba[i] = pixels[j];
-                            rgba[i + 1] = pixels[j + 1];
-                            rgba[i + 2] = pixels[j + 2];
-                            rgba[i + 3] = 255;
-                        }
-
-                        return true;
-
-                    case PixelFormat.Gray8:
-                        for (int i = 0, j = 0; i < rgba.Length; i += 4, j++)
-                        {
-                            rgba[i] = rgba[i + 1] = rgba[i + 2] = pixels[j];
-                            rgba[i + 3] = 255;
-                        }
-
-                        return true;
-
-                    default:
-                        rgba = [];
-                        return false;
-                }
-            }
-
-            // IImageSource doesn't declare IDisposable (PdfRasterImage never disposes its IImageSource) - the
-            // backing Image's Dispose() is itself a near no-op today (see PeachImage.Image.Dispose's
-            // remarks), so nothing is actually leaked.
-            public void Dispose() { }
-        }
+        // IImageSource doesn't declare IDisposable (PdfRasterImage never disposes its IImageSource) - the
+        // backing Image's Dispose() is itself a near no-op today (see PeachImage.Image.Dispose's
+        // remarks), so nothing is actually leaked.
+        public void Dispose() { }
     }
 }
