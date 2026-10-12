@@ -54,18 +54,18 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // Draw two lines with a red default pen.
             var width = page.Width;
             var height = page.Height;
-            gfx.DrawLine(XPens.Red, 0, 0, width, height);
-            gfx.DrawLine(XPens.Red, width, 0, 0, height);
+            gfx.DrawLine(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0)), 0, 0, width, height);
+            gfx.DrawLine(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0)), width, 0, 0, height);
 
             // Draw a circle with a red pen which is 1.5 point thick.
             var r = width / 5;
-            gfx.DrawEllipse(new XPen(PaintColor.FromArgb(255, 0, 0), 1.5), XBrushes.White, new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
+            gfx.DrawEllipse(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0), 1.5), new SolidBrush(PaintColor.White), new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
             var font = TestFonts.Create("Arial", 20, (PaintFontStyle.Bold | PaintFontStyle.Italic));
 
             // Draw the text.
-            gfx.DrawString("Hello, World!", font, XBrushes.Black,
+            gfx.DrawString("Hello, World!", font, new SolidBrush(PaintColor.Black),
                 new Rect(0, 0, width, height), XStringFormats.Center);
 
             var fullName = WriteTempPngFile();

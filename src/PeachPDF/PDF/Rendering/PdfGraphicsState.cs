@@ -96,45 +96,45 @@ namespace PeachPDF.PDF.Rendering
         PaintColor _realizedStrokeColor = PaintColor.Empty;
         bool _realizedStrokeOverPrint;
 
-        public void RealizePen(XPen pen, PdfColorMode colorMode)
+        public void RealizePen(Pen pen, PdfColorMode colorMode)
         {
             const string frmt2 = Config.SignificantFigures2;
             const string format = Config.SignificantFigures3;
-            PaintColor color = pen.PaintColor;
-            bool overPrint = pen.Overprint;
+            PaintColor color = pen.Paint is SolidBrush solidPaint ? solidPaint.PaintColor : PaintColor.Empty;
+            const bool overPrint = false;
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
             color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
             color = PdfXColorSpaceGuard.RequireAllowedOrConvert(_renderer.Owner, color,
                 "A stroke color (CSS border-color/outline-color/column-rule-color, or an SVG stroke)");
 
-            if (_realizedLineWith != pen._width)
+            if (_realizedLineWith != pen.Width)
             {
-                _renderer.AppendFormatArgs("{0:" + format + "} w\n", pen._width);
-                _realizedLineWith = pen._width;
+                _renderer.AppendFormatArgs("{0:" + format + "} w\n", pen.Width);
+                _realizedLineWith = pen.Width;
             }
 
-            if (_realizedLineCap != (int)pen._lineCap)
+            if (_realizedLineCap != (int)pen.LineCap)
             {
-                _renderer.AppendFormatArgs("{0} J\n", (int)pen._lineCap);
-                _realizedLineCap = (int)pen._lineCap;
+                _renderer.AppendFormatArgs("{0} J\n", (int)pen.LineCap);
+                _realizedLineCap = (int)pen.LineCap;
             }
 
-            if (_realizedLineJoin != (int)pen._lineJoin)
+            if (_realizedLineJoin != (int)pen.LineJoin)
             {
-                _renderer.AppendFormatArgs("{0} j\n", (int)pen._lineJoin);
-                _realizedLineJoin = (int)pen._lineJoin;
+                _renderer.AppendFormatArgs("{0} j\n", (int)pen.LineJoin);
+                _realizedLineJoin = (int)pen.LineJoin;
             }
 
             if (_realizedLineJoin == (int)LineJoin.Miter)
             {
-                if (_realizedMiterLimit != (int)pen._miterLimit && (int)pen._miterLimit != 0)
+                if (_realizedMiterLimit != (int)pen.MiterLimit && (int)pen.MiterLimit != 0)
                 {
-                    _renderer.AppendFormatInt("{0} M\n", (int)pen._miterLimit);
-                    _realizedMiterLimit = (int)pen._miterLimit;
+                    _renderer.AppendFormatInt("{0} M\n", (int)pen.MiterLimit);
+                    _realizedMiterLimit = (int)pen.MiterLimit;
                 }
             }
 
-            if (_realizedDashStyle != pen._dashStyle || pen._dashStyle == DashStyle.Custom)
+            if (_realizedDashStyle != pen.DashStyle || pen.DashStyle == DashStyle.Custom)
             {
                 double dot = pen.Width;
                 double dash = 3 * dot;
@@ -169,20 +169,20 @@ namespace PeachPDF.PDF.Rendering
                     case DashStyle.Custom:
                         {
                             StringBuilder pdf = new StringBuilder("[", 256);
-                            int len = pen._dashPattern == null ? 0 : pen._dashPattern.Length;
+                            int len = pen.DashPattern.Length;
                             for (int idx = 0; idx < len; idx++)
                             {
                                 if (idx > 0)
                                     pdf.Append(' ');
-                                pdf.Append(PdfEncoders.ToString(pen._dashPattern[idx] * pen._width));
+                                pdf.Append(PdfEncoders.ToString(pen.DashPattern[idx]));
                             }
                             // Make an even number of values look like in GDI+
                             if (len > 0 && len % 2 == 1)
                             {
                                 pdf.Append(' ');
-                                pdf.Append(PdfEncoders.ToString(0.2 * pen._width));
+                                pdf.Append(PdfEncoders.ToString(0.2 * pen.Width));
                             }
-                            pdf.AppendFormat(CultureInfo.InvariantCulture, "]{0:" + format + "} d\n", pen._dashOffset * pen._width);
+                            pdf.AppendFormat(CultureInfo.InvariantCulture, "]{0:" + format + "} d\n", pen.DashOffset);
                             string pattern = pdf.ToString();
 
                             // BUG: drice2@ageone.de reported a realizing problem
@@ -198,9 +198,9 @@ namespace PeachPDF.PDF.Rendering
                 _realizedDashStyle = dashStyle;
             }
 
-            if (pen.Brush != null)
+            if (pen.Paint is not SolidBrush)
             {
-                RealizeBrush(pen.Brush, colorMode, 0, 0, true);
+                RealizeBrush(pen.Paint, colorMode, 0, 0, true);
             }
             else if (ResolveEffectiveColorMode(colorMode, color) != PdfColorMode.Cmyk)
             {
@@ -235,7 +235,7 @@ namespace PeachPDF.PDF.Rendering
             // alpha must stay fully opaque. Driving /CA from color.A here would emit /CA 0 and make the
             // whole brush stroke invisible whenever the previously realized stroke alpha wasn't already
             // 0 (e.g. right after any opaque solid stroke).
-            double strokeAlpha = pen.Brush != null ? 1.0 : color.Opacity();
+            double strokeAlpha = pen.Paint is not SolidBrush ? 1.0 : color.Opacity();
 
             if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.Opacity() != strokeAlpha || _realizedStrokeOverPrint != overPrint))
             {
@@ -261,7 +261,7 @@ namespace PeachPDF.PDF.Rendering
             // invalidate the tracked stroke color (as RealizeBrush already does for the fill side) so a
             // following solid stroke re-establishes its own DeviceRGB/CMYK color instead of reusing this
             // pattern. Solid strokes keep tracking their realized color for the dedup above.
-            _realizedStrokeColor = pen.Brush != null ? PaintColor.Empty : color;
+            _realizedStrokeColor = pen.Paint is not SolidBrush ? PaintColor.Empty : color;
             _realizedStrokeOverPrint = overPrint;
         }
 
@@ -272,7 +272,7 @@ namespace PeachPDF.PDF.Rendering
         PaintColor _realizedFillColor = PaintColor.Empty;
         bool _realizedNonStrokeOverPrint;
 
-        public void RealizeBrush(XBrush brush, PdfColorMode colorMode, int renderingMode, double fontEmSize, bool isForPen = false)
+        public void RealizeBrush(Brush brush, PdfColorMode colorMode, int renderingMode, double fontEmSize, bool isForPen = false)
         {
             // Rendering mode 2 is used for bold simulation; mode 3 paints no ink and therefore has no
             // brush to realize (color-font vector glyphs use it solely for selectable extraction text).
@@ -280,11 +280,11 @@ namespace PeachPDF.PDF.Rendering
             if (renderingMode == 3)
                 return;
 
-            XSolidBrush solidBrush = brush as XSolidBrush;
+            SolidBrush solidBrush = brush as SolidBrush;
             if (solidBrush != null)
             {
                 PaintColor color = solidBrush.PaintColor;
-                bool overPrint = solidBrush.Overprint;
+                const bool overPrint = false;
 
                 if (renderingMode == 0)
                 {
@@ -295,7 +295,7 @@ namespace PeachPDF.PDF.Rendering
                     // Come here in case of bold simulation.
                     RealizeFillColor(color, false, colorMode);
                     //color = PaintColor.FromArgb(0, 128, 0);
-                    RealizePen(new XPen(color, fontEmSize * Const.BoldEmphasis), colorMode);
+                    RealizePen(PdfPaints.CreatePen(color, fontEmSize * Const.BoldEmphasis), colorMode);
                 }
                 else
                     throw new InvalidOperationException("Only rendering modes 0 and 2 are currently supported.");
@@ -342,13 +342,13 @@ namespace PeachPDF.PDF.Rendering
 
                     _realizedFillColor = PaintColor.Empty;
                 }
-                else if (brush is XBaseGradientBrush gradientBrush)
+                else if (PdfPaints.IsGradient(brush))
                 {
                     Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
                     Matrix3x2 matrix = _renderer.DefaultViewMatrix;
                     matrix = EffectiveCtm * matrix;
                     PdfShadingPattern pattern = new PdfShadingPattern(_renderer.Owner);
-                    pattern.SetupFromBrush(gradientBrush, matrix, _renderer);
+                    pattern.SetupFromBrush(brush, matrix, _renderer);
                     string name = _renderer.Resources.AddPattern(pattern);
 
                     if (pattern.AlphaExtGState != null)
@@ -479,7 +479,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>The character spacing (<c>Tc</c>) last written, unrounded.</summary>
         internal double RealizedCharSpace => _realizedCharSpace;
 
-        public void RealizeFont(XFont font, XBrush brush, int renderingMode, double letterSpacing = 0)
+        public void RealizeFont(XFont font, Brush brush, int renderingMode, double letterSpacing = 0)
         {
             const string format = Config.SignificantFigures3;
 

@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Internal;
 using PeachPDF.PDF;
@@ -183,7 +184,7 @@ namespace PeachPDF.PDF
 
         public static string NeedPenOrBrush
         {
-            get { return "XPen or XBrush or both must not be null."; }
+            get { return "Pen or Brush or both must not be null."; }
         }
 
         public static string CannotChangeImmutableObject(string typename)

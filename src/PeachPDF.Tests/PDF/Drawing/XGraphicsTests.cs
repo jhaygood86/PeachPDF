@@ -124,7 +124,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using var gfx = XGraphics.FromPdfPage(page);
 
             var container = gfx.BeginContainer();
-            gfx.DrawLine(XPens.Black, 0, 0, 10, 10);
+            gfx.DrawLine(PdfPaints.CreatePen(PaintColor.Black), 0, 0, 10, 10);
             gfx.EndContainer(container);
 
             using var stream = new MemoryStream();
@@ -153,7 +153,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var pen = new XPen(PaintColor.Black, 1);
+                var pen = PdfPaints.CreatePen(PaintColor.Black, 1);
                 gfx.DrawArc(pen, 10, 10, 40, 40, 30, 270);
             }
 
@@ -168,7 +168,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             var (document, page) = NewPage();
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var pen = new XPen(PaintColor.Black, 1);
+                var pen = PdfPaints.CreatePen(PaintColor.Black, 1);
                 gfx.DrawArc(pen, 10, 10, 40, 40, 30, -270);
             }
 
@@ -193,7 +193,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
                     5.67891, 6.78912,
                     7.89123, 8.91234);
                 path.CloseFigure();
-                gfx.DrawPath(XBrushes.Black, path);
+                gfx.DrawPath(new SolidBrush(PaintColor.Black), path);
             }
 
             using var stream = new MemoryStream();
@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                gfx.DrawLine(XPens.Black, 0, 0, 10, 10);
+                gfx.DrawLine(PdfPaints.CreatePen(PaintColor.Black), 0, 0, 10, 10);
             }
 
             using var stream = new MemoryStream();
@@ -334,8 +334,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var pen = new XPen(PaintColor.FromArgb(255, 0, 0), 1.5);
-                var brush = XBrushes.Blue;
+                var pen = PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0), 1.5);
+                var brush = new SolidBrush(PaintColor.FromArgb(0, 0, 255));
                 var font = TestFonts.Create("Times New Roman", 14, PaintFontStyle.Bold);
 
                 gfx.TranslateTransform(1, 1);
@@ -417,7 +417,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var state = gfx.Save();
-                var brush = new XSolidBrush(PaintColor.FromArgb(0, 255, 0, 0));
+                var brush = new SolidBrush(PaintColor.FromArgb(0, 255, 0, 0));
                 gfx.DrawRectangle(brush, 10, 10, 20, 20);
                 gfx.Restore(state);
             }
@@ -446,7 +446,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var state = gfx.Save();
-                var pen = new XPen(PaintColor.FromArgb(0, 0, 0, 0), 2);
+                var pen = PdfPaints.CreatePen(PaintColor.FromArgb(0, 0, 0, 0), 2);
                 gfx.DrawLine(pen, 10, 10, 30, 30);
                 gfx.Restore(state);
             }

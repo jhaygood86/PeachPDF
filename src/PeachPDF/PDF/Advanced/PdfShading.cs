@@ -35,6 +35,7 @@ using PeachPDF.PDF.Internal;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace PeachPDF.PDF.Advanced
@@ -51,16 +52,38 @@ namespace PeachPDF.PDF.Advanced
             : base(document)
         { }
 
-        internal void SetupFromBrush(XBaseGradientBrush brush, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(Brush brush, XGraphicsPdfRenderer renderer)
         {
-            if (brush is XRadialGradientBrush radialBrush)
-                SetupFromBrush(radialBrush, renderer);
-            else if (brush is XLinearGradientBrush linearBrush)
-                SetupFromBrush(linearBrush, renderer);
-            else if (brush is XConicGradientBrush conicBrush)
-                SetupConicFromBrush(conicBrush, renderer);
-            else
-                throw new ArgumentException("Unsupoorted XGradientBrush: " + brush);
+            switch (brush)
+            {
+                case RadialGradientBrush radialBrush:
+                    SetupFromBrush(radialBrush, renderer);
+                    break;
+                case LinearGradientBrush linearBrush:
+                    SetupFromBrush(linearBrush, renderer);
+                    break;
+                case ConicGradientBrush conicBrush:
+                    SetupConicFromBrush(conicBrush, renderer);
+                    break;
+                default:
+                    throw new ArgumentException("Unsupported gradient brush: " + brush);
+            }
+        }
+
+        private static PaintColor[] StopColors(IReadOnlyList<GradientStop> stops)
+        {
+            var colors = new PaintColor[stops.Count];
+            for (int i = 0; i < colors.Length; i++)
+                colors[i] = stops[i].PaintColor;
+            return colors;
+        }
+
+        private static double[] StopPositions(IReadOnlyList<GradientStop> stops)
+        {
+            var positions = new double[stops.Count];
+            for (int i = 0; i < positions.Length; i++)
+                positions[i] = stops[i].Position;
+            return positions;
         }
 
         internal Matrix3x2? EllipsePatternMatrix { get; private set; }
@@ -94,74 +117,28 @@ namespace PeachPDF.PDF.Advanced
             return anyCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
         }
 
-        internal void SetupFromBrush(XRadialGradientBrush brush, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(RadialGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
-            if (brush == null)
-                throw new ArgumentNullException("brush");
-
-            // Multi-stop path (from CSS radial-gradient)
-            if (brush._colors != null)
-            {
-                SetupRadialMultiStop(brush, renderer);
-                return;
-            }
-
-            // Legacy 2-color path
-            PdfColorMode colorMode = ResolveShadingColorMode([brush._color1, brush._color2]);
-            PaintColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
-            PaintColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
-
-            PdfDictionary function = new PdfDictionary();
-
-            Elements[Keys.ShadingType] = new PdfInteger(3);
-            if (colorMode != PdfColorMode.Cmyk)
-                Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
-            else
-                Elements[Keys.ColorSpace] = new PdfName("/DeviceCMYK");
-
-            PaintPoint p1 = renderer.WorldToView(brush._center1);
-            PaintPoint p2 = renderer.WorldToView(brush._center2);
-
-            var rv1 = renderer.WorldToView(new PaintPoint(brush._r1 + brush._center1.X, brush._center1.Y));
-            var rv2 = renderer.WorldToView(new PaintPoint(brush._r2 + brush._center2.X, brush._center2.Y));
-
-            var dx1 = rv1.X - p1.X;
-            var dy1 = rv1.Y - p1.Y;
-            var dx2 = rv2.X - p2.X;
-            var dy2 = rv2.Y - p2.Y;
-
-            var r1 = Math.Sqrt(dx1 * dx1 + dy1 * dy1);
-            var r2 = Math.Sqrt(dx2 * dx2 + dy2 * dy2);
-
-            const string format = Config.SignificantFigures3;
-            Elements[Keys.Coords] = new PdfLiteral("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "}]", p1.X, p1.Y, r1, p2.X, p2.Y, r2);
-
-            Elements[Keys.Function] = function;
-
-            string clr1 = "[" + PdfEncoders.ToString(color1, colorMode) + "]";
-            string clr2 = "[" + PdfEncoders.ToString(color2, colorMode) + "]";
-
-            function.Elements["/FunctionType"] = new PdfInteger(2);
-            function.Elements["/C0"] = new PdfLiteral(clr1);
-            function.Elements["/C1"] = new PdfLiteral(clr2);
-            function.Elements["/Domain"] = new PdfLiteral("[0 1]");
-            function.Elements["/N"] = new PdfInteger(1);
+            ArgumentNullException.ThrowIfNull(brush);
+            SetupRadialMultiStop(brush, renderer);
         }
 
-        private void SetupRadialMultiStop(XRadialGradientBrush brush, XGraphicsPdfRenderer renderer)
+        private void SetupRadialMultiStop(RadialGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
-            PdfColorMode colorMode = ResolveShadingColorMode(brush._colors!);
+            PaintColor[] colors = StopColors(brush.Stops);
+            double[] positions = StopPositions(brush.Stops);
+            PdfColorMode colorMode = ResolveShadingColorMode(colors);
 
             Elements[Keys.ShadingType] = new PdfInteger(3);
             if (colorMode != PdfColorMode.Cmyk)
                 Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
             else
                 Elements[Keys.ColorSpace] = new PdfName("/DeviceCMYK");
-            Elements[Keys.Extend] = new PdfLiteral(brush.IsRepeating ? "[false false]" : "[true true]");
+            Elements[Keys.Extend] = new PdfLiteral((brush.Spread == GradientSpread.Repeat) ? "[false false]" : "[true true]");
 
-            PaintPoint center_v = renderer.WorldToView(brush._center1);
-            PaintPoint rightEdge_v = renderer.WorldToView(new PaintPoint(brush._center1.X + brush._radiusX, brush._center1.Y));
-            PaintPoint topEdge_v = renderer.WorldToView(new PaintPoint(brush._center1.X, brush._center1.Y - brush._radiusY));
+            PaintPoint center_v = renderer.WorldToView(brush.Center);
+            PaintPoint rightEdge_v = renderer.WorldToView(new PaintPoint(brush.Center.X + brush.RadiusX, brush.Center.Y));
+            PaintPoint topEdge_v = renderer.WorldToView(new PaintPoint(brush.Center.X, brush.Center.Y - brush.RadiusY));
 
             double rx_v = Math.Abs(rightEdge_v.X - center_v.X);
             double ry_v = Math.Abs(topEdge_v.Y - center_v.Y);
@@ -175,20 +152,20 @@ namespace PeachPDF.PDF.Advanced
             double unitFocalX = 0, unitFocalY = 0;
             // The first stop's circle: its radius in the coordinate space the /Coords below are written in.
             double focalR = 0;
-            PaintPoint focal_v = renderer.WorldToView(brush._focalCenter);
+            PaintPoint focal_v = renderer.WorldToView(brush.Focus);
 
-            if (brush._transform is { } gradientTransform && brush._radiusX > 0 && brush._radiusY > 0)
+            if (brush.Transform is { } gradientTransform && brush.RadiusX > 0 && brush.RadiusY > 0)
             {
                 // A rotated/skewed gradientTransform: the ellipse is the unit circle carried through
                 // (radii, center) and then the transform, i.e. a general 2x2 that no pair of axis-aligned
                 // radii can state.
                 PaintPoint Map(double u, double v) => renderer.WorldToView(gradientTransform.Transform(
-                    new PaintPoint(brush._center1.X + u * brush._radiusX, brush._center1.Y + v * brush._radiusY)));
+                    new PaintPoint(brush.Center.X + u * brush.RadiusX, brush.Center.Y + v * brush.RadiusY)));
 
                 PaintPoint o = Map(0, 0), ux = Map(1, 0), uy = Map(0, 1);
                 unitMatrix = PdfMatrix.Create(ux.X - o.X, ux.Y - o.Y, uy.X - o.X, uy.Y - o.Y, o.X, o.Y);
-                unitFocalX = (brush._focalCenter.X - brush._center1.X) / brush._radiusX;
-                unitFocalY = (brush._focalCenter.Y - brush._center1.Y) / brush._radiusY;
+                unitFocalX = (brush.Focus.X - brush.Center.X) / brush.RadiusX;
+                unitFocalY = (brush.Focus.Y - brush.Center.Y) / brush.RadiusY;
                 var focalLen = Math.Sqrt(unitFocalX * unitFocalX + unitFocalY * unitFocalY);
                 if (focalLen > 0.9999)
                 {
@@ -196,7 +173,7 @@ namespace PeachPDF.PDF.Advanced
                     unitFocalY *= 0.9999 / focalLen;
                 }
 
-                focalR = brush.FocalRadius > 0 ? Math.Min(brush.FocalRadius / brush._radiusX, 0.9999) : 0;
+                focalR = brush.FocusRadius > 0 ? Math.Min(brush.FocusRadius / brush.RadiusX, 0.9999) : 0;
                 Elements[Keys.Coords] = new PdfLiteral(
                     "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} 0 0 1]", unitFocalX, unitFocalY, focalR);
                 EllipsePatternMatrix = unitMatrix;
@@ -207,7 +184,7 @@ namespace PeachPDF.PDF.Advanced
                 // point (defaults to center_v, i.e. identical to every pre-existing caller's output,
                 // when no distinct focal point was supplied) - this is what lets a gradient's brightest
                 // point be offset from its outer circle's center (e.g. SVG radialGradient's fx/fy).
-                focalR = brush.FocalRadius > 0 && brush._radiusX > 0 ? brush.FocalRadius * rx_v / brush._radiusX : 0;
+                focalR = brush.FocusRadius > 0 && brush.RadiusX > 0 ? brush.FocusRadius * rx_v / brush.RadiusX : 0;
                 Elements[Keys.Coords] = new PdfLiteral(
                     "[{0:" + fmt + "} {1:" + fmt + "} {5:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
                     focal_v.X, focal_v.Y, center_v.X, center_v.Y, rx_v, focalR);
@@ -219,10 +196,7 @@ namespace PeachPDF.PDF.Advanced
                 EllipsePatternMatrix = PdfMatrix.Create(rx_v, 0, 0, ry_v, center_v.X, center_v.Y);
             }
 
-            PaintColor[] colors = brush._colors!;
-            double[]? positions = brush._positions;
-
-            if (positions != null && RequiresStitchingFunction(positions))
+            if (RequiresStitchingFunction(positions))
                 Elements[Keys.Function] = BuildStitchingFunction(colors, positions, colorMode);
             else
             {
@@ -238,7 +212,7 @@ namespace PeachPDF.PDF.Advanced
             }
 
             BuildRadialAlphaExtGStateIfNeeded(colors, positions,
-                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, brush.IsRepeating, unitMatrix, unitFocalX, unitFocalY,
+                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, (brush.Spread == GradientSpread.Repeat), unitMatrix, unitFocalX, unitFocalY,
                 focal_v.X, focal_v.Y, focalR);
         }
 
@@ -346,15 +320,16 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Setups the shading from the specified brush.
         /// </summary>
-        internal void SetupFromBrush(XLinearGradientBrush brush, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(LinearGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
-            PaintColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
+            PaintColor[] allColors = StopColors(brush.Stops);
+            double[] allPositions = StopPositions(brush.Stops);
             PdfColorMode colorMode = ResolveShadingColorMode(allColors);
-            PaintColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
-            PaintColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
+            PaintColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, allColors[0]);
+            PaintColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, allColors[allColors.Length - 1]);
 
             PdfDictionary function = new PdfDictionary();
 
@@ -364,64 +339,22 @@ namespace PeachPDF.PDF.Advanced
             else
                 Elements[Keys.ColorSpace] = new PdfName("/DeviceCMYK");
 
-            double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-            if (brush._useRect)
-            {
-                PaintPoint pt1 = renderer.WorldToView(new PaintPoint(brush._rect.Left, brush._rect.Top));
-                PaintPoint pt2 = renderer.WorldToView(new PaintPoint(brush._rect.Right, brush._rect.Bottom));
+            PaintPoint pt1 = renderer.WorldToView(brush.Start);
+            PaintPoint pt2 = renderer.WorldToView(brush.End);
 
-                switch (brush._linearGradientMode)
-                {
-                    case XLinearGradientMode.Horizontal:
-                        x1 = pt1.X;
-                        y1 = pt1.Y;
-                        x2 = pt2.X;
-                        y2 = pt1.Y;
-                        break;
-
-                    case XLinearGradientMode.Vertical:
-                        x1 = pt1.X;
-                        y1 = pt1.Y;
-                        x2 = pt1.X;
-                        y2 = pt2.Y;
-                        break;
-
-                    case XLinearGradientMode.ForwardDiagonal:
-                        x1 = pt1.X;
-                        y1 = pt1.Y;
-                        x2 = pt2.X;
-                        y2 = pt2.Y;
-                        break;
-
-                    case XLinearGradientMode.BackwardDiagonal:
-                        x1 = pt2.X;
-                        y1 = pt1.Y;
-                        x2 = pt1.X;
-                        y2 = pt2.Y;
-                        break;
-                }
-            }
-            else
-            {
-                PaintPoint pt1 = renderer.WorldToView(brush._point1);
-                PaintPoint pt2 = renderer.WorldToView(brush._point2);
-
-                x1 = pt1.X;
-                y1 = pt1.Y;
-                x2 = pt2.X;
-                y2 = pt2.Y;
-            }
+            double x1 = pt1.X;
+            double y1 = pt1.Y;
+            double x2 = pt2.X;
+            double y2 = pt2.Y;
 
             const string format = Config.SignificantFigures3;
             Elements[Keys.Coords] = new PdfLiteral("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", x1, y1, x2, y2);
 
-            Elements[Keys.Extend] = new PdfLiteral(brush.IsRepeating ? "[false false]" : "[true true]");
+            Elements[Keys.Extend] = new PdfLiteral((brush.Spread == GradientSpread.Repeat) ? "[false false]" : "[true true]");
 
-            double[]? allPositions = brush._positions;
-
-            if (brush._colors != null && brush._positions != null && RequiresStitchingFunction(brush._positions))
+            if (RequiresStitchingFunction(allPositions))
             {
-                Elements[Keys.Function] = BuildStitchingFunction(brush._colors, brush._positions, colorMode);
+                Elements[Keys.Function] = BuildStitchingFunction(allColors, allPositions, colorMode);
             }
             else
             {
@@ -436,7 +369,7 @@ namespace PeachPDF.PDF.Advanced
                 Elements[Keys.Function] = function;
             }
 
-            BuildAlphaExtGStateIfNeeded(allColors, allPositions, x1, y1, x2, y2, brush.IsRepeating);
+            BuildAlphaExtGStateIfNeeded(allColors, allPositions, x1, y1, x2, y2, (brush.Spread == GradientSpread.Repeat));
         }
 
         private void BuildAlphaExtGStateIfNeeded(PaintColor[] colors, double[]? positions, double x1, double y1, double x2, double y2, bool isRepeating = false)
@@ -640,7 +573,7 @@ namespace PeachPDF.PDF.Advanced
 
         // ── Conic gradient (Type 4 Gouraud-shaded free-form triangle mesh) ──────────────────────
 
-        private void SetupConicFromBrush(XConicGradientBrush brush, XGraphicsPdfRenderer renderer)
+        private void SetupConicFromBrush(ConicGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
             PaintPoint vc = renderer.WorldToView(brush.Center);
             // Compute view-space radius by transforming a point on the x-axis
@@ -651,8 +584,8 @@ namespace PeachPDF.PDF.Advanced
             double xMin = vc.X - R, xMax = vc.X + R;
             double yMin = vc.Y - R, yMax = vc.Y + R;
 
-            PaintColor[] colors = brush.Colors;
-            double[] angles = brush.AnglesRad;
+            PaintColor[] colors = StopColors(brush.Stops);
+            double[] angles = brush.AnglesRadians.ToArray();
 
             PdfColorMode colorMode = ResolveShadingColorMode(colors);
             var cmyk = colorMode == PdfColorMode.Cmyk;

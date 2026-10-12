@@ -223,7 +223,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>See <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - threaded straight through to
-        /// <see cref="XGraphics.DrawString(string, XFont, XBrush, double, double, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>,
+        /// <see cref="XGraphics.DrawString(string, XFont, Brush, double, double, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>,
         /// the one real PDF-writing path that acts on it.</summary>
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
@@ -533,7 +533,7 @@ namespace PeachPDF.Adapters
                 return;
 
             var xBrush = ToXBrush(brush);
-            if (xBrush is XBaseGradientBrush)
+            if (PdfPaints.IsGradient(xBrush))
             {
                 // Wrap in q/Q so the SMask applied for transparent gradients does not
                 // leak into subsequent operations (e.g. border drawing).
@@ -542,8 +542,8 @@ namespace PeachPDF.Adapters
                 _g.Restore(state);
 
                 // handle bug in PdfSharp that keeps the brush color for next string draw
-                if (xBrush is XLinearGradientBrush)
-                    _g.DrawRectangle(XBrushes.White, 0, 0, 0.1 / PixelsPerPoint, 0.1 / PixelsPerPoint);
+                if (xBrush is LinearGradientBrush)
+                    _g.DrawRectangle(new SolidBrush(PaintColor.White), 0, 0, 0.1 / PixelsPerPoint, 0.1 / PixelsPerPoint);
             }
             else
             {
@@ -636,7 +636,7 @@ namespace PeachPDF.Adapters
         public override void DrawPath(Pen pen, GraphicsPath path)
         {
             var xPen = ToXPen(pen);
-            if (xPen.Brush is XBaseGradientBrush)
+            if (PdfPaints.IsGradient(xPen.Paint))
             {
                 // Wrap in q/Q so the SMask applied for a transparent gradient stroke does not
                 // leak into subsequent operations. A later paint that emits no SMask of its own
@@ -658,7 +658,7 @@ namespace PeachPDF.Adapters
                 return;
 
             var xBrush = ToXBrush(brush);
-            if (xBrush is XBaseGradientBrush)
+            if (PdfPaints.IsGradient(xBrush))
             {
                 var state = _g.Save();
                 _g.DrawPath(xBrush, ((GraphicsPathAdapter)path).GraphicsPath);
@@ -696,31 +696,24 @@ namespace PeachPDF.Adapters
         #region Brush/pen translation
 
         /// <summary>
-        /// Builds this backend's own <see cref="XBrush"/> from a self-describing <see cref="Brush"/> -
+        /// Builds this backend's own <see cref="Brush"/> from a self-describing <see cref="Brush"/> -
         /// the PDF-specific half of the split <see cref="RenderContext"/>'s brush factories used to do
         /// themselves before brushes became plain, backend-agnostic data (see <see cref="Brush"/>'s own
         /// remarks). Not cached: a brush is typically drawn once or a handful of times, and a real PDF
         /// shading brush is cheap to construct.
         /// </summary>
-        private XBrush ToXBrush(Brush brush) => brush switch
+        private Brush ToXBrush(Brush brush) => brush switch
         {
             SolidBrush solid => ToXSolidBrush(solid.PaintColor),
-            LinearGradientBrush linear => new XLinearGradientBrush(
-                Utils.ToPoints(linear.Start, PixelsPerPoint), Utils.ToPoints(linear.End, PixelsPerPoint),
-                linear.Stops.Select(s => s.PaintColor).ToArray(),
-                linear.Stops.Select(s => s.Position).ToArray())
-            { IsRepeating = linear.Spread == GradientSpread.Repeat },
-            RadialGradientBrush radial => new XRadialGradientBrush(
-                Utils.ToPoints(radial.Center, PixelsPerPoint), radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint,
-                radial.Stops.Select(s => s.PaintColor).ToArray(),
-                radial.Stops.Select(s => s.Position).ToArray(),
-                Utils.ToPoints(radial.Focus, PixelsPerPoint),
+            LinearGradientBrush linear => new LinearGradientBrush(
+                Utils.ToPoints(linear.Start, PixelsPerPoint), Utils.ToPoints(linear.End, PixelsPerPoint), linear.Stops, linear.Spread),
+            RadialGradientBrush radial => new RadialGradientBrush(
+                Utils.ToPoints(radial.Center, PixelsPerPoint), Utils.ToPoints(radial.Focus, PixelsPerPoint),
+                radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint, radial.Stops, radial.Spread,
                 radial.Transform is { } rt ? PdfMatrix.Create(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
-            { IsRepeating = radial.Spread == GradientSpread.Repeat, FocalRadius = radial.FocusRadius / PixelsPerPoint },
-            ConicGradientBrush conic => new XConicGradientBrush(
-                Utils.ToPoints(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
-                conic.Stops.Select(s => s.PaintColor).ToArray(),
-                conic.AnglesRadians.ToArray()),
+            { FocusRadius = radial.FocusRadius / PixelsPerPoint },
+            ConicGradientBrush conic => new ConicGradientBrush(
+                Utils.ToPoints(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint, conic.Stops, conic.AnglesRadians),
             TileBrush tile => ToXTilingBrush(tile),
             HatchBrush hatch => hatch.ToTileBrush(this) is { } hatchTile
                 ? ToXTilingBrush(hatchTile)
@@ -815,24 +808,24 @@ namespace PeachPDF.Adapters
 
         /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent
         /// cases, the same optimization <c>PdfSharpAdapter.CreateSolidBrush</c> used to apply.</summary>
-        private static XBrush ToXSolidBrush(PaintColor color)
+        private static Brush ToXSolidBrush(PaintColor color)
         {
             if (color == PaintColor.White)
-                return XBrushes.White;
+                return new SolidBrush(PaintColor.White);
             if (color == PaintColor.Black)
-                return XBrushes.Black;
+                return new SolidBrush(PaintColor.Black);
             if (color.A < 1)
-                return XBrushes.Transparent;
-            return new XSolidBrush(color);
+                return new SolidBrush(PaintColor.FromArgb(0, 255, 255, 255));
+            return new SolidBrush(color);
         }
 
         /// <summary>
-        /// Builds this backend's own <see cref="XPen"/> from a self-describing <see cref="Pen"/> - the
+        /// Builds this backend's own <see cref="Pen"/> from a self-describing <see cref="Pen"/> - the
         /// PDF-specific half of what <c>PenAdapter</c> used to do directly.
         /// </summary>
         /// <remarks>
-        /// A solid-colour pen goes through <see cref="XPen"/>'s <c>PaintColor</c> constructor rather than its
-        /// <c>XBrush</c> one, and must: <c>PdfGraphicsState.RealizePen</c> (the PDF writer's own
+        /// A solid-colour pen goes through <see cref="Pen"/>'s <c>PaintColor</c> constructor rather than its
+        /// <c>Brush</c> one, and must: <c>PdfGraphicsState.RealizePen</c> (the PDF writer's own
         /// stroke-alpha/colour realization) reads <c>pen.PaintColor</c> - the <c>_color</c> field the
         /// <c>PaintColor</c> constructor sets - not anything derived from <c>pen.Brush</c>, so a solid pen
         /// built via the brush constructor would keep <c>_color</c>'s default (opaque) value and silently
@@ -841,31 +834,29 @@ namespace PeachPDF.Adapters
         /// brush constructor - mirroring the split PdfSharpAdapter's own <c>CreatePen(PaintColor)</c>/
         /// <c>CreatePen(Brush)</c> used to make explicitly, before both collapsed into this one method.
         /// </remarks>
-        private XPen ToXPen(Pen pen)
+        private Pen ToXPen(Pen pen)
         {
-            var xPen = pen.Paint is SolidBrush solid
-                ? new XPen(solid.PaintColor, pen.Width)
-                : new XPen(ToXBrush(pen.Paint), pen.Width);
-
-            xPen.MiterLimit = pen.MiterLimit;
-            xPen.LineCap = pen.LineCap;
-            xPen.LineJoin = pen.LineJoin;
+            var xPen = new Pen
+            {
+                Width = pen.Width,
+                MiterLimit = pen.MiterLimit,
+                LineCap = pen.LineCap,
+                LineJoin = pen.LineJoin,
+                Paint = pen.Paint is SolidBrush solid ? new SolidBrush(solid.PaintColor) : ToXBrush(pen.Paint),
+            };
             xPen.DashStyle = pen.DashStyle;
 
             if (pen.DashStyle == DashStyle.Dash && pen.Width < 2)
             {
-                xPen.DashPattern = [4, 4]; // better looking
+                // A thin dashed line reads better with longer dashes than the standard 3:1 ratio.
+                xPen.SetDashPattern([4 * pen.Width, 4 * pen.Width], 0);
             }
             else if (pen.DashStyle == DashStyle.Custom)
             {
                 if (pen.Width > 0)
                 {
-                    // XPen's custom dash array is expressed as multiples of pen width (a GDI+ convention -
-                    // see PdfGraphicsState.RealizePen, which multiplies each entry by pen._width when
-                    // writing the PDF "d" operator), whereas SVG's stroke-dasharray/stroke-dashoffset are
-                    // absolute user-space lengths - normalize by dividing through by the pen's width.
-                    xPen.DashPattern = pen.DashPattern.Select(v => v / pen.Width).ToArray();
-                    xPen.DashOffset = pen.DashOffset / pen.Width;
+                    PdfPaints.RequireValidDashPattern(pen.DashPattern);
+                    xPen.SetDashPattern(pen.DashPattern, pen.DashOffset);
                 }
                 else
                 {

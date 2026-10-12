@@ -133,7 +133,7 @@ namespace PeachPDF.Tests.Raster
             Assert.True(Pixel(g, 30 + 10, 20)[0] > Pixel(g, 30, 20 + 10)[0]);
         }
 
-        // The two-colour, inner/outer-radius XRadialGradientBrush constructor (no stop list) has no
+        // The two-colour, inner/outer-radius RadialGradientBrush constructor (no stop list) has no
         // production caller either - RenderContext.GetRadialGradientBrush always builds the stops-based shape
         // - so RadialGradientBrush doesn't model an inner radius, and the test exercising that
         // constructor directly is retired along with it (see PaintSource.RadialPaint.Create's own remarks).

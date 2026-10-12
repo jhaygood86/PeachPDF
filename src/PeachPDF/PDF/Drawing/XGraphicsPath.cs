@@ -462,7 +462,7 @@ namespace PeachPDF.PDF.Drawing
         /// Replaces this path with curves that enclose the area that is filled when this path is drawn 
         /// by the specified pen.
         /// </summary>
-        public void Widen(XPen pen)
+        public void Widen(Pen pen)
         {
             // Just do nothing.
         }
@@ -471,7 +471,7 @@ namespace PeachPDF.PDF.Drawing
         /// Replaces this path with curves that enclose the area that is filled when this path is drawn 
         /// by the specified pen.
         /// </summary>
-        public void Widen(XPen pen, Matrix3x2 matrix)
+        public void Widen(Pen pen, Matrix3x2 matrix)
         {
             // Just do nothing.
         }
@@ -480,7 +480,7 @@ namespace PeachPDF.PDF.Drawing
         /// Replaces this path with curves that enclose the area that is filled when this path is drawn 
         /// by the specified pen.
         /// </summary>
-        public void Widen(XPen pen, Matrix3x2 matrix, double flatness)
+        public void Widen(Pen pen, Matrix3x2 matrix, double flatness)
         {
             // Just do nothing.
         }

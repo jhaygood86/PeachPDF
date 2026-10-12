@@ -124,7 +124,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Strokes a single connection of two points.
         /// </summary>
-        public void DrawLine(XPen pen, double x1, double y1, double x2, double y2)
+        public void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {
             DrawLines(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2) });
         }
@@ -134,7 +134,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Strokes a series of connected points.
         /// </summary>
-        public void DrawLines(XPen pen, PaintPoint[] points)
+        public void DrawLines(Pen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -155,14 +155,14 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawBezier ---------------------------------------------------------------------------
 
-        public void DrawBezier(XPen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4)
+        public void DrawBezier(Pen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4)
         {
             DrawBeziers(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2), new PaintPoint(x3, y3), new PaintPoint(x4, y4) });
         }
 
         // ----- DrawBeziers --------------------------------------------------------------------------
 
-        public void DrawBeziers(XPen pen, PaintPoint[] points)
+        public void DrawBeziers(Pen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -190,7 +190,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawCurve ----------------------------------------------------------------------------
 
-        public void DrawCurve(XPen pen, PaintPoint[] points, double tension)
+        public void DrawCurve(Pen pen, PaintPoint[] points, double tension)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -226,7 +226,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawArc ------------------------------------------------------------------------------
 
-        public void DrawArc(XPen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
+        public void DrawArc(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -239,7 +239,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawRectangle ------------------------------------------------------------------------
 
-        public void DrawRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height)
+        public void DrawRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush");
@@ -260,7 +260,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawRectangles -----------------------------------------------------------------------
 
-        public void DrawRectangles(XPen? pen, XBrush? brush, Rect[] rects)
+        public void DrawRectangles(Pen? pen, Brush? brush, Rect[] rects)
         {
             int count = rects.Length;
             for (int idx = 0; idx < count; idx++)
@@ -272,7 +272,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawRoundedRectangle -----------------------------------------------------------------
 
-        public void DrawRoundedRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
+        public void DrawRoundedRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
         {
             XGraphicsPath path = new XGraphicsPath();
             path.AddRoundedRectangle(x, y, width, height, ellipseWidth, ellipseHeight);
@@ -281,7 +281,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawEllipse --------------------------------------------------------------------------
 
-        public void DrawEllipse(XPen? pen, XBrush? brush, double x, double y, double width, double height)
+        public void DrawEllipse(Pen? pen, Brush? brush, double x, double y, double width, double height)
         {
             Realize(pen, brush);
 
@@ -311,7 +311,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawPolygon --------------------------------------------------------------------------
 
-        public void DrawPolygon(XPen? pen, XBrush? brush, PaintPoint[] points, FillMode fillmode)
+        public void DrawPolygon(Pen? pen, Brush? brush, PaintPoint[] points, FillMode fillmode)
         {
             Realize(pen, brush);
 
@@ -328,7 +328,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawPie ------------------------------------------------------------------------------
 
-        public void DrawPie(XPen? pen, XBrush? brush, double x, double y, double width, double height,
+        public void DrawPie(Pen? pen, Brush? brush, double x, double y, double width, double height,
           double startAngle, double sweepAngle)
         {
             Realize(pen, brush);
@@ -340,7 +340,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawClosedCurve ----------------------------------------------------------------------
 
-        public void DrawClosedCurve(XPen? pen, XBrush? brush, PaintPoint[] points, double tension, FillMode fillmode)
+        public void DrawClosedCurve(Pen? pen, Brush? brush, PaintPoint[] points, double tension, FillMode fillmode)
         {
             int count = points.Length;
             if (count == 0)
@@ -372,7 +372,7 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawPath -----------------------------------------------------------------------------
 
-        public void DrawPath(XPen? pen, XBrush? brush, XGraphicsPath path)
+        public void DrawPath(Pen? pen, Brush? brush, XGraphicsPath path)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen");
@@ -497,7 +497,7 @@ namespace PeachPDF.PDF.Rendering
             return thousandths * fontSize / 1000 + glyphs.Count * charSpace;
         }
 
-        public void DrawString(string s, XFont font, XBrush brush, Rect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
+        public void DrawString(string s, XFont font, Brush brush, Rect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
         {
             int contentLengthAtEntry = _content.Length;
             bool isOnlySpaces = s.Length > 0 && !s.AsSpan().ContainsAnyExcept(' ');
@@ -817,12 +817,12 @@ namespace PeachPDF.PDF.Rendering
         /// addressed directly by font glyph index - the same per-glyph <c>Td</c>+<c>Tj</c> emission
         /// <see cref="DrawPositionedGlyphs"/> already uses, generalized to take already-absolute
         /// positions instead of shaped-run deltas relative to a pen, and to realize the font/brush
-        /// itself (its one caller, <see cref="DrawString(string, XFont, XBrush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/>,
+        /// itself (its one caller, <see cref="DrawString(string, XFont, Brush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/>,
         /// already did that before ever reaching <see cref="DrawPositionedGlyphs"/>). No bold/italic
         /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
         /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
         /// </summary>
-        public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush)
+        public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, Brush brush)
         {
             if (glyphs.Count == 0)
                 return;
@@ -1590,7 +1590,7 @@ namespace PeachPDF.PDF.Rendering
             _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y, width, height, name);
         }
 
-        void AppendStrokeFill(XPen pen, XBrush brush, FillMode fillMode, bool closePath)
+        void AppendStrokeFill(Pen pen, Brush brush, FillMode fillMode, bool closePath)
         {
             if (closePath)
                 _content.Append("h ");
@@ -1755,7 +1755,7 @@ namespace PeachPDF.PDF.Rendering
         }
 
         /// <summary>Begins the shared rendering-mode-3 text object for one color-glyph run.</summary>
-        internal void BeginInvisibleTextRun(XFont font, XBrush brush)
+        internal void BeginInvisibleTextRun(XFont font, Brush brush)
         {
             Realize(font, brush, renderingMode: 3);
         }
@@ -1860,7 +1860,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Makes the specified pen and brush to the current graphics objects.
         /// </summary>
-        private void Realize(XPen pen, XBrush brush)
+        private void Realize(Pen pen, Brush brush)
         {
             BeginPage();
             BeginGraphicMode();
@@ -1879,7 +1879,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Makes the specified pen to the current graphics object.
         /// </summary>
-        void Realize(XPen pen)
+        void Realize(Pen pen)
         {
             Realize(pen, null);
         }
@@ -1887,7 +1887,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Makes the specified brush to the current graphics object.
         /// </summary>
-        void Realize(XBrush brush)
+        void Realize(Brush brush)
         {
             Realize(null, brush);
         }
@@ -1895,7 +1895,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Makes the specified font and brush to the current graphics objects.
         /// </summary>
-        void Realize(XFont font, XBrush brush, int renderingMode, double letterSpacing = 0)
+        void Realize(XFont font, Brush brush, int renderingMode, double letterSpacing = 0)
         {
             BeginPage();
             RealizeTransform();

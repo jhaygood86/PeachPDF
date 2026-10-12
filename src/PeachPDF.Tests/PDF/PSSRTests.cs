@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.PDF;
 using PeachPDF.PDF.Drawing;
 
@@ -86,7 +87,7 @@ namespace PeachPDF.Tests.PdfEngineTests
         [Fact]
         public void CannotChangeImmutableObject_IncludesTypeName()
         {
-            Assert.Contains("XPen", PSSR.CannotChangeImmutableObject("XPen"));
+            Assert.Contains("Pen", PSSR.CannotChangeImmutableObject("Pen"));
         }
 
         [Fact]

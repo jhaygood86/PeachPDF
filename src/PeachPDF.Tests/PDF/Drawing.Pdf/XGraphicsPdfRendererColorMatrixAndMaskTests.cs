@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             return (document, gfx);
         }
 
-        private static XForm NewTile(PdfDocument document, double size, XBrush brush)
+        private static XForm NewTile(PdfDocument document, double size, Brush brush)
         {
             var form = new XForm(document, new Size(size, size));
             var formGfx = XGraphics.FromForm(form);
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageWithColorMatrix_ChannelIndependent_GsAndDoShareTheSameCm()
         {
             var (document, gfx) = NewPage();
-            var form = NewTile(document, 50, XBrushes.Red);
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
 
             gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150);
             gfx.Dispose();
@@ -78,7 +78,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageWithColorMatrix_ChannelIndependent_EmitsType4TransferFunction()
         {
             var (document, gfx) = NewPage();
-            var form = NewTile(document, 50, XBrushes.Red);
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
 
             gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150);
             gfx.Dispose();
@@ -92,7 +92,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageWithColorMatrix_CrossChannel_Throws()
         {
             var (document, gfx) = NewPage();
-            var form = NewTile(document, 50, XBrushes.Red);
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
 
             var ex = Assert.Throws<NotSupportedException>(() =>
                 gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Grayscale));
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageAlphaMasked_GsAndDoShareTheSameCm()
         {
             var (document, gfx) = NewPage();
-            var content = NewTile(document, 50, XBrushes.Red);
-            var mask = NewTile(document, 50, XBrushes.White);
+            var content = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var mask = NewTile(document, 50, new SolidBrush(PaintColor.White));
 
             gfx.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50));
             gfx.Dispose();
@@ -118,8 +118,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageAlphaMasked_UsesAlphaSubtype_NotLuminosity()
         {
             var (document, gfx) = NewPage();
-            var content = NewTile(document, 50, XBrushes.Red);
-            var mask = NewTile(document, 50, XBrushes.White);
+            var content = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var mask = NewTile(document, 50, new SolidBrush(PaintColor.White));
 
             gfx.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50));
             gfx.Dispose();
@@ -133,15 +133,15 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageAlphaMasked_Invert_AddsTransferFunctionToTheMask()
         {
             var (documentPlain, gfxPlain) = NewPage();
-            var contentPlain = NewTile(documentPlain, 50, XBrushes.Red);
-            var maskPlain = NewTile(documentPlain, 50, XBrushes.White);
+            var contentPlain = NewTile(documentPlain, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var maskPlain = NewTile(documentPlain, 50, new SolidBrush(PaintColor.White));
             gfxPlain.DrawImageAlphaMasked(contentPlain, maskPlain, new Rect(10, 10, 50, 50));
             gfxPlain.Dispose();
             var plainFunctionCount = Regex.Matches(Serialize(documentPlain), "/FunctionType 4").Count;
 
             var (documentInverted, gfxInverted) = NewPage();
-            var contentInverted = NewTile(documentInverted, 50, XBrushes.Red);
-            var maskInverted = NewTile(documentInverted, 50, XBrushes.White);
+            var contentInverted = NewTile(documentInverted, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var maskInverted = NewTile(documentInverted, 50, new SolidBrush(PaintColor.White));
             gfxInverted.DrawImageAlphaMasked(contentInverted, maskInverted, new Rect(10, 10, 50, 50), invert: true);
             gfxInverted.Dispose();
             var invertedFunctionCount = Regex.Matches(Serialize(documentInverted), "/FunctionType 4").Count;
@@ -154,8 +154,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageBlendedOver_PaintsBottomThenTopWithBlendModeOnTopsCm()
         {
             var (document, gfx) = NewPage();
-            var top = NewTile(document, 50, XBrushes.Red);
-            var bottom = NewTile(document, 50, XBrushes.Blue);
+            var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var bottom = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(0, 0, 255)));
 
             gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Multiply");
             gfx.Dispose();
@@ -179,8 +179,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = XGraphics.FromPdfPage(page);
-            var top = NewTile(document, 50, XBrushes.Red);
-            var bottom = NewTile(document, 50, XBrushes.Blue);
+            var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var bottom = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(0, 0, 255)));
 
             Assert.Throws<PdfAConformanceException>(() =>
                 gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Multiply"));
@@ -193,8 +193,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = XGraphics.FromPdfPage(page);
-            var top = NewTile(document, 50, XBrushes.Red);
-            var bottom = NewTile(document, 50, XBrushes.Blue);
+            var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var bottom = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(0, 0, 255)));
 
             // Should not throw - a Normal-mode feBlend is just two ordinary Form XObject placements.
             gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Normal");
@@ -207,7 +207,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = XGraphics.FromPdfPage(page);
-            var form = NewTile(document, 50, XBrushes.Red);
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
 
             Assert.Throws<PdfAConformanceException>(() =>
                 gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150));
@@ -220,8 +220,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
             document.Options.PdfAConformance = PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = XGraphics.FromPdfPage(page);
-            var content = NewTile(document, 50, XBrushes.Red);
-            var mask = NewTile(document, 50, XBrushes.White);
+            var content = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var mask = NewTile(document, 50, new SolidBrush(PaintColor.White));
 
             Assert.Throws<PdfAConformanceException>(() =>
                 gfx.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50)));
@@ -231,8 +231,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing.Pdf
         public void DrawImageBlendedOver_NormalBlendMode_StillPaintsBothForms()
         {
             var (document, gfx) = NewPage();
-            var top = NewTile(document, 50, XBrushes.Red);
-            var bottom = NewTile(document, 50, XBrushes.Blue);
+            var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+            var bottom = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(0, 0, 255)));
 
             gfx.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), "Normal");
             gfx.Dispose();

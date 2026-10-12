@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Rendering;
@@ -54,14 +55,14 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfExtGState? AlphaExtGState { get; private set; }
 
-        internal void SetupFromBrush(XBaseGradientBrush brush, Matrix3x2 matrix, XGraphicsPdfRenderer renderer)
+        internal void SetupFromBrush(Brush brush, Matrix3x2 matrix, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
             PdfShading shading = new PdfShading(_document);
 
-            if (brush is XConicGradientBrush)
+            if (brush is ConicGradientBrush)
             {
                 // Type 4 shading has binary stream content; PDF spec requires stream objects to be indirect.
                 _document._irefTable.Add(shading);
@@ -88,21 +89,6 @@ namespace PeachPDF.PDF.Advanced
                 Elements.SetMatrix(Keys.Matrix, matrix);
             }
 
-            AlphaExtGState = shading.AlphaExtGState;
-        }
-
-        /// <summary>
-        /// Setups the shading pattern from the specified brush.
-        /// </summary>
-        internal void SetupFromBrush(XLinearGradientBrush brush, Matrix3x2 matrix, XGraphicsPdfRenderer renderer)
-        {
-            if (brush == null)
-                throw new ArgumentNullException("brush");
-
-            PdfShading shading = new PdfShading(_document);
-            shading.SetupFromBrush(brush, renderer);
-            Elements[Keys.Shading] = shading;
-            Elements.SetMatrix(Keys.Matrix, matrix);
             AlphaExtGState = shading.AlphaExtGState;
         }
 

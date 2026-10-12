@@ -25,19 +25,19 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
             // Draw two lines with a red default pen.
             var width = page.Width;
             var height = page.Height;
-            gfx.DrawLine(XPens.Red, 0, 0, width, height);
-            gfx.DrawLine(XPens.Red, width, 0, 0, height);
+            gfx.DrawLine(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0)), 0, 0, width, height);
+            gfx.DrawLine(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0)), width, 0, 0, height);
 
             // Draw a circle with a red pen which is 1.5 point thick.
             var r = width / 5;
-            gfx.DrawEllipse(new XPen(PaintColor.FromArgb(255, 0, 0), 1.5), XBrushes.White,
+            gfx.DrawEllipse(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0), 1.5), new SolidBrush(PaintColor.White),
                 new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
             var font = TestFonts.Create("Times New Roman", 20, (PaintFontStyle.Bold | PaintFontStyle.Italic));
 
             // Draw the text.
-            gfx.DrawString("Hello, World!", font, XBrushes.Black,
+            gfx.DrawString("Hello, World!", font, new SolidBrush(PaintColor.Black),
                 new Rect(0, 0, width, height), XStringFormats.Center);
 
             // Save the document.
@@ -102,23 +102,23 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
                 var tf = new XTextFormatter(gfx);
 
                 var rect = new Rect(40, 100, 250, 232);
-                gfx.DrawRectangle(XBrushes.SeaShell, rect);
-                tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
+                gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
+                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 rect = new Rect(310, 100, 250, 232);
-                gfx.DrawRectangle(XBrushes.SeaShell, rect);
+                gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
                 tf.Alignment = XParagraphAlignment.Right;
-                tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
+                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 rect = new Rect(40, 400, 250, 232);
-                gfx.DrawRectangle(XBrushes.SeaShell, rect);
+                gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
                 tf.Alignment = XParagraphAlignment.Center;
-                tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
+                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 rect = new Rect(310, 400, 250, 232);
-                gfx.DrawRectangle(XBrushes.SeaShell, rect);
+                gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
                 tf.Alignment = XParagraphAlignment.Justify;
-                tf.DrawString(text, font, XBrushes.Black, rect, XStringFormats.TopLeft);
+                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 using (var stream = new MemoryStream())
                 {

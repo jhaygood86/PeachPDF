@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.Numerics;
 
 namespace PeachPDF.PDF.Drawing
@@ -6,7 +7,7 @@ namespace PeachPDF.PDF.Drawing
     /// A brush that repeats a Form XObject, or an image, across the plane as a PDF tiling pattern (PDF 32000-1 §8.7.3): the tile is
     /// written once however many cells show it, and a form stays vector content.
     /// </summary>
-    internal sealed class XTilingBrush : XBrush
+    internal sealed class XTilingBrush : Brush
     {
         /// <param name="tile">the tile: drawn once per cell</param>
         /// <param name="cellWidth">the cell's width in points</param>

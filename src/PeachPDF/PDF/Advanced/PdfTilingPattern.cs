@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using System.Numerics;
 using System;
 using PeachPDF.PDF.Drawing;
@@ -107,7 +108,7 @@ namespace PeachPDF.PDF.Advanced
         ///// <summary>
         ///// Setups the shading pattern from the specified brush.
         ///// </summary>
-        //public void SetupFromBrush(XLinearGradientBrush brush, Matrix3x2 matrix)
+        //public void SetupFromBrush(LinearGradientBrush brush, Matrix3x2 matrix)
         //{
         //  if (brush == null)
         //    throw new ArgumentNullException("brush");

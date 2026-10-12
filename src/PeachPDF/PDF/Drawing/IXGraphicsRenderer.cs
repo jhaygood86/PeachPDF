@@ -45,72 +45,72 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Draws a straight line.
         /// </summary>
-        void DrawLine(XPen pen, double x1, double y1, double x2, double y2);
+        void DrawLine(Pen pen, double x1, double y1, double x2, double y2);
 
         /// <summary>
         /// Draws a series of straight lines.
         /// </summary>
-        void DrawLines(XPen pen, PaintPoint[] points);
+        void DrawLines(Pen pen, PaintPoint[] points);
 
         /// <summary>
         /// Draws a B�zier spline.
         /// </summary>
-        void DrawBezier(XPen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
+        void DrawBezier(Pen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
 
         /// <summary>
         /// Draws a series of B�zier splines.
         /// </summary>
-        void DrawBeziers(XPen pen, PaintPoint[] points);
+        void DrawBeziers(Pen pen, PaintPoint[] points);
 
         /// <summary>
         /// Draws a cardinal spline.
         /// </summary>
-        void DrawCurve(XPen pen, PaintPoint[] points, double tension);
+        void DrawCurve(Pen pen, PaintPoint[] points, double tension);
 
         /// <summary>
         /// Draws an arc.
         /// </summary>
-        void DrawArc(XPen pen, double x, double y, double width, double height, double startAngle, double sweepAngle);
+        void DrawArc(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle);
 
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        void DrawRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height);
+        void DrawRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height);
 
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        void DrawRectangles(XPen? pen, XBrush? brush, Rect[] rects);
+        void DrawRectangles(Pen? pen, Brush? brush, Rect[] rects);
 
         /// <summary>
         /// Draws a rectangle with rounded corners.
         /// </summary>
-        void DrawRoundedRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight);
+        void DrawRoundedRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight);
 
         /// <summary>
         /// Draws an ellipse.
         /// </summary>
-        void DrawEllipse(XPen? pen, XBrush? brush, double x, double y, double width, double height);
+        void DrawEllipse(Pen? pen, Brush? brush, double x, double y, double width, double height);
 
         /// <summary>
         /// Draws a polygon.
         /// </summary>
-        void DrawPolygon(XPen? pen, XBrush? brush, PaintPoint[] points, FillMode fillmode);
+        void DrawPolygon(Pen? pen, Brush? brush, PaintPoint[] points, FillMode fillmode);
 
         /// <summary>
         /// Draws a pie.
         /// </summary>
-        void DrawPie(XPen? pen, XBrush? brush, double x, double y, double width, double height, double startAngle, double sweepAngle);
+        void DrawPie(Pen? pen, Brush? brush, double x, double y, double width, double height, double startAngle, double sweepAngle);
 
         /// <summary>
         /// Draws a cardinal spline.
         /// </summary>
-        void DrawClosedCurve(XPen? pen, XBrush? brush, PaintPoint[] points, double tension, FillMode fillmode);
+        void DrawClosedCurve(Pen? pen, Brush? brush, PaintPoint[] points, double tension, FillMode fillmode);
 
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        void DrawPath(XPen? pen, XBrush? brush, XGraphicsPath path);
+        void DrawPath(Pen? pen, Brush? brush, XGraphicsPath path);
 
         /// <summary>
         /// Draws a series of glyphs identified by the specified text and font.
@@ -137,16 +137,16 @@ namespace PeachPDF.PDF.Drawing
         /// so a reversed/mirrored RTL word's glyphs map back to their true source characters rather than
         /// whichever character occupies that position in the *painted* string.
         /// </param>
-        void DrawString(string s, XFont font, XBrush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null);
+        void DrawString(string s, XFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null);
 
         /// <summary>
         /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
         /// addressed directly by font glyph index rather than by Unicode character - see
         /// <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s own remarks for why this exists
         /// (an OpenType MATH table's stretchy-operator glyphs, which have no Unicode mapping to shape
-        /// through the ordinary <see cref="DrawString(string, XFont, XBrush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
+        /// through the ordinary <see cref="DrawString(string, XFont, Brush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
         /// </summary>
-        void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush);
+        void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, Brush brush);
 
         /// <summary>
         /// Draws an image.

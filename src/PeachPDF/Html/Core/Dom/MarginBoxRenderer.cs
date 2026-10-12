@@ -1031,16 +1031,16 @@ namespace PeachPDF.Html.Core.Dom
         private static string? FirstNonEmpty(string? a, string? b) =>
             !string.IsNullOrEmpty(a) ? a : (!string.IsNullOrEmpty(b) ? b : null);
 
-        private static XBrush BuildBrush(StyleDeclaration style)
+        private static Brush BuildBrush(StyleDeclaration style)
         {
             var colorStr = style.Color;
             if (!string.IsNullOrEmpty(colorStr))
             {
                 var color = ParseColor(colorStr);
                 if (color.HasValue)
-                    return new XSolidBrush(color.Value);
+                    return new SolidBrush(color.Value);
             }
-            return XBrushes.Black;
+            return new SolidBrush(PaintColor.Black);
         }
 
         private static PaintColor? ParseColor(string value)

@@ -137,7 +137,7 @@ namespace PeachPDF.PDF.Drawing.Layout
         /// <param name="brush">The text brush.</param>
         /// <param name="layoutRectangle">The layout rectangle.</param>
         /// <param name="lineHeight">The line height to use, or <see langword="null"/> to derive it from the font.</param>
-        public void DrawString(string text, XFont font, XBrush brush, Rect layoutRectangle, double? lineHeight = null)
+        public void DrawString(string text, XFont font, Brush brush, Rect layoutRectangle, double? lineHeight = null)
         {
             DrawString(text, font, brush, layoutRectangle, XStringFormats.TopLeft, lineHeight);
         }
@@ -151,7 +151,7 @@ namespace PeachPDF.PDF.Drawing.Layout
         /// <param name="layoutRectangle">The layout rectangle.</param>
         /// <param name="format">The format. Must be <c>XStringFormat.TopLeft</c></param>
         /// <param name="lineHeight">The line height to use, or <see langword="null"/> to derive it from the font.</param>
-        public void DrawString(string text, XFont font, XBrush brush, Rect layoutRectangle, XStringFormat format, double? lineHeight = null)
+        public void DrawString(string text, XFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double? lineHeight = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");

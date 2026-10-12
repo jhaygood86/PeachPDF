@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             document.Options.NoCompression = true;
             var page = document.AddPage();
             using (var gfx = XGraphics.FromPdfPage(page))
-                gfx.DrawString("Hello", font, XBrushes.Black, new PaintPoint(20, 40));
+                gfx.DrawString("Hello", font, new SolidBrush(PaintColor.Black), new PaintPoint(20, 40));
 
             using var stream = new MemoryStream();
             document.Save(stream);

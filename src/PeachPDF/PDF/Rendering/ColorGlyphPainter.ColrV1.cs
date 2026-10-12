@@ -9,6 +9,7 @@
 //
 #endregion
 
+using System.Linq;
 using PeachDrawing.Core;
 using PeachDrawing.Core.ColorGlyphs;
 using PeachDrawing.Text.Outlines;
@@ -59,7 +60,7 @@ namespace PeachPDF.PDF.Rendering
                     return;
                 }
 
-                owner._gfx.DrawPath(new XSolidBrush(ToXColor(color)), BuildPath(outline, transform));
+                owner._gfx.DrawPath(new SolidBrush(ToXColor(color)), BuildPath(outline, transform));
             }
 
             public void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
@@ -134,29 +135,37 @@ namespace PeachPDF.PDF.Rendering
                     owner._gfx.Restore(state);
             }
 
-            private static XBrush ToBrush(ColorGlyphPaint paint)
+            private static Brush ToBrush(ColorGlyphPaint paint)
             {
                 switch (paint)
                 {
                     case SolidColorGlyphPaint solid:
-                        return new XSolidBrush(ToXColor(solid.Color));
+                        return new SolidBrush(ToXColor(solid.Color));
 
                     case LinearColorGlyphPaint linear:
-                        return new XLinearGradientBrush(new PaintPoint(linear.Start.X, linear.Start.Y), new PaintPoint(linear.End.X, linear.End.Y),
-                            ToXColors(linear.Colors), [.. linear.Positions]);
+                        return new LinearGradientBrush(new PaintPoint(linear.Start.X, linear.Start.Y), new PaintPoint(linear.End.X, linear.End.Y),
+                            ToStops(linear.Colors, linear.Positions), GradientSpread.Pad);
 
                     case RadialColorGlyphPaint radial:
-                        return new XRadialGradientBrush(new PaintPoint(radial.Center.X, radial.Center.Y), radial.Radius, radial.Radius,
-                            ToXColors(radial.Colors), [.. radial.Positions], new PaintPoint(radial.Focal.X, radial.Focal.Y))
-                        { FocalRadius = radial.FocalRadius };
+                        return new RadialGradientBrush(new PaintPoint(radial.Center.X, radial.Center.Y), new PaintPoint(radial.Focal.X, radial.Focal.Y),
+                            radial.Radius, radial.Radius, ToStops(radial.Colors, radial.Positions), GradientSpread.Pad)
+                        { FocusRadius = radial.FocalRadius };
 
                     case SweepColorGlyphPaint sweep:
-                        return new XConicGradientBrush(new PaintPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,
-                            ToXColors(sweep.Colors), [.. sweep.AnglesRadians]);
+                        return new ConicGradientBrush(new PaintPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,
+                            ToStops(sweep.Colors, sweep.AnglesRadians.Select(angle => angle / (2 * Math.PI)).ToArray()), [.. sweep.AnglesRadians]);
 
                     default:
                         throw new NotSupportedException("Unknown color glyph paint " + paint.GetType().Name);
                 }
+            }
+
+            private static GradientStop[] ToStops(IReadOnlyList<PaintColor> colors, IReadOnlyList<double> positions)
+            {
+                var stops = new GradientStop[colors.Count];
+                for (int i = 0; i < stops.Length; i++)
+                    stops[i] = new GradientStop(ToXColor(colors[i]), positions[i]);
+                return stops;
             }
 
             private static PaintColor[] ToXColors(IReadOnlyList<PaintColor> colors)

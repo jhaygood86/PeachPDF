@@ -1,9 +1,11 @@
+using PeachDrawing.Core;
+
 namespace PeachPDF.PDF.Drawing.Layout
 {
     internal class FormatterEnvironment
     {
         public XFont Font { get; set; } = null!;
-        public XBrush Brush { get; set; } = null!;
+        public Brush Brush { get; set; } = null!;
 
         public double LineSpace { get; set; }
         public double CyAscent { get; set; }

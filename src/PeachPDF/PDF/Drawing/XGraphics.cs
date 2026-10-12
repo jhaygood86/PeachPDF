@@ -255,7 +255,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a line connecting two PaintPoint structures.
         /// </summary>
-        public void DrawLine(XPen pen, PaintPoint pt1, PaintPoint pt2)
+        public void DrawLine(Pen pen, PaintPoint pt1, PaintPoint pt2)
         {
             DrawLine(pen, pt1.X, pt1.Y, pt2.X, pt2.Y);
         }
@@ -263,7 +263,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a line connecting the two points specified by coordinate pairs.
         /// </summary>
-        public void DrawLine(XPen pen, double x1, double y1, double x2, double y2)
+        public void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -276,7 +276,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of line segments that connect an array of points.
         /// </summary>
-        public void DrawLines(XPen pen, PaintPoint[] points)
+        public void DrawLines(Pen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -292,7 +292,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of line segments that connect an array of x and y pairs.
         /// </summary>
-        public void DrawLines(XPen pen, double x, double y, params double[] value)
+        public void DrawLines(Pen pen, double x, double y, params double[] value)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -315,7 +315,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a B�zier spline defined by four points.
         /// </summary>
-        public void DrawBezier(XPen pen, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, PaintPoint pt4)
+        public void DrawBezier(Pen pen, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, PaintPoint pt4)
         {
             DrawBezier(pen, pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, pt4.X, pt4.Y);
         }
@@ -323,7 +323,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a B�zier spline defined by four points.
         /// </summary>
-        public void DrawBezier(XPen pen, double x1, double y1, double x2, double y2,
+        public void DrawBezier(Pen pen, double x1, double y1, double x2, double y2,
           double x3, double y3, double x4, double y4)
         {
             if (pen == null)
@@ -339,7 +339,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of B�zier splines from an array of points.
         /// </summary>
-        public void DrawBeziers(XPen pen, PaintPoint[] points)
+        public void DrawBeziers(Pen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -360,7 +360,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a cardinal spline through a specified array of points.
         /// </summary>
-        public void DrawCurve(XPen pen, PaintPoint[] points)
+        public void DrawCurve(Pen pen, PaintPoint[] points)
         {
             DrawCurve(pen, points, 0.5);
         }
@@ -369,7 +369,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Draws a cardinal spline through a specified array of point using a specified tension.
         /// The drawing begins offset from the beginning of the array.
         /// </summary>
-        public void DrawCurve(XPen pen, PaintPoint[] points, int offset, int numberOfSegments, double tension)
+        public void DrawCurve(Pen pen, PaintPoint[] points, int offset, int numberOfSegments, double tension)
         {
             PaintPoint[] points2 = new PaintPoint[numberOfSegments];
             Array.Copy(points, offset, points2, 0, numberOfSegments);
@@ -379,7 +379,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a cardinal spline through a specified array of points using a specified tension. 
         /// </summary>
-        public void DrawCurve(XPen pen, PaintPoint[] points, double tension)
+        public void DrawCurve(Pen pen, PaintPoint[] points, double tension)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -399,7 +399,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an arc representing a portion of an ellipse.
         /// </summary>
-        public void DrawArc(XPen pen, Rect rect, double startAngle, double sweepAngle)
+        public void DrawArc(Pen pen, Rect rect, double startAngle, double sweepAngle)
         {
             DrawArc(pen, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -407,7 +407,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an arc representing a portion of an ellipse.
         /// </summary>
-        public void DrawArc(XPen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
+        public void DrawArc(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -430,7 +430,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XPen pen, Rect rect)
+        public void DrawRectangle(Pen pen, Rect rect)
         {
             DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -438,7 +438,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XPen pen, double x, double y, double width, double height)
+        public void DrawRectangle(Pen pen, double x, double y, double width, double height)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -457,7 +457,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XBrush brush, Rect rect)
+        public void DrawRectangle(Brush brush, Rect rect)
         {
             DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -465,7 +465,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XBrush brush, double x, double y, double width, double height)
+        public void DrawRectangle(Brush brush, double x, double y, double width, double height)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -480,7 +480,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XPen pen, XBrush brush, Rect rect)
+        public void DrawRectangle(Pen pen, Brush brush, Rect rect)
         {
             DrawRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -488,7 +488,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        public void DrawRectangle(XPen pen, XBrush brush, double x, double y, double width, double height)
+        public void DrawRectangle(Pen pen, Brush brush, double x, double y, double width, double height)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -504,7 +504,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        public void DrawRectangles(XPen pen, Rect[] rectangles)
+        public void DrawRectangles(Pen pen, Rect[] rectangles)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -519,7 +519,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        public void DrawRectangles(XBrush brush, Rect[] rectangles)
+        public void DrawRectangles(Brush brush, Rect[] rectangles)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -534,7 +534,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        public void DrawRectangles(XPen pen, XBrush brush, Rect[] rectangles)
+        public void DrawRectangles(Pen pen, Brush brush, Rect[] rectangles)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -560,7 +560,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XPen pen, Rect rect, Size ellipseSize)
+        public void DrawRoundedRectangle(Pen pen, Rect rect, Size ellipseSize)
         {
             DrawRoundedRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
         }
@@ -568,7 +568,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XPen pen, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
+        public void DrawRoundedRectangle(Pen pen, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -581,7 +581,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XBrush brush, Rect rect, Size ellipseSize)
+        public void DrawRoundedRectangle(Brush brush, Rect rect, Size ellipseSize)
         {
             DrawRoundedRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
         }
@@ -589,7 +589,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XBrush brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
+        public void DrawRoundedRectangle(Brush brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -602,7 +602,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XPen pen, XBrush brush, Rect rect, Size ellipseSize)
+        public void DrawRoundedRectangle(Pen pen, Brush brush, Rect rect, Size ellipseSize)
         {
             DrawRoundedRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
         }
@@ -610,7 +610,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a rectangles with round corners.
         /// </summary>
-        public void DrawRoundedRectangle(XPen pen, XBrush brush, double x, double y, double width, double height,
+        public void DrawRoundedRectangle(Pen pen, Brush brush, double x, double y, double width, double height,
             double ellipseWidth, double ellipseHeight)
         {
             if (pen == null && brush == null)
@@ -627,7 +627,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XPen pen, Rect rect)
+        public void DrawEllipse(Pen pen, Rect rect)
         {
             DrawEllipse(pen, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -635,7 +635,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XPen pen, double x, double y, double width, double height)
+        public void DrawEllipse(Pen pen, double x, double y, double width, double height)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -655,7 +655,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XBrush brush, Rect rect)
+        public void DrawEllipse(Brush brush, Rect rect)
         {
             DrawEllipse(brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -663,7 +663,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XBrush brush, double x, double y, double width, double height)
+        public void DrawEllipse(Brush brush, double x, double y, double width, double height)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -682,7 +682,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XPen pen, XBrush brush, Rect rect)
+        public void DrawEllipse(Pen pen, Brush brush, Rect rect)
         {
             DrawEllipse(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
         }
@@ -690,7 +690,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws an ellipse defined by a bounding rectangle.
         /// </summary>
-        public void DrawEllipse(XPen pen, XBrush brush, double x, double y, double width, double height)
+        public void DrawEllipse(Pen pen, Brush brush, double x, double y, double width, double height)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -702,7 +702,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XPen pen, PaintPoint[] points)
+        public void DrawPolygon(Pen pen, PaintPoint[] points)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -720,7 +720,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XBrush brush, PaintPoint[] points, FillMode fillmode)
+        public void DrawPolygon(Brush brush, PaintPoint[] points, FillMode fillmode)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -738,7 +738,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a polygon defined by an array of points.
         /// </summary>
-        public void DrawPolygon(XPen pen, XBrush brush, PaintPoint[] points, FillMode fillmode)
+        public void DrawPolygon(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
@@ -759,7 +759,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XPen pen, Rect rect, double startAngle, double sweepAngle)
+        public void DrawPie(Pen pen, Rect rect, double startAngle, double sweepAngle)
         {
             DrawPie(pen, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -767,7 +767,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XPen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
+        public void DrawPie(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen", PSSR.NeedPenOrBrush);
@@ -781,7 +781,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XBrush brush, Rect rect, double startAngle, double sweepAngle)
+        public void DrawPie(Brush brush, Rect rect, double startAngle, double sweepAngle)
         {
             DrawPie(brush, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -789,7 +789,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XBrush brush, double x, double y, double width, double height, double startAngle, double sweepAngle)
+        public void DrawPie(Brush brush, double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush", PSSR.NeedPenOrBrush);
@@ -803,7 +803,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XPen pen, XBrush brush, Rect rect, double startAngle, double sweepAngle)
+        public void DrawPie(Pen pen, Brush brush, Rect rect, double startAngle, double sweepAngle)
         {
             DrawPie(pen, brush, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
         }
@@ -811,7 +811,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a pie defined by an ellipse.
         /// </summary>
-        public void DrawPie(XPen pen, XBrush brush, double x, double y, double width, double height, double startAngle, double sweepAngle)
+        public void DrawPie(Pen pen, Brush brush, double x, double y, double width, double height, double startAngle, double sweepAngle)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen", PSSR.NeedPenOrBrush);
@@ -827,7 +827,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, PaintPoint[] points)
+        public void DrawClosedCurve(Pen pen, PaintPoint[] points)
         {
             DrawClosedCurve(pen, null, points, FillMode.EvenOdd, 0.5);
         }
@@ -836,7 +836,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, PaintPoint[] points, double tension)
+        public void DrawClosedCurve(Pen pen, PaintPoint[] points, double tension)
         {
             DrawClosedCurve(pen, null, points, FillMode.EvenOdd, tension);
         }
@@ -846,7 +846,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, PaintPoint[] points)
+        public void DrawClosedCurve(Brush brush, PaintPoint[] points)
         {
             DrawClosedCurve(null, brush, points, FillMode.EvenOdd, 0.5);
         }
@@ -854,7 +854,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, PaintPoint[] points, FillMode fillmode)
+        public void DrawClosedCurve(Brush brush, PaintPoint[] points, FillMode fillmode)
         {
             DrawClosedCurve(null, brush, points, fillmode, 0.5);
         }
@@ -862,7 +862,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XBrush brush, PaintPoint[] points, FillMode fillmode, double tension)
+        public void DrawClosedCurve(Brush brush, PaintPoint[] points, FillMode fillmode, double tension)
         {
             DrawClosedCurve(null, brush, points, fillmode, tension);
         }
@@ -872,7 +872,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, PaintPoint[] points)
+        public void DrawClosedCurve(Pen pen, Brush brush, PaintPoint[] points)
         {
             DrawClosedCurve(pen, brush, points, FillMode.EvenOdd, 0.5);
         }
@@ -880,7 +880,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, PaintPoint[] points, FillMode fillmode)
+        public void DrawClosedCurve(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode)
         {
             DrawClosedCurve(pen, brush, points, fillmode, 0.5);
         }
@@ -888,7 +888,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a closed cardinal spline defined by an array of points.
         /// </summary>
-        public void DrawClosedCurve(XPen pen, XBrush brush, PaintPoint[] points, FillMode fillmode, double tension)
+        public void DrawClosedCurve(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode, double tension)
         {
             if (pen == null && brush == null)
             {
@@ -913,7 +913,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        public void DrawPath(XPen pen, XGraphicsPath path)
+        public void DrawPath(Pen pen, XGraphicsPath path)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -929,7 +929,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        public void DrawPath(XBrush brush, XGraphicsPath path)
+        public void DrawPath(Brush brush, XGraphicsPath path)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -945,7 +945,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        public void DrawPath(XPen pen, XBrush brush, XGraphicsPath path)
+        public void DrawPath(Pen pen, Brush brush, XGraphicsPath path)
         {
             if (pen == null && brush == null)
             {
@@ -965,7 +965,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Draws the specified text string.
         /// </summary>
         /// <summary>
-        /// When true, <see cref="DrawString(string, XFont, XBrush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>
+        /// When true, <see cref="DrawString(string, XFont, Brush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>
         /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
         /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
         /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
@@ -978,7 +978,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>The render context pixel canvases are built from when a glyph is drawn through the raster backend, or <see langword="null"/> when there is none.</summary>
         internal PeachDrawing.Core.RenderContext? RasterContext { get; set; }
 
-        public void DrawString(string s, XFont font, XBrush brush, PaintPoint point)
+        public void DrawString(string s, XFont font, Brush brush, PaintPoint point)
         {
             DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), XStringFormats.Default);
         }
@@ -987,7 +987,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, PaintPoint point, XStringFormat format)
+        public void DrawString(string s, XFont font, Brush brush, PaintPoint point, XStringFormat format)
         {
             DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), format);
         }
@@ -995,7 +995,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y)
+        public void DrawString(string s, XFont font, Brush brush, double x, double y)
         {
             DrawString(s, font, brush, new Rect(x, y, 0, 0), XStringFormats.Default);
         }
@@ -1003,7 +1003,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string s, XFont font, Brush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             DrawString(s, font, brush, new Rect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
         }
@@ -1012,7 +1012,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, Rect layoutRectangle)
+        public void DrawString(string s, XFont font, Brush brush, Rect layoutRectangle)
         {
             DrawString(s, font, brush, layoutRectangle, XStringFormats.Default);
         }
@@ -1023,7 +1023,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// see <see cref="PeachDrawing.Core.Canvas"/>'s own equivalent overload for why this
         /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string text, XFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1050,7 +1050,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// directly by font glyph index - see <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s
         /// own remarks for why this exists alongside the ordinary character-based <c>DrawString</c>.
         /// </summary>
-        public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush)
+        public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, Brush brush)
         {
             if (font == null)
                 throw new ArgumentNullException("font");
