@@ -26,6 +26,7 @@ using PeachPDF.Network;
 - [Rendering MathML formulas](#rendering-mathml-formulas)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
 - [PDF 2.0 output](#pdf-20-output)
+- [Encrypting and password-protecting PDF output](#encrypting-and-password-protecting-pdf-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
 - [Rasterized effects and resolution](#rasterized-effects-and-resolution)
 - [Flattening transparency for PDF/A-1 and PDF/X](#flattening-transparency-for-pdfa-1-and-pdfx)
@@ -547,6 +548,51 @@ var config = new PdfGenerateConfig
 Set `JxlPassthrough = true` (default `false`) with `PdfVersion.Pdf20` to embed an opaque, upright, non-animated gray or RGB JPEG XL image as its original bytes under a `/JXLDecode` filter, instead of decoding it and recompressing the pixels. No PDF standard defines a JPEG XL filter yet: the filter name and image dictionary follow the only open-source design published so far, so **no shipping PDF reader opens such a file today**. A JPEG XL image with alpha, animation or CMYK, a sideways orientation, or any image under `ImageCompression.Lossy`, takes the normal raster path. The image is embedded at its natural size and is never downscaled. The [`peachpdf`](cli.md) tool exposes this as `--jxl-passthrough`.
 
 `PdfVersion.Pdf20` is incompatible with every PDF/A and PDF/X level except the two that are defined against PDF 2.0: PDF/A-4 (`PdfA4`, `PdfA4E`, `PdfA4F`) and PDF/X-6 (`X6`). Asking for any earlier level together with an explicit `PdfVersion.Pdf20` throws. Conversely, requesting PDF/A-4 or PDF/X-6 selects PDF 2.0 by itself as long as you never set `PdfVersion`; setting it to `Pdf17` explicitly alongside one of them throws.
+
+## Encrypting and password-protecting PDF output
+
+Set `PdfGenerateConfig.Encryption` to encrypt the PDF and to control what a reader lets people do with it. PeachPDF writes the PDF standard security handler with **AES-256** ([ISO 32000-2](https://www.iso.org/standard/75839.html), revision 6) and nothing older: RC4 and AES-128 depend on algorithms that are deprecated, so they are not offered. All the cryptography comes from .NET's own `System.Security.Cryptography`.
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    Encryption = new PdfEncryptionOptions
+    {
+        UserPassword = "to open it",      // needed to open the document; null or "" opens without one
+        OwnerPassword = "to unlock it",   // lifts every restriction below
+        Permissions = PdfPermissions.AllowPrint | PdfPermissions.AllowCopy
+    }
+};
+```
+
+| Option | Meaning |
+|---|---|
+| `UserPassword` | The password a reader asks for before showing the document. With none, anyone can open it and only `Permissions` apply. |
+| `OwnerPassword` | Lifts the restrictions. With none, a random one is generated and thrown away, so the restrictions can never be lifted. |
+| `Permissions` | What someone who opened the document with the user password may do (default `PdfPermissions.All`). |
+| `EncryptMetadata` | `false` leaves the XMP metadata stream readable, so search and indexing tools can see it without a password. Default `true`. |
+
+The permission flags are `AllowPrint`, `AllowHighQualityPrint` (full-resolution printing; without it printing is low quality, and without `AllowPrint` there is none), `AllowCopy` (copying text and graphics), `AllowAccessibilityExtract` (screen readers), `AllowModify`, `AllowAnnotations`, `AllowFillForms` and `AllowAssemble` (inserting, rotating and deleting pages). `PdfPermissions.None` forbids all of them and `PdfPermissions.All` allows all of them.
+
+For a **read-only** document — one that can be viewed, printed and copied from but not edited, annotated, filled in or reassembled — use `PdfPermissions.ReadOnly`, or the shortcut that also takes the passwords:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    Encryption = PdfEncryptionOptions.ReadOnly(ownerPassword: "to unlock it")
+};
+```
+
+Things to know:
+
+- **Permissions are a request, not a lock.** A reader enforces them voluntarily, and anyone who can open the document can read all of its content. Only the passwords are cryptographic: use a user password when the content itself must stay private.
+- **Not with PDF/A or PDF/X.** Both standards forbid encryption, so setting `Encryption` together with `PdfAConformance` or `PdfXConformance` throws.
+- **PDF version.** The default PDF 2.0 file carries revision 6 natively. With `PdfVersion.Pdf17` the file is written as PDF 1.7 and announces the Adobe extension level 8 that PDF 1.7 readers (Acrobat X and later, Chrome, Edge, Firefox, MuPDF, pdf.js) recognise.
+- **Whole document.** Encryption applies to the file as a whole, so every `AddPdfPages`/`AddPages` call on one document must give the same options; a different set throws.
+- **Passwords** are normalised to Unicode NFKC and used as UTF-8, and only the first 127 bytes count.
+- **Runtime support.** Encryption needs the platform's AES and SHA-2 implementations. A host that has none (browser WebAssembly may be one) throws `PlatformNotSupportedException` when the document is saved.
+
+The [`peachpdf`](cli.md) tool exposes this as `--user-password`, `--owner-password`, `--permissions` and `--no-encrypt-metadata`.
 
 ## Enabling interactive PDF forms
 

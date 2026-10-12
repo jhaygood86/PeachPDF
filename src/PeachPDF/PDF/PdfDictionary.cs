@@ -75,19 +75,61 @@ internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<strin
 
 internal override void WriteObject(PdfWriter writer)
     {
-        writer.WriteBeginObject(this);
-        //int count = Elements.Count;
-        PdfName[] keys = Elements.KeyNames;
+        // /Length precedes the stream bytes and AES changes their count, so a stream is encrypted before anything is
+        // written. What is changed on the dictionary for the write is put back afterwards, so saving a second time
+        // encrypts the plaintext again rather than the ciphertext.
+        PdfItem? plainLength = null;
+        bool changedLength = false, addedCrypt = false;
+        if (writer.Encryption is { } encryption && _stream is not null && IsIndirect)
+        {
+            if (this is PdfMetadataStream && encryption.LeavesMetadataPlain)
+            {
+                // ISO 32000-2, 7.6.6: a cleartext stream in an encrypted document names the Identity crypt filter.
+                if (!Elements.ContainsKey(PdfStream.Keys.Filter))
+                {
+                    Elements.SetName(PdfStream.Keys.Filter, "/Crypt");
+                    var parms = new PdfDictionary(_document);
+                    parms.Elements.SetName("/Name", "/Identity");
+                    Elements["/DecodeParms"] = parms;
+                    addedCrypt = true;
+                }
+            }
+            else
+            {
+                byte[] cipher = encryption.Encrypt(_stream.Value);
+                plainLength = Elements[PdfStream.Keys.Length];
+                Elements.SetInteger(PdfStream.Keys.Length, cipher.Length);
+                changedLength = true;
+                writer.EncryptedStreamBytes = cipher;
+            }
+        }
 
-        // TODO: automatically set length
-        if (_stream is not null)
-            Debug.Assert(Elements.ContainsKey(PdfStream.Keys.Length), "Dictionary has a stream but no length is set.");
+        try
+        {
+            writer.WriteBeginObject(this);
+            PdfName[] keys = Elements.KeyNames;
 
-        foreach (PdfName key in keys)
-            WriteDictionaryElement(writer, key);
-        if (Stream is not null)
-            WriteDictionaryStream(writer);
-        writer.WriteEndObject();
+            // TODO: automatically set length
+            if (_stream is not null)
+                Debug.Assert(Elements.ContainsKey(PdfStream.Keys.Length), "Dictionary has a stream but no length is set.");
+
+            foreach (PdfName key in keys)
+                WriteDictionaryElement(writer, key);
+            if (Stream is not null)
+                WriteDictionaryStream(writer);
+            writer.WriteEndObject();
+        }
+        finally
+        {
+            writer.EncryptedStreamBytes = null;
+            if (changedLength && plainLength is not null)
+                Elements[PdfStream.Keys.Length] = plainLength;
+            if (addedCrypt)
+            {
+                Elements.Remove(PdfStream.Keys.Filter);
+                Elements.Remove("/DecodeParms");
+            }
+        }
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using PeachPDF.PDF.Rendering;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
 using PeachPDF.PDF.IO;
+using PeachPDF.PDF.Security;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -212,6 +213,27 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         try
         {
             _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
+
+            // A fresh handler per save: its file key and salts are drawn anew, so two saves never share a key.
+            PdfAes256SecurityHandler? security = Options.Encryption is { } encryptionOptions
+                ? new PdfAes256SecurityHandler(encryptionOptions)
+                : null;
+            if (security is not null)
+            {
+                _trailer.Elements[PdfTrailer.Keys.Encrypt] = security.CreateEncryptDictionary(this);
+                writer.Encryption = security;
+                if (_version < 20)
+                {
+                    // AES-256 revision 6 is defined by ISO 32000-2; a PDF 1.7 file announces it the way Acrobat does,
+                    // as the Adobe extension level 8.
+                    var adbe = new PdfDictionary(this);
+                    adbe.Elements.SetName("/BaseVersion", "/1.7");
+                    adbe.Elements.SetInteger("/ExtensionLevel", 8);
+                    var extensions = Catalog.Elements["/Extensions"] as PdfDictionary ?? new PdfDictionary(this);
+                    extensions.Elements["/ADBE"] = adbe;
+                    Catalog.Elements["/Extensions"] = extensions;
+                }
+            }
 
             // ISO 19005-4 (6.1.3) allows an Info dictionary only as a lone /ModDate and deprecates it: PDF/A-4 carries
             // its metadata in the XMP stream (already built from Info's values), so the trailer drops /Info altogether.

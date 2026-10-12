@@ -15118,6 +15118,30 @@ await SaveShowcaseAsync("all_shorthand", "Selectors & Cascade", "The all shortha
     "in HTML, SVG and MathML, and obey declaration order.",
     allShorthandHtml, pdfConfig);
 
+// An owner password with no user password, so the PDF opens in any reader (and in the site's preview rasterizer)
+// while the read-only permission set stays enforced by a reader that honours it.
+var encryptedReadOnlyHtml = "<!DOCTYPE html><html lang=\"en-US\"><head><style>" +
+    "body { font-family: sans-serif; margin: 0; } " +
+    ".lock { border: 2px solid #2b6cb0; border-radius: 10px; padding: 14px 18px; background: #ebf4ff; } " +
+    "h1 { margin: 0 0 6px; font-size: 20pt; color: #2b6cb0; } " +
+    "td, th { padding: 4px 12px; border-bottom: 1px solid #bcd; text-align: left; }" +
+    "</style></head><body><div class=\"lock\"><h1>Read-only, AES-256 encrypted</h1>" +
+    "<p>This document opens without a password. It is encrypted, and its permissions allow viewing, printing and copying but not " +
+    "editing, annotating, filling in or reassembling.</p>" +
+    "<table><tr><th>Permission</th><th>Allowed</th></tr>" +
+    "<tr><td>Print</td><td>yes</td></tr><tr><td>Copy text</td><td>yes</td></tr>" +
+    "<tr><td>Modify</td><td>no</td></tr><tr><td>Annotate</td><td>no</td></tr>" +
+    "<tr><td>Fill forms</td><td>no</td></tr><tr><td>Assemble pages</td><td>no</td></tr></table></div></body></html>";
+
+await SaveShowcaseAsync("encrypted_read_only", "Standards & Accessibility", "AES-256 encryption: a read-only document",
+    "PdfGenerateConfig.Encryption writes an AES-256 encrypted PDF. This one has an owner password and no user password, so it opens " +
+    "anywhere, while its permissions forbid editing, annotating, form filling and page assembly.",
+    encryptedReadOnlyHtml, new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        Encryption = PdfEncryptionOptions.ReadOnly(ownerPassword: "peachpdf-showcase-owner"),
+    });
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

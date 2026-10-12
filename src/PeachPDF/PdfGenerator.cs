@@ -526,6 +526,36 @@ namespace PeachPDF
             {
                 document.PdfDocument.Version = 16;
             }
+
+            // Encryption is a whole-document property, like the conformance levels above, and both PDF/A (ISO 19005,
+            // 6.1.3) and PDF/X (ISO 15930) forbid an /Encrypt entry - a document cannot claim one and carry the other.
+            // The snapshot keeps a caller who edits their options object afterwards from changing a document in progress.
+            var encryption = config.Encryption?.Clone();
+            if (encryption is not null
+                && (config.PdfAConformance != PdfAConformance.None || config.PdfXConformance != PdfXConformance.None))
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.Encryption cannot be combined with PdfAConformance or PdfXConformance: " +
+                    "PDF/A and PDF/X documents must not be encrypted.");
+            }
+
+            if (document.PdfDocument.Options.EncryptionEstablished
+                && !(document.PdfDocument.Options.Encryption is null ? encryption is null : document.PdfDocument.Options.Encryption.SameAs(encryption)))
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.Encryption must be the same on every AddPdfPages/AddPages call for a given " +
+                    "document - a PDF file is encrypted as a whole, with one set of passwords and permissions.");
+            }
+
+            document.PdfDocument.Options.Encryption = encryption;
+            document.PdfDocument.Options.EncryptionEstablished = true;
+
+            // AES-256 (revision 6) is a PDF 2.0 feature that PDF 1.7 readers also accept (Adobe extension level 8); a
+            // file that would otherwise carry an older header is raised to 1.7.
+            if (encryption is not null && document.PdfDocument.Version < 17)
+            {
+                document.PdfDocument.Version = 17;
+            }
         }
 
         /// <summary>

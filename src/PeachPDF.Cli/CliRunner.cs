@@ -155,6 +155,17 @@ internal static class CliRunner
             config.PdfAConformance = pdfA;
         }
 
+        if (options.WantsEncryption)
+        {
+            config.Encryption = new PdfEncryptionOptions
+            {
+                UserPassword = options.UserPassword,
+                OwnerPassword = options.OwnerPassword,
+                Permissions = options.Permissions ?? PdfPermissions.All,
+                EncryptMetadata = !options.NoEncryptMetadata,
+            };
+        }
+
         // PDF/A always writes an XMP stream, which needs a creation date - and the library throws when it
         // has none, rather than inventing one. So no date is made up here either: an explicit
         // --pdf-creation-date is used as given, otherwise the document's own date (<meta name="date">) is.
