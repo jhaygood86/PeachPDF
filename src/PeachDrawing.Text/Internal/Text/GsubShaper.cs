@@ -67,7 +67,7 @@ namespace PeachDrawing.Text.Internal.Text
         // or <value> - 1 for an explicit font-feature-settings tag with an integer greater than 1, per
         // CSS Fonts Level 3's "the value selects the Nth glyph alternate" rule. A lookup of any other
         // type at that index ignores the paired value entirely.
-        private static readonly ConditionalWeakTable<GsubTable, ConcurrentDictionary<ShapeSettings, SortedDictionary<int, int>>> LookupIndexCache = new();
+        private static readonly ConditionalWeakTable<GsubTable, ConcurrentDictionary<ShapeSettings, KeyValuePair<int, int>[]>> LookupIndexCache = new();
 
         // Every tag any font-variant-* longhand (ligatures/caps/numeric/east-asian) can itself
         // produce - an explicit font-feature-settings entry for one of these is always superseded by
@@ -207,8 +207,8 @@ namespace PeachDrawing.Text.Internal.Text
                 ApplyKhmerShaping(gsub, glyphs, khmerCategories, languageTag, scriptPreference, gdef);
             }
 
-            SortedDictionary<int, int> lookupIndices = GetActiveLookupIndices(gsub, features);
-            if (lookupIndices.Count == 0)
+            KeyValuePair<int, int>[] lookupIndices = GetActiveLookupIndices(gsub, features);
+            if (lookupIndices.Length == 0)
                 return glyphs;
 
             // One pass over the combined, font-LookupList-index-ordered set, dispatching each lookup
@@ -353,10 +353,13 @@ namespace PeachDrawing.Text.Internal.Text
             return result;
         }
 
-        private static SortedDictionary<int, int> GetActiveLookupIndices(GsubTable gsub, ShapeSettings features)
+        // An array, not the sorted collection it is built in: this is enumerated once per shaped word, and enumerating a
+        // SortedDictionary allocates its enumerator and the stack behind it every time. The factory is static for the same
+        // reason - a lambda capturing the table is a closure and a delegate per call, hit or miss.
+        private static KeyValuePair<int, int>[] GetActiveLookupIndices(GsubTable gsub, ShapeSettings features)
         {
             var perTableCache = LookupIndexCache.GetOrCreateValue(gsub);
-            return perTableCache.GetOrAdd(features, key =>
+            return perTableCache.GetOrAdd(features, static (key, gsub) =>
             {
                 // Every tag here wants the default (first) glyph alternate if its lookup turns out to
                 // be Type 3 - only an explicit font-feature-settings value greater than 1 asks for a
@@ -470,8 +473,10 @@ namespace PeachDrawing.Text.Internal.Text
                     }
                 }
 
-                return result;
-            });
+                var ordered = new KeyValuePair<int, int>[result.Count];
+                ((ICollection<KeyValuePair<int, int>>)result).CopyTo(ordered, 0);
+                return ordered;
+            }, gsub);
         }
 
         private static readonly IReadOnlyDictionary<ArabicJoiningForm, string> JoiningFormTags = new Dictionary<ArabicJoiningForm, string>

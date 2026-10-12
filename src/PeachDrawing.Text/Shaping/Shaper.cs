@@ -46,7 +46,15 @@ namespace PeachDrawing.Text.Shaping
                 }
             }
 
-            return new GlyphRun(typeface, typeface.Face.Descriptor.Shape(text, settings));
+            if (!ShapedRunCache.IsCacheable(settings))
+            {
+                return new GlyphRun(typeface, typeface.Face.Descriptor.Shape(text, settings));
+            }
+
+            var cache = typeface.ShapedRuns;
+
+            return cache.Find(text, settings)
+                ?? cache.Keep(text, settings, new GlyphRun(typeface, typeface.Face.Descriptor.Shape(text, settings)));
         }
 
         /// <summary>The <c>GSUB</c> feature tags that implement a caps mode, none for <see cref="CapsMode.None"/>.</summary>

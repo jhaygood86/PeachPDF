@@ -93,11 +93,37 @@ internal class CharacterMapInfo
             ? logicalText
             : text;
 
-        foreach (PlacedGlyph glyph in Shaper.Shape(_typeface, text, features).Glyphs)
+        var glyphs = Shaper.Shape(_typeface, text, features).Glyphs;
+
+        for (var i = 0; i < glyphs.Count; i++)
         {
+            var glyph = glyphs[i];
             GlyphIndices.Add(glyph.GlyphIndex);
-            MapGlyphToText(glyph.GlyphIndex, source.Substring(glyph.ClusterStart, glyph.ClusterLength));
+            MapGlyphToText(glyph.GlyphIndex, source, glyph.ClusterStart, glyph.ClusterLength);
         }
+    }
+
+    /// <summary>
+    /// <see cref="MapGlyphToText(int, string)"/> for a piece of <paramref name="source"/>, without cutting the piece out
+    /// unless it is going to be kept. A word drawn again maps every one of its glyphs to the text they already map to, so
+    /// comparing in place spares a string per glyph of every word drawn.
+    /// </summary>
+    private void MapGlyphToText(int glyphIndex, string source, int start, int length)
+    {
+        var piece = source.AsSpan(start, length);
+        var isSpace = piece.Length == 1 && piece[0] == ' ';
+
+        if (LigatureGlyphToText.TryGetValue(glyphIndex, out var existing))
+        {
+            if (!isSpace && existing == " ")
+                return;
+
+            // Already mapped to exactly this text: setting it again changes nothing.
+            if (existing.AsSpan().SequenceEqual(piece))
+                return;
+        }
+
+        LigatureGlyphToText[glyphIndex] = isSpace ? " " : piece.ToString();
     }
 
     /// <summary>

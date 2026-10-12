@@ -40,6 +40,73 @@ namespace PeachDrawing.Core
 
             Debug.Assert(metrics.CellAscent > 0);
 
+            int adjustedLength;
+            var height = singleLineHeight;
+            int maxWidth;
+
+            if (IsPlainRun(text))
+            {
+                // The whole of a word, which is what nearly every call is: nothing to drop, remap or split, so the text
+                // shaped is the text given. None of the builder, per-character strings and closure the general path needs.
+                maxWidth = ShapedWidth(typeface, text, features);
+                adjustedLength = text.Length;
+            }
+            else
+            {
+                (maxWidth, adjustedLength, height) = MeasureLines(text, typeface, features, singleLineHeight, lineGapHeight);
+            }
+
+            result.Width = maxWidth * size / metrics.UnitsPerEm;
+            result.Height = height;
+
+            // Adjust bold simulation.
+            if ((synthesis & SyntheticStyle.Bold) == SyntheticStyle.Bold)
+            {
+                // Add 2% of the em-size for each character.
+                // Unsure how to deal with white space. Currently count as regular character.
+                result.Width += adjustedLength * size * BoldEmphasis;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="text"/> is a run <see cref="Measure"/> shapes exactly as given: no line feed, tab or other
+        /// control character, and no surrogate (a lone one is replaced when the text is read as runes).
+        /// </summary>
+        private static bool IsPlainRun(string text)
+        {
+            foreach (var c in text)
+            {
+                if (c < 32 || char.IsSurrogate(c)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// The width of <paramref name="text"/> shaped as one run, in font design units. GPOS's <c>XAdvanceDelta</c> (kerning)
+        /// is folded in here, not just applied at paint time - line-breaking, text-align and justification all key off this
+        /// value, and it must agree with what a backend's own glyph painter actually paints.
+        /// </summary>
+        private static int ShapedWidth(Typeface typeface, string text, ShapeSettings features)
+        {
+            var glyphs = Shaper.Shape(typeface, text, features).Glyphs;
+            var width = 0;
+
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                var glyph = glyphs[i];
+                width += (int)Math.Round(typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta);
+            }
+
+            return width;
+        }
+
+        /// <summary>Measures text that holds line feeds, tabs or other characters needing handling, one line at a time.</summary>
+        private static (int MaxWidth, int AdjustedLength, double Height) MeasureLines(
+            string text, Typeface typeface, ShapeSettings features, double singleLineHeight, double lineGapHeight)
+        {
             int adjustedLength = 0;
             var height = singleLineHeight;
             int maxWidth = 0;
@@ -56,12 +123,10 @@ namespace PeachDrawing.Core
 
             void FlushLine()
             {
-                width = 0;
                 // GPOS's XAdvanceDelta (kerning) must be folded into the measured width here, not
                 // just applied at paint time - line-breaking/text-align/justification all key off
                 // this value, and must agree with what a backend's own glyph painter actually paints.
-                foreach (PlacedGlyph glyph in Shaper.Shape(typeface, lineText.ToString(), features).Glyphs)
-                    width += (int)Math.Round(typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta);
+                width = ShapedWidth(typeface, lineText.ToString(), features);
                 lineText.Clear();
             }
 
@@ -102,23 +167,12 @@ namespace PeachDrawing.Core
                     continue;
                 }
 
-                lineText.Append(rune.ToString());
+                lineText.Append(rune);
             }
             FlushLine();
             maxWidth = Math.Max(maxWidth, width);
 
-            result.Width = maxWidth * size / metrics.UnitsPerEm;
-            result.Height = height;
-
-            // Adjust bold simulation.
-            if ((synthesis & SyntheticStyle.Bold) == SyntheticStyle.Bold)
-            {
-                // Add 2% of the em-size for each character.
-                // Unsure how to deal with white space. Currently count as regular character.
-                result.Width += adjustedLength * size * BoldEmphasis;
-            }
-
-            return result;
+            return (maxWidth, adjustedLength, height);
         }
     }
 }

@@ -43,7 +43,7 @@ namespace PeachDrawing.Text.Internal.Text
 
         // GposTable instances are cached and shared process-wide, same rationale as GsubShaper's own
         // LookupIndexCache.
-        private static readonly ConditionalWeakTable<GposTable, ConcurrentDictionary<ShapeSettings, SortedSet<int>>> LookupIndexCache = new();
+        private static readonly ConditionalWeakTable<GposTable, ConcurrentDictionary<ShapeSettings, int[]>> LookupIndexCache = new();
 
         public static void Apply(OpenTypeDescriptor descriptor, List<PlacedGlyph> glyphs, ShapeSettings features)
         {
@@ -61,8 +61,8 @@ namespace PeachDrawing.Text.Internal.Text
 
             GdefTable? gdef = descriptor.FontFace.gdef?.Table;
 
-            SortedSet<int> lookupIndices = GetActiveLookupIndices(gpos, features);
-            if (lookupIndices.Count == 0)
+            int[] lookupIndices = GetActiveLookupIndices(gpos, features);
+            if (lookupIndices.Length == 0)
                 return;
 
             foreach (int lookupIndex in lookupIndices)
@@ -120,10 +120,11 @@ namespace PeachDrawing.Text.Internal.Text
             }
         }
 
-        private static SortedSet<int> GetActiveLookupIndices(GposTable gpos, ShapeSettings features)
+        // An array and a static factory, for the reasons GsubShaper.GetActiveLookupIndices spells out.
+        private static int[] GetActiveLookupIndices(GposTable gpos, ShapeSettings features)
         {
             var perTableCache = LookupIndexCache.GetOrCreateValue(gpos);
-            return perTableCache.GetOrAdd(features, key =>
+            return perTableCache.GetOrAdd(features, static (key, gpos) =>
             {
                 // `font-kerning: none` gates `kern` off entirely; mark-positioning tags are requested
                 // unconditionally - combining-mark attachment isn't a stylistic opt-out the way
@@ -138,8 +139,11 @@ namespace PeachDrawing.Text.Internal.Text
                 if (key.JoiningForms is { Count: > 0 })
                     tags.Add("curs");
 
-                return gpos.GetActiveLookupIndices(ResolveScriptPreference(key.ScriptTag), tags);
-            });
+                var active = gpos.GetActiveLookupIndices(ResolveScriptPreference(key.ScriptTag), tags);
+                var ordered = new int[active.Count];
+                active.CopyTo(ordered);
+                return ordered;
+            }, gpos);
         }
 
         // internal rather than private: lets tests exercise the positioning math directly against a
