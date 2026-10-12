@@ -231,9 +231,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
 
         try
         {
-            if (_trailer is PdfCrossReferenceStream)
-                _trailer = new PdfTrailer((PdfCrossReferenceStream)_trailer);
-
             _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
 
             // ISO 19005-4 (6.1.3) allows an Info dictionary only as a lone /ModDate and deprecates it: PDF/A-4 carries

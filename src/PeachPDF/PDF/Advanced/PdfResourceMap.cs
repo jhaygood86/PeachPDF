@@ -20,14 +20,4 @@ internal sealed class PdfResourceMap : PdfDictionary //, IEnumerable
         : base(dict)
     { }
 
-    /// <summary>
-    /// Adds all imported resource names to the specified hashtable.
-    /// </summary>
-    internal void CollectResourceNames(Dictionary<string, object?> usedResourceNames)
-    {
-        // ?TODO: Imported resources (e.g. fonts) can be reused, but I think this is rather difficult. Will be an issue in PDFsharp 2.0.
-        PdfName[] names = Elements.KeyNames;
-        foreach (PdfName name in names)
-            usedResourceNames.Add(name.ToString(), null);
-    }
 }

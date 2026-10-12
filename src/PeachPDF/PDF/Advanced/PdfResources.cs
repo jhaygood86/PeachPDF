@@ -2,6 +2,7 @@
 
 using PeachDrawing.Core;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace PeachPDF.PDF.Advanced;
 
@@ -177,9 +178,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            string name;
-            while (ExistsResourceNames(name = string.Format("/F{0}", _fontNumber++))) { }
-            return name;
+            return string.Create(CultureInfo.InvariantCulture, $"/F{_fontNumber++}");
         }
     }
     int _fontNumber;
@@ -191,9 +190,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            string name;
-            while (ExistsResourceNames(name = string.Format("/I{0}", _imageNumber++))) { }
-            return name;
+            return string.Create(CultureInfo.InvariantCulture, $"/I{_imageNumber++}");
         }
     }
     int _imageNumber;
@@ -205,9 +202,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            string name;
-            while (ExistsResourceNames(name = string.Format("/Fm{0}", _formNumber++))) { }
-            return name;
+            return string.Create(CultureInfo.InvariantCulture, $"/Fm{_formNumber++}");
         }
     }
     int _formNumber;
@@ -219,9 +214,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            string name;
-            while (ExistsResourceNames(name = string.Format("/GS{0}", _extGStateNumber++))) { }
-            return name;
+            return string.Create(CultureInfo.InvariantCulture, $"/GS{_extGStateNumber++}");
         }
     }
     int _extGStateNumber;
@@ -233,59 +226,10 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            string name;
-            while (ExistsResourceNames(name = string.Format("/Pa{0}", _patternNumber++))) ;
-            return name;
+            return string.Create(CultureInfo.InvariantCulture, $"/Pa{_patternNumber++}");
         }
     }
     int _patternNumber;
-
-    /// <summary>
-    /// Check whether a resource name is already used in the context of this resource dictionary.
-    /// PDF4NET uses GUIDs as resource names, but I think this weapon is to heavy.
-    /// </summary>
-    internal bool ExistsResourceNames(string name)
-    {
-        // TODO: more precise: is this page imported and is PageOptions != Replace
-        // BUG: 
-        //if (!Owner.IsImported)
-        //  return false;
-
-        // Collect all resouce names of all imported resources.
-        if (_importedResourceNames is null)
-        {
-            _importedResourceNames = new Dictionary<string, object?>();
-
-            if (Elements[Keys.Font] is not null)
-                Fonts.CollectResourceNames(_importedResourceNames);
-
-            if (Elements[Keys.XObject] is not null)
-                XObjects.CollectResourceNames(_importedResourceNames);
-
-            if (Elements[Keys.ExtGState] is not null)
-                ExtGStates.CollectResourceNames(_importedResourceNames);
-
-            if (Elements[Keys.ColorSpace] is not null)
-                ColorSpaces.CollectResourceNames(_importedResourceNames);
-
-            if (Elements[Keys.Pattern] is not null)
-                Patterns.CollectResourceNames(_importedResourceNames);
-
-            if (Elements[Keys.Shading] is not null)
-                Shadings.CollectResourceNames(_importedResourceNames);
-
-            if (Elements[Keys.Properties] is not null)
-                Properties.CollectResourceNames(_importedResourceNames);
-        }
-        return _importedResourceNames.ContainsKey(name);
-        // This is superfluous because PDFsharp resource names cannot be double.
-        // importedResourceNames.Add(name, null);
-    }
-
-    /// <summary>
-    /// All the names of imported resources.
-    /// </summary>
-    Dictionary<string, object?> _importedResourceNames = null!;
 
     /// <summary>
     /// Maps all PDFsharp resources to their local resource names.
