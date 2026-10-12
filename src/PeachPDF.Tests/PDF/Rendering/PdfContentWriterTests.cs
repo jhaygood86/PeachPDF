@@ -209,5 +209,48 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
             Assert.Same(content, returned);
             Assert.Equal("ABCDE", content.ToString());
         }
+
+        [Theory]
+        [InlineData(256)]   // roomy: formatted straight into the chunk
+        [InlineData(8)]     // too small for the direct path: formatted through scratch space across chunks
+        public void AppendNumber_UsesInvariantCultureAndTheRequestedFormat(int chunkSize)
+        {
+            var previous = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+                var content = new PdfContentWriter(chunkSize);
+
+                content.Append(1234.56789, "0.###").Append(' ').Append(-0.5f, "0.####").Append(' ').Append(7, "0");
+
+                Assert.Equal("1234.568 -0.5 7", content.ToString());
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previous;
+            }
+        }
+
+        [Theory]
+        [InlineData(0.00015f)]
+        [InlineData(36.31805f)]
+        [InlineData(1.00005f)]
+        [InlineData(-208.8979f)]
+        public void AppendNumber_FormatsSinglePrecisionValuesWithTheirOwnDigits(float value)
+        {
+            // The same text the boxed float gave through string.Format: single precision is not widened first.
+            string expected = value.ToString("0.####", CultureInfo.InvariantCulture);
+
+            Assert.Equal(expected, new PdfContentWriter().Append(value, "0.####").ToString());
+        }
+
+        [Fact]
+        public void AppendNumber_HugeMagnitudeFallsBackToStringFormatting()
+        {
+            string text = new PdfContentWriter(8).Append(double.MaxValue, "0.###").ToString();
+
+            Assert.StartsWith("17976931348623", text);
+            Assert.Equal(309, text.Length);
+        }
     }
 }
