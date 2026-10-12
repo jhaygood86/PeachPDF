@@ -92,8 +92,8 @@ internal sealed partial class PdfGraphicsRenderer
         double fontSize = Math.Round(font.Size, 3, MidpointRounding.AwayFromZero);
         double charSpace = Math.Round(_gfxState.RealizedCharSpace, 3, MidpointRounding.AwayFromZero);
         double thousandths = 0;
-        foreach (PlacedGlyph glyph in glyphs)
-            thousandths += PdfTypefaceMetrics.GlyphWidth(font.Typeface, glyph.GlyphIndex);
+        for (var i = 0; i < glyphs.Count; i++)
+            thousandths += PdfTypefaceMetrics.GlyphWidth(font.Typeface, glyphs[i].GlyphIndex);
         return thousandths * fontSize / 1000 + glyphs.Count * charSpace;
     }
 
@@ -188,8 +188,9 @@ internal sealed partial class PdfGraphicsRenderer
             shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
             RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
             StringBuilder sb = new StringBuilder();
-            foreach (PlacedGlyph glyph in shapedGlyphs)
+            for (var glyphIndex = 0; glyphIndex < shapedGlyphs.Count; glyphIndex++)
             {
+                var glyph = shapedGlyphs[glyphIndex];
                 sb.Append((char)glyph.GlyphIndex);
                 if (glyph.XAdvanceDelta != 0 || glyph.YAdvanceDelta != 0 || glyph.XOffset != 0 || glyph.YOffset != 0)
                     hasGposDeltas = true;

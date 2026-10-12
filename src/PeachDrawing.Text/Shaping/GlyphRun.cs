@@ -28,8 +28,9 @@ namespace PeachDrawing.Text.Shaping
             get
             {
                 double advance = 0;
-                foreach (var glyph in Glyphs)
+                for (var i = 0; i < Glyphs.Count; i++)
                 {
+                    var glyph = Glyphs[i];
                     advance += Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta;
                 }
 

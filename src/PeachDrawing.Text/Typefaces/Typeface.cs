@@ -33,6 +33,11 @@ namespace PeachDrawing.Text
         /// <summary>The engine's own view of this face.</summary>
         internal LoadedTypeface Face { get; }
 
+        private ShapedRunCache? _shapedRuns;
+
+        /// <summary>The runs shaped in this face so far, created on first use.</summary>
+        internal ShapedRunCache ShapedRuns => _shapedRuns ?? Interlocked.CompareExchange(ref _shapedRuns, new ShapedRunCache(), null) ?? _shapedRuns!;
+
         /// <summary>The family name the font file declares, in English, such as <c>Arial</c>.</summary>
         public string FamilyName => Face.FamilyName;
 
