@@ -506,7 +506,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     {
         get
         {
-            return string.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectId.DebuggerDisplay, _elements is null ? 0 : _elements.Count);
+            return string.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", $"id=({ObjectId})", _elements is null ? 0 : _elements.Count);
 
         }
     }

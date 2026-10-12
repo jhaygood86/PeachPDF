@@ -7,120 +7,60 @@ using System.Globalization;
 namespace PeachPDF.PDF;
 
 /// <summary>
-/// Represents a PDF object identifier, a pair of object and generation number.
+/// Identifies an indirect PDF object by its object number and generation number.
 /// </summary>
-[DebuggerDisplay("{DebuggerDisplay}")]
-internal struct PdfObjectId : IComparable
+[DebuggerDisplay("id=({ToString(),nq})")]
+internal readonly struct PdfObjectId : IEquatable<PdfObjectId>, IComparable<PdfObjectId>, IComparable
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PdfObjectId"/> class.
-    /// </summary>
-    /// <param name="objectNumber">The object number.</param>
-    public PdfObjectId(int objectNumber)
+    public PdfObjectId(int objectNumber) : this(objectNumber, 0)
     {
-        Debug.Assert(objectNumber >= 1, "Object number out of range.");
-        _objectNumber = objectNumber;
-        _generationNumber = 0;
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PdfObjectId"/> class.
-    /// </summary>
-    /// <param name="objectNumber">The object number.</param>
-    /// <param name="generationNumber">The generation number.</param>
     public PdfObjectId(int objectNumber, int generationNumber)
     {
         Debug.Assert(objectNumber >= 1, "Object number out of range.");
-        //Debug.Assert(generationNumber >= 0 && generationNumber <= 65535, "Generation number out of range.");
-        _objectNumber = objectNumber;
-        _generationNumber = (ushort)generationNumber;
+        ObjectNumber = objectNumber;
+        GenerationNumber = (ushort)generationNumber;
     }
 
     /// <summary>
-    /// Gets or sets the object number.
+    /// Gets the object number.
     /// </summary>
-    public int ObjectNumber => _objectNumber;
-    readonly int _objectNumber;
+    public int ObjectNumber { get; }
 
     /// <summary>
-    /// Gets or sets the generation number.
+    /// Gets the generation number.
     /// </summary>
-    public int GenerationNumber => _generationNumber;
-    readonly ushort _generationNumber;
+    public ushort GenerationNumber { get; }
 
     /// <summary>
-    /// Indicates whether this object is an empty object identifier.
+    /// Indicates whether this is the empty id that belongs to no object.
     /// </summary>
-    public bool IsEmpty => _objectNumber == 0;
+    public bool IsEmpty => ObjectNumber == 0;
 
     /// <summary>
-    /// Indicates whether this instance and a specified object are equal.
+    /// The empty id.
     /// </summary>
-    public override bool Equals(object? obj)
+    public static PdfObjectId Empty => default;
+
+    public bool Equals(PdfObjectId other) => ObjectNumber == other.ObjectNumber && GenerationNumber == other.GenerationNumber;
+
+    public override bool Equals(object? obj) => obj is PdfObjectId other && Equals(other);
+
+    public override int GetHashCode() => HashCode.Combine(ObjectNumber, GenerationNumber);
+
+    public static bool operator ==(PdfObjectId left, PdfObjectId right) => left.Equals(right);
+
+    public static bool operator !=(PdfObjectId left, PdfObjectId right) => !left.Equals(right);
+
+    public int CompareTo(PdfObjectId other)
     {
-        if (obj is PdfObjectId)
-        {
-            PdfObjectId id = (PdfObjectId)obj;
-            if (_objectNumber == id._objectNumber)
-                return _generationNumber == id._generationNumber;
-        }
-        return false;
+        int byNumber = ObjectNumber.CompareTo(other.ObjectNumber);
+        return byNumber != 0 ? byNumber : GenerationNumber.CompareTo(other.GenerationNumber);
     }
 
-    /// <summary>
-    /// Returns the hash code for this instance.
-    /// </summary>
-    public override int GetHashCode()
-    {
-        return _objectNumber ^ _generationNumber;
-    }
+    int IComparable.CompareTo(object? obj) => obj is PdfObjectId other ? CompareTo(other) : 1;
 
-    /// <summary>
-    /// Determines whether the two objects are equal.
-    /// </summary>
-    public static bool operator ==(PdfObjectId left, PdfObjectId right)
-    {
-        return left.Equals(right);
-    }
-
-    /// <summary>
-    /// Determines whether the tow objects not are equal.
-    /// </summary>
-    public static bool operator !=(PdfObjectId left, PdfObjectId right)
-    {
-        return !left.Equals(right);
-    }
-
-    /// <summary>
-    /// Returns the object and generation numbers as a string.
-    /// </summary>
-    public override string ToString()
-    {
-        return _objectNumber.ToString(CultureInfo.InvariantCulture) + " " + _generationNumber.ToString(CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// Creates an empty object identifier.
-    /// </summary>
-    public static PdfObjectId Empty => new PdfObjectId();
-
-    /// <summary>
-    /// Compares the current object id with another object.
-    /// </summary>
-    public int CompareTo(object? obj)
-    {
-        if (obj is PdfObjectId)
-        {
-            PdfObjectId id = (PdfObjectId)obj;
-            if (_objectNumber == id._objectNumber)
-                return _generationNumber - id._generationNumber;
-            return _objectNumber - id._objectNumber;
-        }
-        return 1;
-    }
-
-    /// <summary>
-    /// Gets the DebuggerDisplayAttribute text.
-    /// </summary>
-    internal string DebuggerDisplay => string.Format("id=({0})", ToString());
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture, $"{ObjectNumber} {GenerationNumber}");
 }

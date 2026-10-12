@@ -227,7 +227,7 @@ internal partial class PdfDictionary
         get
         {
             return string.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
-                ObjectId.DebuggerDisplay,
+                $"id=({ObjectId})",
                 Elements.Count,
                 _elements.DebuggerDisplay);
         }
