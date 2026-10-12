@@ -838,7 +838,15 @@ namespace PeachPDF.Html.Core.Dom
                     // everything from the break onward belongs to the next one.
                     var beyond = BeyondThisColumn(columnsBox.PendingBreakToken);
 
-                    columnBottom = MaxBottomOf(children, placedBelow, beyond);
+                    // A child that ended more than a whole page band above this column cannot reach it, however it
+                    // overflows: asking each of the document's earlier children again, for every column, made the
+                    // fill quadratic in pages. Without a real page grid there is no band to measure by, so nothing is skipped.
+                    var settledAbove = htmlContainer.HasRealPageGrid
+                        ? boxTop - htmlContainer.PageBandHeightOf(startSlot)
+                        : double.NegativeInfinity;
+
+                    columnBottom = MaxBottomOf(children, placedBelow, beyond, settledAbove, out var measured);
+                    htmlContainer.RecordColumnBottomMeasure(measured);
 
 
                     // This column's geometry, handed over while the boxes still hold it. A child
@@ -1015,20 +1023,20 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="CssRect.AwaitsTheNextFragmentainer"/>).
         /// </para>
         /// </remarks>
-        private static IReadOnlySet<CssBox> BeyondThisColumn(BreakToken? token)
+        private static BoxesBeyondColumn BeyondThisColumn(BreakToken? token)
         {
             // The last column of every container reaches here with no record at all, and so does every
             // column of one whose content fits - so the empty answer is the common one, and it needs no
             // set of its own.
-            if (token is not BlockBreakToken) return NoBoxes;
+            if (token is not BlockBreakToken) return BoxesBeyondColumn.None;
 
-            var beyond = new HashSet<CssBox>();
+            var beyond = new BoxesBeyondColumn();
             AddBoxesBeyond(token, beyond);
 
             return beyond;
         }
 
-        private static void AddBoxesBeyond(BreakToken? token, HashSet<CssBox> beyond)
+        private static void AddBoxesBeyond(BreakToken? token, BoxesBeyondColumn beyond)
         {
             while (token is not null)
             {
@@ -1038,10 +1046,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
 
-                        for (var i = from; i < link.Box.Boxes.Count; i++)
-                        {
-                            beyond.Add(link.Box.Boxes[i]);
-                        }
+                        beyond.AddFrom(link.Box.Boxes, from);
 
                         // A floated child of the flow that stopped, placed on the line it discarded: laid out here, and
                         // again by the next column, which is the only one that holds it.
@@ -1094,7 +1099,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Ordinals count words only: a float has the ordinal of the word that follows it. One at the resume ordinal itself is not
         /// added: the flow placed it, on the line it kept or on the one it discarded (<c>FloatsOfTheDiscardedLine</c>).
         /// </remarks>
-        private static void AddFloatsAfter(CssBox flowBox, int resumeOrdinal, HashSet<CssBox> beyond)
+        private static void AddFloatsAfter(CssBox flowBox, int resumeOrdinal, BoxesBeyondColumn beyond)
         {
             var ordinal = 0;
             Walk(flowBox);
@@ -1116,13 +1121,20 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
         }
-        private static double MaxBottomOf(List<CssBox> children, int limit, IReadOnlySet<CssBox> beyond)
+        private static double MaxBottomOf(List<CssBox> children, int limit, BoxesBeyondColumn beyond, double settledAbove, out int measured)
         {
             var bottom = double.MinValue;
+            measured = 0;
 
             for (var i = 0; i < children.Count && i < limit; i++)
             {
-                bottom = Math.Max(bottom, DeepestBottomOf(children[i], beyond));
+                var child = children[i];
+
+                // A block that places itself and ended above settledAbove is finished and far behind this column.
+                if (child.PlacesItselfAsBlockBox && child.ActualBottom < settledAbove) continue;
+
+                measured++;
+                bottom = Math.Max(bottom, DeepestBottomOf(child, beyond));
             }
 
             return bottom is double.MinValue ? 0 : bottom;
@@ -1152,7 +1164,7 @@ namespace PeachPDF.Html.Core.Dom
         /// finished with, so asking one how far down it reaches names the wrong box.
         /// </para>
         /// </remarks>
-        private static double DeepestBottomOf(CssBox box, IReadOnlySet<CssBox> beyond)
+        private static double DeepestBottomOf(CssBox box, BoxesBeyondColumn beyond)
         {
             var bottom = box.PlacesItselfAsBlockBox ? box.ActualBottom : double.MinValue;
 

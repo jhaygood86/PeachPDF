@@ -53,7 +53,7 @@ namespace PeachPDF.Html.Core.Fragments
         private readonly Dictionary<CssBox, BoxGeometry> _geometry = [];
 
         /// <summary>
-        /// The single root this snapshot was captured from, or null for the multi-root <see cref="Capture(IEnumerable{CssBox}, IReadOnlySet{CssBox}?)"/>
+        /// The single root this snapshot was captured from, or null for the multi-root <see cref="Capture(IEnumerable{CssBox}, IBoxExclusion?)"/>
         /// overload. Consulted by <see cref="Translate"/>/<see cref="ReflectSubtree"/> to skip an
         /// out-of-flow descendant whose containing block lies outside this snapshot's own subtree,
         /// mirroring <see cref="CssBox.OffsetTop(double)"/>'s <see cref="CssBox.EscapesTranslationOf"/>
@@ -100,7 +100,7 @@ namespace PeachPDF.Html.Core.Fragments
         /// in <c>DEBUG</c> rather than assumed silently.
         /// </para>
         /// </remarks>
-        internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots, IReadOnlySet<CssBox>? excluded = null)
+        internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots, IBoxExclusion? excluded = null)
         {
             ArgumentNullException.ThrowIfNull(roots);
 
@@ -117,7 +117,7 @@ namespace PeachPDF.Html.Core.Fragments
             return snapshot;
         }
 
-        private void CaptureBox(CssBox box, IReadOnlySet<CssBox>? excluded)
+        private void CaptureBox(CssBox box, IBoxExclusion? excluded)
         {
             var geometry = new BoxGeometry
             {
@@ -189,6 +189,31 @@ namespace PeachPDF.Html.Core.Fragments
             {
                 Forget(childBox);
             }
+        }
+
+        /// <summary>
+        /// Forgets every box this snapshot holds that <paramref name="moved"/> names, or that lies under one it names: the same
+        /// boxes <see cref="Forget(CssBox)"/> would drop for each moved box in turn, found by asking each held box instead of
+        /// visiting every moved one. A snapshot holds one column's boxes; the moved ones are the rest of the document.
+        /// </summary>
+        internal void ForgetMatching(IBoxExclusion moved)
+        {
+            List<CssBox>? doomed = null;
+
+            foreach (var held in _geometry.Keys)
+            {
+                for (var box = held; box is not null; box = box.ParentBox)
+                {
+                    if (!moved.Contains(box)) continue;
+
+                    (doomed ??= []).Add(held);
+                    break;
+                }
+            }
+
+            if (doomed is null) return;
+
+            foreach (var box in doomed) _geometry.Remove(box);
         }
 
         /// <summary>
