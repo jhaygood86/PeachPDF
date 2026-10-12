@@ -37,10 +37,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             return (graphics, font);
         }
 
-        private static PaintPoint[] Points(GraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
+        private static PaintPoint[] Points(GraphicsPath path) => PathPoints.Of(path);
 
         private static int SubpathCount(GraphicsPath path)
-            => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathTypes.Count(t => t == StartOfSubpath);
+            => PathPoints.ContourCount(path);
 
         [Fact]
         public async Task GlyfFont_ProducesFilledOutline_WithOneSubpathPerContour()

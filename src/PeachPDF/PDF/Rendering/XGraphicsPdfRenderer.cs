@@ -155,87 +155,11 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawBezier ---------------------------------------------------------------------------
 
-        public void DrawBezier(Pen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4)
-        {
-            DrawBeziers(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2), new PaintPoint(x3, y3), new PaintPoint(x4, y4) });
-        }
-
         // ----- DrawBeziers --------------------------------------------------------------------------
-
-        public void DrawBeziers(Pen pen, PaintPoint[] points)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-            if (points == null)
-                throw new ArgumentNullException("points");
-
-            int count = points.Length;
-            if (count == 0)
-                return;
-
-            if ((count - 1) % 3 != 0)
-                throw new ArgumentException("Invalid number of points for bezier curves. Number must fulfil 4+3n.", "points");
-
-            Realize(pen);
-
-            AppendPathPoint(points[0].X, points[0].Y, 'm');
-            for (int idx = 1; idx < count; idx += 3)
-                AppendBezier(
-                    points[idx].X, points[idx].Y,
-                    points[idx + 1].X, points[idx + 1].Y,
-                    points[idx + 2].X, points[idx + 2].Y);
-
-            AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
-        }
 
         // ----- DrawCurve ----------------------------------------------------------------------------
 
-        public void DrawCurve(Pen pen, PaintPoint[] points, double tension)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-            if (points == null)
-                throw new ArgumentNullException("points");
-
-            int count = points.Length;
-            if (count == 0)
-                return;
-            if (count < 2)
-                throw new ArgumentException("Not enough points", "points");
-
-            // See http://pubpages.unh.edu/~cs770/a5/cardinal.html  // Link is down...
-            tension /= 3;
-
-            Realize(pen);
-
-            AppendPathPoint(points[0].X, points[0].Y, 'm');
-            if (count == 2)
-            {
-                // Just draws a line.
-                AppendCurveSegment(points[0], points[0], points[1], points[1], tension);
-            }
-            else
-            {
-                AppendCurveSegment(points[0], points[0], points[1], points[2], tension);
-                for (int idx = 1; idx < count - 2; idx++)
-                    AppendCurveSegment(points[idx - 1], points[idx], points[idx + 1], points[idx + 2], tension);
-                AppendCurveSegment(points[count - 3], points[count - 2], points[count - 1], points[count - 1], tension);
-            }
-            AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
-        }
-
         // ----- DrawArc ------------------------------------------------------------------------------
-
-        public void DrawArc(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-
-            Realize(pen);
-
-            AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.MoveTo1st, Matrix3x2.Identity);
-            AppendStrokeFill(pen, null, FillMode.EvenOdd, false);
-        }
 
         // ----- DrawRectangle ------------------------------------------------------------------------
 
@@ -260,54 +184,9 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawRectangles -----------------------------------------------------------------------
 
-        public void DrawRectangles(Pen? pen, Brush? brush, Rect[] rects)
-        {
-            int count = rects.Length;
-            for (int idx = 0; idx < count; idx++)
-            {
-                Rect rect = rects[idx];
-                DrawRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
-            }
-        }
-
         // ----- DrawRoundedRectangle -----------------------------------------------------------------
 
-        public void DrawRoundedRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
-        {
-            XGraphicsPath path = new XGraphicsPath();
-            path.AddRoundedRectangle(x, y, width, height, ellipseWidth, ellipseHeight);
-            DrawPath(pen, brush, path);
-        }
-
         // ----- DrawEllipse --------------------------------------------------------------------------
-
-        public void DrawEllipse(Pen? pen, Brush? brush, double x, double y, double width, double height)
-        {
-            Realize(pen, brush);
-
-            // Useful information is here http://home.t-online.de/home/Robert.Rossmair/ellipse.htm (note: link was dead on November 2, 2015)
-            // or here http://www.whizkidtech.redprince.net/bezier/circle/
-            // Deeper but more difficult: http://www.tinaja.com/cubic01.asp
-            Rect rect = new Rect(x, y, width, height);
-            double δx = rect.Width / 2;
-            double δy = rect.Height / 2;
-            double fx = δx * Const.κ;
-            double fy = δy * Const.κ;
-            double x0 = rect.X + δx;
-            double y0 = rect.Y + δy;
-
-            // Approximate an ellipse by drawing four cubic splines.
-            AppendPathPoint(x0 + δx, y0, 'm');
-            AppendBezier(
-              x0 + δx, y0 + fy, x0 + fx, y0 + δy, x0, y0 + δy);
-            AppendBezier(
-              x0 - fx, y0 + δy, x0 - δx, y0 + fy, x0 - δx, y0);
-            AppendBezier(
-              x0 - δx, y0 - fy, x0 - fx, y0 - δy, x0, y0 - δy);
-            AppendBezier(
-              x0 + fx, y0 - δy, x0 + δx, y0 - fy, x0 + δx, y0);
-            AppendStrokeFill(pen, brush, FillMode.Nonzero, true);
-        }
 
         // ----- DrawPolygon --------------------------------------------------------------------------
 
@@ -328,57 +207,17 @@ namespace PeachPDF.PDF.Rendering
 
         // ----- DrawPie ------------------------------------------------------------------------------
 
-        public void DrawPie(Pen? pen, Brush? brush, double x, double y, double width, double height,
-          double startAngle, double sweepAngle)
-        {
-            Realize(pen, brush);
-
-            AppendPathPoint(x + width / 2, y + height / 2, 'm');
-            AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.LineTo1st, Matrix3x2.Identity);
-            AppendStrokeFill(pen, brush, FillMode.EvenOdd, true);
-        }
-
         // ----- DrawClosedCurve ----------------------------------------------------------------------
-
-        public void DrawClosedCurve(Pen? pen, Brush? brush, PaintPoint[] points, double tension, FillMode fillmode)
-        {
-            int count = points.Length;
-            if (count == 0)
-                return;
-            if (count < 2)
-                throw new ArgumentException("Not enough points.", "points");
-
-            // Simply tried out. Not proofed why it is correct.
-            tension /= 3;
-
-            Realize(pen, brush);
-
-            AppendPathPoint(points[0].X, points[0].Y, 'm');
-            if (count == 2)
-            {
-                // Just draw a line.
-                AppendCurveSegment(points[0], points[0], points[1], points[1], tension);
-            }
-            else
-            {
-                AppendCurveSegment(points[count - 1], points[0], points[1], points[2], tension);
-                for (int idx = 1; idx < count - 2; idx++)
-                    AppendCurveSegment(points[idx - 1], points[idx], points[idx + 1], points[idx + 2], tension);
-                AppendCurveSegment(points[count - 3], points[count - 2], points[count - 1], points[0], tension);
-                AppendCurveSegment(points[count - 2], points[count - 1], points[0], points[1], tension);
-            }
-            AppendStrokeFill(pen, brush, fillmode, true);
-        }
 
         // ----- DrawPath -----------------------------------------------------------------------------
 
-        public void DrawPath(Pen? pen, Brush? brush, XGraphicsPath path)
+        public void DrawPath(Pen? pen, Brush? brush, GraphicsPath path)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen");
 
             Realize(pen, brush);
-            AppendPath(path._corePath);
+            AppendPath(path);
             AppendStrokeFill(pen, brush, path.FillMode, false);
         }
 
@@ -1040,7 +879,7 @@ namespace PeachPDF.PDF.Rendering
 
         #region Clipping
 
-        public void SetClip(XGraphicsPath path, XCombineMode combineMode)
+        public void IntersectClip(GraphicsPath path)
         {
             if (path == null)
                 throw new NotImplementedException("SetClip with no path.");
@@ -1050,26 +889,9 @@ namespace PeachPDF.PDF.Rendering
             if (_gfxState.Level < GraphicsStackLevelWorldSpace)
                 RealizeTransform();  // TODO: refactor this function
 
-            if (combineMode == XCombineMode.Replace)
-            {
-                if (_clipLevel != 0)
-                {
-                    if (_clipLevel != _gfxState.Level)
-                        throw new NotImplementedException("Cannot set new clip region in an inner graphic state level.");
-                    else
-                        ResetClip();
-                }
+            // Only intersecting is supported: the clip never grows, it is narrowed for the rest of the current graphics state.
+            if (_clipLevel == 0)
                 _clipLevel = _gfxState.Level;
-            }
-            else if (combineMode == XCombineMode.Intersect)
-            {
-                if (_clipLevel == 0)
-                    _clipLevel = _gfxState.Level;
-            }
-            else
-            {
-                Debug.Assert(false, "Invalid XCombineMode in internal function.");
-            }
             _gfxState.SetAndRealizeClipPath(path);
         }
 
@@ -1132,39 +954,6 @@ namespace PeachPDF.PDF.Rendering
         #region Append to PDF stream
 
         /// <summary>
-        /// Appends one or up to five Bézier curves that interpolate the arc.
-        /// </summary>
-        void AppendPartialArc(double x, double y, double width, double height, double startAngle, double sweepAngle, PathStart pathStart, Matrix3x2 matrix)
-        {
-            var (α, β, smallAngle, clockwise) = NormalizeArcAngles(startAngle, sweepAngle);
-
-            int startQuadrant = Quadrant(α, true, clockwise);
-            int endQuadrant = Quadrant(β, false, clockwise);
-
-            if (startQuadrant == endQuadrant && smallAngle)
-            {
-                AppendPartialArcQuadrant(x, y, width, height, α, β, pathStart, matrix);
-                return;
-            }
-
-            int currentQuadrant = startQuadrant;
-            bool firstLoop = true;
-            do
-            {
-                AppendArcQuadrantSegment(x, y, width, height, α, β, pathStart, matrix,
-                    currentQuadrant, startQuadrant, endQuadrant, firstLoop, clockwise);
-
-                // Don't stop immediately if arc is greater than 270 degrees
-                if (currentQuadrant == endQuadrant && smallAngle)
-                    break;
-
-                smallAngle = true;
-                currentQuadrant = NextQuadrant(currentQuadrant, clockwise);
-                firstLoop = false;
-            } while (true);
-        }
-
-        /// <summary>
         /// Normalizes the start/sweep angles of AppendPartialArc into a start angle α, an end angle β
         /// (both 0..360), whether the arc spans at most 90° (so a single quadrant may suffice), and
         /// whether it sweeps clockwise.
@@ -1197,30 +986,6 @@ namespace PeachPDF.PDF.Rendering
             return (α, β, smallAngle, clockwise);
         }
 
-        /// <summary>
-        /// Appends the Bézier curve(s) for the current quadrant of AppendPartialArc's do/while loop.
-        /// </summary>
-        void AppendArcQuadrantSegment(double x, double y, double width, double height, double α, double β, PathStart pathStart, Matrix3x2 matrix,
-            int currentQuadrant, int startQuadrant, int endQuadrant, bool firstLoop, bool clockwise)
-        {
-            if (currentQuadrant == startQuadrant && firstLoop)
-            {
-                double ξ = currentQuadrant * 90 + (clockwise ? 90 : 0);
-                AppendPartialArcQuadrant(x, y, width, height, α, ξ, pathStart, matrix);
-            }
-            else if (currentQuadrant == endQuadrant)
-            {
-                double ξ = currentQuadrant * 90 + (clockwise ? 0 : 90);
-                AppendPartialArcQuadrant(x, y, width, height, ξ, β, PathStart.Ignore1st, matrix);
-            }
-            else
-            {
-                double ξ1 = currentQuadrant * 90 + (clockwise ? 0 : 90);
-                double ξ2 = currentQuadrant * 90 + (clockwise ? 90 : 0);
-                AppendPartialArcQuadrant(x, y, width, height, ξ1, ξ2, PathStart.Ignore1st, matrix);
-            }
-        }
-
         static int NextQuadrant(int currentQuadrant, bool clockwise)
         {
             if (clockwise)
@@ -1250,120 +1015,6 @@ namespace PeachPDF.PDF.Rendering
         }
 
         /// <summary>
-        /// Appends a Bézier curve for an arc within a quadrant.
-        /// </summary>
-        void AppendPartialArcQuadrant(double x, double y, double width, double height, double α, double β, PathStart pathStart, Matrix3x2 matrix)
-        {
-            Debug.Assert(α >= 0 && α <= 360);
-            Debug.Assert(β >= 0);
-            if (β > 360)
-                β = β - Math.Floor(β / 360) * 360;
-            Debug.Assert(Math.Abs(α - β) <= 90);
-
-            // Scanling factor
-            double δx = width / 2;
-            double δy = height / 2;
-
-            // Center of ellipse
-            double x0 = x + δx;
-            double y0 = y + δy;
-
-            // We have the following quarters:
-            //     |
-            //   2 | 3
-            // ----+-----
-            //   1 | 0
-            //     |
-            // If the angles lie in quarter 2 or 3, their values are subtracted by 180 and the
-            // resulting curve is reflected at the center. This algorithm works as expected (simply tried out).
-            // There may be a mathematically more elegant solution...
-            bool reflect = false;
-            if (α >= 180 && β >= 180)
-            {
-                α -= 180;
-                β -= 180;
-                reflect = true;
-            }
-
-            double sinα, sinβ;
-            if (width == height)
-            {
-                // Circular arc needs no correction.
-                α = α * Calc.Deg2Rad;
-                β = β * Calc.Deg2Rad;
-            }
-            else
-            {
-                // Elliptic arc needs the angles to be adjusted such that the scaling transformation is compensated.
-                α = α * Calc.Deg2Rad;
-                sinα = Math.Sin(α);
-                if (Math.Abs(sinα) > 1E-10)
-                    α = Math.PI / 2 - Math.Atan(δy * Math.Cos(α) / (δx * sinα));
-                β = β * Calc.Deg2Rad;
-                sinβ = Math.Sin(β);
-                if (Math.Abs(sinβ) > 1E-10)
-                    β = Math.PI / 2 - Math.Atan(δy * Math.Cos(β) / (δx * sinβ));
-            }
-
-            double κ = 4 * (1 - Math.Cos((α - β) / 2)) / (3 * Math.Sin((β - α) / 2));
-            sinα = Math.Sin(α);
-            double cosα = Math.Cos(α);
-            sinβ = Math.Sin(β);
-            double cosβ = Math.Cos(β);
-
-            PaintPoint pt1, pt2, pt3;
-            const string format = Config.SignificantFigures3;
-            if (!reflect)
-            {
-                // Calculation for quarter 0 and 1
-                switch (pathStart)
-                {
-                    case PathStart.MoveTo1st:
-                        pt1 = matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα));
-                        AppendPathPoint(pt1.X, pt1.Y, 'm', format);
-                        break;
-
-                    case PathStart.LineTo1st:
-                        pt1 = matrix.Transform(new PaintPoint(x0 + δx * cosα, y0 + δy * sinα));
-                        AppendPathPoint(pt1.X, pt1.Y, 'l', format);
-                        break;
-
-                    case PathStart.Ignore1st:
-                        break;
-                }
-                pt1 = matrix.Transform(new PaintPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα)));
-                pt2 = matrix.Transform(new PaintPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ)));
-                pt3 = matrix.Transform(new PaintPoint(x0 + δx * cosβ, y0 + δy * sinβ));
-                AppendBezier(
-                  pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, format);
-            }
-            else
-            {
-                // Calculation for quarter 2 and 3.
-                switch (pathStart)
-                {
-                    case PathStart.MoveTo1st:
-                        pt1 = matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα));
-                        AppendPathPoint(pt1.X, pt1.Y, 'm', format);
-                        break;
-
-                    case PathStart.LineTo1st:
-                        pt1 = matrix.Transform(new PaintPoint(x0 - δx * cosα, y0 - δy * sinα));
-                        AppendPathPoint(pt1.X, pt1.Y, 'l', format);
-                        break;
-
-                    case PathStart.Ignore1st:
-                        break;
-                }
-                pt1 = matrix.Transform(new PaintPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα)));
-                pt2 = matrix.Transform(new PaintPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ)));
-                pt3 = matrix.Transform(new PaintPoint(x0 - δx * cosβ, y0 - δy * sinβ));
-                AppendBezier(
-                    pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, format);
-            }
-        }
-
-        /// <summary>
         /// Appends a Bézier curve for a cardinal spline through pt1 and pt2.
         /// </summary>
         void AppendCurveSegment(PaintPoint pt0, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, double tension3)
@@ -1375,104 +1026,25 @@ namespace PeachPDF.PDF.Rendering
         }
 
         /// <summary>
-        /// Appends the content of a GraphicsPath object.
+        /// Appends the outline of a path: each contour as a move, its lines and curves, and a close when it is closed.
         /// </summary>
-        internal void AppendPath(CoreGraphicsPath path)
+        internal void AppendPath(GraphicsPath path)
         {
-            AppendPath(path.PathPointsSpan, path.PathTypesSpan);
-            //PaintPoint[] points = path.PathPoints;
-            //Byte[] types = path.PathTypes;
-
-            //int count = points.Length;
-            //if (count == 0)
-            //    return;
-
-            //for (int idx = 0; idx < count; idx++)
-            //{
-            //    // From GDI+ documentation:
-            //    const byte PathPointTypeStart = 0; // move
-            //    const byte PathPointTypeLine = 1; // line
-            //    const byte PathPointTypeBezier = 3; // default Bezier (= cubic Bezier)
-            //    const byte PathPointTypePathTypeMask = 0x07; // type mask (lowest 3 bits).
-            //    //const byte PathPointTypeDashMode = 0x10; // currently in dash mode.
-            //    //const byte PathPointTypePathMarker = 0x20; // a marker for the path.
-            //    const byte PathPointTypeCloseSubpath = 0x80; // closed flag
-
-            //    byte type = types[idx];
-            //    switch (type & PathPointTypePathTypeMask)
-            //    {
-            //        case PathPointTypeStart:
-            //            //PDF_moveto(pdf, points[idx].X, points[idx].Y);
-            //            AppendFormat("{0:" + format + "} {1:" + format + "} m\n", points[idx].X, points[idx].Y);
-            //            break;
-
-            //        case PathPointTypeLine:
-            //            //PDF_lineto(pdf, points[idx].X, points[idx].Y);
-            //            AppendFormat("{0:" + format + "} {1:" + format + "} l\n", points[idx].X, points[idx].Y);
-            //            if ((type & PathPointTypeCloseSubpath) != 0)
-            //                Append("h\n");
-            //            break;
-
-            //        case PathPointTypeBezier:
-            //            Debug.Assert(idx + 2 < count);
-            //            //PDF_curveto(pdf, points[idx].X, points[idx].Y, 
-            //            //                 points[idx + 1].X, points[idx + 1].Y, 
-            //            //                 points[idx + 2].X, points[idx + 2].Y);
-            //            AppendFormat("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n", points[idx].X, points[idx].Y,
-            //                points[++idx].X, points[idx].Y, points[++idx].X, points[idx].Y);
-            //            if ((types[idx] & PathPointTypeCloseSubpath) != 0)
-            //                Append("h\n");
-            //            break;
-            //    }
-            //}
-        }
-
-        void AppendPath(ReadOnlySpan<PaintPoint> points, ReadOnlySpan<byte> types)
-        {
-            int count = points.Length;
-            if (count == 0)
-                return;
-            Debug.Assert(types.Length == count);
-
-            for (int idx = 0; idx < count; idx++)
+            foreach (var contour in path.GetCurveContours())
             {
-                // ReSharper disable InconsistentNaming
-                // From GDI+ documentation:
-                const byte PathPointTypeStart = 0; // move
-                const byte PathPointTypeLine = 1; // line
-                const byte PathPointTypeBezier = 3; // default Bezier (= cubic Bezier)
-                const byte PathPointTypePathTypeMask = 0x07; // type mask (lowest 3 bits).
-                //const byte PathPointTypeDashMode = 0x10; // currently in dash mode.
-                //const byte PathPointTypePathMarker = 0x20; // a marker for the path.
-                const byte PathPointTypeCloseSubpath = 0x80; // closed flag
-                // ReSharper restore InconsistentNaming
+                AppendPathPoint(contour.Start.X, contour.Start.Y, 'm');
 
-                byte type = types[idx];
-                switch (type & PathPointTypePathTypeMask)
+                foreach (var command in contour.Commands)
                 {
-                    case PathPointTypeStart:
-                        //PDF_moveto(pdf, points[idx].X, points[idx].Y);
-                        AppendPathPoint(points[idx].X, points[idx].Y, 'm');
-                        break;
-
-                    case PathPointTypeLine:
-                        //PDF_lineto(pdf, points[idx].X, points[idx].Y);
-                        AppendPathPoint(points[idx].X, points[idx].Y, 'l');
-                        if ((type & PathPointTypeCloseSubpath) != 0)
-                            Append("h\n");
-                        break;
-
-                    case PathPointTypeBezier:
-                        Debug.Assert(idx + 2 < count);
-                        //PDF_curveto(pdf, points[idx].X, points[idx].Y, 
-                        //                 points[idx + 1].X, points[idx + 1].Y, 
-                        //                 points[idx + 2].X, points[idx + 2].Y);
-                        AppendBezier(points[idx].X, points[idx].Y,
-                            points[++idx].X, points[idx].Y, points[++idx].X, points[idx].Y);
-                        if ((types[idx] & PathPointTypeCloseSubpath) != 0)
-                            Append("h\n");
-                        break;
+                    if (command.Kind == PathCommandKind.Cubic)
+                        AppendBezier(command.Control1.X, command.Control1.Y, command.Control2.X, command.Control2.Y, command.End.X, command.End.Y);
+                    else
+                        AppendPathPoint(command.End.X, command.End.Y, 'l');
                 }
+
+                // A contour that is only a start point has no segment for the close to end, so it emits nothing.
+                if (contour.Closed && contour.Commands.Count > 0)
+                    Append("h\n");
             }
         }
 

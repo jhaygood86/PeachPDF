@@ -58,11 +58,11 @@ namespace PeachPDF.Tests.Svg
         {
             public List<PaintPoint[]> Paths { get; } = [];
 
-            public override GraphicsPath GetGraphicsPath() => new GraphicsPathAdapter();
+            public override GraphicsPath GetGraphicsPath() => new PdfGraphicsPath();
 
             public override void DrawPath(Pen pen, GraphicsPath path)
             {
-                Paths.Add(((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints);
+                Paths.Add(PathPoints.Of(path));
             }
         }
     }

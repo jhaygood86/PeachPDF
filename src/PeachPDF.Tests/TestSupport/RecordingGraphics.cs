@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         /// <summary>Merges <paramref name="path"/>'s recorded points into this one, mirroring the real
-        /// <c>GraphicsPathAdapter.AddPath</c>'s union semantics (see its own remarks) closely enough
+        /// <c>PdfGraphicsPath.AddPath</c>'s union semantics (see its own remarks) closely enough
         /// for a test to observe that a multi-shape clip (rounded corners, or a
         /// <c>background-clip: text</c> glyph-outline union) actually combined every shape.</summary>
         public override void AddPath(GraphicsPath path)
@@ -331,7 +331,7 @@ namespace PeachPDF.Tests.TestSupport
         /// Genuinely clips this recorded (single-contour, per this double's own <c>FakeOutline</c>-style
         /// test callers) point list to <paramref name="rect"/>, reusing the real
         /// <see cref="PeachDrawing.Core.Geometry.PolygonClipper"/> primitive
-        /// <c>GraphicsPathAdapter.ClipToRect</c> itself is built on - so a test asserting on the result
+        /// <c>PdfGraphicsPath.ClipToRect</c> itself is built on - so a test asserting on the result
         /// (e.g. that an upright glyph's clip-path union never exceeds its own reserved cell) is
         /// exercising the actual clip algorithm, not a test-only stand-in for it.
         /// </summary>

@@ -312,116 +312,11 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         }
 
         // ----- DrawBezier ---------------------------------------------------------------------------
-        /// <summary>
-        /// Draws a B�zier spline defined by four points.
-        /// </summary>
-        public void DrawBezier(Pen pen, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, PaintPoint pt4)
-        {
-            DrawBezier(pen, pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, pt4.X, pt4.Y);
-        }
-
-        /// <summary>
-        /// Draws a B�zier spline defined by four points.
-        /// </summary>
-        public void DrawBezier(Pen pen, double x1, double y1, double x2, double y2,
-          double x3, double y3, double x4, double y4)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-
-            if (_renderer != null)
-                _renderer.DrawBeziers(pen,
-                  new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2), new PaintPoint(x3, y3), new PaintPoint(x4, y4) });
-        }
-
         // ----- DrawBeziers --------------------------------------------------------------------------
-
-        /// <summary>
-        /// Draws a series of B�zier splines from an array of points.
-        /// </summary>
-        public void DrawBeziers(Pen pen, PaintPoint[] points)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-
-            int count = points.Length;
-            if (count == 0)
-                return;
-
-            if ((count - 1) % 3 != 0)
-                throw new ArgumentException("Invalid number of points for bezier curves. Number must fulfil 4+3n.", "points");
-
-            if (_renderer != null)
-                _renderer.DrawBeziers(pen, points);
-        }
 
         // ----- DrawCurve ----------------------------------------------------------------------------
 
-        /// <summary>
-        /// Draws a cardinal spline through a specified array of points.
-        /// </summary>
-        public void DrawCurve(Pen pen, PaintPoint[] points)
-        {
-            DrawCurve(pen, points, 0.5);
-        }
-
-        /// <summary>
-        /// Draws a cardinal spline through a specified array of point using a specified tension.
-        /// The drawing begins offset from the beginning of the array.
-        /// </summary>
-        public void DrawCurve(Pen pen, PaintPoint[] points, int offset, int numberOfSegments, double tension)
-        {
-            PaintPoint[] points2 = new PaintPoint[numberOfSegments];
-            Array.Copy(points, offset, points2, 0, numberOfSegments);
-            DrawCurve(pen, points2, tension);
-        }
-
-        /// <summary>
-        /// Draws a cardinal spline through a specified array of points using a specified tension. 
-        /// </summary>
-        public void DrawCurve(Pen pen, PaintPoint[] points, double tension)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-            if (points == null)
-                throw new ArgumentNullException("points");
-
-            int count = points.Length;
-            if (count < 2)
-                throw new ArgumentException("DrawCurve requires two or more points.", "points");
-
-            if (_renderer != null)
-                _renderer.DrawCurve(pen, points, tension);
-        }
-
         // ----- DrawArc ------------------------------------------------------------------------------
-
-        /// <summary>
-        /// Draws an arc representing a portion of an ellipse.
-        /// </summary>
-        public void DrawArc(Pen pen, Rect rect, double startAngle, double sweepAngle)
-        {
-            DrawArc(pen, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
-        }
-
-        /// <summary>
-        /// Draws an arc representing a portion of an ellipse.
-        /// </summary>
-        public void DrawArc(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-
-            if (Math.Abs(sweepAngle) >= 360)
-            {
-                DrawEllipse(pen, x, y, width, height);
-            }
-            else
-            {
-                if (_renderer != null)
-                    _renderer.DrawArc(pen, x, y, width, height, startAngle, sweepAngle);
-            }
-        }
 
         // ----- DrawRectangle ------------------------------------------------------------------------
 
@@ -501,203 +396,25 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
 
         // ----- stroke -----
 
-        /// <summary>
-        /// Draws a series of rectangles.
-        /// </summary>
-        public void DrawRectangles(Pen pen, Rect[] rectangles)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-            if (rectangles == null)
-                throw new ArgumentNullException("rectangles");
-
-            DrawRectangles(pen, null, rectangles);
-        }
-
         // ----- fill -----
 
-        /// <summary>
-        /// Draws a series of rectangles.
-        /// </summary>
-        public void DrawRectangles(Brush brush, Rect[] rectangles)
-        {
-            if (brush == null)
-                throw new ArgumentNullException("brush");
-            if (rectangles == null)
-                throw new ArgumentNullException("rectangles");
-
-            DrawRectangles(null, brush, rectangles);
-        }
-
         // ----- stroke and fill -----
-
-        /// <summary>
-        /// Draws a series of rectangles.
-        /// </summary>
-        public void DrawRectangles(Pen pen, Brush brush, Rect[] rectangles)
-        {
-            if (pen == null && brush == null)
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
-            if (rectangles == null)
-                throw new ArgumentNullException("rectangles");
-
-            int count = rectangles.Length;
-
-            if (_renderer != null)
-            {
-                for (int idx = 0; idx < count; idx++)
-                {
-                    Rect rect = rectangles[idx];
-                    _renderer.DrawRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
-                }
-            }
-        }
 
         // ----- DrawRoundedRectangle -----------------------------------------------------------------
 
         // ----- stroke -----
 
-        /// <summary>
-        /// Draws a rectangles with round corners.
-        /// </summary>
-        public void DrawRoundedRectangle(Pen pen, Rect rect, Size ellipseSize)
-        {
-            DrawRoundedRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
-        }
-
-        /// <summary>
-        /// Draws a rectangles with round corners.
-        /// </summary>
-        public void DrawRoundedRectangle(Pen pen, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-
-            DrawRoundedRectangle(pen, null, x, y, width, height, ellipseWidth, ellipseHeight);
-        }
-
         // ----- fill -----
 
-        /// <summary>
-        /// Draws a rectangles with round corners.
-        /// </summary>
-        public void DrawRoundedRectangle(Brush brush, Rect rect, Size ellipseSize)
-        {
-            DrawRoundedRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
-        }
-
-        /// <summary>
-        /// Draws a rectangles with round corners.
-        /// </summary>
-        public void DrawRoundedRectangle(Brush brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
-        {
-            if (brush == null)
-                throw new ArgumentNullException("brush");
-
-            DrawRoundedRectangle(null, brush, x, y, width, height, ellipseWidth, ellipseHeight);
-        }
-
         // ----- stroke and fill -----
-
-        /// <summary>
-        /// Draws a rectangles with round corners.
-        /// </summary>
-        public void DrawRoundedRectangle(Pen pen, Brush brush, Rect rect, Size ellipseSize)
-        {
-            DrawRoundedRectangle(pen, brush, rect.X, rect.Y, rect.Width, rect.Height, ellipseSize.Width, ellipseSize.Height);
-        }
-
-        /// <summary>
-        /// Draws a rectangles with round corners.
-        /// </summary>
-        public void DrawRoundedRectangle(Pen pen, Brush brush, double x, double y, double width, double height,
-            double ellipseWidth, double ellipseHeight)
-        {
-            if (pen == null && brush == null)
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
-
-            if (_renderer != null)
-                _renderer.DrawRoundedRectangle(pen, brush, x, y, width, height, ellipseWidth, ellipseHeight);
-        }
 
         // ----- DrawEllipse --------------------------------------------------------------------------
 
         // ----- stroke -----
 
-        /// <summary>
-        /// Draws an ellipse defined by a bounding rectangle.
-        /// </summary>
-        public void DrawEllipse(Pen pen, Rect rect)
-        {
-            DrawEllipse(pen, rect.X, rect.Y, rect.Width, rect.Height);
-        }
-
-        /// <summary>
-        /// Draws an ellipse defined by a bounding rectangle.
-        /// </summary>
-        public void DrawEllipse(Pen pen, double x, double y, double width, double height)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen");
-
-            // No DrawArc defined?
-            if (_drawGraphics)
-            {
-
-            }
-
-            if (_renderer != null)
-                _renderer.DrawEllipse(pen, null, x, y, width, height);
-        }
-
         // ----- fill -----
 
-        /// <summary>
-        /// Draws an ellipse defined by a bounding rectangle.
-        /// </summary>
-        public void DrawEllipse(Brush brush, Rect rect)
-        {
-            DrawEllipse(brush, rect.X, rect.Y, rect.Width, rect.Height);
-        }
-
-        /// <summary>
-        /// Draws an ellipse defined by a bounding rectangle.
-        /// </summary>
-        public void DrawEllipse(Brush brush, double x, double y, double width, double height)
-        {
-            if (brush == null)
-                throw new ArgumentNullException("brush");
-
-            if (_drawGraphics)
-            {
-
-            }
-
-            if (_renderer != null)
-                _renderer.DrawEllipse(null, brush, x, y, width, height);
-        }
-
         // ----- stroke and fill -----
-
-        /// <summary>
-        /// Draws an ellipse defined by a bounding rectangle.
-        /// </summary>
-        public void DrawEllipse(Pen pen, Brush brush, Rect rect)
-        {
-            DrawEllipse(pen, brush, rect.X, rect.Y, rect.Width, rect.Height);
-        }
-
-        /// <summary>
-        /// Draws an ellipse defined by a bounding rectangle.
-        /// </summary>
-        public void DrawEllipse(Pen pen, Brush brush, double x, double y, double width, double height)
-        {
-            if (pen == null && brush == null)
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
-
-            if (_renderer != null)
-                _renderer.DrawEllipse(pen, brush, x, y, width, height);
-        }
 
         /// <summary>
         /// Draws a polygon defined by an array of points.
@@ -756,155 +473,18 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         // ----- stroke -----
 
 
-        /// <summary>
-        /// Draws a pie defined by an ellipse.
-        /// </summary>
-        public void DrawPie(Pen pen, Rect rect, double startAngle, double sweepAngle)
-        {
-            DrawPie(pen, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
-        }
-
-        /// <summary>
-        /// Draws a pie defined by an ellipse.
-        /// </summary>
-        public void DrawPie(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle)
-        {
-            if (pen == null)
-                throw new ArgumentNullException("pen", PSSR.NeedPenOrBrush);
-
-            if (_renderer != null)
-                _renderer.DrawPie(pen, null, x, y, width, height, startAngle, sweepAngle);
-        }
-
         // ----- fill -----
 
-        /// <summary>
-        /// Draws a pie defined by an ellipse.
-        /// </summary>
-        public void DrawPie(Brush brush, Rect rect, double startAngle, double sweepAngle)
-        {
-            DrawPie(brush, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
-        }
-
-        /// <summary>
-        /// Draws a pie defined by an ellipse.
-        /// </summary>
-        public void DrawPie(Brush brush, double x, double y, double width, double height, double startAngle, double sweepAngle)
-        {
-            if (brush == null)
-                throw new ArgumentNullException("brush", PSSR.NeedPenOrBrush);
-
-            if (_renderer != null)
-                _renderer.DrawPie(null, brush, x, y, width, height, startAngle, sweepAngle);
-        }
-
         // ----- stroke and fill -----
-
-        /// <summary>
-        /// Draws a pie defined by an ellipse.
-        /// </summary>
-        public void DrawPie(Pen pen, Brush brush, Rect rect, double startAngle, double sweepAngle)
-        {
-            DrawPie(pen, brush, rect.X, rect.Y, rect.Width, rect.Height, startAngle, sweepAngle);
-        }
-
-        /// <summary>
-        /// Draws a pie defined by an ellipse.
-        /// </summary>
-        public void DrawPie(Pen pen, Brush brush, double x, double y, double width, double height, double startAngle, double sweepAngle)
-        {
-            if (pen == null && brush == null)
-                throw new ArgumentNullException("pen", PSSR.NeedPenOrBrush);
-
-            if (_renderer != null)
-                _renderer.DrawPie(pen, brush, x, y, width, height, startAngle, sweepAngle);
-        }
 
         // ----- DrawClosedCurve ----------------------------------------------------------------------
 
         // ----- stroke -----
 
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Pen pen, PaintPoint[] points)
-        {
-            DrawClosedCurve(pen, null, points, FillMode.EvenOdd, 0.5);
-        }
-
-
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Pen pen, PaintPoint[] points, double tension)
-        {
-            DrawClosedCurve(pen, null, points, FillMode.EvenOdd, tension);
-        }
 
         // ----- fill -----
 
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Brush brush, PaintPoint[] points)
-        {
-            DrawClosedCurve(null, brush, points, FillMode.EvenOdd, 0.5);
-        }
-
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Brush brush, PaintPoint[] points, FillMode fillmode)
-        {
-            DrawClosedCurve(null, brush, points, fillmode, 0.5);
-        }
-
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Brush brush, PaintPoint[] points, FillMode fillmode, double tension)
-        {
-            DrawClosedCurve(null, brush, points, fillmode, tension);
-        }
-
         // ----- stroke and fill -----
-
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Pen pen, Brush brush, PaintPoint[] points)
-        {
-            DrawClosedCurve(pen, brush, points, FillMode.EvenOdd, 0.5);
-        }
-
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode)
-        {
-            DrawClosedCurve(pen, brush, points, fillmode, 0.5);
-        }
-
-        /// <summary>
-        /// Draws a closed cardinal spline defined by an array of points.
-        /// </summary>
-        public void DrawClosedCurve(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode, double tension)
-        {
-            if (pen == null && brush == null)
-            {
-                // ReSharper disable once NotResolvedInText
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
-            }
-
-            int count = points.Length;
-            if (count == 0)
-                return;
-            if (count < 2)
-                throw new ArgumentException("Not enough points.", "points");
-
-            if (_renderer != null)
-                _renderer.DrawClosedCurve(pen, brush, points, tension, fillmode);
-        }
 
         // ----- DrawPath -----------------------------------------------------------------------------
 
@@ -913,7 +493,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        public void DrawPath(Pen pen, XGraphicsPath path)
+        public void DrawPath(Pen pen, GraphicsPath path)
         {
             if (pen == null)
                 throw new ArgumentNullException("pen");
@@ -929,7 +509,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        public void DrawPath(Brush brush, XGraphicsPath path)
+        public void DrawPath(Brush brush, GraphicsPath path)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
@@ -945,7 +525,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        public void DrawPath(Pen pen, Brush brush, XGraphicsPath path)
+        public void DrawPath(Pen pen, Brush brush, GraphicsPath path)
         {
             if (pen == null && brush == null)
             {
@@ -1377,7 +957,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// </summary>
         public void IntersectClip(Rect rect)
         {
-            XGraphicsPath path = new XGraphicsPath();
+            GraphicsPath path = new PdfGraphicsPath();
             path.AddRectangle(rect);
             IntersectClip(path);
         }
@@ -1386,13 +966,13 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Updates the clip region of this XGraphics to the intersection of the 
         /// current clip region and the specified graphical path.
         /// </summary>
-        public void IntersectClip(XGraphicsPath path)
+        public void IntersectClip(GraphicsPath path)
         {
             if (path == null)
                 throw new ArgumentNullException("path");
 
             if (_renderer != null)
-                _renderer.SetClip(path, XCombineMode.Intersect);
+                _renderer.IntersectClip(path);
         }
 
         //public void SetClip(Graphics g);

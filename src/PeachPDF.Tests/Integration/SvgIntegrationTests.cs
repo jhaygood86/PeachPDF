@@ -2071,7 +2071,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ClipShapeTransform_ProducesSameGeometryAsDirectlyAuthoredShape()
         {
-            // The real GraphicsPathAdapter.Transform/AddPath (+ XGraphicsPath/CoreGraphicsPath) must bake
+            // The real PdfGraphicsPath.Transform/AddPath (+ GraphicsPath/CoreGraphicsPath) must bake
             // the clip shape's transform into its coordinates, so a transformed clip is byte-identical to
             // the same region authored directly - and distinct from the un-transformed (pre-fix) geometry.
             var transformed = ClipGeometryNumbers(await GetPdfText(TransformedClipHtml));

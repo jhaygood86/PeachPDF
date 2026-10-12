@@ -629,21 +629,21 @@ namespace PeachPDF.PDF.Rendering
 
         public void SetAndRealizeClipRect(Rect clipRect)
         {
-            XGraphicsPath clipPath = new XGraphicsPath();
+            GraphicsPath clipPath = new PdfGraphicsPath();
             clipPath.AddRectangle(clipRect);
             RealizeClipPath(clipPath);
         }
 
-        public void SetAndRealizeClipPath(XGraphicsPath clipPath)
+        public void SetAndRealizeClipPath(GraphicsPath clipPath)
         {
             RealizeClipPath(clipPath);
         }
 
-        void RealizeClipPath(XGraphicsPath clipPath)
+        void RealizeClipPath(GraphicsPath clipPath)
         {
             _renderer.BeginGraphicMode();
             RealizeCtm();
-            _renderer.AppendPath(clipPath._corePath);
+            _renderer.AppendPath(clipPath);
             _renderer.Append(clipPath.FillMode == FillMode.Nonzero ? "W n\n" : "W* n\n");
         }
 

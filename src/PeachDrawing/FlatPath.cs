@@ -62,7 +62,7 @@ internal sealed class FlatPath
     /// <summary>
     /// Builds a <see cref="FlatPath"/> from an <see cref="GraphicsPath"/>'s own flattened geometry
     /// (<see cref="GraphicsPath.Flatten"/>) - the backend-agnostic replacement for reading
-    /// <c>GraphicsPathAdapter</c>'s wrapped <c>XGraphicsPath</c> directly.
+    /// <c>PdfGraphicsPath</c>'s wrapped <c>GraphicsPath</c> directly.
     /// </summary>
     public static FlatPath From(GraphicsPath path, double tolerance)
     {

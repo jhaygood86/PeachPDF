@@ -102,8 +102,8 @@ namespace PeachPDF.Tests.Svg
             using var a = g.GetTextOutline("a", font, new PaintPoint(0, 40), features: plain.DrawStringCalls[0].Features)!;
             using var b = g.GetTextOutline("a", font, new PaintPoint(0, 40), features: alt.DrawStringCalls[0].Features)!;
             Assert.NotEqual(
-                ((GraphicsPathAdapter)a).GraphicsPath._corePath.PathPoints,
-                ((GraphicsPathAdapter)b).GraphicsPath._corePath.PathPoints);
+                PathPoints.Of(a),
+                PathPoints.Of(b));
         }
 
         [Fact]

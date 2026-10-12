@@ -125,7 +125,7 @@ namespace PeachPDF.Adapters
             // hides content that should actually be visible.
             _clipStack.Push(_clipStack.Peek());
             _g.Save();
-            _g.IntersectClip(((GraphicsPathAdapter)path).GraphicsPath);
+            _g.IntersectClip(path);
         }
 
         public override void PushClipExclude(Rect rect)
@@ -353,7 +353,7 @@ namespace PeachPDF.Adapters
 
         public override GraphicsPath GetGraphicsPath()
         {
-            return new GraphicsPathAdapter();
+            return new PdfGraphicsPath();
         }
 
         public override (Canvas Graphics, Image Image)? CreateTile(double width, double height)
@@ -643,12 +643,12 @@ namespace PeachPDF.Adapters
                 // (an opaque gradient stroke, or any non-gradient content) would otherwise inherit
                 // this stroke's luminosity mask and be masked away (issue #135).
                 var state = _g.Save();
-                _g.DrawPath(xPen, ((GraphicsPathAdapter)path).GraphicsPath);
+                _g.DrawPath(xPen, path);
                 _g.Restore(state);
             }
             else
             {
-                _g.DrawPath(xPen, ((GraphicsPathAdapter)path).GraphicsPath);
+                _g.DrawPath(xPen, path);
             }
         }
 
@@ -661,12 +661,12 @@ namespace PeachPDF.Adapters
             if (PdfPaints.IsGradient(xBrush))
             {
                 var state = _g.Save();
-                _g.DrawPath(xBrush, ((GraphicsPathAdapter)path).GraphicsPath);
+                _g.DrawPath(xBrush, path);
                 _g.Restore(state);
             }
             else
             {
-                _g.DrawPath(xBrush, ((GraphicsPathAdapter)path).GraphicsPath);
+                _g.DrawPath(xBrush, path);
             }
         }
 

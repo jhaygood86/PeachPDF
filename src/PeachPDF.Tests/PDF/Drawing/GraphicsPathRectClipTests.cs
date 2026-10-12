@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
@@ -11,15 +12,15 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
     /// <c>FragmentPainter.Decorations.cs</c>'s <c>CollectUprightWord</c> needs to reproduce, in a
     /// <c>background-clip: text</c> clip-path union, the same per-cell clip
     /// <c>PaintUprightVerticalRun</c> already applies via <c>PushClip</c>/<c>PopClip</c> at paint time
-    /// for a font with real vertical metrics. Exercised at the concrete <see cref="GraphicsPathAdapter"/>
+    /// for a font with real vertical metrics. Exercised at the concrete <see cref="PdfGraphicsPath"/>
     /// level (real production implementation, not a test double) so these tests prove the actual
     /// Sutherland-Hodgman-against-flattened-contours algorithm, not a mock's approximation of it.
     /// </summary>
     public class GraphicsPathRectClipTests
     {
-        private static GraphicsPathAdapter Rectangle(double x, double y, double width, double height)
+        private static PdfGraphicsPath Rectangle(double x, double y, double width, double height)
         {
-            var path = new GraphicsPathAdapter();
+            var path = new PdfGraphicsPath();
             path.Start(x, y);
             path.LineTo(x + width, y);
             path.LineTo(x + width, y + height);
@@ -28,8 +29,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             return path;
         }
 
-        private static List<PaintPoint> PointsOf(GraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints
-            .Select(p => new PaintPoint(p.X, p.Y)).ToList();
+        private static List<PaintPoint> PointsOf(GraphicsPath path) => PathPoints.Of(path).ToList();
 
         [Fact]
         public void EntirelyInsideRect_IsUnchanged()
@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             // A circle-ish shape (four cubic Bézier quadrants) of radius 50 centered at (50, 50) -
             // straddles a clip rect that only covers its left half, so the curve genuinely crosses the
             // boundary and must be flattened before it can be clipped at all.
-            var path = new GraphicsPathAdapter();
+            var path = new PdfGraphicsPath();
             const double cx = 50, cy = 50, r = 50;
             const double k = 0.5522847498; // cubic Bézier circle-approximation constant
             path.Start(cx + r, cy);
@@ -123,7 +123,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         {
             // Two disjoint squares (as separate subpaths, mirroring how a multi-glyph outline is
             // built) - one entirely inside the clip rect, one entirely outside.
-            var path = new GraphicsPathAdapter();
+            var path = new PdfGraphicsPath();
             path.Start(10, 10);
             path.LineTo(20, 10);
             path.LineTo(20, 20);
@@ -150,7 +150,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         [Fact]
         public void EmptyPath_ProducesEmptyPath()
         {
-            var path = new GraphicsPathAdapter();
+            var path = new PdfGraphicsPath();
             var clipped = path.ClipToRect(new Rect(0, 0, 100, 100));
 
             Assert.Empty(PointsOf(clipped));
@@ -168,31 +168,15 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         }
 
         [Fact]
-        public void MalformedPath_BezierWithNoPrecedingPoint_DoesNotThrow()
-        {
-            // A Bezier-type point with nothing before it to start the curve from - shouldn't be
-            // reachable through the public GraphicsPath API (every real caller's AddBezierTo follows a
-            // Start/AddMove/LineTo), but CoreGraphicsPath.EnumerateFlattenedContours defends against it
-            // anyway, since a clip-shape utility should degrade to "less clipped" on corrupted input
-            // rather than throw mid-paint.
-            var path = new CoreGraphicsPath();
-            path.BezierTo(1, 1, 2, 2, 3, 3, false);
-
-            var clipped = path.ClipToRect(0, 0, 100, 100);
-
-            Assert.Empty(clipped.PathPoints);
-        }
-
-        [Fact]
         public void ClippedPath_ContinuingToBuildOntoIt_StartsFromItsOwnLastPoint()
         {
-            // GraphicsPathAdapter.ClipToRect hands back a *new* adapter wrapping the clipped geometry -
+            // PdfGraphicsPath.ClipToRect hands back a *new* adapter wrapping the clipped geometry -
             // its private last-point-tracking field must be seeded from that geometry's own last vertex,
             // not left at the default (0, 0), or a caller that keeps building onto the returned path
             // (e.g. a further LineTo) would silently draw a spurious segment from the origin instead of
             // continuing from where the clipped shape actually ends.
             var square = Rectangle(10, 10, 5, 5); // corners (10,10)-(15,10)-(15,15)-(10,15)
-            var clipped = (GraphicsPathAdapter)square.ClipToRect(new Rect(0, 0, 100, 100)); // fully inside - unchanged
+            var clipped = (PdfGraphicsPath)square.ClipToRect(new Rect(0, 0, 100, 100)); // fully inside - unchanged
 
             clipped.LineTo(50, 50);
 

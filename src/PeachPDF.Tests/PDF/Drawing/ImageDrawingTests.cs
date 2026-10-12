@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
             // Draw a circle with a red pen which is 1.5 point thick.
             var r = width / 5;
-            gfx.DrawEllipse(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0), 1.5), new SolidBrush(PaintColor.White), new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
+            gfx.DrawRectangle(PdfPaints.CreatePen(PaintColor.FromArgb(255, 0, 0), 1.5), new SolidBrush(PaintColor.White), new Rect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
             var font = TestFonts.Create("Arial", 20, (PaintFontStyle.Bold | PaintFontStyle.Italic));

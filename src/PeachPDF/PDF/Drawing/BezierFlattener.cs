@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
-    /// Subdivides a cubic Bézier curve into line segments - the step <see cref="CoreGraphicsPath.ClipToRect"/>
+    /// Subdivides a cubic Bézier curve into line segments - the step <see cref="PdfGraphicsPath.ClipToRect"/>
     /// needs before a curve-bearing contour (a glyph outline's own curved segments, in particular) can be
     /// clipped against an axis-aligned rectangle via <see cref="PeachDrawing.Core.Geometry.PolygonClipper"/>, since an arbitrary
     /// rectangle clip of a cubic Bézier is not itself expressible as a cubic Bézier in general.
@@ -13,7 +13,7 @@ namespace PeachPDF.PDF.Drawing
     {
         /// <summary>
         /// The maximum allowed deviation, in path units (PDF points, un-scaled by <c>PixelsPerPoint</c> -
-        /// the same space <see cref="CoreGraphicsPath"/> already stores its points in), between the
+        /// the same space <see cref="PdfGraphicsPath"/> already stores its points in), between the
         /// flattened line segments and the true curve. Sub-tenth-of-a-point deviation is invisible for a
         /// filled text-clip shape - the only consumer of this flattener - so this is chosen for cheap,
         /// good-enough fidelity rather than print-quality curve rendering.

@@ -73,7 +73,7 @@ namespace PeachPDF.PDF.Rendering
                     return;
                 }
 
-                XGraphicsPath clipPath = BuildPath(outline, transform);
+                GraphicsPath clipPath = BuildPath(outline, transform);
                 _clips.Push(owner._gfx.Save());
                 owner._gfx.IntersectClip(clipPath);
             }
@@ -86,7 +86,7 @@ namespace PeachPDF.PDF.Rendering
                     return true;
                 }
 
-                XGraphicsPath clipPath = BuildPath(outline, transform);
+                GraphicsPath clipPath = BuildPath(outline, transform);
                 clipPath.FillMode = FillMode.EvenOdd;
                 clipPath.AddRectangle(new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
                 _clips.Push(owner._gfx.Save());
@@ -112,7 +112,7 @@ namespace PeachPDF.PDF.Rendering
                     return;
                 }
 
-                var path = new XGraphicsPath { FillMode = FillMode.Nonzero };
+                var path = new PdfGraphicsPath { FillMode = FillMode.Nonzero };
                 path.AddRectangle(rect);
                 owner._gfx.DrawPath(ToBrush(paint), path);
             }
@@ -176,22 +176,15 @@ namespace PeachPDF.PDF.Rendering
                 return converted;
             }
 
-            private static XGraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)
+            private static GraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)
             {
-                int pointCount = outline.Contours.Count;
-                for (var ci = 0; ci < outline.Contours.Count; ci++)
-                {
-                    OutlineContour contour = outline.Contours[ci];
-                    for (var si = 0; si < contour.Segments.Count; si++)
-                        pointCount += contour.Segments[si].IsCubic ? 3 : 1;
-                }
-
-                var path = new XGraphicsPath(pointCount) { FillMode = FillMode.Nonzero };
+                var path = new PdfGraphicsPath { FillMode = FillMode.Nonzero };
 
                 for (var ci = 0; ci < outline.Contours.Count; ci++)
                 {
                     OutlineContour contour = outline.Contours[ci];
-                    PaintPoint current = Map(transform, contour.Start.X, contour.Start.Y);
+                    PaintPoint start = Map(transform, contour.Start.X, contour.Start.Y);
+                    path.Start(start.X, start.Y);
                     for (var si = 0; si < contour.Segments.Count; si++)
                     {
                         OutlineSegment segment = contour.Segments[si];
@@ -200,14 +193,12 @@ namespace PeachPDF.PDF.Rendering
                         {
                             PaintPoint c1 = Map(transform, segment.Control1.X, segment.Control1.Y);
                             PaintPoint c2 = Map(transform, segment.Control2.X, segment.Control2.Y);
-                            path.AddBezier(current.X, current.Y, c1.X, c1.Y, c2.X, c2.Y, end.X, end.Y);
+                            path.AddBezierTo(c1.X, c1.Y, c2.X, c2.Y, end.X, end.Y);
                         }
                         else
                         {
-                            path.AddLine(current.X, current.Y, end.X, end.Y);
+                            path.LineTo(end.X, end.Y);
                         }
-
-                        current = end;
                     }
 
                     path.CloseFigure();

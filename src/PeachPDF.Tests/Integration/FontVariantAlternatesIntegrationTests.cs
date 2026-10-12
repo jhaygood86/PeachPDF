@@ -113,7 +113,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static PaintPoint[] Points(GraphicsPath path) =>
-            ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
+            PathPoints.Of(path);
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 

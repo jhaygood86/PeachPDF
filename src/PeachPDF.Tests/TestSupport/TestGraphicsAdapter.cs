@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.TestSupport
     /// points, arc endpoints) so tests can assert the resulting clip/paint geometry - e.g. that a
     /// clip shape's <c>transform</c> was baked into its coordinates (issue #169). <see cref="Transform"/>
     /// applies the matrix to every recorded point (same convention as the real
-    /// <c>GraphicsPathAdapter</c>/<c>Matrix3x2</c>) and <see cref="AddPath"/> merges another path's
+    /// <c>PdfGraphicsPath</c>/<c>Matrix3x2</c>) and <see cref="AddPath"/> merges another path's
     /// recorded points, faithfully mirroring the production path so a test double never diverges from
     /// what actually renders. <see cref="SubpathStarts"/> additionally records where each subpath
     /// begins, which is the only way to tell one shape from several in a single path - an outline
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.TestSupport
         /// double records a flat point list rather than real subpath/contour structure, it can't
         /// reproduce the real Sutherland-Hodgman clip - it just keeps whichever recorded points already
         /// fall inside <paramref name="rect"/>, which is enough for tests that use this double and don't
-        /// assert on rectangle-clip geometry specifically (see <c>GraphicsPathAdapter.ClipToRect</c> for
+        /// assert on rectangle-clip geometry specifically (see <c>PdfGraphicsPath.ClipToRect</c> for
         /// the real implementation).</summary>
         public override GraphicsPath ClipToRect(Rect rect)
         {

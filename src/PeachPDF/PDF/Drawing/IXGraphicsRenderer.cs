@@ -53,44 +53,9 @@ namespace PeachPDF.PDF.Drawing
         void DrawLines(Pen pen, PaintPoint[] points);
 
         /// <summary>
-        /// Draws a B�zier spline.
-        /// </summary>
-        void DrawBezier(Pen pen, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4);
-
-        /// <summary>
-        /// Draws a series of B�zier splines.
-        /// </summary>
-        void DrawBeziers(Pen pen, PaintPoint[] points);
-
-        /// <summary>
-        /// Draws a cardinal spline.
-        /// </summary>
-        void DrawCurve(Pen pen, PaintPoint[] points, double tension);
-
-        /// <summary>
-        /// Draws an arc.
-        /// </summary>
-        void DrawArc(Pen pen, double x, double y, double width, double height, double startAngle, double sweepAngle);
-
-        /// <summary>
         /// Draws a rectangle.
         /// </summary>
         void DrawRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height);
-
-        /// <summary>
-        /// Draws a series of rectangles.
-        /// </summary>
-        void DrawRectangles(Pen? pen, Brush? brush, Rect[] rects);
-
-        /// <summary>
-        /// Draws a rectangle with rounded corners.
-        /// </summary>
-        void DrawRoundedRectangle(Pen? pen, Brush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight);
-
-        /// <summary>
-        /// Draws an ellipse.
-        /// </summary>
-        void DrawEllipse(Pen? pen, Brush? brush, double x, double y, double width, double height);
 
         /// <summary>
         /// Draws a polygon.
@@ -98,19 +63,9 @@ namespace PeachPDF.PDF.Drawing
         void DrawPolygon(Pen? pen, Brush? brush, PaintPoint[] points, FillMode fillmode);
 
         /// <summary>
-        /// Draws a pie.
-        /// </summary>
-        void DrawPie(Pen? pen, Brush? brush, double x, double y, double width, double height, double startAngle, double sweepAngle);
-
-        /// <summary>
-        /// Draws a cardinal spline.
-        /// </summary>
-        void DrawClosedCurve(Pen? pen, Brush? brush, PaintPoint[] points, double tension, FillMode fillmode);
-
-        /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        void DrawPath(Pen? pen, Brush? brush, XGraphicsPath path);
+        void DrawPath(Pen? pen, Brush? brush, GraphicsPath path);
 
         /// <summary>
         /// Draws a series of glyphs identified by the specified text and font.
@@ -193,7 +148,7 @@ namespace PeachPDF.PDF.Drawing
 
         #region Clipping
 
-        void SetClip(XGraphicsPath path, XCombineMode combineMode);
+        void IntersectClip(GraphicsPath path);
 
         void ResetClip();
 

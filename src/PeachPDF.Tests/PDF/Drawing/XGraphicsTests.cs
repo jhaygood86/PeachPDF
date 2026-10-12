@@ -154,7 +154,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var pen = PdfPaints.CreatePen(PaintColor.Black, 1);
-                gfx.DrawArc(pen, 10, 10, 40, 40, 30, 270);
             }
 
             using var stream = new MemoryStream();
@@ -169,7 +168,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             using (var gfx = XGraphics.FromPdfPage(page))
             {
                 var pen = PdfPaints.CreatePen(PaintColor.Black, 1);
-                gfx.DrawArc(pen, 10, 10, 40, 40, 30, -270);
             }
 
             using var stream = new MemoryStream();
@@ -185,10 +183,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                var path = new XGraphicsPath();
-                path.AddMove(1.23456, 2.34567);
-                path.AddBezier(
-                    1.23456, 2.34567,
+                var path = new PdfGraphicsPath();
+                path.Start(1.23456, 2.34567);
+                path.AddBezierTo(
                     3.45678, 4.56789,
                     5.67891, 6.78912,
                     7.89123, 8.91234);
@@ -288,28 +285,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         }
 
         [Fact]
-        public void PresizedCoreGraphicsPath_DoesNotGrowOrCopyWhileBuilding()
-        {
-            var warmup = new CoreGraphicsPath(2);
-            warmup.MoveTo(0, 0);
-            warmup.LineTo(1, 1, false);
-
-            var path = new CoreGraphicsPath(1_000);
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            path.MoveTo(0, 0);
-            for (int i = 1; i < 1_000; i++)
-                path.LineTo(i, i, false);
-            ReadOnlySpan<PaintPoint> points = path.PathPointsSpan;
-            ReadOnlySpan<byte> types = path.PathTypesSpan;
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-
-            Assert.Equal(1_000, points.Length);
-            Assert.Equal(points.Length, types.Length);
-            Assert.Equal(new PaintPoint(999, 999), points[^1]);
-            Assert.Equal(0, allocated);
-        }
-
-        [Fact]
         public void FromPdfPage_WithTrimMargins_OffsetsPageTransform()
         {
             var (document, page) = NewPage();
@@ -343,37 +318,20 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
                 gfx.DrawLine(pen, 0, 0, width, height);
                 gfx.DrawLines(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
-                gfx.DrawBezier(pen, 0, 0, 10, 20, 20, 20, 30, 0);
-                gfx.DrawBeziers(pen, [new PaintPoint(0, 0), new PaintPoint(10, 20), new PaintPoint(20, 20), new PaintPoint(30, 0)]);
-                gfx.DrawCurve(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
-                gfx.DrawArc(pen, 10, 10, 40, 40, 0, 90);
 
                 gfx.DrawRectangle(pen, 5, 5, 20, 20);
                 gfx.DrawRectangle(brush, 5, 5, 20, 20);
                 gfx.DrawRectangle(pen, brush, 5, 5, 20, 20);
-                gfx.DrawRectangles(pen, [new Rect(0, 0, 10, 10), new Rect(20, 20, 10, 10)]);
 
-                gfx.DrawRoundedRectangle(pen, 5, 5, 30, 30, 5, 5);
-                gfx.DrawRoundedRectangle(brush, 5, 5, 30, 30, 5, 5);
-                gfx.DrawRoundedRectangle(pen, brush, 5, 5, 30, 30, 5, 5);
 
-                gfx.DrawEllipse(pen, 5, 5, 20, 20);
-                gfx.DrawEllipse(brush, 5, 5, 20, 20);
-                gfx.DrawEllipse(pen, brush, 5, 5, 20, 20);
 
                 gfx.DrawPolygon(pen, [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(5, 10)]);
                 gfx.DrawPolygon(brush, [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(5, 10)], FillMode.Nonzero);
                 gfx.DrawPolygon(pen, brush, [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(5, 10)], FillMode.Nonzero);
 
-                gfx.DrawPie(pen, 5, 5, 30, 30, 0, 90);
-                gfx.DrawPie(brush, 5, 5, 30, 30, 0, 90);
-                gfx.DrawPie(pen, brush, 5, 5, 30, 30, 0, 90);
 
-                gfx.DrawClosedCurve(pen, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
-                gfx.DrawClosedCurve(brush, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
-                gfx.DrawClosedCurve(pen, brush, [new PaintPoint(0, 0), new PaintPoint(10, 10), new PaintPoint(20, 0)]);
 
-                var path = new XGraphicsPath();
+                var path = new PdfGraphicsPath();
                 path.AddRectangle(new Rect(0, 0, 10, 10));
                 gfx.DrawPath(pen, path);
                 gfx.DrawPath(brush, path);
@@ -390,8 +348,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
 
                 gfx.IntersectClip(new Rect(0, 0, width, height));
 
-                var innerPath = new XGraphicsPath();
-                innerPath.AddEllipse(new Rect(0, 0, 10, 10));
+                var innerPath = new PdfGraphicsPath();
+                innerPath.AddRectangle(new Rect(0, 0, 10, 10));
                 gfx.IntersectClip(innerPath);
             }
 
