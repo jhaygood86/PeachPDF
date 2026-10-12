@@ -563,7 +563,7 @@ namespace PeachPDF.PDF
         {
             get
             {
-                return String.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectID.DebuggerDisplay, _elements == null ? 0 : _elements.Count);
+                return String.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", ObjectId.DebuggerDisplay, _elements == null ? 0 : _elements.Count);
 
             }
         }

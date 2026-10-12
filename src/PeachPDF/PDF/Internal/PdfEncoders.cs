@@ -45,18 +45,18 @@ namespace PeachPDF.PDF.Internal
         /// <summary>
         /// Gets the raw encoding.
         /// </summary>
-        public static Encoding RawEncoding
+        public static Encoding LatinOneByteEncoding
         {
-            get { return _rawEncoding ?? (_rawEncoding = new RawEncoding()); }
+            get { return _rawEncoding ?? (_rawEncoding = new LatinOneByteEncoding()); }
         }
         static Encoding _rawEncoding = null!;
 
         /// <summary>
         /// Gets the raw Unicode encoding.
         /// </summary>
-        public static Encoding RawUnicodeEncoding
+        public static Encoding RawBigEndianUnicodeEncoding
         {
-            get { return _rawUnicodeEncoding ?? (_rawUnicodeEncoding = new RawUnicodeEncoding()); }
+            get { return _rawUnicodeEncoding ?? (_rawUnicodeEncoding = new RawBigEndianUnicodeEncoding()); }
         }
         static Encoding _rawUnicodeEncoding = null!;
 
@@ -70,7 +70,7 @@ namespace PeachPDF.PDF.Internal
                 if (_winAnsiEncoding == null)
                 {
                     // Use own implementation in Silverlight and WinRT
-                    _winAnsiEncoding = new AnsiEncoding();
+                    _winAnsiEncoding = new WindowsAnsiEncoding();
                 }
                 return _winAnsiEncoding;
             }
@@ -78,11 +78,11 @@ namespace PeachPDF.PDF.Internal
         static Encoding _winAnsiEncoding = null!;
 
         /// <summary>
-        /// Gets the PDF DocEncoding encoding.
+        /// Gets the PDF PdfDocumentEncoding encoding.
         /// </summary>
-        public static Encoding DocEncoding
+        public static Encoding PdfDocumentEncoding
         {
-            get { return _docEncoding ?? (_docEncoding = new DocEncoding()); }
+            get { return _docEncoding ?? (_docEncoding = new PdfDocumentEncoding()); }
         }
         static Encoding _docEncoding = null!;
 
@@ -128,8 +128,8 @@ namespace PeachPDF.PDF.Internal
             byte[] bytes;
             switch (encoding)
             {
-                case PdfStringEncoding.RawEncoding:
-                    bytes = RawEncoding.GetBytes(text);
+                case PdfStringEncoding.LatinOneByteEncoding:
+                    bytes = LatinOneByteEncoding.GetBytes(text);
                     break;
 
                 case PdfStringEncoding.WinAnsiEncoding:
@@ -137,18 +137,18 @@ namespace PeachPDF.PDF.Internal
                     break;
 
                 case PdfStringEncoding.PDFDocEncoding:
-                    bytes = DocEncoding.GetBytes(text);
+                    bytes = PdfDocumentEncoding.GetBytes(text);
                     break;
 
                 case PdfStringEncoding.Unicode:
-                    bytes = RawUnicodeEncoding.GetBytes(text);
+                    bytes = RawBigEndianUnicodeEncoding.GetBytes(text);
                     break;
 
                 default:
                     throw new NotImplementedException(encoding.ToString());
             }
             byte[] temp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, false);
-            return RawEncoding.GetString(temp, 0, temp.Length);
+            return LatinOneByteEncoding.GetString(temp, 0, temp.Length);
         }
 
         /// <summary>
@@ -160,7 +160,7 @@ namespace PeachPDF.PDF.Internal
                 return "()";
 
             byte[] temp = FormatStringLiteral(bytes, unicode, true, false);
-            return RawEncoding.GetString(temp, 0, temp.Length);
+            return LatinOneByteEncoding.GetString(temp, 0, temp.Length);
         }
 
         /// <summary>
@@ -174,8 +174,8 @@ namespace PeachPDF.PDF.Internal
             byte[] bytes;
             switch (encoding)
             {
-                case PdfStringEncoding.RawEncoding:
-                    bytes = RawEncoding.GetBytes(text);
+                case PdfStringEncoding.LatinOneByteEncoding:
+                    bytes = LatinOneByteEncoding.GetBytes(text);
                     break;
 
                 case PdfStringEncoding.WinAnsiEncoding:
@@ -183,11 +183,11 @@ namespace PeachPDF.PDF.Internal
                     break;
 
                 case PdfStringEncoding.PDFDocEncoding:
-                    bytes = DocEncoding.GetBytes(text);
+                    bytes = PdfDocumentEncoding.GetBytes(text);
                     break;
 
                 case PdfStringEncoding.Unicode:
-                    bytes = RawUnicodeEncoding.GetBytes(text);
+                    bytes = RawBigEndianUnicodeEncoding.GetBytes(text);
                     break;
 
                 default:
@@ -195,7 +195,7 @@ namespace PeachPDF.PDF.Internal
             }
 
             byte[] agTemp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, true);
-            return RawEncoding.GetString(agTemp, 0, agTemp.Length);
+            return LatinOneByteEncoding.GetString(agTemp, 0, agTemp.Length);
         }
 
         /// <summary>
@@ -207,7 +207,7 @@ namespace PeachPDF.PDF.Internal
                 return "<>";
 
             byte[] agTemp = FormatStringLiteral(bytes, unicode, true, true);
-            return RawEncoding.GetString(agTemp, 0, agTemp.Length);
+            return LatinOneByteEncoding.GetString(agTemp, 0, agTemp.Length);
         }
 
         /// <summary>
@@ -330,7 +330,7 @@ namespace PeachPDF.PDF.Internal
                     goto Hex;
                 }
             }
-            return RawEncoding.GetBytes(pdf.ToString());
+            return LatinOneByteEncoding.GetBytes(pdf.ToString());
         }
 
         /// <summary>

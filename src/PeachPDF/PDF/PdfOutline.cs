@@ -510,7 +510,7 @@ namespace PeachPDF.PDF
             /// (Optional) The type of PDF object that this dictionary describes; if present,
             /// must be Outlines for an outline dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional, FixedValue = "Outlines")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Outlines")]
             public const string Type = "/Type";
 
             // Outline and outline item are combined
@@ -518,62 +518,62 @@ namespace PeachPDF.PDF
             ///// (Required if there are any open or closed outline entries; must be an indirect reference)
             ///// An outline item dictionary representing the first top-level item in the outline.
             ///// </summary>
-            //[KeyInfo(KeyType.Dictionary)]
+            //[PdfKey(PdfKeyType.Dictionary)]
             //public const string First = "/First";
             //
             ///// <summary>
             ///// (Required if there are any open or closed outline entries; must be an indirect reference)
             ///// An outline item dictionary representing the last top-level item in the outline.
             ///// </summary>
-            //[KeyInfo(KeyType.Dictionary)]
+            //[PdfKey(PdfKeyType.Dictionary)]
             //public const string Last = "/Last";
             //
             ///// <summary>
             ///// (Required if the document has any open outline entries) The total number of open items at all
             ///// levels of the outline. This entry should be omitted if there are no open outline items.
             ///// </summary>
-            //[KeyInfo(KeyType.Integer)]
+            //[PdfKey(PdfKeyType.Integer)]
             //public const string Count = "/Count";
 
             /// <summary>
             /// (Required) The text to be displayed on the screen for this item.
             /// </summary>
-            [KeyInfo(KeyType.String | KeyType.Required)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Required)]
             public const string Title = "/Title";
 
             /// <summary>
             /// (Required; must be an indirect reference) The parent of this item in the outline hierarchy.
             /// The parent of a top-level item is the outline dictionary itself.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Parent = "/Parent";
 
             /// <summary>
             /// (Required for all but the first item at each level; must be an indirect reference)
             /// The previous item at this outline level.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Prev = "/Prev";
 
             /// <summary>
             /// (Required for all but the last item at each level; must be an indirect reference)
             /// The next item at this outline level.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Next = "/Next";
 
             /// <summary>
             /// (Required if the item has any descendants; must be an indirect reference)
             ///  The first of this item’s immediate children in the outline hierarchy.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string First = "/First";
 
             /// <summary>
             /// (Required if the item has any descendants; must be an indirect reference)
             /// The last of this item’s immediate children in the outline hierarchy.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Last = "/Last";
 
             /// <summary>
@@ -582,21 +582,21 @@ namespace PeachPDF.PDF
             /// negative integer whose absolute value specifies how many descendants would appear if the 
             /// item were reopened.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string Count = "/Count";
 
             /// <summary>
             /// (Optional; not permitted if an A entry is present) The destination to be displayed when this 
             /// item is activated.
             /// </summary>
-            [KeyInfo(KeyType.ArrayOrNameOrString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.ArrayOrNameOrString | PdfKeyType.Optional)]
             public const string Dest = "/Dest";
 
             /// <summary>
             /// (Optional; not permitted if a Dest entry is present) The action to be performed when
             /// this item is activated.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string A = "/A";
 
             /// <summary>
@@ -607,7 +607,7 @@ namespace PeachPDF.PDF
             /// an item should also specify a destination (Dest) corresponding to an area of a page where the
             /// contents of the designated structure element are displayed.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string SE = "/SE";
 
             /// <summary>
@@ -615,24 +615,24 @@ namespace PeachPDF.PDF
             /// components in the DeviceRGB color space of the color to be used for the outline entry’s text.
             /// Default value: [0.0 0.0 0.0].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string C = "/C";
 
             /// <summary>
             /// (Optional; PDF 1.4) A set of flags specifying style characteristics for displaying the outline
             /// item’s text. Default value: 0.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string F = "/F";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
 
             // ReSharper restore InconsistentNaming
         }
@@ -640,7 +640,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

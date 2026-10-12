@@ -42,7 +42,7 @@ using System;
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable UseNameofExpression
 
-namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
+namespace PeachPDF.PDF.Drawing
 {
     /// <summary>
     /// Represents a drawing surface for a fixed size page.

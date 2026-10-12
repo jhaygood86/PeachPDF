@@ -45,7 +45,7 @@ namespace PeachPDF.PDF
         /// The characters of the string are actually bytes with an unknown or context specific meaning or encoding.
         /// With this encoding the 8 high bits of each character is zero.
         /// </summary>
-        RawEncoding = PdfStringFlags.RawEncoding,
+        LatinOneByteEncoding = PdfStringFlags.LatinOneByteEncoding,
 
         /// <summary>
         /// Not yet used by PeachPDF.PDF.
@@ -89,7 +89,7 @@ namespace PeachPDF.PDF
     enum PdfStringFlags
     {
         // ReSharper disable InconsistentNaming
-        RawEncoding = 0x00,
+        LatinOneByteEncoding = 0x00,
         StandardEncoding = 0x01,  // not used by PDFsharp
         PDFDocEncoding = 0x02,
         WinAnsiEncoding = 0x03,
@@ -114,7 +114,7 @@ namespace PeachPDF.PDF
         public PdfString()
         {
             // Redundant assignment.
-            //_flags = PdfStringFlags.RawEncoding;
+            //_flags = PdfStringFlags.LatinOneByteEncoding;
         }
 
         /// <summary>
@@ -125,7 +125,7 @@ namespace PeachPDF.PDF
         {
             CheckRawEncoding(value);
             _value = value;
-            //_flags = PdfStringFlags.RawEncoding;
+            //_flags = PdfStringFlags.LatinOneByteEncoding;
         }
 
         /// <summary>
@@ -137,7 +137,7 @@ namespace PeachPDF.PDF
         {
             switch (encoding)
             {
-                case PdfStringEncoding.RawEncoding:
+                case PdfStringEncoding.LatinOneByteEncoding:
                     CheckRawEncoding(value);
                     break;
 
@@ -225,10 +225,10 @@ namespace PeachPDF.PDF
                 switch (encoding)
                 {
                     case PdfStringEncoding.Unicode:
-                        _value = PdfEncoders.RawUnicodeEncoding.GetString(value);
+                        _value = PdfEncoders.RawBigEndianUnicodeEncoding.GetString(value);
                         break;
                     default:
-                        _value = PdfEncoders.RawEncoding.GetString(value);
+                        _value = PdfEncoders.LatinOneByteEncoding.GetString(value);
                         break;
                 }
             }
@@ -240,9 +240,9 @@ namespace PeachPDF.PDF
             switch (encoding)
             {
                 case PdfStringEncoding.Unicode:
-                    return PdfEncoders.RawUnicodeEncoding.GetBytes(_value);
+                    return PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(_value);
                 default:
-                    return PdfEncoders.RawEncoding.GetBytes(_value);
+                    return PdfEncoders.LatinOneByteEncoding.GetBytes(_value);
             }
         }
 

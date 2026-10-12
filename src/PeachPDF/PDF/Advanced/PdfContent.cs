@@ -112,7 +112,7 @@ namespace PeachPDF.PDF.Advanced
             if (_pdfRenderer != null)
             {
                 // GetContent also disposes the underlying PdfGraphics object, if one exists
-                //Stream = new PdfStream(PdfEncoders.RawEncoding.GetBytes(pdfRenderer.GetContent()), this);
+                //Stream = new PdfStream(PdfEncoders.LatinOneByteEncoding.GetBytes(pdfRenderer.GetContent()), this);
                 _pdfRenderer.Close();
                 Debug.Assert(_pdfRenderer == null);
             }
@@ -141,17 +141,17 @@ namespace PeachPDF.PDF.Advanced
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

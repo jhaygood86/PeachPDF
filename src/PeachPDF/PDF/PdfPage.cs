@@ -425,7 +425,7 @@ namespace PeachPDF.PDF
         /// Adds an internal document link.
         /// </summary>
         /// <param name="rect">The link area in default page coordinates.</param>
-        /// <param name="destinationName">The Named Destination�s name.</param>
+        /// <param name="destinationName">The Named Destination's name.</param>
         public PdfLinkAnnotation AddDocumentLink(PdfRectangle rect, string destinationName)
         {
             var annotation = PdfLinkAnnotation.CreateDocumentLink(rect, destinationName);
@@ -629,24 +629,24 @@ namespace PeachPDF.PDF
             /// (Required) The type of PDF object that this dictionary describes;
             /// must be Page for a page object.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Page")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Page")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required; must be an indirect reference)
             /// The page tree node that is the immediate parent of this page object.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required | KeyType.MustBeIndirect)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required | PdfKeyType.MustBeIndirect)]
             public const string Parent = "/Parent";
 
             /// <summary>
             /// (Required if PieceInfo is present; optional otherwise; PDF 1.3) The date and time
-            /// when the page�s contents were most recently modified. If a page-piece dictionary
+            /// when the page's contents were most recently modified. If a page-piece dictionary
             /// (PieceInfo) is present, the modification date is used to ascertain which of the 
             /// application data dictionaries that it contains correspond to the current content
             /// of the page.
             /// </summary>
-            [KeyInfo(KeyType.Date)]
+            [PdfKey(PdfKeyType.Date)]
             public const string LastModified = "/LastModified";
 
             /// <summary>
@@ -654,7 +654,7 @@ namespace PeachPDF.PDF
             /// region to which the contents of the page should be clipped when output in a production
             /// environment. Default value: the value of CropBox.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Rectangle | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Rectangle | PdfKeyType.Optional)]
             public const string BleedBox = "/BleedBox";
 
             /// <summary>
@@ -662,15 +662,15 @@ namespace PeachPDF.PDF
             /// intended dimensions of the finished page after trimming. Default value: the value of 
             /// CropBox.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Rectangle | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Rectangle | PdfKeyType.Optional)]
             public const string TrimBox = "/TrimBox";
 
             /// <summary>
             /// (Optional; PDF 1.3) A rectangle, expressed in default user space units, defining the
-            /// extent of the page�s meaningful content (including potential white space) as intended
-            /// by the page�s creator. Default value: the value of CropBox.
+            /// extent of the page's meaningful content (including potential white space) as intended
+            /// by the page's creator. Default value: the value of CropBox.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Rectangle | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Rectangle | PdfKeyType.Optional)]
             public const string ArtBox = "/ArtBox";
 
             /// <summary>
@@ -679,7 +679,7 @@ namespace PeachPDF.PDF
             /// page boundaries. If this entry is absent, the application should use its own current 
             /// default settings.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string BoxColorInfo = "/BoxColorInfo";
 
             /// <summary>
@@ -689,23 +689,23 @@ namespace PeachPDF.PDF
             /// in order, to form a single stream. This allows PDF producers to create image objects and
             /// other resources as they occur, even though they interrupt the content stream. The division
             /// between streams may occur only at the boundaries between lexical tokens but is unrelated
-            /// to the page�s logical content or organization. Applications that consume or produce PDF 
+            /// to the page's logical content or organization. Applications that consume or produce PDF 
             /// files are not required to preserve the existing structure of the Contents array.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Stream | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string Contents = "/Contents";
 
             /// <summary>
-            /// (Optional; PDF 1.4) A group attributes dictionary specifying the attributes of the page�s 
+            /// (Optional; PDF 1.4) A group attributes dictionary specifying the attributes of the page's 
             /// page group for use in the transparent imaging model.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Group = "/Group";
 
             /// <summary>
-            /// (Optional) A stream object defining the page�s thumbnail image.
+            /// (Optional) A stream object defining the page's thumbnail image.
             /// </summary>
-            [KeyInfo(KeyType.Stream | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string Thumb = "/Thumb";
 
             /// <summary>
@@ -713,77 +713,77 @@ namespace PeachPDF.PDF
             /// references to article beads appearing on the page. The beads are listed in the array in 
             /// natural reading order.
             /// </summary>
-            [KeyInfo("1.1", KeyType.Array | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Array | PdfKeyType.Optional)]
             public const string B = "/B";
 
             /// <summary>
-            /// (Optional; PDF 1.1) The page�s display duration (also called its advance timing): the 
+            /// (Optional; PDF 1.1) The page's display duration (also called its advance timing): the 
             /// maximum length of time, in seconds, that the page is displayed during presentations before
             /// the viewer application automatically advances to the next page. By default, the viewer does 
             /// not advance automatically.
             /// </summary>
-            [KeyInfo("1.1", KeyType.Real | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Real | PdfKeyType.Optional)]
             public const string Dur = "/Dur";
 
             /// <summary>
             /// (Optional; PDF 1.1) A transition dictionary describing the transition effect to be used 
             /// when displaying the page during presentations.
             /// </summary>
-            [KeyInfo("1.1", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Trans = "/Trans";
 
             /// <summary>
             /// (Optional) An array of annotation dictionaries representing annotations associated with 
             /// the page.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional, typeof(PdfAnnotations))]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional, typeof(PdfAnnotations))]
             public const string Annots = "/Annots";
 
             /// <summary>
             /// (Optional; PDF 1.2) An additional-actions dictionary defining actions to be performed 
             /// when the page is opened or closed.
             /// </summary>
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string AA = "/AA";
 
             /// <summary>
             /// (Optional; PDF 1.4) A metadata stream containing metadata for the page.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Stream | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string Metadata = "/Metadata";
 
             /// <summary>
             /// (Optional; PDF 1.3) A page-piece dictionary associated with the page.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string PieceInfo = "/PieceInfo";
 
             /// <summary>
             /// (Required if the page contains structural content items; PDF 1.3)
-            /// The integer key of the page�s entry in the structural parent tree.
+            /// The integer key of the page's entry in the structural parent tree.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string StructParents = "/StructParents";
 
             /// <summary>
             /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of
-            /// the page�s parent Web Capture content set.
+            /// the page's parent Web Capture content set.
             /// </summary>
-            [KeyInfo("1.3", KeyType.String | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.String | PdfKeyType.Optional)]
             public const string ID = "/ID";
 
             /// <summary>
-            /// (Optional; PDF 1.3) The page�s preferred zoom (magnification) factor: the factor 
+            /// (Optional; PDF 1.3) The page's preferred zoom (magnification) factor: the factor 
             /// by which it should be scaled to achieve the natural display magnification.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Real | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Real | PdfKeyType.Optional)]
             public const string PZ = "/PZ";
 
             /// <summary>
             /// (Optional; PDF 1.3) A separation dictionary containing information needed
             /// to generate color separations for the page.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string SeparationInfo = "/SeparationInfo";
 
             /// <summary>
@@ -791,51 +791,51 @@ namespace PeachPDF.PDF
             /// on the page. The possible values are R (row order), C (column order),
             /// and S (structure order).
             /// </summary>
-            [KeyInfo("1.5", KeyType.Name | KeyType.Optional)]
+            [PdfKey("1.5", PdfKeyType.Name | PdfKeyType.Optional)]
             public const string Tabs = "/Tabs";
 
             /// <summary>
             /// (Required if this page was created from a named page object; PDF 1.5)
             /// The name of the originating page object.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string TemplateInstantiated = "/TemplateInstantiated";
 
             /// <summary>
             /// (Optional; PDF 1.5) A navigation node dictionary representing the first node
             /// on the page.
             /// </summary>
-            [KeyInfo("1.5", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.5", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string PresSteps = "/PresSteps";
 
             /// <summary>
             /// (Optional; PDF 1.6) A positive number giving the size of default user space units,
             /// in multiples of 1/72 inch. The range of supported values is implementation-dependent.
             /// </summary>
-            [KeyInfo("1.6", KeyType.Real | KeyType.Optional)]
+            [PdfKey("1.6", PdfKeyType.Real | PdfKeyType.Optional)]
             public const string UserUnit = "/UserUnit";
 
             /// <summary>
             /// (Optional; PDF 1.6) An array of viewport dictionaries specifying rectangular regions 
             /// of the page.
             /// </summary>
-            [KeyInfo("1.6", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.6", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string VP = "/VP";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }
@@ -851,14 +851,14 @@ namespace PeachPDF.PDF
             /// Omitting the entry entirely indicates that the resources are to be inherited from an 
             /// ancestor node in the page tree.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required | KeyType.Inheritable, typeof(PdfResources))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required | PdfKeyType.Inheritable, typeof(PdfResources))]
             public const string Resources = "/Resources";
 
             /// <summary>
             /// (Required; inheritable) A rectangle, expressed in default user space units, defining the 
             /// boundaries of the physical medium on which the page is intended to be displayed or printed.
             /// </summary>
-            [KeyInfo(KeyType.Rectangle | KeyType.Required | KeyType.Inheritable)]
+            [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required | PdfKeyType.Inheritable)]
             public const string MediaBox = "/MediaBox";
 
             /// <summary>
@@ -867,14 +867,14 @@ namespace PeachPDF.PDF
             /// are to be clipped (cropped) to this rectangle and then imposed on the output medium in some
             /// implementation defined manner. Default value: the value of MediaBox.
             /// </summary>
-            [KeyInfo(KeyType.Rectangle | KeyType.Optional | KeyType.Inheritable)]
+            [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional | PdfKeyType.Inheritable)]
             public const string CropBox = "/CropBox";
 
             /// <summary>
             /// (Optional; inheritable) The number of degrees by which the page should be rotated clockwise 
             /// when displayed or printed. The value must be a multiple of 90. Default value: 0.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string Rotate = "/Rotate";
         }
     }

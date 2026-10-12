@@ -144,7 +144,7 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional but strongly recommended; PDF 1.2) A dictionary specifying any
             /// resources (such as fonts and images) required by the form XObject.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResources))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResources))]
             public const string Resources = "/Resources";
         }
     }

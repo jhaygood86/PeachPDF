@@ -131,14 +131,14 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional) The type of PDF object that this dictionary describes; if present,
             /// must be XObject for a form XObject.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) The type of XObject that this dictionary describes; must be Form
             /// for a form XObject.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string Subtype = "/Subtype";
 
             /// <summary>
@@ -146,16 +146,16 @@ namespace PeachPDF.PDF.Advanced
             /// describes. The only valid value defined at the time of publication is 1.
             /// Default value: 1.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string FormType = "/FormType";
 
             /// <summary>
             /// (Required) An array of four numbers in the form coordinate system, giving the 
             /// coordinates of the left, bottom, right, and top edges, respectively, of the 
-            /// form XObject�s bounding box. These boundaries are used to clip the form XObject
+            /// form XObject's bounding box. These boundaries are used to clip the form XObject
             /// and to determine its size for caching.
             /// </summary>
-            [KeyInfo(KeyType.Rectangle | KeyType.Required)]
+            [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required)]
             public const string BBox = "/BBox";
 
             /// <summary>
@@ -163,25 +163,25 @@ namespace PeachPDF.PDF.Advanced
             /// form space into user space.
             /// Default value: the identity matrix [1 0 0 1 0 0].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Matrix = "/Matrix";
 
             /// <summary>
             /// (Optional but strongly recommended; PDF 1.2) A dictionary specifying any
             /// resources (such as fonts and images) required by the form XObject.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResources))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResources))]
             public const string Resources = "/Resources";
 
             /// <summary>
             /// (Optional; PDF 1.4) A group attributes dictionary indicating that the contents
             /// of the form XObject are to be treated as a group and specifying the attributes
-            /// of that group (see Section 4.9.2, �Group XObjects�).
+            /// of that group (see Section 4.9.2, "Group XObjects").
             /// Note: If a Ref entry (see below) is present, the group attributes also apply to the
             /// external page imported by that entry, which allows such an imported page to be
             /// treated as a group without further modification.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Group = "/Group";
 
             // further keys:
@@ -198,17 +198,17 @@ namespace PeachPDF.PDF.Advanced
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

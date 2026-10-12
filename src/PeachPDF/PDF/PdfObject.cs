@@ -95,20 +95,20 @@ namespace PeachPDF.PDF
         /// Setting the object identifier makes this object an indirect object, i.e. the object gets
         /// a PdfReference entry in the PdfReferenceTable.
         /// </summary>
-        internal void SetObjectID(int objectNumber, int generationNumber)
+        internal void SetObjectId(int objectNumber, int generationNumber)
         {
-            PdfObjectID objectID = new PdfObjectID(objectNumber, generationNumber);
+            PdfObjectId objectId = new PdfObjectId(objectNumber, generationNumber);
 
             // TODO: check imported
             if (_iref == null)
-                _iref = _document._irefTable[objectID];
+                _iref = _document._irefTable[objectId];
             if (_iref == null)
             {
                 // ReSharper disable once ObjectCreationAsStatement because the new object is set to this object
                 // in the constructor of PdfReference.
                 new PdfReference(this);
                 Debug.Assert(_iref != null);
-                _iref.ObjectID = objectID;
+                _iref.ObjectId = objectId;
             }
             _iref.Value = this;
             _iref.Document = _document;
@@ -177,7 +177,7 @@ namespace PeachPDF.PDF
             //{
             //    //_InStreamOffset = stream.Position;
             //    _document.xrefTable.AddObject(this);
-            //    return Format("{0} {1} obj\n", _objectID, _generation);
+            //    return Format("{0} {1} obj\n", _objectId, _generation);
             //}
             //else if (_inStreamOffset == -1)
             //{
@@ -186,12 +186,12 @@ namespace PeachPDF.PDF
         }
 
         /// <summary>
-        /// Gets the object identifier. Returns PdfObjectID.Empty for direct objects,
+        /// Gets the object identifier. Returns PdfObjectId.Empty for direct objects,
         /// i.e. never returns null.
         /// </summary>
-        internal PdfObjectID ObjectID
+        internal PdfObjectId ObjectId
         {
-            get { return _iref != null ? _iref.ObjectID : PdfObjectID.Empty; }
+            get { return _iref != null ? _iref.ObjectId : PdfObjectId.Empty; }
         }
 
         /// <summary>
@@ -199,7 +199,7 @@ namespace PeachPDF.PDF
         /// </summary>
         internal int ObjectNumber
         {
-            get { return ObjectID.ObjectNumber; }
+            get { return ObjectId.ObjectNumber; }
         }
 
         /// <summary>
@@ -207,7 +207,7 @@ namespace PeachPDF.PDF
         /// </summary>
         internal int GenerationNumber
         {
-            get { return ObjectID.GenerationNumber; }
+            get { return ObjectId.GenerationNumber; }
         }
 
         /// <summary>

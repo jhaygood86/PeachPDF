@@ -89,7 +89,7 @@ namespace PeachPDF.PDF.Annotations
         /// Creates a link within the current document using a named destination.
         /// </summary>
         /// <param name="rect">The link area in default page coordinates.</param>
-        /// <param name="destinationName">The named destination�s name.</param>
+        /// <param name="destinationName">The named destination's name.</param>
         public static PdfLinkAnnotation CreateDocumentLink(PdfRectangle rect, string destinationName)
         {
             var action = new PdfDictionary();
@@ -139,7 +139,7 @@ namespace PeachPDF.PDF.Annotations
             //pdf.AppendFormat(CultureInfo.InvariantCulture,
             //  "{0} 0 obj\n<<\n/Type/Annot\n/Subtype/Link\n" +
             //  "/Rect[{1} {2} {3} {4}]\n/BS<</Type/Border>>\n/Border[0 0 0]\n/C[0 0 0]\n",
-            //  ObjectID.ObjectNumber, rect.X1, rect.Y1, rect.X2, rect.Y2);
+            //  ObjectId.ObjectNumber, rect.X1, rect.Y1, rect.X2, rect.Y2);
 
             // Older Adobe Reader versions uses a border width of 0 as default value if neither Border nor BS are present.
             // But the PDF Reference specifies:
@@ -165,7 +165,7 @@ namespace PeachPDF.PDF.Annotations
                         destIndex = Owner.PageCount;
                     destIndex--;
                     dest = Owner.Pages[destIndex];
-                    //pdf.AppendFormat("/Dest[{0} 0 R/XYZ null null 0]\n", dest.ObjectID);
+                    //pdf.AppendFormat("/Dest[{0} 0 R/XYZ null null 0]\n", dest.ObjectId);
                     Elements[Keys.Dest] = new PdfLiteral("[{0} 0 R/XYZ null null 0]", dest.ObjectNumber);
                     break;
 
@@ -201,20 +201,20 @@ namespace PeachPDF.PDF.Annotations
             /// (Optional; not permitted if an A entry is present) A destination to be displayed
             /// when the annotation is activated.
             /// </summary>
-            [KeyInfo(KeyType.ArrayOrNameOrString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.ArrayOrNameOrString | PdfKeyType.Optional)]
             public const string Dest = "/Dest";
 
             /// <summary>
-            /// (Optional; PDF 1.2) The annotation�s highlighting mode, the visual effect to be
+            /// (Optional; PDF 1.2) The annotation's highlighting mode, the visual effect to be
             /// used when the mouse button is pressed or held down inside its active area:
             /// N (None) No highlighting.
             /// I (Invert) Invert the contents of the annotation rectangle.
-            /// O (Outline) Invert the annotation�s border.
+            /// O (Outline) Invert the annotation's border.
             /// P (Push) Display the annotation as if it were being pushed below the surface of the page.
             /// Default value: I.
             /// Note: In PDF 1.1, highlighting is always done by inverting colors inside the annotation rectangle.
             /// </summary>
-            [KeyInfo("1.2", KeyType.Name | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.Name | PdfKeyType.Optional)]
             public const string H = "/H";
 
             /// <summary>
@@ -223,7 +223,7 @@ namespace PeachPDF.PDF.Annotations
             /// the data from the original URI action so that it can be changed back in case the target page for 
             /// the go-to action is subsequently deleted.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string PA = "/PA";
 
             // QuadPoints
@@ -231,17 +231,17 @@ namespace PeachPDF.PDF.Annotations
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

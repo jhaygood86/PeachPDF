@@ -42,11 +42,11 @@ namespace PeachPDF.PDF.Advanced
         readonly PdfObject _obj;
 
         /// <summary>
-        /// Gets the object identifier. Returns PdfObjectID.Empty for direct objects.
+        /// Gets the object identifier. Returns PdfObjectId.Empty for direct objects.
         /// </summary>
-        public PdfObjectID ObjectID
+        public PdfObjectId ObjectId
         {
-            get { return _obj.ObjectID; }
+            get { return _obj.ObjectId; }
         }
 
         /// <summary>
@@ -54,7 +54,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public int ObjectNumber
         {
-            get { return _obj.ObjectID.ObjectNumber; }
+            get { return _obj.ObjectId.ObjectNumber; }
         }
 
         /// <summary>
@@ -62,14 +62,14 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public int GenerationNumber
         {
-            get { return _obj.ObjectID.GenerationNumber; }
+            get { return _obj.ObjectId.GenerationNumber; }
         }
 
         /// <summary>
         /// Gets the name of the current type.
         /// Not a very useful property, but can be used for data binding.
         /// </summary>
-        public string TypeID
+        public string TypeId
         {
             get
             {

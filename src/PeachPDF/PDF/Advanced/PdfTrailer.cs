@@ -106,7 +106,7 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets the first or second document identifier.
         /// </summary>
-        public string GetDocumentID(int index)
+        public string GetDocumentId(int index)
         {
             if (index < 0 || index > 1)
                 throw new ArgumentOutOfRangeException("index", index, "Index must be 0 or 1.");
@@ -123,25 +123,25 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Sets the first or second document identifier.
         /// </summary>
-        public void SetDocumentID(int index, string value)
+        public void SetDocumentId(int index, string value)
         {
             if (index < 0 || index > 1)
                 throw new ArgumentOutOfRangeException("index", index, "Index must be 0 or 1.");
 
             PdfArray array = Elements[Keys.ID] as PdfArray;
             if (array == null || array.Elements.Count < 2)
-                array = CreateNewDocumentIDs();
+                array = CreateNewDocumentIds();
             array.Elements[index] = new PdfString(value, PdfStringFlags.HexLiteral);
         }
 
         /// <summary>
         /// Creates and sets two identical new document IDs.
         /// </summary>
-        internal PdfArray CreateNewDocumentIDs()
+        internal PdfArray CreateNewDocumentIds()
         {
             PdfArray array = new PdfArray(_document);
-            byte[] docID = Guid.NewGuid().ToByteArray();
-            string id = PdfEncoders.RawEncoding.GetString(docID, 0, docID.Length);
+            byte[] documentId = Guid.NewGuid().ToByteArray();
+            string id = PdfEncoders.LatinOneByteEncoding.GetString(documentId, 0, documentId.Length);
             array.Elements.Add(new PdfString(id, PdfStringFlags.HexLiteral));
             array.Elements.Add(new PdfString(id, PdfStringFlags.HexLiteral));
             Elements[Keys.ID] = array;
@@ -165,7 +165,7 @@ namespace PeachPDF.PDF.Advanced
             PdfReference iref = _document._trailer.Elements[Keys.Root] as PdfReference;
             if (iref != null && iref.Value == null)
             {
-                iref = _document._irefTable[iref.ObjectID];
+                iref = _document._irefTable[iref.ObjectId];
                 Debug.Assert(iref.Value != null);
                 _document._trailer.Elements[Keys.Root] = iref;
             }
@@ -174,7 +174,7 @@ namespace PeachPDF.PDF.Advanced
             iref = _document._trailer.Elements[PdfTrailer.Keys.Info] as PdfReference;
             if (iref != null && iref.Value == null)
             {
-                iref = _document._irefTable[iref.ObjectID];
+                iref = _document._irefTable[iref.ObjectId];
                 Debug.Assert(iref.Value != null);
                 _document._trailer.Elements[Keys.Info] = iref;
             }
@@ -191,14 +191,14 @@ namespace PeachPDF.PDF.Advanced
         internal class Keys : KeysBase  // Reference: TABLE 3.13  Entries in the file trailer dictionary / Page 97
         {
             /// <summary>
-            /// (Required; must not be an indirect reference) The total number of entries in the file�s 
+            /// (Required; must not be an indirect reference) The total number of entries in the file's 
             /// cross-reference table, as defined by the combination of the original section and all
             /// update sections. Equivalently, this value is 1 greater than the highest object number
             /// used in the file.
             /// Note: Any object in a cross-reference section whose number is greater than this value is
             /// ignored and considered missing.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string Size = "/Size";
 
             /// <summary>
@@ -206,26 +206,26 @@ namespace PeachPDF.PDF.Advanced
             /// reference) The byte offset from the beginning of the file to the beginning of the previous 
             /// cross-reference section.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string Prev = "/Prev";
 
             /// <summary>
             /// (Required; must be an indirect reference) The catalog dictionary for the PDF document
             /// contained in the file.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required, typeof(PdfCatalog))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required, typeof(PdfCatalog))]
             public const string Root = "/Root";
 
             /// <summary>
-            /// (Required if document is encrypted; PDF 1.1) The document�s encryption dictionary.
+            /// (Required if document is encrypted; PDF 1.1) The document's encryption dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Encrypt = "/Encrypt";
 
             /// <summary>
-            /// (Optional; must be an indirect reference) The document�s information dictionary.
+            /// (Optional; must be an indirect reference) The document's information dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfDocumentInformation))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfDocumentInformation))]
             public const string Info = "/Info";
 
             /// <summary>
@@ -234,29 +234,29 @@ namespace PeachPDF.PDF.Advanced
             /// its absence might prevent the file from functioning in some workflows
             /// that depend on files being uniquely identified.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string ID = "/ID";
 
             /// <summary>
             /// (Optional) The byte offset from the beginning of the file of a cross-reference stream.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string XRefStm = "/XRefStm";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

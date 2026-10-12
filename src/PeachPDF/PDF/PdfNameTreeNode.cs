@@ -311,7 +311,7 @@ namespace PeachPDF.PDF
             /// An array of indirect references to the immediate children of this node
             /// The children may be intermediate or leaf nodes.
             /// </summary>
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string Kids = "/Kids";
 
             /// <summary>
@@ -321,7 +321,7 @@ namespace PeachPDF.PDF
             /// where each keyi is a string and the corresponding valuei is the object associated with that key.
             /// The keys are sorted in lexical order, as described below.
             /// </summary>
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string Names = "/Names";
 
             /// <summary>
@@ -329,15 +329,15 @@ namespace PeachPDF.PDF
             /// An array of two strings, specifying the (lexically) least and greatest keys included in the Names array 
             /// of a leaf node or in the Namesarrays of any leaf nodes that are descendants of an intermediate node.
             /// </summary>
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string Limits = "/Limits";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta? _meta;
+            static PdfDictionaryMetadata? _meta;
 
             // ReSharper restore InconsistentNaming
         }
@@ -345,7 +345,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
 
         /// <summary>
         /// Gets the DebuggerDisplayAttribute text.

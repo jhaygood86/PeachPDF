@@ -139,29 +139,29 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) The type of PDF object that this dictionary describes;
             /// must be Font for a font dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Font")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Font")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) The type of font.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string Subtype = "/Subtype";
 
             /// <summary>
             /// (Required) The PostScript name of the font.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string BaseFont = "/BaseFont";
 
             /// <summary>
             /// (Required except for the standard 14 fonts; must be an indirect reference)
-            /// A font descriptor describing the font�s metrics other than its glyph widths.
+            /// A font descriptor describing the font's metrics other than its glyph widths.
             /// Note: For the standard 14 fonts, the entries FirstChar, LastChar, Widths, and 
             /// FontDescriptor must either all be present or all be absent. Ordinarily, they are
             /// absent; specifying them enables a standard font to be overridden.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.MustBeIndirect, typeof(PdfFontDescriptor))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.MustBeIndirect, typeof(PdfFontDescriptor))]
             public const string FontDescriptor = "/FontDescriptor";
         }
     }

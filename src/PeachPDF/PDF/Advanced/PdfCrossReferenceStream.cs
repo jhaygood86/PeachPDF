@@ -68,7 +68,7 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) The type of PDF object that this dictionary describes;
             /// must be XRef for a cross-reference stream.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "XRef")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "XRef")]
             public const string Type = "/Type";
 
             /// <summary>
@@ -76,7 +76,7 @@ namespace PeachPDF.PDF.Advanced
             /// used in this section or in any section for which this is an update.
             /// It is equivalent to the Size entry in a trailer dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public new const string Size = "/Size";
 
             /// <summary>
@@ -87,7 +87,7 @@ namespace PeachPDF.PDF.Advanced
             /// an object number may have at most one entry in a section.
             /// Default value: [0 Size].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Index = "/Index";
 
             /// <summary>
@@ -96,7 +96,7 @@ namespace PeachPDF.PDF.Advanced
             /// of the previous cross-reference stream. This entry has the same function as the Prev 
             /// entry in the trailer dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public new const string Prev = "/Prev";
 
             /// <summary>
@@ -128,23 +128,23 @@ namespace PeachPDF.PDF.Advanced
             ///      2  The object number of the object stream in which this object is stored. (The generation number of the object stream is implicitly 0.)
             ///      3  The index of this object within the object stream.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Required)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
             public const string W = "/W";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static new DictionaryMeta Meta
+            public static new PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

@@ -60,32 +60,32 @@ namespace PeachPDF.PDF.Structure
         {
             // Reference: ISO 32000-1 Table 322 - Entries in the structure tree root
 
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "StructTreeRoot")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "StructTreeRoot")]
             public const string Type = "/Type";
 
-            [KeyInfo(KeyType.ArrayOrDictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
             public const string K = "/K";
 
-            [KeyInfo(KeyType.Optional)]
+            [PdfKey(PdfKeyType.Optional)]
             public const string IDTree = "/IDTree";
 
-            [KeyInfo(KeyType.NumberTree | KeyType.Optional, typeof(PdfNumberTreeNode))]
+            [PdfKey(PdfKeyType.NumberTree | PdfKeyType.Optional, typeof(PdfNumberTreeNode))]
             public const string ParentTree = "/ParentTree";
 
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string ParentTreeNextKey = "/ParentTreeNextKey";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string RoleMap = "/RoleMap";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string ClassMap = "/ClassMap";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

@@ -301,27 +301,27 @@ namespace PeachPDF.PDF.Advanced
         internal sealed class Keys : KeysBase
         {
             /// <summary>(Required) Must be Metadata for a metadata stream dictionary.</summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Metadata")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Metadata")]
             public const string Type = "/Type";
 
             /// <summary>(Required) Must be XML for an XMP metadata stream.</summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "XML")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "XML")]
             public const string Subtype = "/Subtype";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ??= CreateMeta(typeof(Keys)); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

@@ -386,68 +386,68 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional) A dictionary that maps resource names to graphics state 
             /// parameter dictionaries.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string ExtGState = "/ExtGState";
 
             /// <summary>
             /// (Optional) A dictionary that maps each resource name to either the name of a
             /// device-dependent color space or an array describing a color space.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string ColorSpace = "/ColorSpace";
 
             /// <summary>
             /// (Optional) A dictionary that maps each resource name to either the name of a
             /// device-dependent color space or an array describing a color space.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string Pattern = "/Pattern";
 
             /// <summary>
             /// (Optional; PDF 1.3) A dictionary that maps resource names to shading dictionaries.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string Shading = "/Shading";
 
             /// <summary>
             /// (Optional) A dictionary that maps resource names to external objects.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string XObject = "/XObject";
 
             /// <summary>
             /// (Optional) A dictionary that maps resource names to font dictionaries.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string Font = "/Font";
 
             /// <summary>
             /// (Optional) An array of predefined procedure set names.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string ProcSet = "/ProcSet";
 
             /// <summary>
             /// (Optional; PDF 1.2) A dictionary that maps resource names to property list
             /// dictionaries for marked content.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfResourceMap))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfResourceMap))]
             public const string Properties = "/Properties";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

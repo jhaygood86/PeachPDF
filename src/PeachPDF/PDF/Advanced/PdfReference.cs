@@ -46,7 +46,7 @@ namespace PeachPDF.PDF.Advanced
     {
         // About PdfReference 
         // 
-        // * A PdfReference holds either the ObjectID or the PdfObject or both.
+        // * A PdfReference holds either the ObjectId or the PdfObject or both.
         // 
         // * Each PdfObject has a PdfReference if and only if it is an indirect object. Direct objects have
         //   no PdfReference, because they are embedded in a parent objects.
@@ -56,11 +56,11 @@ namespace PeachPDF.PDF.Advanced
         //   or array that is a PdfObject represents a direct (or embeddded) object.
         //
         // * When a PDF file is imported, the PdfXRefTable is filled with PdfReference objects keeping the
-        //   ObjectsIDs and file positions (offsets) of all indirect objects.
+        //   ObjectsIds and file positions (offsets) of all indirect objects.
         //
-        // * Indirect objects can easily be renumbered because they do not rely on their ObjectsIDs.
+        // * Indirect objects can easily be renumbered because they do not rely on their ObjectsIds.
         //
-        // * During modification of a document the ObjectID of an indirect object has no meaning,
+        // * During modification of a document the ObjectId of an indirect object has no meaning,
         //   except that they must be different in pairs.
 
         /// <summary>
@@ -77,9 +77,9 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Initializes a new PdfReference instance from the specified object identifier and file position.
         /// </summary>
-        public PdfReference(PdfObjectID objectID, long position)
+        public PdfReference(PdfObjectId objectId, long position)
         {
-            _objectID = objectID;
+            _objectId = objectId;
             _position = position;
         }
 
@@ -92,7 +92,7 @@ namespace PeachPDF.PDF.Advanced
 
             // Each line must be exactly 20 bytes long, otherwise Acrobat repairs the file.
             string text = String.Format("{0:0000000000} {1:00000} n\n",
-              _position, _objectID.GenerationNumber); // InUse ? 'n' : 'f');
+              _position, _objectId.GenerationNumber); // InUse ? 'n' : 'f');
             writer.WriteRaw(text);
         }
 
@@ -107,33 +107,33 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets or sets the object identifier.
         /// </summary>
-        public PdfObjectID ObjectID
+        public PdfObjectId ObjectId
         {
-            get { return _objectID; }
+            get { return _objectId; }
             set
             {
                 // Ignore redundant invokations.
-                if (_objectID == value)
+                if (_objectId == value)
                     return;
 
-                _objectID = value;
+                _objectId = value;
                 if (Document != null)
                 {
                     //PdfXRefTable table = Document.xrefTable;
                     //table.Remove(this);
-                    //objectID = value;
+                    //objectId = value;
                     //table.Add(this);
                 }
             }
         }
-        PdfObjectID _objectID;
+        PdfObjectId _objectId;
 
         /// <summary>
         /// Gets the object number of the object identifier.
         /// </summary>
         public int ObjectNumber
         {
-            get { return _objectID.ObjectNumber; }
+            get { return _objectId.ObjectNumber; }
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public int GenerationNumber
         {
-            get { return _objectID.GenerationNumber; }
+            get { return _objectId.GenerationNumber; }
         }
 
         /// <summary>
@@ -201,7 +201,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public override string ToString()
         {
-            return _objectID + " R";
+            return _objectId + " R";
         }
 
         internal static PdfReferenceComparer Comparer
@@ -210,7 +210,7 @@ namespace PeachPDF.PDF.Advanced
         }
 
         /// <summary>
-        /// Implements a comparer that compares PdfReference objects by their PdfObjectID.
+        /// Implements a comparer that compares PdfReference objects by their PdfObjectId.
         /// </summary>
         internal class PdfReferenceComparer : IComparer<PdfReference>
         {
@@ -221,7 +221,7 @@ namespace PeachPDF.PDF.Advanced
                 if (l != null)
                 {
                     if (r != null)
-                        return l._objectID.CompareTo(r._objectID);
+                        return l._objectId.CompareTo(r._objectId);
                     return -1;
                 }
                 if (r != null)

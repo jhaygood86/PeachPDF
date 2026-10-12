@@ -43,26 +43,26 @@ namespace PeachPDF.PDF.Structure
         {
             // Reference: ISO 32000-1 Table 324 - Entries in a marked-content reference dictionary
 
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "MCR")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "MCR")]
             public const string Type = "/Type";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Pg = "/Pg";
 
-            [KeyInfo(KeyType.Stream | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string Stm = "/Stm";
 
-            [KeyInfo(KeyType.Optional)]
+            [PdfKey(PdfKeyType.Optional)]
             public const string StmOwn = "/StmOwn";
 
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string MCID = "/MCID";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

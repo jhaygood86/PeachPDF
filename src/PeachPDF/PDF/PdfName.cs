@@ -137,15 +137,15 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Gets the comparer for this type.
         /// </summary>
-        public static PdfXNameComparer Comparer
+        public static PdfNameKeyComparer Comparer
         {
-            get { return new PdfXNameComparer(); }
+            get { return new PdfNameKeyComparer(); }
         }
 
         /// <summary>
         /// Implements a comparer that compares PdfName objects.
         /// </summary>
-        internal class PdfXNameComparer : IComparer<PdfName>
+        internal class PdfNameKeyComparer : IComparer<PdfName>
         {
             /// <summary>
             /// Compares two objects and returns a value indicating whether one is less than, equal to, or greater than the other.

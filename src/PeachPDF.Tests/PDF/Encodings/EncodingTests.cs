@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Encodings
             }
         }
 
-        // Used test PDFsharp AnsiEncoding against Microsoft code page 1252.
+        // Used test PDFsharp WindowsAnsiEncoding against Microsoft code page 1252.
         Encoding? GetDotNetAnsiEncoding()
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);

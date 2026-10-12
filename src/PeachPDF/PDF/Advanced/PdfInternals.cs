@@ -52,10 +52,10 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets or sets the first document identifier.
         /// </summary>
-        public string FirstDocumentID
+        public string FirstDocumentId
         {
-            get { return _document._trailer.GetDocumentID(0); }
-            set { _document._trailer.SetDocumentID(0, value); }
+            get { return _document._trailer.GetDocumentId(0); }
+            set { _document._trailer.SetDocumentId(0, value); }
         }
 
         /// <summary>
@@ -63,16 +63,16 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public Guid FirstDocumentGuid
         {
-            get { return GuidFromString(_document._trailer.GetDocumentID(0)); }
+            get { return GuidFromString(_document._trailer.GetDocumentId(0)); }
         }
 
         /// <summary>
         /// Gets or sets the second document identifier.
         /// </summary>
-        public string SecondDocumentID
+        public string SecondDocumentId
         {
-            get { return _document._trailer.GetDocumentID(1); }
-            set { _document._trailer.SetDocumentID(1, value); }
+            get { return _document._trailer.GetDocumentId(1); }
+            set { _document._trailer.SetDocumentId(1, value); }
         }
 
         /// <summary>
@@ -80,7 +80,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public Guid SecondDocumentGuid
         {
-            get { return GuidFromString(_document._trailer.GetDocumentID(0)); }
+            get { return GuidFromString(_document._trailer.GetDocumentId(0)); }
         }
 
         Guid GuidFromString(string id)
@@ -114,9 +114,9 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Returns the object with the specified Identifier, or null, if no such object exists.
         /// </summary>
-        public PdfObject GetObject(PdfObjectID objectID)
+        public PdfObject GetObject(PdfObjectId objectId)
         {
-            return _document._irefTable[objectID].Value;
+            return _document._irefTable[objectId].Value;
         }
 
         /// <summary>
@@ -133,11 +133,11 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets the object identifier of the specified object.
         /// </summary>
-        public static PdfObjectID GetObjectID(PdfObject obj)
+        public static PdfObjectId GetObjectId(PdfObject obj)
         {
             if (obj == null)
                 throw new ArgumentNullException("obj");
-            return obj.ObjectID;
+            return obj.ObjectId;
         }
 
         /// <summary>

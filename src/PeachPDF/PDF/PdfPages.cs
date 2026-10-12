@@ -82,7 +82,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// Finds a page by its id. Transforms it to PdfPage if necessary.
         /// </summary>
-        internal PdfPage FindPage(PdfObjectID id)  // TODO: public?
+        internal PdfPage FindPage(PdfObjectId id)  // TODO: public?
         {
             PdfPage page = null;
             foreach (PdfItem item in PagesArray)
@@ -91,7 +91,7 @@ namespace PeachPDF.PDF
                 if (reference != null)
                 {
                     PdfDictionary dictionary = reference.Value as PdfDictionary;
-                    if (dictionary != null && dictionary.ObjectID == id)
+                    if (dictionary != null && dictionary.ObjectId == id)
                     {
                         page = dictionary as PdfPage ?? new PdfPage(dictionary);
                         break;
@@ -319,44 +319,44 @@ namespace PeachPDF.PDF
             /// (Required) The type of PDF object that this dictionary describes; 
             /// must be Pages for a page tree node.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Pages")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Pages")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required except in root node; must be an indirect reference)
             /// The page tree node that is the immediate parent of this one.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Parent = "/Parent";
 
             /// <summary>
             /// (Required) An array of indirect references to the immediate children of this node.
             /// The children may be page objects or other page tree nodes.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Required)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
             public const string Kids = "/Kids";
 
             /// <summary>
             /// (Required) The number of leaf nodes (page objects) that are descendants of this node 
             /// within the page tree.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string Count = "/Count";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

@@ -67,16 +67,16 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional) The type of PDF object that this dictionary describes;
             /// if present, must be Mask for a soft-mask dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional, FixedValue = "Mask")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Mask")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) A subtype specifying the method to be used in deriving the mask values
             /// from the transparency group specified by the G entry:
-            /// Alpha: Use the group�s computed alpha, disregarding its color.
-            /// Luminosity: Convert the group�s computed color to a single-component luminosity value.
+            /// Alpha: Use the group's computed alpha, disregarding its color.
+            /// Luminosity: Convert the group's computed color to a single-component luminosity value.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string S = "/S";
 
             /// <summary>
@@ -85,7 +85,7 @@ namespace PeachPDF.PDF.Advanced
             /// group attributes dictionary must contain a CS entry defining the color space
             /// in which the compositing computation is to be performed.
             /// </summary>
-            [KeyInfo(KeyType.Stream | KeyType.Required)]
+            [PdfKey(PdfKeyType.Stream | PdfKeyType.Required)]
             public const string G = "/G";
 
             /// <summary>
@@ -94,9 +94,9 @@ namespace PeachPDF.PDF.Advanced
             /// This entry is consulted only if the subtype S is Luminosity. The array consists of
             /// n numbers, where n is the number of components in the color space specified
             /// by the CS entry in the group attributes dictionary.
-            /// Default value: the color space�s initial value, representing black.
+            /// Default value: the color space's initial value, representing black.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string BC = "/BC";
 
             /// <summary>
@@ -109,7 +109,7 @@ namespace PeachPDF.PDF.Advanced
             /// specified in place of a function object to designate the identity function.
             /// Default value: Identity.
             /// </summary>
-            [KeyInfo(KeyType.FunctionOrName | KeyType.Optional)]
+            [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
             public const string TR = "/TR";
         }
     }

@@ -45,20 +45,20 @@ namespace PeachPDF.PDF.Structure
         {
             // Reference: ISO 32000-1 Table 325 - Entries in an object reference dictionary
 
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "OBJR")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "OBJR")]
             public const string Type = "/Type";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Pg = "/Pg";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Obj = "/Obj";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

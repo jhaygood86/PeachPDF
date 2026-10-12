@@ -45,7 +45,7 @@ namespace PeachPDF.PDF
         /// </summary>
         public PdfStringObject()
         {
-            _flags = PdfStringFlags.RawEncoding;
+            _flags = PdfStringFlags.LatinOneByteEncoding;
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace PeachPDF.PDF
             : base(document)
         {
             _value = value;
-            _flags = PdfStringFlags.RawEncoding;
+            _flags = PdfStringFlags.LatinOneByteEncoding;
         }
 
         /// <summary>
@@ -124,8 +124,8 @@ namespace PeachPDF.PDF
         internal byte[] EncryptionValue
         {
             // TODO: Unicode case is not handled!
-            get { return _value == null ? new byte[0] : PdfEncoders.RawEncoding.GetBytes(_value); }
-            set { _value = PdfEncoders.RawEncoding.GetString(value, 0, value.Length); }
+            get { return _value == null ? new byte[0] : PdfEncoders.LatinOneByteEncoding.GetBytes(_value); }
+            set { _value = PdfEncoders.LatinOneByteEncoding.GetString(value, 0, value.Length); }
         }
 
         /// <summary>

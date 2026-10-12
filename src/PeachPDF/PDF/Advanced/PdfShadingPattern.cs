@@ -101,27 +101,27 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional) The type of PDF object that this dictionary describes; if present,
             /// must be Pattern for a pattern dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) A code identifying the type of pattern that this dictionary describes;
             /// must be 2 for a shading pattern.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string PatternType = "/PatternType";
 
             /// <summary>
             /// (Required) A shading object (see below) defining the shading pattern's gradient fill.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string Shading = "/Shading";
 
             /// <summary>
             /// (Optional) An array of six numbers specifying the pattern matrix.
             /// Default value: the identity matrix [1 0 0 1 0 0].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Matrix = "/Matrix";
 
             /// <summary>
@@ -130,23 +130,23 @@ namespace PeachPDF.PDF.Advanced
             /// that are not so specified are inherited from the graphics state that was in effect
             /// at the beginning of the content stream in which the pattern is defined as a resource.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string ExtGState = "/ExtGState";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

@@ -629,17 +629,17 @@ namespace PeachPDF.PDF.Advanced
                 {
                     double tA = (double)t / nTri;
                     double tB = (double)(t + 1) / nTri;
-                    double θA = a1 + (a2 - a1) * tA;
-                    double θB = a1 + (a2 - a1) * tB;
+                    double angleA = a1 + (a2 - a1) * tA;
+                    double angleB = a1 + (a2 - a1) * tB;
 
                     PaintColor colorA = cmyk ? LerpXColorCmyk(c1, c2, tA) : LerpXColor(c1, c2, tA);
                     PaintColor colorB = cmyk ? LerpXColorCmyk(c1, c2, tB) : LerpXColor(c1, c2, tB);
 
-                    // In PDF view space: 0=top, clockwise ↔ x=sin(θ), y=+cos(θ)
-                    double oAX = cx + R * Math.Sin(θA);
-                    double oAY = cy + R * Math.Cos(θA);
-                    double oBX = cx + R * Math.Sin(θB);
-                    double oBY = cy + R * Math.Cos(θB);
+                    // In PDF view space: 0=top, clockwise: x=sin(angle), y=+cos(angle)
+                    double oAX = cx + R * Math.Sin(angleA);
+                    double oAY = cy + R * Math.Cos(angleA);
+                    double oBX = cx + R * Math.Sin(angleB);
+                    double oBY = cy + R * Math.Cos(angleB);
 
                     AppendConicVertex(data, 0, cx, cy, colorA, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
                     AppendConicVertex(data, 0, oAX, oAY, colorA, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
@@ -799,14 +799,14 @@ namespace PeachPDF.PDF.Advanced
             /// 6 Coons patch mesh
             /// 7 Tensor-product patch mesh
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string ShadingType = "/ShadingType";
 
             /// <summary>
             /// (Required) The color space in which color values are expressed. This may be any device, 
             /// CIE-based, or special color space except a Pattern space.
             /// </summary>
-            [KeyInfo(KeyType.NameOrArray | KeyType.Required)]
+            [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Required)]
             public const string ColorSpace = "/ColorSpace";
 
             /// <summary>
@@ -817,7 +817,7 @@ namespace PeachPDF.PDF.Advanced
             /// the effect is as if the painting operation were performed twice: first with the 
             /// background color and then with the shading.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Background = "/Background";
 
             /// <summary>
@@ -827,7 +827,7 @@ namespace PeachPDF.PDF.Advanced
             /// clipping boundary when the shading is painted, in addition to the current clipping path
             /// and any other clipping boundaries in effect at that time.
             /// </summary>
-            [KeyInfo(KeyType.Rectangle | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional)]
             public const string BBox = "/BBox";
 
             /// <summary>
@@ -841,7 +841,7 @@ namespace PeachPDF.PDF.Advanced
             /// is ignored.
             /// Default value: false.
             /// </summary>
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string AntiAlias = "/AntiAlias";
 
             // ---- Type 2 ----------------------------------------------------------
@@ -850,7 +850,7 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) An array of four numbers [x0 y0 x1 y1] specifying the starting and
             /// ending coordinates of the axis, expressed in the shading's target coordinate space.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Required)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
             public const string Coords = "/Coords";
 
             /// <summary>
@@ -860,7 +860,7 @@ namespace PeachPDF.PDF.Advanced
             /// the axis. The variable t becomes the input argument to the color function(s).
             /// Default value: [0.0 1.0].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Domain = "/Domain";
 
             /// <summary>
@@ -871,7 +871,7 @@ namespace PeachPDF.PDF.Advanced
             /// dictionary. If the value returned by the function for a given color component is out
             /// of range, it is adjusted to the nearest valid value.
             /// </summary>
-            [KeyInfo(KeyType.Function | KeyType.Required)]
+            [PdfKey(PdfKeyType.Function | PdfKeyType.Required)]
             public const string Function = "/Function";
 
             /// <summary>
@@ -879,23 +879,23 @@ namespace PeachPDF.PDF.Advanced
             /// beyond the starting and ending points of the axis, respectively.
             /// Default value: [false false].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Extend = "/Extend";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

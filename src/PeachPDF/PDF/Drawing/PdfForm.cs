@@ -196,7 +196,7 @@ namespace PeachPDF.PDF.Drawing
 
             if (PdfRenderer != null)
             {
-                //pdfForm.CreateStream(PdfEncoders.RawEncoding.GetBytes(PdfRenderer.GetContent()));
+                //pdfForm.CreateStream(PdfEncoders.LatinOneByteEncoding.GetBytes(PdfRenderer.GetContent()));
                 PdfRenderer.Close();
 
                 if (_document.Options.CompressContentStreams)

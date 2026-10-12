@@ -99,70 +99,70 @@ namespace PeachPDF.PDF.Advanced
             /// <summary>
             /// (Optional; PDF 1.2) A name tree mapping name strings to destinations (see “Named Destinations” on page 583).
             /// </summary>
-            [KeyInfo("1.2", KeyType.NameTree | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.NameTree | PdfKeyType.Optional)]
             public const string Dests = "/Dests";
 
             ///// <summary>
             ///// (Optional; PDF 1.3) A name tree mapping name strings to annotation appearance streams
             ///// (see Section 8.4.4, “Appearance Streams”).
             ///// </summary>
-            //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string AP = "/AP";
 
             ///// <summary>
             ///// (Optional; PDF 1.3) A name tree mapping name strings to document-level JavaScript actions
             ///// (see “JavaScript Actions” on page 709).
             ///// </summary>
-            //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string JavaScript = "/JavaScript";
 
             ///// <summary>
             ///// (Optional; PDF 1.3) A name tree mapping name strings to visible pages for use in interactive forms
             ///// (see Section 8.6.5, “Named Pages”).
             ///// </summary>
-            //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string Pages = "/Pages";
 
             ///// <summary>
             ///// (Optional; PDF 1.3) A name tree mapping name strings to invisible (template) pages for use in
             ///// interactive forms (see Section 8.6.5, “Named Pages”).
             ///// </summary>
-            //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string Templates = "/Templates";
 
             ///// <summary>
             ///// (Optional; PDF 1.3) A name tree mapping digital identifiers to Web Capture content sets
             ///// (see Section 10.9.3, “Content Sets”).
             ///// </summary>
-            //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string IDS = "/IDS";
 
             ///// <summary>
             ///// (Optional; PDF 1.3) A name tree mapping uniform resource locators (URLs) to Web Capture content sets
             ///// (see Section 10.9.3, “Content Sets”).
             ///// </summary>
-            //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string URLS = "/URLS";
 
             /// <summary>
             /// (Optional; PDF 1.4) A name tree mapping name strings to file specifications for embedded file streams
             /// (see Section 3.10.3, “Embedded File Streams”).
             /// </summary>
-            [KeyInfo("1.4", KeyType.NameTree | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.NameTree | PdfKeyType.Optional)]
             public const string EmbeddedFiles = "/EmbeddedFiles";
 
             ///// <summary>
             ///// (Optional; PDF 1.4) A name tree mapping name strings to alternate presentations
             ///// (see Section 9.4, “Alternate Presentations”).
             ///// </summary>
-            //[KeyInfo("1.4", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.4", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string AlternatePresentations = "/AlternatePresentations";
 
             ///// <summary>
             ///// (Optional; PDF 1.5) A name tree mapping name strings (which must have Unicode encoding) to
             ///// rendition objects (see Section 9.1.2, “Renditions”).
             ///// </summary>
-            //[KeyInfo("1.5", KeyType.NameTree | KeyType.Optional)]
+            //[PdfKey("1.5", PdfKeyType.NameTree | PdfKeyType.Optional)]
             //public const string Renditions = "/Renditions";
 
             // ReSharper restore InconsistentNaming

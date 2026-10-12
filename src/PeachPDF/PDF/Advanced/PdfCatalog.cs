@@ -284,24 +284,24 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) The type of PDF object that this dictionary describes; 
             /// must be Catalog for the catalog dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Catalog")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Catalog")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Optional; PDF 1.4) The version of the PDF specification to which the document
-            /// conforms (for example, 1.4) if later than the version specified in the file�s header.
+            /// conforms (for example, 1.4) if later than the version specified in the file's header.
             /// If the header specifies a later version, or if this entry is absent, the document 
             /// conforms to the version specified in the header. This entry enables a PDF producer 
             /// application to update the version using an incremental update.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Name | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Name | PdfKeyType.Optional)]
             public const string Version = "/Version";
 
             /// <summary>
             /// (Required; must be an indirect reference) The page tree node that is the root of 
-            /// the document�s page tree.
+            /// the document's page tree.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required | KeyType.MustBeIndirect, typeof(PdfPages))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required | PdfKeyType.MustBeIndirect, typeof(PdfPages))]
             public const string Pages = "/Pages";
 
             /// <summary>
@@ -310,64 +310,64 @@ namespace PeachPDF.PDF.Advanced
             /// Each page index denotes the first page in a labeling range to which the specified page 
             /// label dictionary applies. The tree must include a value for pageindex 0.
             /// </summary>
-            [KeyInfo("1.3", KeyType.NumberTree | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.NumberTree | PdfKeyType.Optional)]
             public const string PageLabels = "/PageLabels";
 
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Names = "/Names";
 
-            [KeyInfo("1.1", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Dests = "/Dests";
 
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional, typeof(PdfViewerPreferences))]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfViewerPreferences))]
             public const string ViewerPreferences = "/ViewerPreferences";
 
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string PageLayout = "/PageLayout";
 
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string PageMode = "/PageMode";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfOutline))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfOutline))]
             public const string Outlines = "/Outlines";
 
-            [KeyInfo("1.1", KeyType.Array | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Threads = "/Threads";
 
-            [KeyInfo("1.1", KeyType.ArrayOrDictionary | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
             public const string OpenAction = "/OpenAction";
 
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string AA = "/AA";
 
-            [KeyInfo("1.1", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string URI = "/URI";
 
             /// <summary>
             /// (Optional; PDF 1.4; must be an indirect reference) A metadata stream 
             /// containing metadata  for the document.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional | KeyType.MustBeIndirect)]
+            [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional | PdfKeyType.MustBeIndirect)]
             public const string Metadata = "/Metadata";
 
             /// <summary>
-            /// (Optional; PDF 1.3) The document�s structure tree root dictionary.
+            /// (Optional; PDF 1.3) The document's structure tree root dictionary.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional, typeof(PdfStructureTreeRoot))]
+            [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfStructureTreeRoot))]
             public const string StructTreeRoot = "/StructTreeRoot";
 
             /// <summary>
             /// (Optional; must be an indirect reference) The document's interactive form (AcroForm)
             /// dictionary.
             /// </summary>
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional, typeof(PdfAcroForm))]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfAcroForm))]
             public const string AcroForm = "/AcroForm";
 
             /// <summary>
             /// (Optional; PDF 1.4) A mark information dictionary containing information
-            /// about the document�s usage of Tagged PDF conventions.
+            /// about the document's usage of Tagged PDF conventions.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional, typeof(PdfMarkInformation))]
+            [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional, typeof(PdfMarkInformation))]
             public const string MarkInfo = "/MarkInfo";
 
             /// <summary>
@@ -375,71 +375,71 @@ namespace PeachPDF.PDF.Advanced
             /// text in the document except where overridden by language specifications for structure 
             /// elements or marked content. If this entry is absent, the language is considered unknown.
             /// </summary>
-            [KeyInfo("1.4", KeyType.String | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.String | PdfKeyType.Optional)]
             public const string Lang = "/Lang";
 
             /// <summary>
             /// (Optional; PDF 1.3) A Web Capture information dictionary containing state information
             /// used by the Acrobat Web Capture (AcroSpider) plugin extension.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string SpiderInfo = "/SpiderInfo";
 
             /// <summary>
             /// (Optional; PDF 1.4) An array of output intent dictionaries describing the color 
             /// characteristics of output devices on which the document might be rendered.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Array | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Array | PdfKeyType.Optional)]
             public const string OutputIntents = "/OutputIntents";
 
             /// <summary>
             /// (Optional; PDF 1.4) A page-piece dictionary associated with the document.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string PieceInfo = "/PieceInfo";
 
             /// <summary>
-            /// (Optional; PDF 1.5; required if a document contains optional content) The document�s 
+            /// (Optional; PDF 1.5; required if a document contains optional content) The document's 
             /// optional content properties dictionary.
             /// </summary>
-            [KeyInfo("1.5", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.5", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string OCProperties = "/OCProperties";
 
             /// <summary>
             /// (Optional; PDF 1.5) A permissions dictionary that specifies user access permissions 
             /// for the document.
             /// </summary>
-            [KeyInfo("1.5", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.5", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Perms = "/Perms";
 
             /// <summary>
             /// (Optional; PDF 1.5) A dictionary containing attestations regarding the content of a
             /// PDF document, as it relates to the legality of digital signatures.
             /// </summary>
-            [KeyInfo("1.5", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.5", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Legal = "/Legal";
 
             /// <summary>
             /// (Optional; PDF 2.0) An array of file specification dictionaries denoting the associated
             /// files for the entire document (ISO 32000-2 §14.13, "Associated files").
             /// </summary>
-            [KeyInfo("2.0", KeyType.Array | KeyType.Optional)]
+            [PdfKey("2.0", PdfKeyType.Array | PdfKeyType.Optional)]
             public const string AF = "/AF";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            public static DictionaryMeta Meta
+            public static PdfDictionaryMetadata Meta
             {
                 get { return _meta ??= CreateMeta(typeof(Keys)); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

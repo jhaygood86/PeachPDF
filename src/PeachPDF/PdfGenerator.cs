@@ -911,10 +911,10 @@ namespace PeachPDF
                 if (config.PdfXConformance != PdfXConformance.X6)
                 {
                     var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance);
-                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.RawEncoding);
+                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.LatinOneByteEncoding);
                     if (gtsConformance is not null)
                     {
-                        document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.RawEncoding);
+                        document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.LatinOneByteEncoding);
                     }
                 }
             }

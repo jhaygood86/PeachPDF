@@ -115,7 +115,7 @@ namespace PeachPDF.PDF
             _imageTable = new PdfImageTable(this);
             _trailer = new PdfTrailer(this);
             _irefTable = new PdfCrossReferenceTable(this);
-            _trailer.CreateNewDocumentIDs();
+            _trailer.CreateNewDocumentIds();
         }
 
         //~PdfDocument()

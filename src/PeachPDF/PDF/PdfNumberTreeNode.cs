@@ -248,21 +248,21 @@ namespace PeachPDF.PDF
         {
             // Reference: ISO 32000-1 Table 37 - Entries in a number tree node dictionary
 
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string Kids = "/Kids";
 
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string Nums = "/Nums";
 
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string Limits = "/Limits";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta? _meta;
+            static PdfDictionaryMetadata? _meta;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
 
         string DebuggerDisplay => String.Format("root:{0}", IsRoot);
     }

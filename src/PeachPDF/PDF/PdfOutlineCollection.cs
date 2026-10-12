@@ -274,7 +274,7 @@ namespace PeachPDF.PDF
             outline.Parent = _parent;
 
             //_outlines.Add(outline);
-            if (!Owner._irefTable.Contains(outline.ObjectID))
+            if (!Owner._irefTable.Contains(outline.ObjectId))
                 Owner._irefTable.Add(outline);
             // else
             // {

@@ -37,9 +37,9 @@ namespace PeachPDF.PDF
     /// </summary>
     internal class KeysBase
     {
-        internal static DictionaryMeta CreateMeta([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type type)
+        internal static PdfDictionaryMetadata CreateMeta([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type type)
         {
-            return new DictionaryMeta(type);
+            return new PdfDictionaryMetadata(type);
         }
     }
 }

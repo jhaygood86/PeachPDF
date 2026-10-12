@@ -50,9 +50,9 @@ namespace PeachPDF.PDF.Advanced
         readonly PdfDocument _document;
 
         /// <summary>
-        /// Represents the relation between PdfObjectID and PdfReference for a PdfDocument.
+        /// Represents the relation between PdfObjectId and PdfReference for a PdfDocument.
         /// </summary>
-        public Dictionary<PdfObjectID, PdfReference> ObjectTable = new Dictionary<PdfObjectID, PdfReference>();
+        public Dictionary<PdfObjectId, PdfReference> ObjectTable = new Dictionary<PdfObjectId, PdfReference>();
 
         internal bool IsUnderConstruction
         {
@@ -66,14 +66,14 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public void Add(PdfReference iref)
         {
-            if (iref.ObjectID.IsEmpty)
-                iref.ObjectID = new PdfObjectID(GetNewObjectNumber());
+            if (iref.ObjectId.IsEmpty)
+                iref.ObjectId = new PdfObjectId(GetNewObjectNumber());
 
-            if (ObjectTable.ContainsKey(iref.ObjectID))
+            if (ObjectTable.ContainsKey(iref.ObjectId))
                 return;
             //     throw new InvalidOperationException("Object already in table.");
 
-            ObjectTable.Add(iref.ObjectID, iref);
+            ObjectTable.Add(iref.ObjectId, iref);
         }
 
         /// <summary>
@@ -86,31 +86,31 @@ namespace PeachPDF.PDF.Advanced
             else
                 Debug.Assert(value.Owner == _document);
 
-            if (value.ObjectID.IsEmpty)
-                value.SetObjectID(GetNewObjectNumber(), 0);
+            if (value.ObjectId.IsEmpty)
+                value.SetObjectId(GetNewObjectNumber(), 0);
 
-            if (ObjectTable.ContainsKey(value.ObjectID))
+            if (ObjectTable.ContainsKey(value.ObjectId))
                 return;
             // throw new InvalidOperationException("Object already in table.");
 
-            ObjectTable.Add(value.ObjectID, value.Reference);
+            ObjectTable.Add(value.ObjectId, value.Reference);
         }
 
         public void Remove(PdfReference iref)
         {
-            ObjectTable.Remove(iref.ObjectID);
+            ObjectTable.Remove(iref.ObjectId);
         }
 
         /// <summary>
         /// Gets a cross reference entry from an object identifier.
         /// Returns null if no object with the specified ID exists in the object table.
         /// </summary>
-        public PdfReference this[PdfObjectID objectID]
+        public PdfReference this[PdfObjectId objectId]
         {
             get
             {
                 PdfReference iref;
-                ObjectTable.TryGetValue(objectID, out iref);
+                ObjectTable.TryGetValue(objectId, out iref);
                 return iref;
             }
         }
@@ -118,23 +118,23 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Indicates whether the specified object identifier is in the table.
         /// </summary>
-        public bool Contains(PdfObjectID objectID)
+        public bool Contains(PdfObjectId objectId)
         {
-            return ObjectTable.ContainsKey(objectID);
+            return ObjectTable.ContainsKey(objectId);
         }
 
-        //public PdfObject GetObject(PdfObjectID objectID)
+        //public PdfObject GetObject(PdfObjectId objectId)
         //{
-        //  return this[objectID].Value;
+        //  return this[objectId].Value;
         //}
 
         //    /// <summary>
         //    /// Gets the entry for the specified object, or null, if the object is not in
         //    /// this XRef table.
         //    /// </summary>
-        //    internal PdfReference GetEntry(PdfObjectID objectID)
+        //    internal PdfReference GetEntry(PdfObjectId objectId)
         //    {
-        //      return this[objectID];
+        //      return this[objectId];
         //    }
 
         /// <summary>
@@ -174,14 +174,14 @@ namespace PeachPDF.PDF.Advanced
         /// <summary>
         /// Gets an array of all object identifiers. For debugging purposes only.
         /// </summary>
-        internal PdfObjectID[] AllObjectIDs
+        internal PdfObjectId[] AllObjectIds
         {
             get
             {
                 ICollection collection = ObjectTable.Keys;
-                PdfObjectID[] objectIDs = new PdfObjectID[collection.Count];
-                collection.CopyTo(objectIDs, 0);
-                return objectIDs;
+                PdfObjectId[] objectIds = new PdfObjectId[collection.Count];
+                collection.CopyTo(objectIds, 0);
+                return objectIds;
             }
         }
 
@@ -192,7 +192,7 @@ namespace PeachPDF.PDF.Advanced
         {
             get
             {
-                Dictionary<PdfObjectID, PdfReference>.ValueCollection collection = ObjectTable.Values;
+                Dictionary<PdfObjectId, PdfReference>.ValueCollection collection = ObjectTable.Values;
                 List<PdfReference> list = new List<PdfReference>(collection);
                 list.Sort(PdfReference.Comparer);
                 PdfReference[] irefs = new PdfReference[collection.Count];
@@ -221,7 +221,7 @@ namespace PeachPDF.PDF.Advanced
             ObjectTable.Clear();
             foreach (PdfReference iref in irefs)
             {
-                ObjectTable.Add(iref.ObjectID, iref);
+                ObjectTable.Add(iref.ObjectId, iref);
                 _maxObjectNumber = Math.Max(_maxObjectNumber, iref.ObjectNumber);
             }
             //CheckConsistence();
@@ -242,9 +242,9 @@ namespace PeachPDF.PDF.Advanced
             for (int idx = 0; idx < count; idx++)
             {
                 PdfReference iref = irefs[idx];
-                iref.ObjectID = new PdfObjectID(idx + 1);
+                iref.ObjectId = new PdfObjectId(idx + 1);
                 // Rehash with new number.
-                ObjectTable.Add(iref.ObjectID, iref);
+                ObjectTable.Add(iref.ObjectId, iref);
             }
             _maxObjectNumber = count;
             //CheckConsistence();
@@ -264,11 +264,11 @@ namespace PeachPDF.PDF.Advanced
                 ht1.Add(iref, null);
             }
 
-            Dictionary<PdfObjectID, object> ht2 = new Dictionary<PdfObjectID, object>();
+            Dictionary<PdfObjectId, object> ht2 = new Dictionary<PdfObjectId, object>();
             foreach (PdfReference iref in ObjectTable.Values)
             {
-                Debug.Assert(!ht2.ContainsKey(iref.ObjectID), "Duplicate iref.");
-                ht2.Add(iref.ObjectID, null);
+                Debug.Assert(!ht2.ContainsKey(iref.ObjectId), "Duplicate iref.");
+                ht2.Add(iref.ObjectId, null);
             }
 
             ICollection collection = ObjectTable.Values;
@@ -283,7 +283,7 @@ namespace PeachPDF.PDF.Advanced
                         Debug.Assert(irefs[i] != irefs[j]);
                         Debug.Assert(!ReferenceEquals(irefs[i], irefs[j]));
                         Debug.Assert(!ReferenceEquals(irefs[i].Value, irefs[j].Value));
-                        Debug.Assert(!Equals(irefs[i].ObjectID, irefs[j].Value.ObjectID));
+                        Debug.Assert(!Equals(irefs[i].ObjectId, irefs[j].Value.ObjectId));
                         Debug.Assert(irefs[i].ObjectNumber != irefs[j].Value.ObjectNumber);
                         Debug.Assert(ReferenceEquals(irefs[i].Document, irefs[j].Document));
                         GetType();
@@ -384,7 +384,7 @@ namespace PeachPDF.PDF.Advanced
                     if (iref != null)
                     {
                         if (!ReferenceEquals(iref.Document, _document))
-                            Debug.WriteLine(String.Format("Bad iref: {0}", iref.ObjectID.ToString()));
+                            Debug.WriteLine(String.Format("Bad iref: {0}", iref.ObjectId.ToString()));
                         Debug.Assert(ReferenceEquals(iref.Document, _document) || iref.Document == null, "External object detected!");
 
                         if (!objects.ContainsKey(iref))
@@ -394,7 +394,7 @@ namespace PeachPDF.PDF.Advanced
                             {
                                 if (value == null)
                                 {
-                                    iref = ObjectTable[iref.ObjectID];
+                                    iref = ObjectTable[iref.ObjectId];
                                     Debug.Assert(iref.Value != null);
                                     value = iref.Value;
                                 }

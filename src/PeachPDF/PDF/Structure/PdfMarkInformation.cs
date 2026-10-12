@@ -31,20 +31,20 @@ namespace PeachPDF.PDF.Structure
         {
             // Reference: ISO 32000-1 Table 321 - Entries in the mark information dictionary
 
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string Marked = "/Marked";
 
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string UserProperties = "/UserProperties";
 
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string Suspects = "/Suspects";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

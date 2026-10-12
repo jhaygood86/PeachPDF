@@ -127,7 +127,7 @@ namespace PeachPDF.PDF.Annotations
         }
 
         /// <summary>
-        /// Gets or sets the text label to be displayed in the title bar of the annotation�s
+        /// Gets or sets the text label to be displayed in the title bar of the annotation's
         /// pop-up window when open and active. By convention, this entry identifies
         /// the user who added the annotation.
         /// </summary>
@@ -157,7 +157,7 @@ namespace PeachPDF.PDF.Annotations
 
         /// <summary>
         /// Gets or sets the text to be displayed for the annotation or, if this type of
-        /// annotation does not display text, an alternate description of the annotation�s
+        /// annotation does not display text, an alternate description of the annotation's
         /// contents in human-readable form.
         /// </summary>
         public string Contents
@@ -238,30 +238,30 @@ namespace PeachPDF.PDF.Annotations
             /// (Optional) The type of PDF object that this dictionary describes; if present,
             /// must be Annot for an annotation dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional, FixedValue = "Annot")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Annot")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) The type of annotation that this dictionary describes.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string Subtype = "/Subtype";
 
             /// <summary>
             /// (Required) The annotation rectangle, defining the location of the annotation
             /// on the page in default user space units.
             /// </summary>
-            [KeyInfo(KeyType.Rectangle | KeyType.Required)]
+            [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required)]
             public const string Rect = "/Rect";
 
             /// <summary>
             /// (Optional) Text to be displayed for the annotation or, if this type of annotation
-            /// does not display text, an alternate description of the annotation�s contents
+            /// does not display text, an alternate description of the annotation's contents
             /// in human-readable form. In either case, this text is useful when
-            /// extracting the document�s contents in support of accessibility to users with
+            /// extracting the document's contents in support of accessibility to users with
             /// disabilities or for other purposes.
             /// </summary>
-            [KeyInfo(KeyType.TextString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string Contents = "/Contents";
 
             // P
@@ -270,7 +270,7 @@ namespace PeachPDF.PDF.Annotations
             /// (Optional; PDF 1.4) The annotation name, a text string uniquely identifying it
             /// among all the annotations on its page.
             /// </summary>
-            [KeyInfo(KeyType.TextString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string NM = "/NM";
 
             /// <summary>
@@ -278,21 +278,21 @@ namespace PeachPDF.PDF.Annotations
             /// modified. The preferred format is a date string, but viewer applications should be 
             /// prepared to accept and display a string in any format.
             /// </summary>
-            [KeyInfo(KeyType.Date | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Date | PdfKeyType.Optional)]
             public const string M = "/M";
 
             /// <summary>
             /// (Optional; PDF 1.1) A set of flags specifying various characteristics of the annotation.
             /// Default value: 0.
             /// </summary>
-            [KeyInfo("1.1", KeyType.Integer | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string F = "/F";
 
             /// <summary>
             /// (Optional; PDF 1.2) A border style dictionary specifying the characteristics of
-            /// the annotation�s border.
+            /// the annotation's border.
             /// </summary>
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string BS = "/BS";
 
             /// <summary>
@@ -300,19 +300,19 @@ namespace PeachPDF.PDF.Annotations
             /// is presented visually on the page. Individual annotation handlers may ignore
             /// this entry and provide their own appearances.
             /// </summary>
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string AP = "/AP";
 
             /// <summary>
             /// (Required if the appearance dictionary AP contains one or more subdictionaries; PDF 1.2)
-            /// The annotation�s appearance state, which selects the applicable appearance stream from 
+            /// The annotation's appearance state, which selects the applicable appearance stream from 
             /// an appearance subdictionary.
             /// </summary>
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string AS = "/AS";
 
             /// <summary>
-            /// (Optional) An array specifying the characteristics of the annotation�s border.
+            /// (Optional) An array specifying the characteristics of the annotation's border.
             /// The border is specified as a rounded rectangle.
             /// In PDF 1.0, the array consists of three numbers defining the horizontal corner 
             /// radius, vertical corner radius, and border width, all in default user space units.
@@ -326,18 +326,18 @@ namespace PeachPDF.PDF.Annotations
             /// dash phase is specified; the phase is assumed to be 0.
             /// Note: In PDF 1.2 or later, this entry may be ignored in favor of the BS entry.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Border = "/Border";
 
             /// <summary>
             /// (Optional; PDF 1.1) An array of three numbers in the range 0.0 to 1.0, representing
             /// the components of a color in the DeviceRGB color space. This color is used for the
             /// following purposes:
-            /// � The background of the annotation�s icon when closed
-            /// � The title bar of the annotation�s pop-up window
-            /// � The border of a link annotation
+            /// - The background of the annotation's icon when closed
+            /// - The title bar of the annotation's pop-up window
+            /// - The border of a link annotation
             /// </summary>
-            [KeyInfo("1.1", KeyType.Array | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Array | PdfKeyType.Optional)]
             public const string C = "/C";
 
             /// <summary>
@@ -345,7 +345,7 @@ namespace PeachPDF.PDF.Annotations
             /// Note: This entry is not permitted in link annotations if a Dest entry is present.
             /// Also note that the A entry in movie annotations has a different meaning.
             /// </summary>
-            [KeyInfo("1.1", KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey("1.1", PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string A = "/A";
 
             // AA
@@ -354,7 +354,7 @@ namespace PeachPDF.PDF.Annotations
             /// (Required if the annotation is a structural content item; PDF 1.3) The integer
             /// key of the annotation's entry in the structure parent tree.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Integer | KeyType.Optional)]
+            [PdfKey("1.3", PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string StructParent = "/StructParent";
 
             // OC
@@ -362,18 +362,18 @@ namespace PeachPDF.PDF.Annotations
             // ----- Excerpt of entries specific to markup annotations ----------------------------------
 
             /// <summary>
-            /// (Optional; PDF 1.1) The text label to be displayed in the title bar of the annotation�s
+            /// (Optional; PDF 1.1) The text label to be displayed in the title bar of the annotation's
             /// pop-up window when open and active. By convention, this entry identifies
             /// the user who added the annotation.
             /// </summary>
-            [KeyInfo(KeyType.TextString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string T = "/T";
 
             /// <summary>
             /// (Optional; PDF 1.3) An indirect reference to a pop-up annotation for entering or
             /// editing the text associated with this annotation.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Popup = "/Popup";
 
             /// <summary>
@@ -383,12 +383,12 @@ namespace PeachPDF.PDF.Annotations
             /// the annotation is opened.
             /// The specified value is not used if the annotation has an appearance stream; in that
             /// case, the appearance stream must specify any transparency. (However, if the viewer
-            /// regenerates the annotation�s appearance stream, it may incorporate the CA value
-            /// into the stream�s content.)
+            /// regenerates the annotation's appearance stream, it may incorporate the CA value
+            /// into the stream's content.)
             /// The implicit blend mode is Normal.
             /// Default value: 1.0.
             /// </summary>
-            [KeyInfo(KeyType.Real | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
             public const string CA = "/CA";
 
             //RC
@@ -399,7 +399,7 @@ namespace PeachPDF.PDF.Annotations
             /// (Optional; PDF 1.5) Text representing a short description of the subject being
             /// addressed by the annotation.
             /// </summary>
-            [KeyInfo("1.5", KeyType.TextString | KeyType.Optional)]
+            [PdfKey("1.5", PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string Subj = "/Subj";
 
             //RT

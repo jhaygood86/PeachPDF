@@ -137,13 +137,13 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) The type of PDF object that this dictionary describes;
             /// must be Font for a CIDFont dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Font")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Font")]
             public new const string Type = "/Type";
 
             /// <summary>
             /// (Required) The type of CIDFont; CIDFontType0 or CIDFontType2.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public new const string Subtype = "/Subtype";
 
             /// <summary>
@@ -152,28 +152,28 @@ namespace PeachPDF.PDF.Advanced
             /// Type 2 CIDFonts, it is derived the same way as for a simple TrueType font;
             /// In either case, the name can have a subset prefix if appropriate.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public new const string BaseFont = "/BaseFont";
 
             /// <summary>
             /// (Required) A dictionary containing entries that define the character collection
             /// of the CIDFont.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string CIDSystemInfo = "/CIDSystemInfo";
 
             /// <summary>
             /// (Required; must be an indirect reference) A font descriptor describing the
             /// CIDFont’s default metrics other than its glyph widths.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.MustBeIndirect, typeof(PdfFontDescriptor))]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.MustBeIndirect, typeof(PdfFontDescriptor))]
             public new const string FontDescriptor = "/FontDescriptor";
 
             /// <summary>
             /// (Optional) The default width for glyphs in the CIDFont.
             /// Default value: 1000.
             /// </summary>
-            [KeyInfo(KeyType.Integer)]
+            [PdfKey(PdfKeyType.Integer)]
             public const string DW = "/DW";
 
             /// <summary>
@@ -182,7 +182,7 @@ namespace PeachPDF.PDF.Advanced
             /// for consecutive CIDs or one width for a range of CIDs.
             /// Default value: none (the DW value is used for all glyphs).
             /// </summary>
-            [KeyInfo(KeyType.Array, typeof(PdfArray))]
+            [PdfKey(PdfKeyType.Array, typeof(PdfArray))]
             public const string W = "/W";
 
             /// <summary>
@@ -190,7 +190,7 @@ namespace PeachPDF.PDF.Advanced
             /// numbers specifying the default metrics for vertical writing.
             /// Default value: [880 −1000].
             /// </summary>
-            [KeyInfo(KeyType.Array)]
+            [PdfKey(PdfKeyType.Array)]
             public const string DW2 = "/DW2";
 
             /// <summary>
@@ -198,7 +198,7 @@ namespace PeachPDF.PDF.Advanced
             /// of the metrics for vertical writing for the glyphs in the CIDFont.
             /// Default value: none (the DW2 value is used for all glyphs).
             /// </summary>
-            [KeyInfo(KeyType.Array, typeof(PdfArray))]
+            [PdfKey(PdfKeyType.Array, typeof(PdfArray))]
             public const string W2 = "/W2";
 
             /// <summary>
@@ -213,23 +213,23 @@ namespace PeachPDF.PDF.Advanced
             /// This entry may appear only in a Type 2 CIDFont whose associated True-Type font 
             /// program is embedded in the PDF file.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.StreamOrName)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.StreamOrName)]
             public const string CIDToGIDMap = "/CIDToGIDMap";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

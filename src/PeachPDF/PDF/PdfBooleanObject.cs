@@ -82,7 +82,7 @@ namespace PeachPDF.PDF
         }
 
         /// <summary>
-        /// Writes the keyword �false� or �true�.
+        /// Writes the keyword "false" or "true".
         /// </summary>
         internal override void WriteObject(PdfWriter writer)
         {

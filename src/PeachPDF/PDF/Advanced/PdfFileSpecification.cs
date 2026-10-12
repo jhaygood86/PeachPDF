@@ -109,7 +109,7 @@ namespace PeachPDF.PDF.Advanced
             /// The type of PDF object that this dictionary describes; must be Filespec 
             /// for a file specification dictionary (see implementation note 45 in Appendix H).
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional, FixedValue = "Filespec")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Filespec")]
             public const string Type = "/Type";
 
             /// <summary>
@@ -122,7 +122,7 @@ namespace PeachPDF.PDF.Advanced
             /// The UF entry provides cross-platform and cross-language compatibility and the F 
             /// entry provides backwards compatibility
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string F = "/F";
 
             /// <summary>
@@ -137,7 +137,7 @@ namespace PeachPDF.PDF.Advanced
             /// Note: It is recommended that the F and UF entries be used in place of the DOS, 
             /// Mac, or Unix entries.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string EF = "/EF";
 
             /// <summary>
@@ -145,13 +145,13 @@ namespace PeachPDF.PDF.Advanced
             /// file specification of the form described in the PDF specification - the cross-platform,
             /// cross-language counterpart of F.
             /// </summary>
-            [KeyInfo(KeyType.String | KeyType.Optional)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
             public const string UF = "/UF";
 
             /// <summary>
             /// (Optional; PDF 1.6) A text string describing the file.
             /// </summary>
-            [KeyInfo(KeyType.String | KeyType.Optional)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
             public const string Desc = "/Desc";
 
             /// <summary>
@@ -159,23 +159,23 @@ namespace PeachPDF.PDF.Advanced
             /// object it's associated with - one of /Source, /Data, /Alternative, /Supplement,
             /// /EncryptedPayload, /FormData, /Schema, or /Unspecified (ISO 32000-2 Table 43).
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string AFRelationship = "/AFRelationship";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return meta ??= CreateMeta(typeof(Keys)); }
             }
-            static DictionaryMeta meta = null!;
+            static PdfDictionaryMetadata meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

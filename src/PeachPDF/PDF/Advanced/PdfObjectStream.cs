@@ -62,20 +62,20 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) The type of PDF object that this dictionary describes;
             /// must be ObjStmfor an object stream.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "ObjStm")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "ObjStm")]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) The number of compressed objects in the stream.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string N = "/N";
 
             /// <summary>
             /// (Required) The byte offset (in the decoded stream) of the first
             /// compressed object.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string First = "/First";
 
             /// <summary>
@@ -84,7 +84,7 @@ namespace PeachPDF.PDF.Advanced
             /// a collection of object streams (see below). A given collection consists
             /// of a set of streams whose Extendslinks form a directed acyclic graph.
             /// </summary>
-            [KeyInfo(KeyType.Stream | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string Extends = "/Extends";
         }
     }

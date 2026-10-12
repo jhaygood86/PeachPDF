@@ -123,13 +123,13 @@ namespace PeachPDF.PDF.Advanced
             /// (Required) The type of PDF object that this dictionary describes;
             /// must be Font for a font dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required, FixedValue = "Font")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Font")]
             public new const string Type = "/Type";
 
             /// <summary>
             /// (Required) The type of font; must be Type0 for a Type 0 font.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public new const string Subtype = "/Subtype";
 
             /// <summary>
@@ -138,11 +138,11 @@ namespace PeachPDF.PDF.Advanced
             /// dictionary. The conventions described here ensure maximum compatibility
             /// with existing Acrobat products.
             /// If the descendant is a Type 0 CIDFont, this name should be the concatenation
-            /// of the CIDFont�s BaseFont name, a hyphen, and the CMap name given in the
+            /// of the CIDFont's BaseFont name, a hyphen, and the CMap name given in the
             /// Encoding entry (or the CMapName entry in the CMap). If the descendant is a
-            /// Type 2 CIDFont, this name should be the same as the CIDFont�s BaseFont name.
+            /// Type 2 CIDFont, this name should be the same as the CIDFont's BaseFont name.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public new const string BaseFont = "/BaseFont";
 
             /// <summary>
@@ -151,27 +151,27 @@ namespace PeachPDF.PDF.Advanced
             /// Type 2 CIDFont whose associated TrueType font program is not embedded
             /// in the PDF file, the Encoding entry must be a predefined CMap name.
             /// </summary>
-            [KeyInfo(KeyType.StreamOrName | KeyType.Required)]
+            [PdfKey(PdfKeyType.StreamOrName | PdfKeyType.Required)]
             public const string Encoding = "/Encoding";
 
             /// <summary>
             /// (Required) A one-element array specifying the CIDFont dictionary that is the
             /// descendant of this Type 0 font.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Required)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Required)]
             public const string DescendantFonts = "/DescendantFonts";
 
             /// <summary>
             /// ((Optional) A stream containing a CMap file that maps character codes to
             /// Unicode values.
             /// </summary>
-            [KeyInfo(KeyType.Stream | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string ToUnicode = "/ToUnicode";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get
                 {
@@ -180,13 +180,13 @@ namespace PeachPDF.PDF.Advanced
                     return Keys._meta = null!;
                 }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

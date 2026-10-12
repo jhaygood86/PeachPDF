@@ -2,7 +2,7 @@
 //
 // Accumulates PDF page/form content directly as raw bytes. PDF content operators
 // are ASCII, while encoded text strings use the same byte-to-char identity mapping
-// as PdfEncoders.RawEncoding.
+// as PdfEncoders.LatinOneByteEncoding.
 //
 #endregion
 
@@ -194,7 +194,7 @@ namespace PeachPDF.PDF.Rendering
         }
 
         public override string ToString()
-            => PdfEncoders.RawEncoding.GetString(ToArray());
+            => PdfEncoders.LatinOneByteEncoding.GetString(ToArray());
 
         private void EnsureCurrentChunk()
         {

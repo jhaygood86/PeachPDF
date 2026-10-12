@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.PdfEngineTests
 {
     /// <summary>
     /// Regression tests for a bug introduced in commit 6183dc9 where
-    /// PdfObject.SetObjectID accidentally nulled _document via the expression
+    /// PdfObject.SetObjectId accidentally nulled _document via the expression
     ///   _iref.Document = _document = null!
     /// instead of the original
     ///   _iref.Document = _document

@@ -101,7 +101,7 @@ namespace PeachPDF.PDF.Advanced
             // The pattern space is y down and both kinds of tile are the right way up in y-up space, so the tile is placed flipped.
             var content = string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "q {0:0.####} 0 0 {1:0.####} 0 {2:0.####} cm {3} Do Q\n", cx, -cy, brush.CellHeight, name);
-            Stream = new PdfStream(PdfEncoders.RawEncoding.GetBytes(content), this);
+            Stream = new PdfStream(PdfEncoders.LatinOneByteEncoding.GetBytes(content), this);
             Elements.SetInteger("/Length", Stream.Length);
         }
 
@@ -128,22 +128,22 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional) The type of PDF object that this dictionary describes; if present,
             /// must be Pattern for a pattern dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) A code identifying the type of pattern that this dictionary describes;
             /// must be 1 for a tiling pattern.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string PatternType = "/PatternType";
 
             /// <summary>
             /// (Required) A code that determines how the color of the pattern cell is to be specified:
-            /// 1: Colored tiling pattern. The pattern�s content stream specifies the colors used to 
+            /// 1: Colored tiling pattern. The pattern's content stream specifies the colors used to 
             /// paint the pattern cell. When the content stream begins execution, the current color
-            /// is the one that was initially in effect in the pattern�s parent content stream.
-            /// 2: Uncolored tiling pattern. The pattern�s content stream does not specify any color
+            /// is the one that was initially in effect in the pattern's parent content stream.
+            /// 2: Uncolored tiling pattern. The pattern's content stream does not specify any color
             /// information. Instead, the entire pattern cell is painted with a separately specified color
             /// each time the pattern is used. Essentially, the content stream describes a stencil
             /// through which the current color is to be poured. The content stream must not invoke
@@ -151,13 +151,13 @@ namespace PeachPDF.PDF.Advanced
             /// otherwise, an error occurs. The content stream may paint an image mask, however,
             /// since it does not specify any color information.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string PaintType = "/PaintType";
 
             /// <summary>
             /// (Required) A code that controls adjustments to the spacing of tiles relative to the device
             /// pixel grid:
-            /// 1: Constant spacing. Pattern cells are spaced consistently�that is, by a multiple of a
+            /// 1: Constant spacing. Pattern cells are spaced consistently - that is, by a multiple of a
             /// device pixel. To achieve this, the application may need to distort the pattern cell slightly
             /// by making small adjustments to XStep, YStep, and the transformation matrix. The amount
             /// of distortion does not exceed 1 device pixel.
@@ -168,22 +168,22 @@ namespace PeachPDF.PDF.Advanced
             /// 3: Constant spacing and faster tiling. Pattern cells are spaced consistently as in tiling
             /// type 1 but with additional distortion permitted to enable a more efficient implementation. 
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string TilingType = "/TilingType";
 
             /// <summary>
             /// (Required) An array of four numbers in the pattern coordinate system giving the
             /// coordinates of the left, bottom, right, and top edges, respectively, of the pattern
-            /// cell�s bounding box. These boundaries are used to clip the pattern cell.
+            /// cell's bounding box. These boundaries are used to clip the pattern cell.
             /// </summary>
-            [KeyInfo(KeyType.Rectangle | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional)]
             public const string BBox = "/BBox";
 
             /// <summary>
             /// (Required) The desired horizontal spacing between pattern cells, measured in the
             /// pattern coordinate system.
             /// </summary>
-            [KeyInfo(KeyType.Real | KeyType.Required)]
+            [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
             public const string XStep = "/XStep";
 
             /// <summary>
@@ -192,37 +192,37 @@ namespace PeachPDF.PDF.Advanced
             /// pattern cell implied by the BBox entry. This allows tiling with irregularly shaped figures.
             /// XStep and YStep may be either positive or negative but not zero.
             /// </summary>
-            [KeyInfo(KeyType.Real | KeyType.Required)]
+            [PdfKey(PdfKeyType.Real | PdfKeyType.Required)]
             public const string YStep = "/YStep";
 
             /// <summary>
             /// (Required) A resource dictionary containing all of the named resources required by
-            /// the pattern�s content stream (see Section 3.7.2, �Resource Dictionaries�).
+            /// the pattern's content stream (see Section 3.7.2, "Resource Dictionaries").
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public new const string Resources = "/Resources";
 
             /// <summary>
             /// (Optional) An array of six numbers specifying the pattern matrix.
             /// Default value: the identity matrix [1 0 0 1 0 0].
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Matrix = "/Matrix";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
             /// </summary>
-            internal static DictionaryMeta Meta
+            internal static PdfDictionaryMetadata Meta
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
         /// <summary>
         /// Gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal override DictionaryMeta Meta
+        internal override PdfDictionaryMetadata Meta
         {
             get { return Keys.Meta; }
         }

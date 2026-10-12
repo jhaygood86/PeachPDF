@@ -260,7 +260,7 @@ namespace PeachPDF.PDF
         /// <summary>
         /// When overridden in a derived class, gets the KeysMeta of this dictionary type.
         /// </summary>
-        internal virtual DictionaryMeta Meta
+        internal virtual PdfDictionaryMetadata Meta
         {
             get { return null; }
         }
@@ -979,10 +979,10 @@ namespace PeachPDF.PDF
             Type GetValueType(string key)  // TODO: move to PdfObject
             {
                 Type type = null;
-                DictionaryMeta meta = _ownerDictionary.Meta;
+                PdfDictionaryMetadata meta = _ownerDictionary.Meta;
                 if (meta != null)
                 {
-                    KeyDescriptor kd = meta[key];
+                    PdfKeyDescriptor kd = meta[key];
                     if (kd != null)
                         type = kd.GetValueType();
                     //else
@@ -1549,7 +1549,7 @@ namespace PeachPDF.PDF
                 if (_value == null)
                     return "«null»";
 
-                return PdfEncoders.RawEncoding.GetString(_value, 0, _value.Length);
+                return PdfEncoders.LatinOneByteEncoding.GetString(_value, 0, _value.Length);
             }
 
             //internal void WriteObject_(Stream stream)
@@ -1563,7 +1563,7 @@ namespace PeachPDF.PDF
             ///// </summary>
             //public static byte[] RawEncode(string content)
             //{
-            //    return PdfEncoders.RawEncoding.GetBytes(content);
+            //    return PdfEncoders.LatinOneByteEncoding.GetBytes(content);
             //}
 
             /// <summary>
@@ -1579,7 +1579,7 @@ namespace PeachPDF.PDF
                 /// EOL marker, preceding endstream, that is not included in the count and is not logically
                 /// part of the stream data.)
                 /// </summary>
-                [KeyInfo(KeyType.Integer | KeyType.Required)]
+                [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
                 public const string Length = "/Length";
 
                 /// <summary>
@@ -1587,7 +1587,7 @@ namespace PeachPDF.PDF
                 /// the keywords stream and endstream, or an array of such names. Multiple filters should be
                 /// specified in the order in which they are to be applied.
                 /// </summary>
-                [KeyInfo(KeyType.NameOrArray | KeyType.Optional)]
+                [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Optional)]
                 public const string Filter = "/Filter";
 
                 /// <summary>
@@ -1601,7 +1601,7 @@ namespace PeachPDF.PDF
                 /// their default values). If none of the filters have parameters, or if all their parameters
                 /// have default values, the DecodeParms entry may be omitted.
                 /// </summary>
-                [KeyInfo(KeyType.ArrayOrDictionary | KeyType.Optional)]
+                [PdfKey(PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
                 public const string DecodeParms = "/DecodeParms";
 
                 /// <summary>
@@ -1611,21 +1611,21 @@ namespace PeachPDF.PDF
                 /// However, the Length entry should still specify the number of those bytes. (Usually, there are
                 /// no bytes and Length is 0.)
                 /// </summary>
-                [KeyInfo("1.2", KeyType.String | KeyType.Optional)]
+                [PdfKey("1.2", PdfKeyType.String | PdfKeyType.Optional)]
                 public const string F = "/F";
 
                 /// <summary>
                 /// (Optional; PDF 1.2) The name of a filter to be applied in processing the data found in the
                 /// stream’s external file, or an array of such names. The same rules apply as for Filter.
                 /// </summary>
-                [KeyInfo("1.2", KeyType.NameOrArray | KeyType.Optional)]
+                [PdfKey("1.2", PdfKeyType.NameOrArray | PdfKeyType.Optional)]
                 public const string FFilter = "/FFilter";
 
                 /// <summary>
                 /// (Optional; PDF 1.2) A parameter dictionary, or an array of such dictionaries, used by the
                 /// filters specified by FFilter. The same rules apply as for DecodeParms.
                 /// </summary>
-                [KeyInfo("1.2", KeyType.ArrayOrDictionary | KeyType.Optional)]
+                [PdfKey("1.2", PdfKeyType.ArrayOrDictionary | PdfKeyType.Optional)]
                 public const string FDecodeParms = "/FDecodeParms";
 
                 /// <summary>
@@ -1635,7 +1635,7 @@ namespace PeachPDF.PDF
                 /// This value should be considered a hint only; for some stream filters, it may not be possible
                 /// to determine this value precisely.
                 /// </summary>
-                [KeyInfo("1.5", KeyType.Integer | KeyType.Optional)]
+                [PdfKey("1.5", PdfKeyType.Integer | PdfKeyType.Optional)]
                 public const string DL = "/DL";
 
                 // ReSharper restore InconsistentNaming
@@ -1652,7 +1652,7 @@ namespace PeachPDF.PDF
             get
             {
                 return String.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
-                    ObjectID.DebuggerDisplay,
+                    ObjectId.DebuggerDisplay,
                     Elements.Count,
                     _elements.DebuggerDisplay);
             }

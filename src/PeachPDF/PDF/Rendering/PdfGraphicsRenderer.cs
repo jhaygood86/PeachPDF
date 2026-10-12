@@ -436,9 +436,9 @@ namespace PeachPDF.PDF.Rendering
                 }
                 s = sb.ToString();
 
-                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
+                byte[] bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(s);
                 bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-                text = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+                text = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
 
                 // Map absolute position to PDF world space.
                 PaintPoint pos = new PaintPoint(x, y);
@@ -607,9 +607,9 @@ namespace PeachPDF.PDF.Rendering
                 PaintPoint glyphPos = WorldToView(new PaintPoint(glyphX, glyphY));
                 AdjustTdOffset(ref glyphPos, 0, null);
 
-                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
+                byte[] bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
                 bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-                string glyphText = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+                string glyphText = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
 
                 AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", glyphPos.X, glyphPos.Y, glyphText);
 
@@ -659,9 +659,9 @@ namespace PeachPDF.PDF.Rendering
                 PaintPoint pos = WorldToView(new PaintPoint(glyph.X, glyph.Y));
                 AdjustTdOffset(ref pos, 0, null);
 
-                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
+                byte[] bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
                 bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-                string glyphText = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+                string glyphText = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
 
                 AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, glyphText);
             }
@@ -911,67 +911,6 @@ namespace PeachPDF.PDF.Rendering
         // --------------------------------------------------------------------------------------------
 
         #region Append to PDF stream
-
-        /// <summary>
-        /// Normalizes the start/sweep angles of AppendPartialArc into a start angle α, an end angle β
-        /// (both 0..360), whether the arc spans at most 90° (so a single quadrant may suffice), and
-        /// whether it sweeps clockwise.
-        /// </summary>
-        static (double alpha, double beta, bool smallAngle, bool clockwise) NormalizeArcAngles(double startAngle, double sweepAngle)
-        {
-            double α = startAngle;
-            if (α < 0)
-                α = α + (1 + Math.Floor((Math.Abs(α) / 360))) * 360;
-            else if (α > 360)
-                α = α - Math.Floor(α / 360) * 360;
-            Debug.Assert(α >= 0 && α <= 360);
-
-            double β = Math.Clamp(sweepAngle, -360, 360);
-
-            if (α == 0 && β < 0)
-                α = 360;
-            else if (α == 360 && β > 0)
-                α = 0;
-
-            // Is it possible that the arc is small starts and ends in same quadrant?
-            bool smallAngle = Math.Abs(β) <= 90;
-
-            β = α + β;
-            if (β < 0)
-                β = β + (1 + Math.Floor((Math.Abs(β) / 360))) * 360;
-
-            bool clockwise = sweepAngle > 0;
-
-            return (α, β, smallAngle, clockwise);
-        }
-
-        static int NextQuadrant(int currentQuadrant, bool clockwise)
-        {
-            if (clockwise)
-                return currentQuadrant == 3 ? 0 : currentQuadrant + 1;
-            return currentQuadrant == 0 ? 3 : currentQuadrant - 1;
-        }
-
-        /// <summary>
-        /// Gets the quadrant (0 through 3) of the specified angle. If the angle lies on an edge
-        /// (0, 90, 180, etc.) the result depends on the details how the angle is used.
-        /// </summary>
-        int Quadrant(double φ, bool start, bool clockwise)
-        {
-            Debug.Assert(φ >= 0);
-            if (φ > 360)
-                φ = φ - Math.Floor(φ / 360) * 360;
-
-            int quadrant = (int)(φ / 90);
-            if (quadrant * 90 == φ)
-            {
-                if ((start && !clockwise) || (!start && clockwise))
-                    quadrant = quadrant == 0 ? 3 : quadrant - 1;
-            }
-            else
-                quadrant = clockwise ? ((int)Math.Floor(φ / 90)) % 4 : (int)Math.Floor(φ / 90);
-            return quadrant;
-        }
 
         /// <summary>
         /// Appends a Bézier curve for a cardinal spline through pt1 and pt2.

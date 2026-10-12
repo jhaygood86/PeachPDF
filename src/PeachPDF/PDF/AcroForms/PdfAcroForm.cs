@@ -47,32 +47,32 @@ namespace PeachPDF.PDF.AcroForms
         /// </summary>
         internal sealed class Keys : KeysBase
         {
-            [KeyInfo(KeyType.Array | KeyType.Required | KeyType.MustBeIndirect)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Required | PdfKeyType.MustBeIndirect)]
             public const string Fields = "/Fields";
 
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string NeedAppearances = "/NeedAppearances";
 
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string SigFlags = "/SigFlags";
 
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string CO = "/CO";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string DR = "/DR";
 
-            [KeyInfo(KeyType.String | KeyType.Optional)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
             public const string DA = "/DA";
 
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string Q = "/Q";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

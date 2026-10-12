@@ -117,9 +117,9 @@ namespace PeachPDF.PDF.Structure
         /// </summary>
         internal static IEnumerable<PdfDictionary> GetKids(DictionaryElements elements)
         {
-            // GetObject (not GetValue) deliberately - "/K" has no single fixed KeyInfo type (it can
+            // GetObject (not GetValue) deliberately - "/K" has no single fixed PdfKey type (it can
             // hold a struct elem, an MCID integer, an /MCR, or an /OBJR), and GetValue's type
-            // transformation logic throws for a KeyType.Various key with no declared type.
+            // transformation logic throws for a PdfKeyType.Various key with no declared type.
             var k = elements.GetObject(Keys.K);
 
             if (k is PdfArray array)
@@ -165,42 +165,42 @@ namespace PeachPDF.PDF.Structure
         {
             // Reference: ISO 32000-1 Table 323 - Entries in a structure element dictionary
 
-            [KeyInfo(KeyType.Name | KeyType.Optional, FixedValue = "StructElem")]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "StructElem")]
             public const string Type = "/Type";
 
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string S = "/S";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Required)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
             public const string P = "/P";
 
-            [KeyInfo(KeyType.ByteString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.ByteString | PdfKeyType.Optional)]
             public const string ID = "/ID";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Pg = "/Pg";
 
-            [KeyInfo(KeyType.Various | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
             public const string K = "/K";
 
-            [KeyInfo(KeyType.TextString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string Lang = "/Lang";
 
-            [KeyInfo(KeyType.TextString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string Alt = "/Alt";
 
-            [KeyInfo(KeyType.TextString | KeyType.Optional)]
+            [PdfKey(PdfKeyType.TextString | PdfKeyType.Optional)]
             public const string ActualText = "/ActualText";
 
             // PDF 2.0 addition (ISO 32000-2 §14.13, "Associated files") - not in ISO 32000-1 Table 323.
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string AF = "/AF";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

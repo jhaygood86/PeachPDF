@@ -2,7 +2,7 @@
 //
 // Authors:
 //   Stefan Lange
-//   Thomas H�vel
+//   Thomas Hövel
 //
 // Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
 //
@@ -883,37 +883,37 @@ namespace PeachPDF.PDF.Advanced
             /// (Optional) The type of PDF object that this dictionary describes;
             /// if present, must be XObject for an image XObject.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string Type = "/Type";
 
             /// <summary>
             /// (Required) The type of XObject that this dictionary describes;
             /// must be Image for an image XObject.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Required)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
             public const string Subtype = "/Subtype";
 
             /// <summary>
             /// (Required) The width of the image, in samples.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string Width = "/Width";
 
             /// <summary>
             /// (Required) The height of the image, in samples.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string Height = "/Height";
 
             /// <summary>
             /// (Required for images, except those that use the JPXDecode filter; not allowed for image masks)
             /// The color space in which image samples are specified; it can be any type of color space except
             /// Pattern. If the image uses the JPXDecode filter, this entry is optional:
-            /// � If ColorSpace is present, any color space specifications in the JPEG2000 data are ignored.
-            /// � If ColorSpace is absent, the color space specifications in the JPEG2000 data are used.
+            /// - If ColorSpace is present, any color space specifications in the JPEG2000 data are ignored.
+            /// - If ColorSpace is absent, the color space specifications in the JPEG2000 data are used.
             ///   The Decode array is also ignored unless ImageMask is true.
             /// </summary>
-            [KeyInfo(KeyType.NameOrArray | KeyType.Required)]
+            [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Required)]
             public const string ColorSpace = "/ColorSpace";
 
             /// <summary>
@@ -930,14 +930,14 @@ namespace PeachPDF.PDF.Advanced
             /// If the image stream uses the JPXDecode filter, this entry is optional and ignored if present.
             /// The bit depth is determined in the process of decoding the JPEG2000 image.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string BitsPerComponent = "/BitsPerComponent";
 
             /// <summary>
             /// (Optional; PDF 1.1) The name of a color rendering intent to be used in rendering the image.
             /// Default value: the current rendering intent in the graphics state.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string Intent = "/Intent";
 
             /// <summary>
@@ -946,7 +946,7 @@ namespace PeachPDF.PDF.Advanced
             /// not be specified; unmasked areas are painted using the current nonstroking color.
             /// Default value: false.
             /// </summary>
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string ImageMask = "/ImageMask";
 
             /// <summary>
@@ -955,24 +955,24 @@ namespace PeachPDF.PDF.Advanced
             /// a range of colors to be applied to it as a color key mask. If ImageMask is true, this entry
             /// must not be present.
             /// </summary>
-            [KeyInfo(KeyType.StreamOrArray | KeyType.Optional)]
+            [PdfKey(PdfKeyType.StreamOrArray | PdfKeyType.Optional)]
             public const string Mask = "/Mask";
 
             /// <summary>
             /// (Optional) An array of numbers describing how to map image samples into the range of values
-            /// appropriate for the image�s color space. If ImageMask is true, the array must be either
+            /// appropriate for the image's color space. If ImageMask is true, the array must be either
             /// [0 1] or [1 0]; otherwise, its length must be twice the number of color components required 
             /// by ColorSpace. If the image uses the JPXDecode filter and ImageMask is false, Decode is ignored.
-            /// Default value: see �Decode Arrays�.
+            /// Default value: see "Decode Arrays".
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Decode = "/Decode";
 
             /// <summary>
             /// (Optional) A flag indicating whether image interpolation is to be performed. 
             /// Default value: false.
             /// </summary>
-            [KeyInfo(KeyType.Boolean | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
             public const string Interpolate = "/Interpolate";
 
             /// <summary>
@@ -980,7 +980,7 @@ namespace PeachPDF.PDF.Advanced
             /// elements within the array has no significance. This entry may not be present in an image 
             /// XObject that is itself an alternate image.
             /// </summary>
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Alternates = "/Alternates";
 
             /// <summary>
@@ -988,63 +988,63 @@ namespace PeachPDF.PDF.Advanced
             /// source of mask shape or mask opacity values in the transparent imaging model. The alpha 
             /// source parameter in the graphics state determines whether the mask values are interpreted as
             /// shape or opacity. If present, this entry overrides the current soft mask in the graphics state,
-            /// as well as the image�s Mask entry, if any. (However, the other transparency related graphics 
-            /// state parameters � blend mode and alpha constant � remain in effect.) If SMask is absent, the 
+            /// as well as the image's Mask entry, if any. (However, the other transparency related graphics 
+            /// state parameters " blend mode and alpha constant " remain in effect.) If SMask is absent, the 
             /// image has no associated soft mask (although the current soft mask in the graphics state may
             /// still apply).
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string SMask = "/SMask";
 
             /// <summary>
             /// (Optional for images that use the JPXDecode filter, meaningless otherwise; PDF 1.5)
             /// A code specifying how soft-mask information encoded with image samples should be used:
             /// 0 If present, encoded soft-mask image information should be ignored.
-            /// 1 The image�s data stream includes encoded soft-mask values. An application can create
+            /// 1 The image's data stream includes encoded soft-mask values. An application can create
             ///   a soft-mask image from the information to be used as a source of mask shape or mask 
             ///   opacity in the transparency imaging model.
-            /// 2 The image�s data stream includes color channels that have been preblended with a 
+            /// 2 The image's data stream includes color channels that have been preblended with a 
             ///   background; the image data also includes an opacity channel. An application can create
             ///   a soft-mask image with a Matte entry from the opacity channel information to be used as
             ///   a source of mask shape or mask opacity in the transparency model. If this entry has a 
             ///   nonzero value, SMask should not be specified.
             /// Default value: 0.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string SMaskInData = "/SMaskInData";
 
             /// <summary>
             /// (Required in PDF 1.0; optional otherwise) The name by which this image XObject is 
             /// referenced in the XObject subdictionary of the current resource dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string Name = "/Name";
 
             /// <summary>
             /// (Required if the image is a structural content item; PDF 1.3) The integer key of the 
-            /// image�s entry in the structural parent tree.
+            /// image's entry in the structural parent tree.
             /// </summary>
-            [KeyInfo(KeyType.Integer | KeyType.Required)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Required)]
             public const string StructParent = "/StructParent";
 
             /// <summary>
-            /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of the image�s
+            /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of the image's
             /// parent Web Capture content set.
             /// </summary>
-            [KeyInfo(KeyType.String | KeyType.Optional)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
             public const string ID = "/ID";
 
             /// <summary>
             /// (Optional; PDF 1.2) An OPI version dictionary for the image. If ImageMask is true, 
             /// this entry is ignored.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string OPI = "/OPI";
 
             /// <summary>
             /// (Optional; PDF 1.4) A metadata stream containing metadata for the image.
             /// </summary>
-            [KeyInfo(KeyType.Stream | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
             public const string Metadata = "/Metadata";
 
             /// <summary>
@@ -1053,7 +1053,7 @@ namespace PeachPDF.PDF.Advanced
             /// processed, its visibility is determined based on this entry. If it is determined to be 
             /// invisible, the entire image is skipped, as if there were no Do operator to invoke it.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string OC = "/OC";
 
             // ReSharper restore InconsistentNaming

@@ -81,41 +81,41 @@ namespace PeachPDF.PDF.AcroForms
         /// </summary>
         internal new class Keys : PdfAnnotation.Keys
         {
-            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
             public const string FT = "/FT";
 
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
             public const string Parent = "/Parent";
 
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Kids = "/Kids";
 
-            [KeyInfo(KeyType.String | KeyType.Optional)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
             public const string TU = "/TU";
 
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string Ff = "/Ff";
 
-            [KeyInfo(KeyType.Various | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
             public const string V = "/V";
 
-            [KeyInfo(KeyType.Various | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Various | PdfKeyType.Optional)]
             public const string DV = "/DV";
 
-            [KeyInfo(KeyType.String | KeyType.Optional)]
+            [PdfKey(PdfKeyType.String | PdfKeyType.Optional)]
             public const string DA = "/DA";
 
-            [KeyInfo(KeyType.Integer | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
             public const string MaxLen = "/MaxLen";
 
-            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
             public const string Opt = "/Opt";
 
-            public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
+            public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
 
-            static DictionaryMeta _meta = null!;
+            static PdfDictionaryMetadata _meta = null!;
         }
 
-        internal override DictionaryMeta Meta => Keys.Meta;
+        internal override PdfDictionaryMetadata Meta => Keys.Meta;
     }
 }

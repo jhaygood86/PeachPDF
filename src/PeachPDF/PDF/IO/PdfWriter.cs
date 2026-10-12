@@ -265,7 +265,7 @@ namespace PeachPDF.PDF.IO
             //WriteRaw(PdfEncoders.DocEncode(text, unicode));
             byte[] bytes;
             if (!unicode)
-                bytes = PdfEncoders.DocEncoding.GetBytes(text);
+                bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
             else
                 bytes = PdfEncoders.UnicodeEncoding.GetBytes(text);
             bytes = PdfEncoders.FormatStringLiteral(bytes, unicode, true, false);
@@ -277,7 +277,7 @@ namespace PeachPDF.PDF.IO
         {
             WriteSeparator(CharCat.Delimiter);
             //WriteRaw(PdfEncoders.DocEncode(text, false));
-            byte[] bytes = PdfEncoders.DocEncoding.GetBytes(text);
+            byte[] bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
             bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, false);
             Write(bytes);
             _lastCat = CharCat.Delimiter;
@@ -287,7 +287,7 @@ namespace PeachPDF.PDF.IO
         {
             WriteSeparator(CharCat.Delimiter);
             //WriteRaw(PdfEncoders.DocEncodeHex(text));
-            byte[] bytes = PdfEncoders.DocEncoding.GetBytes(text);
+            byte[] bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
             bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, true);
             _stream.Write(bytes, 0, bytes.Length);
             _lastCat = CharCat.Delimiter;
@@ -398,7 +398,7 @@ namespace PeachPDF.PDF.IO
 
             if (omitStream)
             {
-                WriteRaw("  �...stream content omitted...�\n");  // useful for debugging only
+                WriteRaw("  ...stream content omitted...\n");  // useful for debugging only
             }
             else
             {
@@ -427,7 +427,7 @@ namespace PeachPDF.PDF.IO
             if (String.IsNullOrEmpty(rawString))
                 return;
 
-            byte[] bytes = PdfEncoders.RawEncoding.GetBytes(rawString);
+            byte[] bytes = PdfEncoders.LatinOneByteEncoding.GetBytes(rawString);
             _stream.Write(bytes, 0, bytes.Length);
             _lastCat = GetCategory((char)bytes[bytes.Length - 1]);
         }
@@ -453,10 +453,10 @@ namespace PeachPDF.PDF.IO
         {
             if (_layout == PdfWriterLayout.Verbose)
                 WriteRaw(String.Format("{0} {1} obj   % {2}\n",
-                    value.ObjectID.ObjectNumber, value.ObjectID.GenerationNumber,
+                    value.ObjectId.ObjectNumber, value.ObjectId.GenerationNumber,
                     value.GetType().FullName));
             else
-                WriteRaw(String.Format("{0} {1} obj\n", value.ObjectID.ObjectNumber, value.ObjectID.GenerationNumber));
+                WriteRaw(String.Format("{0} {1} obj\n", value.ObjectId.ObjectNumber, value.ObjectId.GenerationNumber));
         }
 
         public void WriteFileHeader(PdfDocument document)
