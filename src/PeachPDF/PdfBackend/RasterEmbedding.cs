@@ -8,7 +8,7 @@ namespace PeachPDF.PdfBackend
     /// <summary>
     /// Turns a finished <see cref="RasterSurface"/> into an <see cref="PdfRasterImage"/> the PDF writer can embed -
     /// the PDF-specific half of what used to be <c>RasterEmbedder</c>. The pixels-to-bytes encoding itself
-    /// (<see cref="RasterSurfaceEncoding"/>) has no PdfSharpCore dependency; this file is exactly the
+    /// (<see cref="RasterSurfaceEncoding"/>) has no PDF engine dependency; this file is exactly the
     /// <see cref="PdfRasterImage"/> wrapping around it, kept PeachPDF-side.
     /// </summary>
     internal static class RasterEmbedding

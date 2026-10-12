@@ -334,7 +334,7 @@ namespace PeachPDF.PdfBackend
 
         public override (Canvas Graphics, Image Image)? CreateTile(double width, double height)
         {
-            // PdfForm/PdfGraphics.FromForm() is real, working PdfSharpCore infrastructure for drawing into
+            // PdfForm/PdfGraphics.FromForm() is real, working PDF engine infrastructure for drawing into
             // a separate PDF Form XObject's own content stream (rather than the page's) - the same
             // mechanism this method's own PdfGraphics (_g) is itself built on when bound to a page. PdfGraphics.Owner
             // falls back to the owning document of a Form XObject (not just a page), so this also works
@@ -541,7 +541,7 @@ namespace PeachPDF.PdfBackend
                 return;
             }
 
-            // PDF has no "draw this sub-rectangle of an XObject" operator, and PdfSharpCore's own
+            // PDF has no "draw this sub-rectangle of an XObject" operator, and the PDF engine's own
             // srcRect overload never implemented one either - it silently drew the whole image into
             // destRect, so every border-image slice painted the entire source squashed into its own
             // region rather than the region's own ninth of it. Crop the only way the imaging model
@@ -782,7 +782,7 @@ namespace PeachPDF.PdfBackend
             return new PdfTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
         }
 
-        /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent
+        /// <summary>Reuses the PDF engine's built-in static brushes for the common opaque black/white/transparent
         /// cases, the same optimization <c>PdfRenderContext.CreateSolidBrush</c> used to apply.</summary>
         private static Brush ToXSolidBrush(PaintColor color)
         {

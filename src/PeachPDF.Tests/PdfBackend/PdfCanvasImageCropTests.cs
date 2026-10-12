@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// <see cref="PdfCanvas.DrawImage(Image, Rect, Rect)"/> must draw only the requested portion of
-    /// the image. PDF has no "draw this sub-rectangle of an XObject" operator and PdfSharpCore's own
+    /// the image. PDF has no "draw this sub-rectangle of an XObject" operator and the PDF engine's own
     /// <c>srcRect</c> overload never implemented one - it silently drew the whole image into the destination
     /// rectangle, so every <c>border-image</c> slice painted the entire source squashed into its own ninth of
     /// the frame. The crop is therefore a clip plus a deliberately off-destination placement of the whole

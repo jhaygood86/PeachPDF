@@ -27,7 +27,7 @@ Fragmentation (FragmentTree)
 Painting (Canvas)
     │
     ▼
-PDF Rendering (PdfSharpCore fork)
+PDF Rendering (embedded PDF engine)
     │
     ▼
 PDF Output
@@ -532,7 +532,7 @@ A fragment's *rectangles* were the last thing still derived from the box's singl
 
 ### Graphics abstraction
 
-The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation forwards every call to PdfSharpCore's `PdfGraphics`. The abstract surface exposes:
+The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation, `PdfCanvas`, writes every call as PDF content through the embedded engine's `PdfGraphics`. The abstract surface exposes:
 
 | Method | Purpose |
 |---|---|
@@ -626,22 +626,22 @@ A successfully resolved image or SVG document is cached on the render's `HtmlCon
 
 ## 8. PDF Rendering
 
-**Library:** PdfSharpCore (forked and merged into PeachPDF)
+**Library:** the embedded PDF engine, `PeachPDF.PDF` (derived from PDFsharp and merged into PeachPDF)
 
 **Source location:** [src/PeachPDF/PDF/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PDF/)
 
-The final phase writes the PDF file. PeachPDF embeds a custom fork of [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore) directly in the source tree. The fork has been optimised specifically for PeachPDF's usage patterns and trimming requirements.
+The final phase writes the PDF file. PeachPDF embeds a PDF writing engine, derived from [PDFsharp](https://github.com/empira/PDFsharp) (MIT), directly in the source tree. It is write-only, uses the `PeachDrawing.Core` value types (`Rect`, `PaintColor`, `Brush`, `Pen`, `GraphicsPath`, `TypefaceFont`, `Matrix3x2`) directly rather than its own twins, and has been shaped around PeachPDF's usage patterns and trimming requirements.
 
-### Adapter bridge
+### PDF backend
 
 The abstract types the rendering engine draws through (`Canvas`, `RenderContext`, `Brush`, `Pen`, `Font`, `FontFamily`, `Image`, `GraphicsPath`, and the paint-ready value types) live in their own package, `PeachDrawing.Core` (see [docs/peachdrawing-core.md](peachdrawing-core.md)) — nothing in that surface names a PDF-specific type. The PDF backend in [src/PeachPDF/PdfBackend/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PdfBackend/) (`PdfCanvas`, `PdfRenderContext`, `PdfCanvasFont`, `PdfCanvasFontFamily`, `PdfCanvasImage`, `PdfSvgGlyphPainter`) implement those abstract types for PDF specifically. They translate every `Canvas` drawing call into the corresponding `PdfGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
 
 ### Font pipeline
 
-PdfSharpCore's font subsystem is built around OpenType:
+The PDF engine's font subsystem is built around OpenType:
 
 - `FontSet` ([Typefaces/FontSet.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Typefaces/FontSet.cs)) — the public entry point for fonts: the installed fonts plus the ones added to it, per instance. Fonts are added with `AddData`, families are found with `TryFindFamily` and `TryFindCoveringFamily`, and a query (`TypefaceQuery`: weight, width class, slant, an optional character to cover) is matched with `TypefaceFamily.TryMatch` or `FontSet.MatchOrFallback`, giving a `TypefaceMatch` (a public `Typeface` and the `SyntheticStyle` still to be faked). `PdfRenderContext` owns one `FontSet` and goes through nothing else to register and match fonts. `FontSet` is a thin layer over the internal `FontResolver`.
-- `LoadedTypeface` ([Fonts/LoadedTypeface.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Fonts/LoadedTypeface.cs)) — one resolved font face, independent of any size, behind the public `Typeface` (its `Face` property): it owns the `OpenTypeFontface` and the `OpenTypeDescriptor` (metrics, glyph mapping, shaping and outlines in design units). The PDF writer's `XFont` is just a matched typeface plus an em size.
+- `LoadedTypeface` ([Fonts/LoadedTypeface.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Fonts/LoadedTypeface.cs)) — one resolved font face, independent of any size, behind the public `Typeface` (its `Face` property): it owns the `OpenTypeFontface` and the `OpenTypeDescriptor` (metrics, glyph mapping, shaping and outlines in design units). The PDF writer's font is Core's `TypefaceFont`: a matched typeface plus an em size.
 - `OpenTypeFontface` — reads raw OpenType/TrueType tables (`cmap`, `glyf`, `hmtx`, `loca`, `OS/2`, etc.) from font binary data.
 - `TypefaceCache` — caches resolved typefaces keyed by family+style to avoid repeated file reads (system families globally, custom `@font-face` families per `FontResolver` instance).
 - Font subsetting — only the glyphs actually used in the document are embedded in the PDF, significantly reducing output file size for documents that use only a subset of a large font.
@@ -699,7 +699,7 @@ Bidirectional layout is a separate engine, `BidiResolver` ([Text/Bidi/](https://
 
 ### Image pipeline
 
-PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF, WebP, AVIF, TIFF, JPEG XL) arrive as pre-decoded RGBA bitmaps from PeachImage (see [Image loading and decoding](#image-loading-and-decoding)) and are written as PDF image XObjects using `XBitmapImage`.
+Every image arrives through PeachImage (see [Image loading and decoding](#image-loading-and-decoding)): JPEG, PNG, GIF and JPEG XL sources that qualify are embedded byte for byte, and everything else is decoded to a 32-bit bitmap that `PdfImage` splits into RGB samples, a 1-bit `/Mask` and an `/SMask`, then compresses and writes as a PDF image XObject.
 
 ### Graphics context
 
@@ -714,11 +714,11 @@ PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageIm
 3. Runs the full HTML→DOM→CSS→Layout→Paint pipeline against the document's pages.
 4. Returns the completed `PdfDocument`, which the caller saves to any `Stream`.
 
-Unnecessary PdfSharpCore features (WPF/GDI rendering targets, interactive form fields, XPS output) have been removed, keeping the dependency surface small and compatible with .NET 8 trimming and AOT compilation.
+The engine keeps only what writing needs (no reader, no WPF/GDI rendering targets, no XPS output), keeping the dependency surface small and compatible with .NET 8 trimming and AOT compilation.
 
 ### Tagged PDF (PDF/UA) structure tree
 
-**Key types:** `StructureTagBuilder` / `StructureTagMapper` ([Html/Core/Handlers/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Html/Core/Handlers/)), `PdfStructureElement` / `PdfStructureTreeRoot` / `PdfNumberTreeNode` / `PdfMarkedContentReference` / `PdfObjectReference` ([PDF/Structure/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PDF/Pdf.Structure/))
+**Key types:** `StructureTagBuilder` / `StructureTagMapper` ([Html/Core/Handlers/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Html/Core/Handlers/)), `PdfStructureElement` / `PdfStructureTreeRoot` / `PdfNumberTreeNode` / `PdfMarkedContentReference` / `PdfObjectReference` ([PDF/Structure/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PDF/Structure/))
 
 Tagged output (`PdfGenerateConfig.EnableTaggedPdf`, off by default — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) for the user-facing CSS property and default mapping) is built live from the same fragment paint walk that produces the visible page content, rather than from a separate pass or an event-interception layer around drawing calls (the approach upstream PDFsharp's modern `UAManager`/`StructureBuilder` uses, which depends on an `PdfGraphics` event system this ~2016-era fork doesn't have). PeachPDF already fully controls its own paint walk, so it is the natural place to hook in.
 

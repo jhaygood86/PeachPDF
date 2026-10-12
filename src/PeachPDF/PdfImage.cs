@@ -25,7 +25,7 @@ namespace PeachPDF
         // Resolve call with the SAME adapter (placements within one document build, the common, well-
         // scoped case this class exists for) reuses it for free; a different adapter (this instance reused
         // across a separate CreateDocument/AddPages call) re-resolves rather than risking a PDF resource
-        // that assumes single-document ownership - see this repo's own PdfSharpCore fork, whose form/image
+        // that assumes single-document ownership - see this repo's own PDF engine, whose form/image
         // XObjects are written against one specific PdfDocument.
         private RenderContext? _resolvedByRenderContext;
         private Image? _resolvedImage;

@@ -83,7 +83,7 @@ If a change gives PeachPDF a new visible rendering capability, add or update a s
 
 - Don't write two independent parsers for the same CSS value grammar across layers. If both the CSS-OM/parsing layer and a later render/resolution layer need to understand a value's grammar, extract it into one shared internal class both call (e.g. `CalcParser`, `BackgroundPositionGrammar`/`BackgroundSizeGrammar`). Only the final numeric resolution that genuinely depends on runtime-only information should differ between layers.
 - `PeachDrawing.Core` (`Canvas`/`RenderContext`/`Pen`/etc., see [docs/peachdrawing-core.md](docs/peachdrawing-core.md)) is the abstraction boundary between layout/paint logic and the concrete PDF backend (`src/PeachPDF/PdfBackend/`, over the embedded PDF engine in `src/PeachPDF/PDF/`). New rendering primitives get added there first, then implemented in `PdfCanvas`/`XGraphics`/`XGraphicsPdfRenderer`. If you add a new abstract `Canvas` member, update the test-only mocks (`SpyGraphics`, `RecordingGraphics`) too.
-- Before building new PDF-writing infrastructure (patterns, soft masks, shadings), check whether `PdfSharpCore` already has an unused primitive for it — `XForm`/`PdfFormXObject`, `PdfTilingPattern`, `PdfSoftMask` have all been found pre-existing-but-uncalled at various points.
+- Before building new PDF-writing infrastructure (patterns, soft masks, shadings), check whether the PDF engine in `src/PeachPDF/PDF/` already has an unused primitive for it — `PdfForm`/`PdfFormXObject`, `PdfTilingPattern`, `PdfSoftMask` have all been found pre-existing-but-uncalled at various points.
 
 ## Pull requests
 

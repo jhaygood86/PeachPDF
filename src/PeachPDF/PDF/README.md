@@ -1,61 +1,18 @@
-# PeachPDF.PdfSharpCore
+# PeachPDF.PDF
 
-[![NuGet Version](https://img.shields.io/nuget/v/PdfSharpCore.svg)](https://www.nuget.org/packages/PdfSharpCore/)
-[![CI](https://github.com/ststeiger/PdfSharpCore/actions/workflows/build.yml/badge.svg)](https://github.com/ststeiger/PdfSharpCore/actions/workflows/build.yml)
-[![codecov.io](https://codecov.io/github/ststeiger/PdfSharpCore/coverage.svg?branch=master)](https://codecov.io/github/ststeiger/PdfSharpCore?branch=master)
+The PDF writing engine inside PeachPDF. It is derived from [PDFsharp](https://github.com/empira/PDFsharp) (MIT, see
+[LICENSE.md](LICENSE.md)) and has been reshaped to what PeachPDF needs: it only writes PDF, never reads it, and every
+type is `internal`.
 
-**PeachPDF.PdfSharpCore** is a partial port of [PdfSharp.Xamarin](https://github.com/roceh/PdfSharp.Xamarin/) for .NET Standard.
-Additionally MigraDoc has been ported as well (from version 1.32).
-Image support has been implemented with [StbImageSharp](https://github.com/StbSharp/StbImageSharp/).
+| Folder | Namespace | What it holds |
+|---|---|---|
+| (root) | `PeachPDF.PDF` | The object model: `PdfDocument`, `PdfPage`, `PdfDictionary`, `PdfArray`, `PdfString`, `PdfName`, ... |
+| `Advanced/` | `PeachPDF.PDF.Advanced` | The indirect objects a page needs: images, fonts, shadings, patterns, resources, the cross-reference table |
+| `AcroForms/`, `Annotations/`, `Structure/` | `PeachPDF.PDF.AcroForms`, `.Annotations`, `.Structure` | Interactive forms, annotations and the tagged-PDF structure tree |
+| `Drawing/` | `PeachPDF.PDF.Drawing` | `PdfGraphics` (the drawing surface), `PdfForm`, `PdfRasterImage` and the image sources |
+| `Rendering/` | `PeachPDF.PDF.Rendering` | `PdfGraphicsRenderer`, which turns drawing calls into content-stream operators |
+| `Filters/`, `IO/`, `Internal/` | `.Filters`, `.IO`, `.Internal` | Stream compression, `PdfWriter`, and the encodings and number formatting |
 
-
-## Table of Contents
-
-- [Documentation](docs/index.md)
-- [Example](#example)
-- [Contributing](#contributing)
-- [License](#license)
-
-
-## Example
-
-The following code snippet creates a simple PDF-file with the text 'Hello World!'.
-The code is written for a .NET 8 console app with top level statements.
-
-```csharp
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Fonts;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Utils;
-
-GlobalFontSettings.FontResolver = new FontResolver();
-
-var document = new PdfDocument();
-var page = document.AddPage();
-
-var gfx = XGraphics.FromPdfPage(page);
-var font = new XFont("Arial", 20, XFontStyle.Bold);
-
-var textColor = XBrushes.Black;
-var layout = new XRect(20, 20, page.Width, page.Height);
-var format = XStringFormats.Center;
-
-gfx.DrawString("Hello World!", font, textColor, layout, format);
-
-document.Save("helloworld.pdf");
-```
-
-## Contributing
-
-We appreciate feedback and contribution to this repo!
-
-
-## License
-
-This software is released under the MIT License. See the [LICENSE](LICENCE.md) file for more info.
-
-PeachPDF.PdfSharpCore relies on the following MIT-licensed packages:
-
-* *SharpZipLib*
-* *StbImageSharp*
-* *StbImageWriteSharp*
+The engine draws with the shared `PeachDrawing.Core` types (`Rect`, `PaintColor`, `Brush`, `Pen`, `GraphicsPath`,
+`TypefaceFont`) and `System.Numerics.Matrix3x2` instead of parallel types of its own. The `PdfBackend/` folder next to
+this one implements the `PeachDrawing.Core` `Canvas` on top of it.

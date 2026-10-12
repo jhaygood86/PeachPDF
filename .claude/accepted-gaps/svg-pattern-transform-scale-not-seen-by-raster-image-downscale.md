@@ -2,7 +2,7 @@
 
 `PdfGenerateConfig.DownscaleImages` resizes an oversized raster image down to its actual on-page display
 size before embedding, computed in `XGraphicsPdfRenderer.Realize` by folding the currently-active CTM's
-scale into the image's own destRect (`PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs`). This correctly
+scale into the image's own destRect (`PDF/Rendering/PdfGraphicsRenderer.Images.cs`). This correctly
 covers an ordinary CSS `transform:` on an `<img>`/background, and an SVG element/group `transform`, since
 both apply through the same page-level CTM the image is ultimately drawn against.
 

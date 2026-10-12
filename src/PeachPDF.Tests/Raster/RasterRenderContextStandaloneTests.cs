@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.Raster
     /// <summary>
     /// Proves <see cref="RasterRenderContext"/>/<see cref="RasterCanvas"/> work as a fully standalone
     /// drawing surface - constructed, drawn on, and saved with zero <c>HtmlContainerInt</c>, CSS, layout, or
-    /// PDF document involved anywhere in the call chain, and with no PdfSharpCore type anywhere either (font
+    /// PDF document involved anywhere in the call chain, and with no PDF engine type anywhere either (font
     /// creation goes through <c>TypefaceFont</c>, image decoding through <c>DecodedImage</c>). This is the
     /// concrete evidence for the plan's "Land the standalone construction/export API" step: a future
     /// <c>PeachDrawing</c> package's own standalone consumer does exactly this shape of thing.

@@ -30,7 +30,7 @@ See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the ful
 
 - .NET 8 or newer (every currently-supported .NET version, per [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core))
 
-_Note: This package embeds a fork of PdfSharpCore directly in its source tree; that fork carries its own license (see `src/PeachPDF/PDF/LICENSE.md`), but the end result is still open source_
+_Note: This package embeds a PDF writing engine derived from PDFsharp directly in its source tree; that engine carries its own license (see `src/PeachPDF/PDF/LICENSE.md`), but the end result is still open source_
 
 Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved. This software is based in part on the work of the FreeType Team (see [License](https://peachpdf.net/license.html)).
 

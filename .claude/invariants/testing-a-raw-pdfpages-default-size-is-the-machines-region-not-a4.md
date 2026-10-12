@@ -1,6 +1,6 @@
 # A raw `PdfPage`'s default size is the machine's region, not A4
 
-`PdfSharpCore.Pdf.PdfPage.Initialize()` sets the new page's size from the ambient region:
+`PeachPDF.PDF.PdfPage.Initialize()` sets the new page's size from the ambient region:
 
 ```csharp
 Size = RegionInfo.CurrentRegion.IsMetric ? PageSize.A4 : PageSize.Letter;
