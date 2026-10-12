@@ -19,7 +19,8 @@ namespace PeachDrawing.Text.Export
         /// its own, whose visible shapes are its layers, is given a small outline so that a reader can still select it.
         /// The typeface of a variable font at a location (<see cref="Typeface.WithAxes"/>) is written as a static font: its glyphs have
         /// the location's variations applied and carry no hinting instructions, since a PDF cannot embed a variable font.
-        /// A TrueType font is cut down, and a font with CFF outlines is returned whole, which
+        /// A TrueType font is cut down. A CID-keyed CFF font is cut down to a bare CFF table (<see cref="ExportedFont.Format"/> is
+        /// <see cref="ExportedFontFormat.CompactFontFormat"/>), and any other font with CFF outlines is returned whole, which
         /// <see cref="ExportedFont.IsSubset"/> reports; the glyphs asked for are not looked at then.
         /// The exception is a variable font with CFF2 outlines, which is always written afresh, whatever its location, as a static
         /// font with CFF outlines that holds only the glyphs asked for: each outline is drawn at the location and written as a
@@ -46,10 +47,6 @@ namespace PeachDrawing.Text.Export
             // (The outlines are those the descriptor draws, so a font that also has a CFF table, which it should not, is a CFF font.)
             bool isCff2 = face.loca == null && face.glyf == null && face.cff is not { IsSupported: true }
                 && face.cff2 is { IsSupported: true } && face.maxp.numGlyphs > 0;
-            if (face.loca == null && !isCff2)
-            {
-                return new ExportedFont(face.FontSource.Bytes, hasCffOutlines: true, isSubset: false);
-            }
 
             int glyphCount = face.maxp.numGlyphs;
             var wanted = new Dictionary<int, object>();
@@ -66,11 +63,55 @@ namespace PeachDrawing.Text.Export
             if (isCff2)
             {
                 byte[] cff = StaticCffFontBuilder.Build(face, typeface.Face.Descriptor, wanted.Keys, keepCharacterMap);
-                return new ExportedFont(cff, hasCffOutlines: true, isSubset: true);
+                return new ExportedFont(cff, hasCffOutlines: true, isSubset: true, ExportedFontFormat.OpenType);
+            }
+
+            if (face.loca == null)
+            {
+                // A CFF1 font keeps its outlines in its CFF table, so the glyf/loca subsetting the
+                // branch below does cannot touch it - which used to mean the whole face went into the
+                // PDF. A CID-keyed CFF can be rewritten to hold only the glyphs asked for, and is
+                // emitted as the bare CFF table that is what a CIDFontType0 descendant is defined to
+                // carry (leaving behind the layout and mapping tables, which in a CJK font are
+                // megabytes a viewer never reads). A plain CFF has to stay inside the OpenType file
+                // that holds its mapping, and anything that cannot be taken apart is embedded whole.
+                byte[]? subsetCff = TrySubsetCff(face, wanted.Keys);
+                if (subsetCff is not null)
+                {
+                    return new ExportedFont(subsetCff, hasCffOutlines: true, isSubset: true, ExportedFontFormat.CompactFontFormat);
+                }
+
+                return new ExportedFont(face.FontSource.Bytes, hasCffOutlines: true, isSubset: false, ExportedFontFormat.OpenType);
             }
 
             OpenTypeFontface subset = face.CreateFontSubSet(wanted, cidFont: !keepCharacterMap, typeface.Face.Variation);
-            return new ExportedFont(subset.FontSource.Bytes, hasCffOutlines: false, isSubset: true);
+            return new ExportedFont(subset.FontSource.Bytes, hasCffOutlines: false, isSubset: true, ExportedFontFormat.OpenType);
+        }
+
+        /// <summary>
+        /// Rewrites a CID-keyed CFF table down to the glyphs a document draws, or returns null when it
+        /// cannot be rewritten safely: not CID-keyed, no CFF table, or a font the subsetter cannot take
+        /// apart.
+        /// </summary>
+        private static byte[]? TrySubsetCff(OpenTypeFontface face, IEnumerable<int> usedGlyphs)
+        {
+            if (face.cff is not { IsCidKeyed: true }
+                || !face.TableDictionary.TryGetValue("CFF ", out TableDirectoryEntry? entry)
+                || entry is null)
+            {
+                return null;
+            }
+
+            var source = face.FontSource.Bytes;
+            if (entry.Offset < 0 || entry.Length <= 0 || entry.Offset + entry.Length > source.Length)
+            {
+                return null;
+            }
+
+            var cff = new byte[entry.Length];
+            Array.Copy(source, entry.Offset, cff, 0, entry.Length);
+
+            return CffSubsetter.Subset(cff, [.. usedGlyphs]);
         }
     }
 }

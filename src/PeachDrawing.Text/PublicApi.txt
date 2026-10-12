@@ -43,7 +43,11 @@ PeachDrawing.Text.Compression.BrotliDecompression : static class
 PeachDrawing.Text.Export.ExportedFont : sealed class
   property Boolean HasCffOutlines { get; }
   property Boolean IsSubset { get; }
+  property ExportedFontFormat Format { get; }
   property ReadOnlyMemory<Byte> Data { get; }
+PeachDrawing.Text.Export.ExportedFontFormat : enum Int32
+  CompactFontFormat = 1
+  OpenType = 0
 PeachDrawing.Text.Export.TypefaceExporter : static class
   method static ExportedFont ExportSubset(Typeface typeface, IEnumerable<Int32> glyphs, Boolean keepCharacterMap)
 PeachDrawing.Text.FontSet : sealed class

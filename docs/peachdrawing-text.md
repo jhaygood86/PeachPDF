@@ -384,14 +384,14 @@ The per-glyph corner kerning of `MathKernInfo` and the device tables that adjust
 ## Embedding: `PeachDrawing.Text.Export`
 
 A document that embeds a font wants only the glyphs it uses. `TypefaceExporter.ExportSubset` cuts a typeface down to the glyph
-indices you give it and returns the bytes of a font file, an `ExportedFont`.
+indices you give it and returns the bytes of a font, an `ExportedFont`, whose `Format` says what the bytes are.
 
 ```csharp
 using PeachDrawing.Text.Export;
 
 ExportedFont subset = TypefaceExporter.ExportSubset(face, usedGlyphs, keepCharacterMap: false);
 byte[] fontFile = subset.Data.ToArray();
-// subset.HasCffOutlines says which kind of font stream to write; subset.IsSubset says whether it was cut down.
+// subset.Format says what the bytes are; subset.HasCffOutlines says whether the glyphs are CFF; subset.IsSubset says whether it was cut down.
 ```
 
 - The glyphs keep their indices, so text already encoded as glyph indices stays valid against the subset. The glyphs a composite
@@ -401,11 +401,11 @@ byte[] fontFile = subset.Data.ToArray();
 - A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
 - For a typeface from `WithAxes` the subset is a static font at that location: each glyph's points and component offsets have the
   variations applied, the side bearings and advances of the glyphs are set to match, and the hinting tables are left out.
-- A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
+- A CID-keyed CFF font is cut down to a bare CFF table: `Format` is `CompactFontFormat`, and a PDF embeds it under a `CIDFontType0`
+  descendant. Any other font with CFF outlines is returned whole, and `IsSubset` is `false`.
 - A variable font with CFF2 outlines is always written afresh, at its default location or at the one `WithAxes` gave: each glyph you
   ask for is drawn at the location and written as a charstring of lines and curves over whole-number coordinates (no hints, no
-  subroutines), in a CID-keyed OpenType font with CFF outlines whose glyph indices are its CIDs. `HasCffOutlines` is `true` and
-  `IsSubset` is `true`; a glyph that was not asked for is an empty glyph in its place.
+  subroutines), in a CID-keyed OpenType font with CFF outlines whose glyph indices are its CIDs. `HasCffOutlines` and `IsSubset` are `true`, and `Format` is `OpenType`; a glyph that was not asked for is an empty glyph in its place.
 - `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
 
 What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,
