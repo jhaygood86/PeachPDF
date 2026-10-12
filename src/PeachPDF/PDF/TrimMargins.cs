@@ -14,15 +14,6 @@ internal sealed class TrimMargins
     ///// <summary>
     ///// Clones this instance.
     ///// </summary>
-    //public TrimMargins Clone()
-    //{
-    //  TrimMargins trimMargins = new TrimMargins();
-    //  trimMargins.left = left;
-    //  trimMargins.top = top;
-    //  trimMargins.right = right;
-    //  trimMargins.bottom = bottom;
-    //  return trimMargins;
-    //}
 
     /// <summary>
     /// Sets all four crop margins simultaneously.

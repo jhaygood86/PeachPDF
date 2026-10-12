@@ -246,20 +246,7 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
         //_outlines.Add(outline);
         if (!Owner._irefTable.Contains(outline.ObjectId))
             Owner._irefTable.Add(outline);
-        // else
-        // {
-        //     outline.GetType();
-        // }
 
-        //if (outline.Opened)
-        //{
-        //    outline = _parent;
-        //    while (outline != null)
-        //    {
-        //        outline.OpenCount++;
-        //        outline = outline.Parent;
-        //    }
-        //}
     }
 
     void RemoveFromOutlinesTree(PdfOutline outline)

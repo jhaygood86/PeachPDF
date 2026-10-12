@@ -96,11 +96,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         return ObjectTable.ContainsKey(objectId);
     }
 
-    //public PdfObject GetObject(PdfObjectId objectId)
-    //{
-    //  return this[objectId].Value;
-    //}
-
     //    /// <summary>
     //    /// Gets the entry for the specified object, or null, if the object is not in
     //    /// this XRef table.
@@ -265,23 +260,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     ///// <summary>
     ///// The garbage collector for PDF objects.
     ///// </summary>
-    //public sealed class GC
-    //{
-    //  PdfXRefTable xrefTable;
-    //
-    //  internal GC(PdfXRefTable xrefTable)
-    //  {
-    //    _xrefTable = xrefTable;
-    //  }
-    //
-    //  public void Collect()
-    //  { }
-    //
-    //  public PdfReference[] ReachableObjects()
-    //  {
-    //    Hash_table objects = new Hash_table();
-    //    TransitiveClosure(objects, _xrefTable.document.trailer);
-    //  }
 
     /// <summary>
     /// Calculates the transitive closure of the specified PdfObject, i.e. all indirect objects
@@ -410,13 +388,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
 ///// Represents the cross-reference table of a PDF document. 
 ///// It contains all indirect objects of a document.
 ///// </summary>
-//internal sealed class PdfCrossReferenceStreamTable  // Must not be derive from PdfObject.
-//{
-//    public PdfCrossReferenceStreamTable(PdfDocument document)
-//    {
-//        _document = document;
-//    }
-//    readonly PdfDocument _document;
 
 //    public class Item
 //    {

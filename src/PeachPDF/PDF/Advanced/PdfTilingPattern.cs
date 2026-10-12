@@ -80,16 +80,6 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
     ///// <summary>
     ///// Setups the shading pattern from the specified brush.
     ///// </summary>
-    //public void SetupFromBrush(LinearGradientBrush brush, Matrix3x2 matrix)
-    //{
-    //  if (brush == null)
-    //    throw new ArgumentNullException("brush");
-
-    //  PdfShading shading = new PdfShading(document);
-    //  shading.SetupFromBrush(brush);
-    //  Elements[Keys.Shading] = shading;
-    //  Elements[Keys.Matrix] = new PdfLiteral("[" + PdfEncoders.ToString(matrix) + "]");
-    //}
 
     /// <summary>
     /// Common keys for all streams.

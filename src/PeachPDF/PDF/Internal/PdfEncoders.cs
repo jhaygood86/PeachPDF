@@ -59,23 +59,6 @@ internal static class PdfEncoders
     ///// <summary>
     ///// Encodes a string from a byte array. Each character gets the code of the corresponding byte.
     ///// </summary>
-    //public static string RawString(byte[] bytes, int offset, int length)
-    //{
-    //  char[] chars = new char[length];
-    //  for (int idx = offset, ch = 0; idx < offset +  length; idx++, ch++)
-    //    chars[ch] = (char)bytes[idx];
-    //  return new string(chars, 0, length);
-    //}
-    //
-    //public static string RawString(byte[] bytes)
-    //{
-    //  return RawString(bytes, 0, bytes.Length);
-    //}
-
-    //public static string EncodeAsLiteral(string text)
-    //{
-    //  return EncodeAsLiteral(text, false);
-    //}
 
     /// <summary>
     /// Converts a raw string into a raw string literal.
@@ -317,126 +300,9 @@ internal static class PdfEncoders
         0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF,
     };
 
-    //public static string DocEncode(string text, bool unicode)//, PdfStandardSecurityHandler securityHandler)
-    //{
-    //  if (text == null || text == "")
-    //    return "()";
-    //
-    //  int length = text.Length;
-    //  StringBuilder encoded = new StringBuilder(2 * length);
-    //  if (!unicode)
-    //  {
-    //    byte[] bytes = WinAnsiEncoding.GetBytes(text);
-    //    encoded.Append('(');
-    //    for (int idx = 0; idx < length; idx++)
-    //    {
-    //      char ch = (char)bytes[idx];
-    //      if (ch > 255)
-    //      {
-    //        //TODO unicode?
-    //        encoded.Append(InvalidChar);
-    //        //encoded.Append(ch);
-    //        continue;
-    //      }
-    //      ch = (char)docencode[(int)ch];
-    //      if (ch < 32)
-    //      {
-    //        switch (ch)
-    //        {
-    //          case '\n':
-    //            encoded.Append("\\n");
-    //            break;
-    //
-    //          case '\r':
-    //            encoded.Append("\\r");
-    //            break;
-    //
-    //          case '\t':
-    //            encoded.Append("\\t");
-    //            break;
-    //
-    //          case '\f':
-    //            encoded.Append("\\f");
-    //            break;
-    //
-    //          default: 
-    //            encoded.Append(InvalidChar); // TODO
-    //            break;
-    //        }
-    //      }
-    //      else
-    //      {
-    //        switch (ch)
-    //        {
-    //          case '(':
-    //            encoded.Append("\\(");
-    //            break;
-    //
-    //          case ')':
-    //            encoded.Append("\\)");
-    //            break;
-    //
-    //          case '\\':
-    //            encoded.Append("\\\\");
-    //            break;
-    //
-    //          default:
-    //            encoded.Append(ch);
-    //            break;
-    //        }
-    //      }
-    //    }
-    //    encoded.Append(')');
-    //  }
-    //  else
-    //  {
-    //    encoded.Append("<FEFF");
-    //    for (int idx = 0; idx < length; idx++)
-    //      encoded.AppendFormat("{0:X4}", (int)text[idx]);
-    //    encoded.Append('>');
-    //  }
-    //  return encoded.ToString();
-    //}
-
-    //public static string DocEncode(string text)
-    //{
-    //  return DocEncode(text, false);
-    //}
-
     ///// <summary>
     ///// Encodes a hexadecimal doc-encoded string literal.
     ///// </summary>
-    //public static string DocEncodeHex(string text, bool unicode)
-    //{
-    //  if (text == null || text == "")
-    //    return "<>";
-    //
-    //  int length = text.Length;
-    //  StringBuilder encoded = new StringBuilder(3 * length);
-    //  if (!unicode)
-    //  {
-    //    byte[] bytes = WinAnsiEncoding.GetBytes(text);
-    //    encoded.Append('<');
-    //    for (int idx = 0; idx < length; idx++)
-    //      encoded.AppendFormat("{0:X2}", docencode[bytes[idx]]);
-    //    encoded.Append('>');
-    //  }
-    //  else
-    //  {
-    //    encoded.Append("<FEFF");
-    //    for (int idx = 0; idx < length; idx++)
-    //    {
-    //      encoded.AppendFormat("{0:X4}", (int)text[idx]);
-    //    }
-    //    encoded.Append('>');
-    //  }
-    //  return encoded.ToString();
-    //}
-
-    //public static string DocEncodeHex(string text)
-    //{
-    //  return DocEncodeHex(text, false);
-    //}
 
     /// <summary>
     /// ...because I always forget CultureInfo.InvariantCulture and wonder why Acrobat

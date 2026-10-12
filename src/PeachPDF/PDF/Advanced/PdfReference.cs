@@ -92,10 +92,6 @@ internal sealed class PdfReference : PdfItem
             _objectId = value;
             if (Document is not null)
             {
-                //PdfXRefTable table = Document.xrefTable;
-                //table.Remove(this);
-                //objectId = value;
-                //table.Add(this);
             }
         }
     }
@@ -120,13 +116,6 @@ internal sealed class PdfReference : PdfItem
         set => _position = value;
     }
     long _position;
-
-    //public bool InUse
-    //{
-    //  get {return inUse;}
-    //  set {inUse = value;}
-    //}
-    //bool inUse;
 
     /// <summary>
     /// Gets or sets the referenced PdfObject.

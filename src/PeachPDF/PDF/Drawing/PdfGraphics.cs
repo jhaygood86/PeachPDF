@@ -197,11 +197,6 @@ internal sealed class PdfGraphics : IDisposable
     public Size PageSize
     {
         get => _pageSize;
-        //set
-        //{
-        //  //TODO
-        //  throw new NotImplementedException("PageSize cannot be modified in current implementation.");
-        //}
     }
     Size _pageSize;
     Size _pageSizePoints;
@@ -801,15 +796,6 @@ internal sealed class PdfGraphics : IDisposable
         if (_renderer is not null)
             _renderer.IntersectClip(path);
     }
-
-    //public void SetClip(Graphics g);
-    //public void SetClip(Graphics g, CombineMode combineMode);
-    //public void SetClip(GraphicsPath path, CombineMode combineMode);
-    //public void SetClip(Rectangle rect, CombineMode combineMode);
-    //public void SetClip(GdiRectF rect, CombineMode combineMode);
-    //public void SetClip(Region region, CombineMode combineMode);
-    //public void IntersectClip(Region region);
-    //public void ExcludeClip(Region region);
 
     // --------------------------------------------------------------------------------------------
 

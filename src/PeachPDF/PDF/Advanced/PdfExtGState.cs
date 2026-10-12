@@ -18,11 +18,6 @@ internal sealed class PdfExtGState : PdfDictionary
     {
         Elements.SetName(Keys.Type, "/ExtGState");
 
-        //#if OP_HACK
-        //            Elements.SetValue(Keys.op, new PdfBoolean(false));
-        //            Elements.SetValue(Keys.OP, new PdfBoolean(false));
-        //            Elements.SetValue(Keys.OPM, new PdfInteger(1));
-        //#endif
     }
 
     /// <summary>

@@ -90,11 +90,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         _trailer.CreateNewDocumentIds();
     }
 
-    //~PdfDocument()
-    //{
-    //  Dispose(false);
-    //}
-
     /// <summary>
     /// Disposes all references to this document stored in other documents. This function should be called
     /// for documents you finished importing pages from. Calling Dispose is technically not necessary but
@@ -283,11 +278,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             _trailer.WriteObject(writer);
             writer.WriteEof(this, startxref);
 
-            //if (encrypt)
-            //{
-            //  state &= ~DocumentState.SavingEncrypted;
-            //  //_securitySettings.SecurityHandler.EncryptDocument();
-            //}
         }
         finally
         {

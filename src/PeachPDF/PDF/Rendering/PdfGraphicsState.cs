@@ -521,28 +521,6 @@ internal sealed class PdfGraphicsState : ICloneable
     ///// <summary>
     ///// The world transform in PDF world space.
     ///// </summary>
-    //public Matrix3x2 EffectiveCtm
-    //{
-    //  get
-    //  {
-    //    //if (MustRealizeCtm)
-    //    if (!UnrealizedCtm.IsIdentity)
-    //    {
-    //      Matrix3x2 matrix = RealizedCtm;
-    //      matrix.Prepend(UnrealizedCtm);
-    //      return matrix;
-    //    }
-    //    return RealizedCtm;
-    //  }
-    //  //set
-    //  //{
-    //  //  Matrix3x2 matrix = realizedCtm;
-    //  //  matrix.Invert();
-    //  //  matrix.Prepend(value);
-    //  //  unrealizedCtm = matrix;
-    //  //  MustRealizeCtm = !unrealizedCtm.IsIdentity;
-    //  //}
-    //}
 
     public void AddTransform(Matrix3x2 value)
     {

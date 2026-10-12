@@ -34,13 +34,6 @@ internal class PdfRasterImage : IDisposable
     //   PdfForm
     //   PdfForm
 
-    // ???
-    //public bool Disposed
-    //{
-    //    get { return _disposed; }
-    //    set { _disposed = value; }
-    //}
-
     /// <summary>
     /// Initializes a new instance of the <see cref="PdfRasterImage"/> class.
     /// </summary>

@@ -40,13 +40,6 @@ internal class PdfStringFormat
     }
     PdfStringAlignment _alignment;
 
-    //public int DigitSubstitutionLanguage { get; }
-    //public StringDigitSubstitute DigitSubstitutionMethod { get; }
-    //public StringFormatFlags FormatFlags { get; set; }
-    //public static StringFormat GenericDefault { get; }
-    //public static StringFormat GenericTypographic { get; }
-    //public HotkeyPrefix HotkeyPrefix { get; set; }
-
     /// <summary>
     /// Gets or sets the line alignment.
     /// </summary>

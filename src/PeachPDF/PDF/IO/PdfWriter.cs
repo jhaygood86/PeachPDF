@@ -507,10 +507,6 @@ internal sealed class PdfWriter
     ///// <summary>
     ///// Returns an indent string of blanks.
     ///// </summary>
-    //static string Ind(int _indent)
-    //{
-    //  return new String(' ', _indent);
-    //}
 
     /// <summary>
     /// Gets an indent string of current indent.

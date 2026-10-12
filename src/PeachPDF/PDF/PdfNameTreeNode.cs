@@ -290,11 +290,6 @@ internal sealed class PdfNameTreeNode : PdfDictionary
     ///// <summary>
     ///// Returns the value in the PDF date format.
     ///// </summary>
-    //public override string ToString()
-    //{
-    //    string delta = _value.ToString("zzz").Replace(':', '\'');
-    //    return string.Format("D:{0:yyyyMMddHHmmss}{1}'", _value, delta);
-    //}
 
     /// <summary>
     /// Predefined keys of this dictionary.

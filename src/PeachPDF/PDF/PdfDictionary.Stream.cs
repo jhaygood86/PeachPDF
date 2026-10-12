@@ -127,19 +127,9 @@ internal partial class PdfDictionary
             return PdfEncoders.LatinOneByteEncoding.GetString(_value, 0, _value.Length);
         }
 
-        //internal void WriteObject_(Stream stream)
-        //{
-        //    if (_value != null)
-        //        stream.Write(_value, 0, value.Length);
-        //}
-
         ///// <summary>
         ///// Converts a raw encoded string into a byte array.
         ///// </summary>
-        //public static byte[] RawEncode(string content)
-        //{
-        //    return PdfEncoders.LatinOneByteEncoding.GetBytes(content);
-        //}
 
         /// <summary>
         /// Common keys for all streams.

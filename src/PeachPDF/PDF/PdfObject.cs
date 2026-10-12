@@ -138,17 +138,6 @@ internal abstract class PdfObject : PdfItem
     internal override void WriteObject(PdfWriter writer)
     {
         Debug.Assert(false, "Must not come here!");
-        //Debug.Assert(_inStreamOffset <= 0);
-        //if (_inStreamOffset == 0)
-        //{
-        //    //_InStreamOffset = stream.Position;
-        //    _document.xrefTable.AddObject(this);
-        //    return Format("{0} {1} obj\n", _objectId, _generation);
-        //}
-        //else if (_inStreamOffset == -1)
-        //{
-        //}
-        //return null;
     }
 
     /// <summary>

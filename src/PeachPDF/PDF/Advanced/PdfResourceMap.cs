@@ -22,17 +22,6 @@ internal sealed class PdfResourceMap : PdfDictionary //, IEnumerable
         : base(dict)
     { }
 
-    //    public int Count
-    //    {
-    //      get {return resources.Count;}
-    //    }
-    //
-    //    public PdfObject this[string key]
-    //    {
-    //      get {return resources[key] as PdfObject;}
-    //      set {resources[key] = value;}
-    //    }
-
     /// <summary>
     /// Adds all imported resource names to the specified hashtable.
     /// </summary>
