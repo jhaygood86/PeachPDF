@@ -324,7 +324,16 @@ namespace PeachPDF.Html.Core.Paint
 
             var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
             if (destination.Width <= 0 || destination.Height <= 0)
+            {
+                // Outside the clip, so nothing of these planes is drawn here: see PaintProjective.
+                for (var i = 0; i < planes.Length; i++)
+                {
+                    if (planes[i].HasSource)
+                        RecordHiddenSubtree(planes[i].Fragment);
+                }
+
                 return true;
+            }
 
             using var destinationScope = g.BeginRasterSurface(destination);
             if (destinationScope is null)
@@ -348,10 +357,21 @@ namespace PeachPDF.Html.Core.Paint
                     if (sourceScope is null)
                     {
                         plane.HasSource = false;
+                        RecordHiddenSubtree(plane.Fragment); // not drawn, so nothing to click
                         continue;
                     }
 
-                    PaintClippedWithEffects(sourceScope.Graphics, plane.Fragment);
+                    var enclosingMap = EnterMap(plane.Map);
+                    try
+                    {
+                        RecordPlacement(plane.Fragment);
+                        PaintClippedWithEffects(sourceScope.Graphics, plane.Fragment);
+                    }
+                    finally
+                    {
+                        LeaveMap(enclosingMap);
+                    }
+
                     Warp.Composite(sourceScope.Surface, destinationScope.Surface, plane.Map, plane.Depth, depthBuffer);
                 }
             }

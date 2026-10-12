@@ -59,7 +59,7 @@ no inverse, but four neighbouring paths still looked at something else. All four
   it in front (`translateZ(60pt) scaleZ(0)`, scale first) so the test can tell. The 4x4 cut-off is `1e-18`, not the 2D
   `1e-12`: a three-axis determinant is the cube of the scale, so `scale3d(0.00008, ...)` on a very wide element would
   otherwise be culled while `scale(0.00008)` is not; whether a matrix is merely tiny is left to the 2D checks.
-- **Not done:** a link/widget over a *drawn* transformed element still sits at the untransformed rectangle - see
-  [the gap](../accepted-gaps/link-annotations-and-widgets-ignore-an-elements-transform.md).
+- **Not done here:** a link/widget over a *drawn* transformed element still sat at the untransformed rectangle; that was
+  [fixed next](2026-10-12-annotations-follow-the-transform-the-painter-drew.md).
 - **Evidence:** `CollapsedTransformTests` (78 cases with the running-element file) - 21 of the first 53 failed with the guards disabled, and the sliver cull is covered by
   one test per call site.

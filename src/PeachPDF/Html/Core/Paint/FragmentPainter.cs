@@ -88,6 +88,7 @@ namespace PeachPDF.Html.Core.Paint
         internal void PaintDetached(Canvas g, BoxFragment root)
         {
             ResetDetachedState(root);
+            _recordsPlacements = true;
 
             try
             {
@@ -160,6 +161,8 @@ namespace PeachPDF.Html.Core.Paint
             g.PushClip(pageClip);
 
             _pageRoot = fragmentainer.Root;
+            _slot = fragmentainer.SlotIndex;
+            _recordsPlacements = true;
             PaintFragment(g, fragmentainer.Root);
 
             g.PopClip();
@@ -356,6 +359,27 @@ namespace PeachPDF.Html.Core.Paint
             g.PopTransform();
         }
 
+        /// <summary><see cref="PaintUnderTransform"/>, with the placement of the fragment and what it holds recorded under <paramref name="matrix"/>.</summary>
+        private void PaintUnderMap(Canvas g, BoxFragment fragment, in Matrix3x2 matrix)
+        {
+            if (!IsInvertible(matrix))
+            {
+                RecordHiddenSubtree(fragment); // nothing is drawn, so nothing to click
+                return;
+            }
+
+            var saved = EnterMap(HomographyOf(matrix));
+            try
+            {
+                RecordPlacement(fragment);
+                PaintUnderTransform(g, fragment, matrix);
+            }
+            finally
+            {
+                LeaveMap(saved);
+            }
+        }
+
         /// <summary>
         /// Paints one box fragment — the portion of a box that lives in a single fragmentainer (CSS
         /// Fragmentation Level 3 §2) — establishing the whole-element effects (<c>transform</c>,
@@ -409,6 +433,11 @@ namespace PeachPDF.Html.Core.Paint
                 // A 3D rendering context (transform-style: preserve-3d) is composed as a whole, planes depth-tested against each other.
                 var paintedAsContext = visible && !_textOnly && TryPaintContext3D(g, fragment);
 
+                // Skipped as outside the clip (a carousel track translated out of its overflow box): nothing under it is drawn on this page, and
+                // under a transform "not recorded" would read as "not moved" and leave its links at the layout rectangle.
+                if (!visible && (_mapped || box.IsTransformed))
+                    RecordHiddenSubtree(fragment);
+
                 if (visible && !paintedAsContext)
                 {
                     // A transform that is not affine once projected onto the element's plane (perspective, or a 3D transform under a
@@ -425,13 +454,16 @@ namespace PeachPDF.Html.Core.Paint
                         NoteNotRendered(box);
                     }
 
+                    var enclosingMap = default(MapState);
                     if (transformed)
                     {
                         // ActualTransformMatrix is cached treating the box's own top-left as local
                         // (0, 0), so re-anchor the pivot to where the box sits on this page. The whole
                         // (unfragmented) border box is deliberately used rather than this fragment's
                         // own rectangle: per-fragment transform origins are a separate change.
-                        g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
+                        var rebased = box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y);
+                        g.PushTransform(rebased);
+                        enclosingMap = EnterMap(HomographyOf(rebased));
                     }
 
                     if (degenerate)
@@ -441,23 +473,27 @@ namespace PeachPDF.Html.Core.Paint
                     else if (projective is { Affine: { } affine })
                     {
                         // Affine once the parent's perspective is in: a plain transform after all (a plane brought nearer is just larger).
-                        PaintUnderTransform(g, fragment, affine);
+                        PaintUnderMap(g, fragment, affine);
                     }
                     else if (projective is { } warp)
                     {
                         if (!PaintProjective(g, fragment, warp))
                         {
                             // No raster context (a measure-only pass): the affine linearisation of the transform is the best that is left.
-                            PaintUnderTransform(g, fragment, box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
+                            PaintUnderMap(g, fragment, box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                         }
                     }
                     else
                     {
+                        RecordPlacement(fragment);
                         PaintClippedWithEffects(g, fragment);
                     }
 
                     if (transformed)
+                    {
                         g.PopTransform();
+                        LeaveMap(enclosingMap);
+                    }
                 }
 
                 // Restore clips

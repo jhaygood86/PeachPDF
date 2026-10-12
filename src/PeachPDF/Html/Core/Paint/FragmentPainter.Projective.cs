@@ -173,7 +173,12 @@ namespace PeachPDF.Html.Core.Paint
 
             var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
             if (destination.Width <= 0 || destination.Height <= 0)
+            {
+                // Nothing of it lands in the clip, so nothing under it is drawn on this page: the annotation pass must not read "not recorded"
+                // as "not moved" for the box or anything inside it.
+                RecordHiddenSubtree(fragment);
                 return true;
+            }
 
             // A plane brought closer than its flat size is drawn larger than its bitmap: render the source with as many more pixels as the
             // warp enlarges it by, at most a few times over, so it does not blur.
@@ -189,12 +194,15 @@ namespace PeachPDF.Html.Core.Paint
 
             var wasSuppressed = _taggingSuppressed;
             _taggingSuppressed = true;
+            var enclosingMap = EnterMap(warp.Map);
             try
             {
+                RecordPlacement(fragment);
                 PaintClippedWithEffects(sourceScope.Graphics, fragment);
             }
             finally
             {
+                LeaveMap(enclosingMap);
                 _taggingSuppressed = wasSuppressed;
             }
 

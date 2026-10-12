@@ -1482,7 +1482,7 @@ namespace PeachPDF.Html.Core
                     {
                         if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None || DomUtils.IsUnderNoVisibleArea(child)) continue;
 
-                        linkElements.Add(new LinkElementData<Rect>(shell.GetAttribute("id"), shell.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(child.Rectangles, child.Bounds), shell));
+                        linkElements.Add(new LinkElementData<Rect>(shell.GetAttribute("id"), shell.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(child.Rectangles, child.Bounds), shell, child));
                     }
                 }
 
@@ -1492,12 +1492,12 @@ namespace PeachPDF.Html.Core
                 }
             }
 
-            var svgLinks = new List<(Rect Rect, string Href)>();
+            var svgLinks = new List<(Rect Rect, string Href, CssBox Owner)>();
             DomUtils.GetAllSvgLinks(Root, svgLinks);
 
-            foreach (var (rect, href) in svgLinks)
+            foreach (var (rect, href, owner) in svgLinks)
             {
-                linkElements.Add(new LinkElementData<Rect>(string.Empty, href, rect));
+                linkElements.Add(new LinkElementData<Rect>(string.Empty, href, rect, geometryBox: owner));
             }
 
             return linkElements;
@@ -4754,6 +4754,13 @@ namespace PeachPDF.Html.Core
 
         /// <summary>Whether the painter recorded <paramref name="box"/> with <see cref="NoteNotRendered"/>.</summary>
         internal bool IsNotRendered(CssBox box) => _notRenderedBoxes?.Contains(box) == true;
+
+        /// <summary>
+        /// Where the painter drew the link, form-control and SVG boxes that a <c>transform</c> moved off their layout rectangle - read by the
+        /// annotation pass (<c>PdfGenerator.HandleLinks</c>/<c>HandleFormFields</c>) so a clickable area lands on what was drawn. Meaningful once
+        /// the pages have been painted, like <see cref="IsNotRendered"/>.
+        /// </summary>
+        internal BoxPlacements Placements { get; } = new();
 
         /// <summary>
         /// The page/viewport rect, in the same fragmentainer-local coordinate space every painted

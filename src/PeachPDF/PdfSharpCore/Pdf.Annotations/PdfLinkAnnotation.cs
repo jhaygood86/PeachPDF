@@ -109,6 +109,22 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
         PdfDictionary _action = default!;
 
         /// <summary>
+        /// Sets the quadrilateral the link is active in (<c>/QuadPoints</c>), for a link whose area is not the axis-aligned
+        /// <see cref="PdfAnnotation.Rectangle"/> that bounds it. The corners are in default user space.
+        /// </summary>
+        public void SetQuadPoints(System.Collections.Generic.IReadOnlyList<PeachPDF.PdfSharpCore.Drawing.XPoint> corners)
+        {
+            var array = new PdfArray(Owner);
+            foreach (var corner in corners)
+            {
+                array.Elements.Add(new PdfReal(corner.X));
+                array.Elements.Add(new PdfReal(corner.Y));
+            }
+
+            Elements.SetObject(Keys.QuadPoints, array);
+        }
+
+        /// <summary>
         /// Creates a link to the web.
         /// </summary>
         public static PdfLinkAnnotation CreateWebLink(PdfRectangle rect, string url)
@@ -226,7 +242,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
             public const string PA = "/PA";
 
-            // QuadPoints
+            /// <summary>
+            /// (Optional; PDF 1.6) An array of 8 x n numbers specifying the coordinates of n quadrilaterals in default
+            /// user space that comprise the region in which the link should be activated, so a link over a rotated or
+            /// skewed shape is not the whole of its bounding box.
+            /// </summary>
+            [KeyInfo("1.6", KeyType.Array | KeyType.Optional)]
+            public const string QuadPoints = "/QuadPoints";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
