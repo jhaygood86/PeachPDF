@@ -49,7 +49,7 @@ internal sealed class PdfRadioButtonField : PdfAcroField
             array = new PdfArray(Owner);
             Elements.SetObject(Keys.Kids, array);
         }
-        array.Elements.Add(widget.Reference);
+        array.Elements.Add(widget.RequiredReference);
     }
 
     /// <summary>The widgets appended via <see cref="AddKid"/>, in the order they were added.</summary>

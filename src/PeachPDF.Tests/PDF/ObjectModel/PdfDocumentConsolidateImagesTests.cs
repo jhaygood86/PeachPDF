@@ -90,8 +90,8 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 
             doc.ConsolidateImages();
 
-            var resolved1 = (PdfDictionary)((PdfReference)xObjects.Elements["/Im1"]).Value;
-            var resolved2 = (PdfDictionary)((PdfReference)xObjects.Elements["/Im2"]).Value;
+            var resolved1 = (PdfDictionary)((PdfReference)xObjects.Elements["/Im1"]!).Value!;
+            var resolved2 = (PdfDictionary)((PdfReference)xObjects.Elements["/Im2"]!).Value!;
             return (resolved1, resolved2);
         }
 
@@ -216,8 +216,8 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 
             var profile1 = CreateIccProfileStream(doc, (byte[])profileBytes.Clone());
             var profile2 = CreateIccProfileStream(doc, (byte[])profileBytes.Clone());
-            var colorSpace1 = new PdfArray(doc, new PdfName("/ICCBased"), profile1.Reference);
-            var colorSpace2 = new PdfArray(doc, new PdfName("/ICCBased"), profile2.Reference);
+            var colorSpace1 = new PdfArray(doc, new PdfName("/ICCBased"), profile1.Reference!);
+            var colorSpace2 = new PdfArray(doc, new PdfName("/ICCBased"), profile2.Reference!);
             doc.Internals.AddObject(colorSpace1);
             doc.Internals.AddObject(colorSpace2);
 
@@ -239,8 +239,8 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 
             var profile1 = CreateIccProfileStream(doc, Encoding.ASCII.GetBytes("icc-profile-a"));
             var profile2 = CreateIccProfileStream(doc, Encoding.ASCII.GetBytes("icc-profile-b"));
-            var colorSpace1 = new PdfArray(doc, new PdfName("/ICCBased"), profile1.Reference);
-            var colorSpace2 = new PdfArray(doc, new PdfName("/ICCBased"), profile2.Reference);
+            var colorSpace1 = new PdfArray(doc, new PdfName("/ICCBased"), profile1.Reference!);
+            var colorSpace2 = new PdfArray(doc, new PdfName("/ICCBased"), profile2.Reference!);
             doc.Internals.AddObject(colorSpace1);
             doc.Internals.AddObject(colorSpace2);
 

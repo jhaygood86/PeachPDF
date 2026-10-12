@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             // one automatically if missing) - the internal "/" in the MIME type is only escaped as
             // "#2F" when PdfWriter actually serializes the Name to PDF syntax, not in this in-memory
             // round trip, so the raw stored value legitimately still contains an unescaped "/".
-            Assert.Equal("/application/mathml+xml", fileSpec.EmbeddedFile.MimeType);
+            Assert.Equal("/application/mathml+xml", fileSpec.EmbeddedFile!.MimeType);
             Assert.Equal(bytes, fileSpec.EmbeddedFile.Stream.Value);
             Assert.Equal("/Filespec", fileSpec.Elements.GetName("/Type"));
         }

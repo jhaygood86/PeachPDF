@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.IO;
 using System;
 using System.Diagnostics;
@@ -182,7 +180,7 @@ internal sealed class PdfLong : PdfNumber, IConvertible
     public object ToType(Type conversionType, IFormatProvider? provider)
     {
         // TODO:  Add PdfLong.ToType implementation
-        return null;
+        return null!;
     }
 
     /// <summary>

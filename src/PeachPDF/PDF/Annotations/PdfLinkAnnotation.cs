@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Internal;
 using PeachPDF.PDF.IO;
 using System;
@@ -108,7 +106,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
 
     internal override void WriteObject(PdfWriter writer)
     {
-        PdfPage dest = null;
+        PdfPage? dest = null;
         //pdf.AppendFormat(CultureInfo.InvariantCulture,
         //  "{0} 0 obj\n<<\n/Type/Annot\n/Subtype/Link\n" +
         //  "/Rect[{1} {2} {3} {4}]\n/BS<</Type/Border>>\n/Border[0 0 0]\n/C[0 0 0]\n",

@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.IO;
 using System;
 using System.Collections;
@@ -66,7 +64,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             return;
         // throw new InvalidOperationException("Object already in table.");
 
-        ObjectTable.Add(value.ObjectId, value.Reference);
+        ObjectTable.Add(value.ObjectId, value.RequiredReference);
     }
 
     public void Remove(PdfReference iref)
@@ -78,11 +76,11 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     /// Gets a cross reference entry from an object identifier.
     /// Returns null if no object with the specified ID exists in the object table.
     /// </summary>
-    public PdfReference this[PdfObjectId objectId]
+    public PdfReference? this[PdfObjectId objectId]
     {
         get
         {
-            PdfReference iref;
+            PdfReference? iref;
             ObjectTable.TryGetValue(objectId, out iref);
             return iref;
         }
@@ -206,7 +204,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     [Conditional("DEBUG_")]
     public void CheckConsistence()
     {
-        Dictionary<PdfReference, object> ht1 = new Dictionary<PdfReference, object>();
+        Dictionary<PdfReference, object?> ht1 = new Dictionary<PdfReference, object?>();
         foreach (PdfReference iref in ObjectTable.Values)
         {
             Debug.Assert(!ht1.ContainsKey(iref), "Duplicate iref.");
@@ -214,7 +212,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             ht1.Add(iref, null);
         }
 
-        Dictionary<PdfObjectId, object> ht2 = new Dictionary<PdfObjectId, object>();
+        Dictionary<PdfObjectId, object?> ht2 = new Dictionary<PdfObjectId, object?>();
         foreach (PdfReference iref in ObjectTable.Values)
         {
             Debug.Assert(!ht2.ContainsKey(iref.ObjectId), "Duplicate iref.");
@@ -260,7 +258,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     public PdfReference[] TransitiveClosure(PdfObject pdfObject, int depth)
     {
         CheckConsistence();
-        Dictionary<PdfItem, object> objects = new Dictionary<PdfItem, object>();
+        Dictionary<PdfItem, object?> objects = new Dictionary<PdfItem, object?>();
         _overflow = new Dictionary<PdfItem, object>();
         TransitiveClosureImplementation(objects, pdfObject);
         TryAgain:
@@ -289,7 +287,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
 
     Dictionary<PdfItem, object> _overflow = new Dictionary<PdfItem, object>();
 
-    void TransitiveClosureImplementation(Dictionary<PdfItem, object> objects, PdfObject startObject)
+    void TransitiveClosureImplementation(Dictionary<PdfItem, object?> objects, PdfObject startObject)
     {
         var stack = new Stack<PdfObject>();
         stack.Push(startObject);
@@ -299,8 +297,8 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             PdfObject pdfObject = stack.Pop();
 
             IEnumerable enumerable;
-            PdfDictionary dict;
-            PdfArray array;
+            PdfDictionary? dict;
+            PdfArray? array;
             if ((dict = pdfObject as PdfDictionary) is not null)
                 enumerable = dict.Elements.Values;
             else if ((array = pdfObject as PdfArray) is not null)
@@ -313,7 +311,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
 
             foreach (PdfItem item in enumerable)
             {
-                PdfReference iref = item as PdfReference;
+                PdfReference? iref = item as PdfReference;
                 if (iref is not null)
                 {
                     if (!ReferenceEquals(iref.Document, _document))
@@ -340,7 +338,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
                 }
                 else
                 {
-                    PdfObject nestedObject = item as PdfObject;
+                    PdfObject? nestedObject = item as PdfObject;
                     if (nestedObject is not null && (nestedObject is PdfDictionary || nestedObject is PdfArray))
                         stack.Push(nestedObject);
                 }

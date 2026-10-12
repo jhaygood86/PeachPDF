@@ -53,11 +53,11 @@ internal sealed class PdfNameDictionary : PdfDictionary
         {
             _embeddedFiles = new PdfNameTreeNode();
             Owner.Internals.AddObject(_embeddedFiles);
-            Elements.SetReference(Keys.EmbeddedFiles, _embeddedFiles.Reference);
+            Elements.SetReference(Keys.EmbeddedFiles, _embeddedFiles.RequiredReference);
         }
 
         Owner.Internals.AddObject(fileSpecification);
-        _embeddedFiles.AddName(name, fileSpecification.Reference);
+        _embeddedFiles.AddName(name, fileSpecification.RequiredReference);
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ internal sealed class PdfNameDictionary : PdfDictionary
         {
             _dests = new PdfNameTreeNode();
             Owner.Internals.AddObject(_dests);
-            Elements.SetReference(Keys.Dests, _dests.Reference);
+            Elements.SetReference(Keys.Dests, _dests.RequiredReference);
         }
 
         // destIndex > Owner.PageCount can happen when rendering pages using PDFsharp directly.

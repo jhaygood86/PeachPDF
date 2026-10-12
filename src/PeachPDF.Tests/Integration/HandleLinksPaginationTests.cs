@@ -38,7 +38,7 @@ namespace PeachPDF.Tests.Integration
             // The link is the first line of page 2's content, so its annotation top must sit within
             // the top margin-plus-a-couple-lines band of the sheet (PDF y counts from the bottom;
             // A4 is 842pt tall, config margins default to 10pt).
-            var rect = doc.Pages[1].Annotations[0].Rectangle;
+            var rect = doc.Pages[1].Annotations[0]!.Rectangle;
             var topFromSheetTop = 842 - rect.Y2;
             Assert.InRange(topFromSheetTop, 5, 60);
         }

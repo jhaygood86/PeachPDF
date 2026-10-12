@@ -1,5 +1,3 @@
-#nullable disable warnings
-
 using System.Text;
 
 namespace PeachPDF.PDF.Advanced;
@@ -59,7 +57,7 @@ internal class PdfFileSpecification : PdfDictionary
         }
     }
 
-    public PdfEmbeddedFile EmbeddedFile
+    public PdfEmbeddedFile? EmbeddedFile
     {
         get
         {

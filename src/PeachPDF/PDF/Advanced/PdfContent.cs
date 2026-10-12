@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Rendering;
 using PeachPDF.PDF.Filters;
 using PeachPDF.PDF.IO;
@@ -26,7 +24,7 @@ internal sealed class PdfContent : PdfDictionary
     /// Initializes a new instance of the <see cref="PdfContent"/> class.
     /// </summary>
     internal PdfContent(PdfPage page)
-        : base(page is not null ? page.Owner : null)
+        : base(page is not null ? page.Owner : null!)
     {
         //_pageContent = new PageContent(page);
     }
@@ -40,7 +38,7 @@ internal sealed class PdfContent : PdfDictionary
         {
             if (value)
             {
-                PdfItem filter = Elements[PdfStream.Keys.Filter];
+                PdfItem? filter = Elements[PdfStream.Keys.Filter];
                 if (filter is null)
                 {
                     byte[] bytes = StreamCompression.Encode(_document.Options, Stream.Value, out var filterName);

@@ -88,11 +88,11 @@ namespace PeachPDF.Tests.Integration
             document.Save(Stream.Null);
 
             var appearance = ResolveNormalAppearance(Assert.Single(Fields(document)));
-            var fontDict = appearance.Elements.GetDictionary(PdfFormXObject.Keys.Resources).Elements.GetDictionary("/Font");
+            var fontDict = appearance.Elements.GetDictionary(PdfFormXObject.Keys.Resources)!.Elements.GetDictionary("/Font")!;
             var embeddedFont = Assert.Single(fontDict.Elements.Values.OfType<PdfReference>().Select(r => r.Value).OfType<PdfDictionary>());
-            var descendantFonts = embeddedFont.Elements.GetArray("/DescendantFonts");
-            var descendantFont = (PdfDictionary)((PdfReference)descendantFonts.Elements[0]).Value;
-            var fontDescriptor = descendantFont.Elements.GetDictionary("/FontDescriptor");
+            var descendantFonts = embeddedFont.Elements.GetArray("/DescendantFonts")!;
+            var descendantFont = (PdfDictionary)((PdfReference)descendantFonts.Elements[0]).Value!;
+            var fontDescriptor = descendantFont.Elements.GetDictionary("/FontDescriptor")!;
 
             Assert.True(fontDescriptor.Elements.ContainsKey("/FontFile2") || fontDescriptor.Elements.ContainsKey("/FontFile3"),
                 "A custom font-family must embed a real font program.");
@@ -128,12 +128,12 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         static PdfFormXObject ResolveNormalAppearance(PdfAcroField field)
         {
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP);
+            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
             if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
                 return direct;
 
-            var states = ap.Elements.GetDictionary("/N");
-            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!).Value;
+            var states = ap.Elements.GetDictionary("/N")!;
+            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!)!.Value;
         }
 
         static async Task<PdfDocument> RenderAsync(string bodyHtml)

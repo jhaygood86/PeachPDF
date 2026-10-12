@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
@@ -86,7 +84,7 @@ internal sealed class PdfRectangle : PdfItem
         if (item is PdfReference)
             item = ((PdfReference)item).Value;
 
-        PdfArray array = item as PdfArray;
+        PdfArray? array = item as PdfArray;
         if (array is null)
             throw new InvalidOperationException("Unexpected token in PDF file. The PDF file may be corrupt. If it is not, please send us the file for service.");
 
@@ -129,7 +127,7 @@ internal sealed class PdfRectangle : PdfItem
     public override bool Equals(object? obj)
     {
         // ReSharper disable CompareOfFloatsByEqualityOperator
-        PdfRectangle rectangle = obj as PdfRectangle;
+        PdfRectangle? rectangle = obj as PdfRectangle;
         if (rectangle is not null)
         {
             PdfRectangle rect = rectangle;
@@ -158,13 +156,13 @@ internal sealed class PdfRectangle : PdfItem
     {
         // ReSharper disable CompareOfFloatsByEqualityOperator
         // use: if (Object.ReferenceEquals(left, null))
-        if ((object)left is not null)
+        if (left is not null)
         {
-            if ((object)right is not null)
+            if (right is not null)
                 return left._x1 == right._x1 && left._y1 == right._y1 && left._x2 == right._x2 && left._y2 == right._y2;
             return false;
         }
-        return (object)right is null;
+        return right is null;
         // ReSharper restore CompareOfFloatsByEqualityOperator
     }
 

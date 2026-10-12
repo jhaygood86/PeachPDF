@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
@@ -77,7 +75,7 @@ internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<strin
             PdfName[] names = dict._elements.KeyNames;
             foreach (PdfName name in names)
             {
-                PdfObject obj = dict._elements[name] as PdfObject;
+                PdfObject? obj = dict._elements[name] as PdfObject;
                 if (obj is not null)
                 {
                     obj = obj.Clone();
@@ -161,9 +159,9 @@ internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<strin
     internal virtual void WriteDictionaryElement(PdfWriter writer, PdfName key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        PdfItem item = Elements[key];
+        PdfItem? item = Elements[key];
         key.WriteObject(writer);
-        item.WriteObject(writer);
+        item!.WriteObject(writer);
         writer.NewLine();
     }
 
@@ -205,5 +203,5 @@ internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<strin
     /// <summary>
     /// When overridden in a derived class, gets the KeysMeta of this dictionary type.
     /// </summary>
-    internal virtual PdfDictionaryMetadata Meta => null;
+    internal virtual PdfDictionaryMetadata? Meta => null;
 }

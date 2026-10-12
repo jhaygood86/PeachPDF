@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.IO;
 using System;
 using System.Diagnostics;
@@ -138,7 +136,7 @@ internal sealed class PdfInteger : PdfNumber, IConvertible, IFormattable
     object IConvertible.ToType(Type conversionType, IFormatProvider? provider)
     {
         // TODO:  Add PdfInteger.ToType implementation
-        return null;
+        return null!;
     }
 
     uint IConvertible.ToUInt32(IFormatProvider? provider)
@@ -146,9 +144,9 @@ internal sealed class PdfInteger : PdfNumber, IConvertible, IFormattable
         return Convert.ToUInt32(_value);
     }
 
-    string IFormattable.ToString(string? _value, IFormatProvider? provider)
+    string IFormattable.ToString(string? format, IFormatProvider? provider)
     {
-        return _value;
+        return _value.ToString(format, provider);
     }
 
 }

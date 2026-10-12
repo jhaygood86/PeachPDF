@@ -98,11 +98,12 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void IFormattable_ToString_ReturnsFormatArgumentVerbatim()
+        public void IFormattable_ToString_FormatsTheValue()
         {
             IFormattable formattable = new PdfInteger(42);
 
-            Assert.Equal("N0", formattable.ToString("N0", CultureInfo.InvariantCulture));
+            Assert.Equal("42", formattable.ToString("N0", CultureInfo.InvariantCulture));
+            Assert.Equal("2A", formattable.ToString("X", CultureInfo.InvariantCulture));
         }
     }
 }

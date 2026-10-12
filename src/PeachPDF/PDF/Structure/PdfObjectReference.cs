@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PeachPDF.PDF.Annotations;
 
 namespace PeachPDF.PDF.Structure;
@@ -23,18 +24,20 @@ internal sealed class PdfObjectReference : PdfDictionary
     /// <summary>
     /// The page the referenced object is rendered on.
     /// </summary>
-    public PdfPage Page
+    [DisallowNull]
+    public PdfPage? Page
     {
-        get => (PdfPage)Elements.GetDictionary(Keys.Pg);
+        get => (PdfPage?)Elements.GetDictionary(Keys.Pg);
         set { Elements.SetReference(Keys.Pg, value); }
     }
 
     /// <summary>
     /// The referenced object (e.g. a link annotation).
     /// </summary>
-    public PdfAnnotation Object
+    [DisallowNull]
+    public PdfAnnotation? Object
     {
-        get => (PdfAnnotation)Elements.GetDictionary(Keys.Obj);
+        get => (PdfAnnotation?)Elements.GetDictionary(Keys.Obj);
         set { Elements.SetReference(Keys.Obj, value); }
     }
 

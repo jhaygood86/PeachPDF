@@ -38,7 +38,7 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         get
         {
             if (_resources is null)
-                _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create);
+                _resources = Elements.GetOrCreate<PdfResources>(Keys.Resources, ValueCreationFlags.Create);
             return _resources;
         }
     }

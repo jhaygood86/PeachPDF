@@ -172,13 +172,13 @@ namespace PeachPDF.Tests.Integration
 
         static PdfFormXObject ResolveNormalAppearance(PdfDictionary widget)
         {
-            var ap = widget.Elements.GetDictionary(PdfAnnotation.Keys.AP);
+            var ap = widget.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
             if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
                 return direct;
 
-            var states = ap.Elements.GetDictionary("/N");
+            var states = ap.Elements.GetDictionary("/N")!;
             var state = widget.Elements.GetName("/AS");
-            return (PdfFormXObject)states.Elements.GetReference(state).Value;
+            return (PdfFormXObject)states.Elements.GetReference(state)!.Value;
         }
     }
 }

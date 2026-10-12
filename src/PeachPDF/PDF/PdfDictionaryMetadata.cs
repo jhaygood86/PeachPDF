@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -25,7 +23,7 @@ internal sealed class PdfDictionaryMetadata
             foreach (var attribute in attributes)
             {
                 PdfKeyDescriptor descriptor = new PdfKeyDescriptor(attribute);
-                descriptor.KeyValue = (string)field.GetValue(null);
+                descriptor.KeyValue = (string)field.GetValue(null)!;
                 _keyDescriptors[descriptor.KeyValue] = descriptor;
             }
         }
@@ -34,12 +32,11 @@ internal sealed class PdfDictionaryMetadata
     /// <summary>
     /// Gets the PdfKeyDescriptor of the specified key, or null if no such descriptor exits.
     /// </summary>
-    public PdfKeyDescriptor this[string key]
+    public PdfKeyDescriptor? this[string key]
     {
         get
         {
-            PdfKeyDescriptor keyDescriptor;
-            _keyDescriptors.TryGetValue(key, out keyDescriptor);
+            _keyDescriptors.TryGetValue(key, out PdfKeyDescriptor? keyDescriptor);
             return keyDescriptor;
         }
     }

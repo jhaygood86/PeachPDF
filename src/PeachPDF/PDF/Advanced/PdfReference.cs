@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 // With this define each iref object gets a unique number (uid) to make them distinguishable in the debugger
 
 using PeachPDF.PDF.IO;
@@ -156,8 +154,8 @@ internal sealed class PdfReference : PdfItem
     {
         public int Compare(PdfReference? x, PdfReference? y)
         {
-            PdfReference l = x;
-            PdfReference r = y;
+            PdfReference? l = x;
+            PdfReference? r = y;
             if (l is not null)
             {
                 if (r is not null)

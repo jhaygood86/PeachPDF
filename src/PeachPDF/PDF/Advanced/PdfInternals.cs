@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.IO;
 using System;
 using System.Diagnostics;
@@ -72,14 +70,14 @@ internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInte
     /// </summary>
     public PdfObject GetObject(PdfObjectId objectId)
     {
-        return _document._irefTable[objectId].Value;
+        return _document._irefTable[objectId]!.Value;
     }
 
     /// <summary>
     /// Returns the PdfReference of the specified object, or null, if the object is not in the
     /// document's object table.
     /// </summary>
-    public static PdfReference GetReference(PdfObject obj)
+    public static PdfReference? GetReference(PdfObject obj)
     {
         ArgumentNullException.ThrowIfNull(obj);
         return obj.Reference;

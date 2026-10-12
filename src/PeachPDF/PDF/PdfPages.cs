@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Advanced;
 using System;
 using System.Collections;
@@ -52,15 +50,15 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// <summary>
     /// Finds a page by its id. Transforms it to PdfPage if necessary.
     /// </summary>
-    internal PdfPage FindPage(PdfObjectId id)  // TODO: public?
+    internal PdfPage? FindPage(PdfObjectId id)  // TODO: public?
     {
-        PdfPage page = null;
+        PdfPage? page = null;
         foreach (PdfItem item in PagesArray)
         {
-            PdfReference reference = item as PdfReference;
+            PdfReference? reference = item as PdfReference;
             if (reference is not null)
             {
-                PdfDictionary dictionary = reference.Value as PdfDictionary;
+                PdfDictionary? dictionary = reference.Value as PdfDictionary;
                 if (dictionary is not null && dictionary.ObjectId == id)
                 {
                     page = dictionary as PdfPage ?? new PdfPage(dictionary);
@@ -118,7 +116,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
             Debug.Assert(page.Owner == Owner);
 
             // Insert page in array.
-            PagesArray.Elements.Insert(index, page.Reference);
+            PagesArray.Elements.Insert(index, page.RequiredReference);
 
             // Update page count.
             Elements.SetInteger(Keys.Count, PagesArray.Elements.Count);
@@ -134,7 +132,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
 
             Owner._irefTable.Add(page);
             Debug.Assert(page.Owner == Owner);
-            PagesArray.Elements.Insert(index, page.Reference);
+            PagesArray.Elements.Insert(index, page.RequiredReference);
             Elements.SetInteger(Keys.Count, PagesArray.Elements.Count);
         }
         else
@@ -154,7 +152,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// </summary>
     public void Remove(PdfPage page)
     {
-        PagesArray.Elements.Remove(page.Reference);
+        PagesArray.Elements.Remove(page.RequiredReference);
         Elements.SetInteger(Keys.Count, PagesArray.Elements.Count);
     }
 
@@ -195,7 +193,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
         get
         {
             if (_pagesArray is null)
-                _pagesArray = (PdfArray)Elements.GetValue(Keys.Kids, ValueCreationFlags.Create);
+                _pagesArray = Elements.GetOrCreate<PdfArray>(Keys.Kids, ValueCreationFlags.Create);
             return _pagesArray;
         }
     }

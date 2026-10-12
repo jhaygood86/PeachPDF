@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.IO;
 using System;
@@ -147,7 +145,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         {
             ArrayElements elements = (ArrayElements)MemberwiseClone();
             elements._elements = new List<PdfItem>(elements._elements);
-            elements._ownerArray = null;
+            elements._ownerArray = null!;
             return elements;
         }
 
@@ -183,11 +181,11 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             if (obj is null || obj is PdfNull)
                 return false;
 
-            PdfBoolean boolean = obj as PdfBoolean;
+            PdfBoolean? boolean = obj as PdfBoolean;
             if (boolean is not null)
                 return boolean.Value;
 
-            PdfBooleanObject booleanObject = obj as PdfBooleanObject;
+            PdfBooleanObject? booleanObject = obj as PdfBooleanObject;
             if (booleanObject is not null)
                 return booleanObject.Value;
 
@@ -209,11 +207,11 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             if (obj is null || obj is PdfNull)
                 return 0;
 
-            PdfInteger integer = obj as PdfInteger;
+            PdfInteger? integer = obj as PdfInteger;
             if (integer is not null)
                 return integer.Value;
 
-            PdfIntegerObject integerObject = obj as PdfIntegerObject;
+            PdfIntegerObject? integerObject = obj as PdfIntegerObject;
             if (integerObject is not null)
                 return integerObject.Value;
 
@@ -235,19 +233,19 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             if (obj is null || obj is PdfNull)
                 return 0;
 
-            PdfReal real = obj as PdfReal;
+            PdfReal? real = obj as PdfReal;
             if (real is not null)
                 return real.Value;
 
-            PdfRealObject realObject = obj as PdfRealObject;
+            PdfRealObject? realObject = obj as PdfRealObject;
             if (realObject is not null)
                 return realObject.Value;
 
-            PdfInteger integer = obj as PdfInteger;
+            PdfInteger? integer = obj as PdfInteger;
             if (integer is not null)
                 return integer.Value;
 
-            PdfIntegerObject integerObject = obj as PdfIntegerObject;
+            PdfIntegerObject? integerObject = obj as PdfIntegerObject;
             if (integerObject is not null)
                 return integerObject.Value;
 
@@ -269,11 +267,11 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             if (obj is null || obj is PdfNull)
                 return string.Empty;
 
-            PdfString str = obj as PdfString;
+            PdfString? str = obj as PdfString;
             if (str is not null)
                 return str.Value;
 
-            PdfStringObject strObject = obj as PdfStringObject;
+            PdfStringObject? strObject = obj as PdfStringObject;
             if (strObject is not null)
                 return strObject.Value;
 
@@ -295,11 +293,11 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             if (obj is null || obj is PdfNull)
                 return string.Empty;
 
-            PdfName name = obj as PdfName;
+            PdfName? name = obj as PdfName;
             if (name is not null)
                 return name.Value;
 
-            PdfNameObject nameObject = obj as PdfNameObject;
+            PdfNameObject? nameObject = obj as PdfNameObject;
             if (nameObject is not null)
                 return nameObject.Value;
 
@@ -310,13 +308,13 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// Gets the PdfObject with the specified index, or null, if no such object exists. If the index refers to
         /// a reference, the referenced PdfObject is returned.
         /// </summary>
-        public PdfObject GetObject(int index)
+        public PdfObject? GetObject(int index)
         {
             if (index < 0 || index >= Count)
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             PdfItem item = this[index];
-            PdfReference reference = item as PdfReference;
+            PdfReference? reference = item as PdfReference;
             if (reference is not null)
                 return reference.Value;
 
@@ -327,7 +325,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// Gets the PdfArray with the specified index, or null, if no such object exists. If the index refers to
         /// a reference, the referenced PdfArray is returned.
         /// </summary>
-        public PdfDictionary GetDictionary(int index)
+        public PdfDictionary? GetDictionary(int index)
         {
             return GetObject(index) as PdfDictionary;
         }
@@ -336,7 +334,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// Gets the PdfArray with the specified index, or null, if no such object exists. If the index refers to
         /// a reference, the referenced PdfArray is returned.
         /// </summary>
-        public PdfArray GetArray(int index)
+        public PdfArray? GetArray(int index)
         {
             return GetObject(index) as PdfArray;
         }
@@ -344,7 +342,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <summary>
         /// Gets the PdfReference with the specified index, or null, if no such object exists.
         /// </summary>
-        public PdfReference GetReference(int index)
+        public PdfReference? GetReference(int index)
         {
             PdfItem item = this[index];
             return item as PdfReference;
@@ -431,9 +429,9 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             //Debug.Assert((value is PdfObject && ((PdfObject)value).Reference == null) | !(value is PdfObject),
             //  "You try to set an indirect object directly into an array.");
 
-            PdfObject obj = value as PdfObject;
+            PdfObject? obj = value as PdfObject;
             if (obj is not null && obj.IsIndirect)
-                _elements.Add(obj.Reference);
+                _elements.Add(obj.RequiredReference);
             else
                 _elements.Add(value);
         }
@@ -464,7 +462,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <summary>
         /// The current implementation return null.
         /// </summary>
-        public object SyncRoot => null;
+        public object SyncRoot => null!;
 
         /// <summary>
         /// Returns an enumerator that iterates through the array.

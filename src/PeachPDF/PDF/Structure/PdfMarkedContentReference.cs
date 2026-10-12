@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace PeachPDF.PDF.Structure;
 
 /// <summary>
@@ -21,9 +23,10 @@ internal sealed class PdfMarkedContentReference : PdfDictionary
     /// <summary>
     /// The page the referenced marked-content sequence is rendered on.
     /// </summary>
-    public PdfPage Page
+    [DisallowNull]
+    public PdfPage? Page
     {
-        get => (PdfPage)Elements.GetDictionary(Keys.Pg);
+        get => (PdfPage?)Elements.GetDictionary(Keys.Pg);
         set { Elements.SetReference(Keys.Pg, value); }
     }
 

@@ -274,7 +274,7 @@ namespace PeachPDF.Html.Core.Handlers
             annotation.StructParent = structParentKey;
 
             var array = new PdfArray(_document);
-            array.Elements.Add(element.Reference);
+            array.Elements.Add(element.RequiredReference);
             _root.ParentTree.AddNumber(structParentKey, array);
 
             // PDF/UA requires tab order to follow structure order on any page that has an
@@ -352,7 +352,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var entries = _parentTreeEntriesByKey[_currentPageStructParentsKey];
             System.Diagnostics.Debug.Assert(mcid == entries.Count, "MCIDs must be allocated contiguously per page.");
-            entries.Add(element.Reference);
+            entries.Add(element.RequiredReference);
         }
 
         sealed class PopParentScope : IDisposable

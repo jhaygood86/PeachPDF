@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.Html.Core
             var (ligatureGlyph, text) = cmap.LigatureGlyphToText.Single();
             Assert.NotEqual(f, ligatureGlyph);
             Assert.Equal("ff", text);
-            Assert.Contains(ligatureGlyph, cmap.GlyphIndices.Keys);
+            Assert.Contains(ligatureGlyph, cmap.GlyphIndices);
         }
 
         [Fact]

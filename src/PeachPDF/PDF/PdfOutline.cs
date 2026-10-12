@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 // Review: Under construction - StL/14-10-05
 
 using PeachDrawing.Core;
@@ -149,12 +147,12 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     /// <summary>
     /// Gets the parent of this outline item. The root item has no parent and returns null.
     /// </summary>
-    public PdfOutline Parent
+    public PdfOutline? Parent
     {
         get => _parent;
         internal set { _parent = value; }
     }
-    PdfOutline _parent = null!;
+    PdfOutline? _parent;
 
     /// <summary>
     /// Gets or sets the title.
@@ -312,8 +310,8 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
                 // Case: This is the outline dictionary (the root).
                 // Reference: TABLE 8.3  Entries in the outline dictionary / Page 585
                 Debug.Assert(_outlines is not null && _outlines.Count > 0 && _outlines[0] is not null);
-                Elements[Keys.First] = _outlines[0].Reference;
-                Elements[Keys.Last] = _outlines[_outlines.Count - 1].Reference;
+                Elements[Keys.First] = _outlines[0].RequiredReference;
+                Elements[Keys.Last] = _outlines[_outlines.Count - 1].RequiredReference;
 
                 // The root has no Opened flag of its own -- its top-level items are always
                 // visible, so /Count is simply the number of items that would show up in the
@@ -326,7 +324,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
             {
                 // Case: This is an outline item dictionary.
                 // Reference: TABLE 8.4  Entries in the outline item dictionary / Page 585
-                Elements[Keys.Parent] = _parent.Reference;
+                Elements[Keys.Parent] = _parent.RequiredReference;
 
                 int count = _parent._outlines.Count;
                 int index = _parent._outlines.IndexOf(this);
@@ -343,16 +341,16 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
                 // Not the first element?
                 if (index > 0)
-                    Elements[Keys.Prev] = _parent._outlines[index - 1].Reference;
+                    Elements[Keys.Prev] = _parent._outlines[index - 1].RequiredReference;
 
                 // Not the last element?
                 if (index < count - 1)
-                    Elements[Keys.Next] = _parent._outlines[index + 1].Reference;
+                    Elements[Keys.Next] = _parent._outlines[index + 1].RequiredReference;
 
                 if (hasKids)
                 {
-                    Elements[Keys.First] = _outlines[0].Reference;
-                    Elements[Keys.Last] = _outlines[_outlines.Count - 1].Reference;
+                    Elements[Keys.First] = _outlines[0].RequiredReference;
+                    Elements[Keys.Last] = _outlines[_outlines.Count - 1].RequiredReference;
                 }
                 // If this item is open, /Count is the number of its own descendants that are
                 // visible; if closed, a negative number whose absolute value is how many
@@ -381,55 +379,55 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
     PdfArray CreateDestArray()
     {
-        PdfArray dest = null;
+        PdfArray? dest = null;
         switch (PageDestinationType)
         {
             // [page /XYZ left top zoom]
             case PdfPageDestinationType.Xyz:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral(string.Format("/XYZ {0} {1} {2}", Fd(Left), Fd(Top), Fd(Zoom))));
+                    DestinationPage.RequiredReference, new PdfLiteral(string.Format("/XYZ {0} {1} {2}", Fd(Left), Fd(Top), Fd(Zoom))));
                 break;
 
             // [page /Fit]
             case PdfPageDestinationType.Fit:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral("/Fit"));
+                    DestinationPage.RequiredReference, new PdfLiteral("/Fit"));
                 break;
 
             // [page /FitH top]
             case PdfPageDestinationType.FitH:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral(string.Format("/FitH {0}", Fd(Top))));
+                    DestinationPage.RequiredReference, new PdfLiteral(string.Format("/FitH {0}", Fd(Top))));
                 break;
 
             // [page /FitV left]
             case PdfPageDestinationType.FitV:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral(string.Format("/FitV {0}", Fd(Left))));
+                    DestinationPage.RequiredReference, new PdfLiteral(string.Format("/FitV {0}", Fd(Left))));
                 break;
 
             // [page /FitR left bottom right top]
             case PdfPageDestinationType.FitR:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral(string.Format("/FitR {0} {1} {2} {3}", Fd(Left), Fd(Bottom), Fd(Right), Fd(Top))));
+                    DestinationPage.RequiredReference, new PdfLiteral(string.Format("/FitR {0} {1} {2} {3}", Fd(Left), Fd(Bottom), Fd(Right), Fd(Top))));
                 break;
 
             // [page /FitB]
             case PdfPageDestinationType.FitB:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral("/FitB"));
+                    DestinationPage.RequiredReference, new PdfLiteral("/FitB"));
                 break;
 
             // [page /FitBH top]
             case PdfPageDestinationType.FitBH:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral(string.Format("/FitBH {0}", Fd(Top))));
+                    DestinationPage.RequiredReference, new PdfLiteral(string.Format("/FitBH {0}", Fd(Top))));
                 break;
 
             // [page /FitBV left]
             case PdfPageDestinationType.FitBV:
                 dest = new PdfArray(Owner,
-                    DestinationPage.Reference, new PdfLiteral(string.Format("/FitBV {0}", Fd(Left))));
+                    DestinationPage.RequiredReference, new PdfLiteral(string.Format("/FitBV {0}", Fd(Left))));
                 break;
 
             default:

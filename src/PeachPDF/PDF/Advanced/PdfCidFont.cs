@@ -27,8 +27,6 @@ using System.Linq;
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Drawing;
 using PeachDrawing.Text.Export;
 using PeachPDF.PDF.Filters;
@@ -67,7 +65,7 @@ internal sealed class PdfCidFont : PdfFont
         FontDescriptor = fontDescriptor;
         // ReSharper disable once DoNotCallOverridableMethodsInConstructor
         Owner._irefTable.Add(fontDescriptor);
-        Elements[Keys.FontDescriptor] = fontDescriptor.Reference;
+        Elements[Keys.FontDescriptor] = fontDescriptor.RequiredReference;
 
     }
 
@@ -85,19 +83,19 @@ internal sealed class PdfCidFont : PdfFont
         base.PrepareForSave();
 
         // CID fonts must be always embedded. PDFsharp embedds automatically a subset.
-        ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _characterMapInfo.GlyphIndices.Keys, keepCharacterMap: false);
+        ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _characterMapInfo.GlyphIndices, keepCharacterMap: false);
         byte[] fontData = subSet.Data.ToArray();
         PdfDictionary fontStream = new PdfDictionary(Owner);
         Owner.Internals.AddObject(fontStream);
         bool isCff = subSet.HasCffOutlines;
         if (isCff)
         {
-            FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile3] = fontStream.Reference;
+            FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile3] = fontStream.RequiredReference;
             fontStream.Elements.SetName("/Subtype", "/OpenType");
         }
         else
         {
-            FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile2] = fontStream.Reference;
+            FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile2] = fontStream.RequiredReference;
             fontStream.Elements["/Length1"] = new PdfInteger(fontData.Length);
         }
         if (!Owner.Options.NoCompression)
@@ -113,7 +111,7 @@ internal sealed class PdfCidFont : PdfFont
         // here (see /CIDToGIDMap above), and glyph 0 (.notdef) is always part of the subset.
         if (Owner.Options.PdfAConformance is PeachPDF.PdfAConformance.PdfA1B or PeachPDF.PdfAConformance.PdfA1A)
         {
-            var cids = _characterMapInfo.GlyphIndices.Keys.Append(0).ToArray();
+            var cids = _characterMapInfo.GlyphIndices.Append(0).ToArray();
             var cidSet = new byte[cids.Max() / 8 + 1];
             foreach (var cid in cids)
                 cidSet[cid >> 3] |= (byte)(0x80 >> (cid & 7));
@@ -122,7 +120,7 @@ internal sealed class PdfCidFont : PdfFont
             Owner.Internals.AddObject(cidSetStream);
             cidSetStream.Elements["/Length"] = new PdfInteger(cidSet.Length);
             cidSetStream.CreateStream(cidSet);
-            FontDescriptor.Elements["/CIDSet"] = cidSetStream.Reference;
+            FontDescriptor.Elements["/CIDSet"] = cidSetStream.RequiredReference;
         }
     }
 

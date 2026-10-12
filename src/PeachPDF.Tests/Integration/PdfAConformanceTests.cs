@@ -502,7 +502,7 @@ namespace PeachPDF.Tests.Integration
 
             var annotations = result.PdfDocument.Pages[0].Annotations;
             Assert.Equal(1, annotations.Count);
-            var annotation = annotations[0];
+            var annotation = annotations[0]!;
             Assert.True(annotation.Elements.ContainsKey("/F"));
             Assert.NotEqual(0, annotation.Elements.GetInteger("/F"));
         }

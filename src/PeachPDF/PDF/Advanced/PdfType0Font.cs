@@ -43,7 +43,7 @@ internal sealed class PdfType0Font : PdfFont
 
         PdfArray descendantFonts = new PdfArray(document);
         Owner._irefTable.Add(_descendantFont);
-        descendantFonts.Elements.Add(_descendantFont.Reference);
+        descendantFonts.Elements.Add(_descendantFont.RequiredReference);
         Elements[Keys.DescendantFonts] = descendantFonts;
     }
 

@@ -39,7 +39,7 @@ internal sealed class PdfCatalog : PdfDictionary
     {
         get
         {
-            _pages ??= (PdfPages)Elements.GetValue(Keys.Pages, ValueCreationFlags.CreateIndirect);
+            _pages ??= Elements.GetOrCreate<PdfPages>(Keys.Pages, ValueCreationFlags.CreateIndirect);
             return _pages;
         }
     }
@@ -66,7 +66,7 @@ internal sealed class PdfCatalog : PdfDictionary
     /// <summary>
     /// Implementation of PdfDocument.ViewerPreferences.
     /// </summary>
-    internal PdfViewerPreferences ViewerPreferences => _viewerPreferences ??= (PdfViewerPreferences)Elements.GetValue(Keys.ViewerPreferences, ValueCreationFlags.CreateIndirect);
+    internal PdfViewerPreferences ViewerPreferences => _viewerPreferences ??= Elements.GetOrCreate<PdfViewerPreferences>(Keys.ViewerPreferences, ValueCreationFlags.CreateIndirect);
     PdfViewerPreferences _viewerPreferences = null!;
 
     /// <summary>
@@ -76,7 +76,7 @@ internal sealed class PdfCatalog : PdfDictionary
     {
         get
         {
-            _outline ??= (PdfOutline)Elements.GetValue(Keys.Outlines, ValueCreationFlags.CreateIndirect);
+            _outline ??= Elements.GetOrCreate<PdfOutline>(Keys.Outlines, ValueCreationFlags.CreateIndirect);
             return _outline.Outlines;
         }
     }
@@ -98,7 +98,7 @@ internal sealed class PdfCatalog : PdfDictionary
                 {
                     _names = new PdfNameDictionary(Owner);
                     Owner.Internals.AddObject(_names);
-                    Elements.SetReference(Keys.Names, _names.Reference);
+                    Elements.SetReference(Keys.Names, _names.RequiredReference);
                 }
             }
             return _names;
@@ -127,7 +127,7 @@ internal sealed class PdfCatalog : PdfDictionary
     /// Only ever touched when tagged PDF output is enabled - untouched, this stays null and no
     /// indirect object is allocated for it.
     /// </summary>
-    internal PdfStructureTreeRoot StructureTreeRoot => _structureTreeRoot ??= (PdfStructureTreeRoot)Elements.GetValue(Keys.StructTreeRoot, ValueCreationFlags.CreateIndirect);
+    internal PdfStructureTreeRoot StructureTreeRoot => _structureTreeRoot ??= Elements.GetOrCreate<PdfStructureTreeRoot>(Keys.StructTreeRoot, ValueCreationFlags.CreateIndirect);
     PdfStructureTreeRoot _structureTreeRoot = null!;
 
     /// <summary>
@@ -135,13 +135,13 @@ internal sealed class PdfCatalog : PdfDictionary
     /// Only ever touched when interactive PDF forms output is enabled - untouched, this stays
     /// null and no indirect object is allocated for it.
     /// </summary>
-    internal PdfAcroForm AcroForm => _acroForm ??= (PdfAcroForm)Elements.GetValue(Keys.AcroForm, ValueCreationFlags.CreateIndirect);
+    internal PdfAcroForm AcroForm => _acroForm ??= Elements.GetOrCreate<PdfAcroForm>(Keys.AcroForm, ValueCreationFlags.CreateIndirect);
     PdfAcroForm _acroForm = null!;
 
     /// <summary>
     /// Gets the mark information dictionary ("/MarkInfo"), lazily creating it on first access.
     /// </summary>
-    internal PdfMarkInformation MarkInfo => _markInfo ??= (PdfMarkInformation)Elements.GetValue(Keys.MarkInfo, ValueCreationFlags.CreateIndirect);
+    internal PdfMarkInformation MarkInfo => _markInfo ??= Elements.GetOrCreate<PdfMarkInformation>(Keys.MarkInfo, ValueCreationFlags.CreateIndirect);
     PdfMarkInformation _markInfo = null!;
 
     /// <summary>
@@ -157,7 +157,7 @@ internal sealed class PdfCatalog : PdfDictionary
         // the bare PDF spec permits either, but this is the safer, more broadly-compatible choice.
         Owner.Internals.AddObject(outputIntent);
         var array = new PdfArray(Owner);
-        array.Elements.Add(outputIntent.Reference);
+        array.Elements.Add(outputIntent.RequiredReference);
         Elements[Keys.OutputIntents] = array;
     }
 
@@ -179,7 +179,7 @@ internal sealed class PdfCatalog : PdfDictionary
             array = new PdfArray(Owner);
             Elements[Keys.AF] = array;
         }
-        array.Elements.Add(fileSpecification.Reference);
+        array.Elements.Add(fileSpecification.RequiredReference);
     }
 
     /// <summary>

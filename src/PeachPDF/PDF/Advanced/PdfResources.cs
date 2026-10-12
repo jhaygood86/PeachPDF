@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Core;
 using System.Collections.Generic;
 
@@ -38,14 +36,14 @@ internal sealed class PdfResources : PdfDictionary
     /// </summary>
     public string AddFont(PdfFont font)
     {
-        string name;
+        string? name;
         if (!_resources.TryGetValue(font, out name))
         {
             name = NextFontName;
             _resources[font] = name;
             if (font.Reference is null)
                 Owner._irefTable.Add(font);
-            Fonts.Elements[name] = font.Reference;
+            Fonts.Elements[name] = font.Reference!;
         }
         return name;
     }
@@ -56,14 +54,14 @@ internal sealed class PdfResources : PdfDictionary
     /// </summary>
     public string AddImage(PdfImage image)
     {
-        string name;
+        string? name;
         if (!_resources.TryGetValue(image, out name))
         {
             name = NextImageName;
             _resources[image] = name;
             if (image.Reference is null)
                 Owner._irefTable.Add(image);
-            XObjects.Elements[name] = image.Reference;
+            XObjects.Elements[name] = image.Reference!;
         }
         return name;
     }
@@ -74,14 +72,14 @@ internal sealed class PdfResources : PdfDictionary
     /// </summary>
     public string AddForm(PdfFormXObject form)
     {
-        string name;
+        string? name;
         if (!_resources.TryGetValue(form, out name))
         {
             name = NextFormName;
             _resources[form] = name;
             if (form.Reference is null)
                 Owner._irefTable.Add(form);
-            XObjects.Elements[name] = form.Reference;
+            XObjects.Elements[name] = form.Reference!;
         }
         return name;
     }
@@ -92,14 +90,14 @@ internal sealed class PdfResources : PdfDictionary
     /// </summary>
     public string AddExtGState(PdfExtGState extGState)
     {
-        string name;
+        string? name;
         if (!_resources.TryGetValue(extGState, out name))
         {
             name = NextExtGStateName;
             _resources[extGState] = name;
             if (extGState.Reference is null)
                 Owner._irefTable.Add(extGState);
-            ExtGStates.Elements[name] = extGState.Reference;
+            ExtGStates.Elements[name] = extGState.Reference!;
         }
         return name;
     }
@@ -110,14 +108,14 @@ internal sealed class PdfResources : PdfDictionary
     /// </summary>
     public string AddPattern(PdfShadingPattern pattern)
     {
-        string name;
+        string? name;
         if (!_resources.TryGetValue(pattern, out name))
         {
             name = NextPatternName;
             _resources[pattern] = name;
             if (pattern.Reference is null)
                 Owner._irefTable.Add(pattern);
-            Patterns.Elements[name] = pattern.Reference;
+            Patterns.Elements[name] = pattern.Reference!;
         }
         return name;
     }
@@ -128,14 +126,14 @@ internal sealed class PdfResources : PdfDictionary
     /// </summary>
     public string AddPattern(PdfTilingPattern pattern)
     {
-        string name;
+        string? name;
         if (!_resources.TryGetValue(pattern, out name))
         {
             name = NextPatternName;
             _resources[pattern] = name;
             if (pattern.Reference is null)
                 Owner._irefTable.Add(pattern);
-            Patterns.Elements[name] = pattern.Reference;
+            Patterns.Elements[name] = pattern.Reference!;
         }
         return name;
     }
@@ -143,33 +141,33 @@ internal sealed class PdfResources : PdfDictionary
     /// <summary>
     /// Gets the fonts map.
     /// </summary>
-    internal PdfResourceMap Fonts => _fonts ?? (_fonts = (PdfResourceMap)Elements.GetValue(Keys.Font, ValueCreationFlags.Create));
+    internal PdfResourceMap Fonts => _fonts ?? (_fonts = Elements.GetOrCreate<PdfResourceMap>(Keys.Font, ValueCreationFlags.Create));
     PdfResourceMap _fonts = null!;
 
     /// <summary>
     /// Gets the external objects map.
     /// </summary>
-    internal PdfResourceMap XObjects => _xObjects ?? (_xObjects = (PdfResourceMap)Elements.GetValue(Keys.XObject, ValueCreationFlags.Create));
+    internal PdfResourceMap XObjects => _xObjects ?? (_xObjects = Elements.GetOrCreate<PdfResourceMap>(Keys.XObject, ValueCreationFlags.Create));
     PdfResourceMap _xObjects = null!;
 
     // TODO: make own class
-    internal PdfResourceMap ExtGStates => _extGStates ?? (_extGStates = (PdfResourceMap)Elements.GetValue(Keys.ExtGState, ValueCreationFlags.Create));
+    internal PdfResourceMap ExtGStates => _extGStates ?? (_extGStates = Elements.GetOrCreate<PdfResourceMap>(Keys.ExtGState, ValueCreationFlags.Create));
     PdfResourceMap _extGStates = null!;
 
     // TODO: make own class
-    internal PdfResourceMap ColorSpaces => _colorSpaces ?? (_colorSpaces = (PdfResourceMap)Elements.GetValue(Keys.ColorSpace, ValueCreationFlags.Create));
+    internal PdfResourceMap ColorSpaces => _colorSpaces ?? (_colorSpaces = Elements.GetOrCreate<PdfResourceMap>(Keys.ColorSpace, ValueCreationFlags.Create));
     PdfResourceMap _colorSpaces = null!;
 
     // TODO: make own class
-    internal PdfResourceMap Patterns => _patterns ?? (_patterns = (PdfResourceMap)Elements.GetValue(Keys.Pattern, ValueCreationFlags.Create));
+    internal PdfResourceMap Patterns => _patterns ?? (_patterns = Elements.GetOrCreate<PdfResourceMap>(Keys.Pattern, ValueCreationFlags.Create));
     PdfResourceMap _patterns = null!;
 
     // TODO: make own class
-    internal PdfResourceMap Shadings => _shadings ?? (_shadings = (PdfResourceMap)Elements.GetValue(Keys.Shading, ValueCreationFlags.Create));
+    internal PdfResourceMap Shadings => _shadings ?? (_shadings = Elements.GetOrCreate<PdfResourceMap>(Keys.Shading, ValueCreationFlags.Create));
     PdfResourceMap _shadings = null!;
 
     // TODO: make own class
-    internal PdfResourceMap Properties => _properties ?? (_properties = (PdfResourceMap)Elements.GetValue(Keys.Properties, ValueCreationFlags.Create));
+    internal PdfResourceMap Properties => _properties ?? (_properties = Elements.GetOrCreate<PdfResourceMap>(Keys.Properties, ValueCreationFlags.Create));
     PdfResourceMap _properties = null!;
 
     /// <summary>
@@ -256,7 +254,7 @@ internal sealed class PdfResources : PdfDictionary
         // Collect all resouce names of all imported resources.
         if (_importedResourceNames is null)
         {
-            _importedResourceNames = new Dictionary<string, object>();
+            _importedResourceNames = new Dictionary<string, object?>();
 
             if (Elements[Keys.Font] is not null)
                 Fonts.CollectResourceNames(_importedResourceNames);
@@ -287,7 +285,7 @@ internal sealed class PdfResources : PdfDictionary
     /// <summary>
     /// All the names of imported resources.
     /// </summary>
-    Dictionary<string, object> _importedResourceNames = null!;
+    Dictionary<string, object?> _importedResourceNames = null!;
 
     /// <summary>
     /// Maps all PDFsharp resources to their local resource names.

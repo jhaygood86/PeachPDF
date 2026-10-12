@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
@@ -39,7 +37,7 @@ internal sealed class PdfFormXObjectTable : PdfResourceTable
             //throw new InvalidOperationException("Because of a current limitation of PDFsharp an PdfForm object can be used only within one single PdfDocument.");
 
             // Dispose PdfFromXObject when document has changed
-            form._pdfForm = null;
+            form._pdfForm = null!;
         }
 
         Debug.Assert(form.GetType() == typeof(PdfForm));

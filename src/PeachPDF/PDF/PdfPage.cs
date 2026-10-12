@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
@@ -40,7 +38,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
         : base(document)
     {
         Elements.SetName(Keys.Type, "/Page");
-        Elements[Keys.Parent] = document.Pages.Reference;
+        Elements[Keys.Parent] = document.Pages.RequiredReference;
         Initialize();
     }
 
@@ -118,7 +116,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
                 _document = value;
                 if (Reference is not null)
                     Reference.Document = value;
-                Elements[Keys.Parent] = _document.Pages.Reference;
+                Elements[Keys.Parent] = _document.Pages.RequiredReference;
             }
         }
     }
@@ -352,8 +350,9 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
             if (_annotations is null)
             {
                 // Get annotations array if exists.
-                _annotations = (PdfAnnotations)Elements.GetValue(Keys.Annots);
-                _annotations.Page = this;
+                _annotations = (PdfAnnotations?)Elements.GetValue(Keys.Annots);
+                if (_annotations is not null)
+                    _annotations.Page = this;
             }
             return _annotations is not null;
         }
@@ -369,13 +368,13 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
             if (_annotations is null)
             {
                 // Get or create annotations array.
-                _annotations = (PdfAnnotations)Elements.GetValue(Keys.Annots, ValueCreationFlags.Create);
+                _annotations = Elements.GetOrCreate<PdfAnnotations>(Keys.Annots, ValueCreationFlags.Create);
                 _annotations.Page = this;
             }
             return _annotations;
         }
     }
-    PdfAnnotations _annotations = null!;
+    PdfAnnotations? _annotations;
 
     /// <summary>
     /// Adds an intra document link.
@@ -433,7 +432,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
         get
         {
             if (_resources is null)
-                _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create); //ValueCreationFlags.CreateIndirect
+                _resources = Elements.GetOrCreate<PdfResources>(Keys.Resources, ValueCreationFlags.Create); //ValueCreationFlags.CreateIndirect
             return _resources;
         }
     }
@@ -467,10 +466,10 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// Tries to get the resource name of the specified font data within this page.
     /// Returns null if no such font exists.
     /// </summary>
-    internal string TryGetFontName(string idName, out PdfFont pdfFont)
+    internal string? TryGetFontName(string idName, out PdfFont? pdfFont)
     {
         pdfFont = _document.FontTable.TryGetFont(idName);
-        string name = null;
+        string? name = null;
         if (pdfFont is not null)
             name = Resources.AddFont(pdfFont);
         return name;

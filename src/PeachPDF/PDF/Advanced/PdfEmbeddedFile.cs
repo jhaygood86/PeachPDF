@@ -1,5 +1,3 @@
-#nullable disable warnings
-
 using PeachPDF.PDF.Filters;
 using PeachPDF.PDF.IO;
 using System;
@@ -22,13 +20,13 @@ internal class PdfEmbeddedFile : PdfDictionary
         Elements.SetObject(Keys.Params, paramsDictionary);
     }
 
-    public PdfEmbeddedFile(PdfDocument document, byte[] bytes, string checksum = null)
+    public PdfEmbeddedFile(PdfDocument document, byte[] bytes, string? checksum = null)
         : this(document)
     {
         this.CreateStreamAndSetProperties(bytes, checksum);
     }
 
-    public void CreateStreamAndSetProperties(byte[] bytes, string checksum = null)
+    public void CreateStreamAndSetProperties(byte[] bytes, string? checksum = null)
     {
         this.CreateStream(bytes);
 

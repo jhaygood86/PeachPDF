@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Collections.Generic;
 
 namespace PeachPDF.PDF.Advanced;
@@ -25,7 +23,7 @@ internal sealed class PdfResourceMap : PdfDictionary //, IEnumerable
     /// <summary>
     /// Adds all imported resource names to the specified hashtable.
     /// </summary>
-    internal void CollectResourceNames(Dictionary<string, object> usedResourceNames)
+    internal void CollectResourceNames(Dictionary<string, object?> usedResourceNames)
     {
         // ?TODO: Imported resources (e.g. fonts) can be reused, but I think this is rather difficult. Will be an issue in PDFsharp 2.0.
         PdfName[] names = Elements.KeyNames;

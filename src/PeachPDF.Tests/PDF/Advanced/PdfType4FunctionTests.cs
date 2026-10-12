@@ -29,8 +29,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
             var fn = PdfType4Function.BuildColorMatrixFunction(document, ColorMatrix.Identity);
 
             Assert.Equal(4, fn.Elements.GetInteger("/FunctionType"));
-            Assert.Equal("[0 1 0 1 0 1 0 1]", fn.Elements["/Domain"].ToString());
-            Assert.Equal("[0 1 0 1 0 1 0 1]", fn.Elements["/Range"].ToString());
+            Assert.Equal("[0 1 0 1 0 1 0 1]", fn.Elements["/Domain"]!.ToString());
+            Assert.Equal("[0 1 0 1 0 1 0 1]", fn.Elements["/Range"]!.ToString());
             Assert.True(fn.IsIndirect, "A Type 4 function is a stream object and must be indirect.");
         }
 
@@ -91,7 +91,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
             var fn = PdfType4Function.BuildInvertFunction(document);
 
             Assert.Equal(4, fn.Elements.GetInteger("/FunctionType"));
-            Assert.Equal("[0 1]", fn.Elements["/Domain"].ToString());
+            Assert.Equal("[0 1]", fn.Elements["/Domain"]!.ToString());
             Assert.True(fn.IsIndirect);
 
             var program = Encoding.ASCII.GetString(fn.Stream.Value);

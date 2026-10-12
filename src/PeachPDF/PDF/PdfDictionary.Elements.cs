@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
@@ -41,7 +39,7 @@ internal partial class PdfDictionary
         {
             DictionaryElements dictionaryElements = (DictionaryElements)MemberwiseClone();
             dictionaryElements._elements = new Dictionary<string, PdfItem>(dictionaryElements._elements);
-            dictionaryElements._ownerDictionary = null;
+            dictionaryElements._ownerDictionary = null!;
             return dictionaryElements;
         }
 
@@ -468,9 +466,9 @@ internal partial class PdfDictionary
         /// <summary>
         /// Gets the value for the specified key. If the value does not exist, it is optionally created.
         /// </summary>
-        public PdfItem GetValue(string key, ValueCreationFlags options)
+        public PdfItem? GetValue(string key, ValueCreationFlags options)
         {
-            PdfItem value = this[key];
+            PdfItem? value = this[key];
 
             if (value is null)
                 return options == ValueCreationFlags.None ? null : CreateMissingValue(key, options);
@@ -504,7 +502,7 @@ internal partial class PdfDictionary
             if (options == ValueCreationFlags.CreateIndirect)
             {
                 _ownerDictionary.Owner._irefTable.Add(obj);
-                this[key] = obj.Reference;
+                this[key] = obj.RequiredReference;
             }
             else
                 this[key] = obj;
@@ -520,7 +518,7 @@ internal partial class PdfDictionary
             // If we come here PDF file is corrupted.
             PdfItem value = iref.Value ?? throw new InvalidOperationException("Indirect reference without value.");
 
-            Type type = GetValueType(key);
+            Type? type = GetValueType(key);
             Debug.Assert(type is not null, "No value type specified in meta information. Please send this file to PDFsharp support.");
 
             if (type is null || type == value.GetType())
@@ -545,7 +543,7 @@ internal partial class PdfDictionary
         {
             Debug.Assert(!dict.IsIndirect);
 
-            Type type = GetValueType(key);
+            Type? type = GetValueType(key);
             Debug.Assert(type is not null, "No value type specified in meta information. Please send this file to PDFsharp support.");
             return dict.GetType() != type ? CreateDictionary(type, dict) : dict;
         }
@@ -555,14 +553,23 @@ internal partial class PdfDictionary
             Debug.Assert(!array.IsIndirect);
 
             // This is more complicated. If type is null do nothing.
-            Type type = GetValueType(key);
+            Type? type = GetValueType(key);
             return type is not null && type != array.GetType() ? CreateArray(type, array) : array;
+        }
+
+        /// <summary>
+        /// Gets the typed value of a key that is created when missing, so the result is never null.
+        /// </summary>
+        internal TItem GetOrCreate<TItem>(string key, ValueCreationFlags options) where TItem : PdfItem
+        {
+            Debug.Assert(options != ValueCreationFlags.None, "A value that is not created can be missing.");
+            return (TItem)GetValue(key, options)!;
         }
 
         /// <summary>
         /// Short cut for GetValue(key, ValueCreationFlags.None).
         /// </summary>
-        public PdfItem GetValue(string key)
+        public PdfItem? GetValue(string key)
         {
             return GetValue(key, ValueCreationFlags.None);
         }
@@ -571,13 +578,13 @@ internal partial class PdfDictionary
         /// Returns the type of the object to be created as value of the specified key.
         /// </summary>
         [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
-        Type GetValueType(string key)  // TODO: move to PdfObject
+        Type? GetValueType(string key)  // TODO: move to PdfObject
         {
-            Type type = null;
-            PdfDictionaryMetadata meta = _ownerDictionary.Meta;
+            Type? type = null;
+            PdfDictionaryMetadata? meta = _ownerDictionary.Meta;
             if (meta is not null)
             {
-                PdfKeyDescriptor kd = meta[key];
+                PdfKeyDescriptor? kd = meta[key];
                 if (kd is not null)
                     type = kd.GetValueType();
                 //else
@@ -631,10 +638,10 @@ internal partial class PdfDictionary
         /// Gets the PdfObject with the specified key, or null, if no such object exists. If the key refers to
         /// a reference, the referenced PdfObject is returned.
         /// </summary>
-        public PdfObject GetObject(string key)
+        public PdfObject? GetObject(string key)
         {
-            PdfItem item = this[key];
-            PdfReference reference = item as PdfReference;
+            PdfItem? item = this[key];
+            PdfReference? reference = item as PdfReference;
             if (reference is not null)
                 return reference.Value;
             return item as PdfObject;
@@ -644,7 +651,7 @@ internal partial class PdfDictionary
         /// Gets the PdfDictionary with the specified key, or null, if no such object exists. If the key refers to
         /// a reference, the referenced PdfDictionary is returned.
         /// </summary>
-        public PdfDictionary GetDictionary(string key)
+        public PdfDictionary? GetDictionary(string key)
         {
             return GetObject(key) as PdfDictionary;
         }
@@ -653,7 +660,7 @@ internal partial class PdfDictionary
         /// Gets the PdfArray with the specified key, or null, if no such object exists. If the key refers to
         /// a reference, the referenced PdfArray is returned.
         /// </summary>
-        public PdfArray GetArray(string key)
+        public PdfArray? GetArray(string key)
         {
             return GetObject(key) as PdfArray;
         }
@@ -661,9 +668,9 @@ internal partial class PdfDictionary
         /// <summary>
         /// Gets the PdfReference with the specified key, or null, if no such object exists.
         /// </summary>
-        public PdfReference GetReference(string key)
+        public PdfReference? GetReference(string key)
         {
-            PdfItem item = this[key];
+            PdfItem? item = this[key];
             return item as PdfReference;
         }
 
@@ -721,37 +728,39 @@ internal partial class PdfDictionary
         /// starting with a slash '/'. This property provides full access to the elements of the
         /// PDF dictionary. Wrong use can lead to errors or corrupt PDF files.
         /// </summary>
-        public PdfItem this[string key]
+        // The IDictionary contract promises a non-null item; a missing key reads as null here, which is what callers test for.
+#pragma warning disable CS8766
+        public PdfItem? this[string key]
         {
             get
             {
-                PdfItem item;
-                _elements.TryGetValue(key, out item);
+                _elements.TryGetValue(key, out PdfItem? item);
                 return item;
             }
             set
             {
                 ArgumentNullException.ThrowIfNull(value);
-                PdfObject obj = value as PdfObject;
+                PdfObject? obj = value as PdfObject;
                 if (obj is not null && obj.IsIndirect)
-                    value = obj.Reference;
+                    value = obj.RequiredReference;
                 _elements[key] = value;
             }
         }
+#pragma warning restore CS8766
 
         /// <summary>
         /// Gets or sets an entry in the dictionary identified by a PdfName object.
         /// </summary>
-        public PdfItem this[PdfName key]
+        public PdfItem? this[PdfName key]
         {
             get => this[key.Value];
             set
             {
                 ArgumentNullException.ThrowIfNull(value);
 
-                PdfObject obj = value as PdfObject;
+                PdfObject? obj = value as PdfObject;
                 if (obj is not null && obj.IsIndirect)
-                    value = obj.Reference;
+                    value = obj.RequiredReference;
                 _elements[key.Value] = value;
             }
         }
@@ -812,9 +821,9 @@ internal partial class PdfDictionary
                 throw new ArgumentException("The key must start with a slash '/'.");
 
             // If object is indirect automatically convert value to reference.
-            PdfObject obj = value as PdfObject;
+            PdfObject? obj = value as PdfObject;
             if (obj is not null && obj.IsIndirect)
-                value = obj.Reference;
+                value = obj.RequiredReference;
 
             _elements.Add(key, value);
         }
@@ -864,7 +873,7 @@ internal partial class PdfDictionary
         /// <summary>
         /// Gets the value associated with the specified key.
         /// </summary>
-        public bool TryGetValue(string key, out PdfItem value)
+        public bool TryGetValue(string key, [MaybeNullWhen(false)] out PdfItem value)
         {
             return _elements.TryGetValue(key, out value);
         }
@@ -911,7 +920,7 @@ internal partial class PdfDictionary
         /// <summary>
         /// The current implementation returns null.
         /// </summary>
-        public object SyncRoot => null;
+        public object SyncRoot => null!;
 
         /// <summary>
         /// Gets the DebuggerDisplayAttribute text.

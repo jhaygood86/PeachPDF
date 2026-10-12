@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Collections.Generic;
 
 namespace PeachPDF.PDF.Advanced;
@@ -24,7 +22,7 @@ internal sealed class PdfExtGStateTable : PdfResourceTable
     public PdfExtGState GetExtGStateStroke(double alpha, bool overprint)
     {
         string key = PdfExtGState.MakeKey(alpha, overprint);
-        PdfExtGState extGState;
+        PdfExtGState? extGState;
         if (!_strokeAlphaValues.TryGetValue(key, out extGState))
         {
             extGState = new PdfExtGState(Owner);
@@ -46,7 +44,7 @@ internal sealed class PdfExtGStateTable : PdfResourceTable
     public PdfExtGState GetExtGStateNonStroke(double alpha, bool overprint)
     {
         string key = PdfExtGState.MakeKey(alpha, overprint);
-        PdfExtGState extGState;
+        PdfExtGState? extGState;
         if (!_nonStrokeStates.TryGetValue(key, out extGState))
         {
             extGState = new PdfExtGState(Owner);
@@ -73,7 +71,7 @@ internal sealed class PdfExtGStateTable : PdfResourceTable
     public PdfExtGState GetExtGState(double alpha)
     {
         string key = PdfExtGState.MakeKey(alpha, false);
-        PdfExtGState extGState;
+        PdfExtGState? extGState;
         if (!_combinedAlphaStates.TryGetValue(key, out extGState))
         {
             extGState = new PdfExtGState(Owner)
@@ -100,7 +98,7 @@ internal sealed class PdfExtGStateTable : PdfResourceTable
             return GetExtGState(alpha);
 
         string key = PdfExtGState.MakeKey(alpha, false) + pdfBlendModeName;
-        PdfExtGState extGState;
+        PdfExtGState? extGState;
         if (!_combinedAlphaBlendStates.TryGetValue(key, out extGState))
         {
             extGState = new PdfExtGState(Owner)

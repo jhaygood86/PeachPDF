@@ -58,7 +58,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             doc.Internals.AddObject(referenced);
             referenced.Elements.SetName("/Type", "/Test");
 
-            node.AddNumber(7, referenced.Reference);
+            node.AddNumber(7, referenced.Reference!);
 
             var resolved = node.GetValue(7);
             Assert.Same(referenced, resolved);

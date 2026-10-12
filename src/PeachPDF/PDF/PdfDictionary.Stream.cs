@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
@@ -47,7 +45,7 @@ internal partial class PdfDictionary
         public PdfStream Clone()
         {
             PdfStream stream = (PdfStream)MemberwiseClone();
-            stream._ownerDictionary = null;
+            stream._ownerDictionary = null!;
             if (stream._value is not null)
             {
                 stream._value = new byte[stream._value.Length];

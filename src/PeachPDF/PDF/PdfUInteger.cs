@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.IO;
 using System;
 using System.Diagnostics;
@@ -185,7 +183,7 @@ internal sealed class PdfUInteger : PdfNumber, IConvertible
     public object ToType(Type conversionType, IFormatProvider? provider)
     {
         // TODO:  Add PdfUInteger.ToType implementation
-        return null;
+        return null!;
     }
 
     /// <summary>

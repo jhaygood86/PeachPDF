@@ -280,8 +280,8 @@ namespace PeachPDF.Tests.Integration
         static async Task<string> AppearanceStream(string bodyHtml)
         {
             var field = await Field(bodyHtml);
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP);
-            var form = (PdfFormXObject)((PdfReference)ap.Elements["/N"]!).Value;
+            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
+            var form = (PdfFormXObject)((PdfReference)ap.Elements["/N"]!).Value!;
             return Encoding.Latin1.GetString(form.Stream.Value);
         }
     }

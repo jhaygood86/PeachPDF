@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
@@ -257,7 +255,7 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
         //outline.Document = Owner;
         outline.Parent = null;
 
-        Owner._irefTable.Remove(outline.Reference);
+        Owner._irefTable.Remove(outline.RequiredReference);
     }
 
     /// <summary>

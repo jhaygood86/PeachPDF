@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
 using System;
@@ -28,7 +26,7 @@ internal sealed class PdfWriter
     {
         if (_stream is not null && closeUnderlyingStream)
             _stream.Dispose();
-        _stream = null;
+        _stream = null!;
     }
 
     public void Close()

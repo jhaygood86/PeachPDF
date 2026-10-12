@@ -126,7 +126,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             closedMid.Outlines.Add("H3 A", page, opened: true);
             closedMid.Outlines.Add("H3 B", page, opened: true);
 
-            var root = top.Parent;
+            var root = top.Parent!;
             root.PrepareForSave();
 
             Assert.Equal(2, root.Elements.GetInteger(PdfOutline.Keys.Count));
@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             closedParent.Outlines.Add("Closed child A", page, opened: false);
             closedParent.Outlines.Add("Closed child B", page, opened: false);
 
-            var root = closedParent.Parent;
+            var root = closedParent.Parent!;
             root.PrepareForSave();
 
             Assert.Equal(-2, closedParent.Elements.GetInteger(PdfOutline.Keys.Count));

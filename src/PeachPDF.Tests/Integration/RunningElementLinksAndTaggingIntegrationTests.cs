@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Integration
 
             // A6 = 297.64pt tall; the link is inside a 12mm (~34pt) top margin, so its annotation must
             // sit near the physical top of the page, not down in the body content.
-            var rect = doc.Pages[0].Annotations[0].Rectangle;
+            var rect = doc.Pages[0].Annotations[0]!.Rectangle;
             var topFromSheetTop = doc.Pages[0].Height - rect.Y2;
             Assert.InRange(topFromSheetTop, 0, 40);
         }

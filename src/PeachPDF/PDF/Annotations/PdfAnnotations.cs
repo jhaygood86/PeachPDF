@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Advanced;
 using System;
 using System.Collections;
@@ -31,7 +29,7 @@ internal sealed class PdfAnnotations : PdfArray
     {
         annotation.Document = Owner;
         Owner._irefTable.Add(annotation);
-        Elements.Add(annotation.Reference);
+        Elements.Add(annotation.RequiredReference);
     }
 
     /// <summary>
@@ -43,7 +41,7 @@ internal sealed class PdfAnnotations : PdfArray
             throw new InvalidOperationException("The annotation does not belong to this document.");
 
         Owner.Internals.RemoveObject(annotation);
-        Elements.Remove(annotation.Reference);
+        Elements.Remove(annotation.RequiredReference);
     }
 
     /// <summary>
@@ -52,7 +50,7 @@ internal sealed class PdfAnnotations : PdfArray
     public void Clear()
     {
         for (int idx = Count - 1; idx >= 0; idx--)
-            Page.Annotations.Remove(_page.Annotations[idx]);
+            Page.Annotations.Remove(_page.Annotations[idx]!);
     }
 
     /// <summary>
@@ -63,12 +61,12 @@ internal sealed class PdfAnnotations : PdfArray
     /// <summary>
     /// Gets the <see cref="PeachPDF.PDF.Annotations.PdfAnnotation"/> at the specified index.
     /// </summary>
-    public PdfAnnotation this[int index]
+    public PdfAnnotation? this[int index]
     {
         get
         {
-            PdfReference iref;
-            PdfDictionary dict;
+            PdfReference? iref;
+            PdfDictionary? dict;
             PdfItem item = Elements[index];
             if ((iref = item as PdfReference) is not null)
             {
@@ -100,6 +98,6 @@ internal sealed class PdfAnnotations : PdfArray
     public override IEnumerator<PdfItem> GetEnumerator()
     {
         for (int index = 0; index < Count; index++)
-            yield return this[index];
+            yield return this[index]!;
     }
 }

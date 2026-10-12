@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Rendering;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
@@ -200,7 +198,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         if (!CanSave(ref message))
             throw new PdfException(message);
 
-        PdfWriter writer = null;
+        PdfWriter? writer = null;
         try
         {
             writer = new PdfWriter(stream);
@@ -393,7 +391,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             if (CanModify)
                 return Pages.Count;
             // PdfOpenMode is InformationOnly
-            PdfDictionary pageTreeRoot = (PdfDictionary)Catalog.Elements.GetObject(PdfCatalog.Keys.Pages);
+            PdfDictionary pageTreeRoot = (PdfDictionary)Catalog.Elements.GetObject(PdfCatalog.Keys.Pages)!;
             return pageTreeRoot.Elements.GetInteger(PdfPages.Keys.Count);
         }
     }
@@ -647,7 +645,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         /// (e.g. two indirect but byte-identical ICC profiles) still compare equal, rather than being
         /// compared by object identity.
         /// </summary>
-        private static string DescribeItem(PdfItem item)
+        private static string DescribeItem(PdfItem? item)
         {
             switch (item)
             {
@@ -675,7 +673,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
                 .Select(resources => resources?.Elements?.GetDictionary("/XObject"))
                 .Where(xObjects => xObjects?.Elements is not null)
                 .SelectMany(xObjects =>
-                    from item in xObjects.Elements
+                    from item in xObjects!.Elements
                     let xObject = (item.Value as PdfReference)?.Value as PdfDictionary
                     where xObject?.Elements?.GetString("/Subtype") == "/Image"
                     select new ImageInfo(xObjects, item, xObject)

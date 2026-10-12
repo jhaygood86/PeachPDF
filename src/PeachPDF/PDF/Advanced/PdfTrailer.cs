@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Internal;
 using PeachPDF.PDF.IO;
 using System;
@@ -37,15 +35,15 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         // /Root 1 0 R
         // /Size 10
 
-        PdfReference iref = trailer.Elements.GetReference(Keys.Info);
+        PdfReference? iref = trailer.Elements.GetReference(Keys.Info);
         if (iref is not null)
             Elements.SetReference(Keys.Info, iref);
 
-        Elements.SetReference(Keys.Root, trailer.Elements.GetReference(Keys.Root));
+        Elements.SetReference(Keys.Root, trailer.Elements.GetReference(Keys.Root)!);
 
         Elements.SetInteger(Keys.Size, trailer.Elements.GetInteger(Keys.Size));
 
-        PdfArray id = trailer.Elements.GetArray(Keys.ID);
+        PdfArray? id = trailer.Elements.GetArray(Keys.ID);
         if (id is not null)
             Elements.SetValue(Keys.ID, id);
     }
@@ -62,13 +60,13 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
     //  get {return Elements.GetInteger(Keys.Prev);}
     //}
 
-    public PdfDocumentInformation Info => (PdfDocumentInformation)Elements.GetValue(Keys.Info, ValueCreationFlags.CreateIndirect);
+    public PdfDocumentInformation Info => Elements.GetOrCreate<PdfDocumentInformation>(Keys.Info, ValueCreationFlags.CreateIndirect);
 
     /// <summary>
     /// (Required; must be an indirect reference)
     /// The catalog dictionary for the PDF document contained in the file.
     /// </summary>
-    public PdfCatalog Root => (PdfCatalog)Elements.GetValue(PdfTrailer.Keys.Root, ValueCreationFlags.CreateIndirect);
+    public PdfCatalog Root => Elements.GetOrCreate<PdfCatalog>(PdfTrailer.Keys.Root, ValueCreationFlags.CreateIndirect);
 
     /// <summary>
     /// Gets the first or second document identifier.
@@ -78,7 +76,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         if (index < 0 || index > 1)
             throw new ArgumentOutOfRangeException("index", index, "Index must be 0 or 1.");
 
-        PdfArray array = Elements[Keys.ID] as PdfArray;
+        PdfArray? array = Elements[Keys.ID] as PdfArray;
         if (array is null || array.Elements.Count < 2)
             return "";
         PdfItem item = array.Elements[index];
@@ -95,7 +93,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         if (index < 0 || index > 1)
             throw new ArgumentOutOfRangeException("index", index, "Index must be 0 or 1.");
 
-        PdfArray array = Elements[Keys.ID] as PdfArray;
+        PdfArray? array = Elements[Keys.ID] as PdfArray;
         if (array is null || array.Elements.Count < 2)
             array = CreateNewDocumentIds();
         array.Elements[index] = new PdfString(value, PdfStringFlags.HexLiteral);
@@ -129,10 +127,10 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
     internal void Finish()
     {
         // /Root
-        PdfReference iref = _document._trailer.Elements[Keys.Root] as PdfReference;
+        PdfReference? iref = _document._trailer.Elements[Keys.Root] as PdfReference;
         if (iref is not null && iref.Value is null)
         {
-            iref = _document._irefTable[iref.ObjectId];
+            iref = _document._irefTable[iref.ObjectId]!;
             Debug.Assert(iref.Value is not null);
             _document._trailer.Elements[Keys.Root] = iref;
         }
@@ -141,7 +139,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
         iref = _document._trailer.Elements[PdfTrailer.Keys.Info] as PdfReference;
         if (iref is not null && iref.Value is null)
         {
-            iref = _document._irefTable[iref.ObjectId];
+            iref = _document._irefTable[iref.ObjectId]!;
             Debug.Assert(iref.Value is not null);
             _document._trailer.Elements[Keys.Info] = iref;
         }

@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Numerics;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Core;
@@ -39,22 +37,12 @@ internal sealed class PdfGraphics : IDisposable
             throw new InvalidOperationException("Cannot create PdfGraphics for a page of a document that cannot be modified. Use PdfDocumentOpenMode.Modify.");
 
         _gsStack = new GraphicsStateStack(this);
-        PdfContent content = null;
-        switch (options)
-        {
-            case PdfPageAppendMode.Replace:
-                page.Contents.Elements.Clear();
-                goto case PdfPageAppendMode.Append;
+        if (options == PdfPageAppendMode.Replace)
+            page.Contents.Elements.Clear();
 
-            case PdfPageAppendMode.Prepend:
-                content = page.Contents.PrependContent();
-                break;
-
-            case PdfPageAppendMode.Append:
-                content = page.Contents.AppendContent();
-                break;
-        }
-        page.RenderContent = content;
+        page.RenderContent = options == PdfPageAppendMode.Prepend
+            ? page.Contents.PrependContent()
+            : page.Contents.AppendContent();
         _renderer = new PdfGraphicsRenderer(page, this, options);
         _pageSizePoints = new Size(page.Width, page.Height);
         _pageSize = new Size(page.Width, page.Height);
@@ -133,7 +121,7 @@ internal sealed class PdfGraphics : IDisposable
         _pageOrigin = new PaintPoint();
 
         double pageHeight = _pageSize.Height;
-        PdfPage targetPage = PdfPage;
+        PdfPage? targetPage = PdfPage;
         PaintPoint trimOffset = new PaintPoint();
         if (targetPage is not null && targetPage.TrimMargins.AreSet)
         {
@@ -170,7 +158,7 @@ internal sealed class PdfGraphics : IDisposable
             if (_renderer is not null)
             {
                 _renderer.Close();
-                _renderer = null;
+                _renderer = null!;
             }
         }
     }
@@ -663,7 +651,7 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     void CheckFormConsistency(PdfRasterImage image)
     {
-        PdfForm xForm = image as PdfForm;
+        PdfForm? xForm = image as PdfForm;
         if (xForm is not null)
         {
             // Force disposing of PdfGraphics that draws the content
@@ -691,7 +679,7 @@ internal sealed class PdfGraphics : IDisposable
     /// </summary>
     public PdfGraphicsStateToken Save()
     {
-        PdfGraphicsStateToken xState = null;
+        PdfGraphicsStateToken? xState = null;
         xState = new PdfGraphicsStateToken();
         InternalGraphicsState iState = new InternalGraphicsState(this, xState);
         iState.Transform = _transform;
@@ -841,11 +829,11 @@ internal sealed class PdfGraphics : IDisposable
     /// Gets the PDF page that serves as drawing surface if PDF is rendered,
     /// or null, if no such object exists.
     /// </summary>
-    public PdfPage PdfPage
+    public PdfPage? PdfPage
     {
         get
         {
-            PdfGraphicsRenderer renderer = _renderer as PdfGraphicsRenderer;
+            PdfGraphicsRenderer? renderer = _renderer as PdfGraphicsRenderer;
             return renderer is not null ? renderer._page : null;
         }
     }
@@ -857,7 +845,7 @@ internal sealed class PdfGraphics : IDisposable
     /// inside another tile (e.g. nested CSS/SVG group <c>opacity</c>, or opacity inside a mask/pattern
     /// tile) - <see cref="PdfPage"/> alone is null for a form-bound instance.
     /// </summary>
-    internal PdfDocument Owner => PdfPage?.Owner ?? _form?.Owner;
+    internal PdfDocument? Owner => PdfPage?.Owner ?? _form?.Owner;
 
     /// <summary>
     /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>

@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
 using System;
@@ -47,7 +45,7 @@ internal class CharacterMapInfo
                     _typeface.TryMapRune(lookup, out ushort mapped);
                     int glyphIndex = mapped;
                     CharacterToGlyphIndex.Add(codepoint, glyphIndex);
-                    GlyphIndices[glyphIndex] = null;
+                    GlyphIndices.Add(glyphIndex);
                 }
             }
         }
@@ -97,7 +95,7 @@ internal class CharacterMapInfo
 
         foreach (PlacedGlyph glyph in Shaper.Shape(_typeface, text, features).Glyphs)
         {
-            GlyphIndices[glyph.GlyphIndex] = null;
+            GlyphIndices.Add(glyph.GlyphIndex);
             MapGlyphToText(glyph.GlyphIndex, source.Substring(glyph.ClusterStart, glyph.ClusterLength));
         }
     }
@@ -132,7 +130,7 @@ internal class CharacterMapInfo
             for (int idx = 0; idx < length; idx++)
             {
                 int glyphIndex = glyphIndices[idx];
-                GlyphIndices[glyphIndex] = null;
+                GlyphIndices.Add(glyphIndex);
             }
         }
     }
@@ -146,20 +144,20 @@ internal class CharacterMapInfo
     /// </summary>
     public void AddShapedGlyph(int glyphIndex, string sourceText)
     {
-        GlyphIndices[glyphIndex] = null;
+        GlyphIndices.Add(glyphIndex);
         MapGlyphToText(glyphIndex, sourceText);
     }
 
     public int[] GetGlyphIndices()
     {
         int[] indices = new int[GlyphIndices.Count];
-        GlyphIndices.Keys.CopyTo(indices, 0);
+        GlyphIndices.CopyTo(indices);
         Array.Sort(indices);
         return indices;
     }
 
     public Dictionary<int, int> CharacterToGlyphIndex = new Dictionary<int, int>();
-    public Dictionary<int, object> GlyphIndices = new Dictionary<int, object>();
+    public HashSet<int> GlyphIndices { get; } = [];
 
     /// <summary>Glyph index to source text, for glyphs <see cref="AddShapedText"/> produced that
     /// represent more than one character (GSUB ligatures) or an astral codepoint.</summary>

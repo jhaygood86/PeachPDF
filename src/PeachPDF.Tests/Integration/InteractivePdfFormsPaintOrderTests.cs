@@ -143,12 +143,12 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         static PdfFormXObject ResolveNormalAppearance(PdfAcroField field)
         {
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP);
+            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
             if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
                 return direct;
 
-            var states = ap.Elements.GetDictionary("/N");
-            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!).Value;
+            var states = ap.Elements.GetDictionary("/N")!;
+            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!)!.Value;
         }
 
         static List<PdfAcroField> Fields(PdfDocument document)

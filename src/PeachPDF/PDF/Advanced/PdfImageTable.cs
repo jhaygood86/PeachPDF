@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
@@ -64,7 +62,7 @@ internal sealed class PdfImageTable : PdfResourceTable
             image._lastSizedSelectorHeightPt = heightPt;
         }
 
-        if (!_images.TryGetValue(selector, out PdfImage pdfImage))
+        if (!_images.TryGetValue(selector, out PdfImage? pdfImage))
         {
             pdfImage = new PdfImage(Owner, image, targetWidth, targetHeight);
             //pdfImage.Document = _document;
@@ -260,7 +258,7 @@ internal sealed class PdfImageTable : PdfResourceTable
 
         public override bool Equals(object? obj)
         {
-            ImageSelector selector = obj as ImageSelector;
+            ImageSelector? selector = obj as ImageSelector;
             if (selector is null)
                 return false;
             return _path == selector._path

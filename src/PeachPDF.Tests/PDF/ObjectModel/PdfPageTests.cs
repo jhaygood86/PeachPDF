@@ -205,16 +205,14 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void HasAnnotations_WithNoAnnotsEntry_Throws()
+        public void HasAnnotations_WithNoAnnotsEntry_IsFalse()
         {
-            // HasAnnotations's getter does `Elements.GetValue(Keys.Annots)` (no ValueCreationFlags.Create), which
-            // returns null when the page has no /Annots entry yet, then immediately dereferences it
-            // via `_annotations.Page = this` -- a real, pre-existing NullReferenceException bug for
-            // any page that hasn't had an annotation added yet. Documented here, not fixed.
+            // The getter looks the /Annots entry up without creating it, so a page that has not had an
+            // annotation added yet simply has none.
             var doc = new PdfDocument();
             var page = doc.AddPage();
 
-            Assert.Throws<NullReferenceException>(() => page.HasAnnotations);
+            Assert.False(page.HasAnnotations);
         }
 
         [Fact]

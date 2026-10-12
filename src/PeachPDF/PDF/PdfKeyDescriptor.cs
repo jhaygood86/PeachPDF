@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -81,7 +79,7 @@ internal sealed class PdfKeyDescriptor
     /// Returns the type of the object to be created as value for the described key.
     /// </summary>
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
-    public Type GetValueType()
+    public Type? GetValueType()
     {
         if (_objectType is not null)
             return _objectType;
@@ -123,7 +121,7 @@ internal sealed class PdfKeyDescriptor
     // failure rather than letting it be asserted against.
     [ExcludeFromCodeCoverage]
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
-    private Type ReportInvalidKeyType()
+    private Type? ReportInvalidKeyType()
     {
         Debug.Assert(false, "Invalid PdfKeyType: " + _keyType);
         return null;

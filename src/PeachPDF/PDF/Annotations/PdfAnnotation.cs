@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
@@ -152,8 +150,8 @@ internal abstract class PdfAnnotation : PdfDictionary
     {
         get
         {
-            PdfItem item = Elements[Keys.C];
-            PdfArray array = item as PdfArray;
+            PdfItem? item = Elements[Keys.C];
+            PdfArray? array = item as PdfArray;
             if (array is not null)  // TODO: check for iref?
             {
                 if (array.Elements.Count == 3)

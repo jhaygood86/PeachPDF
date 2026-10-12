@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachPDF.PDF.Drawing;
@@ -41,7 +39,7 @@ internal sealed class PdfFontTable : PdfResourceTable
     public PdfFont GetFont(TypefaceFont font)
     {
         string selector = Selectors.GetValue(font.Typeface, ComputeKey);
-        PdfFont pdfFont;
+        PdfFont? pdfFont;
         if (!_fonts.TryGetValue(selector, out pdfFont))
         {
             pdfFont = new PdfType0Font(Owner, font);

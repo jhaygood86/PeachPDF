@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PeachPDF.PDF.Annotations;
 
 namespace PeachPDF.PDF.AcroForms;
@@ -17,9 +18,10 @@ internal sealed class PdfWidgetAnnotation : PdfAnnotation
     }
 
     /// <summary>The owning <see cref="PdfRadioButtonField"/> ("/Parent") - the field's own /FT, /T and /V live there, not here. Distinct from the inherited annotation-level <see cref="PdfAnnotation.Parent"/> (the page's <see cref="PdfAnnotations"/> collection), an unrelated key.</summary>
-    public PdfAcroField FieldParent
+    [DisallowNull]
+    public PdfAcroField? FieldParent
     {
-        get => (PdfAcroField)Elements.GetDictionary(PdfAcroField.Keys.Parent);
+        get => (PdfAcroField?)Elements.GetDictionary(PdfAcroField.Keys.Parent);
         set { Elements.SetReference(PdfAcroField.Keys.Parent, value); }
     }
 

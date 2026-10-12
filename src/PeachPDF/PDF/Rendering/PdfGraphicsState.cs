@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
@@ -230,7 +228,7 @@ internal sealed class PdfGraphicsState
         if (renderingMode == 3)
             return;
 
-        SolidBrush solidBrush = brush as SolidBrush;
+        SolidBrush? solidBrush = brush as SolidBrush;
         if (solidBrush is not null)
         {
             PaintColor color = solidBrush.PaintColor;
@@ -416,7 +414,7 @@ internal sealed class PdfGraphicsState
         RealizeFillColor(_realizedFillColor.WithOpacity(transparency), _realizedNonStrokeOverPrint, colorMode);
     }
 
-    internal PdfFont _realizedFont = null!;
+    internal PdfFont? _realizedFont;
     string _realizedFontName = string.Empty;
     double _realizedFontSize;
     int _realizedRenderingMode;  // Reference: TABLE 5.2  Text state operators / Page 398

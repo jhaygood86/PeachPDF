@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PeachPDF.PDF.Advanced;
 using System.Collections.Generic;
 
@@ -41,7 +42,8 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// The parent structure element (or the document's PdfStructureTreeRoot's synthetic root
     /// /Document element).
     /// </summary>
-    public PdfDictionary Parent
+    [DisallowNull]
+    public PdfDictionary? Parent
     {
         get => Elements.GetDictionary(Keys.P);
         set { Elements.SetReference(Keys.P, value); }
@@ -50,9 +52,10 @@ internal sealed class PdfStructureElement : PdfDictionary
     /// <summary>
     /// The page most of this element's marked content lives on (set once, on first content).
     /// </summary>
-    public PdfPage Page
+    [DisallowNull]
+    public PdfPage? Page
     {
-        get => (PdfPage)Elements.GetDictionary(Keys.Pg);
+        get => (PdfPage?)Elements.GetDictionary(Keys.Pg);
         set { Elements.SetReference(Keys.Pg, value); }
     }
 
@@ -82,7 +85,7 @@ internal sealed class PdfStructureElement : PdfDictionary
             array = new PdfArray(Owner);
             Elements[Keys.AF] = array;
         }
-        array.Elements.Add(fileSpecification.Reference);
+        array.Elements.Add(fileSpecification.RequiredReference);
     }
 
     /// <summary>
@@ -139,7 +142,7 @@ internal sealed class PdfStructureElement : PdfDictionary
         }
     }
 
-    static PdfDictionary? GetPdfDictionary(PdfItem item)
+    static PdfDictionary? GetPdfDictionary(PdfItem? item)
     {
         if (item is PdfReference r)
             return r.Value as PdfDictionary;

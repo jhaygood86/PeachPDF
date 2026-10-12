@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Linq;
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
@@ -68,18 +66,18 @@ internal sealed class PdfGraphicsRenderer
             content2.CreateStream(GetContent());
             _content.Clear();
 
-            _gfx = null;
-            _page.RenderContent._pdfRenderer = null;
-            _page.RenderContent = null;
-            _page = null;
+            _gfx = null!;
+            _page.RenderContent._pdfRenderer = null!;
+            _page.RenderContent = null!;
+            _page = null!;
         }
         else if (_form is not null)
         {
             _form._pdfForm.CreateStream(GetContent());
             _content.Clear();
-            _gfx = null;
-            _form.PdfRenderer = null;
-            _form = null;
+            _gfx = null!;
+            _form.PdfRenderer = null!;
+            _form = null!;
         }
     }
 
@@ -383,12 +381,12 @@ internal sealed class PdfGraphicsRenderer
         }
         else
         {
-            PdfFont realizedFont = _gfxState._realizedFont;
+            PdfFont? realizedFont = _gfxState._realizedFont;
             Debug.Assert(realizedFont is not null);
             realizedFont.AddShapedText(s, features, logicalText);
 
-            string text = null;
-            IReadOnlyList<PlacedGlyph> shapedGlyphs = null;
+            string? text = null;
+            IReadOnlyList<PlacedGlyph>? shapedGlyphs = null;
             bool hasGposDeltas = false;
             shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
             RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
@@ -467,7 +465,7 @@ internal sealed class PdfGraphicsRenderer
                     // individually positioned Td+Tj instead of one Tj over the whole run - the
                     // common case (no GPOS deltas) never reaches this branch, so existing output is
                     // otherwise byte-for-byte unchanged.
-                    DrawPositionedGlyphs(shapedGlyphs, font, new PaintPoint(x, y + verticalOffset), laidOutEndX);
+                    DrawPositionedGlyphs(shapedGlyphs!, font, new PaintPoint(x, y + verticalOffset), laidOutEndX);
                 }
                 else
                 {
@@ -616,7 +614,7 @@ internal sealed class PdfGraphicsRenderer
         // No real source text exists for these (a stretchy-operator assembly part/size variant
         // has no Unicode meaning of its own), so ToUnicode gets an empty mapping per glyph - the
         // glyph itself still renders correctly, only copy/paste extraction is affected.
-        PdfFont realizedFont = _gfxState._realizedFont;
+        PdfFont? realizedFont = _gfxState._realizedFont;
         foreach (var glyph in glyphs)
             realizedFont?.AddShapedGlyph(glyph.GlyphIndex, "");
 
@@ -931,7 +929,7 @@ internal sealed class PdfGraphicsRenderer
         _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y, width, height, name);
     }
 
-    void AppendStrokeFill(Pen pen, Brush brush, FillMode fillMode, bool closePath)
+    void AppendStrokeFill(Pen? pen, Brush? brush, FillMode fillMode, bool closePath)
     {
         if (closePath)
             _content.Append("h ");
@@ -1115,7 +1113,7 @@ internal sealed class PdfGraphicsRenderer
             RequireNoMissingGlyphsForPdfA(new[] { glyph }, font);
 
         Debug.Assert(_streamMode == StreamMode.Text);
-        PdfFont realizedFont = _gfxState._realizedFont;
+        PdfFont? realizedFont = _gfxState._realizedFont;
         Debug.Assert(realizedFont is not null);
         realizedFont.AddShapedGlyph(glyph.GlyphIndex, sourceText);
 
@@ -1197,7 +1195,7 @@ internal sealed class PdfGraphicsRenderer
     /// <summary>
     /// Makes the specified pen and brush to the current graphics objects.
     /// </summary>
-    private void Realize(Pen pen, Brush brush)
+    private void Realize(Pen? pen, Brush? brush)
     {
         BeginPage();
         BeginGraphicMode();
@@ -1276,7 +1274,7 @@ internal sealed class PdfGraphicsRenderer
         // The transparency set for a brush also applies to images. Set opacity to 100% so image will be drawn without transparency.
         _gfxState.RealizeNonStrokeTransparency(1, _colorMode);
 
-        PdfForm form = image as PdfForm;
+        PdfForm? form = image as PdfForm;
         if (form is not null)
             return GetFormName(form);
 

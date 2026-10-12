@@ -558,7 +558,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             doc.Internals.AddObject(inner);
             var dict = new PdfDictionary();
 
-            dict.Elements.SetReference("/Inner", inner.Reference);
+            dict.Elements.SetReference("/Inner", inner.Reference!);
 
             Assert.Same(inner.Reference, dict.Elements.GetReference("/Inner"));
         }

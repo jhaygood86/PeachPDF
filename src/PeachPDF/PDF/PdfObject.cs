@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.IO;
 using System;
@@ -57,7 +55,7 @@ internal abstract class PdfObject : PdfItem
     protected override object Copy()
     {
         PdfObject obj = (PdfObject)base.Copy();
-        obj._document = null;
+        obj._document = null!;
         obj._iref = null;
         return obj;
     }
@@ -159,12 +157,18 @@ internal abstract class PdfObject : PdfItem
     /// <summary>
     /// Gets the indirect reference of this object. If the value is null, this object is a direct object.
     /// </summary>
-    public PdfReference Reference
+    public PdfReference? Reference
     {
         get => _iref;
 
         // Setting the reference outside PDFsharp is not considered as a valid operation.
         internal set { _iref = value; }
     }
-    PdfReference _iref = null!;
+    PdfReference? _iref;
+
+    /// <summary>
+    /// Gets the indirect reference of this object, which must be an indirect object.
+    /// </summary>
+    internal PdfReference RequiredReference =>
+        _iref ?? throw new InvalidOperationException("The object is a direct object and has no indirect reference.");
 }

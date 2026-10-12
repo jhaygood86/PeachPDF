@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Filters;
 using PeachPDF.PDF.Internal;
@@ -161,7 +159,7 @@ internal sealed partial class PdfImage : PdfXObject
             return;
         }
 
-        byte[] imageBits = null;
+        byte[]? imageBits = null;
 
         // A resize only ever reaches here for an image with no real alpha (PdfImageTable only
         // resizes; whether that resize lands on the Jpeg or NonJpeg path is still decided by
@@ -176,8 +174,8 @@ internal sealed partial class PdfImage : PdfXObject
         bool tryFlateDecode = _document.Options.UseFlateDecoderForJpegImages == PdfUseFlateDecoderForJpegImages.Automatic;
         bool useFlateDecode = _document.Options.UseFlateDecoderForJpegImages == PdfUseFlateDecoderForJpegImages.Always;
 
-        byte[] imageDataCompressed = (useFlateDecode || tryFlateDecode) ? PdfFlateEncoder.Encode(imageBits, _document.Options.FlateEncodeMode) : null;
-        if (useFlateDecode || tryFlateDecode && imageDataCompressed.Length < imageBits.Length)
+        byte[]? imageDataCompressed = (useFlateDecode || tryFlateDecode) ? PdfFlateEncoder.Encode(imageBits, _document.Options.FlateEncodeMode) : null;
+        if (imageDataCompressed is not null && (useFlateDecode || tryFlateDecode && imageDataCompressed.Length < imageBits.Length))
         {
             Stream = new PdfStream(imageDataCompressed, this);
             Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
@@ -319,7 +317,7 @@ internal sealed partial class PdfImage : PdfXObject
         iccStream.Stream = new PdfStream(iccProfile, iccStream);
         iccStream.Elements[PdfStream.Keys.Length] = new PdfInteger(iccProfile.Length);
 
-        return new PdfArray(_document, new PdfName("/ICCBased"), iccStream.Reference);
+        return new PdfArray(_document, new PdfName("/ICCBased"), iccStream.RequiredReference);
     }
 
     /// <summary>
@@ -392,7 +390,7 @@ internal sealed partial class PdfImage : PdfXObject
             smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
             if (AllowInterpolate)
                 smask.Elements[Keys.Interpolate] = PdfBoolean.True;
-            Elements[Keys.SMask] = smask.Reference;
+            Elements[Keys.SMask] = smask.RequiredReference;
         }
 
         if (AllowInterpolate)
@@ -438,7 +436,7 @@ internal sealed partial class PdfImage : PdfXObject
         lookupStream.Elements[PdfStream.Keys.Length] = new PdfInteger(paletteRgb.Length);
 
         return new PdfArray(_document, new PdfName("/Indexed"), BuildDeviceOrIccColorSpace(3, "/DeviceRGB", iccProfile),
-            new PdfInteger(hival), lookupStream.Reference);
+            new PdfInteger(hival), lookupStream.RequiredReference);
     }
 
     /// <summary>
@@ -733,7 +731,7 @@ internal sealed partial class PdfImage : PdfXObject
             pdfMask.Elements[Keys.Height] = new PdfInteger(height);
             pdfMask.Elements[Keys.BitsPerComponent] = new PdfInteger(1);
             pdfMask.Elements[Keys.ImageMask] = new PdfBoolean(true);
-            Elements[Keys.Mask] = pdfMask.Reference;
+            Elements[Keys.Mask] = pdfMask.RequiredReference;
         }
         if (hasMask && hasAlphaMask && pdfVersion >= 14)
         {
@@ -760,7 +758,7 @@ internal sealed partial class PdfImage : PdfXObject
             smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
             if (AllowInterpolate)
                 smask.Elements[Keys.Interpolate] = PdfBoolean.True;
-            Elements[Keys.SMask] = smask.Reference;
+            Elements[Keys.SMask] = smask.RequiredReference;
         }
 
         byte[] imageDataCompressed = StreamCompression.Encode(_document.Options, imageData, out var imageFilter);

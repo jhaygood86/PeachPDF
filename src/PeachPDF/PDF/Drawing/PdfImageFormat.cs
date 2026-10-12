@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System;
 
 namespace PeachPDF.PDF.Drawing;
@@ -23,7 +21,7 @@ internal sealed class PdfImageFormat
     /// </summary>
     public override bool Equals(object? obj)
     {
-        PdfImageFormat format = obj as PdfImageFormat;
+        PdfImageFormat? format = obj as PdfImageFormat;
         if (format is null)
             return false;
         return _guid == format._guid;

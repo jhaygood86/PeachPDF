@@ -1,7 +1,5 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
-#nullable disable warnings
-
 using System.Numerics;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Rendering;
@@ -147,7 +145,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
 
         _formState = FormState.Finished;
         Gfx.Dispose();
-        Gfx = null;
+        Gfx = null!;
 
         if (PdfRenderer is not null)
         {
@@ -273,7 +271,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
             Debug.Assert(IsTemplate, "This function is for form templates only.");
             return FormXObject.Resources;
             //if (resources == null)
-            //  resources = (PdfResources)pdfForm.Elements.GetValue(PdfFormXObject.Keys.Resources, ValueCreationFlags.Create); // ValueCreationFlags.CreateIndirect
+            //  resources = pdfForm.Elements.GetOrCreate<PdfResources>(PdfFormXObject.Keys.Resources, ValueCreationFlags.Create); // ValueCreationFlags.CreateIndirect
             //return resources;
         }
     }
@@ -308,11 +306,11 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// Tries to get the resource name of the specified font data within this form.
     /// Returns null if no such font exists.
     /// </summary>
-    internal string TryGetFontName(string idName, out PdfFont pdfFont)
+    internal string? TryGetFontName(string idName, out PdfFont? pdfFont)
     {
         Debug.Assert(IsTemplate, "This function is for form templates only.");
         pdfFont = _document.FontTable.TryGetFont(idName);
-        string name = null;
+        string? name = null;
         if (pdfFont is not null)
             name = Resources.AddFont(pdfFont);
         return name;
