@@ -7,6 +7,7 @@
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using PeachPDF.PDF.Internal;
 
@@ -76,6 +77,26 @@ internal sealed class PdfContentWriter
         }
 
         return this;
+    }
+
+    /// <summary>
+    /// Appends a number formatted with the invariant culture, straight into the current chunk when it has room.
+    /// </summary>
+    public PdfContentWriter Append<T>(T value, string format) where T : IUtf8SpanFormattable, IFormattable
+    {
+        EnsureCurrentChunk();
+        Span<byte> free = _currentChunk.AsSpan(_currentCount);
+        if (free.Length >= 64 && value.TryFormat(free, out int written, format, CultureInfo.InvariantCulture))
+        {
+            _currentCount += written;
+            _length += written;
+            return this;
+        }
+
+        Span<byte> scratch = stackalloc byte[64];
+        return value.TryFormat(scratch, out written, format, CultureInfo.InvariantCulture)
+            ? Append(scratch[..written])
+            : Append(value.ToString(format, CultureInfo.InvariantCulture));
     }
 
     public PdfContentWriter Append(ReadOnlySpan<byte> value)

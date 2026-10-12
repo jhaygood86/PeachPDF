@@ -280,7 +280,7 @@ internal sealed class PdfGraphicsRenderer
             || Math.Abs(run.LaidOutEndX - x) > em / 10)
             return false;
 
-        AppendFormatArgs("{0} Tj\n", text);
+        _content.Append(text).Append(" Tj\n");
 
         // The pen has moved on, but nothing after a separator continues from it.
         _textRun = null;
@@ -432,15 +432,16 @@ internal sealed class PdfGraphicsRenderer
                 if (_gfxState.ItalicSimulationOn)
                 {
                     AdjustTdOffset(ref pos, verticalOffset, skewSinus);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td\n{2} Tj\n", pos.X, pos.Y, text);
+                    _content.Append(pos.X, format2).Append(' ').Append(pos.Y, format2).Append(" Td\n").Append(text).Append(" Tj\n");
                     RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                 }
                 else
                 {
                     // Italic simulation is done by skewing characters to the right.
                     Matrix3x2 m = PdfMatrix.Create(1, 0, skewSinus, 1, pos.X, pos.Y);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
-                        m.M11, m.M12, m.M21, m.M22, m.M31, m.M32, text);
+                    _content.Append(m.M11, format2).Append(' ').Append(m.M12, format2).Append(' ').Append(m.M21, format2).Append(' ')
+                        .Append(m.M22, format2).Append(' ').Append(m.M31, format2).Append(' ').Append(m.M32, format2)
+                        .Append(" Tm\n").Append(text).Append(" Tj\n");
                     _gfxState.ItalicSimulationOn = true;
                     AdjustTdOffset(ref pos, verticalOffset, null);
                     RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
@@ -451,8 +452,9 @@ internal sealed class PdfGraphicsRenderer
                 if (_gfxState.ItalicSimulationOn)
                 {
                     Matrix3x2 m = PdfMatrix.Create(1, 0, 0, 1, pos.X, pos.Y);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
-                        m.M11, m.M12, m.M21, m.M22, m.M31, m.M32, text);
+                    _content.Append(m.M11, format2).Append(' ').Append(m.M12, format2).Append(' ').Append(m.M21, format2).Append(' ')
+                        .Append(m.M22, format2).Append(' ').Append(m.M31, format2).Append(' ').Append(m.M32, format2)
+                        .Append(" Tm\n").Append(text).Append(" Tj\n");
                     _gfxState.ItalicSimulationOn = false;
                     AdjustTdOffset(ref pos, verticalOffset, null);
                     RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
@@ -470,7 +472,7 @@ internal sealed class PdfGraphicsRenderer
                 else
                 {
                     AdjustTdOffset(ref pos, verticalOffset, null);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
+                    _content.Append(pos.X, format2).Append(' ').Append(pos.Y, format2).Append(" Td ").Append(text).Append(" Tj\n");
                     RememberTextRun(font, shapedGlyphs, x, laidOutEndX, y + verticalOffset);
                 }
             }
@@ -576,7 +578,7 @@ internal sealed class PdfGraphicsRenderer
             bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
             string glyphText = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
 
-            AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", glyphPos.X, glyphPos.Y, glyphText);
+            _content.Append(glyphPos.X, format2).Append(' ').Append(glyphPos.Y, format2).Append(" Td ").Append(glyphText).Append(" Tj\n");
 
             // XOffset is a placement-only shift (doesn't move where the next glyph starts) - the
             // pen only ever advances by the natural width plus GPOS's own XAdvanceDelta, matching
@@ -628,7 +630,7 @@ internal sealed class PdfGraphicsRenderer
             bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
             string glyphText = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
 
-            AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, glyphText);
+            _content.Append(pos.X, format2).Append(' ').Append(pos.Y, format2).Append(" Td ").Append(glyphText).Append(" Tj\n");
         }
     }
 
@@ -939,17 +941,7 @@ internal sealed class PdfGraphicsRenderer
         _content.Append(" cm ");
     }
 
-    internal static void AppendPdfNumber(PdfContentWriter content, double value, string format)
-    {
-        Span<char> buffer = stackalloc char[64];
-        if (value.TryFormat(buffer, out int written, format.AsSpan(), CultureInfo.InvariantCulture))
-        {
-            content.Append(buffer[..written]);
-            return;
-        }
-
-        content.Append(value.ToString(format, CultureInfo.InvariantCulture));
-    }
+    internal static void AppendPdfNumber(PdfContentWriter content, double value, string format) => content.Append(value, format);
 
     internal void AppendFormat(string format, PaintPoint point)
     {
