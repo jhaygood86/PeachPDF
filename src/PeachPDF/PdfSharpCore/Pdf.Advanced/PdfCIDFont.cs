@@ -94,10 +94,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (isCff)
             {
                 FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile3] = fontStream.Reference;
-                // A subsetted CFF is the bare CFF table, which is what a CIDFontType0 descendant is
-                // defined to carry; a whole face is still the OpenType file that holds its CFF, along
-                // with the layout and mapping tables a viewer would have to parse to find the CFF.
-                fontStream.Elements.SetName("/Subtype", subSet.IsSubset ? "/CIDFontType0C" : "/OpenType");
+                // The subtype follows the bytes: a subsetted CID-keyed CFF is the bare CFF table (header 01 00), which is what
+                // a CIDFontType0 descendant carries. Anything else is an OpenType file, including a variable font's CFF2
+                // outlines written as a static CFF inside one, which a CIDFontType0C stream must not be.
+                fontStream.Elements.SetName("/Subtype", fontData is [1, 0, ..] ? "/CIDFontType0C" : "/OpenType");
             }
             else
             {

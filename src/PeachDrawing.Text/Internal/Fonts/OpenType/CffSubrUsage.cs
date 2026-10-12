@@ -28,11 +28,21 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     {
         private const int MaxDepth = 10;
 
+        /// <summary>
+        /// The state a subroutine is entered in, which decides what its walk does: the font dictionary (its nested local calls
+        /// are that FD's), the hint count and operand stack (stems and hintmask bytes depend on them), and the depth (the nesting limit).
+        /// </summary>
+        private readonly record struct SubrEntry(bool Global, int Fd, int Index, int Hints, int StackDepth, int Depth);
+
+        /// <summary>The state a subroutine leaves behind, replayed when it is entered in the same state again.</summary>
+        private readonly record struct SubrExit(int Hints, int StackDepth, bool HasTop, double Top);
+
         private readonly IReadOnlyList<byte[]> _globalSubrs;
         private readonly Func<int, IReadOnlyList<byte[]>> _localSubrsFor;
 
         private HashSet<int> _global = [];
         private readonly Dictionary<int, HashSet<int>> _local = [];
+        private readonly Dictionary<SubrEntry, SubrExit> _calls = [];
 
         private int _currentFd;
         private int _hintCount;
@@ -120,12 +130,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                         break;
 
                     case 10: // callsubr
-                        if (!Call(_localSubrsFor(_currentFd), _local[_currentFd], depth))
+                        if (!Call(_localSubrsFor(_currentFd), global: false, depth))
                             return;
                         break;
 
                     case 29: // callgsubr
-                        if (!Call(_globalSubrs, _global, depth))
+                        if (!Call(_globalSubrs, global: true, depth))
                             return;
                         break;
 
@@ -155,7 +165,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
         }
 
-        private bool Call(IReadOnlyList<byte[]> subrs, HashSet<int> used, int depth)
+        private bool Call(IReadOnlyList<byte[]> subrs, bool global, int depth)
         {
             if (!_hasTop)
             {
@@ -175,10 +185,27 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 return false;
             }
 
-            if (used.Add(index))
-                Walk(subrs[index], depth + 1);
+            // Skipping a subroutine already walked would drop the stems it adds to the hint count, so the
+            // hintmask bytes after it would be misread. Replaying the state it left behind keeps them counted.
+            var entry = new SubrEntry(global, _currentFd, index, _hintCount, _stackDepth, depth);
+            if (_calls.TryGetValue(entry, out var exit))
+            {
+                _hintCount = exit.Hints;
+                _stackDepth = exit.StackDepth;
+                _hasTop = exit.HasTop;
+                _top = exit.Top;
+                return true;
+            }
 
-            return Complete;
+            var used = global ? _global : _local[_currentFd];
+            used.Add(index);
+            Walk(subrs[index], depth + 1);
+
+            if (!Complete)
+                return false;
+
+            _calls[entry] = new SubrExit(_hintCount, _stackDepth, _hasTop, _top);
+            return true;
         }
 
         private void Clear()

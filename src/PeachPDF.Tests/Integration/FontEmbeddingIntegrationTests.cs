@@ -235,6 +235,27 @@ body {{ font-family: 'TestCffNoFormat', serif; font-size: 14pt; }}
             Assert.Contains("/OpenType", pdfText);
         }
 
+        // A CID-keyed CFF is subset to the glyphs drawn, and the stream is the bare CFF table: CIDFontType0C, not OpenType.
+        [Fact]
+        public async Task CidKeyedCffFont_IsEmbeddedAsABareCffStream_CIDFontType0C()
+        {
+            var b64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.HintingCffCid));
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestCidCff'; src: url('data:font/opentype;base64,{b64}') format('opentype'); }}
+body {{ font-family: 'TestCidCff', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello CFF</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/CIDFontType0C", pdfText);
+        }
+
         // -------------------------------------------------------------------------
         // CFF: /Length1 must NOT appear on a FontFile3 stream (only valid for FontFile2)
         // -------------------------------------------------------------------------

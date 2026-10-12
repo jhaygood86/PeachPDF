@@ -72,5 +72,41 @@ namespace PeachDrawing.Text.Tests.Fonts
             recursive.Add([14], 0);
             Assert.False(recursive.Complete);
         }
+
+        [Fact]
+        public void Add_ReachesEachFontDictionarysLocalSubroutineThroughASharedGlobalSubroutine()
+        {
+            // Global subr 0 calls local subr 0 of whichever font dictionary the glyph belongs to.
+            byte[][] globalSubrs = [[32, 10, 11]]; // push -107, callsubr, return
+            byte[][] fd0Subrs = [[11]];
+            byte[][] fd1Subrs = [[11]];
+            var usage = new CffSubrUsage(globalSubrs, fd => fd == 0 ? fd0Subrs : fd1Subrs);
+
+            usage.Add([32, 29, 14], 0); // push -107, callgsubr, endchar
+            usage.Add([32, 29, 14], 1);
+
+            Assert.True(usage.Complete);
+            Assert.Contains(0, usage.GlobalSubrs);
+            Assert.Contains(0, usage.LocalSubrsForFd(0));
+            Assert.Contains(0, usage.LocalSubrsForFd(1));
+        }
+
+        [Fact]
+        public void Add_CountsTheHintsOfASubroutineWalkedForAnEarlierGlyph()
+        {
+            // Local subr 0 adds twelve hints (24 operands, hstemhm), so the hintmask after it takes two mask bytes.
+            // Its second byte is a return opcode: the call to subr 1 after it is found only if the hint count
+            // still includes subr 0's stems when the second glyph reaches the hintmask.
+            byte[] stems = [.. Enumerable.Repeat((byte)139, 24), 18, 11];
+            byte[][] localSubrs = [stems, [11]];
+            var usage = new CffSubrUsage([], _ => localSubrs);
+
+            usage.Add([32, 10, 14], 0); // callsubr 0, endchar
+            usage.Add([32, 10, 19, 0, 11, 33, 10, 14], 0); // callsubr 0, hintmask, two mask bytes, callsubr 1, endchar
+
+            Assert.True(usage.Complete);
+            Assert.Contains(0, usage.LocalSubrsForFd(0));
+            Assert.Contains(1, usage.LocalSubrsForFd(0));
+        }
     }
 }
