@@ -50,7 +50,7 @@ internal sealed class PdfCatalog : PdfDictionary
     /// </summary>
     internal PdfPageLayout PageLayout
     {
-        get => (PdfPageLayout)Elements.GetEnumFromName(Keys.PageLayout, PdfPageLayout.SinglePage);
+        get => Elements.GetEnumFromName(Keys.PageLayout, PdfPageLayout.SinglePage);
         set { Elements.SetEnumAsName(Keys.PageLayout, value); }
     }
 
@@ -59,7 +59,7 @@ internal sealed class PdfCatalog : PdfDictionary
     /// </summary>
     internal PdfPageMode PageMode
     {
-        get => (PdfPageMode)Elements.GetEnumFromName(Keys.PageMode, PdfPageMode.UseNone);
+        get => Elements.GetEnumFromName(Keys.PageMode, PdfPageMode.UseNone);
         set { Elements.SetEnumAsName(Keys.PageMode, value); }
     }
 

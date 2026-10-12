@@ -577,7 +577,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var dict = new PdfDictionary();
             dict.Elements.SetEnumAsName("/Layout", PdfPageLayout.TwoColumnLeft);
 
-            var result = (PdfPageLayout)dict.Elements.GetEnumFromName("/Layout", PdfPageLayout.SinglePage);
+            var result = dict.Elements.GetEnumFromName("/Layout", PdfPageLayout.SinglePage);
 
             Assert.Equal(PdfPageLayout.TwoColumnLeft, result);
         }
@@ -587,29 +587,9 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         {
             var dict = new PdfDictionary();
 
-            var result = (PdfPageMode)dict.Elements.GetEnumFromName("/Mode", PdfPageMode.FullScreen);
+            var result = dict.Elements.GetEnumFromName("/Mode", PdfPageMode.FullScreen);
 
             Assert.Equal(PdfPageMode.FullScreen, result);
-        }
-
-        [Fact]
-        public void EnumFromName_MissingKeyWithCreate_ThrowsBecauseDefaultLacksLeadingSlash()
-        {
-            // The create branch stores `new PdfName(defaultValue.ToString())`, but an enum's
-            // ToString() never includes a leading slash while PdfName's constructor requires one --
-            // so GetEnumFromName(..., create: true) always throws for any enum default. Real,
-            // pre-existing bug; documented here rather than fixed.
-            var dict = new PdfDictionary();
-
-            Assert.Throws<ArgumentException>(() => dict.Elements.GetEnumFromName("/Mode", PdfPageMode.UseOutlines, create: true));
-        }
-
-        [Fact]
-        public void SetEnumAsName_NonEnumValue_Throws()
-        {
-            var dict = new PdfDictionary();
-
-            Assert.Throws<ArgumentException>(() => dict.Elements.SetEnumAsName("/Mode", "not-an-enum"));
         }
     }
 }
