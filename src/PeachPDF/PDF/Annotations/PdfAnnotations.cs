@@ -99,52 +99,7 @@ internal sealed class PdfAnnotations : PdfArray
     /// </summary>
     public override IEnumerator<PdfItem> GetEnumerator()
     {
-        return (IEnumerator<PdfItem>)new AnnotationsIterator(this);
-    }
-    // THHO4STLA: AnnotationsIterator: Implementation does not work http://forum.pdfsharp.net/viewtopic.php?p=3285#p3285
-    // Code using the enumerator like this will crash:
-    //foreach (var annotation in page.Annotations)
-    //{
-    //    annotation.GetType();
-    //}
-
-    //!!!new 2015-10-15: use PdfItem instead of PdfAnnotation. 
-    // TODO Should we change this to "public new IEnumerator<PdfAnnotation> GetEnumerator()"?
-
-    class AnnotationsIterator : IEnumerator<PdfItem/*PdfAnnotation*/>
-    {
-        public AnnotationsIterator(PdfAnnotations annotations)
-        {
-            _annotations = annotations;
-            _index = -1;
-        }
-
-        public PdfItem/*PdfAnnotation*/ Current
-        {
-            get => _annotations[_index];
-        }
-
-        object IEnumerator.Current
-        {
-            get => Current;
-        }
-
-        public bool MoveNext()
-        {
-            return ++_index < _annotations.Count;
-        }
-
-        public void Reset()
-        {
-            _index = -1;
-        }
-
-        public void Dispose()
-        {
-            //throw new NotImplementedException();
-        }
-
-        readonly PdfAnnotations _annotations;
-        int _index;
+        for (int index = 0; index < Count; index++)
+            yield return this[index];
     }
 }

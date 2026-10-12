@@ -225,58 +225,8 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// </summary>
     public new IEnumerator<PdfPage> GetEnumerator()
     {
-        return new PdfPagesEnumerator(this);
-    }
-
-    class PdfPagesEnumerator : IEnumerator<PdfPage>
-    {
-        internal PdfPagesEnumerator(PdfPages list)
-        {
-            _list = list;
-            _index = -1;
-        }
-
-        public bool MoveNext()
-        {
-            if (_index < _list.Count - 1)
-            {
-                _index++;
-                _currentElement = _list[_index];
-                return true;
-            }
-            _index = _list.Count;
-            return false;
-        }
-
-        public void Reset()
-        {
-            _currentElement = null;
-            _index = -1;
-        }
-
-        object IEnumerator.Current
-        {
-            get => Current;
-        }
-
-        public PdfPage Current
-        {
-            get
-            {
-                if (_index == -1 || _index >= _list.Count)
-                    throw new InvalidOperationException("Enumeration out of range.");
-                return _currentElement!;
-            }
-        }
-
-        public void Dispose()
-        {
-            // Nothing to do.
-        }
-
-        PdfPage? _currentElement;
-        int _index;
-        readonly PdfPages _list;
+        for (int index = 0; index < Count; index++)
+            yield return this[index];
     }
 
     /// <summary>

@@ -112,57 +112,8 @@ internal sealed class PdfContents : PdfArray
     /// </summary>
     public new IEnumerator<PdfContent> GetEnumerator()
     {
-        return new PdfPageContentEnumerator(this);
+        for (int index = 0; index < Elements.Count; index++)
+            yield return (PdfContent)((PdfReference)Elements[index]).Value;
     }
 
-    class PdfPageContentEnumerator : IEnumerator<PdfContent>
-    {
-        internal PdfPageContentEnumerator(PdfContents list)
-        {
-            _contents = list;
-            _index = -1;
-        }
-
-        public bool MoveNext()
-        {
-            if (_index < _contents.Elements.Count - 1)
-            {
-                _index++;
-                _currentElement = (PdfContent)((PdfReference)_contents.Elements[_index]).Value;
-                return true;
-            }
-            _index = _contents.Elements.Count;
-            return false;
-        }
-
-        public void Reset()
-        {
-            _currentElement = null;
-            _index = -1;
-        }
-
-        object IEnumerator.Current
-        {
-            get => Current;
-        }
-
-        public PdfContent Current
-        {
-            get
-            {
-                if (_index == -1 || _index >= _contents.Elements.Count)
-                    throw new InvalidOperationException("Enumeration out of range.");
-                return _currentElement!;
-            }
-        }
-
-        public void Dispose()
-        {
-            // Nothing to do.
-        }
-
-        PdfContent _currentElement = null!;
-        int _index;
-        readonly PdfContents _contents;
-    }
 }
