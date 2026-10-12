@@ -488,7 +488,7 @@ namespace PeachPDF.Html.Core.Utils
         /// concerned - its own descendant boxes (if any) aren't ordinary HTML content, so recursion
         /// stops there rather than continuing into <c>box.Boxes</c>.
         /// </summary>
-        public static void GetAllSvgLinks(CssBox? box, List<(Rect Rect, string Href)> linkBoxes)
+        public static void GetAllSvgLinks(CssBox? box, List<(Rect Rect, string Href, CssBox Owner)> linkBoxes)
         {
             switch (box)
             {
@@ -500,12 +500,12 @@ namespace PeachPDF.Html.Core.Utils
 
                 case CssBoxSvg svgBox:
                     if (svgBox.GetLinkSource() is { } svgSource)
-                        SvgRenderer.CollectLinks(svgSource.Document, svgSource.Rect, linkBoxes);
+                        CollectSvgLinks(svgSource.Document, svgSource.Rect, svgBox, linkBoxes);
                     return;
 
                 case CssBoxImage imageBox:
                     if (imageBox.GetLinkSource() is { } imageSource)
-                        SvgRenderer.CollectLinks(imageSource.Document, imageSource.Rect, linkBoxes);
+                        CollectSvgLinks(imageSource.Document, imageSource.Rect, imageBox, linkBoxes);
                     return;
             }
 
@@ -513,6 +513,16 @@ namespace PeachPDF.Html.Core.Utils
             {
                 GetAllSvgLinks(childBox, linkBoxes);
             }
+        }
+
+        /// <summary>Collects the links of <paramref name="document"/> and tags each with <paramref name="owner"/>, the box it was drawn in.</summary>
+        private static void CollectSvgLinks(SvgDocument document, Rect viewportRect, CssBox owner, List<(Rect Rect, string Href, CssBox Owner)> sink)
+        {
+            var found = new List<(Rect Rect, string Href)>();
+            SvgRenderer.CollectLinks(document, viewportRect, found);
+
+            foreach (var (rect, href) in found)
+                sink.Add((rect, href, owner));
         }
 
         /// <summary>

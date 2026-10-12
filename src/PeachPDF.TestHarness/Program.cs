@@ -13451,6 +13451,15 @@ var interactiveFormsHtml = "<!DOCTYPE html><html><head>" + InteractiveFormsCss +
     "<input class=\"styled-placeholder\" type=\"text\" id=\"hint\" name=\"company\" " +
     "placeholder=\"Acme Corporation\" /></div>" +
 
+    // A field and a link over a transformed element sit where the element is drawn, not where layout put it: the field's widget is the
+    // bounding box of the drawn shape with its appearance turned to match, and the link also carries the rotated outline as /QuadPoints.
+    // Hover the rotated link in a real reader: it should answer only over the turned text, not the empty corners of its box.
+    "<h2>Transformed (rotate, scale)</h2>" +
+    "<div class=\"field\" style=\"height:70pt\"><label>Rotated field</label>" +
+    "<input type=\"text\" id=\"turned\" name=\"turned\" value=\"Tilted\" style=\"transform: rotate(-12deg); width: 120pt\" />&nbsp;&nbsp;&nbsp;&nbsp;" +
+    "<input type=\"checkbox\" id=\"turned-box\" name=\"turned-box\" checked style=\"transform: rotate(20deg) scale(1.6)\" />&nbsp;&nbsp;&nbsp;&nbsp;" +
+    "<a href=\"https://example.com/\" style=\"display:inline-block; transform: rotate(8deg); padding: 3pt 8pt; background: #e9f3ff\">Rotated link</a></div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive PDF Forms",
