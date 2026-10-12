@@ -262,23 +262,11 @@ internal class PdfRasterImage : IDisposable
     }
 
     /// <summary>
-    /// Under construction
+    /// Does nothing: the decoded pixels belong to the image source, which is disposed on its own.
     /// </summary>
     public void Dispose()
     {
-        Dispose(true);
-        //GC.SuppressFinalize(this);
     }
-
-    /// <summary>
-    /// Disposes underlying GDI+ object.
-    /// </summary>
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
-            _disposed = true;
-    }
-    bool _disposed;
 
     /// <summary>
     /// Gets the width of the image in point.

@@ -142,24 +142,17 @@ internal sealed partial class PdfGraphics : IDisposable
     /// </summary>
     public void Dispose()
     {
-        Dispose(true);
-    }
+        if (_disposed)
+            return;
 
-    void Dispose(bool disposing)
-    {
-        if (!_disposed)
+        _disposed = true;
+        _form?.Finish();
+        _drawGraphics = false;
+
+        if (_renderer is not null)
         {
-            _disposed = true;
-            if (_form is not null)
-                _form.Finish();
-
-            _drawGraphics = false;
-
-            if (_renderer is not null)
-            {
-                _renderer.Close();
-                _renderer = null!;
-            }
+            _renderer.Close();
+            _renderer = null!;
         }
     }
 

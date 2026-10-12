@@ -95,20 +95,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// </summary>
     public void Dispose()
     {
-        Dispose(true);
-        //GC.SuppressFinalize(this);
-    }
-
-    void Dispose(bool disposing)
-    {
-        if (_state != DocumentState.Disposed)
-        {
-            if (disposing)
-            {
-                // Dispose managed resources.
-            }
-            //PdfDocument.Gob.DetatchDocument(Handle);
-        }
         _state = DocumentState.Disposed;
     }
 

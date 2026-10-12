@@ -123,14 +123,6 @@ internal class PdfForm : PdfRasterImage, IContentStream
     internal PdfGraphics Gfx = null!;
 
     /// <summary>
-    /// Disposes this instance.
-    /// </summary>
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-    }
-
-    /// <summary>
     /// Sets the form in the state FormState.Finished.
     /// </summary>
     internal virtual void Finish()
