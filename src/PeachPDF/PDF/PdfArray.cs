@@ -14,7 +14,6 @@ namespace PeachPDF.PDF;
 /// <summary>
 /// Represents a PDF array object.
 /// </summary>
-[DebuggerDisplay("{DebuggerDisplay}")]
 internal class PdfArray : PdfObject, IEnumerable<PdfItem>
 {
     /// <summary>
@@ -431,18 +430,4 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     }
 
     ArrayElements _elements = null!;
-
-    /// <summary>
-    /// Gets the DebuggerDisplayAttribute text.
-    /// </summary>
-    // ReSharper disable UnusedMember.Local
-    string DebuggerDisplay
-    // ReSharper restore UnusedMember.Local
-    {
-        get
-        {
-            return string.Format(CultureInfo.InvariantCulture, "array({0},[{1}])", $"id=({ObjectId})", _elements is null ? 0 : _elements.Count);
-
-        }
-    }
 }

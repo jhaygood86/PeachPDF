@@ -23,7 +23,6 @@ internal partial class PdfDictionary
     /// <summary>
     /// Represents the interface to the elements of a PDF dictionary.
     /// </summary>
-    [DebuggerDisplay("{DebuggerDisplay}")]
     internal sealed class DictionaryElements : IDictionary<string, PdfItem>
     {
         internal DictionaryElements(PdfDictionary ownerDictionary)
@@ -886,32 +885,7 @@ internal partial class PdfDictionary
         /// </summary>
         public object SyncRoot => null!;
 
-        /// <summary>
-        /// Gets the DebuggerDisplayAttribute text.
-        /// </summary>
-        // ReSharper disable UnusedMember.Local
-        internal string DebuggerDisplay
-        // ReSharper restore UnusedMember.Local
-        {
-            get
-            {
-                StringBuilder sb = new StringBuilder();
-                sb.AppendFormat(CultureInfo.InvariantCulture, "key={0}:(", _elements.Count);
-                bool addSpace = false;
-                ICollection<string> keys = _elements.Keys;
-                foreach (string key in keys)
-                {
-                    if (addSpace)
-                        sb.Append(' ');
-                    addSpace = true;
-                    sb.Append(key);
-                }
-                sb.Append(")");
-                return sb.ToString();
-            }
-        }
-
-        /// <summary>
+/// <summary>
         /// The elements of the dictionary with a string as key.
         /// Because the string is a name it starts always with a '/'.
         /// </summary>

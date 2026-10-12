@@ -20,7 +20,6 @@ namespace PeachPDF.PDF;
 /// <summary>
 /// Represents a PDF dictionary object.
 /// </summary>
-[DebuggerDisplay("{DebuggerDisplay}")]
 internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfItem>>
 {
     // Reference: 3.2.6  Dictionary Objects / Page 59

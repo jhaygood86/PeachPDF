@@ -189,20 +189,4 @@ internal partial class PdfDictionary
             // ReSharper restore InconsistentNaming
         }
     }
-
-    /// <summary>
-    /// Gets the DebuggerDisplayAttribute text.
-    /// </summary>
-    // ReSharper disable UnusedMember.Local
-    string DebuggerDisplay
-    // ReSharper restore UnusedMember.Local
-    {
-        get
-        {
-            return string.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
-                $"id=({ObjectId})",
-                Elements.Count,
-                _elements.DebuggerDisplay);
-        }
-    }
 }

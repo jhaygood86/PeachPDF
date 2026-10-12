@@ -40,27 +40,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         Info.CreationDate = _creation;
     }
 
-    /// <summary>
-    /// Creates a new PDF document with the specified file name. The file is immediately created and keeps
-    /// locked until the document is closed, at that time the document is saved automatically.
-    /// Do not call Save() for documents created with this constructor, just call Close().
-    /// To open an existing PDF file and import it, use the PdfReader class.
-    /// </summary>
-    public PdfDocument(string filename)
-    {
-        //PdfDocument.Gob.AttatchDocument(Handle);
-
-        _creation = DateTime.Now;
-        _state = DocumentState.Created;
-        _version = 14;
-        Initialize();
-        Info.CreationDate = _creation;
-
-        // TODO 4STLA: encapsulate the whole c'tor with #if !NETFX_CORE?
-        throw new NotImplementedException();
-    }
-
-    /// <summary>
+/// <summary>
     /// Creates a new PDF document using the specified stream.
     /// The stream won't be used until the document is closed, at that time the document is saved automatically.
     /// Do not call Save() for documents created with this constructor, just call Close().
@@ -224,7 +204,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             if (_outStream is not null)
             {
                 // Give feedback if the wrong constructor was used.
-                throw new InvalidOperationException("Cannot save a PDF document with no pages. Do not use \"public PdfDocument(string filename)\" or \"public PdfDocument(Stream outputStream)\" if you want to open an existing PDF document from a file or stream; use PdfReader.Open() for that purpose.");
+                throw new InvalidOperationException("Cannot save a PDF document with no pages. Do not use \"public PdfDocument(Stream outputStream)\" if you want to open an existing PDF document from a file or stream; use PdfReader.Open() for that purpose.");
             }
             throw new InvalidOperationException("Cannot save a PDF document with no pages.");
         }
