@@ -1385,7 +1385,7 @@ namespace PeachPDF.Tests.Svg
 
             var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
             var span = Assert.Single(text.Spans);
-            // Font.Size reports the underlying XFont's own (adapter-internal-units) size, not the raw
+            // Font.Size reports the underlying TypefaceFont's own (adapter-internal-units) size, not the raw
             // SVG font-size value directly - assert the ratio instead of an absolute value so this
             // isn't coupled to PdfSharpAdapter.PixelsPerPoint's default.
             Assert.Equal(3.0, span.Font!.Size / text.Font!.Size, 3);

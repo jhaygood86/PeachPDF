@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Diagnostics;
@@ -82,7 +83,7 @@ namespace PeachPDF.PDF.Advanced
             get { return Resources; }
         }
 
-        internal string GetFontName(XFont font, out PdfFont pdfFont)
+        internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
         {
             pdfFont = _document.FontTable.GetFont(font);
             Debug.Assert(pdfFont != null);
@@ -90,7 +91,7 @@ namespace PeachPDF.PDF.Advanced
             return name;
         }
 
-        string IContentStream.GetFontName(XFont font, out PdfFont pdfFont)
+        string IContentStream.GetFontName(TypefaceFont font, out PdfFont pdfFont)
         {
             return GetFontName(font, out pdfFont);
         }

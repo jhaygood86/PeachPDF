@@ -2856,7 +2856,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter();
             // Match the production PdfGenerator setting: PixelsPerInch=72 → pixelsPerPoint=1.0.
             // Without this, the default PixelsPerPoint=72 makes font heights ≈72px (integer-rounded
-            // from a sub-point XFont), which prevents explicit CSS heights from constraining items.
+            // from a sub-point TypefaceFont), which prevents explicit CSS heights from constraining items.
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);

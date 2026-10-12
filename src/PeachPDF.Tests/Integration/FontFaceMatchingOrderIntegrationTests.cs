@@ -117,9 +117,9 @@ namespace PeachPDF.Tests.Integration
 
             var root = await BuildBoxTree(html);
 
-            Assert.True(((FontAdapter)FindById(root, "a").ActualFont).Font.Synthesis.HasFlag(SyntheticStyle.Italic));
-            Assert.False(((FontAdapter)FindById(root, "b").ActualFont).Font.Synthesis.HasFlag(SyntheticStyle.Italic));
-            Assert.Equal(SyntheticStyle.None, ((FontAdapter)FindById(root, "c").ActualFont).Font.Synthesis);
+            Assert.True(((FontAdapter)FindById(root, "a").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.False(((FontAdapter)FindById(root, "b").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.Equal(SyntheticStyle.None, ((FontAdapter)FindById(root, "c").ActualFont).Font.SyntheticStyle);
         }
 
         // ---- the requested angle chooses among oblique ranges -----------------------------------------------------------------------

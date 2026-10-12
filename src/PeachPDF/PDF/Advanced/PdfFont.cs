@@ -58,7 +58,6 @@ namespace PeachPDF.PDF.Advanced
         }
         PdfFontDescriptor _fontDescriptor = null!;
 
-        internal PdfFontEncoding FontEncoding;
 
         /// <summary>
         /// Gets a value indicating whether this instance is symbol font.

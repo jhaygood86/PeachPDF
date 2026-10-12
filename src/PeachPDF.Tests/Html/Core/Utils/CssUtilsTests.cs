@@ -345,7 +345,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var box = await FindDivBox("font-weight: 700;");
 
             var font = (PeachPDF.Adapters.FontAdapter)box.ActualFont;
-            Assert.True(font.Font.Bold);
+            Assert.True(font.Font.Typeface.IsBold);
         }
 
         [Fact]
@@ -354,7 +354,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var box = await FindDivBox("font-weight: 400;");
 
             var font = (PeachPDF.Adapters.FontAdapter)box.ActualFont;
-            Assert.False(font.Font.Bold);
+            Assert.False(font.Font.Typeface.IsBold);
         }
 
         [Fact]

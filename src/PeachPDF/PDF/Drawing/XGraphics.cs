@@ -206,19 +206,6 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         bool _disposed;
 
         /// <summary>
-        /// Internal hack for MigraDoc. Will be removed in further releases.
-        /// Unicode support requires a global refactoring of MigraDoc and will be done in further releases.
-        /// </summary>
-        // ReSharper disable once InconsistentNaming
-        // ReSharper disable once ConvertToAutoProperty
-        public PdfFontEncoding MUH  // MigraDoc Unicode Hack...
-        {
-            get { return _muh; }
-            set { _muh = value; }
-        }
-        PdfFontEncoding _muh;
-
-        /// <summary>
         /// Gets the current page origin. Setting the origin is not yet implemented.
         /// </summary>
         public PaintPoint PageOrigin
@@ -545,7 +532,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// Draws the specified text string.
         /// </summary>
         /// <summary>
-        /// When true, <see cref="DrawString(string, XFont, Brush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>
+        /// When true, <see cref="DrawString(string, TypefaceFont, Brush, Rect, XStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>
         /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
         /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
         /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
@@ -558,7 +545,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>The render context pixel canvases are built from when a glyph is drawn through the raster backend, or <see langword="null"/> when there is none.</summary>
         internal PeachDrawing.Core.RenderContext? RasterContext { get; set; }
 
-        public void DrawString(string s, XFont font, Brush brush, PaintPoint point)
+        public void DrawString(string s, TypefaceFont font, Brush brush, PaintPoint point)
         {
             DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), XStringFormats.Default);
         }
@@ -567,7 +554,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, Brush brush, PaintPoint point, XStringFormat format)
+        public void DrawString(string s, TypefaceFont font, Brush brush, PaintPoint point, XStringFormat format)
         {
             DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), format);
         }
@@ -575,7 +562,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, Brush brush, double x, double y)
+        public void DrawString(string s, TypefaceFont font, Brush brush, double x, double y)
         {
             DrawString(s, font, brush, new Rect(x, y, 0, 0), XStringFormats.Default);
         }
@@ -583,7 +570,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, Brush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string s, TypefaceFont font, Brush brush, double x, double y, XStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             DrawString(s, font, brush, new Rect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
         }
@@ -592,7 +579,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, Brush brush, Rect layoutRectangle)
+        public void DrawString(string s, TypefaceFont font, Brush brush, Rect layoutRectangle)
         {
             DrawString(s, font, brush, layoutRectangle, XStringFormats.Default);
         }
@@ -603,7 +590,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// see <see cref="PeachDrawing.Core.Canvas"/>'s own equivalent overload for why this
         /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
-        public void DrawString(string text, XFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        public void DrawString(string text, TypefaceFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -630,7 +617,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// directly by font glyph index - see <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s
         /// own remarks for why this exists alongside the ordinary character-based <c>DrawString</c>.
         /// </summary>
-        public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, Brush brush)
+        public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, TypefaceFont font, Brush brush)
         {
             if (font == null)
                 throw new ArgumentNullException("font");
@@ -646,7 +633,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public Size MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings? features = null)
+        public Size MeasureString(string text, TypefaceFont font, XStringFormat stringFormat, ShapeSettings? features = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -662,7 +649,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public Size MeasureString(string text, XFont font, ShapeSettings? features = null)
+        public Size MeasureString(string text, TypefaceFont font, ShapeSettings? features = null)
         {
             return MeasureString(text, font, XStringFormats.Default, features);
         }

@@ -320,7 +320,7 @@ namespace PeachPDF.Adapters
                 obliqueSkewSinus = null;
             }
 
-            var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
+            var xFont = new TypefaceFont(match.Typeface, size / PixelsPerPoint, match.Synthesis, obliqueSkewSinus);
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
@@ -329,7 +329,7 @@ namespace PeachPDF.Adapters
             var fontStyle = WithoutSynthesisSwitches(style);
             var isItalic = (fontStyle & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
-            // A null here tells the caller to try the next family in the stack: never build an XFont for a family
+            // A null here tells the caller to try the next family in the stack: never build an TypefaceFont for a family
             // that can't render this codepoint.
             if (!_fontSet.TryFindFamily(family, out var typefaceFamily)
                 || !typefaceFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))

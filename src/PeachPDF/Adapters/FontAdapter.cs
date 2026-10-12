@@ -69,8 +69,8 @@ namespace PeachPDF.Adapters
         /// Init. Resolves <see cref="Height"/>/<see cref="Ascent"/>/<see cref="UnderlineOffset"/>
         /// eagerly, right here, rather than lazily on this font's first <c>Canvas.MeasureString</c>
         /// call (as a previous version of this constructor did): <paramref name="font"/>'s own descriptor/
-        /// metrics are already fully resolved by the time <c>XFont</c>'s constructor returns
-        /// (<c>XFont.Initialize</c> calls <c>InitializeFontMetrics</c> synchronously), so
+        /// metrics are already fully resolved by the time <c>TypefaceFont</c>'s constructor returns
+        /// (<c>TypefaceFont.Initialize</c> calls <c>InitializeFontMetrics</c> synchronously), so
         /// there was never a real data dependency on "a string having been measured first" - only an
         /// accident of where this arithmetic used to live. Reading <see cref="Height"/>/<see cref="Ascent"/>
         /// before this font's first <c>MeasureString</c> call used to read back a stale, pre-resolution
@@ -78,7 +78,7 @@ namespace PeachPDF.Adapters
         /// pipelines (see <c>CssLayoutEngine.NaturalWordSize</c>'s and <c>SvgRenderer.LayoutGlyphs</c>'s own
         /// remarks) before either pipeline had gotten around to actually measuring a string with this font.
         /// </summary>
-        public FontAdapter(XFont font, double pixelsPerPoint)
+        public FontAdapter(TypefaceFont font, double pixelsPerPoint)
         {
             Font = font;
             PixelsPerPoint = pixelsPerPoint;
@@ -89,7 +89,7 @@ namespace PeachPDF.Adapters
             // family alias that was actually registered) through IFontResolver - for a custom/@font-face-
             // registered family this can resolve to an entirely unrelated font, and even when it does find
             // something, it bypasses the per-instance cache routing that keeps two PdfGenerators' same-
-            // named custom fonts from colliding (see XFont.Descriptor and LoadedTypeface.OwningInstanceResolver).
+            // named custom fonts from colliding (see TypefaceFont.Descriptor and LoadedTypeface.OwningInstanceResolver).
             var metrics = font.Typeface.Metrics;
             var descent = font.Size * metrics.CellDescent / metrics.UnitsPerEm;
             var ascent = font.Size * metrics.CellAscent / metrics.UnitsPerEm;
@@ -107,18 +107,18 @@ namespace PeachPDF.Adapters
             _normalLineHeight = (RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineAscent)) +
                                  RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineDescent)) +
                                  RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineGap))) * pixelsPerPoint;
-            // XFont.Height (int, System.Drawing.Font-style API) rounds up to a whole point via
+            // TypefaceFont.Height (int, System.Drawing.Font-style API) rounds up to a whole point via
             // Math.Ceiling - harmless at an ordinary font.Size, but collapses to exactly 1 for any
             // sub-1pt size, discarding all proportional information. This adapter's own Height then
             // multiplies that lossy value back up by PixelsPerPoint (below) to undo CreateFontInt's own
             // size/PixelsPerPoint division - a font constructed sub-1pt (any PixelsPerInch/ShrinkToFit/
             // ScaleToPageSize scale where PixelsPerPoint > ~7) would land on exactly PixelsPerPoint
             // itself, not the font's real line height (issue #814's line-height family). GetHeight() is
-            // XFont's own double-precision equivalent, with no such collapse.
-            _height = font.GetHeight();
+            // TypefaceFont's own double-precision equivalent, with no such collapse.
+            _height = font.Height;
             // Height above; UnderlineOffset/Ascent below round to whole points too, but only after
             // scaling by PixelsPerPoint (in the properties, not here) - rounding this font's own tiny
-            // constructed size first, the same way Height used to via XFont.Height, would collapse a
+            // constructed size first, the same way Height used to via TypefaceFont.Height, would collapse a
             // sub-1pt ascent/descent to exactly 0 before PixelsPerPoint ever gets a chance to restore
             // real magnitude, for the identical reason.
             _underlineOffset = _height - descent + 1f;
@@ -138,7 +138,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// the underline win-forms font.
         /// </summary>
-        public XFont Font { get; }
+        public TypefaceFont Font { get; }
 
         private double PixelsPerPoint { get; set; }
 
@@ -146,7 +146,7 @@ namespace PeachPDF.Adapters
 
         public override Typeface Typeface => Font.Typeface;
 
-        public override SyntheticStyle SyntheticStyle => Font.Synthesis;
+        public override SyntheticStyle SyntheticStyle => Font.SyntheticStyle;
 
         public override double? ObliqueSkewSinus => Font.ObliqueSkewSinus;
 
@@ -200,7 +200,7 @@ namespace PeachPDF.Adapters
                 ? (position.SizeScale, position.BaselineShift)
                 : null;
 
-        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash + "/" + (int)Font.Synthesis + "/" + Font.Typeface.VariationKey;
+        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash + "/" + (int)Font.SyntheticStyle + "/" + Font.Typeface.VariationKey;
 
         private string? _faceKey;
 

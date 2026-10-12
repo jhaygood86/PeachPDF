@@ -48,7 +48,7 @@ namespace PeachPDF.PDF.Rendering
         /// Constructs a painter that draws one glyph's artwork into its own Form XObject at the
         /// canonical em size, with the glyph's baseline origin at (<paramref name="originX"/>,
         /// <paramref name="originY"/>) in the form's own (y-down) world space. Never paints invisible
-        /// text, so it carries no <see cref="XFont"/>: the selectable text object belongs to the page,
+        /// text, so it carries no <see cref="TypefaceFont"/>: the selectable text object belongs to the page,
         /// not to the artwork.
         /// </summary>
         private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, Typeface typeface, PaintColor foreground,

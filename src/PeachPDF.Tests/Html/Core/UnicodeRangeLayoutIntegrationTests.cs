@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Html.Core
         private static string ResolvedFamilyName(CssBox ownerBox, char c)
         {
             var font = ownerBox.ActualFontForCodepoint(new Rune(c));
-            return ((FontAdapter)font).Font.Name;
+            return ((FontAdapter)font).Font.Typeface.FamilyName;
         }
 
         [Fact]

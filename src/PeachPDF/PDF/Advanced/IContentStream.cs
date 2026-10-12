@@ -29,6 +29,7 @@
 
 
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.PDF.Advanced
@@ -37,7 +38,7 @@ namespace PeachPDF.PDF.Advanced
     {
         PdfResources Resources { get; }
 
-        string GetFontName(XFont font, out PdfFont pdfFont);
+        string GetFontName(TypefaceFont font, out PdfFont pdfFont);
 
         string GetImageName(XImage image, double width, double height);
 

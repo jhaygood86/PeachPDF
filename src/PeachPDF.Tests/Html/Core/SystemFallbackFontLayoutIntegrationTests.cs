@@ -95,7 +95,7 @@ p {{ width: 400px; }}
 
             var resolvedFont = owner.ActualFontForCodepoint(codepoint);
 
-            Assert.NotEqual(latinFamily, ((FontAdapter)resolvedFont).Font.Name);
+            Assert.NotEqual(latinFamily, ((FontAdapter)resolvedFont).Font.Typeface.FamilyName);
             Assert.True(resolvedFont.HasGlyph(codepoint));
         }
 
@@ -127,7 +127,7 @@ p {{ width: 400px; }}
 
             var resolvedFont = owner.ActualFontForCodepoint(codepoint);
 
-            Assert.Equal(latinFamily, ((FontAdapter)resolvedFont).Font.Name);
+            Assert.Equal(latinFamily, ((FontAdapter)resolvedFont).Font.Typeface.FamilyName);
         }
     }
 }

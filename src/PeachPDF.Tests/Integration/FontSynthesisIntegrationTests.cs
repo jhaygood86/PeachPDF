@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
@@ -73,7 +74,7 @@ body {{ font-family: 'TestSynthNormal'; font-size: 14pt; font-weight: normal; }}
         {
             // CSS Fonts Level 4 "oblique <angle>" (e.g. oblique 10deg) must drive the exact faux-italic
             // shear amount when synthesis is needed, instead of the renderer's fixed sin(20deg)
-            // approximation - see XFont.ObliqueSkewSinus / FontObliqueAngleResolver.
+            // approximation - see TypefaceFont.ObliqueSkewSinus / FontObliqueAngleResolver.
             var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
             var b64 = Convert.ToBase64String(ttfBytes);
 

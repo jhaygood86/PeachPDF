@@ -32,7 +32,7 @@ namespace PeachPDF.PDF.Rendering
         private readonly XGraphicsPdfRenderer _renderer;
         private readonly XGraphics _gfx;
         private readonly Typeface _typeface;
-        private readonly XFont _font;
+        private readonly TypefaceFont _font;
         private readonly Brush _textBrush;
         private readonly double _scale;         // design units -> world units
         private readonly double _letterSpacing; // world units
@@ -44,7 +44,7 @@ namespace PeachPDF.PDF.Rendering
         private readonly double _baselineX;
         private readonly double _baselineY;
 
-        public ColorGlyphPainter(XGraphicsPdfRenderer renderer, XFont font,
+        public ColorGlyphPainter(XGraphicsPdfRenderer renderer, TypefaceFont font,
             Brush brush, double baselineX, double baselineY, double letterSpacing,
             int paletteIndex = 0, IReadOnlyDictionary<int, PaintColor>? overrides = null)
         {

@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
             var font = adapter.GetFont("monospace", 12, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.NotNull(font);
-            Assert.Equal("Consolas", font!.Font.Name);
+            Assert.Equal("Consolas", font!.Font.Typeface.FamilyName);
         }
 
         [Theory]
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Integration
             var font = adapter.GetFont("math", 12, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.NotNull(font);
-            Assert.Equal("Cambria Math", font!.Font.Name);
+            Assert.Equal("Cambria Math", font!.Font.Typeface.FamilyName);
         }
 
         [Fact]
@@ -108,7 +108,7 @@ namespace PeachPDF.Tests.Integration
 
             var paragraph = FindByTag(container.Root!, "p")!;
             var math = FindByTag(container.Root!, "math")!;
-            return (((FontAdapter)paragraph.ActualFont).Font.Name, ((FontAdapter)math.ActualFont).Font.Name);
+            return (((FontAdapter)paragraph.ActualFont).Font.Typeface.FamilyName, ((FontAdapter)math.ActualFont).Font.Typeface.FamilyName);
         }
 
         private static CssBox? FindByTag(CssBox box, string tag)

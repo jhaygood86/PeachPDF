@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// glyph indices, not literal ASCII text. These are the direct regression tests for the bug where
     /// margin-box text rendered in the wrong font: no inheritance from the winning <c>@page</c> rule's own
     /// <c>font</c> declarations (fixed via <c>pageStyle</c>), no font-stack/generic-family fallback (a raw
-    /// <c>XFont</c> was built directly instead of going through <see cref="FontFamilyResolver"/>), and no
+    /// <c>TypefaceFont</c> was built directly instead of going through <see cref="FontFamilyResolver"/>), and no
     /// keyword/relative font-size support (fixed via <see cref="FontSizeResolver"/>).
     /// </summary>
     public class MarginBoxRendererFontTests
@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
             var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
 
         [Fact]
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
             var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
 
         [Fact]
@@ -57,7 +57,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
             var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
             Assert.Equal(DefaultFontResolver.FontSize, font.Size, 3);
         }
 
@@ -70,7 +70,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
             var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
 
         [Fact]
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
-            Assert.True(font.Bold);
+            Assert.True(font.Typeface.IsBold);
         }
 
         [Fact]
@@ -92,7 +92,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
-            Assert.True(font.Bold);
+            Assert.True(font.Typeface.IsBold);
         }
 
         [Fact]
@@ -103,7 +103,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
-            Assert.True(font.Italic);
+            Assert.True(font.Typeface.IsItalic);
         }
 
         [Fact]

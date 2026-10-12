@@ -70,15 +70,5 @@ namespace PeachPDF.Tests.PdfEngineTests
             Assert.Equal(name.Trim() + suffix, PdfTypefaceMetrics.GetBaseName(face));
         }
 
-        [Fact]
-        public void SimpleFontWidths_AgreeWithTheGlyphWidthOfEachCode()
-        {
-            var face = TypefaceFixtures.FromFile(BundledFonts.Ttf);
-            int[] widths = PdfSimpleFontWidths.Compute(face);
-
-            face.TryMapRune(new Rune('A'), out var a);
-            Assert.Equal(PdfTypefaceMetrics.GlyphWidth(face, a), widths['A']);
-            Assert.True(widths['A'] > 0);
-        }
     }
 }

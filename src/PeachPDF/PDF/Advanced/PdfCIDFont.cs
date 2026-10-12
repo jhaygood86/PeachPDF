@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System.Linq;
 #region PDFsharp - A .NET library for processing PDF
 //
@@ -45,7 +46,7 @@ namespace PeachPDF.PDF.Advanced
             : base(document)
         { }
 
-        public PdfCIDFont(PdfDocument document, PdfFontDescriptor fontDescriptor, XFont font)
+        public PdfCIDFont(PdfDocument document, PdfFontDescriptor fontDescriptor, TypefaceFont font)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/Font");
@@ -70,7 +71,6 @@ namespace PeachPDF.PDF.Advanced
             Owner._irefTable.Add(fontDescriptor);
             Elements[Keys.FontDescriptor] = fontDescriptor.Reference;
 
-            FontEncoding = font.PdfOptions.FontEncoding;
         }
 
         public string BaseFont

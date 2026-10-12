@@ -360,7 +360,7 @@ namespace PeachPDF.PDF.Drawing
         /// <summary>
         /// Gets the resource name of the specified font within this form.
         /// </summary>
-        internal string GetFontName(XFont font, out PdfFont pdfFont)
+        internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
         {
             Debug.Assert(IsTemplate, "This function is for form templates only.");
             pdfFont = _document.FontTable.GetFont(font);
@@ -369,7 +369,7 @@ namespace PeachPDF.PDF.Drawing
             return name;
         }
 
-        string IContentStream.GetFontName(XFont font, out PdfFont pdfFont)
+        string IContentStream.GetFontName(TypefaceFont font, out PdfFont pdfFont)
         {
             return GetFontName(font, out pdfFont);
         }

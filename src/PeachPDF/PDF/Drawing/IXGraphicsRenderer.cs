@@ -92,16 +92,16 @@ namespace PeachPDF.PDF.Drawing
         /// so a reversed/mirrored RTL word's glyphs map back to their true source characters rather than
         /// whichever character occupies that position in the *painted* string.
         /// </param>
-        void DrawString(string s, XFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null);
+        void DrawString(string s, TypefaceFont font, Brush brush, Rect layoutRectangle, XStringFormat format, double letterSpacing, FontPalette? fontPalette, ShapeSettings features, string? logicalText = null);
 
         /// <summary>
         /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
         /// addressed directly by font glyph index rather than by Unicode character - see
         /// <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s own remarks for why this exists
         /// (an OpenType MATH table's stretchy-operator glyphs, which have no Unicode mapping to shape
-        /// through the ordinary <see cref="DrawString(string, XFont, Brush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
+        /// through the ordinary <see cref="DrawString(string, TypefaceFont, Brush, Rect, XStringFormat, double, FontPalette?, ShapeSettings, string)"/> path).
         /// </summary>
-        void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, Brush brush);
+        void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, TypefaceFont font, Brush brush);
 
         /// <summary>
         /// Draws an image.

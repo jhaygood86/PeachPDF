@@ -65,11 +65,11 @@ p {{ width: 300px; }}
             var paragraph = FindByTag(container.Root!, "p");
             Assert.NotNull(paragraph);
 
-            // The resolved XFont reports the font's own internal name (read from its 'name' table),
+            // The resolved TypefaceFont reports the font's own internal name (read from its 'name' table),
             // not the @font-face CSS alias and not a fallback - confirms the real OTF was actually
             // loaded and used despite the missing format() hint, not silently falling back.
             var fontAdapter = Assert.IsType<FontAdapter>(paragraph!.ActualFont);
-            Assert.Equal(expectedFontName, fontAdapter.Font.Name);
+            Assert.Equal(expectedFontName, fontAdapter.Font.Typeface.FamilyName);
         }
     }
 }

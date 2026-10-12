@@ -1,7 +1,6 @@
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF.Drawing.Layout;
 using PeachPDF.PDF;
 
 
@@ -99,26 +98,22 @@ namespace PeachPDF.Tests.PdfEngineTests.Basics
                 var gfx = XGraphics.FromPdfPage(page);
 
                 var font = TestFonts.Create("Times New Roman", 10, PaintFontStyle.Bold);
-                var tf = new XTextFormatter(gfx);
 
                 var rect = new Rect(40, 100, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 rect = new Rect(310, 100, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                tf.Alignment = XParagraphAlignment.Right;
-                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 rect = new Rect(40, 400, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                tf.Alignment = XParagraphAlignment.Center;
-                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 rect = new Rect(310, 400, 250, 232);
                 gfx.DrawRectangle(new SolidBrush(PaintColor.FromArgb(255, 245, 238)), rect);
-                tf.Alignment = XParagraphAlignment.Justify;
-                tf.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
+                gfx.DrawString(text, font, new SolidBrush(PaintColor.Black), rect, XStringFormats.TopLeft);
 
                 using (var stream = new MemoryStream())
                 {

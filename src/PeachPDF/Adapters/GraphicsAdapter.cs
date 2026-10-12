@@ -223,7 +223,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>See <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - threaded straight through to
-        /// <see cref="XGraphics.DrawString(string, XFont, Brush, double, double, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>,
+        /// <see cref="XGraphics.DrawString(string, TypefaceFont, Brush, double, double, XStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>,
         /// the one real PDF-writing path that acts on it.</summary>
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
@@ -241,7 +241,7 @@ namespace PeachPDF.Adapters
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
             try
             {
-                _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? ShapeSettings.Default, logicalText);
+                _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
             }
             finally
             {
@@ -266,22 +266,6 @@ namespace PeachPDF.Adapters
             _g.DrawGlyphsAtPositions(positioned, ((FontAdapter)font).Font, xBrush);
         }
 
-        /// <summary>
-        /// Converts a resolved <see cref="FontPalette"/> (adapter layer, <see cref="PaintColor"/> overrides) into the
-        /// backend <see cref="XGlyphPalette"/> (<see cref="PaintColor"/> overrides). Null passes straight through.
-        /// </summary>
-        private static XGlyphPalette? ToGlyphPalette(FontPalette? palette)
-        {
-            if (palette is null)
-                return null;
-
-            var overrides = new Dictionary<int, PaintColor>(palette.Overrides.Count);
-            foreach (var (entryIndex, color) in palette.Overrides)
-                overrides[entryIndex] = PaintColor.FromArgb(color.A, color.R, color.G, color.B);
-
-            return new XGlyphPalette(palette.BasePaletteIndex, overrides);
-        }
-
         public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
             TextOutlineBuilder.Build(GetGraphicsPath(), font, PixelsPerPoint, str, baselineOrigin, letterSpacing,
                 features ?? ShapeSettings.Default);
@@ -301,7 +285,7 @@ namespace PeachPDF.Adapters
             // an underline's band is one unit tall at the default thickness, so borrowing the rounded
             // value would shift the band by up to half its own height and flip whether a glyph that just
             // grazes the line is skipped.
-            var baselineY = origin.Y + realFont.GetHeight() * realFont.CellAscent / realFont.CellSpace * PixelsPerPoint;
+            var baselineY = origin.Y + realFont.Height * realFont.Typeface.Metrics.CellAscent / realFont.Typeface.Metrics.LineSpacing * PixelsPerPoint;
 
             // Measured relative to the run's own origin and baseline, so the same word on a later line -
             // with the same band at a different absolute y - is a cache hit rather than a second full
@@ -333,7 +317,7 @@ namespace PeachPDF.Adapters
         /// <see cref="_inkCrossings"/> caches. Null means no glyph in the run had a decodable outline at all.
         /// </summary>
         private static List<InkSpan>? MeasureInkCrossings(
-            Typeface typeface, XFont realFont, string str, in InkCrossingKey key,
+            Typeface typeface, TypefaceFont realFont, string str, in InkCrossingKey key,
             double pixelsPerPoint)
         {
             // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks.
@@ -348,7 +332,7 @@ namespace PeachPDF.Adapters
         /// factored out: the font, the text, the band relative to the baseline, and how the run is shaped.
         /// </summary>
         private readonly record struct InkCrossingKey(
-            XFont Font, string Text, double BandTop, double BandBottom, double LetterSpacing,
+            TypefaceFont Font, string Text, double BandTop, double BandBottom, double LetterSpacing,
             ShapeSettings Features);
 
         public override GraphicsPath GetGraphicsPath()

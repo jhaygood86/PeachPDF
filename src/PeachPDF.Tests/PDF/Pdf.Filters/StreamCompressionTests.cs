@@ -113,21 +113,5 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf.Filters
             Assert.Same(compressed, dictionary.Stream.Value);
         }
 
-        [Fact]
-        public void NonUnicodeTrueTypeFont_IsEmbeddedWithTheDocumentsFilter()
-        {
-            var document = Pdf20Document();
-            var page = document.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
-            var font = TestFonts.Create("Times New Roman", 12, pdfOptions: new XPdfFontOptions(PdfFontEncoding.WinAnsi));
-            gfx.DrawString("Hello", font, new SolidBrush(PaintColor.Black), new Rect(0, 0, 200, 50), XStringFormats.TopLeft);
-
-            using var stream = new MemoryStream();
-            document.Save(stream);
-            var text = Encoding.Latin1.GetString(stream.ToArray());
-
-            Assert.Contains("/FontFile2", text);
-            Assert.Contains("/BrotliDecode", text);
-        }
     }
 }

@@ -987,7 +987,7 @@ namespace PeachPDF.Html.Core.Dom
             DomParser.ParseLengthToPdfPoints(sizeStr)
             ?? FontSizeResolver.Resolve(sizeStr, DefaultFontResolver.FontSize, DefaultFontResolver.FontSize);
 
-        internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RenderContext adapter)
+        internal static TypefaceFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RenderContext adapter)
         {
             var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? DefaultFontResolver.DefaultFont;
             var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);

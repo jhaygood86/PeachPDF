@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachDrawing.Text;
 using System.Diagnostics;
@@ -43,17 +44,14 @@ namespace PeachPDF.PDF.Advanced
             : base(document)
         { }
 
-        public PdfType0Font(PdfDocument document, XFont font, bool vertical)
+        public PdfType0Font(PdfDocument document, TypefaceFont font)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/Font");
             Elements.SetName(Keys.Subtype, "/Type0");
-            Elements.SetName(Keys.Encoding, vertical ? "/Identity-V" : "/Identity-H");
+            Elements.SetName(Keys.Encoding, "/Identity-H");
 
             FontDescriptor = new PdfFontDescriptor(document, font.Typeface);
-            _fontOptions = font.PdfOptions;
-            Debug.Assert(_fontOptions != null);
-
             _cmapInfo = new CMapInfo(font.Typeface);
             _descendantFont = new PdfCIDFont(document, FontDescriptor, font);
             _descendantFont.CMapInfo = _cmapInfo;
@@ -75,12 +73,6 @@ namespace PeachPDF.PDF.Advanced
             descendantFonts.Elements.Add(_descendantFont.Reference);
             Elements[Keys.DescendantFonts] = descendantFonts;
         }
-
-        XPdfFontOptions FontOptions
-        {
-            get { return _fontOptions; }
-        }
-        XPdfFontOptions _fontOptions = null!;
 
         public string BaseFont
         {

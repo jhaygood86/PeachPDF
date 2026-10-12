@@ -30,6 +30,7 @@
 #nullable disable warnings
 
 
+using System.Linq;
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using PeachDrawing.Text.Outlines;
@@ -266,7 +267,7 @@ namespace PeachPDF.PDF.Rendering
         /// Records where the run just written left the pen, for <see cref="TryShowAtPen"/>; forgets it for
         /// a font shown without shaping (<paramref name="glyphs"/> null), which never continues one.
         /// </summary>
-        private void RememberTextRun(XFont font, IReadOnlyList<PlacedGlyph>? glyphs, double x, double laidOutEndX, double baselineY) =>
+        private void RememberTextRun(TypefaceFont font, IReadOnlyList<PlacedGlyph>? glyphs, double x, double laidOutEndX, double baselineY) =>
             _textRun = glyphs is null ? null : new TextRun(_content.Length, x + ReaderAdvance(font, glyphs), laidOutEndX, baselineY);
 
         /// <summary>
@@ -306,7 +307,7 @@ namespace PeachPDF.PDF.Rendering
         /// advance horizontal, and a space has no ink to slant.
         /// </para>
         /// </remarks>
-        private bool TryShowAtPen(double x, double baselineY, string text, XFont font, int contentLengthAtEntry)
+        private bool TryShowAtPen(double x, double baselineY, string text, TypefaceFont font, int contentLengthAtEntry)
         {
             double em = font.Size;
             if (_textRun is not { } run || run.ContentLength != contentLengthAtEntry
@@ -326,7 +327,7 @@ namespace PeachPDF.PDF.Rendering
         /// the <c>/W</c> width written for each glyph (see <see cref="PdfTypefaceMetrics.GlyphWidth"/>), at
         /// the font size and character spacing as written.
         /// </summary>
-        private double ReaderAdvance(XFont font, IReadOnlyList<PlacedGlyph> glyphs)
+        private double ReaderAdvance(TypefaceFont font, IReadOnlyList<PlacedGlyph> glyphs)
         {
             double fontSize = Math.Round(font.Size, 3, MidpointRounding.AwayFromZero);
             double charSpace = Math.Round(_gfxState.RealizedCharSpace, 3, MidpointRounding.AwayFromZero);
@@ -336,29 +337,27 @@ namespace PeachPDF.PDF.Rendering
             return thousandths * fontSize / 1000 + glyphs.Count * charSpace;
         }
 
-        public void DrawString(string s, XFont font, Brush brush, Rect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
+        public void DrawString(string s, TypefaceFont font, Brush brush, Rect rect, XStringFormat format, double letterSpacing, FontPalette? fontPalette, ShapeSettings features, string? logicalText = null)
         {
             int contentLengthAtEntry = _content.Length;
             bool isOnlySpaces = s.Length > 0 && !s.AsSpan().ContainsAnyExcept(' ');
             double x = rect.X;
             double y = rect.Y;
 
-            double lineSpace = font.GetHeight();
-            double cyAscent = lineSpace * font.CellAscent / font.CellSpace;
-            double cyDescent = lineSpace * font.CellDescent / font.CellSpace;
+            double lineSpace = font.Height;
+            double cyAscent = lineSpace * font.Typeface.Metrics.CellAscent / font.Typeface.Metrics.LineSpacing;
+            double cyDescent = lineSpace * font.Typeface.Metrics.CellDescent / font.Typeface.Metrics.LineSpacing;
 
             //bool bold = (font.Style & PaintFontStyle.Bold) != 0;
             //bool italic = (font.Style & PaintFontStyle.Italic) != 0;
-            bool italicSimulation = (font.Synthesis & SyntheticStyle.Italic) != 0;
-            bool boldSimulation = (font.Synthesis & SyntheticStyle.Bold) != 0;
-            bool strikeout = (font.Style & PaintFontStyle.Strikeout) != 0;
-            bool underline = (font.Style & PaintFontStyle.Underline) != 0;
+            bool italicSimulation = (font.SyntheticStyle & SyntheticStyle.Italic) != 0;
+            bool boldSimulation = (font.SyntheticStyle & SyntheticStyle.Bold) != 0;
 
             // Merely reading the typeface does not realize/embed the color font below.
             TypefaceMetrics metrics = font.Typeface.Metrics;
             // Invisible text (see XGraphics.InvisibleText) is always the plain outline text object, never colour artwork.
             bool invisible = Gfx.InvisibleText;
-            bool isColorFont = font.Unicode && font.Typeface.HasColorGlyphs && !invisible;
+            bool isColorFont = font.Typeface.HasColorGlyphs && !invisible;
             IReadOnlyList<PlacedGlyph>? colorGlyphs = isColorFont ? Shaper.Shape(font.Typeface, s, features).Glyphs : null;
             double width = colorGlyphs is not null && CanMeasureAsSingleShapedRun(s)
                 ? MeasureShapedRunWidth(s, font, colorGlyphs)
@@ -414,7 +413,7 @@ namespace PeachPDF.PDF.Rendering
                 // font-palette (index + entry overrides), when present, selects the CPAL palette.
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, font, brush, x, y,
-                    letterSpacing, paletteIndex, fontPalette?.Overrides);
+                    letterSpacing, paletteIndex, fontPalette?.Overrides.ToDictionary(entry => entry.Key, entry => entry.Value));
                 colorPainter.Paint(s, colorGlyphs!, logicalText);
             }
             else
@@ -426,28 +425,20 @@ namespace PeachPDF.PDF.Rendering
                 string text = null;
                 IReadOnlyList<PlacedGlyph> shapedGlyphs = null;
                 bool hasGposDeltas = false;
-                if (font.Unicode)
+                shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
+                RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
+                StringBuilder sb = new StringBuilder();
+                foreach (PlacedGlyph glyph in shapedGlyphs)
                 {
-                    shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
-                    RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
-                    StringBuilder sb = new StringBuilder();
-                    foreach (PlacedGlyph glyph in shapedGlyphs)
-                    {
-                        sb.Append((char)glyph.GlyphIndex);
-                        if (glyph.XAdvanceDelta != 0 || glyph.YAdvanceDelta != 0 || glyph.XOffset != 0 || glyph.YOffset != 0)
-                            hasGposDeltas = true;
-                    }
-                    s = sb.ToString();
+                    sb.Append((char)glyph.GlyphIndex);
+                    if (glyph.XAdvanceDelta != 0 || glyph.YAdvanceDelta != 0 || glyph.XOffset != 0 || glyph.YOffset != 0)
+                        hasGposDeltas = true;
+                }
+                s = sb.ToString();
 
-                    byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
-                    bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-                    text = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
-                }
-                else
-                {
-                    byte[] bytes = PdfEncoders.WinAnsiEncoding.GetBytes(s);
-                    text = PdfEncoders.ToStringLiteral(bytes, false);
-                }
+                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
+                bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
+                text = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
 
                 // Map absolute position to PDF world space.
                 PaintPoint pos = new PaintPoint(x, y);
@@ -462,11 +453,11 @@ namespace PeachPDF.PDF.Rendering
                 }
 
                 double laidOutEndX = x + width + (shapedGlyphs?.Count ?? 0) * letterSpacing;
-                bool shownAtPen = font.Unicode && isOnlySpaces
+                bool shownAtPen = isOnlySpaces
                     && TryShowAtPen(x, y + verticalOffset, text, font, contentLengthAtEntry);
                 if (!shownAtPen)
                 {
-                // A declared "oblique <angle>" (see XFont.ObliqueSkewSinus) drives the exact shear amount;
+                // A declared "oblique <angle>" (see TypefaceFont.ObliqueSkewSinus) drives the exact shear amount;
                 // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
                 // sin(20°) approximation this renderer has always used.
                 double skewSinus = font.ObliqueSkewSinus ?? Const.ItalicSkewAngleSinus;
@@ -521,23 +512,6 @@ namespace PeachPDF.PDF.Rendering
                 }
             }
 
-            if (underline && !invisible)
-            {
-                double underlinePosition = lineSpace * metrics.UnderlinePosition / font.CellSpace;
-                double underlineThickness = lineSpace * metrics.UnderlineThickness / font.CellSpace;
-                //DrawRectangle(null, brush, x, y - underlinePosition, width, underlineThickness);
-                double underlineRectY = y - underlinePosition;
-                DrawRectangle(null, brush, x, underlineRectY, width, underlineThickness);
-            }
-
-            if (strikeout && !invisible)
-            {
-                double strikeoutPosition = lineSpace * metrics.StrikeoutPosition / font.CellSpace;
-                double strikeoutSize = lineSpace * metrics.StrikeoutThickness / font.CellSpace;
-                //DrawRectangle(null, brush, x, y - strikeoutPosition - strikeoutSize, width, strikeoutSize);
-                double strikeoutRectY = y - strikeoutPosition;
-                DrawRectangle(null, brush, x, strikeoutRectY, width, strikeoutSize);
-            }
         }
 
         private static bool CanMeasureAsSingleShapedRun(string text)
@@ -551,7 +525,7 @@ namespace PeachPDF.PDF.Rendering
             return true;
         }
 
-        private static double MeasureShapedRunWidth(string text, XFont font, IReadOnlyList<PlacedGlyph> glyphs)
+        private static double MeasureShapedRunWidth(string text, TypefaceFont font, IReadOnlyList<PlacedGlyph> glyphs)
         {
             int designWidth = 0;
             for (int i = 0; i < glyphs.Count; i++)
@@ -560,8 +534,8 @@ namespace PeachPDF.PDF.Rendering
                 designWidth += (int)Math.Round(font.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta);
             }
 
-            double width = designWidth * font.Size / font.UnitsPerEm;
-            if ((font.Synthesis & SyntheticStyle.Bold) != 0)
+            double width = designWidth * font.Size / font.Typeface.Metrics.UnitsPerEm;
+            if ((font.SyntheticStyle & SyntheticStyle.Bold) != 0)
             {
                 int characterCount = 0;
                 foreach (Rune _ in text.EnumerateRunes())
@@ -580,7 +554,7 @@ namespace PeachPDF.PDF.Rendering
         /// path checks a complete shaped run; color-font vector painting checks each source-bearing
         /// glyph before emitting its invisible selection text.
         /// </summary>
-        void RequireNoMissingGlyphsForPdfA(IReadOnlyList<PlacedGlyph> glyphs, XFont font)
+        void RequireNoMissingGlyphsForPdfA(IReadOnlyList<PlacedGlyph> glyphs, TypefaceFont font)
         {
             if (Owner.Options.PdfAConformance == PdfAConformance.None)
                 return;
@@ -594,7 +568,7 @@ namespace PeachPDF.PDF.Rendering
                     // FragmentPainter's generic paint-error catch would otherwise fold it into a vague
                     // "Exception in box paint" HtmlRenderException.
                     throw new PdfAConformanceException(
-                        $"The font '{font.Name}' has no glyph for one or more characters in this text, " +
+                        $"The font '{font.Typeface.FamilyName}' has no glyph for one or more characters in this text, " +
                         "and no fallback font covers them either. PDF/A forbids a text-showing operator " +
                         "from referencing the missing-glyph placeholder (.notdef - e.g. ISO 19005-2 " +
                         "§6.2.11.8). Add a font-family fallback that covers every character in the " +
@@ -613,10 +587,10 @@ namespace PeachPDF.PDF.Rendering
         /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
         /// horizontal text only.
         /// </summary>
-        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, PaintPoint startPos, double laidOutEndX)
+        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, TypefaceFont font, PaintPoint startPos, double laidOutEndX)
         {
             const string format2 = Config.SignificantFigures4;
-            double scale = font.Size / font.UnitsPerEm;
+            double scale = font.Size / font.Typeface.Metrics.UnitsPerEm;
 
             double penX = startPos.X;
             double penY = startPos.Y;
@@ -656,12 +630,12 @@ namespace PeachPDF.PDF.Rendering
         /// addressed directly by font glyph index - the same per-glyph <c>Td</c>+<c>Tj</c> emission
         /// <see cref="DrawPositionedGlyphs"/> already uses, generalized to take already-absolute
         /// positions instead of shaped-run deltas relative to a pen, and to realize the font/brush
-        /// itself (its one caller, <see cref="DrawString(string, XFont, Brush, Rect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/>,
+        /// itself (its one caller, <see cref="DrawString(string, TypefaceFont, Brush, Rect, XStringFormat, double, FontPalette?, ShapeSettings, string)"/>,
         /// already did that before ever reaching <see cref="DrawPositionedGlyphs"/>). No bold/italic
         /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
         /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
         /// </summary>
-        public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, Brush brush)
+        public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, TypefaceFont font, Brush brush)
         {
             if (glyphs.Count == 0)
                 return;
@@ -1327,7 +1301,7 @@ namespace PeachPDF.PDF.Rendering
         }
 
         /// <summary>Begins the shared rendering-mode-3 text object for one color-glyph run.</summary>
-        internal void BeginInvisibleTextRun(XFont font, Brush brush)
+        internal void BeginInvisibleTextRun(TypefaceFont font, Brush brush)
         {
             Realize(font, brush, renderingMode: 3);
         }
@@ -1344,7 +1318,7 @@ namespace PeachPDF.PDF.Rendering
         /// the surrounding marked-content sequence's <c>/ActualText</c> supplies its exact Unicode,
         /// including sequences which share the same glyph ID.
         /// </summary>
-        internal void DrawInvisibleGlyph(XFont font, PlacedGlyph glyph, string sourceText, double x, double y)
+        internal void DrawInvisibleGlyph(TypefaceFont font, PlacedGlyph glyph, string sourceText, double x, double y)
         {
             if (glyph.GlyphIndex == 0)
                 RequireNoMissingGlyphsForPdfA(new[] { glyph }, font);
@@ -1467,7 +1441,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Makes the specified font and brush to the current graphics objects.
         /// </summary>
-        void Realize(XFont font, Brush brush, int renderingMode, double letterSpacing = 0)
+        void Realize(TypefaceFont font, Brush brush, int renderingMode, double letterSpacing = 0)
         {
             BeginPage();
             RealizeTransform();
@@ -1482,7 +1456,7 @@ namespace PeachPDF.PDF.Rendering
         /// <param name="pos">The absolute text position.</param>
         /// <param name="dy">The dy.</param>
         /// <param name="skewSinus">Non-null (the sine of the italic-simulation skew angle actually in
-        /// effect - see <see cref="XFont.ObliqueSkewSinus"/>) if skewing for italic simulation is
+        /// effect - see <see cref="TypefaceFont.ObliqueSkewSinus"/>) if skewing for italic simulation is
         /// currently on; null otherwise.</param>
         void AdjustTdOffset(ref PaintPoint pos, double dy, double? skewSinus)
         {
@@ -1981,7 +1955,7 @@ namespace PeachPDF.PDF.Rendering
         /// <summary>
         /// Gets the resource name of the specified font within this page or form.
         /// </summary>
-        internal string GetFontName(XFont font, out PdfFont pdfFont)
+        internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
         {
             if (_page != null)
                 return _page.GetFontName(font, out pdfFont);

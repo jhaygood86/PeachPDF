@@ -61,12 +61,12 @@ p {{ width: 300px; }}
             var paragraph = FindByTag(container.Root!, "p");
             Assert.NotNull(paragraph);
 
-            // The resolved XFont reports the font's own internal family name (read from its
+            // The resolved TypefaceFont reports the font's own internal family name (read from its
             // 'name' table after WOFF2->OpenType conversion), not the @font-face CSS alias --
             // this confirms the real WOFF2 font was decoded and actually used, not silently
             // falling back to a default/system font.
             var fontAdapter = Assert.IsType<FontAdapter>(paragraph!.ActualFont);
-            Assert.Equal("Inter Medium", fontAdapter.Font.Name);
+            Assert.Equal("Inter Medium", fontAdapter.Font.Typeface.FamilyName);
         }
     }
 }

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Adapters;
 using PeachDrawing.Text;
 using PeachPDF.Tests.TestSupport;
@@ -15,9 +16,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
         // each ascent/descent/gap component to a whole CSS pixel *after* multiplying by PixelsPerPoint,
         // instead of before - correct only by coincidence at the default PixelsPerPoint=1 every other test
         // in this repo uses, since Length.PointsPerPx is a fixed pt-per-CSS-px ratio, not a
-        // pt-per-internal-layout-unit one. Two FontAdapters wrapping the *same* XFont (so both share
+        // pt-per-internal-layout-unit one. Two FontAdapters wrapping the *same* TypefaceFont (so both share
         // identical ascent/descent/gap component values in real-point space, unaffected by
-        // PixelsPerPoint - see FontAdapter's own remarks on why XFont.Size is a true, unscaled point size)
+        // PixelsPerPoint - see FontAdapter's own remarks on why TypefaceFont.Size is a true, unscaled point size)
         // isolate the fix precisely: with each component correctly rounded once, in real-point space,
         // before the single final multiply, NormalLineHeight must scale by *exactly* PixelsPerPoint. The
         // bug this guards against instead re-rounds at a different (wrong) granularity per PixelsPerPoint

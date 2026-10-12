@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachPDF.PDF.Drawing;
 using System.Collections.Generic;
@@ -62,23 +63,15 @@ namespace PeachPDF.PDF.Advanced
         { }
 
         /// <summary>
-        /// Gets a PdfFont from an XFont. If no PdfFont already exists, a new one is created.
+        /// Gets a PdfFont from an TypefaceFont. If no PdfFont already exists, a new one is created.
         /// </summary>
-        public PdfFont GetFont(XFont font)
+        public PdfFont GetFont(TypefaceFont font)
         {
-            string selector = font.Selector;
-            if (selector == null)
-            {
-                selector = ComputeKey(font); //new FontSelector(font);
-                font.Selector = selector;
-            }
+            string selector = Selectors.GetValue(font.Typeface, ComputeKey);
             PdfFont pdfFont;
             if (!_fonts.TryGetValue(selector, out pdfFont))
             {
-                if (font.Unicode)
-                    pdfFont = new PdfType0Font(Owner, font, font.IsVertical);
-                else
-                    pdfFont = new PdfTrueTypeFont(Owner, font);
+                pdfFont = new PdfType0Font(Owner, font);
                 //pdfFont.Document = _document;
                 Debug.Assert(pdfFont.Owner == Owner);
                 _fonts[selector] = pdfFont;
@@ -101,22 +94,24 @@ namespace PeachPDF.PDF.Advanced
             return pdfFont;
         }
 
-        internal static string ComputeKey(XFont font)
+        internal static string ComputeKey(Typeface typeface)
         {
-            Typeface typeface = font.Typeface;
             // Include the font source's content hash, not just its internal FullFaceName: two DIFFERENT
             // font files can share one internal name (a common webfont-subset pattern), and keying the
             // per-document embed cache on the name alone would merge them into a single embedded font -
             // the second silently rendering with the first's glyphs. The hash makes identity content-
             // addressed (identical bytes still coalesce to one embed; different bytes never do).
             string key = typeface.FullName.ToLowerInvariant() + "/" + typeface.ContentHash + "/" + typeface.VariationKey +
-                (typeface.IsBold ? "/b" : "") + (typeface.IsItalic ? "/i" : "") + font.Unicode;
+                (typeface.IsBold ? "/b" : "") + (typeface.IsItalic ? "/i" : "") + "/Unicode";
             return key;
         }
 
         /// <summary>
         /// Map from PdfFontSelector to PdfFont.
         /// </summary>
+        /// <summary>Each typeface's embed key, worked out once however many sizes of it are drawn.</summary>
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Typeface, string> Selectors = new();
+
         readonly Dictionary<string, PdfFont> _fonts = new Dictionary<string, PdfFont>();
 
         public void PrepareForSave()

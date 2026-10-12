@@ -43,9 +43,9 @@ namespace PeachDrawing.Text.Internal.Fonts
     {
         // Implementation Notes
         // LoadedTypeface is the centerpiece for font management. There is a one to one relationship
-        // between XFont an LoadedTypeface.
+        // between TypefaceFont an LoadedTypeface.
         //
-        // * Each LoadedTypeface can belong to one or more XFont objects.
+        // * Each LoadedTypeface can belong to one or more TypefaceFont objects.
         // * An LoadedTypeface hold an XFontFamily.
         // * LoadedTypeface hold a reference to an OpenTypeFontface. 
         // * 
@@ -205,7 +205,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             var info = resolver.ResolveFace(familyName, new FaceRequest(options.Weight, options.IsItalic, options.WidthPercent, codepoint, options.ObliqueAngle));
             if (info == null)
             {
-                // The caller (PdfSharpAdapter) pre-checks coverage before ever building the XFont, so a
+                // The caller (PdfSharpAdapter) pre-checks coverage before ever building the TypefaceFont, so a
                 // null here is not expected - guard defensively rather than dereferencing null.
                 throw new InvalidOperationException("No appropriate font found.");
             }
@@ -234,7 +234,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// The specific <see cref="PeachDrawing.Text.Internal.Fonts.FontResolver"/> instance this typeface was resolved through its
         /// OWN per-instance cache for (i.e. a custom/<c>@font-face</c>-registered family - see
         /// <see cref="GetOrCreateFrom"/>), or null if it came from the global, process-wide caches (a
-        /// pure system-font request, safe to share). The PDF layer's <c>XFont</c> uses it to tell the two cases apart.
+        /// pure system-font request, safe to share). The PDF layer's <c>TypefaceFont</c> uses it to tell the two cases apart.
         /// </summary>
         internal FontResolver? OwningInstanceResolver { get; set; }
 

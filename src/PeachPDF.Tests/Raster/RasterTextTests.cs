@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.Raster
             Draw(f, "HHH", font);
 
             // A flat-bottomed capital sits on the baseline: y + cell ascent (in points), not the rounded Font.Ascent.
-            var baseline = 10 + real.GetHeight() * real.CellAscent / real.CellSpace;
+            var baseline = 10 + real.Height * real.Typeface.Metrics.CellAscent / real.Typeface.Metrics.LineSpacing;
             var (_, _, _, maxY, _) = InkBounds(f.Graphics);
             Assert.InRange(maxY + 1, baseline - 1, baseline + 1);
         }
