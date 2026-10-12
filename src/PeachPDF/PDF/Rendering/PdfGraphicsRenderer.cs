@@ -493,19 +493,7 @@ internal sealed partial class PdfGraphicsRenderer
 
     void BeginPageDownwards()
     {
-        // Take TrimBox into account.
         PageHeightPt = Size.Height;
-        PaintPoint trimOffset = new PaintPoint();
-        if (_page is not null && _page.TrimMargins.AreSet)
-        {
-            PageHeightPt += _page.TrimMargins.Top + _page.TrimMargins.Bottom;
-            trimOffset = new PaintPoint(_page.TrimMargins.Left, _page.TrimMargins.Top);
-        }
-
-        if (trimOffset != new PaintPoint())
-        {
-            DefaultViewMatrix = PdfMatrix.Translation(trimOffset.X, -trimOffset.Y) * DefaultViewMatrix;
-        }
 
         // Save initial graphic state.
         SaveState();

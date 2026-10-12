@@ -154,20 +154,6 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void TrimMargins_All_SetsAllFourMargins()
-        {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-
-            page.TrimMargins.All = 10;
-
-            Assert.Equal(10, page.TrimMargins.Left, 3);
-            Assert.Equal(10, page.TrimMargins.Right, 3);
-            Assert.Equal(10, page.TrimMargins.Top, 3);
-            Assert.Equal(10, page.TrimMargins.Bottom, 3);
-        }
-
-        [Fact]
         public void Tag_RoundTrips()
         {
             var doc = new PdfDocument();

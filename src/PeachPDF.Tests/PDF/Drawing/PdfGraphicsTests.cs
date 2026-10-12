@@ -269,22 +269,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
         }
 
         [Fact]
-        public void FromPdfPage_WithTrimMargins_OffsetsPageTransform()
-        {
-            var (document, page) = NewPage();
-            page.TrimMargins.All = 5;
-
-            using (var gfx = PdfGraphics.FromPdfPage(page))
-            {
-                gfx.DrawLine(PdfPaints.CreatePen(PaintColor.Black), 0, 0, 10, 10);
-            }
-
-            using var stream = new MemoryStream();
-            document.Save(stream);
-            Assert.True(stream.Length > 0);
-        }
-
-        [Fact]
         public void DrawEverything_ProducesNonEmptySavedDocument()
         {
             var (document, page) = NewPage();

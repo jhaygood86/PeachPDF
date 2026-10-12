@@ -142,8 +142,6 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
             // never does - so this path can never succeed and exists only to fail with a clear message.
             throw new InvalidOperationException("A PDF document must be opened with PdfDocumentOpenMode.Import to import pages from it.");
         }
-        if (Owner.Settings.TrimMargins.AreSet)
-            page.TrimMargins = Owner.Settings.TrimMargins;
         return page;
     }
 

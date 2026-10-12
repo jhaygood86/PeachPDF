@@ -182,7 +182,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         // TODO: more diagnostic checks
         string message = "";
         if (!CanSave(ref message))
-            throw new PdfException(message);
+            throw new InvalidOperationException(message);
 
         PdfWriter? writer = null;
         try
@@ -332,20 +332,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         }
     }
     PdfDocumentOptions _options = null!;
-
-    /// <summary>
-    /// Gets PDF specific document settings.
-    /// </summary>
-    public PdfDocumentSettings Settings
-    {
-        get
-        {
-            if (_settings is null)
-                _settings = new PdfDocumentSettings(this);
-            return _settings;
-        }
-    }
-    PdfDocumentSettings _settings = null!;
 
     /// <summary>
     /// Gets or sets the PDF version number. Return value 14 e.g. means PDF 1.4 / Acrobat 5 etc.

@@ -79,26 +79,6 @@ namespace PeachPDF.Tests.PdfEngineTests.IO
         }
 
         [Fact]
-        public void Write_PdfLong_WritesValue()
-        {
-            var (writer, stream) = CreateWriter();
-
-            writer.Write(new PdfLong(123456789012L));
-
-            Assert.Equal("123456789012", ReadAll(stream));
-        }
-
-        [Fact]
-        public void Write_PdfUInteger_WritesValue()
-        {
-            var (writer, stream) = CreateWriter();
-
-            writer.Write(new PdfUInteger(99u));
-
-            Assert.Equal("99", ReadAll(stream));
-        }
-
-        [Fact]
         public void Write_Double_WritesInvariantDecimal()
         {
             var (writer, stream) = CreateWriter();

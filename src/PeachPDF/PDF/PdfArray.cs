@@ -178,16 +178,13 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj is null || obj is PdfNull)
+            if (obj is null)
                 return false;
 
             PdfBoolean? boolean = obj as PdfBoolean;
             if (boolean is not null)
                 return boolean.Value;
 
-            PdfBooleanObject? booleanObject = obj as PdfBooleanObject;
-            if (booleanObject is not null)
-                return booleanObject.Value;
 
             throw new InvalidCastException("GetBoolean: Object is not a boolean.");
         }
@@ -204,16 +201,13 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj is null || obj is PdfNull)
+            if (obj is null)
                 return 0;
 
             PdfInteger? integer = obj as PdfInteger;
             if (integer is not null)
                 return integer.Value;
 
-            PdfIntegerObject? integerObject = obj as PdfIntegerObject;
-            if (integerObject is not null)
-                return integerObject.Value;
 
             throw new InvalidCastException("GetInteger: Object is not an integer.");
         }
@@ -230,24 +224,18 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj is null || obj is PdfNull)
+            if (obj is null)
                 return 0;
 
             PdfReal? real = obj as PdfReal;
             if (real is not null)
                 return real.Value;
 
-            PdfRealObject? realObject = obj as PdfRealObject;
-            if (realObject is not null)
-                return realObject.Value;
 
             PdfInteger? integer = obj as PdfInteger;
             if (integer is not null)
                 return integer.Value;
 
-            PdfIntegerObject? integerObject = obj as PdfIntegerObject;
-            if (integerObject is not null)
-                return integerObject.Value;
 
             throw new InvalidCastException("GetReal: Object is not a number.");
         }
@@ -264,16 +252,13 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj is null || obj is PdfNull)
+            if (obj is null)
                 return string.Empty;
 
             PdfString? str = obj as PdfString;
             if (str is not null)
                 return str.Value;
 
-            PdfStringObject? strObject = obj as PdfStringObject;
-            if (strObject is not null)
-                return strObject.Value;
 
             throw new InvalidCastException("GetString: Object is not a string.");
         }
@@ -290,16 +275,13 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
                 throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
             object obj = this[index];
-            if (obj is null || obj is PdfNull)
+            if (obj is null)
                 return string.Empty;
 
             PdfName? name = obj as PdfName;
             if (name is not null)
                 return name.Value;
 
-            PdfNameObject? nameObject = obj as PdfNameObject;
-            if (nameObject is not null)
-                return nameObject.Value;
 
             throw new InvalidCastException("GetName: Object is not a name.");
         }

@@ -95,15 +95,7 @@ internal sealed class PdfWriter
     /// </summary>
     public void Write(PdfInteger value) => WriteNumber(value.Value);
 
-    /// <summary>
-    /// Writes the specified value to the PDF stream.
-    /// </summary>
-    public void Write(PdfLong value) => WriteNumber(value.Value);
 
-    /// <summary>
-    /// Writes the specified value to the PDF stream.
-    /// </summary>
-    public void Write(PdfUInteger value) => WriteNumber(value.Value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.

@@ -154,34 +154,6 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     PageSize _pageSize;
 
     /// <summary>
-    /// Gets or sets the trim margins.
-    /// </summary>
-    public TrimMargins TrimMargins
-    {
-        get
-        {
-            if (_trimMargins is null)
-                _trimMargins = new TrimMargins();
-            return _trimMargins;
-        }
-        set
-        {
-            if (_trimMargins is null)
-                _trimMargins = new TrimMargins();
-            if (value is not null)
-            {
-                _trimMargins.Left = value.Left;
-                _trimMargins.Right = value.Right;
-                _trimMargins.Top = value.Top;
-                _trimMargins.Bottom = value.Bottom;
-            }
-            else
-                _trimMargins.All = 0;
-        }
-    }
-    TrimMargins _trimMargins = new TrimMargins();
-
-    /// <summary>
     /// Gets or sets the media box directly. XGrahics is not prepared to work with a media box
     /// with an origin other than (0,0).
     /// </summary>
@@ -557,32 +529,6 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// Hack to indicate that a page-level transparency group must be created.
     /// </summary>
     internal bool TransparencyUsed;
-
-    internal override void PrepareForSave()
-    {
-        if (_trimMargins.AreSet)
-        {
-            // These are the values InDesign set for an A4 page with 3mm crop margin at each edge.
-            // (recall that PDF rect are two points and NOT a point and a width)
-            // /MediaBox[0.0 0.0 612.283 858.898]  216 302.7
-            // /CropBox[0.0 0.0 612.283 858.898]
-            // /BleedBox[0.0 0.0 612.283 858.898]
-            // /ArtBox[8.50394 8.50394 603.78 850.394] 3 3 213 300
-            // /TrimBox[8.50394 8.50394 603.78 850.394]
-
-            double width = _trimMargins.Left + Width + _trimMargins.Right;
-            double height = _trimMargins.Top + Height + _trimMargins.Bottom;
-
-            MediaBox = new PdfRectangle(0, 0, width, height);
-            CropBox = new PdfRectangle(0, 0, width, height);
-            BleedBox = new PdfRectangle(0, 0, width, height);
-
-            PdfRectangle rect = new PdfRectangle(_trimMargins.Left, _trimMargins.Top,
-              width - _trimMargins.Right, height - _trimMargins.Bottom);
-            TrimBox = rect;
-            ArtBox = rect.Clone();
-        }
-    }
 
     /// <summary>
     /// Predefined keys of this dictionary.

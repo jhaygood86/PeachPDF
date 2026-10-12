@@ -77,9 +77,6 @@ internal partial class PdfDictionary
                 case PdfBoolean boolean:
                     value = boolean.Value;
                     return true;
-                case PdfBooleanObject booleanObject:
-                    value = booleanObject.Value;
-                    return true;
                 default:
                     value = false;
                     return false;
@@ -92,12 +89,6 @@ internal partial class PdfDictionary
             {
                 case PdfInteger integer:
                     value = integer.Value;
-                    return true;
-                case PdfIntegerObject integerObject:
-                    value = integerObject.Value;
-                    return true;
-                case PdfUInteger unsignedInteger:
-                    value = (int)unsignedInteger.Value;
                     return true;
                 default:
                     value = 0;
@@ -112,14 +103,8 @@ internal partial class PdfDictionary
                 case PdfReal real:
                     value = real.Value;
                     return true;
-                case PdfRealObject realObject:
-                    value = realObject.Value;
-                    return true;
                 case PdfInteger integer:
                     value = integer.Value;
-                    return true;
-                case PdfIntegerObject integerObject:
-                    value = integerObject.Value;
                     return true;
                 default:
                     value = 0;
@@ -134,14 +119,8 @@ internal partial class PdfDictionary
                 case PdfString text:
                     value = text.Value;
                     return true;
-                case PdfStringObject textObject:
-                    value = textObject.Value;
-                    return true;
                 case PdfName name:
                     value = name.Value;
-                    return true;
-                case PdfNameObject nameObject:
-                    value = nameObject.Value;
                     return true;
                 default:
                     value = null;
@@ -197,9 +176,6 @@ internal partial class PdfDictionary
                 return 0;
             }
 
-            if (item is PdfNull)
-                return 0;
-
             return TryReadInteger(Unwrapped(item), out int value)
                 ? value
                 : throw new InvalidCastException("GetInteger: Object is not an integer.");
@@ -211,7 +187,7 @@ internal partial class PdfDictionary
         public bool TryGetInteger(string key, out int value)
         {
             PdfItem? item = this[key];
-            if (item is null or PdfNull)
+            if (item is null)
             {
                 value = 0;
                 return false;
@@ -314,7 +290,6 @@ internal partial class PdfDictionary
             {
                 null => string.Empty,
                 PdfName name => name.Value,
-                PdfNameObject nameObject => nameObject.Value,
                 _ => throw new InvalidCastException("GetName: Object is not a name."),
             };
         }
@@ -433,7 +408,7 @@ internal partial class PdfDictionary
             {
                 null => defaultValue,
                 PdfDate date => date.Value,
-                PdfString or PdfStringObject => defaultValue,
+                PdfString => defaultValue,
                 _ => throw new InvalidCastException("GetDateTime: Object is not a string or date."),
             };
         }

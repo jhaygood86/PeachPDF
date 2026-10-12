@@ -120,20 +120,7 @@ internal sealed partial class PdfGraphics : IDisposable
     {
         _pageOrigin = new PaintPoint();
 
-        double pageHeight = _pageSize.Height;
-        PdfPage? targetPage = PdfPage;
-        PaintPoint trimOffset = new PaintPoint();
-        if (targetPage is not null && targetPage.TrimMargins.AreSet)
-        {
-            pageHeight += targetPage.TrimMargins.Top + targetPage.TrimMargins.Bottom;
-            trimOffset = new PaintPoint(targetPage.TrimMargins.Left, targetPage.TrimMargins.Top);
-        }
-
-        Matrix3x2 matrix = Matrix3x2.Identity;
-        if (trimOffset != new PaintPoint())
-            matrix = PdfMatrix.Translation(trimOffset.X, -trimOffset.Y) * matrix;
-
-        DefaultViewMatrix = matrix;
+        DefaultViewMatrix = Matrix3x2.Identity;
         _transform = Matrix3x2.Identity;
     }
 
