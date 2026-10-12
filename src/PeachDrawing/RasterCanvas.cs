@@ -202,7 +202,7 @@ public sealed partial class RasterCanvas : Canvas
             _blend = _blendModes.Pop();
     }
 
-    // The render-wide setting (PdfGenerateConfig.RasterAntiAliasing, read as _adapter.RasterAntiAliasing) is the default; a
+    // The render-wide setting (PdfGenerateConfig.RasterAntiAliasing, read as _renderContext.RasterAntiAliasing) is the default; a
     // PushAntiAlias overrides it for the shapes drawn until the matching PopAntiAlias, and ScanlineRasterizer honours whichever applies.
     private readonly Stack<bool> _antiAlias = new();
 
