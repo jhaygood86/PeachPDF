@@ -912,6 +912,16 @@ namespace PeachPDF.Html.Core
         internal void RecordUnheldChildSkipped() => UnheldChildrenSkipped++;
 
         /// <summary>
+        /// How many children of multi-column containers the columns engine measured the depth of, over every column it filled
+        /// during the current <see cref="PerformLayoutOnePass"/> call. A column measures the ones it holds and the ones that
+        /// could still reach it; a count that grows with the square of the pages is the engine asking its finished pages again.
+        /// </summary>
+        internal long ColumnBottomChildrenMeasured { get; private set; }
+
+        /// <summary>Records how many children one column fill measured.</summary>
+        internal void RecordColumnBottomMeasure(int children) => ColumnBottomChildrenMeasured += children;
+
+        /// <summary>
         /// Whether any box in the current document asks for <c>box-decoration-break: clone</c>. Reserving room
         /// for a cloned border and padding at a break (css-break-3 §6.2) means asking, for a great many words,
         /// what a box's ancestors declared; this settles the answer once so a document that clones nothing —
@@ -1717,6 +1727,7 @@ namespace PeachPDF.Html.Core
             BuildDraftCalls = 0;
             CatchUpSlotEmits = 0;
             UnheldChildrenSkipped = 0;
+            ColumnBottomChildrenMeasured = 0;
             if (Root is null) return;
 
             // A document with per-page left/right margins settles its box->page assignment in the reflow
@@ -3279,7 +3290,7 @@ namespace PeachPDF.Html.Core
         /// <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from index <paramref name="fromIndex"/> on:
         /// content a later column of the same fill moved on whole.
         /// </summary>
-        internal void ForgetInCapturedInstancesFrom(CssBox contextRoot, int slot, int fromIndex, IEnumerable<CssBox> boxes) =>
+        internal void ForgetInCapturedInstancesFrom(CssBox contextRoot, int slot, int fromIndex, BoxesBeyondColumn boxes) =>
             _emitter?.ForgetInCapturedInstancesFrom(contextRoot, slot, fromIndex, boxes);
 
         /// <summary>
