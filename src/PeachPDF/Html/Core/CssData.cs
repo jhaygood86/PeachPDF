@@ -1298,9 +1298,32 @@ namespace PeachPDF.Html.Core
                 return false;
             }
 
+            var sameTypeOnly = childSelector is FirstTypeSelector or LastTypeSelector;
+            var fromEndPosition = childSelector is LastChildSelector or LastTypeSelector;
+
+            // Answered from the parent's sibling index when it has one (see SiblingIndex): without it every
+            // row of a long table scans and copies all its siblings. An "of S" clause filters the siblings, so
+            // that rarer form keeps the walk below.
+            if (childSelector.Kind is AllSelector
+                && SiblingIndex.For(parent.Children, node.NameComparison) is { } siblingIndex
+                && siblingIndex.IndexOf(node) is var at and >= 0)
+            {
+                int indexedPosition;
+                if (sameTypeOnly)
+                {
+                    var (typePosition, typeCount) = siblingIndex.TypePositionOf(node);
+                    indexedPosition = fromEndPosition ? typeCount - typePosition : typePosition + 1;
+                }
+                else
+                {
+                    indexedPosition = fromEndPosition ? siblingIndex.Elements.Count - at : at + 1;
+                }
+
+                return MatchesAnPlusB(indexedPosition, childSelector.Step, childSelector.Offset);
+            }
+
             IEnumerable<ICssDomNode> siblingNodes = parent.Children.Where(b => b.TagName is not null);
 
-            var sameTypeOnly = childSelector is FirstTypeSelector or LastTypeSelector;
             if (sameTypeOnly)
             {
                 siblingNodes = siblingNodes.Where(b => b.TagName!.Equals(nodeTag, node.NameComparison));
@@ -1320,7 +1343,6 @@ namespace PeachPDF.Html.Core
                 return false;
             }
 
-            var fromEndPosition = childSelector is LastChildSelector or LastTypeSelector;
             var position = fromEndPosition ? siblings.Count - index : index + 1;
 
             return MatchesAnPlusB(position, childSelector.Step, childSelector.Offset);
@@ -1564,6 +1586,11 @@ namespace PeachPDF.Html.Core
         {
             var parent = node.Parent;
             if (parent is null) return null;
+            if (SiblingIndex.For(parent.Children, node.NameComparison) is { } index && index.IndexOf(node) is var at and >= 0)
+            {
+                return at + 1 < index.Elements.Count ? index.Elements[at + 1] : null;
+            }
+
             var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
             var idx = siblings.IndexOf(node);
             return idx >= 0 && idx + 1 < siblings.Count ? siblings[idx + 1] : null;
@@ -1575,8 +1602,20 @@ namespace PeachPDF.Html.Core
             var parent = node.Parent;
             if (parent is null) yield break;
 
-            var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
-            var idx = siblings.IndexOf(node);
+            IReadOnlyList<ICssDomNode> siblings;
+            int idx;
+            if (SiblingIndex.For(parent.Children, node.NameComparison) is { } index && index.IndexOf(node) is var at and >= 0)
+            {
+                siblings = index.Elements;
+                idx = at;
+            }
+            else
+            {
+                var scanned = parent.Children.Where(b => b.TagName is not null).ToList();
+                siblings = scanned;
+                idx = scanned.IndexOf(node);
+            }
+
             if (idx < 0) yield break;
 
             for (var i = idx + 1; i < siblings.Count; i++) yield return siblings[i];
@@ -1622,6 +1661,11 @@ namespace PeachPDF.Html.Core
         private static ICssDomNode? PrecedingElementSibling(IReadOnlyList<ICssDomNode> children, ICssDomNode node)
         {
             if (node.TagName is null) return null;
+
+            if (SiblingIndex.For(children, node.NameComparison) is { } index && index.IndexOf(node) is var at and >= 0)
+            {
+                return at > 0 ? index.Elements[at - 1] : null;
+            }
 
             ICssDomNode? previous = null;
             for (var i = 0; i < children.Count; i++)
@@ -1722,8 +1766,19 @@ namespace PeachPDF.Html.Core
                         var parent = currentRef.Parent;
                         if (parent is null) return false;
 
-                        var children = parent.Children;
-                        var at = ChildIndexOf(children, currentRef);
+                        IReadOnlyList<ICssDomNode> children = parent.Children;
+                        int at;
+                        if (SiblingIndex.For(children, currentRef.NameComparison) is { } index
+                            && index.IndexOf(currentRef) is var indexedAt and >= 0)
+                        {
+                            children = index.Elements;
+                            at = indexedAt;
+                        }
+                        else
+                        {
+                            at = ChildIndexOf(children, currentRef);
+                        }
+
                         if (at <= 0) return false;
 
                         ICssDomNode? match = null;
