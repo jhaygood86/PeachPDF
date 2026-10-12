@@ -30,7 +30,7 @@ namespace PeachDrawing.Core
         /// <summary>
         /// the global adapter
         /// </summary>
-        protected readonly RenderContext _adapter;
+        protected readonly RenderContext _renderContext;
 
         /// <summary>
         /// The clipping bound stack as clips are pushed/poped to/from the graphics
@@ -48,11 +48,11 @@ namespace PeachDrawing.Core
         /// <summary>
         /// Init.
         /// </summary>
-        protected Canvas(RenderContext adapter, Rect initialClip)
+        protected Canvas(RenderContext renderContext, Rect initialClip)
         {
-            ArgumentNullException.ThrowIfNull(adapter, "global");
+            ArgumentNullException.ThrowIfNull(renderContext, "global");
 
-            _adapter = adapter;
+            _renderContext = renderContext;
             _clipStack.Push(initialClip);
         }
 
@@ -85,7 +85,7 @@ namespace PeachDrawing.Core
         /// <returns>pen instance</returns>
         public Pen GetPen(PaintColor color)
         {
-            return _adapter.GetPen(color);
+            return _renderContext.GetPen(color);
         }
 
         /// <summary>
@@ -93,7 +93,7 @@ namespace PeachDrawing.Core
         /// </summary>
         public Pen GetPen(Brush brush)
         {
-            return _adapter.GetPen(brush);
+            return _renderContext.GetPen(brush);
         }
 
         /// <summary>
@@ -103,7 +103,7 @@ namespace PeachDrawing.Core
         /// <returns>solid color brush instance</returns>
         public Brush GetSolidBrush(PaintColor color)
         {
-            return _adapter.GetSolidBrush(color);
+            return _renderContext.GetSolidBrush(color);
         }
 
         /// <summary>
@@ -116,31 +116,31 @@ namespace PeachDrawing.Core
         /// <returns>linear gradient color brush instance</returns>
         public Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, double angle)
         {
-            return _adapter.GetLinearGradientBrush(rect, color1, color2, angle);
+            return _renderContext.GetLinearGradientBrush(rect, color1, color2, angle);
         }
 
         /// <summary>Convenience wrapper for <c>RenderContext.GetLinearGradientBrush(PaintPoint, PaintPoint, (PaintColor, double)[], bool)</c> on the <see cref="RenderContext"/> this graphics was built from.</summary>
         public Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, (PaintColor PaintColor, double Position)[] stops, bool isRepeating = false)
         {
-            return _adapter.GetLinearGradientBrush(p1, p2, stops, isRepeating);
+            return _renderContext.GetLinearGradientBrush(p1, p2, stops, isRepeating);
         }
 
         /// <summary>Convenience wrapper for <see cref="RenderContext.GetRadialGradientBrush(PaintPoint, double, double, ValueTuple{PaintColor, double}[], bool, PaintPoint?, Matrix3x2?)"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>
         public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating = false, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
         {
-            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter, transform);
+            return _renderContext.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter, transform);
         }
 
         /// <summary>Convenience wrapper for the two-circle <see cref="RenderContext.GetRadialGradientBrush(PaintPoint, double, double, ValueTuple{PaintColor, double}[], bool, PaintPoint?, double, Matrix3x2?)"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>
         public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating, PaintPoint? focalCenter, double focalRadius, Matrix3x2? transform = null)
         {
-            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter, focalRadius, transform);
+            return _renderContext.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter, focalRadius, transform);
         }
 
         /// <summary>Convenience wrapper for <see cref="RenderContext.GetConicGradientBrush"/> on the <see cref="RenderContext"/> this graphics was built from.</summary>
         public Brush GetConicGradientBrush(PaintPoint center, double outerRadius, PaintColor[] colors, double[] anglesRad)
         {
-            return _adapter.GetConicGradientBrush(center, outerRadius, colors, anglesRad);
+            return _renderContext.GetConicGradientBrush(center, outerRadius, colors, anglesRad);
         }
 
         /// <summary>

@@ -103,7 +103,7 @@ namespace PeachPDF.PdfBackend
         private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
 
         /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
-        internal RenderContext RenderContext => _adapter;
+        internal RenderContext RenderContext => _renderContext;
 
         public override void PopClip()
         {
@@ -221,7 +221,7 @@ namespace PeachPDF.PdfBackend
         {
             // Invisible text paints nothing, so its colour is irrelevant - and an opaque one keeps it clear of the alpha and
             // colour-space guards a real colour would pass through.
-            var xBrush = ToXBrush(_adapter.GetSolidBrush(InvisibleText ? PaintColor.Black : color));
+            var xBrush = ToXBrush(_renderContext.GetSolidBrush(InvisibleText ? PaintColor.Black : color));
             _g.InvisibleText = InvisibleText;
             var xPoint = Utils.ToPoints(point, PixelsPerPoint);
 
@@ -246,7 +246,7 @@ namespace PeachPDF.PdfBackend
             if (InvisibleText)
                 return;
 
-            var xBrush = ToXBrush(_adapter.GetSolidBrush(color));
+            var xBrush = ToXBrush(_renderContext.GetSolidBrush(color));
             var positioned = new (int GlyphIndex, double X, double Y)[glyphs.Count];
             for (var i = 0; i < glyphs.Count; i++)
             {
@@ -368,7 +368,7 @@ namespace PeachPDF.PdfBackend
             // underlying PdfGraphics, which is what actually calls PdfForm.Finish() and closes out the
             // Form XObject's content stream (see PdfGraphics.Dispose()). Without this, the tile's
             // drawing commands would never get flushed into the PDF at all.
-            var tileGraphics = new PdfCanvas(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
+            var tileGraphics = new PdfCanvas(_renderContext, formGraphics, PixelsPerPoint, releaseGraphics: true);
             // See CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only, see SeedTransform)
             // lets a reader inside the tile (a gradient/pattern reaching it through context-fill/context-stroke,
             // chiefly) relate the tile's coordinate space back to whatever space content outside it is measured
@@ -384,7 +384,7 @@ namespace PeachPDF.PdfBackend
             RasterLayerEffects.Apply(surface, effects);
 
         public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) =>
-            RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale, _accumulated);
+            RasterSurfaceFactory.Create(_renderContext, PixelsPerPoint, layoutBounds, dpiOverride ?? _renderContext.RasterizationDpi, _renderContext.MaxRasterPixels, TransformScale, _accumulated);
 
         public override bool FlattensTransparency =>
             _g.Owner is { } owner && owner.Options.FlattenTransparency &&
@@ -393,7 +393,7 @@ namespace PeachPDF.PdfBackend
 
         private TransparencyProbe? _probe;
 
-        public TransparencyProbe CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
+        public TransparencyProbe CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_renderContext, PixelsPerPoint);
 
         public override void DrawRaster(RasterSurface surface)
         {
@@ -483,7 +483,7 @@ namespace PeachPDF.PdfBackend
             if (_g.PdfSvgGlyphPainter is PdfSvgGlyphPainter own && ReferenceEquals(own.Host, this))
                 _g.PdfSvgGlyphPainter = _previousSvgGlyphPainter;
 
-            if (ReferenceEquals(_g.RasterContext, _adapter))
+            if (ReferenceEquals(_g.RasterContext, _renderContext))
                 _g.RasterContext = _previousRasterContext;
 
             if (_releaseGraphics)

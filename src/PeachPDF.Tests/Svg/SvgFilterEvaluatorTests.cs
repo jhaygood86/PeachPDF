@@ -363,7 +363,7 @@ namespace PeachPDF.Tests.Svg
         {
             var image = new FakeImage(_nextId++);
             TilesById[image.Id] = image;
-            return (new FakeFilterGraphics(_adapter, image, TilesById, PageLog), image);
+            return (new FakeFilterGraphics(_renderContext, image, TilesById, PageLog), image);
         }
 
         public override void DrawRectangle(Brush brush, double x, double y, double width, double height) => Log("Flood");

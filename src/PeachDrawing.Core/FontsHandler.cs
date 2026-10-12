@@ -26,7 +26,7 @@ namespace PeachDrawing.Core
         /// <summary>
         /// 
         /// </summary>
-        private readonly RenderContext _adapter;
+        private readonly RenderContext _renderContext;
 
         /// <summary>
         /// Allow to map not installed fonts to different
@@ -65,11 +65,11 @@ namespace PeachDrawing.Core
         /// <summary>
         /// Init.
         /// </summary>
-        public FontsHandler(RenderContext adapter)
+        public FontsHandler(RenderContext renderContext)
         {
-            ArgumentNullException.ThrowIfNull(adapter, "global");
+            ArgumentNullException.ThrowIfNull(renderContext, "global");
 
-            _adapter = adapter;
+            _renderContext = renderContext;
         }
 
         /// <summary>
@@ -160,7 +160,7 @@ namespace PeachDrawing.Core
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
             var font = TryGetFont(family, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, variations);
-            var sizeKey = (size, _adapter.LayoutUnitsPerPoint);
+            var sizeKey = (size, _renderContext.LayoutUnitsPerPoint);
 
             if (font == null)
             {
@@ -207,12 +207,12 @@ namespace PeachDrawing.Core
                 ? family
                 : _fontsMapping.TryGetValue(family, out var mappedFamily) ? mappedFamily : family;
 
-            var key = (resolvedFamily.ToLowerInvariant(), size, _adapter.LayoutUnitsPerPoint, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value, variations);
+            var key = (resolvedFamily.ToLowerInvariant(), size, _renderContext.LayoutUnitsPerPoint, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value, variations);
 
             if (_codepointFontsCache.TryGetValue(key, out var cached))
                 return cached;
 
-            var font = _adapter.CreateFontForCodepoint(resolvedFamily, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint, variations);
+            var font = _renderContext.CreateFontForCodepoint(resolvedFamily, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint, variations);
             _codepointFontsCache[key] = font;
             return font;
         }
@@ -227,12 +227,12 @@ namespace PeachDrawing.Core
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
 
-            var key = (size, _adapter.LayoutUnitsPerPoint, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value, presentation, variations);
+            var key = (size, _renderContext.LayoutUnitsPerPoint, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value, presentation, variations);
 
             if (_systemFallbackFontsCache.TryGetValue(key, out var cached))
                 return cached;
 
-            var font = _adapter.CreateSystemFallbackFontForCodepoint(size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint, presentation, variations);
+            var font = _renderContext.CreateSystemFallbackFontForCodepoint(size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint, presentation, variations);
             _systemFallbackFontsCache[key] = font;
             return font;
         }
@@ -253,7 +253,7 @@ namespace PeachDrawing.Core
         private Font? TryGetFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             Font? font = null;
-            var sizeKey = (size, _adapter.LayoutUnitsPerPoint);
+            var sizeKey = (size, _renderContext.LayoutUnitsPerPoint);
 
             if (_fontsCache.TryGetValue(family, out var a))
             {
@@ -285,15 +285,15 @@ namespace PeachDrawing.Core
             try
             {
                 return _existingFontFamilies.TryGetValue(family, out fontFamily)
-                    ? _adapter.CreateFont(fontFamily, size, style, weight, stretch, obliqueSkewSinus, variations)
-                    : _adapter.CreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
+                    ? _renderContext.CreateFont(fontFamily, size, style, weight, stretch, obliqueSkewSinus, variations)
+                    : _renderContext.CreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
             }
             catch
             {
                 // handle possibility of no requested style exists for the font, use regular then
                 return _existingFontFamilies.TryGetValue(family, out fontFamily)
-                    ? _adapter.CreateFont(fontFamily, size, PaintFontStyle.Regular, weight, stretch, obliqueSkewSinus, variations)
-                    : _adapter.CreateFont(family, size, PaintFontStyle.Regular, weight, stretch, obliqueSkewSinus, variations);
+                    ? _renderContext.CreateFont(fontFamily, size, PaintFontStyle.Regular, weight, stretch, obliqueSkewSinus, variations)
+                    : _renderContext.CreateFont(family, size, PaintFontStyle.Regular, weight, stretch, obliqueSkewSinus, variations);
             }
         }
 

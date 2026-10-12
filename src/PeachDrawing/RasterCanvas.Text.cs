@@ -165,7 +165,7 @@ public sealed partial class RasterCanvas
 
         // Null when this canvas's RenderContext has no SVG engine to render one with (e.g. a standalone
         // canvas, which has no SVG rendering capability at all) - the caller draws the outline instead.
-        _svgGlyphs ??= _adapter.CreateSvgGlyphPainter(this);
+        _svgGlyphs ??= _renderContext.CreateSvgGlyphPainter(this);
         if (_svgGlyphs is null)
             return false;
 
@@ -232,7 +232,7 @@ public sealed partial class RasterCanvas
     /// </summary>
     private OutlineRequest? HintingRequest(Font font, in Affine toDevice)
     {
-        var mode = _adapter.TextHinting;
+        var mode = _renderContext.TextHinting;
         if (mode == TextHinting.None)
             return null;
 
@@ -248,7 +248,7 @@ public sealed partial class RasterCanvas
             PixelsPerEmX = font.Size * scaleX,
             PixelsPerEmY = font.Size * scaleY,
             GridFitting = mode == TextHinting.Monochrome ? GridFitting.Monochrome : GridFitting.Standard,
-            StemDarkening = _adapter.TextStemDarkening,
+            StemDarkening = _renderContext.TextStemDarkening,
         };
     }
 

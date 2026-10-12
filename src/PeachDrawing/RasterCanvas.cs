@@ -44,11 +44,11 @@ public sealed partial class RasterCanvas : Canvas
     private byte[] _pixelScratch;
 
     /// <summary>Builds a canvas that paints into <paramref name="surface"/>.</summary>
-    /// <param name="adapter">the render context this canvas resolves colors, fonts and paint objects from</param>
+    /// <param name="renderContext">the render context this canvas resolves colors, fonts and paint objects from</param>
     /// <param name="surface">the pixel buffer this canvas paints into</param>
     /// <param name="pixelsPerPoint">the scale between this canvas's own coordinate space and true PDF points - see <see cref="Canvas.PixelsPerPoint"/>; <c>1</c> for a standalone canvas, where a layout unit is a device pixel directly</param>
-    public RasterCanvas(RenderContext adapter, RasterSurface surface, double pixelsPerPoint)
-        : base(adapter, surface.LayoutRect)
+    public RasterCanvas(RenderContext renderContext, RasterSurface surface, double pixelsPerPoint)
+        : base(renderContext, surface.LayoutRect)
     {
         _surface = surface;
         _pixelsPerPoint = pixelsPerPoint;
@@ -206,14 +206,14 @@ public sealed partial class RasterCanvas : Canvas
     // PushAntiAlias overrides it for the shapes drawn until the matching PopAntiAlias, and ScanlineRasterizer honours whichever applies.
     private readonly Stack<bool> _antiAlias = new();
 
-    private bool AntiAlias => _antiAlias.Count > 0 ? _antiAlias.Peek() : _adapter.RasterAntiAliasing;
+    private bool AntiAlias => _antiAlias.Count > 0 ? _antiAlias.Peek() : _renderContext.RasterAntiAliasing;
 
     /// <summary>
     /// Smoothing can be turned off for a stretch of drawing, but never on when the render as a whole turned it off
     /// (<c>RasterAntiAliasing</c> is false, for output that must be identical from run to run): that setting is the ceiling.
     /// </summary>
     /// <inheritdoc/>
-    public override void PushAntiAlias(bool enabled) => _antiAlias.Push(enabled && _adapter.RasterAntiAliasing);
+    public override void PushAntiAlias(bool enabled) => _antiAlias.Push(enabled && _renderContext.RasterAntiAliasing);
 
     /// <inheritdoc/>
     public override void PopAntiAlias()
@@ -264,13 +264,13 @@ public sealed partial class RasterCanvas : Canvas
 
         var pw = Math.Max(1, (int)Math.Ceiling(width * _surface.PixelsPerUnitX - 1e-9));
         var ph = Math.Max(1, (int)Math.Ceiling(height * _surface.PixelsPerUnitY - 1e-9));
-        if ((long)pw * ph > Math.Min(MaxTilePixels, _adapter.MaxRasterPixels))
+        if ((long)pw * ph > Math.Min(MaxTilePixels, _renderContext.MaxRasterPixels))
             return null;
 
         // The tile's pixel pitch is stretched by less than one pixel across its whole size so it covers
         // exactly `width` x `height`, and drawing it back at that size needs no resampling.
         var tile = new RasterSurface(pw, ph, 0, 0, pw / width, ph / height);
-        var tileGraphics = new RasterCanvas(_adapter, tile, _pixelsPerPoint);
+        var tileGraphics = new RasterCanvas(_renderContext, tile, _pixelsPerPoint);
         // See Canvas.CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only - the
         // tile's actual pixel geometry is governed by `tile`'s own grid/pitch above, untouched by this)
         // lets a reader inside the tile relate its coordinate space back to whatever space content
@@ -305,7 +305,7 @@ public sealed partial class RasterCanvas : Canvas
             return null;
 
         var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY);
-        var graphics = new RasterCanvas(_adapter, nested, _pixelsPerPoint);
+        var graphics = new RasterCanvas(_renderContext, nested, _pixelsPerPoint);
         graphics.SeedTransform(_layoutCtm);
         return new RasterRegion(graphics, nested);
     }

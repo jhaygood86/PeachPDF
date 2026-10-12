@@ -65,7 +65,7 @@ PeachDrawing.Homography : struct
 PeachDrawing.PathStroker : static class
   method static Void Stroke(GraphicsPath path, Pen pen, GraphicsPath destination, Double tolerance = 0.1)
 PeachDrawing.RasterCanvas : sealed class
-  ctor(RenderContext adapter, RasterSurface surface, Double pixelsPerPoint)
+  ctor(RenderContext renderContext, RasterSurface surface, Double pixelsPerPoint)
   method PixelBuffer ToPixelBuffer()
   method Task SaveAsync(Stream stream, String formatName, EncoderOptions options, CancellationToken cancellationToken = null)
   method Void Erase(GraphicsPath path)
@@ -136,7 +136,7 @@ PeachDrawing.RasterSurfaceEncoding : static class
   method static Void Save(RasterSurface surface, Stream stream, String formatName, EncoderOptions options)
 PeachDrawing.RasterSurfaceFactory : static class
   field const Int32 MaxDimension
-  method static RasterRegion Create(RenderContext adapter, Double pixelsPerPoint, Rect layoutBounds, Double dpi, Int64 maxPixels, ValueTuple<Double, Double> transformScale = null, Matrix3x2? initialTransform = null)
+  method static RasterRegion Create(RenderContext renderContext, Double pixelsPerPoint, Rect layoutBounds, Double dpi, Int64 maxPixels, ValueTuple<Double, Double> transformScale = null, Matrix3x2? initialTransform = null)
 PeachDrawing.TextOutlineBuilder : static class
   method static GraphicsPath Build(GraphicsPath path, Font realFont, Double pixelsPerPoint, String str, PaintPoint baselineOrigin, Double letterSpacing, ShapeSettings features)
 PeachDrawing.Warp : static class

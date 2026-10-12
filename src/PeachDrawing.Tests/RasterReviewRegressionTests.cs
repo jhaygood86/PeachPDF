@@ -8,10 +8,10 @@ namespace PeachDrawing.Tests
     /// <summary>Regressions for defects a review of the raster backend found: each pins the behaviour that was wrong.</summary>
     public class RasterReviewRegressionTests
     {
-        private static readonly RasterRenderContext Adapter = new();
+        private static readonly RasterRenderContext RenderContext = new();
 
         private static RasterCanvas NewGraphics(int width, int height) =>
-            new(Adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            new(RenderContext, new RasterSurface(width, height, 0, 0, 1, 1), 1);
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
@@ -107,8 +107,8 @@ namespace PeachDrawing.Tests
         [Fact]
         public void TileCreation_HonoursTheConfiguredPixelBudget()
         {
-            var adapter = new RasterRenderContext { MaxRasterPixels = 1000 };
-            var g = new RasterCanvas(adapter, new RasterSurface(10, 10, 0, 0, 1, 1), 1);
+            var renderContext = new RasterRenderContext { MaxRasterPixels = 1000 };
+            var g = new RasterCanvas(renderContext, new RasterSurface(10, 10, 0, 0, 1, 1), 1);
 
             Assert.Null(g.CreateTile(100, 100));
             Assert.NotNull(g.CreateTile(10, 10));
