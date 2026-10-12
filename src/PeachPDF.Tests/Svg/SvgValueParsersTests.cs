@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 
@@ -6,7 +6,7 @@ namespace PeachPDF.Tests.Svg
 {
     public class SvgValueParsersTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         [Fact]
         public void ParseViewBox_FourNumbers_ReturnsRect()
@@ -124,14 +124,14 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParsePaint_None_ReturnsNonePaint()
         {
-            var paint = SvgValueParsers.ParsePaint("none", Adapter, PaintColor.Black);
+            var paint = SvgValueParsers.ParsePaint("none", RenderContext, PaintColor.Black);
             Assert.Equal(SvgPaintKind.None, paint.Kind);
         }
 
         [Fact]
         public void ParsePaint_UrlReference_ReturnsGradientRefWithId()
         {
-            var paint = SvgValueParsers.ParsePaint("url(#SVGID_1_)", Adapter, PaintColor.Black);
+            var paint = SvgValueParsers.ParsePaint("url(#SVGID_1_)", RenderContext, PaintColor.Black);
             Assert.Equal(SvgPaintKind.GradientRef, paint.Kind);
             Assert.Equal("SVGID_1_", paint.ReferenceId);
         }
@@ -139,7 +139,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParsePaint_HexColor_ReturnsSolidColor()
         {
-            var paint = SvgValueParsers.ParsePaint("#431300", Adapter, PaintColor.Black);
+            var paint = SvgValueParsers.ParsePaint("#431300", RenderContext, PaintColor.Black);
             Assert.Equal(SvgPaintKind.Solid, paint.Kind);
             Assert.Equal(PaintColor.FromArgb(0x43, 0x13, 0x00), paint.PaintColor);
         }
@@ -147,21 +147,21 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParseStopColor_PlainAttribute_ReturnsColor()
         {
-            var color = SvgValueParsers.ParseStopColor("#A07335", null, null, Adapter);
+            var color = SvgValueParsers.ParseStopColor("#A07335", null, null, RenderContext);
             Assert.Equal(PaintColor.FromArgb(0xA0, 0x73, 0x35), color);
         }
 
         [Fact]
         public void ParseStopColor_StyleAttributeOverridesPlainAttribute()
         {
-            var color = SvgValueParsers.ParseStopColor("#000000", null, "stop-color:#FFFFFF", Adapter);
+            var color = SvgValueParsers.ParseStopColor("#000000", null, "stop-color:#FFFFFF", RenderContext);
             Assert.Equal(PaintColor.White, color);
         }
 
         [Fact]
         public void ParseStopColor_WithOpacity_BakesAlphaIntoColor()
         {
-            var color = SvgValueParsers.ParseStopColor("#FFFFFF", "0.5", null, Adapter);
+            var color = SvgValueParsers.ParseStopColor("#FFFFFF", "0.5", null, RenderContext);
             Assert.Equal(128, color.A);
         }
 
@@ -269,7 +269,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParsePaint_CurrentColor_ResolvesToContextColor()
         {
-            var paint = SvgValueParsers.ParsePaint("currentColor", Adapter, PaintColor.FromArgb(0x11, 0x22, 0x33));
+            var paint = SvgValueParsers.ParsePaint("currentColor", RenderContext, PaintColor.FromArgb(0x11, 0x22, 0x33));
             Assert.Equal(SvgPaintKind.Solid, paint.Kind);
             Assert.Equal(PaintColor.FromArgb(0x11, 0x22, 0x33), paint.PaintColor);
         }

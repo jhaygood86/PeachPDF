@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -31,30 +31,30 @@ namespace PeachPDF.Tests.Html.Core
             return null;
         }
 
-        private sealed record Layout(PdfSharpAdapter Adapter, CssBox Root)
+        private sealed record Layout(PdfRenderContext RenderContext, CssBox Root)
         {
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
         }
 
         private static async Task<Layout> LayoutAsync(string css, string body)
         {
-            var adapter = new PdfSharpAdapter();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "AdjustFam");
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, "OtherFam");
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSupsFam");
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "AdjustFam");
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, "OtherFam");
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSupsFam");
 
-            var container = new HtmlContainerInt(adapter);
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml($"<html><head><style>body {{ margin: 0 }} {css}</style></head><body>{body}</body></html>", null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
-            return new Layout(adapter, container.Root!);
+            return new Layout(renderContext, container.Root!);
         }
 
         // ---- font-size-adjust ----------------------------------------------------------------------

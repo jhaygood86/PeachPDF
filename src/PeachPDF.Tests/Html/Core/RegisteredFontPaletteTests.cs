@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Html.Core
     /// </summary>
     public class RegisteredFontPaletteTests
     {
-        private static readonly CssValueParser ValueParser = new(new PdfSharpAdapter());
+        private static readonly CssValueParser ValueParser = new(new PdfRenderContext());
 
         private static RegisteredFontPalette? Register(string body)
         {

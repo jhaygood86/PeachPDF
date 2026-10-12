@@ -1,6 +1,6 @@
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.AcroForms;
 using System.Collections.Generic;
 using System.Linq;
 

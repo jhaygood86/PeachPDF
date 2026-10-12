@@ -430,7 +430,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithTheSameInvoice_EmbedsItOnce_AndKeepsTheXmpBlock()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PdfSharpCore.Pdf.PdfDocument());
+            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
 
             await generator.AddPdfPages(document, SimpleHtml, Config(Cii(En16931Guideline)));
             await generator.AddPdfPages(document, SimpleHtml, Config(Cii(En16931Guideline)));
@@ -444,7 +444,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_ThatDropsTheInvoice_IsRejected_SoTheXmpNeverLosesItsFxBlock()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PdfSharpCore.Pdf.PdfDocument());
+            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
             await generator.AddPdfPages(document, SimpleHtml, Config(Cii(En16931Guideline)));
 
             var withoutInvoice = Config(Cii(En16931Guideline));
@@ -458,7 +458,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithADifferentProfile_IsRejected()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PdfSharpCore.Pdf.PdfDocument());
+            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
             await generator.AddPdfPages(document, SimpleHtml, Config(Cii(En16931Guideline)));
 
             await Assert.ThrowsAsync<InvalidOperationException>(

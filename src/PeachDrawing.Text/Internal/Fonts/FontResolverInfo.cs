@@ -150,7 +150,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         readonly string _faceName;
 
         /// <summary>
-        /// Indicates whether bold must be simulated. Bold simulation is not implemented in PeachPDF.PdfSharpCore.
+        /// Indicates whether bold must be simulated. Bold simulation is not implemented in PeachPDF.PDF.
         /// </summary>
         public bool MustSimulateBold
         {

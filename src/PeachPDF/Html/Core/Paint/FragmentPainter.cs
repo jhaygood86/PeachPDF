@@ -122,12 +122,12 @@ namespace PeachPDF.Html.Core.Paint
         /// is exactly what lets a <c>position: fixed</c> box's own paint reach its spec-correct containing block (the
         /// page box, margins included, per CSS2.1 §10.1): <c>Canvas.SuspendClipping</c> pops the clip
         /// stack down to exactly one entry, which is always the unconditionally-infinite clip
-        /// <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor pushes before this method ever
+        /// <see cref="PeachPDF.PdfBackend.PdfCanvas"/>'s constructor pushes before this method ever
         /// runs - not "one level below whatever is on top" - so a single push here is already as far out
         /// as suspension can ever reach; a second, wider clip pushed above it would be popped by the same
         /// loop and change nothing. What DOES need to be single-level is that this push go through
         /// <c>Canvas.PushClip</c> at all: an earlier version of <see cref="PdfGenerator"/> intersected
-        /// the equivalent window directly on the raw <c>XGraphics</c> object, ahead of and invisible to
+        /// the equivalent window directly on the raw <c>PdfGraphics</c> object, ahead of and invisible to
         /// this abstraction's own clip stack - <c>SuspendClipping</c> could never undo that one, so a fixed
         /// box's own geometry inside the page's margins was silently discarded on every page. See issue
         /// #880.
@@ -225,7 +225,7 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Whether <paramref name="matrix"/> can be pushed onto the canvas: finite, with a determinant the PDF writer's CTM inversion
-        /// (<c>XMatrix.HasInverse</c>, which treats anything under ten times double epsilon as zero) will accept. The cut-off is a
+        /// (<c>Matrix3x2.HasInverse</c>, which treats anything under ten times double epsilon as zero) will accept. The cut-off is a
         /// little looser than the writer's, so a single matrix this lets through is never one the writer rejects on its own; a scale small
         /// enough to fall between the two has no visible area anyway. It is a per-element check: the writer inverts the cumulative CTM, which
         /// it tolerates being singular (<c>PdfGraphicsState.RealizeCtm</c>). Computed in double, since the float determinant of a small
@@ -502,7 +502,7 @@ namespace PeachPDF.Html.Core.Paint
                     g.ResumeClipping();
                 }
             }
-            catch (PeachPDF.PdfSharpCore.Pdf.Advanced.PdfConformanceException)
+            catch (PeachPDF.PDF.Advanced.PdfConformanceException)
             {
                 // A PDF/A or PDF/X conformance rejection (the document uses a feature/color that the
                 // requested conformance level forbids) is a deliberate validation failure, not an

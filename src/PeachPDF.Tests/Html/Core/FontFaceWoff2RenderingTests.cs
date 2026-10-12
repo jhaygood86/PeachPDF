@@ -1,14 +1,15 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// HTML-layer regression test verifying that a real WOFF2 font (Inter-Medium.woff2) declared
     /// via @font-face is loaded and resolved during HTML/CSS layout -- i.e. the DomParser's
-    /// async font-face handling (AddFontFamilyFromUrl -> PdfSharpAdapter.AddFont ->
+    /// async font-face handling (AddFontFamilyFromUrl -> PdfRenderContext.AddFont ->
     /// FontFormatConverter.ToOpenType -> Woff2Converter.Convert) completes and the box tree ends
     /// up using the custom family rather than silently falling back to the default font.
     /// </summary>
@@ -44,28 +45,28 @@ p {{ width: 300px; }}
 <body><p>Hello WOFF2</p></body>
 </html>";
 
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
             var paragraph = FindByTag(container.Root!, "p");
             Assert.NotNull(paragraph);
 
-            // The resolved XFont reports the font's own internal family name (read from its
+            // The resolved TypefaceFont reports the font's own internal family name (read from its
             // 'name' table after WOFF2->OpenType conversion), not the @font-face CSS alias --
             // this confirms the real WOFF2 font was decoded and actually used, not silently
             // falling back to a default/system font.
-            var fontAdapter = Assert.IsType<FontAdapter>(paragraph!.ActualFont);
-            Assert.Equal("Inter Medium", fontAdapter.Font.Name);
+            var pdfCanvasFont = Assert.IsType<PdfCanvasFont>(paragraph!.ActualFont);
+            Assert.Equal("Inter Medium", pdfCanvasFont.Font.Typeface.FamilyName);
         }
     }
 }

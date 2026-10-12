@@ -29,7 +29,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     /// <para>
     /// That is a statement about the glyph, not about where a decoration line should break. Deciding
     /// the skip <i>shape</i> — in particular whether to hull a glyph's runs into one interval — belongs
-    /// to the caller (<c>GraphicsAdapter.MeasureInkCrossings</c>), which is what CSS Text Decoration 4
+    /// to the caller (<c>PdfCanvas.MeasureInkCrossings</c>), which is what CSS Text Decoration 4
     /// §2.10.5 leaves to the UA. Keeping the two apart is deliberate: this class stays honest geometry,
     /// unit-testable against a fixture whose ink is known exactly.
     /// </para>

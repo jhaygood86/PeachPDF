@@ -65,7 +65,7 @@ namespace PeachPDF.Html.Core.Handlers
                     return (string.Empty, null);
                 }
 
-                var networkResponse = await htmlContainer.Adapter.GetResourceStream(uri);
+                var networkResponse = await htmlContainer.RenderContext.GetResourceStream(uri);
 
                 Stream? stream = null;
 

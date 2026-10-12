@@ -49,7 +49,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("// edit the JSON entry and rebuild. See CLAUDE.md's generator section.");
             sb.AppendLine("#nullable enable");
             sb.AppendLine();
-            sb.AppendLine("using PeachPDF.Adapters;");
+            sb.AppendLine("using PeachPDF.PdfBackend;");
             sb.AppendLine("using PeachPDF.CSS;");
             sb.AppendLine("using PeachDrawing.Core;");
             sb.AppendLine("using PeachPDF.Html.Core.Entities;");

@@ -1,8 +1,9 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
@@ -23,18 +24,18 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox Root, HtmlContainerInt Container)> Layout(string body, string css = "", double pixelsPerPoint = 1.0)
         {
             var html = $"<html><head><style>body {{ margin:0; font-family:{Mono}; font-size:20pt; }} {css}</style></head><body>{body}</body></html>";
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, Mono);
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Sans);
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, Mono);
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Sans);
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
             return (container.Root!, container);
         }

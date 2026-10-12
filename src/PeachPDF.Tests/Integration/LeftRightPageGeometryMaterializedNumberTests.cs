@@ -1,7 +1,6 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -144,7 +143,7 @@ namespace PeachPDF.Tests.Integration
 
             // The link sits flush at the page's own content-left edge, so its rect's X1 is exactly
             // this page's resolved margin-left - :left's 100pt, not :right's 40pt.
-            var rect = doc.Pages[1].Annotations[0].Rectangle;
+            var rect = doc.Pages[1].Annotations[0]!.Rectangle;
             Assert.Equal(100, rect.X1, 1);
         }
 

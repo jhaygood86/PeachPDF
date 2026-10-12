@@ -1,9 +1,9 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Numerics;
 using PeachPDF.Tests.TestSupport;
 
@@ -911,7 +911,7 @@ namespace PeachPDF.Tests.Integration
             public int FilledRectangles { get; private set; }
             public int StringsDrawn { get; private set; }
 
-            public SpyGraphics() : base(new PdfSharpAdapter(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public SpyGraphics() : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void PushTransform(Matrix3x2 matrix) => LastPushedTransform = matrix;
             public override void PopTransform() => PopTransformCount++;
@@ -982,16 +982,16 @@ div {{ width: 200pt; height: 100pt; {css} }}
 
         private async Task<HtmlContainerInt> LayoutHtml(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return container;

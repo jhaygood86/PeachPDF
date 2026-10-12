@@ -1,9 +1,9 @@
 ﻿using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Integration
             var boxA = FindById(container.Root!, "a")!;
             var boxB = FindById(container.Root!, "b")!;
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, boxA, recorder);
             FragmentPaintHarness.PaintBox(container, boxB, recorder);
 
@@ -112,8 +112,8 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(Points(outlineDefault), Points(outlineWithAlternate));
         }
 
-        private static XPoint[] Points(GraphicsPath path) =>
-            ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
+        private static PaintPoint[] Points(GraphicsPath path) =>
+            PathPoints.Of(path);
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -128,28 +128,28 @@ body {{ font-family: 'Recursive'; width: 400px; }}
 
         private static async Task<HtmlContainerInt> LayoutHtml(string body)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body), null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
             return container;
         }
 
-        private static GraphicsAdapter MeasureGraphics()
+        private static PdfCanvas MeasureGraphics()
         {
-            var adapter = new PdfSharpAdapter();
-            var size = new XSize(595, 842);
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            return new GraphicsAdapter(adapter, measure, 1.0);
+            var renderContext = new PdfRenderContext();
+            var size = new Size(595, 842);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            return new PdfCanvas(renderContext, measure, 1.0);
         }
 
         private static CssBox? FindById(CssBox box, string id)
@@ -179,8 +179,8 @@ body {{ font-family: 'Recursive'; width: 400px; }}
         {
             public List<(string Text, ShapeSettings Features)> DrawStringCalls { get; } = [];
 
-            public RecordingGraphics(RenderContext adapter)
-                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics(RenderContext renderContext)
+                : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null)
                 => DrawStringCalls.Add((str, features ?? ShapeSettings.Default));

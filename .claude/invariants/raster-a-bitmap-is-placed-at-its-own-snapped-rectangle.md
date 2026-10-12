@@ -1,7 +1,7 @@
 # A raster surface is placed at the rectangle it records, never at the one that was asked for
 
-`PeachDrawing`'s internal `RasterSurfaceFactory.Create` (called from `GraphicsAdapter.BeginRasterSurface` -
-see [[raster-graphics-mirrors-graphicsadapters-unit-conventions]] for the two-package unit-convention split
+`PeachDrawing`'s internal `RasterSurfaceFactory.Create` (called from `PdfCanvas.BeginRasterSurface` -
+see [[raster-graphics-mirrors-pdfcanvas-unit-conventions]] for the two-package unit-convention split
 this factory is part of) snaps the requested layout bounds **outwards** to whole pixels on one grid (pixel
 pitch `dpi / 72 / pixelsPerPoint` per layout unit, anchored at the local origin), and the surface stores the
 snapped rectangle as `RasterSurface.LayoutRect`. `DrawRaster` must place the bitmap at *that* rectangle.

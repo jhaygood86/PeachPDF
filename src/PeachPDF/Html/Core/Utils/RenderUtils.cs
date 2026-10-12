@@ -281,7 +281,7 @@ namespace PeachPDF.Html.Core.Utils
         /// ever divides a path's coordinates by <see cref="Canvas.PixelsPerPoint"/> before handing them
         /// to the backend (that division is left to whichever ambient <c>PushTransform</c> is active for
         /// SVG/glyph-outline paths, the other consumers of an <see cref="GraphicsPath"/> — see
-        /// <c>Adapters.GraphicsPathAdapter.Transform</c>'s own comment). A box-geometry path has no such
+        /// <c>PdfGraphicsPath</c>'s own comment). A box-geometry path has no such
         /// ambient transform, so this method divides by <see cref="Canvas.PixelsPerPoint"/> itself,
         /// once, before building the path (issue #812).
         /// </remarks>

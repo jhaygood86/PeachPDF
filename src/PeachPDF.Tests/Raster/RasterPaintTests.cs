@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using System.Numerics;
@@ -8,12 +8,12 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Gradients, pen styles, clips and images drawn through <see cref="RasterCanvas"/>.</summary>
     public class RasterPaintTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static RasterCanvas NewGraphics(int width, int height)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterCanvas(Adapter, surface, 1);
+            return new RasterCanvas(RenderContext, surface, 1);
         }
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
@@ -133,7 +133,7 @@ namespace PeachPDF.Tests.Raster
             Assert.True(Pixel(g, 30 + 10, 20)[0] > Pixel(g, 30, 20 + 10)[0]);
         }
 
-        // The two-colour, inner/outer-radius XRadialGradientBrush constructor (no stop list) has no
+        // The two-colour, inner/outer-radius RadialGradientBrush constructor (no stop list) has no
         // production caller either - RenderContext.GetRadialGradientBrush always builds the stops-based shape
         // - so RadialGradientBrush doesn't model an inner radius, and the test exercising that
         // constructor directly is retired along with it (see PaintSource.RadialPaint.Create's own remarks).

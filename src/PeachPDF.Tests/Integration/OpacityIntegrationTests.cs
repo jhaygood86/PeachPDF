@@ -1,8 +1,9 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.IO;
 using System.Text;
@@ -156,7 +157,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Opacity_NestedOpacityBoxes_BothComposite()
         {
-            // Exercises the CreateTile nested-tile fix (XGraphics.Owner) - a child box with its own
+            // Exercises the CreateTile nested-tile fix (PdfGraphics.Owner) - a child box with its own
             // opacity, painted from inside its already-opacity-wrapped parent's tile, must still be
             // able to create ITS OWN tile rather than silently falling back to unopaqued painting.
             var html = """
@@ -201,7 +202,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Opacity_NoPageContext_FallsBackToDirectPaint()
         {
             // CreateTile returns null outside a real page/document context (e.g. a measure-only pass -
-            // see GraphicsAdapter.CreateTile) - PaintWithOpacity falls back to painting directly rather
+            // see PdfCanvas.CreateTile) - PaintWithOpacity falls back to painting directly rather
             // than throwing. Exercise that fallback by painting into the same measure-context graphics
             // LayoutHtml uses for layout, instead of the full (always page-bound) PdfGenerator pipeline.
             var html = """
@@ -210,16 +211,16 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """;
 
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var divBox = FindByTag(container.Root!, "div")!;
@@ -242,16 +243,16 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """;
 
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var svgBox = FindByTag(container.Root!, "svg")!;
@@ -288,16 +289,16 @@ div {{ width: 200px; height: 100px; {css} }}
 
         private async Task<HtmlContainerInt> LayoutHtml(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return container;

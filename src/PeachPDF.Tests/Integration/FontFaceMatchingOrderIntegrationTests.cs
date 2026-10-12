@@ -1,9 +1,10 @@
+using PeachDrawing.Core;
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Text;
@@ -27,16 +28,16 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -59,7 +60,7 @@ namespace PeachPDF.Tests.Integration
 
         private static CssBox FindById(CssBox root, string id) => Find(root, id) ?? throw new InvalidOperationException("No box with the id " + id);
 
-        private static Typeface TypefaceOf(CssBox box) => ((FontAdapter)box.ActualFont).Font.Typeface;
+        private static Typeface TypefaceOf(CssBox box) => ((PdfCanvasFont)box.ActualFont).Font.Typeface;
 
         private static double Axis(CssBox box, string tag) => TypefaceOf(box).AxisSettings.Single(s => s.Tag == tag).Value;
 
@@ -116,9 +117,9 @@ namespace PeachPDF.Tests.Integration
 
             var root = await BuildBoxTree(html);
 
-            Assert.True(((FontAdapter)FindById(root, "a").ActualFont).Font.Synthesis.HasFlag(SyntheticStyle.Italic));
-            Assert.False(((FontAdapter)FindById(root, "b").ActualFont).Font.Synthesis.HasFlag(SyntheticStyle.Italic));
-            Assert.Equal(SyntheticStyle.None, ((FontAdapter)FindById(root, "c").ActualFont).Font.Synthesis);
+            Assert.True(((PdfCanvasFont)FindById(root, "a").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.False(((PdfCanvasFont)FindById(root, "b").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.Equal(SyntheticStyle.None, ((PdfCanvasFont)FindById(root, "c").ActualFont).Font.SyntheticStyle);
         }
 
         // ---- the requested angle chooses among oblique ranges -----------------------------------------------------------------------

@@ -1,5 +1,6 @@
+using PeachDrawing.Core;
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -16,7 +17,7 @@ namespace PeachPDF.Tests.Integration
     /// <c>FontResolverInfosByName</c>, <c>GlyphTypefaceCache</c>, and (the actual root cause of the
     /// embedded-font-bytes collision this test targets) <c>FontDescriptorCache</c>, independently re-
     /// queried by <c>PdfType0Font</c>/<c>PdfTrueTypeFont</c>/<c>FontHelper</c> instead of reusing an
-    /// already-resolved <c>XFont</c>'s own descriptor - were keyed only by family name + style/weight,
+    /// already-resolved <c>TypefaceFont</c>'s own descriptor - were keyed only by family name + style/weight,
     /// with no notion of which resolver instance's bytes actually produced the data. Whichever
     /// <see cref="PdfGenerator"/> resolved a given custom family+style first "won" every one of these
     /// cache slots for EVERY other instance in the process for the rest of its lifetime, even when a
@@ -24,7 +25,7 @@ namespace PeachPDF.Tests.Integration
     /// name (a realistic multi-tenant/multi-request scenario, e.g. two requests each declaring their own
     /// <c>@font-face</c> for the same family name). Fixed by routing custom (non-system) families through
     /// each <c>FontResolver</c>'s own instance-owned caches instead of the shared static ones, and by
-    /// having the PDF-embedding classes reuse <c>XFont.Descriptor</c> rather than re-deriving it.
+    /// having the PDF-embedding classes reuse <c>TypefaceFont.Descriptor</c> rather than re-deriving it.
     /// </summary>
     public class FontFactoryCrossInstanceIsolationTests
     {
@@ -92,7 +93,7 @@ body {{ font-family: 'SharedFamily'; font-size: 14pt; }}
         }
 
         // Isolated into its own method (not inlined into the test) so the JIT doesn't keep the
-        // PdfGenerator/PdfSharpAdapter/FontResolver chain rooted in a live stack-frame local past the
+        // PdfGenerator/PdfRenderContext/FontResolver chain rooted in a live stack-frame local past the
         // point this method returns.
         private static async Task<WeakReference> CreateAndUseGeneratorAsync()
         {

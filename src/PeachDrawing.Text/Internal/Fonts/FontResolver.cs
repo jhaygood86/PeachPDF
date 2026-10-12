@@ -108,7 +108,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>
         /// The display name (<see cref="FontFamilyModel.Name"/>) of every system font family already
         /// discovered and parsed once into <see cref="_systemFamilies"/> at process start. Lets a caller
-        /// that only needs the family names (e.g. <c>PdfSharpAdapter</c>
+        /// that only needs the family names (e.g. <c>PdfRenderContext</c>
         /// registering them with <c>RAdapter.AddFontFamily</c>) avoid re-opening and re-parsing every
         /// font file on disk purely to recompute a name this static constructor already produced.
         /// </summary>

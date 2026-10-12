@@ -1,4 +1,4 @@
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System;
 using System.IO;
 using System.Text;
@@ -16,11 +16,11 @@ namespace PeachPDF.Tests.Integration
     /// correct rendering (a token can appear while the composited result is wrong). Each test also checks
     /// the structural adjacency CLAUDE.md calls for: the <c>gs</c> operator that activates the relevant
     /// ExtGState and the <c>Do</c> that paints the affected Form XObject must appear on the same
-    /// <c>cm</c>-prefixed content-stream line (<see cref="XGraphicsPdfRenderer.DrawImageWithOpacity"/>/
+    /// <c>cm</c>-prefixed content-stream line (<see cref="PdfGraphicsRenderer.DrawImageWithOpacity"/>/
     /// <c>DrawImageWithColorMatrix</c>'s own emitted format), not merely somewhere in the same document.
     /// Dual-rasterization (PDFium + MuPDF) was done manually for these cases per CLAUDE.md - MuPDF is a
     /// documented, expected non-match for anything going through <c>/TR</c> (it does not implement ExtGState
-    /// transfer functions at all - see <c>XGraphicsPdfRenderer.DrawImageWithColorMatrix</c>'s remarks) - so
+    /// transfer functions at all - see <c>PdfGraphicsRenderer.DrawImageWithColorMatrix</c>'s remarks) - so
     /// only PDFium is authoritative there; <c>/BM</c> (mix-blend-mode) is verified as agreeing on both.
     /// </summary>
     public class MixBlendModeAndFilterPaintIntegrationTests
@@ -147,17 +147,17 @@ namespace PeachPDF.Tests.Integration
                 RegexOptions.Compiled);
 
         /// <summary>
-        /// Regression test for the tile-compositing double-scale bug: <c>GraphicsAdapter.CreateTile</c>
+        /// Regression test for the tile-compositing double-scale bug: <c>PdfCanvas.CreateTile</c>
         /// used to size a tile's Form XObject <c>/BBox</c> directly from its caller's width/height, which
         /// arrive in the engine's own "inflated" (pre-<c>PixelsPerPoint</c>-division) layout-unit space -
         /// the same space <c>FragmentPainter.PaintWithOpacity</c> also uses, unconverted, for the
         /// <c>destRect</c> it later composites that same tile with. Content painted INSIDE the tile was
-        /// already correctly divided by <c>PixelsPerPoint</c> (every <see cref="GraphicsAdapter"/> draw
+        /// already correctly divided by <c>PixelsPerPoint</c> (every <see cref="PdfCanvas"/> draw
         /// call does that), so as long as <c>PixelsPerPoint == 1</c> (the common case - no
         /// <c>ShrinkToFit</c>/<c>ScaleToPageSize</c> rescale, default <c>PixelsPerInch</c>) the mismatch
         /// was invisible. Under a real rescale (<c>PixelsPerPoint != 1</c>, exactly what
         /// <c>PdfGenerateConfig.ShrinkToFit</c> produces whenever content needs shrinking to fit the
-        /// page), the oversized <c>/BBox</c> made <c>XGraphicsPdfRenderer.DrawImage</c>'s own placement
+        /// page), the oversized <c>/BBox</c> made <c>PdfGraphicsRenderer.DrawImage</c>'s own placement
         /// scale (<c>destRect.Width / image.PointWidth</c>) divide the whole tile - BBox AND the
         /// already-correctly-scaled content inside it together - by <c>PixelsPerPoint</c> A SECOND TIME,
         /// visibly shrinking and mispositioning every box painted through the tile path (opacity&lt;1,

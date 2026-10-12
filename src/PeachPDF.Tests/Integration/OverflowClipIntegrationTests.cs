@@ -1,10 +1,10 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -192,7 +192,7 @@ body { margin: 0; }
             var fillBox = LayoutHarness.FindById(root, "fill");
             Assert.NotNull(fillBox);
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, fillBox!, recording);
 
             var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
@@ -216,7 +216,7 @@ body { margin: 0; }
                 "<div id='clipper' style='overflow:hidden;border-radius:999pt;width:100pt;height:6pt;'>" +
                 "<div id='hoisted' style='opacity:0.99;width:65%;height:100%;'></div></div>"));
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recording);
 
             var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
@@ -240,7 +240,7 @@ body { margin: 0; }
                 $"<div style='overflow:hidden;{wrapperStyle}width:60pt;height:5pt'>" +
                 "<div style='position:absolute;z-index:1;top:0;left:0;width:80pt;height:40pt;background:red'></div></div></div>"));
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recording);
 
             var activeClips = new List<Rect>();
@@ -300,7 +300,7 @@ body { margin: 0; }
             var picBox = LayoutHarness.FindById(root, "pic");
             Assert.NotNull(picBox);
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, picBox!, recording);
 
             var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
@@ -320,7 +320,7 @@ body { margin: 0; }
             var fillBox = LayoutHarness.FindById(root, "fill");
             Assert.NotNull(fillBox);
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, fillBox!, recording);
 
             Assert.DoesNotContain(recording.Log, op => op.Kind == PaintOpKind.PushClipPath);
@@ -365,16 +365,16 @@ td { padding: 3px; overflow: hidden; }
 
         private static async Task<CssBox> GetRootBox(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

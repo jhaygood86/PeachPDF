@@ -2,14 +2,14 @@
 
 `PdfGenerateConfig.DownscaleImages` resizes an oversized raster image down to its actual on-page display
 size before embedding, computed in `XGraphicsPdfRenderer.Realize` by folding the currently-active CTM's
-scale into the image's own destRect (`PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs`). This correctly
+scale into the image's own destRect (`PDF/Rendering/PdfGraphicsRenderer.Images.cs`). This correctly
 covers an ordinary CSS `transform:` on an `<img>`/background, and an SVG element/group `transform`, since
 both apply through the same page-level CTM the image is ultimately drawn against.
 
 It does not cover a raster `<image>` painted inside an SVG `<pattern>` whose `patternTransform` scales the
 tile up. `SvgRenderer.PaintPatternFill` renders the pattern's content into its own Form XObject via
-`GraphicsAdapter.CreateTile` at the pattern's native `width`/`height`, then places that tile on the page
-wrapped in a separate `patternTransform` scale (`Adapters/GraphicsAdapter.cs`'s `CreateTile` /
+`PdfCanvas.CreateTile` at the pattern's native `width`/`height`, then places that tile on the page
+wrapped in a separate `patternTransform` scale (`PdfBackend/PdfCanvas.cs`'s `CreateTile` /
 `SvgRenderer.cs`'s `PaintPatternFill`). A `<image>` drawn inside the tile's own content stream computes its
 downscale target from the CTM realized *within that tile* — which has no visibility into the extra scale
 `patternTransform` applies only when the finished tile is placed on the page, in a different content

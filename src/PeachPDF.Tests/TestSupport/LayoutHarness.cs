@@ -1,8 +1,8 @@
-﻿using PeachPDF.Adapters;
+﻿using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
     /// The shared lightweight layout harness: builds an <see cref="HtmlContainerInt"/> over a real
-    /// <see cref="PdfSharpAdapter"/>, runs layout, and hands back the laid-out box tree plus the
+    /// <see cref="PdfRenderContext"/>, runs layout, and hands back the laid-out box tree plus the
     /// container (whose <c>FragmentTree</c> is layout's real output). Prefer this over hand-rolling
     /// another per-file <c>BuildAndLayout</c> copy.
     /// </summary>
@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.TestSupport
         /// one engine again over a box it already laid out, say. It runs before the graphics context is
         /// disposed, which is why it belongs here rather than after the call returns.
         /// </param>
-        /// <param name="configureAdapter">
+        /// <param name="configureRenderContext">
         /// Optional: run against the freshly-constructed adapter before <c>SetHtml</c> parses
         /// <paramref name="html"/> - for registering a font directly (e.g.
         /// <see cref="BundledFonts.RegisterFont"/>) instead of embedding it as a CSS <c>@font-face</c>
@@ -51,14 +51,14 @@ namespace PeachPDF.Tests.TestSupport
             Action<CssBox>? prepare = null,
             Func<CssBox, HtmlContainerInt, Canvas, Task>? after = null,
             double pixelsPerPoint = 1.0,
-            Func<PdfSharpAdapter, Task>? configureAdapter = null)
+            Func<PdfRenderContext, Task>? configureRenderContext = null)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
-            if (configureAdapter is not null)
+            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            if (configureRenderContext is not null)
             {
-                await configureAdapter(adapter);
+                await configureRenderContext(renderContext);
             }
-            var container = new HtmlContainerInt(adapter)
+            var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = margin,
                 MarginBottom = margin,
@@ -66,8 +66,8 @@ namespace PeachPDF.Tests.TestSupport
                 MarginRight = margin
             };
 
-            var sheet = new XSize(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.Convert(sheet, pixelsPerPoint);
+            var sheet = new Size(pageWidth, pageHeight);
+            container.PageSize = Utilities.Utils.ToPixels(sheet, pixelsPerPoint);
 
             await container.SetHtml(html, null);
 
@@ -80,14 +80,14 @@ namespace PeachPDF.Tests.TestSupport
             // Mirror PdfGenerator.SetContent: PageSize is the *content band* (the sheet less its
             // margins) and the document origin sits at the top-left of that band. Getting this wrong
             // puts the root box above the first page's band and makes pagination nonsense.
-            var band = new XSize(pageWidth - container.MarginLeft - container.MarginRight,
+            var band = new Size(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.Convert(band, pixelsPerPoint);
-            container.MaxSize = Utilities.Utils.Convert(band, pixelsPerPoint);
-            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
+            container.PageSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
+            container.MaxSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
+            container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
-            var measure = XGraphics.CreateMeasureContext(sheet, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            var measure = PdfGraphics.CreateMeasureContext(sheet);
+            using var graphics = new PdfCanvas(renderContext, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -119,8 +119,8 @@ namespace PeachPDF.Tests.TestSupport
             double pageHeight = 842,
             double margin = 20)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter)
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = margin,
                 MarginBottom = margin,
@@ -128,19 +128,19 @@ namespace PeachPDF.Tests.TestSupport
                 MarginRight = margin
             };
 
-            var sheet = new XSize(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.Convert(sheet, 1.0);
+            var sheet = new Size(pageWidth, pageHeight);
+            container.PageSize = Utilities.Utils.ToPixels(sheet, 1.0);
 
             await container.SetHtml(html, null);
 
-            var band = new XSize(pageWidth - container.MarginLeft - container.MarginRight,
+            var band = new Size(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.Convert(band, 1.0);
-            container.MaxSize = Utilities.Utils.Convert(band, 1.0);
-            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), 1.0);
+            container.PageSize = Utilities.Utils.ToPixels(band, 1.0);
+            container.MaxSize = Utilities.Utils.ToPixels(band, 1.0);
+            container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(sheet, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(sheet);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
 
             var results = new List<T>(passes);
 

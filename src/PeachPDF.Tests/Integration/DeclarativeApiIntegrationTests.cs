@@ -1,4 +1,5 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -6,8 +7,8 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Layout;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -417,8 +418,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void List_MarkerImageOverloads_SetListStyleImageOnTheListBox()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var descriptor = DocumentBuilder.BuildPage(page =>
                 page.Content(c =>
@@ -1084,8 +1085,8 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            Assert.Equal(600, document.PdfDocument.Pages[0].Width.Point, 1);
-            Assert.Equal(400, document.PdfDocument.Pages[0].Height.Point, 1);
+            Assert.Equal(600, document.PdfDocument.Pages[0].Width, 1);
+            Assert.Equal(400, document.PdfDocument.Pages[0].Height, 1);
         }
 
         // ─── Remaining container decorators / image overloads ──────────────────────────────────────
@@ -1139,8 +1140,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerBuilder_SecondTerminalCall_Throws()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             DocumentBuilder.BuildPage(page =>
                 page.Content(c =>
@@ -1159,8 +1160,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerImage_ByteStreamOverloads_DecodeEagerlyIntoARealCssBoxImage()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var byBytes = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image(MinimalPng)), properties);
@@ -1213,8 +1214,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerImage_UriAndFilePath_StillGoThroughTheLazySrcPath()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var byUri = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image(new Uri("https://example.com/pic.png"))), properties);
@@ -1230,8 +1231,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerImage_SharedPdfImage_ResolvesOnceAndReusesTheSameDecodedImage()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var sharedImage = PdfImage.FromBytes(MinimalPng);
             var byPdfImage1 = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedImage)), properties);
@@ -1251,8 +1252,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerSvg_StringStreamAndBytesOverloads_ParseIntoARealSvgDocument()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var byString = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(MinimalSvg)), properties);
             var imgFromString = Assert.IsType<CssBoxImage>(Assert.Single(byString.RootBox.Boxes));
@@ -1276,8 +1277,8 @@ namespace PeachPDF.Tests.Integration
             // Encoding.UTF8.GetString (used before this test's own fix) leaves a leading BOM as a literal
             // U+FEFF character, which XElement.Parse rejects outright - same bug, same fix, as
             // PdfImage.Resolve's own BOM handling (see ContainerImage_PdfImageFromSvgBytes_...WithBom).
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
             var bomPrefixedBytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes(MinimalSvg)).ToArray();
 
             var byBytes = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(bomPrefixedBytes)), properties);
@@ -1293,8 +1294,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerSvg_Stream_NeverClosesTheCallersStream()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(MinimalSvg));
 
             DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(stream)), properties);
@@ -1327,8 +1328,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerImage_PdfImageFromSvgBytes_DetectsSvgAutomatically()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var sharedSvg = PdfImage.FromBytes(Encoding.UTF8.GetBytes(MinimalSvg));
             var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedSvg)), properties);
@@ -1341,8 +1342,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ContainerImage_PdfImageFromSvgBytes_DetectsSvgPastLeadingWhitespaceAndBom()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             var bom = new byte[] { 0xEF, 0xBB, 0xBF };
             var leadingWhitespace = "  \n\t"u8.ToArray();
@@ -1549,8 +1550,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void TextSpanContainer_Alignment_AllValuesExecute()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             foreach (TextAlignment alignment in Enum.GetValues<TextAlignment>())
             {
@@ -1851,7 +1852,7 @@ namespace PeachPDF.Tests.Integration
                     t.Span(" b").FontSize(8);
                 })));
 
-            using var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            using var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
             var ops = recorder.Log.Where(o => o.Kind == PaintOpKind.DrawString).ToList();
 
@@ -1862,8 +1863,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void TextAlignment_StartAndEnd_ResolveAgainstDirection()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
 
             foreach (var alignment in new[] { TextAlignment.Start, TextAlignment.End })
             {
@@ -1963,8 +1964,8 @@ namespace PeachPDF.Tests.Integration
                 File.WriteAllBytes(tempFile, MinimalPng);
 
                 var fromFile = PdfImage.FromFile(tempFile);
-                var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-                var properties = new CssPropertyFactory(adapter);
+                var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+                var properties = new CssPropertyFactory(renderContext);
                 var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromFile)), properties);
                 var img = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
                 Assert.NotNull(img.Image);
@@ -2003,17 +2004,17 @@ namespace PeachPDF.Tests.Integration
                 MarginLeft = 20,
                 MarginRight = 20
             };
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(renderContext);
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
             PdfGenerator.ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
                     ? PageSizeConverter.ToSize(config.PageSize)
-                    : new XSize(config.ManualPageWidth, config.ManualPageHeight));
+                    : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
-            using var container = new HtmlContainer(adapter)
+            using var container = new HtmlContainer(renderContext)
             {
                 MarginTop = pageDescriptor.MarginTopOverride ?? config.MarginTop,
                 MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom,
@@ -2025,14 +2026,14 @@ namespace PeachPDF.Tests.Integration
 
             await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage);
 
-            var contentPageSize = new XSize(
+            var contentPageSize = new Size(
                 orgPageSize.Width - container.MarginLeft - container.MarginRight,
                 orgPageSize.Height - container.MarginTop - container.MarginBottom);
             container.PageSize = contentPageSize;
-            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
-            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            using var measure = PdfGraphics.CreateMeasureContext(orgPageSize);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
             var containerInt = container.HtmlContainerInt;
@@ -2075,9 +2076,9 @@ namespace PeachPDF.Tests.Integration
             // per-longhand CssPropertyRegistry, which returns false for the text-align shorthand - and the
             // builders ignored that, so Alignment(...) aligned nothing. If the registry ever learns the
             // shorthand this flips, and CssPropertyFactory.SetTextAlign can go back to a single Set.
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var parser = new CssValueParser(adapter);
-            var parent = DocumentBuilder.BuildPage(page => page.Content(c => c.Text("x")), new CssPropertyFactory(adapter)).RootBox;
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var parser = new CssValueParser(renderContext);
+            var parent = DocumentBuilder.BuildPage(page => page.Content(c => c.Text("x")), new CssPropertyFactory(renderContext)).RootBox;
 
             Assert.False(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align", "right"));
             Assert.True(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align-all", "right"));

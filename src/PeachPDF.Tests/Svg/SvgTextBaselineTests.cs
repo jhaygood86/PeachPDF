@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -11,12 +11,12 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>dominant-baseline</c>, <c>alignment-baseline</c> and <c>baseline-shift</c> on horizontal SVG text, asserted on where each run is drawn.</summary>
     public class SvgTextBaselineTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string textAttrs, string content = "Hi", string svgAttrs = "")
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" {svgAttrs}><text x="10" y="50" font-size="20" {textAttrs}>{content}</text></svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
@@ -104,7 +104,7 @@ namespace PeachPDF.Tests.Svg
         {
             var markup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><g baseline-shift="9"><text x="10" y="50" font-size="20">Hi</text></g></svg>""";
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter), new Rect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext), new Rect(0, 0, 200, 100));
 
             Assert.Equal(Y(Render("")), Y(g), 3);
         }

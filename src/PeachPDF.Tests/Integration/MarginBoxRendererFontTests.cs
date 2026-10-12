@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// glyph indices, not literal ASCII text. These are the direct regression tests for the bug where
     /// margin-box text rendered in the wrong font: no inheritance from the winning <c>@page</c> rule's own
     /// <c>font</c> declarations (fixed via <c>pageStyle</c>), no font-stack/generic-family fallback (a raw
-    /// <c>XFont</c> was built directly instead of going through <see cref="FontFamilyResolver"/>), and no
+    /// <c>TypefaceFont</c> was built directly instead of going through <see cref="FontFamilyResolver"/>), and no
     /// keyword/relative font-size support (fixed via <see cref="FontSizeResolver"/>).
     /// </summary>
     public class MarginBoxRendererFontTests
@@ -25,12 +25,12 @@ namespace PeachPDF.Tests.Integration
         {
             var marginStyle = ParseDeclarations("font-family: monospace;");
             var pageStyle = ParseDeclarations("font-family: serif;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, renderContext);
+            var expected = renderContext.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
 
         [Fact]
@@ -40,24 +40,24 @@ namespace PeachPDF.Tests.Integration
             // the enclosing @page rule does. Direct regression test for the missing inheritance path.
             var marginStyle = ParseDeclarations("content: \"x\";");
             var pageStyle = ParseDeclarations("font-family: monospace;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, renderContext);
+            var expected = renderContext.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
 
         [Fact]
         public void NeitherSet_FallsBackToDefaultFontResolverDefaults()
         {
             var marginStyle = ParseDeclarations("content: \"x\";");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
+            var expected = renderContext.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
             Assert.Equal(DefaultFontResolver.FontSize, font.Size, 3);
         }
 
@@ -65,54 +65,54 @@ namespace PeachPDF.Tests.Integration
         public void CommaSeparatedFallback_SkipsUnresolvableFirstFamily()
         {
             var marginStyle = ParseDeclarations("font-family: \"NonexistentFontXYZ\", monospace;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
+            var expected = renderContext.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Name, font.Name);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
 
         [Fact]
         public void FontWeightBold_ResolvesToBoldFont()
         {
             var marginStyle = ParseDeclarations("font-weight: bold;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
-            Assert.True(font.Bold);
+            Assert.True(font.Typeface.IsBold);
         }
 
         [Fact]
         public void FontWeightNumeric700_ResolvesToBoldFont()
         {
             var marginStyle = ParseDeclarations("font-weight: 700;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
-            Assert.True(font.Bold);
+            Assert.True(font.Typeface.IsBold);
         }
 
         [Fact]
         public void FontStyleItalic_ResolvesToItalicFont()
         {
             var marginStyle = ParseDeclarations("font-style: italic;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
-            Assert.True(font.Italic);
+            Assert.True(font.Typeface.IsItalic);
         }
 
         [Fact]
         public void KeywordFontSize_ResolvesViaSharedTable()
         {
             var marginStyle = ParseDeclarations("font-size: large;");
-            var adapter = NewAdapter();
+            var renderContext = NewRenderContext();
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
             Assert.Equal(DefaultFontResolver.FontSize + 2, font.Size, 3);
         }
@@ -121,10 +121,10 @@ namespace PeachPDF.Tests.Integration
         public void PixelsPerPointScaling_StillYieldsCssSpecifiedPointSize()
         {
             var marginStyle = ParseDeclarations("font-size: 20pt;");
-            var adapter = NewAdapter();
-            adapter.PixelsPerPoint = 1.5;
+            var renderContext = NewRenderContext();
+            renderContext.PixelsPerPoint = 1.5;
 
-            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
             Assert.Equal(20.0, font.Size, 3);
         }
@@ -144,10 +144,10 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static PdfSharpAdapter NewAdapter()
+        private static PdfRenderContext NewRenderContext()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            return adapter;
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            return renderContext;
         }
 
         private static StyleDeclaration ParseDeclarations(string css) =>

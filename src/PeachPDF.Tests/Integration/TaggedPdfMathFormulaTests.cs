@@ -1,6 +1,6 @@
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Structure;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Structure;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.Integration
             // The in-memory model stores this raw (with its literal "/") - PdfWriter.Write(PdfName)
             // only escapes it to "#2F" when actually serializing to PDF syntax, not before - see
             // PdfAssociatedFileTests' identical note.
-            Assert.Equal("/application/mathml+xml", fileSpec.EmbeddedFile.MimeType);
+            Assert.Equal("/application/mathml+xml", fileSpec.EmbeddedFile!.MimeType);
 
             var mathml = Encoding.UTF8.GetString(fileSpec.EmbeddedFile.Stream.Value);
             Assert.Contains("<mi>x</mi>", mathml);

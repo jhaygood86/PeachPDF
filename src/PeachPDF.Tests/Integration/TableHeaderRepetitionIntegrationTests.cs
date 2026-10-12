@@ -1,9 +1,10 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -464,19 +465,19 @@ Assert.True(tableBox.ActualBottom > pageHeight);
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(
             string html, double pageHeight = 842)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, pageHeight); // A4 height by default
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-    container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, pageHeight); // A4 height by default
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+    container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
   container.MarginTop = 20;  // Add margins to match @page CSS
     container.MarginBottom = 20;
 
-    var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+    var measure = PdfGraphics.CreateMeasureContext(size);
+using var graphics = new PdfCanvas(renderContext, measure, 1.0);
   await container.PerformLayout(graphics);
 
       Assert.NotNull(container.Root);

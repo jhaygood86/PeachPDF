@@ -1,6 +1,6 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;
@@ -16,12 +16,12 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterSvgTestFace";
 
-        private static async Task<(RasterCanvas Graphics, Font Font, PdfSharpAdapter Adapter)> NewFixture(int width = 160, int height = 120)
+        private static async Task<(RasterCanvas Graphics, Font Font, PdfRenderContext RenderContext)> NewFixture(int width = 160, int height = 120)
         {
-            var adapter = new PdfSharpAdapter();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.SvgTest, Family);
-            var graphics = new RasterCanvas(adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
-            return (graphics, adapter.GetFont(Family, 60, PaintFontStyle.Regular)!, adapter);
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.SvgTest, Family);
+            var graphics = new RasterCanvas(renderContext, new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            return (graphics, renderContext.GetFont(Family, 60, PaintFontStyle.Regular)!, renderContext);
         }
 
         private static void Draw(RasterCanvas g, Font font, string text, PaintColor colour, FontPalette? palette = null) =>
@@ -80,12 +80,12 @@ namespace PeachPDF.Tests.Raster
         public async Task TheGlyphIsWhereThePdfPlacesIt_TheOriginOnTheBaseline()
         {
             var (g, font, _) = await NewFixture();
-            var real = ((FontAdapter)font).Font;
+            var real = ((PdfCanvasFont)font).Font;
 
             Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             // The square runs from the baseline up 0.8 em; it sits from 0.1 em to 0.9 em of the advance.
-            var baseline = 10 + real.GetHeight() * real.CellAscent / real.CellSpace;
+            var baseline = 10 + real.Height * real.Typeface.Metrics.CellAscent / real.Typeface.Metrics.LineSpacing;
             var red = Pixels(g).Where(p => p is { R: 255, G: 0, B: 0, A: 255 }).ToList();
             Assert.InRange(red.Max(p => p.Y) + 1, baseline - 1.5, baseline + 1.5);
             Assert.InRange(red.Min(p => p.Y), baseline - 0.8 * 60 - 1.5, baseline - 0.8 * 60 + 1.5);
@@ -217,11 +217,11 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public async Task ARepeatedGlyphInAnotherRegion_IsDrawnTheSame()
         {
-            var (g, font, adapter) = await NewFixture();
+            var (g, font, renderContext) = await NewFixture();
             Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             // a second surface on the same adapter reuses the glyph's document, and draws the same pixels
-            var second = new RasterCanvas(adapter, new RasterSurface(160, 120, 0, 0, 1, 1), 1);
+            var second = new RasterCanvas(renderContext, new RasterSurface(160, 120, 0, 0, 1, 1), 1);
             Draw(second, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             Assert.Equal(Pixels(g), Pixels(second));

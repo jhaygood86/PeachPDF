@@ -1,8 +1,9 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.TestSupport
@@ -52,32 +53,32 @@ namespace PeachPDF.Tests.TestSupport
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
-            string html, PdfGenerateConfig config, Func<PdfSharpAdapter, Task>? configureAdapter = null)
+            string html, PdfGenerateConfig config, Func<PdfRenderContext, Task>? configureRenderContext = null)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
-            if (configureAdapter is not null)
+            if (configureRenderContext is not null)
             {
-                await configureAdapter(adapter);
+                await configureRenderContext(renderContext);
             }
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)
-                : new XSize(config.ManualPageWidth, config.ManualPageHeight);
+                : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
-                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
-            var container = new HtmlContainer(adapter);
+            var container = new HtmlContainer(renderContext);
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
-            using var measure = XGraphics.CreateMeasureContext(
-                container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var measure = PdfGraphics.CreateMeasureContext(
+                container.PageSize);
 
-            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             await container.PerformLayout(measure);
 
@@ -98,22 +99,22 @@ namespace PeachPDF.Tests.TestSupport
         internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
             string html, PdfGenerateConfig config)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)
-                : new XSize(config.ManualPageWidth, config.ManualPageHeight);
+                : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
-                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
-            var container = new HtmlContainer(adapter);
+            var container = new HtmlContainer(renderContext);
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
-            var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            var measure = PdfGraphics.CreateMeasureContext(container.PageSize);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0
@@ -124,7 +125,7 @@ namespace PeachPDF.Tests.TestSupport
 
             if (config.ScaleToPageSize || config.ShrinkToFit)
             {
-                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                container.MaxSize = new Size(container.PageSize.Width, 0);
                 await container.PerformLayout(measure);
 
                 var actualWidth = container.ActualSize.Width;
@@ -137,31 +138,31 @@ namespace PeachPDF.Tests.TestSupport
 
                 var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
                     ? candidatePixelsPerPoint
-                    : adapter.PixelsPerPoint;
+                    : renderContext.PixelsPerPoint;
 
-                needsRescale = PdfGenerator.NeedsRescale(adapter.PixelsPerPoint, effectivePixelsPerPoint);
+                needsRescale = PdfGenerator.NeedsRescale(renderContext.PixelsPerPoint, effectivePixelsPerPoint);
 
                 if (needsRescale)
                 {
-                    adapter.ClearFontCache();
-                    adapter.PixelsPerPoint = effectivePixelsPerPoint;
+                    renderContext.ClearFontCache();
+                    renderContext.PixelsPerPoint = effectivePixelsPerPoint;
 
                     await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
                     measure.Dispose();
-                    measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+                    measure = PdfGraphics.CreateMeasureContext(container.PageSize);
                 }
             }
 
             if (needsRescale)
             {
-                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                container.MaxSize = new Size(container.PageSize.Width, 0);
                 await container.PerformLayout(measure);
             }
 
             measure.Dispose();
 
-            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt, needsRescale, adapter.PixelsPerPoint);
+            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt, needsRescale, renderContext.PixelsPerPoint);
         }
     }
 }

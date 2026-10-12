@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Linq;
@@ -13,14 +13,14 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgDefinitionInheritanceTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static readonly PaintColor White = PaintColor.FromArgb(0xff, 0xff, 0xff);
 
         private static SvgDocument Build(string markup)
         {
             var root = XDocument.Parse(markup).Root!;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
         }
 
         private static SvgRectElement OnlyRect(IEnumerable<SvgElement> children) => Assert.IsType<SvgRectElement>(Assert.Single(children));

@@ -7,7 +7,7 @@ namespace PeachDrawing.Text.Tests.Fonts
     /// Unit tests for <see cref="FontResolvingOptions"/> - specifically that every constructor
     /// defaults <see cref="FontResolvingOptions.Stretch"/> to normal (<see cref="TtfFontDescription.DefaultStretch"/>)
     /// when the caller doesn't specify one, matching the weight-only constructors' own long-standing
-    /// 700/400 Weight-from-<see cref="XFontStyle"/>.Bold defaulting.
+    /// 700/400 Weight-from-<see cref="PaintFontStyle"/>.Bold defaulting.
     /// </summary>
     public class FontResolvingOptionsTests
     {

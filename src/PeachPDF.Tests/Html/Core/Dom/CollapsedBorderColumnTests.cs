@@ -80,8 +80,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 </table>"));
 
             var table = LayoutHarness.Descendants(root).First(x => x.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable);
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
             var fills = recording.Log.Where(op => op.Kind == PaintOpKind.FillRect).ToList();
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
                     <tr><td>a</td></tr>
                 </table>"));
 
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
             Assert.Contains(recording.Log, op => op.Kind == PaintOpKind.FillRect);

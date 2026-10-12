@@ -1,7 +1,8 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Threading.Tasks;
 
@@ -119,18 +120,18 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(
             string html, double pageWidth = 595, double pageHeight = 842)
         {
-            var adapter = new PdfSharpAdapter();
+            var renderContext = new PdfRenderContext();
             // Match the production PdfGenerator setting: PixelsPerInch=72 → pixelsPerPoint=1.0.
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter);
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(pageWidth, pageHeight);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(pageWidth, pageHeight);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

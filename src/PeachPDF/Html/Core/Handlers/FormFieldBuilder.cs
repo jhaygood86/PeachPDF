@@ -1,12 +1,13 @@
+using System.Numerics;
 using System.Collections.Generic;
 using System.Globalization;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.AcroForms;
+using PeachPDF.PDF.Annotations;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -18,19 +19,19 @@ namespace PeachPDF.Html.Core.Handlers
     /// <c>PdfGenerator.HandleFormFields</c>, a pass over the finished layout that runs after painting,
     /// the same way link annotations are placed by <c>PdfGenerator.HandleLinks</c>.
     /// </summary>
-    internal sealed class FormFieldBuilder(PdfDocument document, RenderContext adapter)
+    internal sealed class FormFieldBuilder(PdfDocument document, RenderContext renderContext)
     {
         internal PdfDocument Document { get; } = document;
-        internal RenderContext Adapter { get; } = adapter;
+        internal RenderContext RenderContext { get; } = renderContext;
 
         /// <summary>
         /// The container's real device-pixel-to-point scale, read fresh on every use (not captured at
         /// construction) - <c>PdfGenerator.GeneratePdf</c> constructs this builder before the
         /// <c>ShrinkToFit</c>/<c>ScaleToPageSize</c> rescale pass may still adjust
-        /// <see cref="PdfSharpAdapter.PixelsPerPoint"/>, and <c>PdfGenerator.HandleFormFields</c> only
+        /// <see cref="PdfRenderContext.PixelsPerPoint"/>, and <c>PdfGenerator.HandleFormFields</c> only
         /// runs once that has settled - mirrors <c>HtmlContainer.PixelsPerPoint</c>'s own idiom.
         /// </summary>
-        double PixelsPerPoint => ((PdfSharpAdapter)Adapter).PixelsPerPoint;
+        double PixelsPerPoint => ((PdfRenderContext)RenderContext).PixelsPerPoint;
 
         PdfDictionary? _helveticaFontResource;
         bool _acroFormInitialized;
@@ -114,10 +115,10 @@ namespace PeachPDF.Html.Core.Handlers
         /// </param>
         /// <param name="appearanceMatrix">the <c>/Matrix</c> to give each appearance stream, or null for none</param>
         internal void AddField(PdfPage page, PdfRectangle rect, CssBox box, FormFieldClassification classification,
-            XSize? contentSize = null, XMatrix? appearanceMatrix = null)
+            Size? contentSize = null, Matrix3x2? appearanceMatrix = null)
         {
             var acroForm = EnsureAcroForm();
-            var content = contentSize ?? new XSize(rect.Width, rect.Height);
+            var content = contentSize ?? new Size(rect.Width, rect.Height);
             var matrix = appearanceMatrix;
 
             switch (classification.Kind)
@@ -137,7 +138,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        void AddTextField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, XSize content, XMatrix? matrix, CssBox box, FormFieldClassification c)
+        void AddTextField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
         {
             var field = new PdfTextField(Document)
             {
@@ -167,7 +168,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var (drawnText, isPlaceholder) = DrawnText(c);
             var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, Adapter, PixelsPerPoint, box, content.Width, content.Height,
+                Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height,
                 drawnText, c.AutoFontSize, c.Comb, isPlaceholder, out var fontSizePt);
 
             // "/DA" (as opposed to the baked "/AP /N" appearance above) is what a reader uses to
@@ -214,7 +215,7 @@ namespace PeachPDF.Html.Core.Handlers
             return (c.Attributes.Password ? new string('*', value.Length) : value, false);
         }
 
-        void AddCheckboxField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, XSize content, XMatrix? matrix, CssBox box, FormFieldClassification c)
+        void AddCheckboxField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
         {
             var onValue = ResolveOnValue(c.Value);
 
@@ -229,15 +230,15 @@ namespace PeachPDF.Html.Core.Handlers
 
             ApplyAlternateName(field, c.Attributes);
 
-            var onAppearance = FormFieldAppearanceBuilder.BuildCheckboxOnAppearance(Document, Adapter, PixelsPerPoint, box, content.Width, content.Height);
-            var offAppearance = FormFieldAppearanceBuilder.BuildCheckboxOffAppearance(Document, Adapter, PixelsPerPoint, box, content.Width, content.Height);
+            var onAppearance = FormFieldAppearanceBuilder.BuildCheckboxOnAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
+            var offAppearance = FormFieldAppearanceBuilder.BuildCheckboxOffAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
             SetTwoStateAppearance(field, onValue, onAppearance, offAppearance, matrix);
 
             page.Annotations.Add(field);
             acroForm.AddField(field);
         }
 
-        void AddRadioButton(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, XSize content, XMatrix? matrix, CssBox box, FormFieldClassification c)
+        void AddRadioButton(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
         {
             var groupKey = string.IsNullOrEmpty(c.Name) ? $"__unnamed_radio_{++_unnamedRadioGroupCounter}__" : c.Name;
             var onValue = ResolveOnValue(c.Value);
@@ -268,8 +269,8 @@ namespace PeachPDF.Html.Core.Handlers
                 AppearanceState = c.Checked ? "/" + onValue : "/Off",
             };
 
-            var onAppearance = FormFieldAppearanceBuilder.BuildRadioOnAppearance(Document, Adapter, PixelsPerPoint, box, content.Width, content.Height);
-            var offAppearance = FormFieldAppearanceBuilder.BuildRadioOffAppearance(Document, Adapter, PixelsPerPoint, box, content.Width, content.Height);
+            var onAppearance = FormFieldAppearanceBuilder.BuildRadioOnAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
+            var offAppearance = FormFieldAppearanceBuilder.BuildRadioOffAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
             SetTwoStateAppearance(widget, onValue, onAppearance, offAppearance, matrix);
 
             group.AddKid(widget);
@@ -279,7 +280,7 @@ namespace PeachPDF.Html.Core.Handlers
             page.Annotations.Add(widget);
         }
 
-        void AddSelectField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, XSize content, XMatrix? matrix, CssBox box, FormFieldClassification c)
+        void AddSelectField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
         {
             var selected = c.Options.Count > 0 ? System.Linq.Enumerable.FirstOrDefault(c.Options, o => o.Selected) : default;
             var selectedLabel = c.Options.Count == 0 ? string.Empty : (selected.Label ?? c.Options[0].Label);
@@ -301,7 +302,7 @@ namespace PeachPDF.Html.Core.Handlers
             field.SetOptions(options);
 
             var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, Adapter, PixelsPerPoint, box, content.Width, content.Height, selectedLabel,
+                Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height, selectedLabel,
                 autoFontSize: false, combCells: null, isPlaceholder: false, out _);
             SetNormalAppearance(field, appearance, matrix);
 
@@ -315,14 +316,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// written only when it does something the fit cannot: turn or skew the appearance (an off-diagonal term), or mirror it (a
         /// diagonal that is not positive).
         /// </summary>
-        static void ApplyMatrix(PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject appearance, XMatrix? matrix)
+        static void ApplyMatrix(PeachPDF.PDF.Advanced.PdfFormXObject appearance, Matrix3x2? matrix)
         {
             // The tolerance absorbs the rounding the divided and converted corner coordinates leave in a plain move or scale.
             if (matrix is { } m && (System.Math.Abs(m.M12) > 1e-6 || System.Math.Abs(m.M21) > 1e-6 || m.M11 <= 1e-6 || m.M22 <= 1e-6))
-                appearance.Elements.SetMatrix(PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject.Keys.Matrix, m);
+                appearance.Elements.SetMatrix(PeachPDF.PDF.Advanced.PdfFormXObject.Keys.Matrix, m);
         }
 
-        static void SetNormalAppearance(PdfAnnotation annotation, PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject appearance, XMatrix? matrix = null)
+        static void SetNormalAppearance(PdfAnnotation annotation, PeachPDF.PDF.Advanced.PdfFormXObject appearance, Matrix3x2? matrix = null)
         {
             ApplyMatrix(appearance, matrix);
             var ap = new PdfDictionary(annotation.Owner);
@@ -331,8 +332,8 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         static void SetTwoStateAppearance(PdfAnnotation annotation, string onValue,
-            PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject onAppearance, PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject offAppearance,
-            XMatrix? matrix = null)
+            PeachPDF.PDF.Advanced.PdfFormXObject onAppearance, PeachPDF.PDF.Advanced.PdfFormXObject offAppearance,
+            Matrix3x2? matrix = null)
         {
             ApplyMatrix(onAppearance, matrix);
             ApplyMatrix(offAppearance, matrix);

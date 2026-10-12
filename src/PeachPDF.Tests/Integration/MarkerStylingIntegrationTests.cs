@@ -1,9 +1,9 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Verifies that author-set properties on <c>::marker</c> (color, font, content, direction) are
     /// actually read by the marker box itself and take visible effect - the gap this feature closes.
-    /// Layout runs through the real <see cref="PdfSharpAdapter"/>/<see cref="GraphicsAdapter"/> (for
+    /// Layout runs through the real <see cref="PdfRenderContext"/>/<see cref="PdfCanvas"/> (for
     /// accurate font metrics, matching real usage); paint verification for color/text assertions runs
     /// through <see cref="TestRecordingGraphics"/> instead, since it's the only way to introspect the
     /// exact <see cref="PaintColor"/> a brush/pen was created with (see its doc comment).
@@ -218,17 +218,17 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

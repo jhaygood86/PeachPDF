@@ -1,6 +1,7 @@
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
+using System.Numerics;
 using System;
 
 namespace PeachPDF.Html.Core.Handlers
@@ -18,7 +19,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// <param name="PageHeightPt">the page's height in points, which the y flip is against</param>
     internal readonly record struct PageFrame(double ContentLeftPt, double ContentTopPt, double OriginX, double OriginY, double PixelsPerPoint, double PageHeightPt)
     {
-        internal XPoint ToPdf(double x, double y) =>
+        internal PaintPoint ToPdf(double x, double y) =>
             new(ContentLeftPt + (x - OriginX) / PixelsPerPoint, PageHeightPt - (ContentTopPt + (y - OriginY) / PixelsPerPoint));
     }
 
@@ -34,7 +35,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// skewed control draw as the page content does. Only an affine map can be carried by that matrix; under perspective the widget is the
     /// upright bounding box.
     /// </remarks>
-    internal readonly record struct AnnotationPlacement(XRect Bounds, XPoint[]? Quad, XMatrix? AppearanceMatrix)
+    internal readonly record struct AnnotationPlacement(Rect Bounds, PaintPoint[]? Quad, Matrix3x2? AppearanceMatrix)
     {
         /// <summary>The corners smaller than this are the same corner.</summary>
         private const double Tolerance = 1e-6;
@@ -52,7 +53,7 @@ namespace PeachPDF.Html.Core.Handlers
                 return false;
 
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-            var points = new XPoint[polygon.Count];
+            var points = new PaintPoint[polygon.Count];
             for (var i = 0; i < polygon.Count; i++)
             {
                 var p = frame.ToPdf(polygon[i].X, polygon[i].Y);
@@ -63,13 +64,13 @@ namespace PeachPDF.Html.Core.Handlers
                 maxY = Math.Max(maxY, p.Y);
             }
 
-            var bounds = new XRect(minX, minY, maxX - minX, maxY - minY);
+            var bounds = new Rect(minX, minY, maxX - minX, maxY - minY);
 
             // Four corners that do not fill their own bounding box: the box is the click target and the quadrilateral the shape. Written in
             // the order readers expect, top-left, top-right, bottom-left, bottom-right of the rectangle they started as, rather than the
             // polygon's winding - and only when nothing was cut off behind the eye, since two clipped corners also leave four points, in an
             // order that remap would tangle.
-            XPoint[]? quad = null;
+            PaintPoint[]? quad = null;
             if (points.Length == 4 && AllInFront(map, local) && Math.Abs(ShoelaceArea(points) - bounds.Width * bounds.Height) > Tolerance * Math.Max(1, bounds.Width * bounds.Height))
                 quad = [points[0], points[1], points[3], points[2]];
 
@@ -82,13 +83,13 @@ namespace PeachPDF.Html.Core.Handlers
         /// says it all, or when the file declares a version older than PDF 1.6, which has no such key).
         /// </summary>
         /// <returns>false when none of it is on <paramref name="page"/> - moved off it, or wholly behind the viewer - so nothing drawn is there to click</returns>
-        internal static bool TryPlaceLink(in Placement placement, Rect local, in PageFrame frame, PeachPDF.PdfSharpCore.Pdf.PdfPage page, int pdfVersion,
-            out XRect bounds, out XPoint[]? quad)
+        internal static bool TryPlaceLink(in Placement placement, Rect local, in PageFrame frame, PeachPDF.PDF.PdfPage page, int pdfVersion,
+            out Rect bounds, out PaintPoint[]? quad)
         {
             bounds = default;
             quad = null;
 
-            if (placement.Hidden || !TryMap(placement.Map, local, frame, out var placed) || !placed.Bounds.IntersectsWith(new XRect(0, 0, page.Width, page.Height)))
+            if (placement.Hidden || !TryMap(placement.Map, local, frame, out var placed) || !placed.Bounds.IntersectsWith(new Rect(0, 0, page.Width, page.Height)))
                 return false;
 
             bounds = placed.Bounds;
@@ -108,7 +109,7 @@ namespace PeachPDF.Html.Core.Handlers
         private const double ProjectionEpsilon = 1e-4;
 
         /// <summary>The area of the polygon <paramref name="points"/>, whichever way it winds.</summary>
-        private static double ShoelaceArea(XPoint[] points)
+        private static double ShoelaceArea(PaintPoint[] points)
         {
             double twice = 0;
             for (var i = 0; i < points.Length; i++)
@@ -125,7 +126,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// The matrix that takes an appearance stream drawn upright in <c>(0, 0)</c> to <c>(width, height)</c> points, y up, to where the
         /// rectangle it belongs to was drawn: the images of the rectangle's own axes, which is the map's linear part.
         /// </summary>
-        private static XMatrix? LinearPart(in Homography map, Rect local, in PageFrame frame)
+        private static Matrix3x2? LinearPart(in Homography map, Rect local, in PageFrame frame)
         {
             if (!(local.Width > 0) || !(local.Height > 0) ||
                 map.Apply(local.Left, local.Top) is not { } topLeft ||
@@ -142,7 +143,7 @@ namespace PeachPDF.Html.Core.Handlers
             // The appearance's x runs along the top edge, from the top-left corner to the top-right one; its y runs up the left edge,
             // from the bottom-left corner to the top-left one. There is no translation: the reader fits the transformed box to /Rect, so one
             // would only be cancelled, and a plain move is then the identity, which is left out of the stream altogether.
-            return new XMatrix(
+            return PdfMatrix.Create(
                 (topRightPdf.X - topLeftPdf.X) / widthPt, (topRightPdf.Y - topLeftPdf.Y) / widthPt,
                 (topLeftPdf.X - bottomLeftPdf.X) / heightPt, (topLeftPdf.Y - bottomLeftPdf.Y) / heightPt,
                 0, 0);

@@ -1,9 +1,10 @@
 ﻿using Microsoft.Playwright;
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Text;
 
 namespace PeachPDF.Tests.Integration
@@ -275,17 +276,17 @@ namespace PeachPDF.Tests.Integration
         string pseudoSelector,
     bool isPseudoBefore)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             // Find and apply string-set

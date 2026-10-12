@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using System;
@@ -8,8 +9,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing.Pdf;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Rendering;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 using PeachDrawing.Text;
@@ -188,7 +189,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ActualTextOwnership_UsesPositionallyAlignedLogicalTextForBidiTransformedRun()
         {
-            // Mirrors CMapInfo.AddShapedText's contract. The displayed RTL run was reversed/mirrored
+            // Mirrors CharacterMapInfo.AddShapedText's contract. The displayed RTL run was reversed/mirrored
             // from source "(AB)" into "(BA)"; ReverseRunes(source) = ")BA(" is the logical source
             // aligned position-for-position with the displayed glyphs.
             PlacedGlyph[] glyphs =
@@ -318,7 +319,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ColrPaintAlpha_ReachesTheContentStreamAsAConstantAlpha()
         {
             // Noto's flag glyphs outline themselves with a #1A1A1A layer at alpha 0.2 - the light grey
-            // border in the reference rendering. That alpha used to be scaled as though XColor.A were a
+            // border in the reference rendering. That alpha used to be scaled as though PaintColor.A were a
             // 0..255 byte when it is a 0..1 double, so it rounded to a fully transparent 0 (or, above
             // 0.5, to 1/255) and every non-opaque COLR paint was effectively invisible.
             string pdf = await RenderWithColorFont(BundledFonts.ColorEmojiSequences, "\U0001F1EF\U0001F1F5");

@@ -1,5 +1,5 @@
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.IO;
 using System.Linq;
@@ -26,8 +26,8 @@ namespace PeachPDF.Tests.Integration
             var page = doc.PdfDocument.Pages[0];
 
             // A4 = 595.28 × 841.89 pt
-            Assert.Equal(595.0, page.Width.Point, 0);
-            Assert.Equal(842.0, page.Height.Point, 0);
+            Assert.Equal(595.0, page.Width, 0);
+            Assert.Equal(842.0, page.Height, 0);
         }
 
         [Fact]
@@ -45,8 +45,8 @@ namespace PeachPDF.Tests.Integration
             var page = doc.PdfDocument.Pages[0];
 
             // US Letter = 612 × 792 pt
-            Assert.Equal(612.0, page.Width.Point, 0);
-            Assert.Equal(792.0, page.Height.Point, 0);
+            Assert.Equal(612.0, page.Width, 0);
+            Assert.Equal(792.0, page.Height, 0);
         }
 
         [Fact]
@@ -64,8 +64,8 @@ namespace PeachPDF.Tests.Integration
             var page = doc.PdfDocument.Pages[0];
 
             // Landscape: width > height
-            Assert.True(page.Width.Point > page.Height.Point,
-                $"Expected landscape but got {page.Width.Point} × {page.Height.Point}");
+            Assert.True(page.Width > page.Height,
+                $"Expected landscape but got {page.Width} × {page.Height}");
         }
 
         [Fact]
@@ -83,8 +83,8 @@ namespace PeachPDF.Tests.Integration
             var page = doc.PdfDocument.Pages[0];
 
             // 200mm ≈ 566.93pt, 100mm ≈ 283.46pt
-            Assert.Equal(567.0, page.Width.Point, 0);
-            Assert.Equal(283.0, page.Height.Point, 0);
+            Assert.Equal(567.0, page.Width, 0);
+            Assert.Equal(283.0, page.Height, 0);
         }
 
         [Fact]
@@ -111,8 +111,8 @@ namespace PeachPDF.Tests.Integration
             var page = doc.PdfDocument.Pages[0];
 
             // Font-relative size resolved to a real (non-A4) page, proving `size` took effect.
-            Assert.True(page.Width.Point > 0 && page.Height.Point > 0);
-            Assert.NotEqual(595.0, page.Width.Point, 0);
+            Assert.True(page.Width > 0 && page.Height > 0);
+            Assert.NotEqual(595.0, page.Width, 0);
         }
 
         // ── page count ─────────────────────────────────────────────────────────
@@ -422,8 +422,8 @@ namespace PeachPDF.Tests.Integration
 
             var page = doc.PdfDocument.Pages[0];
             // A4 default
-            Assert.Equal(595.0, page.Width.Point, 0);
-            Assert.Equal(842.0, page.Height.Point, 0);
+            Assert.Equal(595.0, page.Width, 0);
+            Assert.Equal(842.0, page.Height, 0);
         }
     }
 }

@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgDisplayTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static readonly PaintColor Red = PaintColor.FromArgb(255, 0, 0);
         private static readonly PaintColor Green = PaintColor.FromArgb(0, 128, 0);
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Svg
 
         private static SvgDocument Build(string body) =>
             SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(
-                $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\">{body}</svg>").Root!), Adapter);
+                $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\">{body}</svg>").Root!), RenderContext);
 
         private static bool Paints(string body, PaintColor color)
         {

@@ -2,7 +2,7 @@
 
 `RGraphics.DrawImage(image, destRect, srcRect)` promises to draw only part of an image. PDF cannot
 express that: there is no operator for drawing a sub-rectangle of an image or Form XObject. The only
-implementation is the one `GraphicsAdapter.DrawImage` composes — clip to `destRect`, then place the
+implementation is the one `PdfCanvas.DrawImage` composes — clip to `destRect`, then place the
 **whole** image at the scale/offset that lands `srcRect` on it (`ComputeCroppedPlacement`).
 
 Consequences a future change must not undo:

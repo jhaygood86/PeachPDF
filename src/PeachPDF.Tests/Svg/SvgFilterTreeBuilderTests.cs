@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Linq;
@@ -14,13 +14,13 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterTreeBuilderTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static SvgDocument BuildFrom(string filterMarkup)
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{filterMarkup}</defs><rect id="target" width="50" height="50" filter="url(#f)"/></svg>""";
             var root = XDocument.Parse(markup).Root!;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
         }
 
         [Fact]

@@ -35,7 +35,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 // The readers word their errors like the PDF writer's message table did; the text now lives beside them.
-using PSSR = PeachDrawing.Text.Internal.Fonts.FontMessages;
 
 using Fixed = System.Int32;
 using FWord = System.Int16;
@@ -51,7 +50,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     }
 
     /// <summary>
-    /// Only Symbol and Unicode is used by PeachPDF.PdfSharpCore.
+    /// Only Symbol and Unicode is used by PeachPDF.PDF.
     /// </summary>
     internal enum WinEncodingId
     {
@@ -59,7 +58,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
     }
 
     /// <summary>
-    /// Only Symbol and Unicode is used by PeachPDF.PdfSharpCore.
+    /// Only Symbol and Unicode is used by PeachPDF.PDF.
     /// </summary>
     internal enum AppleEncodingId
     {
@@ -142,7 +141,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -196,7 +195,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
 
@@ -329,7 +328,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
 
@@ -501,7 +500,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -560,7 +559,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -623,7 +622,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -650,7 +649,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -701,7 +700,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -763,7 +762,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -791,7 +790,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -843,7 +842,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -903,7 +902,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
 
@@ -975,7 +974,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1104,7 +1103,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
 
@@ -1244,7 +1243,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
 
@@ -1299,7 +1298,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1334,7 +1333,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1369,7 +1368,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1405,7 +1404,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1444,7 +1443,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1474,7 +1473,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1504,7 +1503,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }
@@ -1535,7 +1534,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+                throw new InvalidOperationException(FontMessages.ErrorReadingFontData, ex);
             }
         }
     }

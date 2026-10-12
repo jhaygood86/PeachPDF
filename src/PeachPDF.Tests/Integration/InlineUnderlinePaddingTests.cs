@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
             var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
                 Document(spanStyle, line), new PdfGenerateConfig { PageSize = PageSize.Letter });
 
-            var recording = new RecordingGraphics(new PeachPDF.Adapters.PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PeachPDF.PdfBackend.PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recording, 0);
 
             // The decoration is the only horizontal hairline on the page: the background is a fill.

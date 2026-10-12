@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -37,7 +37,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         ///
         /// </summary>
-        private readonly RenderContext _adapter;
+        private readonly RenderContext _renderContext;
 
         /// <summary>
         /// Caches parsed inline <c>style=""</c> rules by their raw attribute text, since machine-generated
@@ -51,11 +51,11 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Init.
         /// </summary>
-        public CssValueParser(RenderContext adapter)
+        public CssValueParser(RenderContext renderContext)
         {
-            ArgumentNullException.ThrowIfNull(adapter, "global");
+            ArgumentNullException.ThrowIfNull(renderContext, "global");
 
-            _adapter = adapter;
+            _renderContext = renderContext;
         }
 
         /// <summary>
@@ -349,7 +349,7 @@ namespace PeachPDF.Html.Core.Parse
         /// same idiom (e.g. <see cref="Dom.DerivedStyle.ActualFont"/>, <see cref="Dom.CssBox.NoEms"/>).
         /// </summary>
         private static double PixelsPerPointOf(CssBox box) =>
-            (box.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            (box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
         /// <summary>
         /// Resolves a <see cref="LengthOrCalc"/> (a keyword-or-value cascade property's
@@ -828,7 +828,7 @@ namespace PeachPDF.Html.Core.Parse
 
                 var font = propValue.Substring(start, adjEnd - start + 1);
 
-                if (_adapter.IsFontExists(font))
+                if (_renderContext.IsFontExists(font))
                 {
                     return font;
                 }

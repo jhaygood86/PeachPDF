@@ -1,6 +1,6 @@
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Tests.TestSupport;
 using System.Globalization;
 
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Raster
             var body = $"<div style=\"position:relative;margin:0;width:{Width}pt;height:{Height}pt\">" +
                        $"<div style=\"position:absolute;left:60pt;top:50pt;width:100pt;height:80pt;background:#e80;transform:{transform}\"></div></div>";
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), margin: 0);
-            var page = new RasterCanvas(new PdfSharpAdapter(), new RasterSurface(Width, Height, 0, 0, 1, 1), 1);
+            var page = new RasterCanvas(new PdfRenderContext(), new RasterSurface(Width, Height, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, page);
             return page;
         }

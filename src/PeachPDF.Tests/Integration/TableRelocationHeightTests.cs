@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Tests.Integration;
 
@@ -27,16 +27,16 @@ public class TableRelocationHeightTests
                    $"<h2>Heading</h2><table id='t1'><tr>{Cell("a")}{Cell("b")}</tr></table>" +
                    $"<table id='t2'><tr>{Cell("c")}{Cell("d")}</tr></table></body></html>";
 
-        var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-        var container = new HtmlContainerInt(adapter) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
+        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var container = new HtmlContainerInt(renderContext) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
         await container.SetHtml(html, null);
 
-        var size = new XSize(400, 300);
-        container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-        container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+        var size = new Size(400, 300);
+        container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+        container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-        var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-        using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+        var measure = PdfGraphics.CreateMeasureContext(size);
+        using var graphics = new PdfCanvas(renderContext, measure, 1.0);
         await container.PerformLayout(graphics);
 
         return (FindById(container.Root!, "t1")!, FindById(container.Root!, "t2")!);

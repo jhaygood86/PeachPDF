@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.Integration
         public async Task TruecolorAlpha_SMaskAlsoGetsInterpolateTrue()
         {
             // Issue #1174: the parent color Image XObject already writes /Interpolate true (its own
-            // XImage.Interpolate default), but the grayscale /SMask image built alongside it here was
+            // PdfRasterImage.Interpolate default), but the grayscale /SMask image built alongside it here was
             // silently omitting the same key - a strict reader could then resample the color plane
             // smoothly while sampling the alpha silhouette with nearest-neighbor, producing a jagged
             // edge on an enlarged transparent PNG. Both dictionaries in this alpha-split-eligible path

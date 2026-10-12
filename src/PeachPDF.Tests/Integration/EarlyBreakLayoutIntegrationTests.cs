@@ -438,7 +438,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10,
-                configureAdapter: RegisterResumedParagraphFont);
+                configureRenderContext: RegisterResumedParagraphFont);
 
             Assert.True(container.PassRewinds > 0, "fixture did not re-enter a completed pass");
 
@@ -463,7 +463,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10,
-                configureAdapter: RegisterResumedParagraphFont);
+                configureRenderContext: RegisterResumedParagraphFont);
 
             Assert.True(container.PassRewinds > 0, "fixture did not re-enter a completed pass");
 
@@ -499,7 +499,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10,
-                configureAdapter: RegisterResumedParagraphFont);
+                configureRenderContext: RegisterResumedParagraphFont);
 
             Assert.True(container.PassRewinds > 0, "fixture did not re-enter a completed pass");
 
@@ -532,7 +532,7 @@ namespace PeachPDF.Tests.Integration
             var (_, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(60, 50),
                 pageWidth: 300, pageHeight: 140, margin: 10,
-                configureAdapter: RegisterResumedParagraphFont);
+                configureRenderContext: RegisterResumedParagraphFont);
 
             Assert.True(container.PassRewinds > 0, "fixture did not send the driver back to a finished pass");
         }
@@ -1037,7 +1037,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 PinnedFontIssue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin,
-                configureAdapter: RegisterResumedParagraphFont);
+                configureRenderContext: RegisterResumedParagraphFont);
 
             var card = LayoutHarness.FindById(root, "card")!;
             var page = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
@@ -1081,8 +1081,8 @@ namespace PeachPDF.Tests.Integration
                 + "<h2 id='h2'>Head</h2>"
                 + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>");
 
-        private static Task RegisterResumedParagraphFont(PeachPDF.Adapters.PdfSharpAdapter adapter) =>
-            BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Early Break Fixture");
+        private static Task RegisterResumedParagraphFont(PeachPDF.PdfBackend.PdfRenderContext renderContext) =>
+            BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Early Break Fixture");
 
         /// <summary>
         /// Same shape as <see cref="ResumedParagraphDocument"/>, except a <c>marker</c> div with

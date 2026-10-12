@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Svg;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgContextPaintTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static readonly (byte R, byte G, byte B) Red = (255, 0, 0);
         private static readonly (byte R, byte G, byte B) Blue = (0, 0, 255);
@@ -26,13 +26,13 @@ namespace PeachPDF.Tests.Svg
         {
             var root = XDocument.Parse(markup).Root!;
             var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, css, "print"), Adapter, null, null, contextFill, contextStroke);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, css, "print"), RenderContext, null, null, contextFill, contextStroke);
         }
 
         private static RasterSurface Paint(string markup, SvgPaint? contextFill = null, SvgPaint? contextStroke = null)
         {
             var surface = new RasterSurface(100, 100, 0, 0, 1, 1);
-            using var graphics = new RasterCanvas(Adapter, surface, 1);
+            using var graphics = new RasterCanvas(RenderContext, surface, 1);
             SvgRenderer.RenderInto(graphics, Build(markup, contextFill, contextStroke), new Rect(0, 0, 100, 100));
             return surface;
         }
@@ -437,11 +437,11 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void TheKeywords_AreValidPaintValues()
         {
-            Assert.True(SvgValueParsers.TryParsePaint("context-fill", Adapter, PaintColor.Black, out var fill));
+            Assert.True(SvgValueParsers.TryParsePaint("context-fill", RenderContext, PaintColor.Black, out var fill));
             Assert.Equal(SvgPaintKind.ContextFill, fill.Kind);
-            Assert.True(SvgValueParsers.TryParsePaint(" context-stroke ", Adapter, PaintColor.Black, out var stroke));
+            Assert.True(SvgValueParsers.TryParsePaint(" context-stroke ", RenderContext, PaintColor.Black, out var stroke));
             Assert.Equal(SvgPaintKind.ContextStroke, stroke.Kind);
-            Assert.False(SvgValueParsers.TryParsePaint("context-nothing", Adapter, PaintColor.Black, out _));
+            Assert.False(SvgValueParsers.TryParsePaint("context-nothing", RenderContext, PaintColor.Black, out _));
         }
 
         [Fact]

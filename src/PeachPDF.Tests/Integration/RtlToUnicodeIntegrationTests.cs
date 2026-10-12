@@ -1,5 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -13,8 +13,8 @@ namespace PeachPDF.Tests.Integration
     /// End-to-end coverage that a real bidi-mirrored word actually reaches
     /// <see cref="Canvas.DrawString(string, PeachDrawing.Core.Font, PeachDrawing.Core.PaintColor, PeachDrawing.Core.PaintPoint, PeachDrawing.Core.Size, double, PeachDrawing.Core.FontPalette?, PeachDrawing.Text.Shaping.ShapeSettings?, string?)"/>'s
     /// <c>logicalText</c> parameter with its true logical-order source - the plumbing half of the
-    /// <c>CMapInfo.AddShapedText</c> ToUnicode fix (see
-    /// <c>CMapInfoLogicalTextTests</c> for direct coverage of the remap math itself). Without this
+    /// <c>CharacterMapInfo.AddShapedText</c> ToUnicode fix (see
+    /// <c>CharacterMapInfoLogicalTextTests</c> for direct coverage of the remap math itself). Without this
     /// wiring, <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/> would still paint the correct
     /// (mirrored) glyphs on the page - only text extraction from the resulting PDF would be wrong -
     /// which is exactly why the original defect went unnoticed until real PDFium/MuPDF extraction was
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal("(BA)", word.Text);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, bdo, recorder);
 
             var op = Assert.Single(recorder.Log, o => o.Kind == PaintOpKind.DrawString);
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal("(BA)", word.Text);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, p, recorder);
 
             // One DrawString call per character: '(' 'B' 'A' ')' (the painted/visual order), each
@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(pElement);
             var p = FindWordsBox(pElement!);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, p, recorder);
 
             var op = Assert.Single(recorder.Log, o => o.Kind == PaintOpKind.DrawString);

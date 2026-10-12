@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
@@ -1814,7 +1814,7 @@ namespace PeachPDF.Html.Core.Dom
         // so a re-parse through CssValueParser's now-PixelsPerPoint-aware absolute-length resolution
         // (issue #814) lands back on this same internal-space value instead of PixelsPerPoint times it.
         private static string FormatLayoutUnits(double value, CssBox box) =>
-            (value / ((box.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0))
+            (value / ((box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0))
                 .ToString("F4", CultureInfo.InvariantCulture) + "pt";
 
         // Mirrors the flex engine's twin: the cascade (DomParser.NormalizeFlexOrGridItem) blockifies every

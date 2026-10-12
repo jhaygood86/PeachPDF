@@ -1,7 +1,8 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -77,7 +78,7 @@ namespace PeachPDF.Tests.Html.Core
 
         // ── ResolvePageSize ──────────────────────────────────────────────────────
 
-        private static readonly XSize BasePortrait = new(612, 792);
+        private static readonly Size BasePortrait = new(612, 792);
         private static readonly PageLengthContext DefaultContext = new(EmPt: 12, RemPt: 12, HundredPercentPt: 612);
 
         private static PageRule ParsePageRule(string css) =>
@@ -114,7 +115,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             var rule = ParsePageRule("@page wide { size: 400pt 300pt; }");
 
-            Assert.Equal(new XSize(400, 300), PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+            Assert.Equal(new Size(400, 300), PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
         }
 
         [Fact]
@@ -122,7 +123,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             var rule = ParsePageRule("@page landscape-table { size: landscape; }");
 
-            Assert.Equal(new XSize(792, 612), PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+            Assert.Equal(new Size(792, 612), PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
         }
 
         [Fact]
@@ -158,7 +159,7 @@ namespace PeachPDF.Tests.Html.Core
 
             var size = PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext);
 
-            Assert.Equal(new XSize(300, 300), size);
+            Assert.Equal(new Size(300, 300), size);
         }
 
         // ── ResolvePageBorderAndPadding (issue #1147) ───────────────────────────

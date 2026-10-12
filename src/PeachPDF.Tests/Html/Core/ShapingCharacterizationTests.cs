@@ -1,10 +1,11 @@
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachDrawing.Core;
+using PeachPDF.PDF.Advanced;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -39,7 +40,7 @@ namespace PeachPDF.Tests.Html.Core
             var descriptor = Descriptor(BundledFonts.Ttf); // Source Sans 3
             var f = descriptor.GlyphOf(new Rune('f'));
 
-            var cmap = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var cmap = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             cmap.AddShapedText("ff", new ShapeSettings(LigatureSet.Default));
 
             // The merged ligature glyph is not the plain 'f' glyph, and its source text ("ff") is
@@ -48,7 +49,7 @@ namespace PeachPDF.Tests.Html.Core
             var (ligatureGlyph, text) = cmap.LigatureGlyphToText.Single();
             Assert.NotEqual(f, ligatureGlyph);
             Assert.Equal("ff", text);
-            Assert.Contains(ligatureGlyph, cmap.GlyphIndices.Keys);
+            Assert.Contains(ligatureGlyph, cmap.GlyphIndices);
         }
 
         [Fact]
@@ -80,7 +81,7 @@ namespace PeachPDF.Tests.Html.Core
         public void AddShapedText_NullText_IsANoOp()
         {
             var descriptor = Descriptor(BundledFonts.Ttf);
-            var cmap = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var cmap = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
 
             cmap.AddShapedText(null!, new ShapeSettings(LigatureSet.Default));
 
@@ -97,9 +98,9 @@ namespace PeachPDF.Tests.Html.Core
             // this font's ligatures, so this remains neighbor-independent even with GSUB wired up.)
             var descriptor = Descriptor(BundledFonts.Ttf);
 
-            var alone = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var alone = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             alone.AddChars("a");
-            var inWord = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var inWord = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             inWord.AddChars("cat");
 
             Assert.Equal(alone.CharacterToGlyphIndex['a'], inWord.CharacterToGlyphIndex['a']);
@@ -150,16 +151,16 @@ namespace PeachPDF.Tests.Html.Core
             // Drives the real font-metrics path (FontHelper.MeasureString) through the rune-based loop with
             // a line feed (which starts a new measured line), a tab (treated as a space), and a control
             // character (skipped) - the branches a mock measurement adapter never exercises.
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml("<!DOCTYPE html><html><body><p style=\"font-size:14pt\">x</p></body></html>", null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var font = FindByTag(container.Root!, "p")!.ActualFont;
@@ -175,16 +176,16 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<CssBox> LayoutParagraph(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return FindByTag(container.Root!, "p")!;

@@ -1,8 +1,9 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 
@@ -199,12 +200,12 @@ namespace PeachPDF.Layout
         internal IReadOnlyList<PageRule> PageRules => _pageRules;
 
         /// <summary>This page's own explicit sheet size override, or null to fall back to the document's <see cref="PdfGenerateConfig"/>.</summary>
-        internal XSize? PageSizeOverride
+        internal Size? PageSizeOverride
         {
             get
             {
                 if (_pageSize is { } size) return PageSizeConverter.ToSize(size);
-                if (_explicitSize is { } explicitSize) return new XSize(explicitSize.Width.ToPoints(), explicitSize.Height.ToPoints());
+                if (_explicitSize is { } explicitSize) return new Size(explicitSize.Width.ToPoints(), explicitSize.Height.ToPoints());
                 return null;
             }
         }

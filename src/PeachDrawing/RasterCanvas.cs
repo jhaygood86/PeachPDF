@@ -12,7 +12,7 @@ namespace PeachDrawing;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Coordinates follow <c>GraphicsAdapter</c> exactly</b>, because the same paint code drives both: rects,
+/// <b>Coordinates follow <c>PdfCanvas</c> exactly</b>, because the same paint code drives both: rects,
 /// lines, polygons, images, strings and clips arrive in layout units and are divided by
 /// <see cref="PixelsPerPoint"/> to reach user space (points); paths, pen widths, dash lengths and gradient
 /// geometry are already in user space and used as they are. The current transform maps user space onward, and
@@ -44,11 +44,11 @@ public sealed partial class RasterCanvas : Canvas
     private byte[] _pixelScratch;
 
     /// <summary>Builds a canvas that paints into <paramref name="surface"/>.</summary>
-    /// <param name="adapter">the render context this canvas resolves colors, fonts and paint objects from</param>
+    /// <param name="renderContext">the render context this canvas resolves colors, fonts and paint objects from</param>
     /// <param name="surface">the pixel buffer this canvas paints into</param>
     /// <param name="pixelsPerPoint">the scale between this canvas's own coordinate space and true PDF points - see <see cref="Canvas.PixelsPerPoint"/>; <c>1</c> for a standalone canvas, where a layout unit is a device pixel directly</param>
-    public RasterCanvas(RenderContext adapter, RasterSurface surface, double pixelsPerPoint)
-        : base(adapter, surface.LayoutRect)
+    public RasterCanvas(RenderContext renderContext, RasterSurface surface, double pixelsPerPoint)
+        : base(renderContext, surface.LayoutRect)
     {
         _surface = surface;
         _pixelsPerPoint = pixelsPerPoint;
@@ -171,7 +171,7 @@ public sealed partial class RasterCanvas : Canvas
         _layoutTransforms.Push(_layoutCtm);
         _layoutCtm = matrix.Then(_layoutCtm);
 
-        // Only the translation is divided by PixelsPerPoint, exactly as GraphicsAdapter does: the linear
+        // Only the translation is divided by PixelsPerPoint, exactly as PdfCanvas does: the linear
         // part is already scale-neutral (see Canvas.PixelsPerPoint).
         var m = new Affine(matrix.M11, matrix.M12, matrix.M21, matrix.M22,
             matrix.M31 / _pixelsPerPoint, matrix.M32 / _pixelsPerPoint);
@@ -202,18 +202,18 @@ public sealed partial class RasterCanvas : Canvas
             _blend = _blendModes.Pop();
     }
 
-    // The render-wide setting (PdfGenerateConfig.RasterAntiAliasing, read as _adapter.RasterAntiAliasing) is the default; a
+    // The render-wide setting (PdfGenerateConfig.RasterAntiAliasing, read as _renderContext.RasterAntiAliasing) is the default; a
     // PushAntiAlias overrides it for the shapes drawn until the matching PopAntiAlias, and ScanlineRasterizer honours whichever applies.
     private readonly Stack<bool> _antiAlias = new();
 
-    private bool AntiAlias => _antiAlias.Count > 0 ? _antiAlias.Peek() : _adapter.RasterAntiAliasing;
+    private bool AntiAlias => _antiAlias.Count > 0 ? _antiAlias.Peek() : _renderContext.RasterAntiAliasing;
 
     /// <summary>
     /// Smoothing can be turned off for a stretch of drawing, but never on when the render as a whole turned it off
     /// (<c>RasterAntiAliasing</c> is false, for output that must be identical from run to run): that setting is the ceiling.
     /// </summary>
     /// <inheritdoc/>
-    public override void PushAntiAlias(bool enabled) => _antiAlias.Push(enabled && _adapter.RasterAntiAliasing);
+    public override void PushAntiAlias(bool enabled) => _antiAlias.Push(enabled && _renderContext.RasterAntiAliasing);
 
     /// <inheritdoc/>
     public override void PopAntiAlias()
@@ -264,13 +264,13 @@ public sealed partial class RasterCanvas : Canvas
 
         var pw = Math.Max(1, (int)Math.Ceiling(width * _surface.PixelsPerUnitX - 1e-9));
         var ph = Math.Max(1, (int)Math.Ceiling(height * _surface.PixelsPerUnitY - 1e-9));
-        if ((long)pw * ph > Math.Min(MaxTilePixels, _adapter.MaxRasterPixels))
+        if ((long)pw * ph > Math.Min(MaxTilePixels, _renderContext.MaxRasterPixels))
             return null;
 
         // The tile's pixel pitch is stretched by less than one pixel across its whole size so it covers
         // exactly `width` x `height`, and drawing it back at that size needs no resampling.
         var tile = new RasterSurface(pw, ph, 0, 0, pw / width, ph / height);
-        var tileGraphics = new RasterCanvas(_adapter, tile, _pixelsPerPoint);
+        var tileGraphics = new RasterCanvas(_renderContext, tile, _pixelsPerPoint);
         // See Canvas.CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only - the
         // tile's actual pixel geometry is governed by `tile`'s own grid/pitch above, untouched by this)
         // lets a reader inside the tile relate its coordinate space back to whatever space content
@@ -305,7 +305,7 @@ public sealed partial class RasterCanvas : Canvas
             return null;
 
         var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY);
-        var graphics = new RasterCanvas(_adapter, nested, _pixelsPerPoint);
+        var graphics = new RasterCanvas(_renderContext, nested, _pixelsPerPoint);
         graphics.SeedTransform(_layoutCtm);
         return new RasterRegion(graphics, nested);
     }
@@ -661,7 +661,7 @@ public sealed partial class RasterCanvas : Canvas
 
         if (image.GetPixels() is { } buffer)
         {
-            // ImageAdapter.GetPixels() wraps its own cached decode's array as-is (no copy on its side),
+            // PdfCanvasImage.GetPixels() wraps its own cached decode's array as-is (no copy on its side),
             // so this recovers that same array with none here either - important since a tiled background
             // draws the same image many times, and re-copying its pixels on every tile would show up.
             var bytes = System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer.PremultipliedRgba, out var segment) && segment.Offset == 0 && segment.Count == segment.Array!.Length

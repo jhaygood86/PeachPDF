@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Animation;
@@ -19,7 +19,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -98,9 +98,9 @@ namespace PeachPDF.Html.Core.Parse
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
             var media = MediaQueryContext.FromContainer(htmlContainer, mediaType);
 
-            var cssValueParser = new CssValueParser(htmlContainer.Adapter);
+            var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 
-            await CascadeApplyStyleFonts(cssData, htmlContainer.Adapter);
+            await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext);
 
             CascadeApplyPageStyles(htmlContainer, root, cssData);
             htmlContainer.PageRules = cssData.EnumerateRulesRecursive()
@@ -279,9 +279,9 @@ namespace PeachPDF.Html.Core.Parse
         /// normally.
         /// </para>
         /// </summary>
-        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RenderContext adapter, List<CssBox> displayContentsShells)
+        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RenderContext renderContext, List<CssBox> displayContentsShells)
         {
-            var valueParser = new CssValueParser(adapter);
+            var valueParser = new CssValueParser(renderContext);
             ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media, displayContentsShells);
         }
 
@@ -454,7 +454,7 @@ namespace PeachPDF.Html.Core.Parse
         /// network/relative URL through; a documented v1 limitation, not a bug to route around).
         /// </summary>
         /// <param name="html">the fragment markup to parse</param>
-        /// <param name="adapter">the platform adapter (for UA default styles, `&#64;font-face` registration, and value parsing)</param>
+        /// <param name="renderContext">the platform adapter (for UA default styles, `&#64;font-face` registration, and value parsing)</param>
         /// <param name="cssData">
         /// The stylesheet to cascade the fragment against - typically the caller's own
         /// <see cref="PeachPdfCssContent"/> merged with UA defaults, already cloned by the caller so this
@@ -469,14 +469,14 @@ namespace PeachPDF.Html.Core.Parse
         /// tree walk can find any more and the caller has to hand on to the container that will own the
         /// document (<see cref="HtmlContainerInt.DisplayContentsShells"/>).
         /// </returns>
-        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext adapter, CssData cssData)
+        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext renderContext, CssData cssData)
         {
             var root = HtmlParser.ParseDocument(html);
-            var cssValueParser = new CssValueParser(adapter);
+            var cssValueParser = new CssValueParser(renderContext);
 
             (cssData, _) = await CascadeParseStyles(root, htmlContainer: null, cssData, cssDataChanged: false);
 
-            await CascadeApplyStyleFonts(cssData, adapter);
+            await CascadeApplyStyleFonts(cssData, renderContext);
 
             // No page context exists at splice time, so there is no real viewport/page-box geometry to
             // evaluate @media width/height/orientation features against - the same "no HtmlContainerInt"
@@ -513,12 +513,12 @@ namespace PeachPDF.Html.Core.Parse
         #region Private methods
 
         /// <summary>
-        /// Registers every <c>@font-face</c> rule in <paramref name="cssData"/> with <paramref name="adapter"/>.
+        /// Registers every <c>@font-face</c> rule in <paramref name="cssData"/> with <paramref name="renderContext"/>.
         /// Purely <c>(cssData, adapter)</c>-scoped - no document/container dependency - so it is also reused by
         /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
         /// attached to a declarative document (<see cref="Layout.IDocumentBuilder.Stylesheet"/>).
         /// </summary>
-        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext adapter)
+        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -549,12 +549,12 @@ namespace PeachPDF.Html.Core.Parse
 
                         if (fontFaceDefinition.Local is not null)
                         {
-                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
+                            isLoaded = await renderContext.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
                         }
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
+                            isLoaded = await renderContext.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
                         }
 
                         if (isLoaded) break;
@@ -650,14 +650,14 @@ namespace PeachPDF.Html.Core.Parse
             // PixelsPerPoint-sized discrepancy between this container's own notion of its page-content
             // band height and the actual physical per-page PDF clip (PdfGenerator.AddPdfPages, resolved
             // independently via DomParser.ParseLengthToPdfPoints, which is correctly always in true
-            // points since it feeds an XRect directly). PixelsPerPoint is usually 1.0 (so this was
+            // points since it feeds an Rect directly). PixelsPerPoint is usually 1.0 (so this was
             // invisible) but ShrinkToFit/ScaleToPageSize commonly nudge it away from 1.0 by even a
             // fraction of a percent for perfectly ordinary content - enough for a box relocated to
             // "the next page's content top" by layout's own (slightly wrong) accounting to land a hair
             // inside the previous page's true physical clip window, emitting a clipped-but-present
             // duplicate text run into that page's content stream (see MarginBoxRenderer.cs's own
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
-            var pixelsPerPoint = (htmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (htmlContainer.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
             ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                 allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
@@ -679,7 +679,7 @@ namespace PeachPDF.Html.Core.Parse
             // HundredPercentPt for `%` - actually change between the two calls, becoming correct.
             //
             // PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
-            // caller-configured page size (an XSize, true points) from PageSize (an Size,
+            // caller-configured page size (an Size, true points) from PageSize (an Size,
             // PixelsPerPoint-scaled internal pixel space, per HtmlContainerInt.PageSize's own doc
             // comment) - nothing between PdfGenerator.SetContent assigning it and this point mutates it,
             // so this is the same comparison PdfGenerator.AddPdfPages used to make one layer up, just
@@ -688,9 +688,9 @@ namespace PeachPDF.Html.Core.Parse
             // Utils namespace would otherwise shadow the unqualified "Utils" name ahead of the `using
             // PeachPDF.Utilities;` import.
             if (htmlContainer.CssPageSize is { } cssPageSize &&
-                cssPageSize != PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint))
+                cssPageSize != PeachPDF.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint))
             {
-                htmlContainer.PageSize = PeachPDF.Utilities.Utils.Convert(cssPageSize, pixelsPerPoint);
+                htmlContainer.PageSize = PeachPDF.Utilities.Utils.ToPixels(cssPageSize, pixelsPerPoint);
                 ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                     allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
             }
@@ -789,27 +789,27 @@ namespace PeachPDF.Html.Core.Parse
                     // "otherwise-configured size" (for a bare orientation keyword to rotate) is the
                     // caller-configured PdfGenerateConfig size, reconstructed the same way the retry
                     // check above does.
-                    var baseSizePt = PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint);
+                    var baseSizePt = PeachPDF.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint);
                     htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, baseSizePt);
                 }
             }
         }
 
-        private static readonly FrozenDictionary<string, XSize> NamedPageSizes = new Dictionary<string, XSize>(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, Size> NamedPageSizes = new Dictionary<string, Size>(StringComparer.OrdinalIgnoreCase)
         {
-            { "a0",      new XSize(2383.94, 3370.39) },
-            { "a1",      new XSize(1683.78, 2383.94) },
-            { "a2",      new XSize(1190.55, 1683.78) },
-            { "a3",      new XSize(841.89,  1190.55) },
-            { "a4",      new XSize(595.28,   841.89) },
-            { "a5",      new XSize(419.53,   595.28) },
-            { "a6",      new XSize(297.64,   419.53) },
-            { "b4",      new XSize(708.66,  1000.63) },
-            { "b5",      new XSize(498.90,   708.66) },
-            { "letter",  new XSize(612,       792)   },
-            { "legal",   new XSize(612,      1008)   },
-            { "ledger",  new XSize(1224,      792)   },
-            { "tabloid", new XSize(792,      1224)   },
+            { "a0",      new Size(2383.94, 3370.39) },
+            { "a1",      new Size(1683.78, 2383.94) },
+            { "a2",      new Size(1190.55, 1683.78) },
+            { "a3",      new Size(841.89,  1190.55) },
+            { "a4",      new Size(595.28,   841.89) },
+            { "a5",      new Size(419.53,   595.28) },
+            { "a6",      new Size(297.64,   419.53) },
+            { "b4",      new Size(708.66,  1000.63) },
+            { "b5",      new Size(498.90,   708.66) },
+            { "letter",  new Size(612,       792)   },
+            { "legal",   new Size(612,      1008)   },
+            { "ledger",  new Size(1224,      792)   },
+            { "tabloid", new Size(792,      1224)   },
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -820,7 +820,7 @@ namespace PeachPDF.Html.Core.Parse
         /// fallback via <see cref="Dom.PageRuleResolver.ResolvePageSize"/>), used both as the "no size
         /// declared" fallback and as the size a bare orientation keyword rotates.
         /// </summary>
-        internal static XSize? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context, XSize baseSizePt)
+        internal static Size? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context, Size baseSizePt)
         {
             var parts = sizeValue.Trim().Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
@@ -831,7 +831,7 @@ namespace PeachPDF.Html.Core.Parse
             // not match it is invalid as a whole and must be dropped (CSS Syntax §9), not partially
             // honored - so any token that is present but not a valid component invalidates the whole
             // declaration (issue #163), rather than being silently skipped.
-            XSize? namedSize = null;
+            Size? namedSize = null;
             bool? landscape = null;
             double? firstLength = null, secondLength = null;
             var invalid = false;
@@ -879,14 +879,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 var size = namedSize.Value;
                 if (landscape == true && size.Width < size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 else if (landscape == false && size.Width > size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 return size;
             }
 
             if (firstLength.HasValue)
-                return new XSize(firstLength.Value, secondLength ?? firstLength.Value);
+                return new Size(firstLength.Value, secondLength ?? firstLength.Value);
 
             if (landscape.HasValue)
             {
@@ -901,9 +901,9 @@ namespace PeachPDF.Html.Core.Parse
                 // correctly does nothing.
                 var size = baseSizePt;
                 if (landscape.Value && size.Width < size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 else if (!landscape.Value && size.Width > size.Height)
-                    size = new XSize(size.Height, size.Width);
+                    size = new Size(size.Height, size.Width);
                 return size;
             }
 

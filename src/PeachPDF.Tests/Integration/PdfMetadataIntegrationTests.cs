@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF;
 
 namespace PeachPDF.Tests.Integration
 {

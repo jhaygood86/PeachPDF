@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Raster
@@ -25,9 +25,9 @@ namespace PeachPDF.Tests.Raster
                 return ctx;
             }
 
-            var adapter = new PdfSharpAdapter();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "SynthSwitchSans");
-            return adapter;
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "SynthSwitchSans");
+            return renderContext;
         }
 
         [Theory]

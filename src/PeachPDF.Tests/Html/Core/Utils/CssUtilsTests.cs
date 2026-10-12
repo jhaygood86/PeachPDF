@@ -1,11 +1,11 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -344,8 +344,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-weight: 700;");
 
-            var font = (PeachPDF.Adapters.FontAdapter)box.ActualFont;
-            Assert.True(font.Font.Bold);
+            var font = (PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont;
+            Assert.True(font.Font.Typeface.IsBold);
         }
 
         [Fact]
@@ -353,8 +353,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-weight: 400;");
 
-            var font = (PeachPDF.Adapters.FontAdapter)box.ActualFont;
-            Assert.False(font.Font.Bold);
+            var font = (PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont;
+            Assert.False(font.Font.Typeface.IsBold);
         }
 
         [Fact]
@@ -523,9 +523,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         public async Task WhiteSpace_ReturnsPositiveWidth()
         {
             var (box, _) = await FindDivBoxAndParser("font-size: 16px;");
-            var adapter = new PdfSharpAdapter();
-            var measure = XGraphics.CreateMeasureContext(new XSize(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
+            var renderContext = new PdfRenderContext();
+            var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
+            using var graphics = new PeachPDF.PdfBackend.PdfCanvas(renderContext, measure, 1.0);
 
             var width = CssUtils.WhiteSpace(graphics, box);
 
@@ -1301,21 +1301,21 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
         private static async Task<(CssBox Box, CssValueParser Parser)> FindDivBoxAndParser(string css)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(BuildHtml(css), null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PeachPDF.PdfBackend.PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
             var box = FindByTag(container.Root!, "div")!;
-            return (box, new CssValueParser(adapter));
+            return (box, new CssValueParser(renderContext));
         }
 
         private static string BuildHtml(string css) =>
@@ -1355,16 +1355,16 @@ div {{ width: 200px; height: 100px; {css} }}
 
         private static async Task<CssBox> FindDivBoxFromHtml(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PeachPDF.PdfBackend.PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

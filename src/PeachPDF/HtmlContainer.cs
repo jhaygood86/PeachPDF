@@ -11,13 +11,13 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Network;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
@@ -35,9 +35,9 @@ namespace PeachPDF
         /// <summary>
         /// Init.
         /// </summary>
-        internal HtmlContainer(PdfSharpAdapter adapter)
+        internal HtmlContainer(PdfRenderContext renderContext)
         {
-            HtmlContainerInt = new HtmlContainerInt(adapter);
+            HtmlContainerInt = new HtmlContainerInt(renderContext);
         }
 
         /// <summary>
@@ -49,10 +49,10 @@ namespace PeachPDF
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>
-        public XPoint Location
+        public PaintPoint Location
         {
-            get => Utils.Convert(HtmlContainerInt.Location, PixelsPerPoint);
-            set => HtmlContainerInt.Location = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.Location, PixelsPerPoint);
+            set => HtmlContainerInt.Location = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -62,32 +62,32 @@ namespace PeachPDF
         /// <see cref="ActualSize"/> can be exceed the max size by layout restrictions (unwrappable line, set image size, etc.).<br/>
         /// Set zero for unlimited (width\height separately).<br/>
         /// </summary>
-        public XSize MaxSize
+        public Size MaxSize
         {
-            get => Utils.Convert(HtmlContainerInt.MaxSize, PixelsPerPoint);
-            set => HtmlContainerInt.MaxSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.MaxSize, PixelsPerPoint);
+            set => HtmlContainerInt.MaxSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         /// <summary>
         /// The actual size of the rendered html (after layout)
         /// </summary>
-        public XSize ActualSize
+        public Size ActualSize
         {
-            get => Utils.Convert(HtmlContainerInt.ActualSize, PixelsPerPoint);
-            internal set => HtmlContainerInt.ActualSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.ActualSize, PixelsPerPoint);
+            internal set => HtmlContainerInt.ActualSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
-        public XSize PageSize
+        public Size PageSize
         {
-            get => Utils.Convert(HtmlContainerInt.PageSize, PixelsPerPoint);
-            set => HtmlContainerInt.PageSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.ToPoints(HtmlContainerInt.PageSize, PixelsPerPoint);
+            set => HtmlContainerInt.PageSize = Utils.ToPixels(value, PixelsPerPoint);
         }
 
         /// <summary>
         /// Page size in PDF points derived from the CSS @page { size: ... } rule.
         /// Null when no size rule is present.
         /// </summary>
-        public XSize? CssPageSize => HtmlContainerInt.CssPageSize;
+        public Size? CssPageSize => HtmlContainerInt.CssPageSize;
 
         /// <summary>
         /// All @page rules parsed from the document's stylesheets, in cascade order.
@@ -153,7 +153,7 @@ namespace PeachPDF
             }
         }
 
-        internal double PixelsPerPoint => ((PdfSharpAdapter)HtmlContainerInt.Adapter).PixelsPerPoint;
+        internal double PixelsPerPoint => ((PdfRenderContext)HtmlContainerInt.RenderContext).PixelsPerPoint;
 
         internal HtmlDocumentMetadata? DocumentMetadata => HtmlContainerInt.DocumentMetadata;
 
@@ -177,7 +177,7 @@ namespace PeachPDF
         /// Get all the links in the HTML with the element rectangle and href data.
         /// </summary>
         /// <returns>collection of all the links in the HTML</returns>
-        public List<LinkElementData<XRect>> GetLinks() => GetLinks(null);
+        public List<LinkElementData<Rect>> GetLinks() => GetLinks(null);
 
         /// <summary>
         /// Same as <see cref="GetLinks()"/>, additionally collecting every bookmark-candidate box
@@ -185,14 +185,14 @@ namespace PeachPDF
         /// walk (see <see cref="Html.Core.HtmlContainerInt.GetLinks(List{CssBox}?)"/>), when a caller
         /// needs both - internal only, since the parameter type is internal.
         /// </summary>
-        internal List<LinkElementData<XRect>> GetLinks(List<CssBox>? bookmarkBoxes)
+        internal List<LinkElementData<Rect>> GetLinks(List<CssBox>? bookmarkBoxes)
         {
-            var linkElements = new List<LinkElementData<XRect>>();
+            var linkElements = new List<LinkElementData<Rect>>();
 
             foreach (var link in HtmlContainerInt.GetLinks(bookmarkBoxes))
             {
                 var href = ResolveHref(link.Href);
-                linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.Convert(link.Rectangle, PixelsPerPoint), link.SourceBox, link.GeometryBox));
+                linkElements.Add(new LinkElementData<Rect>(link.Id, href, Utils.ToPoints(link.Rectangle, PixelsPerPoint), link.SourceBox, link.GeometryBox));
             }
 
             return linkElements;
@@ -221,21 +221,21 @@ namespace PeachPDF
         /// </summary>
         /// <param name="elementId">the id of the element to get its rectangle</param>
         /// <returns>the rectangle of the element or null if not found</returns>
-        public XRect? GetElementRectangle(string elementId)
+        public Rect? GetElementRectangle(string elementId)
         {
             var r = HtmlContainerInt.GetElementRectangle(elementId);
-            return r.HasValue ? Utils.Convert(r.Value, PixelsPerPoint) : (XRect?)null;
+            return r.HasValue ? Utils.ToPoints(r.Value, PixelsPerPoint) : (Rect?)null;
         }
 
         /// <summary>
         /// Measures the bounds of box and children, recursively.
         /// </summary>
         /// <param name="g">Device context to draw</param>
-        public async ValueTask PerformLayout(XGraphics g)
+        public async ValueTask PerformLayout(PdfGraphics g)
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            using var ig = new PdfCanvas(HtmlContainerInt.RenderContext, g, PixelsPerPoint);
             await HtmlContainerInt.PerformLayout(ig);
         }
 
@@ -244,11 +244,11 @@ namespace PeachPDF
         /// </summary>
         /// <param name="g">the device to use to render</param>
         /// <param name="fragmentainer">the page to render, from layout's fragment tree</param>
-        internal void PerformPaint(XGraphics g, FragmentainerFragment fragmentainer)
+        internal void PerformPaint(PdfGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            using var ig = new PdfCanvas(HtmlContainerInt.RenderContext, g, PixelsPerPoint);
             HtmlContainerInt.PerformPaint(ig, fragmentainer);
         }
 

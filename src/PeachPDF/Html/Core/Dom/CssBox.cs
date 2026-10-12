@@ -2295,12 +2295,12 @@ namespace PeachPDF.Html.Core.Dom
             if (HtmlContainer is null)
                 return false;
 
-            var adapter = HtmlContainer.Adapter;
+            var renderContext = HtmlContainer.RenderContext;
 
             foreach (var family in (FontFamilyList ?? FontFamily ?? string.Empty).Split(','))
             {
                 var name = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
-                if (adapter.FamilyHasExplicitUnicodeRanges(name))
+                if (renderContext.FamilyHasExplicitUnicodeRanges(name))
                     return true;
             }
 
@@ -10148,12 +10148,12 @@ namespace PeachPDF.Html.Core.Dom
 
         internal Font? GetCachedFont(string fontFamily, double fsize, PaintFontStyle st, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus, variations);
+            return FontFamilyResolver.Resolve(HtmlContainer!.RenderContext, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus, variations);
         }
 
         internal Font? GetCachedFontForCodepoint(string fontFamily, double fsize, PaintFontStyle st, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
+            return FontFamilyResolver.Resolve(HtmlContainer!.RenderContext, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
         }
 
         internal PaintColor GetActualColor(string colorStr)

@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -122,7 +122,7 @@ namespace PeachPDF.Tests.Integration
             // it. (An image gets no space in front of it: only a text word paints one.)
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"""<p id="p">AA <img src="{OnePixelPng}" style="width:20pt;height:10pt"> BB</p>"""));
-            using var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            using var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
             var image = AllWords(LayoutHarness.FindById(root, "p")!).Single(w => w.IsImage);
 
@@ -296,8 +296,8 @@ namespace PeachPDF.Tests.Integration
             // missing-glyph box on the page (and fail PDF/A outright), so the separator is left out.
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("""<p style="font-family:EmojiOnly">AA BB</p>"""),
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Emoji, "EmojiOnly"));
-            using var recorder = new RecordingGraphics(new PdfSharpAdapter());
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Emoji, "EmojiOnly"));
+            using var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
 
             var ops = recorder.Log.Where(o => o.Kind == PaintOpKind.DrawString).ToList();
@@ -358,7 +358,7 @@ namespace PeachPDF.Tests.Integration
             // move off the baseline by the font's own offset, and the space between them has to as well.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 """<p style="font-family:NoSups"><span id="s" style="font-variant-position:super">42 42</span></p>"""),
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSups"));
             Assert.NotNull(LayoutHarness.FindById(root, "s")!.SubSuperscriptSynthesis);
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);
@@ -374,7 +374,7 @@ namespace PeachPDF.Tests.Integration
             // Upright, each character is drawn on its own; the space above "2" moves with it.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 """<p style="font-family:NoSups; writing-mode:vertical-rl; text-orientation:upright; height:400pt"><span id="s" style="font-variant-position:super">4 2</span></p>"""),
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSups"));
             var span = LayoutHarness.FindById(root, "s")!;
             var shift = span.SubSuperscriptSynthesis!.Value.BaselineShift;
             var g = new TestRecordingGraphics();
@@ -395,7 +395,7 @@ namespace PeachPDF.Tests.Integration
             // baseline - shifted by the synthesized superscript - with the word after it.
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 """<p style="font-family:NoSups; writing-mode:vertical-rl; height:400pt"><span style="font-variant-position:super">42 42</span></p>"""),
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSups"));
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);
 
@@ -460,7 +460,7 @@ namespace PeachPDF.Tests.Integration
             string body, Func<string, Font, ShapeSettings?, Size>? measureString = null)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body));
-            using var recorder = new RecordingGraphics(new PdfSharpAdapter()) { MeasureStringOverride = measureString };
+            using var recorder = new RecordingGraphics(new PdfRenderContext()) { MeasureStringOverride = measureString };
             FragmentPaintHarness.PaintPage(container, recorder);
             return recorder.Log;
         }

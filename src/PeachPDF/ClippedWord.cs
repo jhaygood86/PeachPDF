@@ -26,7 +26,7 @@ namespace PeachPDF;
 /// The clip this is measured against is <c>Canvas</c>'s tracked rect stack, and two clips never
 /// reach it: a <c>border-radius</c> or <c>clip-path</c> clip (the path-clip push deliberately
 /// leaves the tracked bound over-wide, and the exclude-push is a no-op), and the page-level
-/// <c>XGraphics.IntersectClip</c> the PDF generator applies outside the stack. So "nothing
+/// <c>PdfGraphics.IntersectClip</c> the PDF generator applies outside the stack. So "nothing
 /// reported" is a weaker statement than "nothing was clipped".
 /// </para>
 /// </remarks>

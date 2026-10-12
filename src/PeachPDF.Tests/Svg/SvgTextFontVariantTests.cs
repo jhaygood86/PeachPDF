@@ -1,5 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextFontVariantTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body)
         {
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
@@ -120,7 +120,7 @@ namespace PeachPDF.Tests.Svg
             // .claude/accepted-gaps) - this only proves real GSUB substitution gets requested when the
             // font can honor it.
             await using var stream = File.OpenRead(BundledFonts.Ttf);
-            await Adapter.AddFont(stream, "SmallCapsTest");
+            await RenderContext.AddFont(stream, "SmallCapsTest");
 
             var g = Render("""<text x="10" y="50" font-size="20" font-family="SmallCapsTest" font-variant-caps="small-caps">Hi</text>""");
 

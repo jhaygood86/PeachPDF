@@ -9,7 +9,7 @@ namespace PeachDrawing;
 /// method (<see cref="GraphicsPath.Start"/>, <see cref="GraphicsPath.LineTo"/>, etc.) and
 /// <see cref="GraphicsPath.Flatten"/> already have a complete, backend-agnostic base implementation -
 /// this type exists only to supply the three genuinely abstract members, unlike the PDF backend's own
-/// <c>GraphicsPathAdapter</c>, which also mirrors every call into a live <c>XGraphicsPath</c> for PDF
+/// <c>PdfGraphicsPath</c>, which also mirrors every call into a live <c>GraphicsPath</c> for PDF
 /// content-stream writing. A raster canvas has no content stream, so there is nothing to mirror.
 /// </summary>
 internal sealed class RasterGraphicsPath : GraphicsPath

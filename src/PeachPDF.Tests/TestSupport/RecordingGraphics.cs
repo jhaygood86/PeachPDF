@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>
         /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #814) without a
-        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
+        /// full <c>PdfCanvas</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
         /// no-op of <c>1.0</c>. A field-backed override (rather than an auto-property) since the base
         /// virtual member is get-only.
         /// </summary>
@@ -108,8 +108,8 @@ namespace PeachPDF.Tests.TestSupport
 
         public override double PixelsPerPoint => PixelsPerPointOverride;
 
-        public RecordingGraphics(RenderContext adapter)
-            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+        public RecordingGraphics(RenderContext renderContext)
+            : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
         public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {
@@ -161,7 +161,7 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>
         /// A path clip (the rounded-corner curve of a `border-radius` + `overflow: hidden` box, e.g.)
         /// doesn't have a rectangular bound this mock can track precisely, so - like the real
-        /// GraphicsAdapter's own clip-stack bookkeeping (RenderUtils.cs remarks) - it keeps the
+        /// PdfCanvas's own clip-stack bookkeeping (RenderUtils.cs remarks) - it keeps the
         /// enclosing rect on the tracked stack rather than attempting one. It still logs and counts the
         /// push/pop like any other clip, so PushCount/PopCount balance and Log preserves push order
         /// (rect clip, then path clip) for a caller asserting on it.
@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         /// <summary>Merges <paramref name="path"/>'s recorded points into this one, mirroring the real
-        /// <c>GraphicsPathAdapter.AddPath</c>'s union semantics (see its own remarks) closely enough
+        /// <c>PdfGraphicsPath.AddPath</c>'s union semantics (see its own remarks) closely enough
         /// for a test to observe that a multi-shape clip (rounded corners, or a
         /// <c>background-clip: text</c> glyph-outline union) actually combined every shape.</summary>
         public override void AddPath(GraphicsPath path)
@@ -331,7 +331,7 @@ namespace PeachPDF.Tests.TestSupport
         /// Genuinely clips this recorded (single-contour, per this double's own <c>FakeOutline</c>-style
         /// test callers) point list to <paramref name="rect"/>, reusing the real
         /// <see cref="PeachDrawing.Core.Geometry.PolygonClipper"/> primitive
-        /// <c>GraphicsPathAdapter.ClipToRect</c> itself is built on - so a test asserting on the result
+        /// <c>PdfGraphicsPath.ClipToRect</c> itself is built on - so a test asserting on the result
         /// (e.g. that an upright glyph's clip-path union never exceeds its own reserved cell) is
         /// exercising the actual clip algorithm, not a test-only stand-in for it.
         /// </summary>

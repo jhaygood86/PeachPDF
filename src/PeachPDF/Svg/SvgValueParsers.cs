@@ -427,9 +427,9 @@ namespace PeachPDF.Svg
         /// standalone/<c>&lt;img&gt;</c> SVG, which has no CSS context to inherit from), or a solid
         /// color (hex/named, delegated to <see cref="CssValueParser.GetActualColor"/>).
         /// </summary>
-        public static SvgPaint ParsePaint(string value, RenderContext adapter, PaintColor contextColor)
+        public static SvgPaint ParsePaint(string value, RenderContext renderContext, PaintColor contextColor)
         {
-            TryParsePaint(value, adapter, contextColor, out var paint);
+            TryParsePaint(value, renderContext, contextColor, out var paint);
             return paint;
         }
 
@@ -439,7 +439,7 @@ namespace PeachPDF.Svg
         /// string <see cref="CssValueParser.IsColorValid"/> rejects; <c>paint</c> still gets the same
         /// fallback <see cref="ParsePaint"/> would have returned, for callers that want a value regardless.
         /// </summary>
-        public static bool TryParsePaint(string value, RenderContext adapter, PaintColor contextColor, out SvgPaint paint)
+        public static bool TryParsePaint(string value, RenderContext renderContext, PaintColor contextColor, out SvgPaint paint)
         {
             var trimmed = value.Trim();
 
@@ -484,7 +484,7 @@ namespace PeachPDF.Svg
                 return true;
             }
 
-            var valueParser = new CssValueParser(adapter);
+            var valueParser = new CssValueParser(renderContext);
             paint = SvgPaint.Solid(valueParser.GetActualColor(trimmed));
             return valueParser.IsColorValid(trimmed);
         }
@@ -530,7 +530,7 @@ namespace PeachPDF.Svg
         /// either as plain attributes or from a <c>style="stop-color:...; stop-opacity:..."</c> attribute
         /// (the latter overrides the former, matching CSS precedence over presentation attributes).
         /// </summary>
-        public static PaintColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RenderContext adapter, Func<string?, string?>? resolveColor = null)
+        public static PaintColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RenderContext renderContext, Func<string?, string?>? resolveColor = null)
         {
             var declarations = ParseStyleDeclarations(style);
             var colorValue = declarations.TryGetValue("stop-color", out var colorFromStyle) ? colorFromStyle : stopColorAttr;
@@ -541,7 +541,7 @@ namespace PeachPDF.Svg
 
             var color = string.IsNullOrWhiteSpace(colorValue)
                 ? PaintColor.Black
-                : new CssValueParser(adapter).GetActualColor(colorValue);
+                : new CssValueParser(renderContext).GetActualColor(colorValue);
 
             var opacity = ParseOpacity(opacityValue);
 

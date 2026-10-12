@@ -17,9 +17,9 @@ namespace PeachPDF.Html.Core.Utils
     /// instance is shared across a whole document build (it owns the <see cref="CssValueParser"/>
     /// <see cref="CssUtils.SetPropertyValue"/> needs).
     /// </summary>
-    internal sealed class CssPropertyFactory(RenderContext adapter)
+    internal sealed class CssPropertyFactory(RenderContext renderContext)
     {
-        private readonly CssValueParser _parser = new(adapter);
+        private readonly CssValueParser _parser = new(renderContext);
 
         /// <summary>
         /// The adapter this whole document build is running against - exposed so a declarative content
@@ -28,7 +28,7 @@ namespace PeachPDF.Html.Core.Utils
         /// can do so without a data-URI/<c>ImageLoadHandler</c> round trip - see <c>ContainerBuilder</c>'s
         /// <c>Image</c>/<c>Svg</c> overloads.
         /// </summary>
-        public RenderContext Adapter => adapter;
+        public RenderContext RenderContext => renderContext;
 
         /// <summary>
         /// The <c>display: contents</c> shells every <c>IContainer.Html(...)</c> fragment built against this

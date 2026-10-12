@@ -1,10 +1,10 @@
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             MarginBoxRenderer.PaintBorder(
                 g, new Rect(0, 0, 100, 50), style, emPt: 16, remPt: 16, pixelsPerPoint: 1.0,
-                adapter: new PdfSharpAdapter());
+                renderContext: new PdfRenderContext());
 
             // FilledShapes rather than DrawPolygonCall: a fill is a fill whichever primitive made it,
             // so a future ring-path fast path here would not silently read as "nothing painted".

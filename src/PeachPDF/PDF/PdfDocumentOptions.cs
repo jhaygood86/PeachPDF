@@ -1,0 +1,278 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+// ReSharper disable ConvertToAutoProperty
+
+namespace PeachPDF.PDF;
+
+/// <summary>
+/// Holds information how to handle the document when it is saved as PDF stream.
+/// </summary>
+internal sealed class PdfDocumentOptions
+{
+    internal PdfDocumentOptions(PdfDocument document)
+    {
+        //_deflateContents = true;
+        //_writeProcedureSets = true;
+    }
+
+    /// <summary>
+    /// Gets or sets the color mode.
+    /// </summary>
+    public PdfColorMode ColorMode
+    {
+        get => _colorMode;
+        set => _colorMode = value;
+    }
+    PdfColorMode _colorMode = PdfColorMode.Rgb;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to compress content streams of PDF pages.
+    /// </summary>
+    public bool CompressContentStreams
+    {
+        get => _compressContentStreams;
+        set => _compressContentStreams = value;
+    }
+    bool _compressContentStreams = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating that all objects are not compressed.
+    /// </summary>
+    public bool NoCompression
+    {
+        get => _noCompression;
+        set => _noCompression = value;
+    }
+    bool _noCompression;
+
+    /// <summary>
+    /// Gets or sets the flate encode mode. Besides the balanced default mode you can set modes for best compression (slower) or best speed (larger files).
+    /// </summary>
+    public PdfFlateEncodeMode FlateEncodeMode
+    {
+        get => _flateEncodeMode;
+        set => _flateEncodeMode = value;
+    }
+    PdfFlateEncodeMode _flateEncodeMode = PdfFlateEncodeMode.Default;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.BrotliCompression"/> - see there for behavior. The request alone;
+    /// <see cref="UseBrotli"/> is what the writer consults.
+    /// </summary>
+    public bool BrotliCompression
+    {
+        get => _brotliCompression;
+        set => _brotliCompression = value;
+    }
+    bool _brotliCompression;
+
+    /// <summary>
+    /// Whether general-purpose streams are compressed with <c>/BrotliDecode</c> instead of <c>/FlateDecode</c>: the
+    /// <see cref="BrotliCompression"/> request, force-disabled unless the document is PDF 2.0 (the only version that
+    /// defines the filter).
+    /// </summary>
+    public bool UseBrotli => _brotliCompression && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.JxlPassthrough"/> - see there for behavior. The request alone;
+    /// <see cref="UseJxlPassthrough"/> is what the writer consults.
+    /// </summary>
+    public bool JxlPassthrough
+    {
+        get => _jxlPassthrough;
+        set => _jxlPassthrough = value;
+    }
+    bool _jxlPassthrough;
+
+    /// <summary>Whether an eligible JPEG XL image embeds as <c>/JXLDecode</c>: the request, and only for a PDF 2.0 document.</summary>
+    public bool UseJxlPassthrough => _jxlPassthrough && _pdfVersion == PdfVersion.Pdf20 && !StandardFiltersOnly;
+
+    /// <summary>
+    /// Whether the document may only use the stream filters listed in ISO 32000-2 Table 6, which excludes the
+    /// <c>/BrotliDecode</c> and <c>/JXLDecode</c> extensions: required by PDF/A-4 (ISO 19005-4, 6.1.6.2) and applied to
+    /// PDF/X-6 as well.
+    /// </summary>
+    public bool StandardFiltersOnly => IsPdfA4 || PdfXConformance == PeachPDF.PdfXConformance.X6;
+
+    /// <summary>Whether the document claims one of the PDF/A-4 levels.</summary>
+    public bool IsPdfA4 => PdfAConformance is PeachPDF.PdfAConformance.PdfA4 or PeachPDF.PdfAConformance.PdfA4E or PeachPDF.PdfAConformance.PdfA4F;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to compress bilevel images using CCITT compression.
+    /// With true, PDFsharp will try FlateDecode CCITT and will use the smallest one or a combination of both.
+    /// With false, PDFsharp will always use FlateDecode only - files may be a few bytes larger, but file creation is faster.
+    /// </summary>
+    public bool EnableCcittCompressionForBilevelImages
+    {
+        get => _enableCcittCompressionForBilevelImages;
+        set => _enableCcittCompressionForBilevelImages = value;
+    }
+    bool _enableCcittCompressionForBilevelImages = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to compress JPEG images with the FlateDecode filter.
+    /// </summary>
+    public PdfUseFlateDecoderForJpegImages UseFlateDecoderForJpegImages
+    {
+        get => _useFlateDecoderForJpegImages;
+        set => _useFlateDecoderForJpegImages = value;
+    }
+    PdfUseFlateDecoderForJpegImages _useFlateDecoderForJpegImages = PdfUseFlateDecoderForJpegImages.Never;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.DownscaleImages"/> - see there for behavior.
+    /// </summary>
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.TransparencyPolicy"/> being <see cref="PeachPDF.TransparencyPolicy.Flatten"/>.
+    /// Read by the painter, which flattens what <see cref="Advanced.PdfATransparencyGuard"/> would otherwise reject.
+    /// </summary>
+    internal bool FlattenTransparency { get; set; }
+
+    public bool DownscaleImages
+    {
+        get => _downscaleImages;
+        set => _downscaleImages = value;
+    }
+    bool _downscaleImages = true;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.DownscaleQuality"/> - see there for behavior.
+    /// </summary>
+    public int DownscaleQuality
+    {
+        get => _downscaleQuality;
+        set => _downscaleQuality = value;
+    }
+    int _downscaleQuality = 70;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.MaximumDownscaleMultiplier"/> - see there for behavior.
+    /// </summary>
+    public double MaximumDownscaleMultiplier
+    {
+        get => _maximumDownscaleMultiplier;
+        set => _maximumDownscaleMultiplier = value;
+    }
+    double _maximumDownscaleMultiplier = 1.0;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.ImageCompression"/> - see there for behavior.
+    /// </summary>
+    public ImageCompression ImageCompression
+    {
+        get => _imageCompression;
+        set => _imageCompression = value;
+    }
+    ImageCompression _imageCompression = ImageCompression.Auto;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> - see there for behavior.
+    /// Read by <see cref="PeachPDF.PDF.Advanced.PdfATransparencyGuard"/> to reject
+    /// PDF/A-1-incompatible transparency usage, and by <see cref="PeachPDF.PDF.Advanced.PdfCatalog"/>/
+    /// <see cref="PeachPDF.PDF.Advanced.PdfOutputIntent"/>/metadata wiring.
+    /// </summary>
+    public PdfAConformance PdfAConformance
+    {
+        get => _pdfAConformance;
+        set => _pdfAConformance = value;
+    }
+    PdfAConformance _pdfAConformance = PdfAConformance.None;
+
+    /// <summary>
+    /// Whether <see cref="PdfAConformance"/> has already been established by a prior
+    /// <c>PdfGenerator.AddPdfPages</c> call on this document. PDF/A conformance is a whole-document
+    /// property - <c>AddPdfPages</c> is a repeatable, public API (a caller can add more pages to an
+    /// existing <c>PeachPdfDocument</c>), so this flag lets it detect and reject a second call that
+    /// requests a different <see cref="PdfAConformance"/> than the first, rather than silently
+    /// producing a document whose already-written <c>/OutputIntents</c>/<c>/Metadata</c> claim a
+    /// conformance level some of its pages were never actually painted under.
+    /// </summary>
+    public bool PdfAConformanceEstablished
+    {
+        get => _pdfAConformanceEstablished;
+        set => _pdfAConformanceEstablished = value;
+    }
+    bool _pdfAConformanceEstablished;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfVersion"/> - see there for behavior.
+    /// </summary>
+    public PdfVersion PdfVersion
+    {
+        get => _pdfVersion;
+        set => _pdfVersion = value;
+    }
+    PdfVersion _pdfVersion = PdfVersion.Pdf17;
+
+    /// <summary>
+    /// Whether <see cref="PdfVersion"/> has already been established by a prior
+    /// <c>PdfGenerator.AddPdfPages</c> call on this document - same "a document's file header is a
+    /// whole-document property" reasoning as <see cref="PdfAConformanceEstablished"/>.
+    /// </summary>
+    public bool PdfVersionEstablished
+    {
+        get => _pdfVersionEstablished;
+        set => _pdfVersionEstablished = value;
+    }
+    bool _pdfVersionEstablished;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfXConformance"/> - see there for behavior. Read
+    /// by <see cref="PeachPDF.PDF.Advanced.PdfATransparencyGuard"/> (X1a/X3 reject
+    /// transparency, same as PDF/A-1) and <see cref="PeachPDF.PDF.Advanced.PdfXColorSpaceGuard"/>
+    /// (X1a rejects chromatic RGB).
+    /// </summary>
+    public PdfXConformance PdfXConformance
+    {
+        get => _pdfXConformance;
+        set => _pdfXConformance = value;
+    }
+    PdfXConformance _pdfXConformance = PdfXConformance.None;
+
+    /// <summary>
+    /// Whether <see cref="PdfXConformance"/> has already been established by a prior
+    /// <c>PdfGenerator.AddPdfPages</c> call on this document - same reasoning as
+    /// <see cref="PdfAConformanceEstablished"/>.
+    /// </summary>
+    public bool PdfXConformanceEstablished
+    {
+        get => _pdfXConformanceEstablished;
+        set => _pdfXConformanceEstablished = value;
+    }
+    bool _pdfXConformanceEstablished;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.ColorOptions"/> - see there for behavior.
+    /// </summary>
+    public ColorOptions? ColorOptions
+    {
+        get => _colorOptions;
+        set => _colorOptions = value;
+    }
+    ColorOptions? _colorOptions;
+
+    /// <summary>
+    /// The set of files a prior <c>PdfGenerator.AddPdfPages</c>/<c>AddPages</c> call on this document
+    /// asked to embed (<see cref="PeachPDF.PdfGenerateConfig.Attachments"/>), or <c>null</c> until one
+    /// has. Embedding is a whole-document property, so a later call must ask for the same set - the same
+    /// reasoning as <see cref="PdfAConformanceEstablished"/>.
+    /// </summary>
+    internal PdfEmbeddingPlan? EmbeddingPlan
+    {
+        get => _embeddingPlan;
+        set => _embeddingPlan = value;
+    }
+    PdfEmbeddingPlan? _embeddingPlan;
+
+    /// <summary>
+    /// Whether <see cref="EmbeddingPlan"/> has already been written into the document. Rendering re-enters
+    /// once per <c>AddPdfPages</c> call and once per declarative <c>Page(...)</c>, but the files are
+    /// embedded only once.
+    /// </summary>
+    internal bool EmbeddingApplied
+    {
+        get => _embeddingApplied;
+        set => _embeddingApplied = value;
+    }
+    bool _embeddingApplied;
+}

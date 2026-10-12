@@ -1,7 +1,8 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -76,17 +77,17 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<HtmlContainerInt> BuildAndLayout(string bodyHtml, double pageHeight)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, pageHeight);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, pageHeight);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = new PeachDrawing.Core.Size(595, 0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new PeachPDF.Adapters.GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PeachPDF.PdfBackend.PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return container;

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 
 namespace PeachPDF.Tests.CSS;
@@ -79,8 +79,8 @@ public class FirstLineRulesFlagTests
 
     private static async Task<CssData> BuildCssData(string body)
     {
-        var adapter = new PdfSharpAdapter();
-        var container = new HtmlContainerInt(adapter);
+        var renderContext = new PdfRenderContext();
+        var container = new HtmlContainerInt(renderContext);
         await container.SetHtml($"<!DOCTYPE html><html><head></head><body>{body}</body></html>", null);
 
         Assert.NotNull(container.CssData);

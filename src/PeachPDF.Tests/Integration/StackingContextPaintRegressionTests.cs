@@ -2,13 +2,12 @@ using PeachDrawing.Text.Shaping;
 using System.Numerics;
 using System.Text;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF.Advanced;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -190,21 +189,21 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<int> CountDrawOperationsAsync(string html)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using (var layoutGraphics = new GraphicsAdapter(adapter, measure, 1.0))
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using (var layoutGraphics = new PdfCanvas(renderContext, measure, 1.0))
             {
                 await container.PerformLayout(layoutGraphics);
             }
 
-            var counter = new DrawCountingGraphics(adapter);
+            var counter = new DrawCountingGraphics(renderContext);
             if (container.Root is not null)
             {
                 FragmentPaintHarness.PaintBox(container, container.Root, counter);
@@ -252,8 +251,8 @@ namespace PeachPDF.Tests.Integration
         {
             public int DrawOperations { get; private set; }
 
-            public DrawCountingGraphics(RenderContext adapter)
-                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public DrawCountingGraphics(RenderContext renderContext)
+                : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) => DrawOperations++;
             public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -36,8 +36,8 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html);
             var table = FindTable(root);
 
-            var adapter = new PdfSharpAdapter();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
             // The shared edge between row 1 and row 2 - both rows' own ActualBottom/Location.Y agree on

@@ -13,7 +13,7 @@
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -25,7 +25,7 @@ using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -284,12 +284,12 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Init.
         /// </summary>
-        public HtmlContainerInt(RenderContext adapter)
+        public HtmlContainerInt(RenderContext renderContext)
         {
-            ArgumentNullException.ThrowIfNull(adapter);
+            ArgumentNullException.ThrowIfNull(renderContext);
 
-            Adapter = adapter;
-            CssParser = new CssParser(adapter, this);
+            RenderContext = renderContext;
+            CssParser = new CssParser(renderContext, this);
             PageGeometry = new PageGeometryTable(this);
         }
 
@@ -304,7 +304,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// 
         /// </summary>
-        internal RenderContext Adapter { get; }
+        internal RenderContext RenderContext { get; }
 
         /// <summary>
         /// parser for CSS data
@@ -932,7 +932,7 @@ namespace PeachPDF.Html.Core
         /// Page size (width × height) in PDF points derived from the CSS @page { size: ... } rule.
         /// Null when no size rule is present. Stored in PDF points, not internal pixel units.
         /// </summary>
-        public XSize? CssPageSize { get; set; }
+        public Size? CssPageSize { get; set; }
 
         /// <summary>
         /// All @page rules parsed from the document's stylesheets, in cascade order.
@@ -1143,7 +1143,7 @@ namespace PeachPDF.Html.Core
                 // assigned and <base> is honoured.) The early return is only a fast path - the memo key
                 // already handles a null root, since the next read against a real tree fails
                 // ReferenceEquals and re-walks.
-                if (Root is null) return Adapter.BaseUri;
+                if (Root is null) return RenderContext.BaseUri;
 
                 if (!ReferenceEquals(_documentBaseRoot, Root))
                 {
@@ -1154,7 +1154,7 @@ namespace PeachPDF.Html.Core
                     _documentBaseRoot = Root;
                 }
 
-                return _documentBase ?? Adapter.BaseUri;
+                return _documentBase ?? RenderContext.BaseUri;
             }
         }
 
@@ -1250,7 +1250,7 @@ namespace PeachPDF.Html.Core
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
 
-            CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(Adapter);
+            CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(RenderContext);
 
             DomParser parser = new(CssParser);
             (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
@@ -1404,20 +1404,20 @@ namespace PeachPDF.Html.Core
             // Mirrors SetHtml's own "use the caller's CssData directly" idiom (no clone) - there is nothing
             // appended to it on this path (no <style>/<link> discovery step exists for a declarative tree),
             // so there is nothing a clone would need to protect the caller's PeachPdfCssContent instance from.
-            CssData = stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(Adapter);
+            CssData = stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(RenderContext);
 
             if (stylesheet is not null)
             {
-                await DomParser.CascadeApplyStyleFonts(CssData, Adapter);
+                await DomParser.CascadeApplyStyleFonts(CssData, RenderContext);
 
-                var cssValueParser = new CssValueParser(Adapter);
+                var cssValueParser = new CssValueParser(RenderContext);
                 RegisteredProperties = RegisteredProperty.BuildRegistry(CssData, cssValueParser);
                 FontPaletteValues = RegisteredFontPalette.BuildRegistry(CssData, cssValueParser);
                 CounterStyles = CounterStyleRegistry.BuildRegistry(CssData);
                 FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(CssData);
 
                 var media = MediaQueryContext.FromContainer(this, Media);
-                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, Adapter, DisplayContentsShells);
+                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, RenderContext, DisplayContentsShells);
             }
 
             // Mirrors DomParser.GenerateCssTree's own ordering (AssignBidiLevels, then the tree walk that
@@ -1428,7 +1428,7 @@ namespace PeachPDF.Html.Core
             // After bidi, as in GenerateCssTree: a stylesheet-assigned display: contents is spliced only
             // once the passes that read the as-authored tree are done. A fragment's own shells were
             // already spliced when it was built, and are skipped.
-            DomParser.FlattenDisplayContents(DisplayContentsShells, new CssValueParser(Adapter));
+            DomParser.FlattenDisplayContents(DisplayContentsShells, new CssValueParser(RenderContext));
 
             ParseToWordsRecursive(root);
         }
@@ -1637,7 +1637,7 @@ namespace PeachPDF.Html.Core
         private ContainerQuerySizes BuildContainerQuerySizes()
         {
             var byId = new Dictionary<uint, ContainerQueryContext>();
-            var pixelsPerPoint = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
             void Walk(CssBox box)
             {
@@ -2212,8 +2212,8 @@ namespace PeachPDF.Html.Core
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
                 return tree;
 
-            var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            var sheetSizePt = new XSize(PageSheetWidth / ppp, PageSheetHeight / ppp);
+            var ppp = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
             var hasRunningElements = _runningElements.Count > 0;
@@ -2327,7 +2327,7 @@ namespace PeachPDF.Html.Core
                 // Bodies were laid out (and are still positioned) in document space - the coordinate
                 // space ReserveBandEnd/PageBottomOf's own reservation math needs, since it has to agree
                 // with ordinary flow content's own document-space geometry. Painting, unlike layout, gets
-                // a fresh XGraphics per page with its own page-local origin (matching how the emitter
+                // a fresh PdfGraphics per page with its own page-local origin (matching how the emitter
                 // makes every *other* fragment's rectangles fragmentainer-local - "local.Y = documentY -
                 // (PageTopOf(k) - MarginTop)", see Fragment.cs's own remarks) - MarginBoxFragment content
                 // never hits this because MarginBoxRenderer.GetMarginBoxRect computes a page-local rect
@@ -4721,7 +4721,7 @@ namespace PeachPDF.Html.Core
         /// box's own wider containing block (the page box, margins included, per CSS2.1 §10.1): a
         /// <c>position: fixed</c> box's own paint reaches past this via
         /// <c>Canvas.SuspendClipping</c>, which always unwinds the whole clip stack down to the single
-        /// unconditionally-infinite clip <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor
+        /// unconditionally-infinite clip <see cref="PeachPDF.PdfBackend.PdfCanvas"/>'s constructor
         /// establishes before this is ever pushed - so this is the only page-level clip that needs to
         /// exist, provided it is pushed through <c>Canvas.PushClip</c> and not intersected directly on
         /// the raw graphics object (see <c>FragmentPainter.Paint</c>'s own remarks, and issue #880).
@@ -5102,7 +5102,7 @@ namespace PeachPDF.Html.Core
         /// <returns></returns>
         internal string GetCssMediaType(IEnumerable<string> mediaTypesAvailable)
         {
-            return Adapter.GetCssMediaType(mediaTypesAvailable);
+            return RenderContext.GetCssMediaType(mediaTypesAvailable);
         }
 
         /// <summary>

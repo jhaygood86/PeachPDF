@@ -98,7 +98,7 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                        $"<body style='margin:0;font-family:\"{Font}\";font-size:10pt;line-height:12pt'>{body}</body></html>";
 
             var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: pageHeight, margin: 20,
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, Font));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, Font));
 
             var placed = container.FragmentTree!.Fragmentainers
                 .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))

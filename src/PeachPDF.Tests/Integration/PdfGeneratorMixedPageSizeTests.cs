@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -44,17 +44,17 @@ namespace PeachPDF.Tests.Integration
             var a4 = PageSizeConverter.ToSize(PageSize.A4);
 
             // Page 0: base A4 portrait, unaffected by the later named-page override.
-            Assert.Equal(a4.Width, doc.PdfDocument.Pages[0].Width.Point, 1);
-            Assert.Equal(a4.Height, doc.PdfDocument.Pages[0].Height.Point, 1);
+            Assert.Equal(a4.Width, doc.PdfDocument.Pages[0].Width, 1);
+            Assert.Equal(a4.Height, doc.PdfDocument.Pages[0].Height, 1);
 
             // Page 1: the named page's own explicit size - genuinely different physical dimensions,
             // not just a resized content band inside the same MediaBox.
-            Assert.Equal(800, doc.PdfDocument.Pages[1].Width.Point, 1);
-            Assert.Equal(500, doc.PdfDocument.Pages[1].Height.Point, 1);
+            Assert.Equal(800, doc.PdfDocument.Pages[1].Width, 1);
+            Assert.Equal(500, doc.PdfDocument.Pages[1].Height, 1);
 
             // Page 2: reverted to a page with no matching named rule - back to the base A4 size.
-            Assert.Equal(a4.Width, doc.PdfDocument.Pages[2].Width.Point, 1);
-            Assert.Equal(a4.Height, doc.PdfDocument.Pages[2].Height.Point, 1);
+            Assert.Equal(a4.Width, doc.PdfDocument.Pages[2].Width, 1);
+            Assert.Equal(a4.Height, doc.PdfDocument.Pages[2].Height, 1);
         }
 
         [Fact]
@@ -84,12 +84,12 @@ namespace PeachPDF.Tests.Integration
             var a4 = PageSizeConverter.ToSize(PageSize.A4);
 
             // Page 0: the `:first` rule's own explicit size - genuinely different physical dimensions.
-            Assert.Equal(800, doc.PdfDocument.Pages[0].Width.Point, 1);
-            Assert.Equal(500, doc.PdfDocument.Pages[0].Height.Point, 1);
+            Assert.Equal(800, doc.PdfDocument.Pages[0].Width, 1);
+            Assert.Equal(500, doc.PdfDocument.Pages[0].Height, 1);
 
             // Page 1: no `:first`/named rule applies - back to the base configured A4 size.
-            Assert.Equal(a4.Width, doc.PdfDocument.Pages[1].Width.Point, 1);
-            Assert.Equal(a4.Height, doc.PdfDocument.Pages[1].Height.Point, 1);
+            Assert.Equal(a4.Width, doc.PdfDocument.Pages[1].Width, 1);
+            Assert.Equal(a4.Height, doc.PdfDocument.Pages[1].Height, 1);
         }
 
         [Fact]
@@ -113,10 +113,10 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, doc.PageCount);
 
             var a4 = PageSizeConverter.ToSize(PageSize.A4);
-            Assert.Equal(a4.Width, doc.PdfDocument.Pages[0].Width.Point, 1);
-            Assert.Equal(a4.Height, doc.PdfDocument.Pages[0].Height.Point, 1);
-            Assert.Equal(doc.PdfDocument.Pages[0].Width.Point, doc.PdfDocument.Pages[1].Width.Point, 1);
-            Assert.Equal(doc.PdfDocument.Pages[0].Height.Point, doc.PdfDocument.Pages[1].Height.Point, 1);
+            Assert.Equal(a4.Width, doc.PdfDocument.Pages[0].Width, 1);
+            Assert.Equal(a4.Height, doc.PdfDocument.Pages[0].Height, 1);
+            Assert.Equal(doc.PdfDocument.Pages[0].Width, doc.PdfDocument.Pages[1].Width, 1);
+            Assert.Equal(doc.PdfDocument.Pages[0].Height, doc.PdfDocument.Pages[1].Height, 1);
         }
 
         [Fact]
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, doc.PageCount);
             // The landscape page (page 1) must genuinely differ from the portrait target page (page 0),
             // which is the precondition for the Y-flip fix actually being exercised.
-            Assert.NotEqual(doc.PdfDocument.Pages[0].Height.Point, doc.PdfDocument.Pages[1].Height.Point, 1);
+            Assert.NotEqual(doc.PdfDocument.Pages[0].Height, doc.PdfDocument.Pages[1].Height, 1);
 
             // A named destination was registered for the anchor, flipped against the TARGET (portrait,
             // 841.89pt-tall A4-margin-reduced) page's own height - if HandleLinks still used the
@@ -158,7 +158,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(match.Success, "expected a /FitH named-destination entry for the 'target' anchor");
 
             var flippedY = double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
-            var targetPageHeight = doc.PdfDocument.Pages[0].Height.Point;
+            var targetPageHeight = doc.PdfDocument.Pages[0].Height;
             Assert.InRange(flippedY, 0, targetPageHeight);
         }
     }

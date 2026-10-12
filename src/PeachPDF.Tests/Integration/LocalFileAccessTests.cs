@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -37,18 +37,18 @@ namespace PeachPDF.Tests.Integration
         {
             // The default DataUriNetworkLoader has no BaseUri of its own, so the working directory is what
             // relative references have historically resolved against.
-            var adapter = new PdfSharpAdapter { AllowLocalFileAccess = true };
+            var renderContext = new PdfRenderContext { AllowLocalFileAccess = true };
 
-            Assert.NotNull(adapter.BaseUri);
-            Assert.Equal("file", adapter.BaseUri!.Scheme);
+            Assert.NotNull(renderContext.BaseUri);
+            Assert.Equal("file", renderContext.BaseUri!.Scheme);
         }
 
         [Fact]
         public void BaseUri_WhenDenied_IsNull()
         {
-            var adapter = new PdfSharpAdapter { AllowLocalFileAccess = false };
+            var renderContext = new PdfRenderContext { AllowLocalFileAccess = false };
 
-            Assert.Null(adapter.BaseUri);
+            Assert.Null(renderContext.BaseUri);
         }
 
         [Fact]
@@ -57,14 +57,14 @@ namespace PeachPDF.Tests.Integration
             // The flag suppresses only the working-directory fallback. A loader that supplies its own base -
             // a zip or archive loader in a sandboxed host, say - keeps it, which is what lets such a host
             // resolve relative references without any file system at all.
-            var adapter = new PdfSharpAdapter
+            var renderContext = new PdfRenderContext
             {
                 AllowLocalFileAccess = false,
                 NetworkLoader = new StubLoader(new RUri("https://example.invalid/doc/"))
             };
 
-            Assert.NotNull(adapter.BaseUri);
-            Assert.Equal("https", adapter.BaseUri!.Scheme);
+            Assert.NotNull(renderContext.BaseUri);
+            Assert.Equal("https", renderContext.BaseUri!.Scheme);
         }
 
         [Fact]
@@ -77,9 +77,9 @@ namespace PeachPDF.Tests.Integration
                 var path = Path.Combine(dir, "pic.png");
                 File.WriteAllBytes(path, Convert.FromBase64String(PngBase64));
 
-                var adapter = new PdfSharpAdapter { AllowLocalFileAccess = false };
+                var renderContext = new PdfRenderContext { AllowLocalFileAccess = false };
 
-                Assert.Null(await adapter.GetResourceStream(new RUri(new Uri(path).AbsoluteUri)));
+                Assert.Null(await renderContext.GetResourceStream(new RUri(new Uri(path).AbsoluteUri)));
             }
             finally
             {
@@ -97,9 +97,9 @@ namespace PeachPDF.Tests.Integration
                 var path = Path.Combine(dir, "pic.png");
                 File.WriteAllBytes(path, Convert.FromBase64String(PngBase64));
 
-                var adapter = new PdfSharpAdapter { AllowLocalFileAccess = true };
+                var renderContext = new PdfRenderContext { AllowLocalFileAccess = true };
 
-                var response = await adapter.GetResourceStream(new RUri(new Uri(path).AbsoluteUri));
+                var response = await renderContext.GetResourceStream(new RUri(new Uri(path).AbsoluteUri));
 
                 Assert.NotNull(response);
                 Assert.NotNull(response!.ResourceStream);
@@ -121,9 +121,9 @@ namespace PeachPDF.Tests.Integration
             // reference survives resolution still relative. Every loader has only ever been handed absolute
             // URIs - RUri.Scheme throws on a relative one, and DataUriNetworkLoader reads it unguarded - so
             // the adapter has to answer for this case itself rather than passing it on.
-            var adapter = new PdfSharpAdapter { AllowLocalFileAccess = false };
+            var renderContext = new PdfRenderContext { AllowLocalFileAccess = false };
 
-            Assert.Null(await adapter.GetResourceStream(new RUri("logo.png", UriKind.Relative)));
+            Assert.Null(await renderContext.GetResourceStream(new RUri("logo.png", UriKind.Relative)));
         }
 
         // ---- End to end ---------------------------------------------------------------------------

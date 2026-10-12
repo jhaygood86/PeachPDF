@@ -41,7 +41,7 @@ namespace PeachPDF.Tests.Raster
             pdf = Regex.Replace(pdf, @"(?m)^%(?! ?PDF|%EOF)[^\r\n]*[\r\n]+", ""); // the creation-time comment lines
             pdf = Regex.Replace(pdf, @"/[A-Z]{6}\+", "/XXXXXX+"); // the random tag of a font subset
             pdf = Regex.Replace(pdf, @"<xmp:(CreateDate|ModifyDate|MetadataDate)>[^<]*</xmp:\1>", "<xmp:$1/>");
-            pdf = Regex.Replace(pdf, @"<xmpMM:(DocumentID|InstanceID)>[^<]*</xmpMM:\1>", "<xmpMM:$1/>");
+            pdf = Regex.Replace(pdf, @"<xmpMM:(DocumentId|InstanceID)>[^<]*</xmpMM:\1>", "<xmpMM:$1/>");
             return pdf;
         }
 
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.Raster
             pdf = Regex.Replace(pdf, @"(?m)^%(?! ?PDF|%EOF)[^\r\n]*[\r\n]+", "");
             pdf = Regex.Replace(pdf, @"/[A-Z]{6}\+", "/XXXXXX+");
             pdf = Regex.Replace(pdf, @"<xmp:(CreateDate|ModifyDate|MetadataDate)>[^<]*</xmp:\1>", "<xmp:$1/>");
-            pdf = Regex.Replace(pdf, @"<xmpMM:(DocumentID|InstanceID)>[^<]*</xmpMM:\1>", "<xmpMM:$1/>");
+            pdf = Regex.Replace(pdf, @"<xmpMM:(DocumentId|InstanceID)>[^<]*</xmpMM:\1>", "<xmpMM:$1/>");
             return pdf;
         }
 

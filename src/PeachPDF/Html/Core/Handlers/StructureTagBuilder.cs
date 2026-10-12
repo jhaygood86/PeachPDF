@@ -1,10 +1,10 @@
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
-using PeachPDF.PdfSharpCore.Pdf.Structure;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Annotations;
+using PeachPDF.PDF.Structure;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// Orchestrates tagged-PDF structure-tree/MCID/ParentTree bookkeeping, driven live from the
     /// fragment paint walk (see <see cref="Paint.FragmentPainter"/>) rather than an event-interception
     /// layer around raw drawing calls - PeachPDF already fully controls its own paint walk, unlike
-    /// upstream PDFsharp's XGraphics-event-driven UAManager/StructureBuilder this reimplements the
+    /// upstream PDFsharp's PdfGraphics-event-driven UAManager/StructureBuilder this reimplements the
     /// same underlying algorithm (AddMarkedContentToStructureElement/AddToParentTree) for.
     /// Only ever constructed when <see cref="PdfGenerateConfig.EnableTaggedPdf"/> is set.
     /// </summary>
@@ -274,7 +274,7 @@ namespace PeachPDF.Html.Core.Handlers
             annotation.StructParent = structParentKey;
 
             var array = new PdfArray(_document);
-            array.Elements.Add(element.Reference);
+            array.Elements.Add(element.RequiredReference);
             _root.ParentTree.AddNumber(structParentKey, array);
 
             // PDF/UA requires tab order to follow structure order on any page that has an
@@ -352,7 +352,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var entries = _parentTreeEntriesByKey[_currentPageStructParentsKey];
             System.Diagnostics.Debug.Assert(mcid == entries.Count, "MCIDs must be allocated contiguously per page.");
-            entries.Add(element.Reference);
+            entries.Add(element.RequiredReference);
         }
 
         sealed class PopParentScope : IDisposable

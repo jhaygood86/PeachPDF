@@ -1,9 +1,10 @@
+using System.Numerics;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.AcroForms;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.PDF.Annotations;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -443,20 +444,20 @@ namespace PeachPDF.Tests.Integration
 
         private static PdfFormXObject NormalAppearance(PdfAcroField field)
         {
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP);
+            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
             return Assert.IsType<PdfFormXObject>(Assert.IsType<PdfReference>(ap.Elements["/N"]).Value);
         }
 
         /// <summary>The appearance's <c>/Matrix</c>, read back from the literal it is written as (<c>[a b c d e f]</c>).</summary>
-        private static XMatrix MatrixOf(PdfFormXObject appearance)
+        private static Matrix3x2 MatrixOf(PdfFormXObject appearance)
         {
             var numbers = appearance.Elements[PdfFormXObject.Keys.Matrix]!.ToString()!
                 .Trim('[', ']', ' ')
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(n => double.Parse(n, System.Globalization.CultureInfo.InvariantCulture))
+                .Select(n => float.Parse(n, System.Globalization.CultureInfo.InvariantCulture))
                 .ToArray();
 
-            return new XMatrix(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5]);
+            return new Matrix3x2(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5]);
         }
 
         private static string Input(string style) =>
@@ -568,13 +569,13 @@ namespace PeachPDF.Tests.Integration
                 "<input type='checkbox' name='c' checked style='position:absolute;left:100pt;top:100pt;width:20pt;height:20pt;transform:rotate(90deg)'>", forms: true);
 
             var field = OnlyField(doc);
-            var states = field.Elements.GetDictionary(PdfAnnotation.Keys.AP).Elements.GetDictionary("/N");
+            var states = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!.Elements.GetDictionary("/N")!;
 
             // Two appearance streams, on and off, and each is carried onto the box.
             Assert.Equal(2, states.Elements.Count);
             foreach (var key in states.Elements.Keys)
             {
-                var appearance = (PdfFormXObject)states.Elements.GetReference(key).Value;
+                var appearance = (PdfFormXObject)states.Elements.GetReference(key)!.Value;
                 Assert.True(appearance.Elements.ContainsKey(PdfFormXObject.Keys.Matrix));
             }
         }

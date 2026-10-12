@@ -9,5 +9,5 @@ transparency; and any other exception during a probe is swallowed as "inconclusi
 scratch page is replaced every 200 probes so a large document does not accumulate a second copy of its own content stream.
 
 A bitmap whose pixels are all opaque is embedded without an alpha plane (`RasterEmbedder.IsOpaque`), so it needs no soft mask and is legal
-under PDF/A-1; `GraphicsAdapter.DrawRaster` only runs the guard for a surface that is *not* opaque. That is why a `backdrop-filter` (over
+under PDF/A-1; `PdfCanvas.DrawRaster` only runs the guard for a surface that is *not* opaque. That is why a `backdrop-filter` (over
 white paper) is legal there with no policy at all, and why a flattened region must be built over the white paper background.

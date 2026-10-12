@@ -479,7 +479,7 @@ namespace PeachPDF.Svg
             /// common case: never mirrored) means <see cref="Glyph"/> itself is already the logical
             /// source. Read by <see cref="PaintGlyphs"/>/<see cref="PaintUprightGlyph"/>/
             /// <see cref="PaintRotatedGlyph"/> to build each painted string's positionally-aligned
-            /// ToUnicode logical source (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks
+            /// ToUnicode logical source (see <c>PeachPDF.PDF.Advanced.CharacterMapInfo.AddShapedText</c>'s own remarks
             /// on that contract) - unlike HTML's whole-word reversal, SVG's bidi pass physically reorders
             /// individual <see cref="GlyphInfo"/> instances, so each glyph already carries its own
             /// correct logical value directly; nothing needs recomputing from a run-wide position formula.
@@ -1492,7 +1492,7 @@ namespace PeachPDF.Svg
                 // Built in parallel with builder (same append points, same order) - each position holds
                 // this glyph's true logical source (LogicalGlyph when bidi-mirrored it, else Glyph
                 // itself/identity), so the result is always positionally aligned with `text` per
-                // CMapInfo.AddShapedText's own contract - collapsed to null below when no glyph in this
+                // CharacterMapInfo.AddShapedText's own contract - collapsed to null below when no glyph in this
                 // batch was actually mirrored, the overwhelmingly common case.
                 var logicalBuilder = new StringBuilder(start.LogicalGlyph ?? start.Glyph);
                 i++;
@@ -1985,7 +1985,7 @@ namespace PeachPDF.Svg
         /// invisibly so it stays selectable (<see cref="PaintInvisibleText"/>). A bitmap-only font yields no
         /// outline, so it goes through the raster backend instead (<see cref="PaintBitmapGlyphs"/>).
         /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
-        /// positionally aligned with it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
+        /// positionally aligned with it (see <c>PeachPDF.PDF.Advanced.CharacterMapInfo.AddShapedText</c>'s own remarks) -
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
         private static void PaintTextGlyphs(Canvas g, SvgDocument document, SvgTextElement run, string text, Font font, double drawX, double drawY, Size size, double opacity,

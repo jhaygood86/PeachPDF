@@ -1,20 +1,20 @@
 using System;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Paint.Content;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
 
 namespace PeachPDF.Html.Core.Handlers
 {
     /// <summary>
     /// Builds the "/AP /N" (and, for a two-state field, "/AP /D") appearance-stream
     /// <see cref="PdfFormXObject"/>s for interactive PDF form fields, through PeachPDF's own real
-    /// rendering pipeline (<see cref="GraphicsAdapter"/> over a fresh <see cref="XForm"/>, exactly
-    /// the recipe <c>GraphicsAdapter.CreateTile</c> already uses for SVG mask/pattern tiles) rather
+    /// rendering pipeline (<see cref="PdfCanvas"/> over a fresh <see cref="PdfForm"/>, exactly
+    /// the recipe <c>PdfCanvas.CreateTile</c> already uses for SVG mask/pattern tiles) rather
     /// than hand-written content-stream operators - the field's real resolved CSS border/background
     /// (<see cref="FormFieldChrome"/>, shared with the flag-on static page painter) and its real
     /// resolved font/color/padding (<see cref="CssBox.ActualFont"/>/<see cref="CssBox.ActualColor"/>)
@@ -28,7 +28,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// (already-in-points) width/height back UP by <c>pixelsPerPoint</c> before handing it to
     /// <see cref="FormFieldChrome"/>/<see cref="BordersDrawHandler"/>/<see cref="FragmentPainter"/> -
     /// each of those, like every other paint call in PeachPDF, divides back down by the
-    /// <see cref="GraphicsAdapter"/>'s own <c>pixelsPerPoint</c> exactly once when it actually draws,
+    /// <see cref="PdfCanvas"/>'s own <c>pixelsPerPoint</c> exactly once when it actually draws,
     /// so passing the SAME <c>pixelsPerPoint</c> the box was laid out with is what keeps a field's
     /// border/padding/font sized consistently with the rest of the box, including under
     /// <c>ShrinkToFit</c>/a non-default <c>PixelsPerInch</c> (see <see cref="CssBox.ActualFont"/>'s
@@ -63,16 +63,16 @@ namespace PeachPDF.Html.Core.Handlers
             return font;
         }
 
-        static PdfFormXObject CreateForm(PdfDocument document, RenderContext adapter, double pixelsPerPoint,
+        static PdfFormXObject CreateForm(PdfDocument document, RenderContext renderContext, double pixelsPerPoint,
             double widthPt, double heightPt, Action<Canvas, Rect> draw)
         {
-            var form = new XForm(document, new XSize(widthPt, heightPt));
-            var formGraphics = XGraphics.FromForm(form);
-            using (var g = new GraphicsAdapter(adapter, formGraphics, pixelsPerPoint, releaseGraphics: true))
+            var form = new PdfForm(document, new Size(widthPt, heightPt));
+            var formGraphics = PdfGraphics.FromForm(form);
+            using (var g = new PdfCanvas(renderContext, formGraphics, pixelsPerPoint, releaseGraphics: true))
             {
                 draw(g, LayoutRect(widthPt, heightPt, pixelsPerPoint));
             }
-            return form.PdfForm;
+            return form.FormXObject;
         }
 
         static Rect LayoutRect(double widthPt, double heightPt, double pixelsPerPoint) =>
@@ -115,7 +115,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// the whole sequence, so the hint disappears on the first keystroke instead of sitting
         /// behind what is typed.
         /// </remarks>
-        internal static PdfFormXObject BuildTextAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint,
+        internal static PdfFormXObject BuildTextAppearance(PdfDocument document, RenderContext renderContext, double pixelsPerPoint,
             CssBox box, double widthPt, double heightPt, string text, bool autoFontSize, int? combCells,
             bool isPlaceholder, out double resolvedFontSizePt)
         {
@@ -127,7 +127,7 @@ namespace PeachPDF.Html.Core.Handlers
             var font = ResolveTextFont(textStyle, contentRect, pixelsPerPoint, autoFontSize);
             resolvedFontSizePt = font.Size;
 
-            return CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
+            return CreateForm(document, renderContext, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
                 // Everything a reader must KEEP when the user edits the field goes before the "/Tx
                 // BMC" below and after the matching "EMC" - see Canvas.BeginVariableText. A comb
@@ -225,24 +225,24 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>A checkbox/radio "off" appearance: the field's border/background chrome only.</summary>
-        internal static PdfFormXObject BuildCheckboxOffAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
-            CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) => FormFieldChrome.PaintBorderAndBackground(g, box, rect));
+        internal static PdfFormXObject BuildCheckboxOffAppearance(PdfDocument document, RenderContext renderContext, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+            CreateForm(document, renderContext, pixelsPerPoint, widthPt, heightPt, (g, rect) => FormFieldChrome.PaintBorderAndBackground(g, box, rect));
 
         /// <summary>A checkbox "on" appearance: border/background chrome plus the check mark, in the field's real resolved text color.</summary>
-        internal static PdfFormXObject BuildCheckboxOnAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
-            CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
+        internal static PdfFormXObject BuildCheckboxOnAppearance(PdfDocument document, RenderContext renderContext, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+            CreateForm(document, renderContext, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
                 FormFieldChrome.PaintCheckboxGlyph(g, box, rect, isChecked: true);
             });
 
         /// <summary>A radio button "off" appearance: the field's circular background/ring only.</summary>
-        internal static PdfFormXObject BuildRadioOffAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
-            CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) => FormFieldChrome.PaintRadioBackground(g, box, rect));
+        internal static PdfFormXObject BuildRadioOffAppearance(PdfDocument document, RenderContext renderContext, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+            CreateForm(document, renderContext, pixelsPerPoint, widthPt, heightPt, (g, rect) => FormFieldChrome.PaintRadioBackground(g, box, rect));
 
         /// <summary>A radio button "on" appearance: circular background/ring plus the filled inner dot, in the field's real resolved text color.</summary>
-        internal static PdfFormXObject BuildRadioOnAppearance(PdfDocument document, RenderContext adapter, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
-            CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
+        internal static PdfFormXObject BuildRadioOnAppearance(PdfDocument document, RenderContext renderContext, double pixelsPerPoint, CssBox box, double widthPt, double heightPt) =>
+            CreateForm(document, renderContext, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
                 FormFieldChrome.PaintRadioBackground(g, box, rect);
                 FormFieldChrome.PaintRadioGlyph(g, box, rect, isChecked: true);

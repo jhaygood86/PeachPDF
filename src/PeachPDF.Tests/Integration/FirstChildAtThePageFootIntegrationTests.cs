@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Integration
                        "<p>w1_90 w1_91</p></body></html>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin,
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, Font));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, Font));
 
             var parent = LayoutHarness.FindById(root, "parent")!;
             var p = LayoutHarness.FindById(root, "p")!;
@@ -70,7 +70,7 @@ namespace PeachPDF.Tests.Integration
                        "<p>w1_90 w1_91</p></body></html>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin,
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, Font));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, Font));
 
             var parent = LayoutHarness.FindById(root, "parent")!;
             var p = LayoutHarness.FindById(root, "p")!;
@@ -98,7 +98,7 @@ namespace PeachPDF.Tests.Integration
                        "<div id='parent' style='padding-top:5pt'><p id='p' style='margin:0'>w1_10 w1_11</p></div></body></html>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin,
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, Font));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, Font));
 
             var parent = LayoutHarness.FindById(root, "parent")!;
             var p = LayoutHarness.FindById(root, "p")!;

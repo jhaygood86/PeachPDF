@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachPDF.Network;
-using PeachPDF.PdfSharpCore;
+using PeachPDF.PDF;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -286,7 +286,7 @@ namespace PeachPDF.Tests.Integration
         public async Task InlineSvg_StrokeMiterlimit_RendersPdfMOperator_GatedByLinejoinNotLinecap()
         {
             // Regression test for a PdfGraphicsState.RealizePen bug: the "M" operator's emission was
-            // gated on _realizedLineCap instead of _realizedLineJoin (XLineCap.Flat and XLineJoin.Miter
+            // gated on _realizedLineCap instead of _realizedLineJoin (LineCap.Butt and LineJoin.Miter
             // are both numeric 0, so the mistake was invisible whenever line-cap happened to be the
             // default "butt"). Using a non-default stroke-linecap here with the default (miter)
             // stroke-linejoin proves "M" is genuinely keyed off line-join.
@@ -448,12 +448,8 @@ namespace PeachPDF.Tests.Integration
 
             var pdfText = await GetPdfText(html);
 
-            // The off-diagonal components print as "-0" rather than "0" here: they're the product of
-            // a literal 0 in the SVG-local matrix with the page's own negative Y-flip scale further up
-            // the transform stack, and IEEE 754 float multiplication propagates the sign of that
-            // negative factor through a zero product - a harmless, pre-existing formatting quirk
-            // unrelated to this feature, not a bug in the SVG transform math itself.
-            Assert.Contains("0.375 -0 -0 0.75 ", pdfText);
+            // The off-diagonal components are a literal 0 in the SVG-local matrix, so they print as plain "0".
+            Assert.Contains("0.375 0 0 0.75 ", pdfText);
         }
 
         [Fact]
@@ -2075,7 +2071,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ClipShapeTransform_ProducesSameGeometryAsDirectlyAuthoredShape()
         {
-            // The real GraphicsPathAdapter.Transform/AddPath (+ XGraphicsPath/CoreGraphicsPath) must bake
+            // The real PdfGraphicsPath.Transform/AddPath (+ GraphicsPath/CoreGraphicsPath) must bake
             // the clip shape's transform into its coordinates, so a transformed clip is byte-identical to
             // the same region authored directly - and distinct from the un-transformed (pre-fix) geometry.
             var transformed = ClipGeometryNumbers(await GetPdfText(TransformedClipHtml));
@@ -2498,14 +2494,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void InlineSvg_FilledPolyline_FillsAClosedShapeButStrokesTheOpenOne()
         {
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
             var markup = """
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                   <polyline points="10,10 90,10 50,90" fill="#ff0000" stroke="#0000ff" stroke-width="4"/>
                 </svg>
                 """;
             var document = PeachPDF.Svg.SvgTreeBuilder.Build(
-                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), adapter);
+                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), renderContext);
             var g = new ClosureSpyGraphics();
 
             PeachPDF.Svg.SvgRenderer.RenderInto(g, document, new PeachDrawing.Core.Rect(0, 0, 100, 100));

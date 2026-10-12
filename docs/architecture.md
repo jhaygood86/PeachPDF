@@ -27,7 +27,7 @@ Fragmentation (FragmentTree)
 Painting (Canvas)
     │
     ▼
-PDF Rendering (PdfSharpCore fork)
+PDF Rendering (embedded PDF engine)
     │
     ▼
 PDF Output
@@ -60,7 +60,7 @@ public abstract class RNetworkLoader
 |---|---|
 | `GetPrimaryContents()` | Returns the root HTML string. Called once at the start of the pipeline when `null` is passed to `PdfGenerator.GeneratePdf`. |
 | `GetResourceStream(RUri)` | Returns a `RNetworkResponse` (stream + HTTP-style headers) for any external resource URI. Called for stylesheets and images. |
-| `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references resolve against the current working directory as a `file:` URI (the default working-directory base is supplied by `PdfSharpAdapter`) — unless [local file access is disabled](usage-examples.md#disabling-local-file-access), in which case there is no base to resolve against and the reference goes unresolved. |
+| `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references resolve against the current working directory as a `file:` URI (the default working-directory base is supplied by `PdfRenderContext`) — unless [local file access is disabled](usage-examples.md#disabling-local-file-access), in which case there is no base to resolve against and the reference goes unresolved. |
 
 `RNetworkResponse` is a simple record: `(Stream? ResourceStream, Dictionary<string, string[]>? ResponseHeaders)`. The headers are inspected by `StylesheetLoadHandler` to validate the `Content-Type` is `text/css` before accepting the body as a stylesheet.
 
@@ -72,7 +72,7 @@ public abstract class RNetworkLoader
 
 **Stylesheets and images** — `StylesheetLoadHandler.LoadStylesheet` and `ImageLoadHandler.SetImageFromPath` both resolve their `href`/`src` to an absolute URI against the document base (a `<base href>` element, else `BaseUri`, else the working-directory `file:` default) via the shared `CommonUtils.ResolveAgainstDocumentBase`, then call `adapter.GetResourceStream(uri)`. There is a single resolution path — local files, `data:` URIs, and remote resources all flow through `GetResourceStream` uniformly, with no separate file-system branch. Stylesheet responses are only accepted when the `Content-Type` is `text/css`; a resolved SVG image is detected from its `Content-Type: image/svg+xml` (or `.svg` extension).
 
-**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `PdfSharpAdapter.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme. Setting [`AllowLocalFileAccess`](usage-examples.md#disabling-local-file-access) to `false` removes the `file:` half of that: every `file:` request then resolves to "not found", and the working-directory base above is withdrawn, so a document cannot reach the file system by either route.
+**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `PdfRenderContext.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme. Setting [`AllowLocalFileAccess`](usage-examples.md#disabling-local-file-access) to `false` removes the `file:` half of that: every `file:` request then resolves to "not found", and the working-directory base above is withdrawn, so a document cannot reach the file system by either route.
 
 ### Built-in implementations
 
@@ -80,7 +80,7 @@ PeachPDF ships four concrete loaders:
 
 #### `DataUriNetworkLoader` ([Network/DataUriNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/DataUriNetworkLoader.cs))
 
-The default loader when no `NetworkLoader` is set in `PdfGenerateConfig`. It handles only `data:` URIs, decoding the base64 payload into a `MemoryStream`. Any other remote URI scheme returns `null`, meaning remote resources (remote stylesheets, remote images) are silently skipped — the safest default for server-side environments where network access must be controlled explicitly. Local `file:` resources still resolve, because `PdfSharpAdapter` routes them through `FileUriNetworkLoader` and supplies a working-directory base URI.
+The default loader when no `NetworkLoader` is set in `PdfGenerateConfig`. It handles only `data:` URIs, decoding the base64 payload into a `MemoryStream`. Any other remote URI scheme returns `null`, meaning remote resources (remote stylesheets, remote images) are silently skipped — the safest default for server-side environments where network access must be controlled explicitly. Local `file:` resources still resolve, because `PdfRenderContext` routes them through `FileUriNetworkLoader` and supplies a working-directory base URI.
 
 #### `FileUriNetworkLoader` ([Network/FileUriNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/FileUriNetworkLoader.cs))
 
@@ -532,7 +532,7 @@ A fragment's *rectangles* were the last thing still derived from the box's singl
 
 ### Graphics abstraction
 
-The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation forwards every call to PdfSharpCore's `XGraphics`. The abstract surface exposes:
+The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation, `PdfCanvas`, writes every call as PDF content through the embedded engine's `PdfGraphics`. The abstract surface exposes:
 
 | Method | Purpose |
 |---|---|
@@ -554,9 +554,9 @@ Brush and pen objects are created through the adapter (`GetSolidBrush`, `GetPen`
 
 PDF cannot express every effect as vector content — a blur, for instance, needs per-pixel convolution. For those, PeachPDF has a second `Canvas` implementation, `RasterGraphics` ([Raster/RasterGraphics.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Raster/RasterGraphics.cs)), that paints into a premultiplied RGBA bitmap instead of a PDF content stream. It is deliberately a *subordinate* of a PDF render rather than a parallel pipeline: layout and text measurement still run through the PDF adapter, so metrics cannot drift, and the raster backend is asked for only when a subtree needs pixels.
 
-The seam is two members on `Canvas`. `BeginRasterSurface(bounds)` returns a child graphics whose coordinate system is the requesting graphics' own, so the ordinary paint code draws into it without any translation; `DrawRaster(surface)` hands the finished bitmap back, and `GraphicsAdapter` encodes it as a PNG and embeds it through the same pass-through path any PNG takes. Both are virtual with inert defaults, so a graphics that cannot rasterize (a measure-only pass, a test double) returns null and the caller falls back to whatever it did before. `FragmentPainter.PaintRasterized` is the first caller: it paints an element's fragment subtree into a surface, runs the element's `filter` list over the pixels, and draws the result.
+The seam is two members on `Canvas`. `BeginRasterSurface(bounds)` returns a child graphics whose coordinate system is the requesting graphics' own, so the ordinary paint code draws into it without any translation; `DrawRaster(surface)` hands the finished bitmap back, and `PdfCanvas` encodes it as a PNG and embeds it through the same pass-through path any PNG takes. Both are virtual with inert defaults, so a graphics that cannot rasterize (a measure-only pass, a test double) returns null and the caller falls back to whatever it did before. `FragmentPainter.PaintRasterized` is the first caller: it paints an element's fragment subtree into a surface, runs the element's `filter` list over the pixels, and draws the result.
 
-Because it runs in the same assembly as the PDF adapter, `RasterGraphics` reads the adapter's pens, brushes, fonts and paths directly (they are plain data) rather than duplicating them, and it follows `GraphicsAdapter`'s unit conventions exactly: rectangles, lines, images and strings arrive in layout units and are divided by `PixelsPerPoint`, while paths, pen widths and gradient geometry are already in user space.
+Because it runs in the same assembly as the PDF adapter, `RasterGraphics` reads the adapter's pens, brushes, fonts and paths directly (they are plain data) rather than duplicating them, and it follows `PdfCanvas`'s unit conventions exactly: rectangles, lines, images and strings arrive in layout units and are divided by `PixelsPerPoint`, while paths, pen widths and gradient geometry are already in user space.
 
 **Resolution.** A surface covers a layout-space rectangle at `PdfGenerateConfig.RasterizationDpi` pixels per inch of paper. Its bounds are snapped outwards to whole pixels on a single grid anchored at the local origin, and the surface records the snapped rectangle; that rectangle is what the bitmap is placed at, so every pixel is exactly `1/dpi` inch and neighbouring surfaces abut without a seam. `PixelsPerPoint` is read at the moment the surface is created, so a document scaled by `ShrinkToFit` still gets the configured physical resolution.
 
@@ -614,7 +614,7 @@ This paint-order correctness — together with the pagination fixes above (blank
 
 Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, AVIF, TIFF, and JPEG XL — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
 
-`PeachImageSource` (the `ImageSource`/`IImageSource` implementation backing this, in `PdfSharpCore/Utils/`) routes a CMYK/YCCK JPEG around the usual forced-RGBA32 decode entirely — that conversion has no color management at all, so applying it to a CMYK source would destroy its print separations. A CMYK JPEG (and an RGB/grayscale JPEG carrying a usable embedded ICC profile) is instead embedded via byte-for-byte pass-through in `PdfImage` — see [Color and ICC profiles](usage-examples.md#color-and-icc-profiles) for the embedding behavior itself.
+`PeachImageSource` (the `ImageSource`/`IImageSource` implementation backing this, in `PDF/Drawing/`) routes a CMYK/YCCK JPEG around the usual forced-RGBA32 decode entirely — that conversion has no color management at all, so applying it to a CMYK source would destroy its print separations. A CMYK JPEG (and an RGB/grayscale JPEG carrying a usable embedded ICC profile) is instead embedded via byte-for-byte pass-through in `PdfImage` — see [Color and ICC profiles](usage-examples.md#color-and-icc-profiles) for the embedding behavior itself.
 
 Orientation is reported, never applied, by PeachImage's decoders: `PeachImageSource` copies `ImageInfo.Orientation` onto the source it returns, and `Image.Width`/`Height` stay the stored raster's size so downscale decisions and every pass-through embed keep working on the real pixels. The CSS `image-orientation` property (default `from-image`) resolves to a rotation and flip, intrinsic sizes are read through the oriented size, and painting pushes a matrix around the draw call, which is why a passed-through JPEG is never re-encoded to rotate it.
 
@@ -628,22 +628,22 @@ A successfully resolved image or SVG document is cached on the render's `HtmlCon
 
 ## 8. PDF Rendering
 
-**Library:** PdfSharpCore (forked and merged into PeachPDF)
+**Library:** the embedded PDF engine, `PeachPDF.PDF` (derived from PDFsharp and merged into PeachPDF)
 
-**Source location:** [src/PeachPDF/PdfSharpCore/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PdfSharpCore/)
+**Source location:** [src/PeachPDF/PDF/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PDF/)
 
-The final phase writes the PDF file. PeachPDF embeds a custom fork of [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore) directly in the source tree. The fork has been optimised specifically for PeachPDF's usage patterns and trimming requirements.
+The final phase writes the PDF file. PeachPDF embeds a PDF writing engine, derived from [PDFsharp](https://github.com/empira/PDFsharp) (MIT), directly in the source tree. It is write-only, uses the `PeachDrawing.Core` value types (`Rect`, `PaintColor`, `Brush`, `Pen`, `GraphicsPath`, `TypefaceFont`, `Matrix3x2`) directly rather than its own twins, and has been shaped around PeachPDF's usage patterns and trimming requirements.
 
-### Adapter bridge
+### PDF backend
 
-The abstract types the rendering engine draws through (`Canvas`, `RenderContext`, `Brush`, `Pen`, `Font`, `FontFamily`, `Image`, `GraphicsPath`, and the paint-ready value types) live in their own package, `PeachDrawing.Core` (see [docs/peachdrawing-core.md](peachdrawing-core.md)) — nothing in that surface names a PDF-specific type. The adapters in [src/PeachPDF/Adapters/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Adapters/) (`GraphicsAdapter`, `PdfSharpAdapter`, `FontAdapter`, `FontFamilyAdapter`, `ImageAdapter`, `GraphicsPathAdapter`, plus `XTextureBrush`) implement those abstract types for PDF specifically. They translate every `Canvas` drawing call into the corresponding `XGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
+The abstract types the rendering engine draws through (`Canvas`, `RenderContext`, `Brush`, `Pen`, `Font`, `FontFamily`, `Image`, `GraphicsPath`, and the paint-ready value types) live in their own package, `PeachDrawing.Core` (see [docs/peachdrawing-core.md](peachdrawing-core.md)) — nothing in that surface names a PDF-specific type. The PDF backend in [src/PeachPDF/PdfBackend/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PdfBackend/) (`PdfCanvas`, `PdfRenderContext`, `PdfCanvasFont`, `PdfCanvasFontFamily`, `PdfCanvasImage`, `PdfSvgGlyphPainter`) implement those abstract types for PDF specifically. They translate every `Canvas` drawing call into the corresponding `PdfGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
 
 ### Font pipeline
 
-PdfSharpCore's font subsystem is built around OpenType:
+The PDF engine's font subsystem is built around OpenType:
 
-- `FontSet` ([Typefaces/FontSet.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Typefaces/FontSet.cs)) — the public entry point for fonts: the installed fonts plus the ones added to it, per instance. Fonts are added with `AddData`, families are found with `TryFindFamily` and `TryFindCoveringFamily`, and a query (`TypefaceQuery`: weight, width class, slant, an optional character to cover) is matched with `TypefaceFamily.TryMatch` or `FontSet.MatchOrFallback`, giving a `TypefaceMatch` (a public `Typeface` and the `SyntheticStyle` still to be faked). `PdfSharpAdapter` owns one `FontSet` and goes through nothing else to register and match fonts. `FontSet` is a thin layer over the internal `FontResolver`.
-- `LoadedTypeface` ([Fonts/LoadedTypeface.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Fonts/LoadedTypeface.cs)) — one resolved font face, independent of any size, behind the public `Typeface` (its `Face` property): it owns the `OpenTypeFontface` and the `OpenTypeDescriptor` (metrics, glyph mapping, shaping and outlines in design units). The PDF writer's `XFont` is just a matched typeface plus an em size.
+- `FontSet` ([Typefaces/FontSet.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Typefaces/FontSet.cs)) — the public entry point for fonts: the installed fonts plus the ones added to it, per instance. Fonts are added with `AddData`, families are found with `TryFindFamily` and `TryFindCoveringFamily`, and a query (`TypefaceQuery`: weight, width class, slant, an optional character to cover) is matched with `TypefaceFamily.TryMatch` or `FontSet.MatchOrFallback`, giving a `TypefaceMatch` (a public `Typeface` and the `SyntheticStyle` still to be faked). `PdfRenderContext` owns one `FontSet` and goes through nothing else to register and match fonts. `FontSet` is a thin layer over the internal `FontResolver`.
+- `LoadedTypeface` ([Fonts/LoadedTypeface.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Fonts/LoadedTypeface.cs)) — one resolved font face, independent of any size, behind the public `Typeface` (its `Face` property): it owns the `OpenTypeFontface` and the `OpenTypeDescriptor` (metrics, glyph mapping, shaping and outlines in design units). The PDF writer's font is Core's `TypefaceFont`: a matched typeface plus an em size.
 - `OpenTypeFontface` — reads raw OpenType/TrueType tables (`cmap`, `glyf`, `hmtx`, `loca`, `OS/2`, etc.) from font binary data.
 - `TypefaceCache` — caches resolved typefaces keyed by family+style to avoid repeated file reads (system families globally, custom `@font-face` families per `FontResolver` instance).
 - Font subsetting — only the glyphs actually used in the document are embedded in the PDF, significantly reducing output file size for documents that use only a subset of a large font.
@@ -666,7 +666,7 @@ PeachPDF identifies a custom font by its bytes, not by its self-reported interna
 
 #### Composite fonts and the Rune-based CID pipeline
 
-Text is written as composite `PdfType0Font`/`PdfCIDFont` ([PdfSharpCore/Pdf.Advanced/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PdfSharpCore/Pdf.Advanced/)) objects, and the whole emission path is codepoint-based rather than UTF-16-`char`-based: `CMapInfo.AddChars`, `FontHelper.MeasureString`, and `XGraphicsPdfRenderer.DrawString` all iterate `Rune`s, `CMapInfo.CharacterToGlyphIndex` is keyed by an `int` codepoint, and `PdfToUnicodeMap` ([PdfSharpCore/Pdf.Advanced/PdfToUnicodeMap.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/Pdf.Advanced/PdfToUnicodeMap.cs)) emits a proper UTF-16 `bfrange` `ToUnicode` destination (an astral codepoint becomes a surrogate pair, keeping copy/paste and text extraction correct). Basic-Multilingual-Plane text is byte-for-byte identical to the pre-`Rune` output, so the existing suite is the regression guard for this rework.
+Text is written as composite `PdfType0Font`/`PdfCIDFont` ([PDF/Advanced/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PDF/Advanced/)) objects, and the whole emission path is codepoint-based rather than UTF-16-`char`-based: `CMapInfo.AddChars`, `FontHelper.MeasureString`, and `PdfGraphicsRenderer.DrawString` all iterate `Rune`s, `CMapInfo.CharacterToGlyphIndex` is keyed by an `int` codepoint, and `PdfToUnicodeMap` ([PDF/Advanced/PdfToUnicodeMap.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PDF/Advanced/PdfToUnicodeMap.cs)) emits a proper UTF-16 `bfrange` `ToUnicode` destination (an astral codepoint becomes a surrogate pair, keeping copy/paste and text extraction correct). Basic-Multilingual-Plane text is byte-for-byte identical to the pre-`Rune` output, so the existing suite is the regression guard for this rework.
 
 #### Astral codepoints and emoji
 
@@ -696,16 +696,16 @@ Bidirectional layout is a separate engine, `BidiResolver` ([Text/Bidi/](https://
 
 `PdfGenerator` and everything it owns (font/brush/pen caches, the font resolver, `HtmlContainer`) is instance-scoped and not safe to share across threads — but PeachPDF is designed so that using one `PdfGenerator` per thread is safe, including the process-wide state this pipeline touches:
 
-- System font discovery (scanning OS font directories and parsing TrueType/OpenType `name` tables) runs exactly once per process, in `FontResolver`'s static constructor, into immutable `FrozenDictionary` structures. Every `FontResolver` instance (one per `PdfSharpAdapter`, one per `PdfGenerator`) reads this once-built data without locking; `AddFont`/`AddFontFromStream` clone a family's data before overriding a style, so a custom font registered on one `PdfGenerator` can never mutate the shared system-font data seen by other instances.
+- System font discovery (scanning OS font directories and parsing TrueType/OpenType `name` tables) runs exactly once per process, in `FontResolver`'s static constructor, into immutable `FrozenDictionary` structures. Every `FontResolver` instance (one per `PdfRenderContext`, one per `PdfGenerator`) reads this once-built data without locking; `AddFont`/`AddFontFromStream` clone a family's data before overriding a style, so a custom font registered on one `PdfGenerator` can never mutate the shared system-font data seen by other instances.
 - `FontFactory`'s process-wide caches (`TypefaceCache` and the font sources with their `OpenTypeFontface` records) are guarded by a single reentrant `FontLock` monitor, so concurrent `PdfGenerator` instances resolving different fonts at the same time don't corrupt each other's cache entries.
 
 ### Image pipeline
 
-PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF, WebP, AVIF, TIFF, JPEG XL) arrive as pre-decoded RGBA bitmaps from PeachImage (see [Image loading and decoding](#image-loading-and-decoding)) and are written as PDF image XObjects using `XBitmapImage`.
+Every image arrives through PeachImage (see [Image loading and decoding](#image-loading-and-decoding)): JPEG, PNG, GIF and JPEG XL sources that qualify are embedded byte for byte, and everything else is decoded to a 32-bit bitmap that `PdfImage` splits into RGB samples, a 1-bit `/Mask` and an `/SMask`, then compresses and writes as a PDF image XObject.
 
 ### Graphics context
 
-`XGraphicsPdfRenderer` implements `IXGraphicsRenderer` and translates every drawing operation into PDF content stream operators. The page coordinate system is flipped from the CSS top-left origin to the PDF bottom-left origin at this layer. Each page in the document gets its own `XGraphics` context; the rendering engine drives page breaks by advancing to a new page when `HtmlContainerInt` signals a page boundary.
+`PdfGraphicsRenderer` implements `PdfGraphicsRenderer` and translates every drawing operation into PDF content stream operators. The page coordinate system is flipped from the CSS top-left origin to the PDF bottom-left origin at this layer. Each page in the document gets its own `PdfGraphics` context; the rendering engine drives page breaks by advancing to a new page when `HtmlContainerInt` signals a page boundary.
 
 ### Output
 
@@ -716,13 +716,13 @@ PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageIm
 3. Runs the full HTML→DOM→CSS→Layout→Paint pipeline against the document's pages.
 4. Returns the completed `PdfDocument`, which the caller saves to any `Stream`.
 
-Unnecessary PdfSharpCore features (WPF/GDI rendering targets, interactive form fields, XPS output) have been removed, keeping the dependency surface small and compatible with .NET 8 trimming and AOT compilation.
+The engine keeps only what writing needs (no reader, no WPF/GDI rendering targets, no XPS output), keeping the dependency surface small and compatible with .NET 8 trimming and AOT compilation.
 
 ### Tagged PDF (PDF/UA) structure tree
 
-**Key types:** `StructureTagBuilder` / `StructureTagMapper` ([Html/Core/Handlers/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Html/Core/Handlers/)), `PdfStructureElement` / `PdfStructureTreeRoot` / `PdfNumberTreeNode` / `PdfMarkedContentReference` / `PdfObjectReference` ([PdfSharpCore/Pdf.Structure/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PdfSharpCore/Pdf.Structure/))
+**Key types:** `StructureTagBuilder` / `StructureTagMapper` ([Html/Core/Handlers/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Html/Core/Handlers/)), `PdfStructureElement` / `PdfStructureTreeRoot` / `PdfNumberTreeNode` / `PdfMarkedContentReference` / `PdfObjectReference` ([PDF/Structure/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PDF/Structure/))
 
-Tagged output (`PdfGenerateConfig.EnableTaggedPdf`, off by default — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) for the user-facing CSS property and default mapping) is built live from the same fragment paint walk that produces the visible page content, rather than from a separate pass or an event-interception layer around drawing calls (the approach upstream PDFsharp's modern `UAManager`/`StructureBuilder` uses, which depends on an `XGraphics` event system this ~2016-era fork doesn't have). PeachPDF already fully controls its own paint walk, so it is the natural place to hook in.
+Tagged output (`PdfGenerateConfig.EnableTaggedPdf`, off by default — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) for the user-facing CSS property and default mapping) is built live from the same fragment paint walk that produces the visible page content, rather than from a separate pass or an event-interception layer around drawing calls (the approach upstream PDFsharp's modern `UAManager`/`StructureBuilder` uses, which depends on an `PdfGraphics` event system this ~2016-era fork doesn't have). PeachPDF already fully controls its own paint walk, so it is the natural place to hook in.
 
 - `FragmentPainter.PaintTagged` — the single choke point every fragment's paint goes through — is where tagging attaches. When `HtmlContainerInt.StructureTagBuilder` is non-null, it calls `StructureTagMapper.Classify(box)` before delegating to `PaintContent`, which dispatches to the box type's own content painter. When tagging is disabled, `PaintTagged` reduces to a direct `PaintContent` call with a single null check — zero behavioral difference from before tagging existed.
 - `StructureTagMapper.Classify` resolves a box to one of four outcomes: transparent pass-through, an `/Artifact` marked-content sequence (e.g. a decorative `<hr>`), a pure grouping structure element (no MCID of its own — most real HTML elements, since their text always lives on an anonymous child box), or a content structure element (gets an MCID wrapping its own `DrawString`/`DrawImage` calls). The common-case HTML-tag → structure-type mapping is entirely CSS-driven via `-peachpdf-pdf-tag-type` (see the linked docs page); this mapper only implements the narrower fallback for anonymous boxes (no source element for any selector to match — e.g. CSS-generated table structure) and the `auto` block/inline default.
@@ -772,7 +772,7 @@ The result is an `SvgDocument`: a `ViewBox`/`Width`/`Height`/`PreserveAspectRati
 
 `SvgRenderer.RenderInto(Canvas g, SvgDocument document, Rect viewportRect)` is the single paint entry point shared by the inline-SVG and `<img src="x.svg">` content painters. It clips to the target rectangle, computes the viewBox→viewport transform (`ComputeViewportTransform`, supporting all 9 `preserveAspectRatio` alignment keywords plus `meet`/`slice`/`none`), pushes that transform, and recursively paints every scene-graph element.
 
-Critically, `SvgRenderer` issues nothing but ordinary `Canvas` calls (`GetGraphicsPath`, `DrawPath`, `GetSolidBrush`, `GetLinearGradientBrush`, `PushClip`, `PushTransform`, `DrawString`, …) — the same abstraction §6's HTML/CSS painting uses. There is no SVG-specific graphics API; an SVG `<path>` becomes an `GraphicsPath` built from bezier/arc/line segments exactly the way a CSS `border-radius` corner does, and an SVG gradient becomes an `Brush` from the same `GetLinearGradientBrush`/`GetRadialGradientBrush` calls background-image gradients use. This is what keeps SVG output genuinely vector: every drawing call flows through the same `XGraphics`-backed adapter as the rest of the document (§7).
+Critically, `SvgRenderer` issues nothing but ordinary `Canvas` calls (`GetGraphicsPath`, `DrawPath`, `GetSolidBrush`, `GetLinearGradientBrush`, `PushClip`, `PushTransform`, `DrawString`, …) — the same abstraction §6's HTML/CSS painting uses. There is no SVG-specific graphics API; an SVG `<path>` becomes an `GraphicsPath` built from bezier/arc/line segments exactly the way a CSS `border-radius` corner does, and an SVG gradient becomes an `Brush` from the same `GetLinearGradientBrush`/`GetRadialGradientBrush` calls background-image gradients use. This is what keeps SVG output genuinely vector: every drawing call flows through the same `PdfGraphics`-backed adapter as the rest of the document (§7).
 
 PDF's native shading types have no tiling/repeat concept of their own, so `spreadMethod="repeat"`/`"reflect"` (`SvgRenderer.ExpandLinearSpread`/`ExpandRadialSpread`) pre-tile the gradient's own stop list — projecting the filled shape's bounding box onto the gradient axis (or radius) to find how many cycles are needed to cover it, then replicating the stops per cycle, mirroring alternate cycles for `reflect` — before the brush is ever built. This mirrors, but doesn't share code with, how CSS's `repeating-linear-gradient()`/`repeating-radial-gradient()` (`CssImagePainter.ExpandRepeatingStops`) solve the identical underlying problem: CSS's gradient axis is already sized to the background box before tiling starts, while SVG's `x1`/`y1`/`x2`/`y2` (or `r`) define only one author-chosen cycle, and SVG additionally needs `reflect`, which CSS repeating-gradients don't have.
 
@@ -782,9 +782,9 @@ The viewport-transform helper is reused, not reimplemented, for every SVG constr
 
 `<pattern>` and `<mask>` needed genuinely new PDF-writing capability, supplied by extending the `Canvas`/`RenderContext` abstraction rather than adding SVG-specific PDF code:
 
-- `Canvas.CreateTile(width, height)` creates an `XForm`/`PdfFormXObject` pair — a real PDF Form XObject — and returns a fresh `Canvas` that paints into it. A pattern's content, a mask's content, and (for a masked element) the element's own content are each rendered once into a tile this way.
+- `Canvas.CreateTile(width, height)` creates an `PdfForm`/`PdfFormXObject` pair — a real PDF Form XObject — and returns a fresh `Canvas` that paints into it. A pattern's content, a mask's content, and (for a masked element) the element's own content are each rendered once into a tile this way.
 - **Pattern fill** clips to the filled shape's geometry, then draws that one tile `Image` repeatedly (`DrawImage`) across the shape's bounding box. Every repeat references the same underlying vector Form XObject content — never a rasterized bitmap — but this is not a native PDF `/PatternType 1` tiling pattern object; it's a simpler, lower-risk approximation that stays fully vector.
-- **Mask** (`SvgRenderer.RenderMaskedElementContent`) renders the masked element's own content into one tile and the `<mask>`'s content into a second, identically-sized tile, then composites them via `Canvas.DrawImageMasked(content, mask, destRect)` — a single atomic placement (`XGraphicsPdfRenderer.DrawImageMasked`, [PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs)) that emits the PDF `/SMask` `gs` operator inside the *same* `q ... cm ... Do ... Q` block used to place the content, reusing `DrawImage`'s already-correct destRect placement math rather than relying on whatever CTM happens to be ambient at some earlier point in the content stream. This atomicity is load-bearing, not stylistic: a `CreateTile` form's content is Y-flipped relative to *its own* small height, not the page's, so a mask activated via a bare, separately-timed `gs` (an earlier implementation) silently lands in the wrong part of the page the moment the page has any margin, scroll offset, or layout position — evaluating as fully transparent everywhere. Both the mask's `/G` form and the masked content's own form must additionally carry their own `/Group << /S /Transparency ... >>` transparency-group dictionary for the soft mask to take effect in spec-conformant readers (Chrome/Edge/Acrobat, all PDFium- or Acrobat-derived) — MuPDF is unusually lenient and applies an `/SMask` even to non-group content, which made this gap easy to miss under a single-renderer check. See [Supported SVG Features](supported-svg-features.md) and the `PdfSoftMask`/`PdfExtGState` PDF object types for the rest of the construct.
+- **Mask** (`SvgRenderer.RenderMaskedElementContent`) renders the masked element's own content into one tile and the `<mask>`'s content into a second, identically-sized tile, then composites them via `Canvas.DrawImageMasked(content, mask, destRect)` — a single atomic placement (`PdfGraphicsRenderer.DrawImageMasked`, [PDF/Rendering/PdfGraphicsRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PDF/Rendering/PdfGraphicsRenderer.cs)) that emits the PDF `/SMask` `gs` operator inside the *same* `q ... cm ... Do ... Q` block used to place the content, reusing `DrawImage`'s already-correct destRect placement math rather than relying on whatever CTM happens to be ambient at some earlier point in the content stream. This atomicity is load-bearing, not stylistic: a `CreateTile` form's content is Y-flipped relative to *its own* small height, not the page's, so a mask activated via a bare, separately-timed `gs` (an earlier implementation) silently lands in the wrong part of the page the moment the page has any margin, scroll offset, or layout position — evaluating as fully transparent everywhere. Both the mask's `/G` form and the masked content's own form must additionally carry their own `/Group << /S /Transparency ... >>` transparency-group dictionary for the soft mask to take effect in spec-conformant readers (Chrome/Edge/Acrobat, all PDFium- or Acrobat-derived) — MuPDF is unusually lenient and applies an `/SMask` even to non-group content, which made this gap easy to miss under a single-renderer check. See [Supported SVG Features](supported-svg-features.md) and the `PdfSoftMask`/`PdfExtGState` PDF object types for the rest of the construct.
 
 ### Link annotations
 
@@ -855,7 +855,7 @@ specification that gives MathML 3's presentation markup a concrete box model, si
 leaves layout implementation-defined. Every structural measurement (fraction rule thickness, radical
 gaps, script shift/scale, stack spacing) comes from the resolved math font's OpenType `MATH` table
 constants (`MathTable.cs`'s `MathConstantsTable`), scaled by `sizePt / unitsPerEm * g.PixelsPerPoint` —
-the same formula `FontAdapter.ScaleDesignUnits` already uses for vertical metrics, so `MathBox` geometry
+the same formula `PdfCanvasFont.ScaleDesignUnits` already uses for vertical metrics, so `MathBox` geometry
 lands in the same working unit space as everything else `Canvas` measures/draws in. A font with no
 `MATH` table (`MathMetrics`'s fallback path) uses fixed, TeX-book-derived approximate ratios instead of
 refusing to lay the formula out — MathML Core's own documented strategy for this case. Inter-element
@@ -886,7 +886,7 @@ tree issuing ordinary `Canvas` calls — the same abstraction §6's HTML/CSS pai
 glyph index via `Canvas.DrawGlyphs` (`GlyphPlacement`), a new primitive alongside the existing
 character-based `DrawString`: unlike ordinary text, a `MATH`-table size-variant glyph frequently has no
 Unicode codepoint of its own to shape through cmap, so it has to be drawn by raw glyph id instead.
-`XGraphicsPdfRenderer.DrawGlyphsAtPositions` implements it by generalizing the existing (previously
+`PdfGraphicsRenderer.DrawGlyphsAtPositions` implements it by generalizing the existing (previously
 private, GPOS-delta-only) per-glyph `Td`+`Tj` emission `DrawString` already used internally, and — since
 nothing else registers these glyphs for font subsetting the way `DrawString`'s own shaping path does —
 explicitly calls `PdfFont.AddShapedGlyph` for each one before drawing, or the embedded font's subset
@@ -902,7 +902,7 @@ engine's internal, already-desugared `MathNode` interpretation of it) and attach
 ([ISO 32000-2](https://www.iso.org/standard/75839.html) §14.13) Associated File
 (`/AF`, `/AFRelationship /Supplement`) on the structure element, using `PdfFileSpecification`/
 `PdfEmbeddedFile` — two low-level PDF object primitives that existed, unused, before this feature (the
-same "pre-existing-but-uncalled primitive" pattern `XForm`/`PdfSoftMask` followed for other features).
+same "pre-existing-but-uncalled primitive" pattern `PdfForm`/`PdfSoftMask` followed for other features).
 The same two objects back the general [`PdfGenerateConfig.Attachments`](#embedded-files-attachments) API.
 See [MathML Associated Files](html-css-support.md#mathml-associated-files) for the user-facing mechanism
 and [PDF 2.0 output](usage-examples.md#pdf-20-output) for `PdfGenerateConfig.PdfVersion`.

@@ -25,7 +25,7 @@ namespace PeachPDF.MathML
     internal static class MathTreeBuilder
     {
         /// <summary>Builds a <see cref="MathDocument"/> from the root <c>&lt;math&gt;</c> source node.</summary>
-        public static MathDocument Build(IMathSourceNode mathRoot, RenderContext adapter)
+        public static MathDocument Build(IMathSourceNode mathRoot, RenderContext renderContext)
         {
             var display = mathRoot.GetAttribute("display") == "block" ? "block" : "inline";
 
@@ -35,7 +35,7 @@ namespace PeachPDF.MathML
                 DisplayStyle: display == "block",
                 ScriptLevel: 0,
                 FontSizePt: mathRoot.FontSizePt,
-                Adapter: adapter);
+                RenderContext: renderContext);
 
             context = ApplyStyleAttributes(mathRoot, context);
 
@@ -67,7 +67,7 @@ namespace PeachPDF.MathML
         /// <summary>This node's own effective color: its <c>mathcolor</c> attribute if present,
         /// otherwise its already-CSS-cascaded <see cref="IMathSourceNode.PaintColor"/>.</summary>
         static PaintColor ResolveColor(IMathSourceNode node, MathBuildContext context) =>
-            MathAttributeParser.TryParseColor(node.GetAttribute("mathcolor"), context.Adapter) ?? node.PaintColor;
+            MathAttributeParser.TryParseColor(node.GetAttribute("mathcolor"), context.RenderContext) ?? node.PaintColor;
 
         /// <summary>Builds one child list as a single node (no wrapping) when it has exactly one entry,
         /// or an inferred <see cref="MathRowNode"/> otherwise (MathML Core's implicit-mrow rule for a

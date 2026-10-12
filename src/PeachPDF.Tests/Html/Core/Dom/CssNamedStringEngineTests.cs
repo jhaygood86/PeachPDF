@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -293,8 +293,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private HtmlContainerInt CreateContainer()
         {
-            var adapter = new PdfSharpAdapter();
-            return new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            return new HtmlContainerInt(renderContext);
         }
     }
 }

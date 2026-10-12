@@ -1,8 +1,8 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Issue #631: two call sites read <see cref="CssBox.GetEmHeight"/>/<see cref="CssBox.GetRemHeight"/>
-    /// as if the result were already true CSS points. It is not - <c>PdfSharpAdapter.CreateFontInt</c>
+    /// as if the result were already true CSS points. It is not - <c>PdfRenderContext.CreateFontInt</c>
     /// divides a requested size by <c>PixelsPerPoint</c> once to reach the adapter's device-scaled
     /// font-measurement space, so undoing that division (multiplying back by <c>PixelsPerPoint</c>) is
     /// required before treating either as a true-point em/rem basis - exactly the correction
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.Integration
             // this lands in the box's internal layout coordinate space, which PixelsPerPoint inflates
             // relative to true points (issue #814) - so at pixelsPerPoint=2, the internal-space value is
             // 40 * 2 = 80, matching BuildAndLayout's now-consistent (production-mirroring) inflation of
-            // PageSize/MaxSize/GraphicsAdapter by the same factor.
+            // PageSize/MaxSize/PdfCanvas by the same factor.
             Assert.Equal(80.0, target!.ActualTextIndent, 3);
         }
 
@@ -165,22 +165,22 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>";
 
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             // Mirrors production (PdfGenerator.SetContent/AddPdfPages): PageSize/MaxSize and the
-            // GraphicsAdapter's own scale both use the SAME pixelsPerPoint as the adapter's font
+            // PdfCanvas's own scale both use the SAME pixelsPerPoint as the adapter's font
             // resolution, so the box tree's internal coordinate space is consistently inflated end to
             // end - the same consistency CssValueParser's absolute-length resolution now relies on
             // (issue #814). A harness that inflated fonts but not geometry (as this one previously did,
             // hardcoding 1.0 here) tests a combination no real PdfGenerator render can produce.
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

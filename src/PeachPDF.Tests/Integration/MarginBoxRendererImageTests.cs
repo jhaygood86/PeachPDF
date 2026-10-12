@@ -1,9 +1,10 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -289,11 +290,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ResolveContentImage_UrlContent_ReturnsLoadedImage()
         {
-            var (adapter, container) = await NewContainer();
+            var (renderContext, container) = await NewContainer();
             var cache = new Dictionary<string, CssImage?>();
 
             var image = await MarginBoxRenderer.ResolveContentImage(
-                $"url(\"data:image/png;base64,{PngBase64}\")", adapter, container, cache);
+                $"url(\"data:image/png;base64,{PngBase64}\")", renderContext, container, cache);
 
             var url = Assert.IsType<CssImage.Url>(image);
             Assert.NotNull(url.Image);
@@ -302,10 +303,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ResolveContentImage_TextContent_ReturnsNull()
         {
-            var (adapter, container) = await NewContainer();
+            var (renderContext, container) = await NewContainer();
             var cache = new Dictionary<string, CssImage?>();
 
-            var image = await MarginBoxRenderer.ResolveContentImage("\"hello\"", adapter, container, cache);
+            var image = await MarginBoxRenderer.ResolveContentImage("\"hello\"", renderContext, container, cache);
 
             Assert.Null(image);
         }
@@ -313,31 +314,31 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ResolveContentImage_RepeatedCall_ReturnsCachedInstance()
         {
-            var (adapter, container) = await NewContainer();
+            var (renderContext, container) = await NewContainer();
             var cache = new Dictionary<string, CssImage?>();
             var contentValue = $"url(\"data:image/png;base64,{PngBase64}\")";
 
-            var first = await MarginBoxRenderer.ResolveContentImage(contentValue, adapter, container, cache);
-            var second = await MarginBoxRenderer.ResolveContentImage(contentValue, adapter, container, cache);
+            var first = await MarginBoxRenderer.ResolveContentImage(contentValue, renderContext, container, cache);
+            var second = await MarginBoxRenderer.ResolveContentImage(contentValue, renderContext, container, cache);
 
             Assert.Same(first, second);
         }
 
-        private static async Task<(PdfSharpAdapter adapter, HtmlContainerInt container)> NewContainer()
+        private static async Task<(PdfRenderContext renderContext, HtmlContainerInt container)> NewContainer()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml("<html><body><p>content</p></body></html>", null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
-            return (adapter, container);
+            return (renderContext, container);
         }
     }
 

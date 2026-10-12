@@ -182,7 +182,7 @@ namespace PeachPDF.Html.Core.Paint
 
             // A plane brought closer than its flat size is drawn larger than its bitmap: render the source with as many more pixels as the
             // warp enlarges it by, at most a few times over, so it does not blur.
-            var dpi = container.Adapter.RasterizationDpi * Magnification(warp.Map, source);
+            var dpi = container.RenderContext.RasterizationDpi * Magnification(warp.Map, source);
 
             using var sourceScope = g.BeginRasterSurface(source, dpi);
             if (sourceScope is null)

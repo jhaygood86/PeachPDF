@@ -91,7 +91,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         /// equal but can never be the same instance. <c>Assert.Equal</c> here would pass against
         /// unfixed code and prove nothing.
         /// <para>
-        /// It matters because <c>PdfGenerator</c> holds its <c>PdfSharpAdapter</c> as an instance
+        /// It matters because <c>PdfGenerator</c> holds its <c>PdfRenderContext</c> as an instance
         /// field and that constructor resolves every generic family plus <c>system-ui</c>, so a caller
         /// rendering N documents used to make 7N identical native round trips.
         /// </para>

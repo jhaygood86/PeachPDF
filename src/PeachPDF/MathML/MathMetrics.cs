@@ -9,7 +9,7 @@ namespace PeachPDF.MathML
     /// <summary>
     /// Scales a resolved math font's <see cref="MathConstantsTable"/> (design units) into the working
     /// unit space <c>Canvas</c> measures/draws in, via the same
-    /// <c>sizePt / unitsPerEm * PixelsPerPoint</c> formula <c>FontAdapter.ScaleDesignUnits</c> already
+    /// <c>sizePt / unitsPerEm * PixelsPerPoint</c> formula <c>PdfCanvasFont.ScaleDesignUnits</c> already
     /// uses for vertical metrics. When the resolved font has no MATH table, each named accessor falls
     /// back to a fixed ratio of the current size instead (MathML Core's own documented fallback
     /// strategy) - see each accessor's own fallback value, drawn from either the OpenType MATH spec's

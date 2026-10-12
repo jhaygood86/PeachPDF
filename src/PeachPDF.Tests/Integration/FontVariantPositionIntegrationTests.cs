@@ -1,9 +1,9 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.Integration
             // Glyph indices, not measured width: a well-designed font's superscript figures aren't
             // guaranteed to differ in advance width from the default ones.
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
-            var typeface = ((FontAdapter)box.ActualFont).Font.Typeface;
+            var typeface = ((PdfCanvasFont)box.ActualFont).Font.Typeface;
 
             var plain = Shaper.Shape(typeface, "42", ShapeSettings.Default);
             var superscript = Shaper.Shape(typeface, "42", box.ActualTextShapingFeatures);
@@ -85,7 +85,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Sub_OnAFontWithSubs_SubstitutesRealGlyphs()
         {
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:sub\">42</b>");
-            var typeface = ((FontAdapter)box.ActualFont).Font.Typeface;
+            var typeface = ((PdfCanvasFont)box.ActualFont).Font.Typeface;
 
             var plain = Shaper.Shape(typeface, "42", ShapeSettings.Default);
             var subscript = Shaper.Shape(typeface, "42", box.ActualTextShapingFeatures);
@@ -197,7 +197,7 @@ namespace PeachPDF.Tests.Integration
                 "<p id=\"p\">x<span id=\"sup\" style=\"font-variant-position:super\">S</span>" +
                 "<span id=\"sub\" style=\"font-variant-position:sub\">B</span></p>");
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
 
             var baseline = recorder.DrawnStrings.Single(d => d.Text == "x").Y;
@@ -227,16 +227,16 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> LayoutAsync(string fontBase64, string body)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(fontBase64, body), null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

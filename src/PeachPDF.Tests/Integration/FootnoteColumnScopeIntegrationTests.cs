@@ -1,7 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -238,10 +238,10 @@ namespace PeachPDF.Tests.Integration
             var areas = AreasOf(container);
             Assert.Equal(2, areas.Count);
 
-            var g = new RecordingGraphics(new PdfSharpAdapter());
+            var g = new RecordingGraphics(new PdfRenderContext());
             foreach (var area in areas)
             {
-                PdfGenerator.PaintFootnoteArea(g, new PdfSharpAdapter(), container, area);
+                PdfGenerator.PaintFootnoteArea(g, new PdfRenderContext(), container, area);
             }
 
             var dividers = g.Log.Where(op => op.Kind == PaintOpKind.FillRect).ToList();
@@ -289,7 +289,7 @@ namespace PeachPDF.Tests.Integration
         /// height has to be the same on every host rather than whatever the platform maps the generic to.
         /// </summary>
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string html, double pageHeight = 842) =>
-            LayoutHarness.LayoutAsync(html, pageHeight: pageHeight, configureAdapter: BundledFonts.PinSansSerifAsync);
+            LayoutHarness.LayoutAsync(html, pageHeight: pageHeight, configureRenderContext: BundledFonts.PinSansSerifAsync);
 
         private static CssBoxFootnoteCall CallOf(HtmlContainerInt container, string id) =>
             container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == id);

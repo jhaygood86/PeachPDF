@@ -1,7 +1,8 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 
@@ -428,7 +429,7 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private PageBandGeometry Compute(int pageIndex, double top, int ruleSelectionPageNumber)
         {
-            var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var ppp = (container.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var baseLPt = container.MarginLeft / ppp;
             var baseTPt = container.MarginTop / ppp;
             var baseRPt = container.MarginRight / ppp;
@@ -452,7 +453,7 @@ namespace PeachPDF.Html.Core
             double sheetPxHeight, sheetWidthPt, sheetHeightPt;
             if (HasSizeOverrides)
             {
-                var baseSizePt = new XSize(baseSheetPxWidth / ppp, baseSheetPxHeight / ppp);
+                var baseSizePt = new Size(baseSheetPxWidth / ppp, baseSheetPxHeight / ppp);
                 var resolved = PageRuleResolver.ResolvePageSize(rule, baseSizePt, container.PageLengthContext);
                 sheetWidthPt = resolved.Width;
                 sheetHeightPt = resolved.Height;

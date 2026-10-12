@@ -1,5 +1,6 @@
+using System.Numerics;
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -12,7 +13,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>text-shadow</c> on SVG glyphs painted under their own transform: along a <c>&lt;textPath&gt;</c>, and blurred under an explicit <c>rotate</c>.</summary>
     public class SvgTextShadowTransformTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         /// <summary>A canvas that can begin an effect layer: it records each layer's options and draws the layer's content straight onto itself, so the log shows it.</summary>
         private sealed class LayerCanvas : TestRecordingGraphics
@@ -29,7 +30,7 @@ namespace PeachPDF.Tests.Svg
         private static T Render<T>(T g, string body, string viewBox = "0 0 200 100") where T : TestRecordingGraphics
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewBox}">{body}</svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var size = viewBox.Split(' ');
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, double.Parse(size[2]), double.Parse(size[3])));
             return g;

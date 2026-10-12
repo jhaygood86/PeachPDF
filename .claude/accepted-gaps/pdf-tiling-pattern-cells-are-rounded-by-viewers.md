@@ -11,4 +11,4 @@ Why it is accepted: it is a property of how the viewer draws every tiling patter
 alternative (drawing every cell as an image) is exactly what makes a large pattern cost a file entry per cell and stops
 working past ten thousand cells. Rotated and skewed grids, where viewers also show seams, are already drawn cell by cell, so the
 drift only affects upright grids. A pattern whose phase must match other content to the pixel at every zoom should be drawn
-as cells; `GraphicsAdapter.TryPaintTurnedTiles` is the place to add such a rule.
+as cells; `PdfCanvas.TryPaintTurnedTiles` is the place to add such a rule.

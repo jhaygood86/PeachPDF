@@ -22,7 +22,7 @@ namespace PeachDrawing.Core
     /// other backend built the instance. This is the same discriminated-union shape <c>CssImage</c>
     /// (<c>Html/Core/Entities/CssImage.cs</c>) already uses for background/gradient/list-marker images -
     /// see <c>CssImagePainter.Paint</c>'s type-dispatch for the precedent. A concrete <see cref="Canvas"/>
-    /// (<c>GraphicsAdapter</c>, <c>RasterCanvas</c>) pattern-matches on the concrete subtype to build
+    /// (<c>PdfCanvas</c>, <c>RasterCanvas</c>) pattern-matches on the concrete subtype to build
     /// whatever native paint representation it needs; nothing here names a PDF- or raster-specific type.
     /// </summary>
     /// <remarks>

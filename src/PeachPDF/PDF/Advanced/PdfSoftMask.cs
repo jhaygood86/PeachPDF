@@ -1,0 +1,88 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+namespace PeachPDF.PDF.Advanced;
+
+/// <summary>
+/// Represents a PDF soft mask.
+/// </summary>
+internal sealed class PdfSoftMask : PdfDictionary
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfXObject"/> class.
+    /// </summary>
+    /// <param name="document">The document that owns the object.</param>
+    public PdfSoftMask(PdfDocument document)
+        : base(document)
+    {
+        Elements.SetName(Keys.Type, "/Mask");
+    }
+
+    /// <summary>
+    /// Sets the <c>/TR</c> transfer function - a single-input/single-output Type 4 function (see
+    /// <see cref="PdfType4Function.BuildInvertFunction"/>) mapping the mask's own computed alpha or
+    /// luminosity value to the resulting mask value, e.g. to invert a mask built for the opposite
+    /// sense (<c>SourceAlpha</c>/<c>feComposite</c>'s complement, a future phase's use case). Unlike
+    /// <see cref="PdfExtGState.TransferFunction"/>, a soft mask's TR is always exactly one function -
+    /// ISO 32000-1 §11.6.5.2 gives it a single scalar in, single scalar out, with no per-colorant
+    /// array form - so this is unconditionally spec-legal regardless of what produced the mask.
+    /// </summary>
+    public PdfDictionary TransferFunction
+    {
+        set { Elements[Keys.TR] = value; }
+    }
+
+    /// <summary>
+    /// Predefined keys of this dictionary.
+    /// </summary>
+    internal class Keys : KeysBase
+    {
+        /// <summary>
+        /// (Optional) The type of PDF object that this dictionary describes;
+        /// if present, must be Mask for a soft-mask dictionary.
+        /// </summary>
+        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional, FixedValue = "Mask")]
+        public const string Type = "/Type";
+
+        /// <summary>
+        /// (Required) A subtype specifying the method to be used in deriving the mask values
+        /// from the transparency group specified by the G entry:
+        /// Alpha: Use the group's computed alpha, disregarding its color.
+        /// Luminosity: Convert the group's computed color to a single-component luminosity value.
+        /// </summary>
+        [PdfKey(PdfKeyType.Name | PdfKeyType.Required)]
+        public const string S = "/S";
+
+        /// <summary>
+        /// (Required) A transparency group XObject to be used as the source of alpha
+        /// or color values for deriving the mask. If the subtype S is Luminosity, the
+        /// group attributes dictionary must contain a CS entry defining the color space
+        /// in which the compositing computation is to be performed.
+        /// </summary>
+        [PdfKey(PdfKeyType.Stream | PdfKeyType.Required)]
+        public const string G = "/G";
+
+        /// <summary>
+        /// (Optional) An array of component values specifying the color to be used
+        /// as the backdrop against which to composite the transparency group XObject G.
+        /// This entry is consulted only if the subtype S is Luminosity. The array consists of
+        /// n numbers, where n is the number of components in the color space specified
+        /// by the CS entry in the group attributes dictionary.
+        /// Default value: the color space's initial value, representing black.
+        /// </summary>
+        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
+        public const string BC = "/BC";
+
+        /// <summary>
+        /// (Optional) A function object specifying the transfer function to be used in
+        /// deriving the mask values. The function accepts one input, the computed
+        /// group alpha or luminosity (depending on the value of the subtype S), and
+        /// returns one output, the resulting mask value. Both the input and output
+        /// must be in the range 0.0 to 1.0; if the computed output falls outside this
+        /// range, it is forced to the nearest valid value. The name Identity may be
+        /// specified in place of a function object to designate the identity function.
+        /// Default value: Identity.
+        /// </summary>
+        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
+        public const string TR = "/TR";
+    }
+}

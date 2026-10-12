@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -16,7 +16,7 @@ namespace PeachPDF.Html.Core.Paint
     /// <remarks>
     /// <para>
     /// <b>What needs it is decided by the writer's own rules.</b> A box's own paint (decorations, text, replaced content) is tried on a
-    /// scratch page whose transparency guard records instead of throwing (<see cref="PeachPDF.Adapters.TransparencyProbe"/>), so there is one
+    /// scratch page whose transparency guard records instead of throwing (<see cref="PeachPDF.PdfBackend.TransparencyProbe"/>), so there is one
     /// list of transparent constructs, the guard's, and a construct added to it is flattened without touching this file. A group effect
     /// (opacity, blend mode, colour-matrix filter, raster filter, backdrop-filter) needs it by definition.
     /// </para>

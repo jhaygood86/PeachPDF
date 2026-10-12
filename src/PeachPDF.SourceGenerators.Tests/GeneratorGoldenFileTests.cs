@@ -52,7 +52,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains("internal static bool SupportsDeclaration(string name, string value) =>", generated);
-            Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.Adapters.PdfSharpAdapter()), name, value);", generated);
+            Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.PdfBackend.PdfRenderContext()), name, value);", generated);
         }
 
         [Fact]
@@ -639,7 +639,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var generated = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
-            Assert.Contains("SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out var parsed)", generated);
+            Assert.Contains("SvgValueParsers.TryParsePaint(value, ctx.RenderContext, ctx.ContextColor, out var parsed)", generated);
             Assert.Contains("element.Fill = ctx.ResolveUrlPaintKind(parsed);", generated);
             Assert.Contains("[\"fill\"] = \"black\",", generated);
         }

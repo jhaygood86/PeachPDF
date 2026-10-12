@@ -4,8 +4,8 @@ PeachPDF is BSD 3-Clause-licensed (see [LICENSE](LICENSE)), but it embeds and ad
 
 ## PdfSharpCore (embedded fork)
 
-- **Location:** [`src/PeachPDF/PdfSharpCore/`](src/PeachPDF/PdfSharpCore/)
-- **License file:** [`src/PeachPDF/PdfSharpCore/LICENSE.md`](src/PeachPDF/PdfSharpCore/LICENSE.md)
+- **Location:** [`src/PeachPDF/PDF/`](src/PeachPDF/PDF/)
+- **License file:** [`src/PeachPDF/PDF/LICENSE.md`](src/PeachPDF/PDF/LICENSE.md)
 - **License:** MIT
 
 ```

@@ -1,0 +1,277 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+using System.Globalization;
+
+namespace PeachPDF.PDF.Advanced;
+
+/// <summary>
+/// Represents an extended graphics state object.
+/// </summary>
+internal sealed class PdfExtGState : PdfDictionary
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfExtGState"/> class.
+    /// </summary>
+    /// <param name="document">The document.</param>
+    public PdfExtGState(PdfDocument document)
+        : base(document)
+    {
+        Elements.SetName(Keys.Type, "/ExtGState");
+
+    }
+
+    /// <summary>
+    /// Sets the alpha value for stroking operations.
+    /// </summary>
+    public double StrokeAlpha
+    {
+        set
+        {
+            _strokeAlpha = value;
+            Elements.SetReal(Keys.CA, value);
+            UpdateKey();
+        }
+    }
+    double _strokeAlpha;
+
+    /// <summary>
+    /// Sets the alpha value for nonstroking operations.
+    /// </summary>
+    public double NonStrokeAlpha
+    {
+        set
+        {
+            _nonStrokeAlpha = value;
+            Elements.SetReal(Keys.ca, value);
+            UpdateKey();
+        }
+    }
+    double _nonStrokeAlpha;
+
+    /// <summary>
+    /// Sets the <c>/TR</c> transfer function - a Type 4 function (see <see cref="PdfType4Function"/>),
+    /// or an array of up to four (ISO 32000-1 §8.6.5.3). Plain element assignment rather than
+    /// <c>Elements.SetReference</c>: a single function is an indirect stream object and gets
+    /// converted to a reference automatically by the assignment itself (the same auto-conversion
+    /// <c>Elements[key] = value</c> already does for any indirect <see cref="PdfObject"/>), while an
+    /// array value is a direct object whose own elements already hold indirect references to the
+    /// functions inside it - <c>SetReference</c> would incorrectly demand the array itself be
+    /// indirect too.
+    /// </summary>
+    public PdfItem TransferFunction
+    {
+        set { Elements[Keys.TR] = value; }
+    }
+
+    internal string Key => _key;
+
+    void UpdateKey()
+    {
+        _key = ((int)(1000 * _strokeAlpha)).ToString(CultureInfo.InvariantCulture) +
+                     ((int)(1000 * _nonStrokeAlpha)).ToString(CultureInfo.InvariantCulture);
+
+    }
+    string _key = null!;
+
+    internal static string MakeKey(double alpha) => ((int)(1000 * alpha)).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Common keys for all streams.
+    /// </summary>
+    internal sealed class Keys : KeysBase
+    {
+        // ReSharper disable InconsistentNaming
+
+        /// <summary>
+        /// (Optional) The type of PDF object that this dictionary describes;
+        /// must be ExtGState for a graphics state parameter dictionary.
+        /// </summary>
+        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
+        public const string Type = "/Type";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The line width (see "Line Width" on page 185).
+        /// </summary>
+        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string LW = "/LW";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The line cap style.
+        /// </summary>
+        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        public const string LC = "/LC";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The line join style.
+        /// </summary>
+        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        public const string LJ = "/LJ";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The miter limit.
+        /// </summary>
+        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string ML = "/ML";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The line dash pattern, expressed as an array of the form
+        /// [dashArray dashPhase], where dashArray is itself an array and dashPhase is an integer.
+        /// </summary>
+        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
+        public const string D = "/D";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The name of the rendering intent.
+        /// </summary>
+        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
+        public const string RI = "/RI";
+
+        /// <summary>
+        /// (Optional) A flag specifying whether to apply overprint. In PDF 1.2 and earlier,
+        /// there is a single overprint parameter that applies to all painting operations.
+        /// Beginning with PDF 1.3, there are two separate overprint parameters: one for stroking 
+        /// and one for all other painting operations. Specifying an OP entry sets both parameters
+        /// unless there is also an op entry in the same graphics state parameter dictionary, in
+        /// which case the OP entry sets only the overprint parameter for stroking.
+        /// </summary>
+        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        public const string OP = "/OP";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A flag specifying whether to apply overprint for painting operations
+        /// other than stroking. If this entry is absent, the OP entry, if any, sets this parameter.
+        /// </summary>
+        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        public const string op = "/op";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The overprint mode.
+        /// </summary>
+        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        public const string OPM = "/OPM";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) An array of the form [font size], where font is an indirect
+        /// reference to a font dictionary and size is a number expressed in text space units.
+        /// These two objects correspond to the operands of the Tf operator; however,
+        /// the first operand is an indirect object reference instead of a resource name.
+        /// </summary>
+        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
+        public const string Font = "/Font";
+
+        /// <summary>
+        /// (Optional) The black-generation function, which maps the interval [0.0 1.0]
+        /// to the interval [0.0 1.0].
+        /// </summary>
+        [PdfKey(PdfKeyType.Function | PdfKeyType.Optional)]
+        public const string BG = "/BG";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) Same as BG except that the value may also be the name Default,
+        /// denoting the black-generation function that was in effect at the start of the page.
+        /// If both BG and BG2 are present in the same graphics state parameter dictionary, 
+        /// BG2 takes precedence.
+        /// </summary>
+        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
+        public const string BG2 = "/BG2";
+
+        /// <summary>
+        /// (Optional) The undercolor-removal function, which maps the interval
+        /// [0.0 1.0] to the interval [-1.0 1.0].
+        /// </summary>
+        [PdfKey(PdfKeyType.Function | PdfKeyType.Optional)]
+        public const string UCR = "/UCR";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) Same as UCR except that the value may also be the name Default,
+        /// denoting the undercolor-removal function that was in effect at the start of the page.
+        /// If both UCR and UCR2 are present in the same graphics state parameter dictionary, 
+        /// UCR2 takes precedence.
+        /// </summary>
+        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
+        public const string UCR2 = "/UCR2";
+
+        /// <summary>
+        /// (Optional) The transfer function, which maps the interval [0.0 1.0] to itself, applied to
+        /// each device colour component before it is halftoned/rendered. May be a single function
+        /// (applied identically to every colorant), an array of functions (one per colorant), or the
+        /// name Default. See <see cref="TransferFunction"/> and <see cref="PdfType4Function"/> -
+        /// crucially, this is a PER-COMPONENT function (it never sees more than one colorant's value
+        /// at a time), so it cannot express a cross-channel colour transform.
+        /// </summary>
+        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
+        public const string TR = "/TR";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) Same as TR except that the value may also be the name Default,
+        /// denoting the transfer function that was in effect at the start of the page. If both TR
+        /// and TR2 are present in the same graphics state parameter dictionary, TR2 takes precedence.
+        /// </summary>
+        [PdfKey(PdfKeyType.FunctionOrName | PdfKeyType.Optional)]
+        public const string TR2 = "/TR2";
+
+        //HT  dictionary, stream, or name
+        //FL  number
+        //SM  number
+
+        /// <summary>
+        /// (Optional) A flag specifying whether to apply automatic stroke adjustment.
+        /// </summary>
+        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        public const string SA = "/SA";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) The current blend mode to be used in the transparent imaging model.
+        /// </summary>
+        [PdfKey(PdfKeyType.NameOrArray | PdfKeyType.Optional)]
+        public const string BM = "/BM";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) The current soft mask, specifying the mask shape or
+        /// mask opacity values to be used in the transparent imaging model.
+        /// </summary>
+        [PdfKey(PdfKeyType.NameOrDictionary | PdfKeyType.Optional)]
+        public const string SMask = "/SMask";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) The current stroking alpha constant, specifying the constant 
+        /// shape or constant opacity value to be used for stroking operations in the transparent
+        /// imaging model.
+        /// </summary>
+        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string CA = "/CA";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) Same as CA, but for nonstroking operations.
+        /// </summary>
+        [PdfKey(PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string ca = "/ca";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) The alpha source flag ("alpha is shape"), specifying whether 
+        /// the current soft mask and alpha constant are to be interpreted as shape values (true)
+        /// or opacity values (false).
+        /// </summary>
+        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        public const string AIS = "/AIS";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) The text knockout flag, which determines the behavior of 
+        /// overlapping glyphs within a text object in the transparent imaging model.
+        /// </summary>
+        [PdfKey(PdfKeyType.Boolean | PdfKeyType.Optional)]
+        public const string TK = "/TK";
+
+        // ReSharper restore InconsistentNaming
+
+        /// <summary>
+        /// Gets the KeysMeta for these keys.
+        /// </summary>
+        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
+    }
+
+    /// <summary>
+    /// Gets the KeysMeta of this dictionary type.
+    /// </summary>
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
+}

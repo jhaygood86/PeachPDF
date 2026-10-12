@@ -1,10 +1,10 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -174,14 +174,14 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
 
-            var adapter = new PdfSharpAdapter();
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var doc = new PdfDocument();
             var page = doc.AddPage();
@@ -195,11 +195,11 @@ namespace PeachPDF.Tests.Integration
                 structureTagBuilder.BeginPage(page);
             }
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var measureGraphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(measureGraphics);
 
-            var recorder = new RecordingGraphics(adapter);
+            var recorder = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recorder);
 
             return recorder.Log;
@@ -215,8 +215,8 @@ namespace PeachPDF.Tests.Integration
         {
             public System.Collections.Generic.List<(string, string?)> Log { get; } = [];
 
-            public RecordingGraphics(RenderContext adapter)
-                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics(RenderContext renderContext)
+                : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void BeginMarkedContent(string structureType, int mcid) => Log.Add(("BeginMarkedContent", structureType));
             public override void EndMarkedContent() => Log.Add(("EndMarkedContent", null));

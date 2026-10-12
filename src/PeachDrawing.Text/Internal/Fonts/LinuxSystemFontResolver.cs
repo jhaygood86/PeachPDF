@@ -39,7 +39,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// returns the same family. Caching therefore changes no result, only how often the round trip
         /// through native code is paid.
         /// <para>
-        /// It was being paid a great deal. <c>PdfGenerator</c> holds its <c>PdfSharpAdapter</c> as an
+        /// It was being paid a great deal. <c>PdfGenerator</c> holds its <c>PdfRenderContext</c> as an
         /// instance field, that adapter's constructor resolves every generic family plus
         /// <c>system-ui</c>, and callers construct a <c>PdfGenerator</c> per document - so a run of
         /// N documents made 7N identical fontconfig round trips. A sampled CPU profile put 2.7% of all

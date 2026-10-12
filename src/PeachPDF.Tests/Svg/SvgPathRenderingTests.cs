@@ -1,6 +1,6 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Svg
                     stroke="black"/>
                 </svg>
                 """).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfSharpAdapter());
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfRenderContext());
             var graphics = new RealPathRecordingGraphics();
 
             SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Svg
                   <path d="M50 10 A40 40 0 0 0 50 90" fill="none" stroke="black"/>
                 </svg>
                 """).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfSharpAdapter());
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfRenderContext());
             var graphics = new RealPathRecordingGraphics();
 
             SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));
@@ -56,13 +56,13 @@ namespace PeachPDF.Tests.Svg
 
         private sealed class RealPathRecordingGraphics : TestRecordingGraphics
         {
-            public List<XPoint[]> Paths { get; } = [];
+            public List<PaintPoint[]> Paths { get; } = [];
 
-            public override GraphicsPath GetGraphicsPath() => new GraphicsPathAdapter();
+            public override GraphicsPath GetGraphicsPath() => new PdfGraphicsPath();
 
             public override void DrawPath(Pen pen, GraphicsPath path)
             {
-                Paths.Add(((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints);
+                Paths.Add(PathPoints.Of(path));
             }
         }
     }

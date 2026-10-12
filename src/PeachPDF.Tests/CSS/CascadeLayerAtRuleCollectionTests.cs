@@ -1,10 +1,10 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Linq;
 
 namespace PeachPDF.Tests.CSS;
@@ -32,7 +32,7 @@ public class CascadeLayerAtRuleCollectionTests
             "  @page { size: 20mm 30mm; } }" +
             "@layer wrap { @media print { @page { margin: 5mm; } } }";
 
-        var cssData = await CssData.Parse(new PdfSharpAdapter(), css, combineWithDefault: false);
+        var cssData = await CssData.Parse(new PdfRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
 
         Assert.Single(all.OfType<IFontFaceRule>());
@@ -64,7 +64,7 @@ public class CascadeLayerAtRuleCollectionTests
             "@supports (display: flex) { @font-face { font-family: L; src: url(a.woff2); } " +
             "  @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
 
-        var cssData = await CssData.Parse(new PdfSharpAdapter(), css, combineWithDefault: false);
+        var cssData = await CssData.Parse(new PdfRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
 
         Assert.Single(all.OfType<IFontFaceRule>());
@@ -80,7 +80,7 @@ public class CascadeLayerAtRuleCollectionTests
         const string css =
             "@supports (transition-duration: 1s) { @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
 
-        var cssData = await CssData.Parse(new PdfSharpAdapter(), css, combineWithDefault: false);
+        var cssData = await CssData.Parse(new PdfRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
 
         Assert.Empty(all.OfType<IPropertyRule>());
@@ -116,16 +116,16 @@ public class CascadeLayerAtRuleCollectionTests
 
     private static async Task<HtmlContainerInt> BuildContainer(string html)
     {
-        var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-        var container = new HtmlContainerInt(adapter);
+        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var container = new HtmlContainerInt(renderContext);
 
-        var size = new XSize(595, 842);
-        container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-        container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+        var size = new Size(595, 842);
+        container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+        container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         await container.SetHtml(html, null);
 
-        var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-        using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+        var measure = PdfGraphics.CreateMeasureContext(size);
+        using var graphics = new PdfCanvas(renderContext, measure, 1.0);
         await container.PerformLayout(graphics);
         return container;
     }

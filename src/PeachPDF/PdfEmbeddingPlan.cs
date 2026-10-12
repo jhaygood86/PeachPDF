@@ -1,7 +1,7 @@
 #nullable enable
 
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
 using System;
 using System.Collections.Generic;
 using System.Linq;

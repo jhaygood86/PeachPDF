@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
                        $"<body style='margin:0;font-family:\"{Font}\";font-size:10pt;line-height:12pt'>{body}</body></html>";
 
             var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: 200, margin: 20,
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, Font));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, Font));
 
             var lines = new List<string>();
             var painter = new FragmentPainter(container) { TraceSink = lines.Add };

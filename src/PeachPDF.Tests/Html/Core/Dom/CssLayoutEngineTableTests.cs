@@ -1,10 +1,10 @@
-﻿using PeachPDF.Adapters;
+﻿using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Diagnostics;
 using System.Globalization;
@@ -1842,8 +1842,8 @@ Assert.NotNull(tbody);
             {
                 if (pass > 0)
                 {
-                    var measure = XGraphics.CreateMeasureContext(new XSize(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
-                    using var graphics = new GraphicsAdapter((PdfSharpAdapter)container.Adapter, measure, 1.0);
+                    var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
+                    using var graphics = new PdfCanvas((PdfRenderContext)container.RenderContext, measure, 1.0);
                     await container.PerformLayout(graphics);
                 }
 
@@ -3182,19 +3182,19 @@ Assert.NotNull(tbody);
     string html, 
  double pageHeight = 842) // A4 height by default
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-       var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+       var container = new HtmlContainerInt(renderContext);
 
           await container.SetHtml(html, null);
 
-     var size = new XSize(595, pageHeight);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-    container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+     var size = new Size(595, pageHeight);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+    container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
    container.MarginTop = 20;
         container.MarginBottom = 20;
 
-   var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+   var measure = PdfGraphics.CreateMeasureContext(size);
+using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
       Assert.NotNull(container.Root);

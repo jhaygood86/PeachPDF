@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextBidiTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body)
         {
@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Svg
 
             // One DrawString call per character, in painted (visual, post-reorder) order: '(' 'B' 'A' ')'.
             // 'B'/'A' were never mirrored, so GlyphInfo.LogicalGlyph (unlike HTML's whole-word logicalText)
-            // stays null for them - there is nothing distinct to recover per character, and CMapInfo
+            // stays null for them - there is nothing distinct to recover per character, and CharacterMapInfo
             // treats null the same as "identical to what's painted".
             Assert.Equal(4, g.DrawStringCalls.Count);
             Assert.Equal([("(", ")"), ("B", null), ("A", null), (")", "(")],

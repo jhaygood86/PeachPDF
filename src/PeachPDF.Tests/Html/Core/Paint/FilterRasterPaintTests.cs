@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachDrawing;
@@ -23,17 +23,17 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("filter:blur(3pt) grayscale(1);"), margin: 0);
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recording);
 
             // No raster surface was available, so the box paints its own background rather than vanishing.
             Assert.Contains(recording.Log, op => op.Kind == PaintOpKind.FillRect);
         }
 
-        private static RasterCanvas NewPage(int width, int height, PdfSharpAdapter adapter)
+        private static RasterCanvas NewPage(int width, int height, PdfRenderContext renderContext)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterCanvas(adapter, surface, 1);
+            return new RasterCanvas(renderContext, surface, 1);
         }
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task Grayscale_TurnsTheRedBoxGrey_WhenPaintedIntoARasterPage()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("filter:grayscale(1);"), margin: 0);
-            var page = NewPage(80, 60, new PdfSharpAdapter());
+            var page = NewPage(80, 60, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -57,7 +57,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task Blur_SpreadsTheBoxBeyondItsEdges_AndSoftensThem()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("margin:20pt;filter:blur(3pt);"), margin: 0);
-            var page = NewPage(120, 100, new PdfSharpAdapter());
+            var page = NewPage(120, 100, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -78,7 +78,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
                 </div>
                 """;
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), margin: 0);
-            var page = NewPage(100, 80, new PdfSharpAdapter());
+            var page = NewPage(100, 80, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -99,7 +99,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task OpacityAndBlendMode_ApplyAfterTheFilterList()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("filter:grayscale(1);opacity:0.5;"), margin: 0);
-            var page = NewPage(80, 60, new PdfSharpAdapter());
+            var page = NewPage(80, 60, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task OpacityFunction_NextToABlur_RunsInTheSameBitmapPass()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("margin:10pt;filter:opacity(0.5) blur(1pt);"), margin: 0);
-            var page = NewPage(80, 70, new PdfSharpAdapter());
+            var page = NewPage(80, 70, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -123,7 +123,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task DropShadowInTheList_IsLeftToTheDecorationPainter()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("margin:10pt;filter:drop-shadow(4pt 4pt 0 #0000ff) grayscale(1);"), margin: 0);
-            var page = NewPage(90, 80, new PdfSharpAdapter());
+            var page = NewPage(90, 80, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
                 Html("margin:20pt;box-shadow:8pt 8pt 0 #0000ff;filter:grayscale(1);"), margin: 0);
-            var page = NewPage(110, 100, new PdfSharpAdapter());
+            var page = NewPage(110, 100, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 
@@ -152,7 +152,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task ElementOutsideTheClip_IsNotRasterized()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(Html("margin:200pt 0 0 0;filter:blur(2pt);"), margin: 0);
-            var page = NewPage(80, 60, new PdfSharpAdapter());
+            var page = NewPage(80, 60, new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, page);
 

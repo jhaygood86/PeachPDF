@@ -1,9 +1,9 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.IO;
 using System.Linq;
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
             // well-designed font's oldstyle figures aren't guaranteed to differ in advance width from
             // the default ones.
             var box = await FindWordsBox("<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums\">0123456789</b>");
-            var typeface = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface;
+            var typeface = ((PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont).Font.Typeface;
 
             var defaultShaped = Shaper.Shape(typeface, "0123456789", ShapeSettings.Default);
             var oldstyleShaped = Shaper.Shape(typeface, "0123456789", box.ActualTextShapingFeatures);
@@ -91,16 +91,16 @@ body {{ font-family: 'SS3Num'; width: 400px; }}
 
         private static async Task<CssBox> FindWordsBox(string body)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body), null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -125,12 +125,12 @@ body {{ font-family: 'SS3Num'; width: 400px; }}
             return null;
         }
 
-        private static GraphicsAdapter MeasureGraphics()
+        private static PdfCanvas MeasureGraphics()
         {
-            var adapter = new PdfSharpAdapter();
-            var size = new XSize(595, 842);
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            return new GraphicsAdapter(adapter, measure, 1.0);
+            var renderContext = new PdfRenderContext();
+            var size = new Size(595, 842);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            return new PdfCanvas(renderContext, measure, 1.0);
         }
     }
 }

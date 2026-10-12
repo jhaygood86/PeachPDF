@@ -1,7 +1,7 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Text;
 using System.Threading.Tasks;
@@ -48,17 +48,17 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<double> MeasureActualWidth(string html, double pageWidth)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             container.PageSize = new Size(pageWidth, 800);
             // Mirrors PdfGenerator's ShrinkToFit measurement pass: width-constrained, height open
-            // (src/PeachPDF/PdfGenerator.cs: container.MaxSize = new XSize(container.PageSize.Width, 0)).
+            // (src/PeachPDF/PdfGenerator.cs: container.MaxSize = new Size(container.PageSize.Width, 0)).
             container.MaxSize = new Size(pageWidth, 0);
 
-            var measure = XGraphics.CreateMeasureContext(new XSize(pageWidth, 800), XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(new Size(pageWidth, 800));
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return container.ActualSize.Width;

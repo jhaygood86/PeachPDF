@@ -1,10 +1,11 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -103,7 +104,7 @@ namespace PeachPDF.Html.Core.Handlers
             // fragment untouched, so the classification below still sees it.
             var target = ResolveTargetValue(box) is { } raw ? container.ResolveHref(raw) : null;
 
-            XRect? rect;
+            Rect? rect;
             if (target is null)
             {
                 // A display:none (or otherwise unrendered) box was never actually painted -
@@ -116,7 +117,7 @@ namespace PeachPDF.Html.Core.Handlers
                 // A display:contents element has no geometry of its own: its content's is where it points.
                 var geometryBox = DomUtils.ResolveGeometryBox(box);
                 var ownRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
-                rect = PeachPDF.Utilities.Utils.Convert(ownRect, ppp);
+                rect = PeachPDF.Utilities.Utils.ToPoints(ownRect, ppp);
             }
             else if (target.Length > 1 && target[0] == '#')
             {

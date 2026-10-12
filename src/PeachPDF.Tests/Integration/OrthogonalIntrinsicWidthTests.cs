@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Tests.Integration;
 
@@ -21,16 +21,16 @@ public class OrthogonalIntrinsicWidthTests
                    ".vbox{border:2px solid #000;padding:8px;writing-mode:vertical-rl;width:60px;height:140px}</style></head>" +
                    $"<body><div class='row'><div id='item'>{item}</div><div id='after'>x</div></div></body></html>";
 
-        var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-        var container = new HtmlContainerInt(adapter) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
+        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var container = new HtmlContainerInt(renderContext) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
         await container.SetHtml(html, null);
 
-        var size = new XSize(600, 800);
-        container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-        container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+        var size = new Size(600, 800);
+        container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+        container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-        var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-        using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+        var measure = PdfGraphics.CreateMeasureContext(size);
+        using var graphics = new PdfCanvas(renderContext, measure, 1.0);
         await container.PerformLayout(graphics);
 
         return Find(container.Root!, "item")!;

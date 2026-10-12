@@ -1,7 +1,7 @@
 ﻿using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
@@ -17,16 +17,16 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterTextTestSans";
 
-        private sealed record Fixture(PdfSharpAdapter Adapter, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
+        private sealed record Fixture(PdfRenderContext RenderContext, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
 
         private static async Task<Fixture> NewFixture(int width = 300, int height = 80)
         {
-            var adapter = new PdfSharpAdapter();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            var graphics = new RasterCanvas(adapter, surface, 1);
-            return new Fixture(adapter, graphics, style => adapter.GetFont(Family, 24, style)!);
+            var graphics = new RasterCanvas(renderContext, surface, 1);
+            return new Fixture(renderContext, graphics, style => renderContext.GetFont(Family, 24, style)!);
         }
 
         private static PaintColor Black => PaintColor.FromArgb(255, 0, 0, 0);
@@ -81,12 +81,12 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
             var font = f.Font(PaintFontStyle.Regular);
-            var real = ((FontAdapter)font).Font;
+            var real = ((PdfCanvasFont)font).Font;
 
             Draw(f, "HHH", font);
 
             // A flat-bottomed capital sits on the baseline: y + cell ascent (in points), not the rounded Font.Ascent.
-            var baseline = 10 + real.GetHeight() * real.CellAscent / real.CellSpace;
+            var baseline = 10 + real.Height * real.Typeface.Metrics.CellAscent / real.Typeface.Metrics.LineSpacing;
             var (_, _, _, maxY, _) = InkBounds(f.Graphics);
             Assert.InRange(maxY + 1, baseline - 1, baseline + 1);
         }
@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
             var font = f.Font(PaintFontStyle.Regular);
-            var pdf = new PdfSharpCore.Drawing.XGraphicsMeasureProbe(font).Width("measure me");
+            var pdf = new PDF.Drawing.PdfGraphicsMeasureProbe(font).Width("measure me");
 
             Assert.Equal(pdf, f.Graphics.MeasureString("measure me", font).Width, 6);
             Assert.Equal("measure me".Length, f.Graphics.CountShapedGlyphs("measure me", font));
@@ -217,15 +217,15 @@ namespace PeachPDF.Tests.Raster
     }
 }
 
-namespace PeachPDF.PdfSharpCore.Drawing
+namespace PeachPDF.PDF.Drawing
 {
-    /// <summary>Test-only: measures with the same routine <c>GraphicsAdapter</c> uses (an <c>XGraphics</c> measure context).</summary>
-    internal sealed class XGraphicsMeasureProbe(PeachDrawing.Core.Font font)
+    /// <summary>Test-only: measures with the same routine <c>PdfCanvas</c> uses (an <c>PdfGraphics</c> measure context).</summary>
+    internal sealed class PdfGraphicsMeasureProbe(PeachDrawing.Core.Font font)
     {
         public double Width(string text)
         {
-            var real = ((PeachPDF.Adapters.FontAdapter)font).Font;
-            var size = FontHelper.MeasureString(text, real, XStringFormats.Default, PeachDrawing.Text.Shaping.ShapeSettings.Default);
+            var real = ((PeachPDF.PdfBackend.PdfCanvasFont)font).Font;
+            var size = FontHelper.MeasureString(text, real, PdfStringFormats.Default, PeachDrawing.Text.Shaping.ShapeSettings.Default);
             return size.Width;
         }
     }

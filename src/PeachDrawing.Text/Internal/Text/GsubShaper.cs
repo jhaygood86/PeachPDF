@@ -28,8 +28,8 @@ namespace PeachDrawing.Text.Internal.Text
     /// reasoning applied to hyphenation.
     ///
     /// This is the single glyph-walk every text-drawing/measuring call site shares
-    /// (<c>FontHelper.MeasureString</c>, <c>XGraphicsPdfRenderer.DrawString</c>,
-    /// <c>ColorGlyphPainter.Paint</c>, <c>GraphicsAdapter.GetTextOutline</c>, <c>CMapInfo</c>) -
+    /// (<c>FontHelper.MeasureString</c>, <c>PdfGraphicsRenderer.DrawString</c>,
+    /// <c>ColorGlyphPainter.Paint</c>, <c>PdfCanvas.GetTextOutline</c>, <c>CharacterMapInfo</c>) -
     /// previously each re-derived "codepoint to glyph" independently.
     /// </summary>
     internal static class GsubShaper
@@ -1125,7 +1125,7 @@ namespace PeachDrawing.Text.Internal.Text
                 var expanded = new PlacedGlyph[sequence.Length];
 
                 // The first output glyph keeps the original source-text span; every subsequent one
-                // gets a zero-length span anchored at its end - so CMapInfo.AddShapedText's
+                // gets a zero-length span anchored at its end - so CharacterMapInfo.AddShapedText's
                 // glyph-index-keyed ToUnicode map doesn't have every one of the N output glyphs
                 // independently claim the whole original span (which would make PDF text extraction
                 // over-copy the source character N times). Substring(x, 0) already resolves such a

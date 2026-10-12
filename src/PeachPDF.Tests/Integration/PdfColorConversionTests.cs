@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Phase B of the CMYK/ICC epic (jhaygood86/PeachPDF#1090) - <see cref="ColorOptions.ConversionMode"/>,
     /// backed by PeachImage 0.4.4's <c>IccColorProfile.ConvertTo</c> device-to-device primitive
-    /// (<see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfColorConversionGuard"/>). The synthetic CMYK
+    /// (<see cref="PeachPDF.PDF.Advanced.PdfColorConversionGuard"/>). The synthetic CMYK
     /// profile fixture's CLUT is zeroed (see <see cref="IccProfileFixture.BuildCmykProfile"/>'s own doc
     /// comment - colorimetric accuracy isn't the point there), so these tests verify the *structural*
     /// result (an RGB-authored color reaches the PDF as a real CMYK operator - the space actually changed,
@@ -241,7 +242,7 @@ namespace PeachPDF.Tests.Integration
                 },
             };
 
-            // Just needs to succeed without throwing - a Gray destination's XColor.FromGrayScale
+            // Just needs to succeed without throwing - a Gray destination's PdfColors.FromGrayScale
             // constructor doesn't preserve alpha, which is a documented, narrow, low-priority gap
             // (Gray output-intent/conversion-target profiles are unusual for CMYK-oriented print
             // workflows) rather than something worth a content-stream assertion here.

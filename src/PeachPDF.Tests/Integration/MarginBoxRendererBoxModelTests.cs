@@ -1,6 +1,7 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -22,7 +23,7 @@ namespace PeachPDF.Tests.Integration
         // A 600×800 sheet with 60pt left/right and 40pt top/bottom margins:
         //   contentWidth  = 600 - 60 - 60 = 480   (shared by a top/bottom row's three boxes)
         //   contentHeight = 800 - 40 - 40 = 720   (shared by a left/right column's three boxes)
-        private static readonly XSize Page = new(600, 800);
+        private static readonly Size Page = new(600, 800);
         private const double ML = 60, MT = 40, MR = 60, MB = 40;
         private const double RemPt = 16;
 
@@ -184,7 +185,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void OverPaddedBox_CollapsesToZeroRatherThanANegativeExtent()
         {
-            // XRect refuses a negative extent, and the render path's own `rect.Width <= 0` guard
+            // Rect refuses a negative extent, and the render path's own `rect.Width <= 0` guard
             // then skips the box — which is what an over-padded box should do.
             var rect = Rect("@top-center { content: \"x\"; padding-left: 400pt; padding-right: 400pt; }", "top-center");
 
@@ -320,7 +321,7 @@ namespace PeachPDF.Tests.Integration
         /// The two steps the render paths run back to back: allocate the slot, then reduce it to the
         /// content box.
         /// </summary>
-        private static XRect Rect(string marginBoxCss, string boxName)
+        private static Rect Rect(string marginBoxCss, string boxName)
         {
             var margins = Margins(marginBoxCss);
             var rect = MarginBoxRenderer.GetMarginBoxRect(boxName, Page, ML, MT, MR, MB, margins, null, RemPt);

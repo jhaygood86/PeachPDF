@@ -33,13 +33,13 @@ namespace PeachPDF.Html.Core.Dom
             List<Token> tokens = pooledTokens;
 
             // Detect image content (url() or gradient functions) before building text
-            if (tokens.Count > 0 && cssBox.HtmlContainer?.Adapter is RenderContext adapter)
+            if (tokens.Count > 0 && cssBox.HtmlContainer?.RenderContext is RenderContext renderContext)
             {
                 var first = tokens[0];
                 if (first.Type == TokenType.Url ||
                     (first is { Type: TokenType.Function } ft && IsGradientFunctionName(ft.Data)))
                 {
-                    var image = new CssValueParser(adapter).ParseImage(cssBox.Content);
+                    var image = new CssValueParser(renderContext).ParseImage(cssBox.Content);
                     if (image != null)
                     {
                         cssBox.ContentImage = image;

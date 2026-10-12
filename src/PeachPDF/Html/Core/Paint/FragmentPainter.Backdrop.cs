@@ -83,7 +83,7 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
-            FilterBackdrop(scope.Surface, applied, box, container.Adapter.MaxRasterPixels);
+            FilterBackdrop(scope.Surface, applied, box, container.RenderContext.MaxRasterPixels);
 
             // The bitmap covers the border box snapped outward to whole pixels, and the element's corners may be rounded: clip to the real
             // shape so the filtered backdrop does not spill past the box.

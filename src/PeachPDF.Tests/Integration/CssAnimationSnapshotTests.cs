@@ -1,9 +1,10 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -140,7 +141,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Interpolation ───────────────────────────────────────────────────────
 
         private static string Mix(string property, string from, string to, double t) =>
-            CssValueInterpolator.Interpolate(new CssValueParser(new PdfSharpAdapter()), property, from, to, t);
+            CssValueInterpolator.Interpolate(new CssValueParser(new PdfRenderContext()), property, from, to, t);
 
         [Theory]
         [InlineData("opacity", "0", "1", 0.25, "0.25")]
@@ -766,9 +767,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task KeyframeSet_UsesRevertOnlyForADeclarationThatSurvives()
         {
-            var adapter = new PdfSharpAdapter();
-            var overridden = RegisteredKeyframes.BuildRegistry(await CssData.Parse(adapter, "@keyframes k { to { opacity: revert; opacity: 1 } }"));
-            var used = RegisteredKeyframes.BuildRegistry(await CssData.Parse(adapter, "@keyframes k { to { opacity: revert } }"));
+            var renderContext = new PdfRenderContext();
+            var overridden = RegisteredKeyframes.BuildRegistry(await CssData.Parse(renderContext, "@keyframes k { to { opacity: revert; opacity: 1 } }"));
+            var used = RegisteredKeyframes.BuildRegistry(await CssData.Parse(renderContext, "@keyframes k { to { opacity: revert } }"));
 
             Assert.False(overridden["k"].UsesRevert);
             Assert.True(used["k"].UsesRevert);
@@ -984,7 +985,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>The widths of every <c>re</c> rectangle in a page's content stream, read from the live object graph.</summary>
-        private static IEnumerable<double> RectangleWidths(PeachPDF.PdfSharpCore.Pdf.PdfDocument document, int page)
+        private static IEnumerable<double> RectangleWidths(PeachPDF.PDF.PdfDocument document, int page)
         {
             using var bytes = new System.IO.MemoryStream();
 
@@ -1136,16 +1137,16 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildAsync(string html, double? progress)
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter) { AnimationProgress = progress };
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext) { AnimationProgress = progress };
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

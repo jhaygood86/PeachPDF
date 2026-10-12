@@ -11,8 +11,8 @@ namespace PeachPDF.Tests.Integration;
 /// </summary>
 public class MulticolTableFontMetricTests
 {
-    private static Task RegisterSourceSans(PeachPDF.Adapters.PdfSharpAdapter adapter) =>
-        BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Metric Fixture");
+    private static Task RegisterSourceSans(PeachPDF.PdfBackend.PdfRenderContext renderContext) =>
+        BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Metric Fixture");
 
     [Theory]
     [InlineData("PinnedSans", "12pt", 0)]
@@ -31,10 +31,10 @@ public class MulticolTableFontMetricTests
                    $"<table border='1'><tr><td>{words}</td><td>w2_1 w2_2</td></tr></table></div></body></html>";
 
         var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
-            html, new PdfGenerateConfig(), async adapter =>
+            html, new PdfGenerateConfig(), async renderContext =>
             {
-                await BundledFonts.PinSansSerifAsync(adapter);
-                await RegisterSourceSans(adapter);
+                await BundledFonts.PinSansSerifAsync(renderContext);
+                await RegisterSourceSans(renderContext);
             });
 
         // Ownership, not the word rectangle: with a line-height below the font's natural height the rectangle of

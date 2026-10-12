@@ -1,10 +1,10 @@
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// End-to-end regression test for the platform-aware generic-family mapping
     /// (<see cref="PeachPDF.Html.Core.Utils.GenericFontFamilyResolver"/>) actually wired into
-    /// <see cref="PdfSharpAdapter"/>'s generic-family mappings, not just the pure resolver function.
+    /// <see cref="PdfRenderContext"/>'s generic-family mappings, not just the pure resolver function.
     /// Windows is the only platform this test can assert a specific resolved family on regardless of
     /// which CI/dev machine runs it, since Consolas is a font every real Windows installation ships -
     /// no-ops (rather than skipping, matching this test project's existing convention for host-dependent
@@ -27,11 +27,11 @@ namespace PeachPDF.Tests.Integration
         {
             if (!OperatingSystem.IsWindows()) return;
 
-            var adapter = new PdfSharpAdapter();
-            var font = adapter.GetFont("monospace", 12, PaintFontStyle.Regular) as FontAdapter;
+            var renderContext = new PdfRenderContext();
+            var font = renderContext.GetFont("monospace", 12, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.NotNull(font);
-            Assert.Equal("Consolas", font!.Font.Name);
+            Assert.Equal("Consolas", font!.Font.Typeface.FamilyName);
         }
 
         [Theory]
@@ -41,15 +41,15 @@ namespace PeachPDF.Tests.Integration
         [InlineData("system-ui")]   // resolved through fontconfig like the three above
         public void Generic_OnLinux_ResolvesToARealInstalledFontconfigFamily(string generic)
         {
-            // Linux delegates to fontconfig at PdfSharpAdapter construction time rather than a hardcoded
+            // Linux delegates to fontconfig at PdfRenderContext construction time rather than a hardcoded
             // table - confirms the resolved mapping is both non-trivial (differs from the bare generic
             // name FontsHandler would otherwise treat as a literal, almost-certainly-uninstalled family)
             // and actually installed (IsFontExists), on a real Linux CI/dev machine.
             if (!OperatingSystem.IsLinux() || OperatingSystem.IsAndroid()) return;
 
-            var adapter = new PdfSharpAdapter();
+            var renderContext = new PdfRenderContext();
 
-            Assert.True(adapter.IsFontExists(generic));
+            Assert.True(renderContext.IsFontExists(generic));
         }
 
         [Fact]
@@ -61,14 +61,14 @@ namespace PeachPDF.Tests.Integration
             if (!OperatingSystem.IsWindows() || !System.IO.File.Exists(cambria))
                 return;
 
-            var adapter = new PdfSharpAdapter();
-            if (adapter.IsFontExists("Latin Modern Math"))
+            var renderContext = new PdfRenderContext();
+            if (renderContext.IsFontExists("Latin Modern Math"))
                 return;
 
-            var font = adapter.GetFont("math", 12, PaintFontStyle.Regular) as FontAdapter;
+            var font = renderContext.GetFont("math", 12, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.NotNull(font);
-            Assert.Equal("Cambria Math", font!.Font.Name);
+            Assert.Equal("Cambria Math", font!.Font.Typeface.FamilyName);
         }
 
         [Fact]
@@ -76,9 +76,9 @@ namespace PeachPDF.Tests.Integration
         {
             // Whichever math font the host has, or the platform default when it has none, the generic must
             // never be left as an unknown family name.
-            var adapter = new PdfSharpAdapter();
+            var renderContext = new PdfRenderContext();
 
-            Assert.True(adapter.IsFontExists("math"));
+            Assert.True(renderContext.IsFontExists("math"));
         }
 
         private const string MathFamily = "TestMathGeneric";
@@ -91,24 +91,24 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<(string Paragraph, string Math)> ResolvedFamiliesAsync(string css)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, MathFamily);
-            adapter.AddFontFamilyMapping("math", MathFamily);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, MathFamily);
+            renderContext.AddFontFamilyMapping("math", MathFamily);
 
-            var container = new HtmlContainerInt(adapter);
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml($"<html><head><style>{css}</style></head><body><p>text</p><math><mi>x</mi></math></body></html>", null);
 
-            var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var size = new Size(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var measure = PdfGraphics.CreateMeasureContext(size);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var paragraph = FindByTag(container.Root!, "p")!;
             var math = FindByTag(container.Root!, "math")!;
-            return (((FontAdapter)paragraph.ActualFont).Font.Name, ((FontAdapter)math.ActualFont).Font.Name);
+            return (((PdfCanvasFont)paragraph.ActualFont).Font.Typeface.FamilyName, ((PdfCanvasFont)math.ActualFont).Font.Typeface.FamilyName);
         }
 
         private static CssBox? FindByTag(CssBox box, string tag)

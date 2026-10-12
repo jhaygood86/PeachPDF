@@ -1,6 +1,7 @@
+using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -20,7 +21,7 @@ namespace PeachPDF.Tests.Integration
         // A 600×800 sheet with 60pt left/right and 40pt top/bottom margins:
         //   contentWidth  = 600 - 60 - 60 = 480 (the span shared by the top/bottom row's three boxes)
         //   contentHeight = 800 - 40 - 40 = 720 (the span shared by a left/right column's three boxes)
-        private static readonly XSize Page = new(600, 800);
+        private static readonly Size Page = new(600, 800);
         private const double ML = 60, MT = 40, MR = 60, MB = 40;
         private const double RemPt = 16;
 

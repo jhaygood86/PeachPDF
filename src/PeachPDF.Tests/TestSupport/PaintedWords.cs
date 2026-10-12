@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Fragmentation;
 
 namespace PeachPDF.Tests.TestSupport;
@@ -29,7 +29,7 @@ internal static partial class PaintedWords
 
         for (var page = 0; page < pages; page++)
         {
-            using var graphics = new RecordingGraphics(new PdfSharpAdapter());
+            using var graphics = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, graphics, page);
             painted.AddRange(graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString).Select(op => op.Text!));
         }
@@ -44,13 +44,13 @@ internal static partial class PaintedWords
     /// on the paint log alone calls it drawn: that is how the #1531 and #1532 reductions passed a recording-only test.
     /// </summary>
     public static async Task<(IReadOnlyList<string> Visible, int Pages)> LayOutAndCollectVisibleAsync(
-        string html, Func<PdfSharpAdapter, Task>? extraFonts = null)
+        string html, Func<PdfRenderContext, Task>? extraFonts = null)
     {
         var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
-            html, new PdfGenerateConfig(), async adapter =>
+            html, new PdfGenerateConfig(), async renderContext =>
             {
-                await BundledFonts.PinSansSerifAsync(adapter);
-                if (extraFonts is not null) await extraFonts(adapter);
+                await BundledFonts.PinSansSerifAsync(renderContext);
+                if (extraFonts is not null) await extraFonts(renderContext);
             });
 
         List<string> visible = [];

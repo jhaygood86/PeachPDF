@@ -1,7 +1,7 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -233,8 +233,8 @@ namespace PeachPDF.Tests.Integration
         private static async Task<HtmlContainerInt> BuildAsync(
             string html, double configuredWidth = SheetW, double configuredHeight = SheetH)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter)
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(configuredWidth, configuredHeight)
             };

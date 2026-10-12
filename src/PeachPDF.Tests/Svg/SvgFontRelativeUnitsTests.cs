@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
@@ -22,10 +22,10 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<SvgDocument> Build(string markup)
         {
-            var adapter = new PdfSharpAdapter();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, Mono);
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, Mono);
             var root = XDocument.Parse(markup).Root!;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), renderContext);
         }
 
         private static string Svg(string attributes, string body) =>
@@ -153,10 +153,10 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public async Task Lh_UnderNonDefaultPixelsPerPoint_IsTheFontsNormalLineHeightInUserUnits()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 96.0 / 72.0 };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, Mono);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 96.0 / 72.0 };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, Mono);
             var root = XDocument.Parse(Svg("font-size=\"20\"", """<rect x="1lh" width="1" height="1"/><text>Hi</text>""")).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), renderContext);
 
             // The font was requested at 20 user units, so its normal line height in user units is that font's
             // own NormalLineHeight whatever PixelsPerPoint is - not that divided or multiplied by it.

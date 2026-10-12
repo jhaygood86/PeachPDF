@@ -9,7 +9,7 @@
 /// the naive-conversion policy this project otherwise avoids for real color writing) instead of being left
 /// zeroed. A reader that actually applies this OutputIntent for CMYK color management (e.g. MuPDF, once
 /// the document carries valid <c>GTS_PDFXVersion</c> identification - see
-/// <c>PdfSharpCore.Pdf.Advanced.PdfMetadataStream.PdfXIdentifiers</c>) would otherwise map every CMYK
+/// <c>PDF.Advanced.PdfMetadataStream.PdfXIdentifiers</c>) would otherwise map every CMYK
 /// input to the same (black) output through an all-zero CLUT, which looked like a real PeachPDF rendering
 /// bug until traced to this fixture - see this session's recent-fix note.
 /// </summary>

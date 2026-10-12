@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -200,7 +200,7 @@ namespace PeachPDF.Tests.Integration
         // makes before delegating to ResolveNamedString.
         private static HtmlContainerInt Container(double pageHeight)
         {
-            var container = new HtmlContainerInt(new PdfSharpAdapter())
+            var container = new HtmlContainerInt(new PdfRenderContext())
             {
                 MarginTop = 0,
                 PageSize = new Size(400, pageHeight),

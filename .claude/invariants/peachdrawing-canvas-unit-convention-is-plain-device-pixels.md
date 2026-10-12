@@ -10,10 +10,10 @@ zero PeachPDF reference at all. Its actual per-instance unit convention is entir
   caller, one user-space unit *is* one device pixel, directly, with no PDF/CSS concept anywhere in the
   path. This is the "least surprising default" a `Canvas` implementer or a standalone consumer should
   expect and can rely on.
-- **`GraphicsAdapter.BeginRasterSurface`** (PeachPDF's own nested-fallback-surface seam - see
-  [[raster-graphics-mirrors-graphicsadapters-unit-conventions]]) constructs a `RasterCanvas` through
+- **`PdfCanvas.BeginRasterSurface`** (PeachPDF's own nested-fallback-surface seam - see
+  [[raster-graphics-mirrors-pdfcanvas-unit-conventions]]) constructs a `RasterCanvas` through
   `PeachDrawing`'s public `RasterSurfaceFactory.Create` with PeachPDF's *real* `PixelsPerPoint`, so that
-  one `RasterCanvas` instance mirrors `GraphicsAdapter`'s own PDF-point convention exactly, for exactly as
+  one `RasterCanvas` instance mirrors `PdfCanvas`'s own PDF-point convention exactly, for exactly as
   long as it takes `FragmentPainter` to paint into it.
 
 **The rule this file exists to pin**: nothing in `RasterCanvas`/`RasterSurface`/`RasterSurfaceFactory`
@@ -22,7 +22,7 @@ PDF-specific constant, or otherwise special-case "when PeachPDF is the caller." 
 constructor parameter; if a future change to the raster-fallback path needs to pass PeachPDF-specific
 context into `RasterCanvas` any other way (a second parameter, a callback, a PeachPDF-owned type reference),
 that is a sign the "usable with zero PeachPDF reference" contract is about to be broken, and the fix belongs
-on the `GraphicsAdapter`/`RasterSurfaceFactory` side of the boundary (still `pixelsPerPoint`-only into
+on the `PdfCanvas`/`RasterSurfaceFactory` side of the boundary (still `pixelsPerPoint`-only into
 `RasterCanvas` itself), not inside the package meant to stand alone.
 
 An earlier draft of this design assumed the opposite shape - that PeachPDF's own glue code would push a

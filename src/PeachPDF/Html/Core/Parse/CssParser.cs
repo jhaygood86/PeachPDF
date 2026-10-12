@@ -34,7 +34,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// 
         /// </summary>
-        private readonly RenderContext _adapter;
+        private readonly RenderContext _renderContext;
 
         /// <summary>
         /// Utility for value parsing.
@@ -49,12 +49,12 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Init.
         /// </summary>
-        public CssParser(RenderContext adapter, HtmlContainerInt? htmlContainer)
+        public CssParser(RenderContext renderContext, HtmlContainerInt? htmlContainer)
         {
-            ArgumentNullException.ThrowIfNull(adapter, "global");
+            ArgumentNullException.ThrowIfNull(renderContext, "global");
 
-            _valueParser = new CssValueParser(adapter);
-            _adapter = adapter;
+            _valueParser = new CssValueParser(renderContext);
+            _renderContext = renderContext;
             _htmlContainer = htmlContainer;
         }
 
@@ -75,7 +75,7 @@ namespace PeachPDF.Html.Core.Parse
             // adding the caller's rules here - or later via PeachPdfCssContent.AddStyleSheet - never
             // mutates the shared instance (which would leak those rules into other renders). This
             // mirrors the render path's clone-on-write (DomParser.CloneCssData).
-            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_adapter)).Clone() : new CssData();
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData();
 
             if (!string.IsNullOrEmpty(stylesheet))
             {
@@ -92,7 +92,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
         {
-            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_adapter)).Clone() : new CssData();
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData();
 
             if (!stylesheet.IsEmpty)
             {

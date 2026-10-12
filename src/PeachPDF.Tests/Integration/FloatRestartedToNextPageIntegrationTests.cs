@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Integration
                        $"<p id='p' style='margin:0'>{Paragraph}</p></body></html>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin,
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, Font));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, Font));
 
             return (root, container, html);
         }

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Xml.Linq;
@@ -8,14 +8,14 @@ namespace PeachPDF.Tests.Svg
     /// <summary>The conservative box of what a document draws: shapes, their strokes, transforms, <c>use</c>, nested viewports and images.</summary>
     public class SvgInkExtentTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private const string Svg = "xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"";
 
         private static Rect? Extent(string body)
         {
             var root = XDocument.Parse($"<svg {Svg} viewBox=\"0 0 100 100\">{body}</svg>").Root!;
-            return SvgInkExtent.Of(SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter));
+            return SvgInkExtent.Of(SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext));
         }
 
         private static void AssertBox(Rect? actual, double x, double y, double width, double height)

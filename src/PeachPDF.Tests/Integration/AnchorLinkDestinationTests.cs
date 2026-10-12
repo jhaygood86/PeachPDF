@@ -1,8 +1,8 @@
-using PeachPDF.Adapters;
+using PeachDrawing.Core;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Drawing;
 using System.Text.RegularExpressions;
 
 namespace PeachPDF.Tests.Integration
@@ -82,11 +82,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task PublicGetLinksNoArgOverload_StillReturnsLinkData()
         {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainer(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainer(renderContext);
             await container.SetHtml("<html><body><a href='https://example.com'>go</a></body></html>");
-            container.MaxSize = new XSize(600, 0);
-            using var measure = XGraphics.CreateMeasureContext(new XSize(600, 800), XGraphicsUnit.Point, XPageDirection.Downwards);
+            container.MaxSize = new Size(600, 0);
+            using var measure = PdfGraphics.CreateMeasureContext(new Size(600, 800));
             await container.PerformLayout(measure);
 
             var links = container.GetLinks();

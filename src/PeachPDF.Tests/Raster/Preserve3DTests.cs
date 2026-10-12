@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Utils;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Raster
         private static async Task<RasterCanvas> Paint(string body, int width = 220, int height = 180)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), margin: 0);
-            var page = new RasterCanvas(new PdfSharpAdapter(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            var page = new RasterCanvas(new PdfRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, page);
             return page;
         }
@@ -362,7 +362,7 @@ namespace PeachPDF.Tests.Raster
         public async Task WithoutRasterSupport_TheContextFallsBackToPaintingItsBoxesOneAtATime()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(Cube("transform:rotateY(25deg)")), margin: 0);
-            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            var recording = new RecordingGraphics(new PdfRenderContext());
 
             FragmentPaintHarness.PaintPage(container, recording);
 

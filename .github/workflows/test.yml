@@ -258,7 +258,7 @@ jobs:
       run: |
         git fetch origin ${{ github.base_ref }}
         $coverageFiles = (Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | ForEach-Object FullName)
-        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --html-report diff-cover-report.html
+        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --format html:diff-cover-report.html
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4

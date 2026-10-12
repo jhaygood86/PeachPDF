@@ -115,7 +115,7 @@ namespace PeachPDF.Html.Core.Paint
                 // derived from OriginalText, not from PreMirrorText - only the ordinary (non-overridden)
                 // path has a known logical-order source to recover for ToUnicode text extraction. text
                 // itself equals PreMirrorText whenever this word was never actually mirrored (the
-                // overwhelming common case) - CMapInfo.AddShapedText's own remap formula needs a
+                // overwhelming common case) - CharacterMapInfo.AddShapedText's own remap formula needs a
                 // *positionally-aligned* logical source (see its own remarks), so only a genuinely
                 // mirrored word's PreMirrorText gets reversed (ReverseRunes - position only, no
                 // re-mirroring) before being handed down; passing it unconditionally would misalign an
@@ -501,7 +501,7 @@ namespace PeachPDF.Html.Core.Paint
         /// (<see cref="Font.HasVerticalOrigin"/> - issue #775), the anchor is nudged by
         /// <see cref="Font.GetVerticalOriginY"/> instead of staying at the plain top-of-cell position:
         /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/> always renders <paramref name="font"/>'s baseline at
-        /// <c>point.Y + font.Ascent</c> (traced through <c>XGraphicsPdfRenderer.DrawString</c>'s own
+        /// <c>point.Y + font.Ascent</c> (traced through <c>PdfGraphicsRenderer.DrawString</c>'s own
         /// <c>cyAscent</c> shift, which uses the exact same <c>Ascender</c> field <see cref="Font.Ascent"/>
         /// is built from), while the OpenType spec defines a glyph's vertical origin as a baseline-relative,
         /// Y-up design-space coordinate - so placing that origin at this cell's own pen position
@@ -536,9 +536,9 @@ namespace PeachPDF.Html.Core.Paint
 
             // Each character here paints as its own single-glyph DrawString call (unlike the horizontal/
             // sideways branches' one whole-word call), so the whole-word logicalText (mismatched length
-            // against a 1-character text) can't be handed through as-is - CMapInfo.AddShapedText's remap
+            // against a 1-character text) can't be handed through as-is - CharacterMapInfo.AddShapedText's remap
             // needs a per-character logical source instead. logicalText is already positionally aligned
-            // with `text` (see CMapInfo.AddShapedText's own remarks) - the i-th rune painted from `text`
+            // with `text` (see CharacterMapInfo.AddShapedText's own remarks) - the i-th rune painted from `text`
             // corresponds directly to logicalText's i-th rune, no reversal needed here.
             Rune[]? logicalRunes = logicalText != null && logicalText.Length == text.Length && logicalText != text
                 ? logicalText.EnumerateRunes().ToArray()

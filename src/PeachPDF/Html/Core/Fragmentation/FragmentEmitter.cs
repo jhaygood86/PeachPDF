@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -3735,7 +3735,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // FragmentPainter.Paint's own remarks on the parallel paint-clip half of this same defect).
                 // Derived from this slot's own geometry (not a document-global constant), so a mixed
                 // page-size document's differently-sized pages each get their own correct bounds too.
-                var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                var ppp = (container.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
                 var sheetHeight = slot.Geometry.SheetHeightPt * ppp;
 
                 return new FragmentRegion(0, sheetHeight, null, null);
@@ -4190,7 +4190,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 !geometry.HasVerticalBorderPaddingOverrides && !geometry.HasHorizontalBorderPaddingOverrides)
                 return (0, 0);
 
-            var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var ppp = (container.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var geom = slot.Geometry;
             // The page area (CSS 2.1 §10.1's initial containing block, css-page-3 §3's content area) -
             // geom.BandWidth/BandHeight already have margin AND the page box's own border/padding

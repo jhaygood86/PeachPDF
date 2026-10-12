@@ -1,0 +1,47 @@
+using System.IO;
+using System.Text;
+using PeachPDF.PDF.Drawing;
+using PeachPDF.PDF;
+using PeachPDF.PDF.Advanced;
+using PeachPDF.Tests.TestSupport;
+using Xunit;
+using PeachDrawing.Text;
+
+namespace PeachPDF.Tests.PdfEngineTests.Fonts
+{
+    /// <summary>
+    /// Direct (non-end-to-end) coverage for <see cref="PdfToUnicodeMap.PrepareForSave"/> merging both
+    /// of <see cref="CharacterMapInfo"/>'s sources - the legacy codepoint-keyed <see cref="CharacterMapInfo.CharacterToGlyphIndex"/>
+    /// (still populated only by the direct-call <see cref="CharacterMapInfo.AddChars"/> API the low-level
+    /// cmap tests use) and the GSUB-ligature-aware <see cref="CharacterMapInfo.LigatureGlyphToText"/> (populated
+    /// by <see cref="CharacterMapInfo.AddShapedText"/>, the pipeline's real entry point). The full pipeline
+    /// round-trip (<c>FontVariantLigaturesIntegrationTests.Ligature_RendersEmbedsAndRoundTripsToUnicode</c>)
+    /// only exercises the ligature source; this exercises both together at the ToUnicode-map layer directly.
+    /// </summary>
+    public class PdfToUnicodeMapLigatureTests
+    {
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Ttf);
+
+        [Fact]
+        public void PrepareForSave_MergesCharacterAndLigatureSources()
+        {
+            var descriptor = Descriptor();
+            var cmapInfo = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            cmapInfo.AddChars("A"); // populates the legacy codepoint-keyed CharacterToGlyphIndex
+            int aGlyph = cmapInfo.CharacterToGlyphIndex['A'];
+
+            const int ligatureGlyph = 12345; // an arbitrary glyph id distinct from 'A's, standing in for a real merged ligature glyph
+            cmapInfo.LigatureGlyphToText[ligatureGlyph] = "ff";
+
+            var doc = new PdfDocument { Options = { CompressContentStreams = false } };
+            var map = new PdfToUnicodeMap(doc, cmapInfo);
+            map.PrepareForSave();
+
+            var text = Encoding.Latin1.GetString(map.Stream.Value);
+
+            Assert.Contains($"<{aGlyph:X4}><{aGlyph:X4}><0041>", text); // 'A' = U+0041
+            Assert.Contains($"<{ligatureGlyph:X4}><{ligatureGlyph:X4}><00660066>", text); // "ff" = U+0066 U+0066
+            Assert.Contains("2 beginbfrange", text);
+        }
+    }
+}

@@ -1,0 +1,339 @@
+//
+// Paints color-font (COLR/CPAL) glyphs as vector fills into the PDF content
+// stream. A small embedded subset is used only for invisible selectable text;
+// it never supplies the visible glyph artwork. Driven from
+// PdfGraphicsRenderer.DrawString for fonts that report IsColorFont.
+//
+//   - COLR v0: each base glyph is a stack of (layer glyph, palette color)
+//     outlines painted bottom-to-top (this file).
+//   - COLR v1: a recursive paint graph (ColorGlyphPainter.ColrV1.cs).
+//
+// Glyph outlines are decoded to design-unit contours and mapped to world space
+// (the same space DrawString's baseline is in) through a Affine2x3 that starts
+// as the per-glyph placement and, for v1, composes the paint graph's own
+// transforms. Fills/clips go through the shared PdfGraphics, so page scaling and
+// the WorldToView mapping apply exactly as for ordinary vector content.
+//
+
+using PeachDrawing.Core;
+using PeachDrawing.Text;
+using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Shaping;
+using System;
+using System.Collections.Generic;
+using PeachPDF.PDF.Drawing;
+
+namespace PeachPDF.PDF.Rendering;
+
+internal sealed partial class ColorGlyphPainter
+{
+    private readonly PdfGraphicsRenderer _renderer;
+    private readonly PdfGraphics _gfx;
+    private readonly Typeface _typeface;
+    private readonly TypefaceFont _font;
+    private readonly Brush _textBrush;
+    private readonly double _scale;         // design units -> world units
+    private readonly double _letterSpacing; // world units
+    private readonly bool _pageDownwards;
+    private readonly PaintColor _foreground;
+    private readonly int _paletteIndex;     // selected CPAL palette (CSS font-palette), default 0
+    private readonly IReadOnlyDictionary<int, PaintColor>? _overrides; // CPAL entry index -> override color
+
+    private readonly double _baselineX;
+    private readonly double _baselineY;
+
+    public ColorGlyphPainter(PdfGraphicsRenderer renderer, TypefaceFont font,
+        Brush brush, double baselineX, double baselineY, double letterSpacing,
+        int paletteIndex = 0, IReadOnlyDictionary<int, PaintColor>? overrides = null)
+    {
+        _renderer = renderer;
+        _gfx = renderer.Gfx;
+        _typeface = font.Typeface;
+        _font = font;
+        _textBrush = brush;
+        _scale = font.Size / _typeface.Metrics.UnitsPerEm;
+        _letterSpacing = letterSpacing;
+        _pageDownwards = true;
+        _foreground = brush is SolidBrush solid ? solid.PaintColor : PaintColor.Black;
+        _paletteIndex = paletteIndex;
+        _overrides = overrides is { Count: > 0 } ? overrides : null;
+        _baselineX = baselineX;
+        _baselineY = baselineY;
+    }
+
+    /// <summary>
+    /// Paints every shaped glyph of the run as vectors, then emits one shared rendering-mode-3 text
+    /// object whose source-bearing glyphs are individually wrapped in Unicode <c>/ActualText</c>.
+    /// The vector paths remain the only visible ink; the text show adds selection geometry and
+    /// <c>/ActualText</c> preserves the exact per-occurrence Unicode sequence.
+    /// </summary>
+    public void Paint(string text, IReadOnlyList<PlacedGlyph> glyphs, string? logicalText = null)
+    {
+        string?[] actualTextByGlyph = BuildActualTextByGlyph(text, logicalText, glyphs);
+        double penX = 0;
+        for (int i = 0; i < glyphs.Count; i++)
+        {
+            PlacedGlyph glyph = glyphs[i];
+            double glyphX = _baselineX + penX + glyph.XOffset * _scale;
+
+            // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts where
+            // this glyph paints without changing its own outline shape - see GposPositioner.
+            // The artwork itself is identical wherever the glyph lands, so it is drawn once into a
+            // Form XObject and referenced here; only when that cannot apply is it inlined.
+            if (!PaintBitmapGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale) &&
+                !PaintSvgGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale) &&
+                !TryPaintGlyphFromForm(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale))
+            {
+                PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
+            }
+
+            penX += (_typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
+        }
+
+        bool hasSelectableGlyph = false;
+        for (int i = 0; i < actualTextByGlyph.Length; i++)
+            hasSelectableGlyph |= actualTextByGlyph[i] is { Length: > 0 };
+        if (!hasSelectableGlyph)
+            return;
+
+        // Paths force graphic mode, so paint all visible artwork first and then share one BT/ET pair
+        // across the run. /ActualText remains per glyph because the same CID can represent distinct
+        // source sequences at different occurrences (for example heart with and without VS16).
+        _renderer.BeginInvisibleTextRun(_font, _textBrush);
+        try
+        {
+            penX = 0;
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                PlacedGlyph glyph = glyphs[i];
+                if (actualTextByGlyph[i] is { Length: > 0 } actualText)
+                {
+                    double glyphX = _baselineX + penX + glyph.XOffset * _scale;
+                    double glyphY = _pageDownwards
+                        ? _baselineY - glyph.YOffset * _scale
+                        : _baselineY + glyph.YOffset * _scale;
+
+                    _renderer.BeginActualText(actualText);
+                    try
+                    {
+                        _renderer.DrawInvisibleGlyph(_font, glyph, actualText, glyphX, glyphY);
+                    }
+                    finally
+                    {
+                        _renderer.EndMarkedContent();
+                    }
+                }
+
+                // A GSUB Multiple Substitution's second and later output glyphs deliberately own no
+                // source characters: the first output carries the original cluster once, rather than
+                // every painted expansion glyph making extraction repeat it.
+                penX += (_typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
+            }
+        }
+        finally
+        {
+            _renderer.EndInvisibleTextRun();
+        }
+    }
+
+    /// <summary>
+    /// Assigns every UTF-16 code unit in the original run to exactly one surviving shaped glyph.
+    /// Besides the ordinary one-character and ligature cases, this keeps default-ignorables that
+    /// shaping consumed or deleted (VS16, ZWJ, emoji tag characters, bidi controls) in the copied
+    /// text even though they correctly have no painted glyph of their own.
+    /// </summary>
+    internal static string?[] BuildActualTextByGlyph(string text, string? logicalText, IReadOnlyList<PlacedGlyph> glyphs)
+    {
+        var result = new string?[glyphs.Count];
+        if (text.Length == 0 || glyphs.Count == 0)
+            return result;
+
+        // Matches CharacterMapInfo.AddShapedText's contract: logicalText differs only when it is a
+        // positionally-aligned source for an already bidi-transformed display string.
+        string source = logicalText is not null && logicalText.Length == text.Length && logicalText != text
+            ? logicalText
+            : text;
+
+        var ownerByCodeUnit = new int[text.Length];
+        Array.Fill(ownerByCodeUnit, -1);
+
+        // A ligature span can overlap a separately-painted skipped mark. Let the widest span own
+        // those characters first; the mark then contributes its vector ink without duplicating text.
+        // Shaped runs almost always have disjoint clusters, so claim those directly and only allocate
+        // and sort an index list when an overlap proves that precedence is actually needed.
+        bool hasOverlappingClusters = false;
+        for (int i = 0; i < glyphs.Count; i++)
+        {
+            PlacedGlyph glyph = glyphs[i];
+            if (glyph.ClusterLength <= 0)
+                continue;
+
+            int start = Math.Clamp(glyph.ClusterStart, 0, text.Length);
+            int end = Math.Clamp(glyph.ClusterStart + glyph.ClusterLength, start, text.Length);
+            for (int codeUnit = start; codeUnit < end; codeUnit++)
+            {
+                if (ownerByCodeUnit[codeUnit] >= 0)
+                {
+                    hasOverlappingClusters = true;
+                }
+                else
+                {
+                    ownerByCodeUnit[codeUnit] = i;
+                }
+            }
+        }
+
+        if (hasOverlappingClusters)
+        {
+            Array.Fill(ownerByCodeUnit, -1);
+            var sourceBearingGlyphs = new List<int>(glyphs.Count);
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                if (glyphs[i].ClusterLength > 0)
+                    sourceBearingGlyphs.Add(i);
+            }
+
+            sourceBearingGlyphs.Sort((left, right) =>
+            {
+                int byLength = glyphs[right].ClusterLength.CompareTo(glyphs[left].ClusterLength);
+                if (byLength != 0)
+                    return byLength;
+
+                int byStart = glyphs[left].ClusterStart.CompareTo(glyphs[right].ClusterStart);
+                return byStart != 0 ? byStart : left.CompareTo(right);
+            });
+
+            foreach (int glyphIndex in sourceBearingGlyphs)
+            {
+                PlacedGlyph glyph = glyphs[glyphIndex];
+                int start = Math.Clamp(glyph.ClusterStart, 0, text.Length);
+                int end = Math.Clamp(glyph.ClusterStart + glyph.ClusterLength, start, text.Length);
+                for (int codeUnit = start; codeUnit < end; codeUnit++)
+                {
+                    if (ownerByCodeUnit[codeUnit] < 0)
+                        ownerByCodeUnit[codeUnit] = glyphIndex;
+                }
+            }
+        }
+
+        // Any unowned interval came from a source character which left no surviving glyph. Attach
+        // an interior/trailing interval to its preceding cluster (heart + VS16 is the canonical
+        // case), or a leading interval to the following cluster.
+        int gapStart = 0;
+        while (gapStart < ownerByCodeUnit.Length)
+        {
+            if (ownerByCodeUnit[gapStart] >= 0)
+            {
+                gapStart++;
+                continue;
+            }
+
+            int gapEnd = gapStart + 1;
+            while (gapEnd < ownerByCodeUnit.Length && ownerByCodeUnit[gapEnd] < 0)
+                gapEnd++;
+
+            int owner = gapStart > 0 ? ownerByCodeUnit[gapStart - 1] : -1;
+            if (owner < 0 && gapEnd < ownerByCodeUnit.Length)
+                owner = ownerByCodeUnit[gapEnd];
+
+            if (owner >= 0)
+            {
+                for (int codeUnit = gapStart; codeUnit < gapEnd; codeUnit++)
+                    ownerByCodeUnit[codeUnit] = owner;
+            }
+
+            gapStart = gapEnd;
+        }
+
+        // Ownership normally consists of one contiguous source range per glyph, so take that range
+        // directly instead of allocating a StringBuilder for every glyph.
+        int rangeStart = 0;
+        while (rangeStart < source.Length)
+        {
+            int owner = ownerByCodeUnit[rangeStart];
+            if (owner < 0)
+            {
+                rangeStart++;
+                continue;
+            }
+
+            int rangeEnd = rangeStart + 1;
+            while (rangeEnd < source.Length && ownerByCodeUnit[rangeEnd] == owner)
+                rangeEnd++;
+
+            string ownedText = source.Substring(rangeStart, rangeEnd - rangeStart);
+            result[owner] = result[owner] is null
+                ? ownedText
+                : string.Concat(result[owner], ownedText);
+            rangeStart = rangeEnd;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Draws a bitmap colour glyph (CBDT/sbix): the strike's picture, scaled by <c>fontSize / strikePpem</c> and placed from the
+    /// glyph origin by the picture's own bearings. False when the glyph has no picture (an ordinary outline glyph).
+    /// </summary>
+    private bool PaintBitmapGlyph(int glyphId, double originX, double originYOffset)
+    {
+        if (!_typeface.HasBitmapGlyphs || !_typeface.TryGetBitmap((ushort)glyphId, _font.Size, out EmbeddedBitmap bitmap))
+            return false;
+
+        double scale = _font.Size / bitmap.Ppem;
+        double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
+        double width = bitmap.Width * scale;
+        double height = bitmap.Height * scale;
+        double left = originX + bitmap.BearingX * scale;
+        double top = _pageDownwards ? baselineY - bitmap.BearingTop * scale : baselineY + bitmap.BearingTop * scale - height;
+
+        if (_measuring)
+        {
+            IncludeInMeasuredBounds(new Rect(left, top, width, height));
+            return true;
+        }
+
+        _gfx.DrawImage(PeachPDF.PdfBackend.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new Rect(left, top, width, height));
+        return true;
+    }
+
+    /// <summary>
+    /// Draws the glyph from the font's SVG document (OpenType SVG). It comes after bitmaps, COLR v1 and COLR v0 in the order a
+    /// glyph's colour forms are tried in, so a font that carries those as well keeps drawing them, and before the plain outline.
+    /// False when the glyph has no document, has a COLR paint, or nothing can draw the document.
+    /// </summary>
+    private bool PaintSvgGlyph(int glyphId, double originX, double originYOffset)
+    {
+        if (_measuring || !_typeface.HasSvgGlyphs || _gfx.PdfSvgGlyphPainter is not { } painter
+            || _typeface.GetColorPaint((ushort)glyphId) is not null
+            || _typeface.TryGetColorLayers((ushort)glyphId, out _)
+            || !_typeface.TryGetSvgGlyph((ushort)glyphId, out var svg))
+        {
+            return false;
+        }
+
+        double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
+        var foreground = _foreground.ToRgbColor();
+        Dictionary<int, PaintColor>? overrides = null;
+        if (_overrides is { Count: > 0 })
+        {
+            overrides = new Dictionary<int, PaintColor>(_overrides.Count);
+            foreach (var (entry, colour) in _overrides)
+                overrides[entry] = colour.ToRgbColor();
+        }
+
+        return painter.TryPaint(_typeface, (ushort)glyphId, svg, _font.Size, originX, baselineY, foreground, _paletteIndex, overrides);
+    }
+
+    /// <summary>The design-units-&gt;world placement affine for a glyph at the given pen origin -
+    /// <paramref name="originYOffset"/> is a GPOS mark-positioning Y delta (world units, already
+    /// scaled and sign-adjusted for page direction the same way X is by the caller).</summary>
+    private Affine2x3 Placement(double originX, double originYOffset = 0)
+    {
+        // Font em-square is y-up; the page (when downwards) is y-down, so flip Y - the offset
+        // flips the same way, since it moves the glyph up in font space regardless of page direction.
+        double yy = _pageDownwards ? -_scale : _scale;
+        double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
+        return new Affine2x3(_scale, 0, 0, yy, originX, baselineY);
+    }
+}

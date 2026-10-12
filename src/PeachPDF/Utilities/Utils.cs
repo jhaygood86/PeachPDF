@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PDF.Drawing;
 
 namespace PeachPDF.Utilities
 {
@@ -23,7 +23,7 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from WinForms point to core point.
         /// </summary>
-        public static PaintPoint Convert(XPoint p, double pixelsPerPoint)
+        public static PaintPoint ToPixels(PaintPoint p, double pixelsPerPoint)
         {
             return new PaintPoint(p.X * pixelsPerPoint, p.Y * pixelsPerPoint);
         }
@@ -31,26 +31,26 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from WinForms point to core point.
         /// </summary>
-        public static XPoint[] Convert(PaintPoint[] points, double pixelsPerPoint)
+        public static PaintPoint[] ToPoints(PaintPoint[] points, double pixelsPerPoint)
         {
-            XPoint[] myPoints = new XPoint[points.Length];
+            PaintPoint[] myPoints = new PaintPoint[points.Length];
             for (int i = 0; i < points.Length; i++)
-                myPoints[i] = Convert(points[i], pixelsPerPoint);
+                myPoints[i] = ToPoints(points[i], pixelsPerPoint);
             return myPoints;
         }
 
         /// <summary>
         /// Convert from core point to WinForms point.
         /// </summary>
-        public static XPoint Convert(PaintPoint p, double pixelsPerPoint)
+        public static PaintPoint ToPoints(PaintPoint p, double pixelsPerPoint)
         {
-            return new XPoint(p.X / pixelsPerPoint, p.Y / pixelsPerPoint);
+            return new PaintPoint(p.X / pixelsPerPoint, p.Y / pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms size to core size.
         /// </summary>
-        public static PeachDrawing.Core.Size Convert(XSize s, double pixelsPerPoint)
+        public static PeachDrawing.Core.Size ToPixels(Size s, double pixelsPerPoint)
         {
             return new PeachDrawing.Core.Size(s.Width * pixelsPerPoint, s.Height * pixelsPerPoint);
         }
@@ -58,15 +58,15 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from core size to WinForms size.
         /// </summary>
-        public static XSize Convert(PeachDrawing.Core.Size s, double pixelsPerPoint)
+        public static Size ToPoints(PeachDrawing.Core.Size s, double pixelsPerPoint)
         {
-            return new XSize(s.Width / pixelsPerPoint, s.Height / pixelsPerPoint);
+            return new Size(s.Width / pixelsPerPoint, s.Height / pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms rectangle to core rectangle.
         /// </summary>
-        public static Rect Convert(XRect r, double pixelsPerPoint)
+        public static Rect ToPixels(Rect r, double pixelsPerPoint)
         {
             return new Rect(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
         }
@@ -74,22 +74,9 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from core rectangle to WinForms rectangle.
         /// </summary>
-        public static XRect Convert(Rect r, double pixelsPerPoint)
+        public static Rect ToPoints(Rect r, double pixelsPerPoint)
         {
-            return new XRect(r.X / pixelsPerPoint, r.Y / pixelsPerPoint, r.Width / pixelsPerPoint, r.Height / pixelsPerPoint);
-        }
-
-        /// <summary>
-        /// Convert from core color to WinForms color. A CSS <c>device-cmyk()</c>-authored
-        /// <see cref="PaintColor"/> (<see cref="PaintColor.IsCmyk"/>) is carried through as a real CMYK
-        /// <see cref="XColor"/> - no RGB approximation is computed for one; every solid brush/pen in the
-        /// paint pipeline funnels through this one method, so this is the only place that needs to branch.
-        /// </summary>
-        public static XColor Convert(PaintColor c)
-        {
-            return c.IsCmyk
-                ? XColor.FromCmyk(c.A / 255.0, c.C, c.M, c.Y, c.K)
-                : XColor.FromArgb(c.A, c.R, c.G, c.B);
+            return new Rect(r.X / pixelsPerPoint, r.Y / pixelsPerPoint, r.Width / pixelsPerPoint, r.Height / pixelsPerPoint);
         }
 
         /// <summary>

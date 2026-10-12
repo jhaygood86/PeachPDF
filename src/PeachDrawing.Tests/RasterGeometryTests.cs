@@ -103,8 +103,8 @@ namespace PeachDrawing.Tests
             Assert.Equal((0, 1), set.GetContour(0));
         }
 
-        // The four tests below build geometry through GraphicsPathAdapter (the GraphicsPath the PDF
-        // backend uses) rather than a raw XGraphicsPath: FlatPath.From's own flattening algorithm moved
+        // The four tests below build geometry through PdfGraphicsPath (the GraphicsPath the PDF
+        // backend uses) rather than a raw GraphicsPath: FlatPath.From's own flattening algorithm moved
         // to GraphicsPath.Flatten (shared, backend-agnostic segment recording - see GraphicsPath's own
         // remarks), so what these tests actually exercise is that shared base-class recording/flattening,
         // reached the same way any real caller reaches it.

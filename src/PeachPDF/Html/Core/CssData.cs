@@ -500,13 +500,13 @@ namespace PeachPDF.Html.Core
         /// default css data (as defined by W3), merged if class name already exists. If false only the data in the given stylesheet is returned.
         /// </summary>
         /// <seealso href="http://www.w3.org/TR/CSS21/sample.html">CSS 2.1 default stylesheet for HTML</seealso>
-        /// <param name="adapter">Platform adapter</param>
+        /// <param name="renderContext">Platform adapter</param>
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RenderContext adapter, string stylesheet, bool combineWithDefault = true)
+        public static async Task<CssData> Parse(RenderContext renderContext, string stylesheet, bool combineWithDefault = true)
         {
-            var parser = new CssParser(adapter, null);
+            var parser = new CssParser(renderContext, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
@@ -515,13 +515,13 @@ namespace PeachPDF.Html.Core
         /// the parser's own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
         /// </summary>
-        /// <param name="adapter">Platform adapter</param>
+        /// <param name="renderContext">Platform adapter</param>
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RenderContext adapter, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
+        public static async Task<CssData> Parse(RenderContext renderContext, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
-            var parser = new CssParser(adapter, null);
+            var parser = new CssParser(renderContext, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 

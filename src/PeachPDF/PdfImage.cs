@@ -25,9 +25,9 @@ namespace PeachPDF
         // Resolve call with the SAME adapter (placements within one document build, the common, well-
         // scoped case this class exists for) reuses it for free; a different adapter (this instance reused
         // across a separate CreateDocument/AddPages call) re-resolves rather than risking a PDF resource
-        // that assumes single-document ownership - see this repo's own PdfSharpCore fork, whose form/image
+        // that assumes single-document ownership - see this repo's own PDF engine, whose form/image
         // XObjects are written against one specific PdfDocument.
-        private RenderContext? _resolvedByAdapter;
+        private RenderContext? _resolvedByRenderContext;
         private Image? _resolvedImage;
         private SvgDocument? _resolvedSvgDocument;
 
@@ -62,15 +62,15 @@ namespace PeachPDF
 
         /// <summary>
         /// Decodes this image's source into an <see cref="Image"/> (raster) or <see cref="SvgDocument"/>
-        /// (SVG), caching the result against <paramref name="adapter"/> so a second placement of this same
+        /// (SVG), caching the result against <paramref name="renderContext"/> so a second placement of this same
         /// <see cref="PdfImage"/> with the same adapter decodes nothing. A file path is read (and, unlike
         /// bytes already in memory, format-sniffed by its own <c>.svg</c> extension rather than content)
         /// lazily, here, on first resolution - not at <see cref="FromFile"/> call time, since no adapter
         /// exists yet to decode with then.
         /// </summary>
-        internal (Image? Image, SvgDocument? SvgDocument) Resolve(RenderContext adapter)
+        internal (Image? Image, SvgDocument? SvgDocument) Resolve(RenderContext renderContext)
         {
-            if (_resolvedByAdapter == adapter)
+            if (_resolvedByRenderContext == renderContext)
             {
                 return (_resolvedImage, _resolvedSvgDocument);
             }
@@ -88,16 +88,16 @@ namespace PeachPDF
                 // ("Data at the root level is invalid").
                 using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
                 var markup = reader.ReadToEnd();
-                _resolvedSvgDocument = SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(markup)), adapter);
+                _resolvedSvgDocument = SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(markup)), renderContext);
                 _resolvedImage = null;
             }
             else
             {
-                _resolvedImage = adapter.ImageFromStream(new MemoryStream(bytes));
+                _resolvedImage = renderContext.ImageFromStream(new MemoryStream(bytes));
                 _resolvedSvgDocument = null;
             }
 
-            _resolvedByAdapter = adapter;
+            _resolvedByRenderContext = renderContext;
             return (_resolvedImage, _resolvedSvgDocument);
         }
 
