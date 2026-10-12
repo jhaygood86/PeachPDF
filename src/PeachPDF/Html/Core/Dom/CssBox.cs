@@ -2655,7 +2655,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // The columns engine calls this before the real fill lays the same boxes out again from scratch,
             // which on a resumed pass includes boxes a frozen fragmentainer already holds.
-            NotifyGeometryChanged(OwnGeometryTop(), 0);
+            if (!NeverTouchedThisLayout) NotifyGeometryChanged(OwnGeometryTop(), 0);
 
             _prologueDone = false;
 
