@@ -1,5 +1,6 @@
 // Derived from PDFsharp (MIT) - see LICENSE.md
 
+using System;
 using System.Text;
 
 namespace PeachPDF.PDF.Internal;
@@ -60,6 +61,46 @@ internal sealed class LatinOneByteEncoding : Encoding
         }
         return charCount;
     }
+
+    public override int GetByteCount(ReadOnlySpan<char> chars) => chars.Length;
+
+    public override int GetByteCount(string s) => s.Length;
+
+    public override int GetBytes(ReadOnlySpan<char> chars, Span<byte> bytes)
+    {
+        if (bytes.Length < chars.Length)
+            throw new ArgumentException("The destination is too small.", nameof(bytes));
+
+        for (int i = 0; i < chars.Length; i++)
+            bytes[i] = (byte)chars[i];
+        return chars.Length;
+    }
+
+    public override byte[] GetBytes(string s)
+    {
+        byte[] bytes = new byte[s.Length];
+        GetBytes(s.AsSpan(), bytes);
+        return bytes;
+    }
+
+    public override int GetCharCount(ReadOnlySpan<byte> bytes) => bytes.Length;
+
+    public override int GetChars(ReadOnlySpan<byte> bytes, Span<char> chars)
+    {
+        if (chars.Length < bytes.Length)
+            throw new ArgumentException("The destination is too small.", nameof(chars));
+
+        for (int i = 0; i < bytes.Length; i++)
+            chars[i] = (char)bytes[i];
+        return bytes.Length;
+    }
+
+    public override string GetString(byte[] bytes, int index, int count) =>
+        string.Create(count, (bytes, index), static (chars, state) =>
+        {
+            for (int i = 0; i < chars.Length; i++)
+                chars[i] = (char)state.bytes[state.index + i];
+        });
 
     /// <summary>
     /// When overridden in a derived class, calculates the number of characters produced by decoding a sequence of bytes from the specified byte array.

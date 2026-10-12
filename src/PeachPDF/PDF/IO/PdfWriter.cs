@@ -5,6 +5,7 @@
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -79,82 +80,42 @@ internal sealed class PdfWriter
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(int value)
-    {
-        WriteSeparator(CharCat.Character);
-        WriteRaw(value.ToString(CultureInfo.InvariantCulture));
-        _lastCat = CharCat.Character;
-    }
+    public void Write(int value) => WriteNumber(value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(long value)
-    {
-        WriteSeparator(CharCat.Character);
-        WriteRaw(value.ToString(CultureInfo.InvariantCulture));
-        _lastCat = CharCat.Character;
-    }
+    public void Write(long value) => WriteNumber(value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(uint value)
-    {
-        WriteSeparator(CharCat.Character);
-        WriteRaw(value.ToString(CultureInfo.InvariantCulture));
-        _lastCat = CharCat.Character;
-    }
+    public void Write(uint value) => WriteNumber(value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(PdfInteger value)
-    {
-        WriteSeparator(CharCat.Character);
-        _lastCat = CharCat.Character;
-        WriteRaw(value.Value.ToString(CultureInfo.InvariantCulture));
-    }
+    public void Write(PdfInteger value) => WriteNumber(value.Value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(PdfLong value)
-    {
-        WriteSeparator(CharCat.Character);
-        _lastCat = CharCat.Character;
-        WriteRaw(value.Value.ToString(CultureInfo.InvariantCulture));
-    }
+    public void Write(PdfLong value) => WriteNumber(value.Value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(PdfUInteger value)
-    {
-        WriteSeparator(CharCat.Character);
-        _lastCat = CharCat.Character;
-        WriteRaw(value.Value.ToString(CultureInfo.InvariantCulture));
-    }
+    public void Write(PdfUInteger value) => WriteNumber(value.Value);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(double value)
-    {
-        WriteSeparator(CharCat.Character);
-        WriteRaw(value.ToString(PdfNumberFormats.SevenDecimals, CultureInfo.InvariantCulture));
-        _lastCat = CharCat.Character;
-    }
+    public void Write(double value) => WriteNumber(value, PdfNumberFormats.SevenDecimals);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
     /// </summary>
-    public void Write(PdfReal value)
-    {
-        WriteSeparator(CharCat.Character);
-        WriteRaw(value.Value.ToString(PdfNumberFormats.SevenDecimals, CultureInfo.InvariantCulture));
-        _lastCat = CharCat.Character;
-    }
+    public void Write(PdfReal value) => WriteNumber(value.Value, PdfNumberFormats.SevenDecimals);
 
     /// <summary>
     /// Writes the specified value to the PDF stream.
@@ -163,11 +124,8 @@ internal sealed class PdfWriter
     {
         WriteSeparator(CharCat.Delimiter);
         PdfStringEncoding encoding = (PdfStringEncoding)(value.Flags & PdfStringFlags.EncodingMask);
-        string pdf = (value.Flags & PdfStringFlags.HexLiteral) == 0 ?
-            PdfEncoders.ToStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode) :
-            PdfEncoders.ToHexStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode);
-        WriteRaw(pdf);
-
+        bool hex = (value.Flags & PdfStringFlags.HexLiteral) != 0;
+        Write(PdfEncoders.FormatStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode, true, hex));
         _lastCat = CharCat.Delimiter;
     }
 
@@ -179,31 +137,37 @@ internal sealed class PdfWriter
         WriteSeparator(CharCat.Delimiter, '/');
         string name = value.Value;
 
-        StringBuilder pdf = new StringBuilder("/");
-        for (int idx = 1; idx < name.Length; idx++)
+        // Every character that needs escaping takes three bytes: '#' and two hexadecimal digits.
+        byte[]? rented = null;
+        int capacity = 1 + (name.Length * 3);
+        Span<byte> buffer = capacity <= 256 ? stackalloc byte[256] : (rented = ArrayPool<byte>.Shared.Rent(capacity));
+        try
         {
-            char ch = name[idx];
-            Debug.Assert(ch < 256);
-            if (ch > ' ')
-                switch (ch)
+            buffer[0] = (byte)'/';
+            int length = 1;
+            for (int idx = 1; idx < name.Length; idx++)
+            {
+                char ch = name[idx];
+                Debug.Assert(ch < 256);
+                // TODO: is this all?
+                if (ch > ' ' && ch is not ('%' or '/' or '<' or '>' or '(' or ')' or '#'))
                 {
-                    // TODO: is this all?
-                    case '%':
-                    case '/':
-                    case '<':
-                    case '>':
-                    case '(':
-                    case ')':
-                    case '#':
-                        break;
-
-                    default:
-                        pdf.Append(name[idx]);
-                        continue;
+                    buffer[length++] = (byte)ch;
                 }
-            pdf.AppendFormat("#{0:X2}", (int)name[idx]);
+                else
+                {
+                    buffer[length++] = (byte)'#';
+                    buffer[length++] = (byte)"0123456789ABCDEF"[(ch >> 4) & 0xF];
+                    buffer[length++] = (byte)"0123456789ABCDEF"[ch & 0xF];
+                }
+            }
+            _stream.Write(buffer[..length]);
         }
-        WriteRaw(pdf.ToString());
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented);
+        }
         _lastCat = CharCat.Character;
     }
 
@@ -216,9 +180,8 @@ internal sealed class PdfWriter
 
     public void Write(PdfRectangle rect)
     {
-        const string format = PdfNumberFormats.ThreeDecimals;
         WriteSeparator(CharCat.Delimiter, '/');
-        WriteRaw(PdfEncoders.Format("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", rect.X1, rect.Y1, rect.X2, rect.Y2));
+        WriteRaw(string.Create(CultureInfo.InvariantCulture, $"[{rect.X1:0.###} {rect.Y1:0.###} {rect.X2:0.###} {rect.Y2:0.###}]"));
         _lastCat = CharCat.Delimiter;
     }
 
@@ -355,6 +318,43 @@ internal sealed class PdfWriter
     }
 
     /// <summary>
+    /// Writes a number with the invariant culture, without allocating a string.
+    /// </summary>
+    private void WriteNumber<T>(T value, string? format = null) where T : ISpanFormattable, IUtf8SpanFormattable
+    {
+        WriteSeparator(CharCat.Character);
+        Span<byte> buffer = stackalloc byte[64];
+        if (value.TryFormat(buffer, out int written, format, CultureInfo.InvariantCulture))
+            _stream.Write(buffer[..written]);
+        else
+            WriteRaw(value.ToString(format, CultureInfo.InvariantCulture));
+        _lastCat = CharCat.Character;
+    }
+
+    /// <summary>
+    /// Writes the characters as Latin-1 bytes.
+    /// </summary>
+    public void WriteRaw(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty)
+            return;
+
+        byte[]? rented = null;
+        Span<byte> bytes = text.Length <= 256 ? stackalloc byte[256] : (rented = ArrayPool<byte>.Shared.Rent(text.Length));
+        try
+        {
+            int count = PdfEncoders.LatinOneByteEncoding.GetBytes(text, bytes);
+            _stream.Write(bytes[..count]);
+            _lastCat = GetCategory((char)bytes[count - 1]);
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
     /// Writes the stream of the specified dictionary.
     /// </summary>
     public void WriteStream(PdfDictionary value, bool omitStream)
@@ -397,9 +397,7 @@ internal sealed class PdfWriter
         if (string.IsNullOrEmpty(rawString))
             return;
 
-        byte[] bytes = PdfEncoders.LatinOneByteEncoding.GetBytes(rawString);
-        _stream.Write(bytes, 0, bytes.Length);
-        _lastCat = GetCategory((char)bytes[bytes.Length - 1]);
+        WriteRaw(rawString.AsSpan());
     }
 
     public void WriteRaw(char ch)
@@ -421,32 +419,24 @@ internal sealed class PdfWriter
 
     void WriteObjectAddress(PdfObject value)
     {
-        if (_layout == PdfWriterLayout.Verbose)
-            WriteRaw(string.Format("{0} {1} obj   % {2}\n",
-                value.ObjectId.ObjectNumber, value.ObjectId.GenerationNumber,
-                value.GetType().FullName));
-        else
-            WriteRaw(string.Format("{0} {1} obj\n", value.ObjectId.ObjectNumber, value.ObjectId.GenerationNumber));
+        PdfObjectId identity = value.ObjectId;
+        WriteRaw(_layout == PdfWriterLayout.Verbose
+            ? string.Create(CultureInfo.InvariantCulture, $"{identity.ObjectNumber} {identity.GenerationNumber} obj   % {value.GetType().FullName}\n")
+            : string.Create(CultureInfo.InvariantCulture, $"{identity.ObjectNumber} {identity.GenerationNumber} obj\n"));
     }
 
     public void WriteFileHeader(PdfDocument document)
     {
-        StringBuilder header = new StringBuilder("%PDF-");
         int version = document._version;
-        header.Append((version / 10).ToString(CultureInfo.InvariantCulture) + "." +
-          (version % 10).ToString(CultureInfo.InvariantCulture) + "\n%\xD3\xF4\xCC\xE1\n");
-        WriteRaw(header.ToString());
+        WriteRaw(string.Create(CultureInfo.InvariantCulture, $"%PDF-{version / 10}.{version % 10}\n%\xD3\xF4\xCC\xE1\n"));
 
         if (_layout == PdfWriterLayout.Verbose)
         {
-            WriteRaw(string.Format("% PDFsharp Version {0} (verbose mode)\n", PdfProductInfo.Version));
+            WriteRaw($"% PDFsharp Version {PdfProductInfo.Version} (verbose mode)\n");
             // Keep some space for later fix-up.
             _commentPosition = (int)_stream.Position + 2;
-            WriteRaw("%                                                \n");
-            WriteRaw("%                                                \n");
-            WriteRaw("%                                                \n");
-            WriteRaw("%                                                \n");
-            WriteRaw("%                                                \n");
+            for (int line = 0; line < 5; line++)
+                WriteRaw("%                                                \n");
             WriteRaw("%--------------------------------------------------------------------------------------------------\n");
         }
     }
