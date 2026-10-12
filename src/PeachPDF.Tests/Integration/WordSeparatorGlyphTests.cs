@@ -296,7 +296,7 @@ namespace PeachPDF.Tests.Integration
             // missing-glyph box on the page (and fail PDF/A outright), so the separator is left out.
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("""<p style="font-family:EmojiOnly">AA BB</p>"""),
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Emoji, "EmojiOnly"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Emoji, "EmojiOnly"));
             using var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
 
@@ -358,7 +358,7 @@ namespace PeachPDF.Tests.Integration
             // move off the baseline by the font's own offset, and the space between them has to as well.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 """<p style="font-family:NoSups"><span id="s" style="font-variant-position:super">42 42</span></p>"""),
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSups"));
             Assert.NotNull(LayoutHarness.FindById(root, "s")!.SubSuperscriptSynthesis);
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);
@@ -374,7 +374,7 @@ namespace PeachPDF.Tests.Integration
             // Upright, each character is drawn on its own; the space above "2" moves with it.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 """<p style="font-family:NoSups; writing-mode:vertical-rl; text-orientation:upright; height:400pt"><span id="s" style="font-variant-position:super">4 2</span></p>"""),
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSups"));
             var span = LayoutHarness.FindById(root, "s")!;
             var shift = span.SubSuperscriptSynthesis!.Value.BaselineShift;
             var g = new TestRecordingGraphics();
@@ -395,7 +395,7 @@ namespace PeachPDF.Tests.Integration
             // baseline - shifted by the synthesized superscript - with the word after it.
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 """<p style="font-family:NoSups; writing-mode:vertical-rl; height:400pt"><span style="font-variant-position:super">42 42</span></p>"""),
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSups"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSups"));
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);
 

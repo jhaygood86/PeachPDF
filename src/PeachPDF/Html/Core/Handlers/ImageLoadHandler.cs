@@ -179,7 +179,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             try
             {
-                Image = _htmlContainer.Adapter.ImageFromStream(stream);
+                Image = _htmlContainer.RenderContext.ImageFromStream(stream);
             }
             catch (InvalidOperationException)
             {
@@ -213,7 +213,7 @@ namespace PeachPDF.Html.Core.Handlers
                     CssVarResolver.VarContext? varContext = null;
                     if (cssData is not null)
                     {
-                        var valueParser = new CssValueParser(_htmlContainer.Adapter);
+                        var valueParser = new CssValueParser(_htmlContainer.RenderContext);
                         registered = RegisteredProperty.BuildRegistry(cssData, valueParser);
                         if (registered.Count > 0)
                             varContext = new CssVarResolver.VarContext(registered, valueParser);
@@ -227,10 +227,10 @@ namespace PeachPDF.Html.Core.Handlers
                     // location — the same rule fetched stylesheets use for their own relative references.
                     var prefetchedImages = await SvgTreeBuilder.PrefetchImageResourcesAsync(sourceNode, _htmlContainer, source);
 
-                    var paletteValues = cssData is null ? null : RegisteredFontPalette.BuildRegistry(cssData, new CssValueParser(_htmlContainer.Adapter));
+                    var paletteValues = cssData is null ? null : RegisteredFontPalette.BuildRegistry(cssData, new CssValueParser(_htmlContainer.RenderContext));
                     var featureValues = cssData is null ? null : RegisteredFontFeatureValues.BuildRegistry(cssData);
 
-                    SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.Adapter, prefetchedImages: prefetchedImages,
+                    SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.RenderContext, prefetchedImages: prefetchedImages,
                         fontPaletteValues: paletteValues, fontFeatureValues: featureValues);
                 }
             }
@@ -267,7 +267,7 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            var networkResponse = await _htmlContainer.Adapter.GetResourceStream(source);
+            var networkResponse = await _htmlContainer.RenderContext.GetResourceStream(source);
 
             if (networkResponse?.ResourceStream is not null)
             {

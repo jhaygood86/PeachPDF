@@ -11,13 +11,13 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class FontFamilyResolver
     {
-        internal static Font? Resolve(RenderContext adapter, string fontFamilyList, double fsize, PaintFontStyle style, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        internal static Font? Resolve(RenderContext renderContext, string fontFamilyList, double fsize, PaintFontStyle style, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             var families = fontFamilyList.Split(',');
 
             if (families.Length == 1)
             {
-                return adapter.GetFont(fontFamilyList, fsize, style, weight, stretch, obliqueSkewSinus, variations);
+                return renderContext.GetFont(fontFamilyList, fsize, style, weight, stretch, obliqueSkewSinus, variations);
             }
 
             Font? selectedFont = null;
@@ -26,7 +26,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 var selectedFamily = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
 
-                selectedFont = adapter.GetFont(selectedFamily, fsize, style, weight, stretch, obliqueSkewSinus, variations);
+                selectedFont = renderContext.GetFont(selectedFamily, fsize, style, weight, stretch, obliqueSkewSinus, variations);
 
                 if (selectedFont is not null)
                 {
@@ -50,7 +50,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <paramref name="presentation"/> is the emoji/text presentation the character was asked to be
         /// drawn in - see <see cref="Emoji.Resolve"/>.
         /// </summary>
-        internal static Font? Resolve(RenderContext adapter, string fontFamilyList, double fsize, PaintFontStyle style, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
+        internal static Font? Resolve(RenderContext renderContext, string fontFamilyList, double fsize, PaintFontStyle style, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
         {
             // With a presentation request (CSS font-variant-emoji, or an explicit U+FE0E/U+FE0F), CSS Fonts 4
             // §5.3's cluster matching order applies: a family whose font supports the requested sequence
@@ -63,7 +63,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 var selectedFamily = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
 
-                var font = adapter.GetFontForCodepoint(selectedFamily, fsize, style, codepoint, weight, stretch, obliqueSkewSinus, variations);
+                var font = renderContext.GetFontForCodepoint(selectedFamily, fsize, style, codepoint, weight, stretch, obliqueSkewSinus, variations);
 
                 if (font is null || !font.HasGlyph(codepoint))
                     continue;
@@ -76,7 +76,7 @@ namespace PeachPDF.Html.Core.Utils
 
             if (presentation != PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference)
             {
-                var matchingFallback = adapter.GetSystemFallbackFontForCodepoint(fsize, style, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
+                var matchingFallback = renderContext.GetSystemFallbackFontForCodepoint(fsize, style, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
                 if (matchingFallback is not null && matchingFallback.HasGlyph(codepoint))
                     return matchingFallback;
 
@@ -84,7 +84,7 @@ namespace PeachPDF.Html.Core.Utils
                     return firstCoveringFont;
             }
 
-            var fallbackFont = adapter.GetSystemFallbackFontForCodepoint(fsize, style, codepoint, weight, stretch, obliqueSkewSinus, variations: variations);
+            var fallbackFont = renderContext.GetSystemFallbackFontForCodepoint(fsize, style, codepoint, weight, stretch, obliqueSkewSinus, variations: variations);
             if (fallbackFont is not null && fallbackFont.HasGlyph(codepoint))
                 return fallbackFont;
 

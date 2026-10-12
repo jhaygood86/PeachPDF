@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
     {
         // PixelsPerPoint=1 so the resolved font Size matches the SVG user-unit font-size, keeping glyph
         // advances (used for textPath placement/drop-off) in the same 1:1 units as the path lengths.
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body, string defs = "")
         {
@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;

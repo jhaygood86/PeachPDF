@@ -489,8 +489,8 @@ body {{ font-family: 'CJK'; margin: 0 }}
 
         private static async Task<HtmlContainerInt> LayoutHtml(string body)
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(body, null);
 
             var size = new Size(595, 842);
@@ -498,7 +498,7 @@ body {{ font-family: 'CJK'; margin: 0 }}
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -549,8 +549,8 @@ body {{ font-family: 'CJK'; margin: 0 }}
             public sealed record PushClipMarker;
             public sealed record PopClipMarker;
 
-            public RecordingGraphics(RenderContext adapter)
-                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics(RenderContext renderContext)
+                : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null)
             {

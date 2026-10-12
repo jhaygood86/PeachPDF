@@ -46,7 +46,7 @@ namespace PeachPDF.Svg
         /// <summary>Guards against a pathological/malicious &lt;use&gt; reference cycle.</summary>
         private const int MaxUseDepth = 8;
 
-        private readonly RenderContext _adapter;
+        private readonly RenderContext _renderContext;
         private readonly PaintColor _contextColor;
         private readonly IReadOnlyDictionary<string, SvgImageResource>? _prefetchedImages;
         private readonly Dictionary<string, ISvgSourceNode> _nodesById = new(StringComparer.Ordinal);
@@ -118,9 +118,9 @@ namespace PeachPDF.Svg
         private double? ViewportDiagonal =>
             _viewportWidth is { } w && _viewportHeight is { } h ? Math.Sqrt((w * w + h * h) / 2.0) : null;
 
-        private SvgTreeBuilder(RenderContext adapter, PaintColor contextColor, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages)
+        private SvgTreeBuilder(RenderContext renderContext, PaintColor contextColor, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages)
         {
-            _adapter = adapter;
+            _renderContext = renderContext;
             _contextColor = contextColor;
             _prefetchedImages = prefetchedImages;
         }
@@ -260,7 +260,7 @@ namespace PeachPDF.Svg
         }
 
         /// <param name="root">The root node to build from.</param>
-        /// <param name="adapter">The graphics adapter, used to resolve paint colors.</param>
+        /// <param name="renderContext">The graphics adapter, used to resolve paint colors.</param>
         /// <param name="contextColor">
         /// The resolved <c>currentColor</c> value - the CSS <c>color</c> property of the inline
         /// <c>&lt;svg&gt;</c>'s HTML ancestor for inline SVG, or omitted (defaulting to black) for
@@ -280,12 +280,12 @@ namespace PeachPDF.Svg
         /// <param name="contextStroke">What <c>context-stroke</c> stands for there; see <paramref name="contextFill"/>.</param>
         /// <param name="fontPaletteValues">The document's <c>@font-palette-values</c> registry (<c>font-palette</c> on SVG text); null when it declares none.</param>
         /// <param name="fontFeatureValues">The document's <c>@font-feature-values</c> registry (<c>font-variant-alternates</c> on SVG text); null when it declares none.</param>
-        public static SvgDocument Build(ISvgSourceNode root, RenderContext adapter, PaintColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null,
+        public static SvgDocument Build(ISvgSourceNode root, RenderContext renderContext, PaintColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null,
             SvgPaint? contextFill = null, SvgPaint? contextStroke = null,
             IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? fontPaletteValues = null,
             IReadOnlyDictionary<(string Family, FontFeatureValueBlockKind Kind, string Name), RegisteredFontFeatureValues>? fontFeatureValues = null)
         {
-            var builder = new SvgTreeBuilder(adapter, contextColor ?? PaintColor.Black, prefetchedImages)
+            var builder = new SvgTreeBuilder(renderContext, contextColor ?? PaintColor.Black, prefetchedImages)
             {
                 _fontPaletteValues = fontPaletteValues,
                 _fontFeatureValues = fontFeatureValues,
@@ -372,7 +372,7 @@ namespace PeachPDF.Svg
 
             try
             {
-                var response = await container.Adapter.GetResourceStream(uri);
+                var response = await container.RenderContext.GetResourceStream(uri);
                 if (response?.ResourceStream is not { } stream)
                     return null;
 
@@ -1223,7 +1223,7 @@ namespace PeachPDF.Svg
 
             var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot));
 
-            var valueParser = new CssValueParser(_adapter);
+            var valueParser = new CssValueParser(_renderContext);
             var registered = nestedCssData is null ? null : RegisteredProperty.BuildRegistry(nestedCssData, valueParser);
             var nestedVarContext = registered is { Count: > 0 }
                 ? new CssVarResolver.VarContext(registered, valueParser)
@@ -1234,7 +1234,7 @@ namespace PeachPDF.Svg
 
             var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print", nestedVarContext);
             // Thread the recursively-prefetched child map so the nested document's own <image>s resolve.
-            return Build(nestedSource, _adapter, _contextColor, nestedImages,
+            return Build(nestedSource, _renderContext, _contextColor, nestedImages,
                 fontPaletteValues: nestedCssData is null ? null : RegisteredFontPalette.BuildRegistry(nestedCssData, valueParser),
                 fontFeatureValues: nestedCssData is null ? null : RegisteredFontFeatureValues.BuildRegistry(nestedCssData));
         }
@@ -1255,7 +1255,7 @@ namespace PeachPDF.Svg
         {
             try
             {
-                return _adapter.ImageFromStream(new MemoryStream(bytes));
+                return _renderContext.ImageFromStream(new MemoryStream(bytes));
             }
             catch (InvalidOperationException)
             {
@@ -1329,7 +1329,7 @@ namespace PeachPDF.Svg
             // The context every generated common-property setter needs beyond the raw value: color
             // resolution, the current viewport diagonal (for percentage lengths), and the url()-to-
             // pattern-vs-gradient reclassification ParsePaint can't do on its own (see ResolveUrlPaintKind).
-            var ctx = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
+            var ctx = new SvgPropertyContext(_renderContext, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
 
             // Each property below keeps ApplyCommon's own null/"inherit"/invalid-value fallback
             // decision (which genuinely differs per property — see css-properties.json's svg.invalidBehavior
@@ -1934,10 +1934,10 @@ namespace PeachPDF.Svg
         {
             var fontStyle = StyleFlagsFor(font);
             var variations = EncodeVariations(font);
-            var resolved = FontFamilyResolver.Resolve(_adapter, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations);
+            var resolved = FontFamilyResolver.Resolve(_renderContext, family, size, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations);
 
             return ApplySizeAdjust(font, resolved, size, null,
-                adjusted => FontFamilyResolver.Resolve(_adapter, family, adjusted, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations));
+                adjusted => FontFamilyResolver.Resolve(_renderContext, family, adjusted, fontStyle, font.Weight, font.Stretch, font.ObliqueSkewSinus, variations));
         }
 
         /// <summary>The style bits of a font request: bold/italic as requested, plus <c>font-synthesis-weight</c>/<c>-style: none</c>.</summary>
@@ -1962,7 +1962,7 @@ namespace PeachPDF.Svg
         {
             if (resolved is null || FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is not { } adjust) return resolved;
 
-            var pixelsPerPoint = (_adapter as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (_renderContext as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var ratio = FontMetricMeasurement.Ratio(resolved, FontSizeAdjustGrammar.ToFontMetric(adjust.Metric), pixelsPerPoint);
             var target = double.IsNaN(adjust.Value) ? fromFontRatio ?? ratio : adjust.Value;
             var adjustedSize = size * target / ratio;
@@ -2050,7 +2050,7 @@ namespace PeachPDF.Svg
                 if (_ratios[(int)metric] is { } cached) return cached;
 
                 var font = _builder.RealizeFont(Font);
-                var pixelsPerPoint = (_builder._adapter as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                var pixelsPerPoint = (_builder._renderContext as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
                 return (_ratios[(int)metric] = FontMetricMeasurement.Ratio(font, metric, pixelsPerPoint)).Value;
             }
         }
@@ -2130,7 +2130,7 @@ namespace PeachPDF.Svg
                 return [];
 
             var basis = new LengthBasis(this, font);
-            var parser = new CssValueParser(_adapter);
+            var parser = new CssValueParser(_renderContext);
             var result = new List<SvgTextShadow>(layers.Count);
             foreach (var layer in layers)
             {
@@ -2178,7 +2178,7 @@ namespace PeachPDF.Svg
             var fontStyle = StyleFlagsFor(font);
             var variations = EncodeVariations(font);
             var baseSize = Math.Max(font.Size, 1);
-            var pixelsPerPoint = (_adapter as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (_renderContext as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             double? primaryRatio = FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is { } primaryAdjust
                 ? FontMetricMeasurement.Ratio(primary, FontSizeAdjustGrammar.ToFontMetric(primaryAdjust.Metric), pixelsPerPoint)
                 : null;
@@ -2192,10 +2192,10 @@ namespace PeachPDF.Svg
                     return cached;
 
                 // Each fallback face is adjusted on its own (the per-face ratio), starting from the unadjusted size.
-                var fallback = FontFamilyResolver.Resolve(_adapter, font.Family, baseSize, fontStyle, rune, font.Weight, font.Stretch,
+                var fallback = FontFamilyResolver.Resolve(_renderContext, font.Family, baseSize, fontStyle, rune, font.Weight, font.Stretch,
                     font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, variations);
                 fallback = ApplySizeAdjust(font, fallback, baseSize, primaryRatio,
-                    adjusted => FontFamilyResolver.Resolve(_adapter, font.Family, adjusted, fontStyle, rune, font.Weight, font.Stretch,
+                    adjusted => FontFamilyResolver.Resolve(_renderContext, font.Family, adjusted, fontStyle, rune, font.Weight, font.Stretch,
                         font.ObliqueSkewSinus, PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, variations)) ?? primary;
                 if (!faces.TryGetValue(fallback.FaceKey, out var canonical))
                     faces[fallback.FaceKey] = canonical = fallback;
@@ -2364,7 +2364,7 @@ namespace PeachPDF.Svg
             // -webkit-text-stroke takes the place of stroke/stroke-width for this text: a stroke centred on the glyph outlines, painted the same way.
             if (runFont.TextStrokeWidth > 0)
             {
-                var strokeContext = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
+                var strokeContext = new SvgPropertyContext(_renderContext, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
                 var previousStroke = run.Stroke;
                 if (SvgPropertyRegistry.TrySet(run, "stroke", string.IsNullOrWhiteSpace(runFont.TextStrokeColor) ? "currentColor" : runFont.TextStrokeColor, in strokeContext))
                     run.StrokeWidth = runFont.TextStrokeWidth;
@@ -2386,7 +2386,7 @@ namespace PeachPDF.Svg
             // A shorthand that omits the colour leaves it at its initial value: currentcolor, like an unset longhand.
             run.TextDecorationColor = !string.IsNullOrEmpty(decorationColorAttr) && !decorationColorAttr.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                 && !decorationColorAttr.Equals("initial", StringComparison.OrdinalIgnoreCase) && !decorationColorAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? new CssValueParser(_adapter).GetActualColor(decorationColorAttr)
+                ? new CssValueParser(_renderContext).GetActualColor(decorationColorAttr)
                 : null;
 
             // Decoration geometry: thickness is the decorating element's own value (not inherited); offset, position and skip-ink inherit.
@@ -3095,7 +3095,7 @@ namespace PeachPDF.Svg
                 ? PaintColor.Black
                 : floodColorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
-                    : new CssValueParser(_adapter).GetActualColor(ResolveIcc(floodColorAttr)!);
+                    : new CssValueParser(_renderContext).GetActualColor(ResolveIcc(floodColorAttr)!);
 
             return new FeFlood
             {
@@ -3341,7 +3341,7 @@ namespace PeachPDF.Svg
                 ? PaintColor.Black
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
-                    : new CssValueParser(_adapter).GetActualColor(ResolveIcc(colorAttr)!);
+                    : new CssValueParser(_renderContext).GetActualColor(ResolveIcc(colorAttr)!);
 
             return new FeDropShadow
             {
@@ -3501,7 +3501,7 @@ namespace PeachPDF.Svg
                 ? PaintColor.White
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
                     ? _contextColor
-                    : new CssValueParser(_adapter).GetActualColor(ResolveIcc(colorAttr)!);
+                    : new CssValueParser(_renderContext).GetActualColor(ResolveIcc(colorAttr)!);
 
             return new FeLighting
             {
@@ -3600,7 +3600,7 @@ namespace PeachPDF.Svg
                     child.GetAttribute("stop-color"),
                     child.GetAttribute("stop-opacity"),
                     child.GetAttribute("style"),
-                    _adapter,
+                    _renderContext,
                     ResolveIcc);
 
                 stops.Add(new SvgGradientStop { Offset = offset, PaintColor = color });

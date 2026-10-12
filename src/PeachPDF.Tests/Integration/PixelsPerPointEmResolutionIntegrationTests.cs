@@ -165,8 +165,8 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>";
 
-            var adapter = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             // Mirrors production (PdfGenerator.SetContent/AddPdfPages): PageSize/MaxSize and the
@@ -180,7 +180,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, pixelsPerPoint);
+            using var graphics = new PdfCanvas(renderContext, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

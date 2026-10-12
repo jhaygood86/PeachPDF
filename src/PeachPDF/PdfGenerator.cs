@@ -944,7 +944,7 @@ namespace PeachPDF
             // enabled - FragmentContentPainters.For and HandleFormFields (below) both check
             // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
             // it's not set, so this is the single point that gates the whole feature off by default.
-            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.Adapter) : null;
+            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.RenderContext) : null;
             container.HtmlContainerInt.FormFieldBuilder = formFieldBuilder;
 
             // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
@@ -1430,13 +1430,13 @@ namespace PeachPDF
         /// </para>
         /// </remarks>
         private static async Task PaintElementMarginBoxes(
-            PdfGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
+            PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
-            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
-            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
             var painter = new FragmentPainter(htmlContainer);
             var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
             var resolvedBoxNames = marginBoxes.Count > 0
@@ -1451,7 +1451,7 @@ namespace PeachPDF
                 var cbHeight = MarginBoxRenderer.MarginAreaHeight(boxName, pageSize, marginTop, marginBottom);
 
                 await MarginBoxRenderer.PaintBackgroundAndBorder(g, outerRect, pageSize, rule, pageStyle, remPt,
-                    cbWidth, cbHeight, adapter, htmlContainer, backgroundImageCache);
+                    cbWidth, cbHeight, renderContext, htmlContainer, backgroundImageCache);
             }
 
             foreach (var marginBox in marginBoxes)
@@ -1490,12 +1490,12 @@ namespace PeachPDF
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
         /// (which is an ordinary box and paints its rule through the normal border path).
         /// </summary>
-        private static void PaintFootnoteArea(PdfGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        private static void PaintFootnoteArea(PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
-            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
-            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
 
-            PaintFootnoteArea(pdfCanvas, adapter, htmlContainer, footnoteArea);
+            PaintFootnoteArea(pdfCanvas, renderContext, htmlContainer, footnoteArea);
         }
 
         /// <summary>
@@ -1505,7 +1505,7 @@ namespace PeachPDF
         /// completes without error or that a fragment holds the right data - see this repo's own testing
         /// conventions on why a token/page-count check alone is not proof a paint path isn't a no-op.
         /// </summary>
-        internal static void PaintFootnoteArea(Canvas pdfCanvas, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        internal static void PaintFootnoteArea(Canvas pdfCanvas, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
             // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
             // wrapper), so it needs its own content-area bound - previously provided for free by a raw
@@ -1516,7 +1516,7 @@ namespace PeachPDF
             var rect = footnoteArea.DividerRect;
             if (rect.Height > 0)
             {
-                var dividerColor = ResolveFootnoteDividerColor(footnoteArea.DividerColor, adapter);
+                var dividerColor = ResolveFootnoteDividerColor(footnoteArea.DividerColor, renderContext);
                 pdfCanvas.DrawRectangle(pdfCanvas.GetSolidBrush(dividerColor), rect.X, rect.Y, rect.Width, rect.Height);
             }
 
@@ -1536,12 +1536,12 @@ namespace PeachPDF
         /// UA-drawn separator with no element of its own to inherit a text color from), otherwise the
         /// declared color parsed the same way any other CSS color value is.
         /// </summary>
-        internal static PaintColor ResolveFootnoteDividerColor(string? declaredColor, RenderContext adapter) =>
+        internal static PaintColor ResolveFootnoteDividerColor(string? declaredColor, RenderContext renderContext) =>
             string.IsNullOrWhiteSpace(declaredColor) ||
             declaredColor.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
             declaredColor.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase)
                 ? PaintColor.Black
-                : new CssValueParser(adapter).GetActualColor(declaredColor);
+                : new CssValueParser(renderContext).GetActualColor(declaredColor);
 
         /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.

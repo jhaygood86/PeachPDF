@@ -768,9 +768,9 @@ namespace PeachPDF.Tests.Integration
         [InlineData("rgb(255, 0, 0)", 255, 0, 0)]
         public void ResolveFootnoteDividerColor_FallsBackToBlack_ForNoRealColor(string? declared, byte r, byte g, byte b)
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
 
-            var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, adapter);
+            var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, renderContext);
 
             Assert.Equal(PaintColor.FromArgb(r, g, b), resolved);
         }

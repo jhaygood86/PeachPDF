@@ -95,14 +95,14 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> AnyBox()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml("<!DOCTYPE html><html><body></body></html>", null);
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
             return container.Root!;
         }

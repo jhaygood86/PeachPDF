@@ -16,12 +16,12 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterSvgTestFace";
 
-        private static async Task<(RasterCanvas Graphics, Font Font, PdfRenderContext Adapter)> NewFixture(int width = 160, int height = 120)
+        private static async Task<(RasterCanvas Graphics, Font Font, PdfRenderContext RenderContext)> NewFixture(int width = 160, int height = 120)
         {
-            var adapter = new PdfRenderContext();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.SvgTest, Family);
-            var graphics = new RasterCanvas(adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
-            return (graphics, adapter.GetFont(Family, 60, PaintFontStyle.Regular)!, adapter);
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.SvgTest, Family);
+            var graphics = new RasterCanvas(renderContext, new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            return (graphics, renderContext.GetFont(Family, 60, PaintFontStyle.Regular)!, renderContext);
         }
 
         private static void Draw(RasterCanvas g, Font font, string text, PaintColor colour, FontPalette? palette = null) =>
@@ -217,11 +217,11 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public async Task ARepeatedGlyphInAnotherRegion_IsDrawnTheSame()
         {
-            var (g, font, adapter) = await NewFixture();
+            var (g, font, renderContext) = await NewFixture();
             Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             // a second surface on the same adapter reuses the glyph's document, and draws the same pixels
-            var second = new RasterCanvas(adapter, new RasterSurface(160, 120, 0, 0, 1, 1), 1);
+            var second = new RasterCanvas(renderContext, new RasterSurface(160, 120, 0, 0, 1, 1), 1);
             Draw(second, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             Assert.Equal(Pixels(g), Pixels(second));

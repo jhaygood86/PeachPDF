@@ -20,20 +20,20 @@ namespace PeachPDF.Tests.PdfBackendTests
         private const string Png4X4 =
             "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGM8YWTEAANMcBZeDgA8MgE0GRiVCQAAAABJRU5ErkJggg==";
 
-        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext RenderContext) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var adapter = new PdfRenderContext();
-            return (document, pageGfx, new PdfCanvas(adapter, pageGfx, 1.0), adapter);
+            var renderContext = new PdfRenderContext();
+            return (document, pageGfx, new PdfCanvas(renderContext, pageGfx, 1.0), renderContext);
         }
 
-        private static Image NewTile(PdfCanvas graphics, RenderContext adapter, double size)
+        private static Image NewTile(PdfCanvas graphics, RenderContext renderContext, double size)
         {
             var (tileGraphics, image) = graphics.CreateTile(size, size)!.Value;
-            tileGraphics.DrawRectangle(adapter.GetSolidBrush(PaintColor.FromArgb(200, 30, 30)), 0, 0, size / 2, size);
+            tileGraphics.DrawRectangle(renderContext.GetSolidBrush(PaintColor.FromArgb(200, 30, 30)), 0, 0, size / 2, size);
             tileGraphics.Dispose();
             return image;
         }
@@ -48,8 +48,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void FormTile_BecomesATilingPatternWhoseContentDrawsTheFormOnce()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var brush = new TileBrush(NewTile(graphics, adapter, 20), 20, 20);
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var brush = new TileBrush(NewTile(graphics, renderContext, 20), 20, 20);
 
             graphics.DrawRectangle(brush, 10, 10, 300, 200);
             pageGfx.Dispose();
@@ -70,9 +70,9 @@ namespace PeachPDF.Tests.PdfBackendTests
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var pageGfx = PdfGraphics.FromPdfPage(document.AddPage());
-            var adapter = new PdfRenderContext();
-            var graphics = new PdfCanvas(adapter, pageGfx, 2.0);
-            var brush = new TileBrush(NewTile(graphics, adapter, 40), 40, 40);
+            var renderContext = new PdfRenderContext();
+            var graphics = new PdfCanvas(renderContext, pageGfx, 2.0);
+            var brush = new TileBrush(NewTile(graphics, renderContext, 40), 40, 40);
 
             graphics.DrawRectangle(brush, 0, 0, 200, 100);
             pageGfx.Dispose();
@@ -85,10 +85,10 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void Transform_ReachesThePatternMatrix()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
+            var (document, pageGfx, graphics, renderContext) = NewPage();
 
             // 1 x 1 cells over 200 x 100 are 20,000 cells: more than are worth drawing one by one, so the turned grid stays a pattern.
-            var rotated = new TileBrush(NewTile(graphics, adapter, 20), 1, 1, Matrix3x2.CreateRotation(MathF.PI / 6));
+            var rotated = new TileBrush(NewTile(graphics, renderContext, 20), 1, 1, Matrix3x2.CreateRotation(MathF.PI / 6));
 
             graphics.DrawRectangle(rotated, 0, 0, 200, 100);
             pageGfx.Dispose();
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ATurnedGrid_OfFewCells_IsDrawnCellByCell_NotAsAPattern()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var rotated = new TileBrush(NewTile(graphics, adapter, 20), 20, 20, Matrix3x2.CreateRotation(MathF.PI / 6));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var rotated = new TileBrush(NewTile(graphics, renderContext, 20), 20, 20, Matrix3x2.CreateRotation(MathF.PI / 6));
 
             graphics.DrawRectangle(rotated, 0, 0, 200, 100);
             pageGfx.Dispose();
@@ -120,8 +120,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         {
             // The cells drawn must reach every corner of the shape, however the grid is turned: the extreme cells' corners, mapped back
             // through the turn, enclose the shape.
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var turned = new TileBrush(NewTile(graphics, adapter, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 4) * Matrix3x2.CreateTranslation(123, -77));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var turned = new TileBrush(NewTile(graphics, renderContext, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 4) * Matrix3x2.CreateTranslation(123, -77));
 
             graphics.DrawRectangle(turned, 300, 200, 90, 60);
             graphics.DrawRectangle(turned, -50, -50, 20, 20);
@@ -135,8 +135,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void AnUprightGrid_UnderARotatedCanvasTransform_IsDrawnCellByCell()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var upright = new TileBrush(NewTile(graphics, adapter, 20), 20, 20);
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var upright = new TileBrush(NewTile(graphics, renderContext, 20), 20, 20);
 
             graphics.PushTransform(Matrix3x2.CreateRotation(MathF.PI / 6));
             graphics.DrawRectangle(upright, 0, 0, 200, 100);
@@ -162,8 +162,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ATurnedGrid_FilledIntoAPathOrPolygon_IsAlsoDrawnCellByCell()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var turned = new TileBrush(NewTile(graphics, adapter, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 5));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var turned = new TileBrush(NewTile(graphics, renderContext, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 5));
 
             using (var path = graphics.GetGraphicsPath())
             {
@@ -182,8 +182,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ATurnedGrid_OfAnEmptyShape_DrawsNoCellsAndDoesNotThrow()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var turned = new TileBrush(NewTile(graphics, adapter, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 5));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var turned = new TileBrush(NewTile(graphics, renderContext, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 5));
 
             graphics.DrawRectangle(turned, 0, 0, 0, 50);
             pageGfx.Dispose();
@@ -208,8 +208,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void PenStrokedWithATile_UsesTheStrokePatternOperators()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var pen = graphics.GetPen(new TileBrush(NewTile(graphics, adapter, 20), 20, 20));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var pen = graphics.GetPen(new TileBrush(NewTile(graphics, renderContext, 20), 20, 20));
             pen.Width = 12;
 
             graphics.DrawLine(pen, 10, 10, 200, 10);
@@ -223,8 +223,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ImageTile_IsEmbeddedOnceInsideThePattern()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var image = adapter.ImageFromStream(new MemoryStream(Convert.FromBase64String(Png4X4)));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var image = renderContext.ImageFromStream(new MemoryStream(Convert.FromBase64String(Png4X4)));
 
             graphics.DrawRectangle(new TileBrush(image, 12, 12), 0, 0, 200, 100);
             pageGfx.Dispose();
@@ -242,8 +242,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [InlineData(ImageSampling.Bicubic, true)]
         public void ImageTile_SamplingDecidesWhetherViewersMaySmoothIt(ImageSampling sampling, bool smooth)
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var image = adapter.ImageFromStream(new MemoryStream(Convert.FromBase64String(Png4X4)));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var image = renderContext.ImageFromStream(new MemoryStream(Convert.FromBase64String(Png4X4)));
 
             graphics.DrawRectangle(new TileBrush(image, 12, 12, Matrix3x2.Identity, sampling), 0, 0, 200, 100);
             pageGfx.Dispose();
@@ -266,10 +266,10 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void TileBrush_KeepsWhatItWasGiven()
         {
-            var (_, pageGfx, graphics, adapter) = NewPage();
+            var (_, pageGfx, graphics, renderContext) = NewPage();
             using (pageGfx)
             {
-                var tile = NewTile(graphics, adapter, 20);
+                var tile = NewTile(graphics, renderContext, 20);
                 var brush = new TileBrush(tile, 15, 25, Matrix3x2.CreateTranslation(3, 4), ImageSampling.Bicubic);
 
                 Assert.Same(tile, brush.Tile);

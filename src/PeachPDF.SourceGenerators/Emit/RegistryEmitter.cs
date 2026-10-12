@@ -376,7 +376,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("    /// <summary>Everything a generated SVG customSetter/default setter needs beyond the raw value — see CLAUDE.md's generator section.</summary>");
             sb.AppendLine("    internal readonly struct SvgPropertyContext");
             sb.AppendLine("    {");
-            sb.AppendLine("        public RenderContext Adapter { get; }");
+            sb.AppendLine("        public RenderContext RenderContext { get; }");
             sb.AppendLine("        public PaintColor ContextColor { get; }");
             sb.AppendLine();
             sb.AppendLine("        /// <summary>The current viewport's diagonal (per the SVG percentage-length formula) — needed to resolve a percentage stroke-width/dashoffset/dasharray entry; null where no viewport is established yet.</summary>");
@@ -388,9 +388,9 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>The element's own font, for the font-relative units (em/ex/ch/cap/ic/lh and the root-element variants) in a stroke-width/dashoffset/dasharray length; null where no font is in scope, which resolves them against the 16px initial size and each unit's spec fallback.</summary>");
             sb.AppendLine("        public ISvgLengthBasis? LengthBasis { get; }");
             sb.AppendLine();
-            sb.AppendLine("        public SvgPropertyContext(RenderContext adapter, PaintColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind, ISvgLengthBasis? lengthBasis = null)");
+            sb.AppendLine("        public SvgPropertyContext(RenderContext renderContext, PaintColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind, ISvgLengthBasis? lengthBasis = null)");
             sb.AppendLine("        {");
-            sb.AppendLine("            Adapter = adapter;");
+            sb.AppendLine("            RenderContext = renderContext;");
             sb.AppendLine("            ContextColor = contextColor;");
             sb.AppendLine("            ViewportDiagonal = viewportDiagonal;");
             sb.AppendLine("            ResolveUrlPaintKind = resolveUrlPaintKind;");
@@ -468,7 +468,7 @@ namespace PeachPDF.SourceGenerators.Emit
             return kind switch
             {
                 DataTypeKind.SvgPaint =>
-                    "if (!global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out var parsed)) return false;\n" +
+                    "if (!global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.RenderContext, ctx.ContextColor, out var parsed)) return false;\n" +
                     $"element.{svg.PropertyPath} = ctx.ResolveUrlPaintKind(parsed);\nreturn true;",
                 DataTypeKind.SvgOpacity =>
                     "if (!global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out var parsed)) return false;\n" +

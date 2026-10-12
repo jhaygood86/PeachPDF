@@ -56,7 +56,7 @@ namespace PeachPDF.Svg
         /// </summary>
         private static CssVarResolver.VarContext? BuildVarContext(HtmlContainerInt? container) =>
             container?.RegisteredProperties is { Count: > 0 } registered
-                ? new CssVarResolver.VarContext(registered, new CssValueParser(container.Adapter))
+                ? new CssVarResolver.VarContext(registered, new CssValueParser(container.RenderContext))
                 : null;
 
         /// <summary>The laid-out HTML of this node when it is a <c>&lt;foreignObject&gt;</c> of an inline <c>&lt;svg&gt;</c>.</summary>

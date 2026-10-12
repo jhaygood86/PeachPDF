@@ -11,12 +11,12 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>textLength</c> and <c>lengthAdjust</c> on SVG text: straight, <c>&lt;textPath&gt;</c> and vertical.</summary>
     public class SvgTextLengthTests
     {
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string textAttrs, string content, string svgAttrs = "")
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" {svgAttrs}><text x="10" y="50" font-size="20" {textAttrs}>{content}</text></svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 400, 100));
             return g;
@@ -253,7 +253,7 @@ namespace PeachPDF.Tests.Svg
         private static TestRecordingGraphics RenderPath(string textPathAttrs, string content, string pathData = "M10 60 L310 60")
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100"><defs><path id="p" d="{pathData}"/></defs><text font-size="20"><textPath href="#p" {textPathAttrs}>{content}</textPath></text></svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 400, 100));
             return g;
@@ -320,7 +320,7 @@ namespace PeachPDF.Tests.Svg
         private static TestRecordingGraphics RenderVertical(string textAttrs, string content)
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><text x="100" y="20" font-size="20" writing-mode="vertical-rl" {textAttrs}>{content}</text></svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 300));
             return g;

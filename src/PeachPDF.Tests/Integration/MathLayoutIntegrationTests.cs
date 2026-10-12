@@ -25,9 +25,9 @@ namespace PeachPDF.Tests.Integration
         static async Task<MathBox> LayoutMath(string mathHtml)
         {
             var html = Wrap(mathHtml);
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "TestMath");
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -60,8 +60,8 @@ namespace PeachPDF.Tests.Integration
         static async Task<CssBox?> CascadeMathMl(string mathHtml, string css)
         {
             var html = $"<html><head><style>{css}</style></head><body>{mathHtml}</body></html>";
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             // Selector matching against MathML descendants happens during the cascade (SetHtml), before
@@ -128,9 +128,9 @@ namespace PeachPDF.Tests.Integration
 
         static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutMathBox(string html)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "TestMath");
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return (container.Root!, container);
@@ -494,14 +494,14 @@ namespace PeachPDF.Tests.Integration
             // No font-family override - resolves to whatever default font the test environment has,
             // almost certainly with no MATH table, exercising MathMetrics' fallback path.
             var html = "<html><body><math><mfrac><mi>x</mi><mi>y</mi></mfrac></math></body></html>";
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var mathBox = FindByTag(container.Root!, "math") as CssBoxMath;

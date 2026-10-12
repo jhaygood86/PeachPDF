@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Regressions for defects a review of the raster backend found: each pins the behaviour that was wrong.</summary>
     public class RasterPipelineRegressionTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         [Theory]
         [InlineData(false, new byte[] { 0, 0, 0, 255 })]

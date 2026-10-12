@@ -48,8 +48,8 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<double> MeasureActualWidth(string html, double pageWidth)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             container.PageSize = new Size(pageWidth, 800);
@@ -58,7 +58,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = new Size(pageWidth, 0);
 
             var measure = PdfGraphics.CreateMeasureContext(new Size(pageWidth, 800));
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return container.ActualSize.Width;

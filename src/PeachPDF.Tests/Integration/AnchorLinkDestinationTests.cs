@@ -82,8 +82,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task PublicGetLinksNoArgOverload_StillReturnsLinkData()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainer(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainer(renderContext);
             await container.SetHtml("<html><body><a href='https://example.com'>go</a></body></html>");
             container.MaxSize = new Size(600, 0);
             using var measure = PdfGraphics.CreateMeasureContext(new Size(600, 800));

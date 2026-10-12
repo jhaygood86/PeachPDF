@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.PdfBackendTests
     /// </summary>
     public class PdfCanvasImageCropTests
     {
-        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext RenderContext) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
@@ -29,15 +29,15 @@ namespace PeachPDF.Tests.PdfBackendTests
             // metric region and fails on a US-region machine (as CI's runners are) purely on page height.
             page.Size = PageSize.A4;
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var adapter = new PdfRenderContext();
-            var graphics = new PdfCanvas(adapter, pageGfx, 1.0);
-            return (document, pageGfx, graphics, adapter);
+            var renderContext = new PdfRenderContext();
+            var graphics = new PdfCanvas(renderContext, pageGfx, 1.0);
+            return (document, pageGfx, graphics, renderContext);
         }
 
-        private static Image NewTile(PdfCanvas graphics, RenderContext adapter, double size, PaintColor color)
+        private static Image NewTile(PdfCanvas graphics, RenderContext renderContext, double size, PaintColor color)
         {
             var (tileGraphics, image) = graphics.CreateTile(size, size)!.Value;
-            tileGraphics.DrawRectangle(adapter.GetSolidBrush(color), 0, 0, size, size);
+            tileGraphics.DrawRectangle(renderContext.GetSolidBrush(color), 0, 0, size, size);
             tileGraphics.Dispose();
             return image;
         }
@@ -93,8 +93,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void CroppedDraw_ClipsAroundTheDestinationBeforeInvokingTheForm()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var tile = NewTile(graphics, adapter, 40, PaintColor.FromArgb(255, 0, 0));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var tile = NewTile(graphics, renderContext, 40, PaintColor.FromArgb(255, 0, 0));
 
             graphics.DrawImage(tile, new Rect(10, 10, 20, 20), new Rect(20, 20, 20, 20));
             pageGfx.Dispose();
@@ -117,8 +117,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void WholeImageSource_DrawsWithoutAnyCropClip()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var tile = NewTile(graphics, adapter, 40, PaintColor.FromArgb(255, 0, 0));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var tile = NewTile(graphics, renderContext, 40, PaintColor.FromArgb(255, 0, 0));
 
             // Every background layer passes its image in full (BackgroundImageDrawHandler) - that must stay
             // the plain, un-clipped draw it has always been.
@@ -135,8 +135,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void DegenerateSource_DrawsNothing()
         {
-            var (document, pageGfx, graphics, adapter) = NewPage();
-            var tile = NewTile(graphics, adapter, 40, PaintColor.FromArgb(255, 0, 0));
+            var (document, pageGfx, graphics, renderContext) = NewPage();
+            var tile = NewTile(graphics, renderContext, 40, PaintColor.FromArgb(255, 0, 0));
 
             graphics.DrawImage(tile, new Rect(10, 10, 20, 20), new Rect(0, 0, 0, 0));
             pageGfx.Dispose();

@@ -158,26 +158,26 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
 
         // ---- drawing -------------------------------------------------------------------------------------
 
-        private static async Task<(PdfRenderContext Adapter, string Family, byte[] Font)> Register(string family, Func<byte[], byte[]> addTables)
+        private static async Task<(PdfRenderContext RenderContext, string Family, byte[] Font)> Register(string family, Func<byte[], byte[]> addTables)
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var bytes = addTables(BaseFont());
             using var stream = new MemoryStream(bytes);
-            await adapter.AddFont(stream, family);
-            return (adapter, family, bytes);
+            await renderContext.AddFont(stream, family);
+            return (renderContext, family, bytes);
         }
 
         [Fact]
         public async Task TheRasterBackend_DrawsTheBitmapGlyph_InsteadOfAnOutline()
         {
-            var (adapter, family, font) = await Register("BitmapRaster", bytes =>
+            var (renderContext, family, font) = await Register("BitmapRaster", bytes =>
             {
                 var a = BitmapGlyphFontFixture.GlyphId(bytes, 'A');
                 return BitmapGlyphFontFixture.WithCbdt(bytes, new BitmapGlyphFontFixture.Picture(20, a, Png(16, 16, 255, 0, 0), 16, 16, 0, 16));
             });
             var surface = new RasterSurface(80, 60, 0, 0, 1, 1);
-            var g = new RasterCanvas(adapter, surface, 1);
-            var f = adapter.GetFont(family, 20, PaintFontStyle.Regular)!;
+            var g = new RasterCanvas(renderContext, surface, 1);
+            var f = renderContext.GetFont(family, 20, PaintFontStyle.Regular)!;
 
             g.DrawString("A", f, PaintColor.FromArgb(255, 0, 0, 0), new PaintPoint(10, 10), g.MeasureString("A", f));
 

@@ -38,10 +38,10 @@ namespace PeachPDF.Tests.TestSupport
         private readonly PdfGraphics _measure;
         private readonly PdfCanvas _real;
 
-        internal InkAwareRecordingGraphics(PdfRenderContext adapter, double pixelsPerPoint = 1.0)
+        internal InkAwareRecordingGraphics(PdfRenderContext renderContext, double pixelsPerPoint = 1.0)
         {
             _measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-            _real = new PdfCanvas(adapter, _measure, pixelsPerPoint);
+            _real = new PdfCanvas(renderContext, _measure, pixelsPerPoint);
         }
 
         /// <summary>One <see cref="Canvas.GetInkCrossings"/> call the painter made.</summary>

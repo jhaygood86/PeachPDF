@@ -174,9 +174,9 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
 
-            var adapter = new PdfRenderContext();
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
@@ -196,10 +196,10 @@ namespace PeachPDF.Tests.Integration
             }
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var measureGraphics = new PdfCanvas(adapter, measure, 1.0);
+            using var measureGraphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(measureGraphics);
 
-            var recorder = new RecordingGraphics(adapter);
+            var recorder = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recorder);
 
             return recorder.Log;
@@ -215,8 +215,8 @@ namespace PeachPDF.Tests.Integration
         {
             public System.Collections.Generic.List<(string, string?)> Log { get; } = [];
 
-            public RecordingGraphics(RenderContext adapter)
-                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics(RenderContext renderContext)
+                : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void BeginMarkedContent(string structureType, int mcid) => Log.Add(("BeginMarkedContent", structureType));
             public override void EndMarkedContent() => Log.Add(("EndMarkedContent", null));

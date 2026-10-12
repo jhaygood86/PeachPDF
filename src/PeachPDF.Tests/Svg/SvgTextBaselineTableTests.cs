@@ -23,16 +23,16 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<TestRecordingGraphics> RenderAsync(string family, string svgBody, string textAttrs = "", string content = "H")
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Sans);
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, Cjk);
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Arabic, NoBase);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Sans);
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Cjk, Cjk);
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Arabic, NoBase);
 
             var markup = svgBody.Length > 0
                 ? $"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">{svgBody}</svg>"""
                 : $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><text x="50" y="40" font-size="20" font-family="{family}" {textAttrs}>{content}</text></svg>""";
             var root = XDocument.Parse(markup).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), renderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;

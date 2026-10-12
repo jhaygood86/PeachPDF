@@ -18,9 +18,9 @@ namespace PeachPDF.Tests.Raster
     {
         private static RasterCanvas NewGraphics(bool antiAlias, int width = 20, int height = 20)
         {
-            var adapter = new PdfRenderContext { RasterAntiAliasing = antiAlias };
+            var renderContext = new PdfRenderContext { RasterAntiAliasing = antiAlias };
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterCanvas(adapter, surface, 1);
+            return new RasterCanvas(renderContext, surface, 1);
         }
 
         private static byte AlphaAt(RasterCanvas g, int x, int y) => g.Surface.Row(y)[x * 4 + 3];
@@ -116,17 +116,17 @@ namespace PeachPDF.Tests.Raster
         {
             const string family = "RasterAntiAliasingTestSans";
 
-            var adapterOn = new PdfRenderContext { RasterAntiAliasing = true };
-            await BundledFonts.RegisterFont(adapterOn, BundledFonts.Ttf, family);
-            var adapterOff = new PdfRenderContext { RasterAntiAliasing = false };
-            await BundledFonts.RegisterFont(adapterOff, BundledFonts.Ttf, family);
+            var renderContextOn = new PdfRenderContext { RasterAntiAliasing = true };
+            await BundledFonts.RegisterFont(renderContextOn, BundledFonts.Ttf, family);
+            var renderContextOff = new PdfRenderContext { RasterAntiAliasing = false };
+            await BundledFonts.RegisterFont(renderContextOff, BundledFonts.Ttf, family);
 
-            var on = new RasterCanvas(adapterOn, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
-            var off = new RasterCanvas(adapterOff, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
+            var on = new RasterCanvas(renderContextOn, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
+            var off = new RasterCanvas(renderContextOff, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
 
             var black = PaintColor.FromArgb(255, 0, 0, 0);
-            var fontOn = adapterOn.GetFont(family, 28, PaintFontStyle.Regular)!;
-            var fontOff = adapterOff.GetFont(family, 28, PaintFontStyle.Regular)!;
+            var fontOn = renderContextOn.GetFont(family, 28, PaintFontStyle.Regular)!;
+            var fontOff = renderContextOff.GetFont(family, 28, PaintFontStyle.Regular)!;
 
             on.DrawString("Sample", fontOn, black, new PaintPoint(10, 10), on.MeasureString("Sample", fontOn));
             off.DrawString("Sample", fontOff, black, new PaintPoint(10, 10), off.MeasureString("Sample", fontOff));

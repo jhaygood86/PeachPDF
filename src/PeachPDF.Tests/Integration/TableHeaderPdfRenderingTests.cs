@@ -268,9 +268,9 @@ namespace PeachPDF.Tests.Integration
                 "<tfoot><tr><th>Footer</th></tr></tfoot>" +
                 "</table></body></html>";
 
-            var adapter = new PdfRenderContext();
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
@@ -278,10 +278,10 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var measureGraphics = new PdfCanvas(adapter, measure, 1.0);
+            using var measureGraphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(measureGraphics);
 
-            var recorder = new DrawStringRecordingGraphics(adapter);
+            var recorder = new DrawStringRecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recorder);
 
             Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Header"));
@@ -297,8 +297,8 @@ namespace PeachPDF.Tests.Integration
         {
             public System.Collections.Generic.List<string> DrawnStrings { get; } = [];
 
-            public DrawStringRecordingGraphics(RenderContext adapter)
-                : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public DrawStringRecordingGraphics(RenderContext renderContext)
+                : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) => DrawnStrings.Add(str);
             public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }

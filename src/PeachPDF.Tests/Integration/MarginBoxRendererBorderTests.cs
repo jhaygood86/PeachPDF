@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             MarginBoxRenderer.PaintBorder(
                 g, new Rect(0, 0, 100, 50), style, emPt: 16, remPt: 16, pixelsPerPoint: 1.0,
-                adapter: new PdfRenderContext());
+                renderContext: new PdfRenderContext());
 
             // FilledShapes rather than DrawPolygonCall: a fill is a fill whichever primitive made it,
             // so a future ring-path fast path here would not silently read as "nothing painted".

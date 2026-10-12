@@ -45,7 +45,7 @@ namespace PeachPDF.SourceGenerators.Emit
             DataTypeKind.CssOmGrammar => BuildCssOmGrammarClause(dt),
             DataTypeKind.EnumKeyword => $"{dt.KeywordMap}.ContainsKey(value)",
             DataTypeKind.KeywordOrValue => BuildKeywordOrValueClause(entry, dt),
-            DataTypeKind.SvgPaint => "global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out _)",
+            DataTypeKind.SvgPaint => "global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.RenderContext, ctx.ContextColor, out _)",
             DataTypeKind.SvgOpacity => "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out _)",
             DataTypeKind.SvgLength => "global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis) is not null",
             DataTypeKind.SvgLengthList => "global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis) is not null",

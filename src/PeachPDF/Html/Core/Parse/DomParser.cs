@@ -98,9 +98,9 @@ namespace PeachPDF.Html.Core.Parse
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
             var media = MediaQueryContext.FromContainer(htmlContainer, mediaType);
 
-            var cssValueParser = new CssValueParser(htmlContainer.Adapter);
+            var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 
-            await CascadeApplyStyleFonts(cssData, htmlContainer.Adapter);
+            await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext);
 
             CascadeApplyPageStyles(htmlContainer, root, cssData);
             htmlContainer.PageRules = cssData.EnumerateRulesRecursive()
@@ -279,9 +279,9 @@ namespace PeachPDF.Html.Core.Parse
         /// normally.
         /// </para>
         /// </summary>
-        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RenderContext adapter, List<CssBox> displayContentsShells)
+        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RenderContext renderContext, List<CssBox> displayContentsShells)
         {
-            var valueParser = new CssValueParser(adapter);
+            var valueParser = new CssValueParser(renderContext);
             ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media, displayContentsShells);
         }
 
@@ -454,7 +454,7 @@ namespace PeachPDF.Html.Core.Parse
         /// network/relative URL through; a documented v1 limitation, not a bug to route around).
         /// </summary>
         /// <param name="html">the fragment markup to parse</param>
-        /// <param name="adapter">the platform adapter (for UA default styles, `&#64;font-face` registration, and value parsing)</param>
+        /// <param name="renderContext">the platform adapter (for UA default styles, `&#64;font-face` registration, and value parsing)</param>
         /// <param name="cssData">
         /// The stylesheet to cascade the fragment against - typically the caller's own
         /// <see cref="PeachPdfCssContent"/> merged with UA defaults, already cloned by the caller so this
@@ -469,14 +469,14 @@ namespace PeachPDF.Html.Core.Parse
         /// tree walk can find any more and the caller has to hand on to the container that will own the
         /// document (<see cref="HtmlContainerInt.DisplayContentsShells"/>).
         /// </returns>
-        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext adapter, CssData cssData)
+        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext renderContext, CssData cssData)
         {
             var root = HtmlParser.ParseDocument(html);
-            var cssValueParser = new CssValueParser(adapter);
+            var cssValueParser = new CssValueParser(renderContext);
 
             (cssData, _) = await CascadeParseStyles(root, htmlContainer: null, cssData, cssDataChanged: false);
 
-            await CascadeApplyStyleFonts(cssData, adapter);
+            await CascadeApplyStyleFonts(cssData, renderContext);
 
             // No page context exists at splice time, so there is no real viewport/page-box geometry to
             // evaluate @media width/height/orientation features against - the same "no HtmlContainerInt"
@@ -513,12 +513,12 @@ namespace PeachPDF.Html.Core.Parse
         #region Private methods
 
         /// <summary>
-        /// Registers every <c>@font-face</c> rule in <paramref name="cssData"/> with <paramref name="adapter"/>.
+        /// Registers every <c>@font-face</c> rule in <paramref name="cssData"/> with <paramref name="renderContext"/>.
         /// Purely <c>(cssData, adapter)</c>-scoped - no document/container dependency - so it is also reused by
         /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
         /// attached to a declarative document (<see cref="Layout.IDocumentBuilder.Stylesheet"/>).
         /// </summary>
-        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext adapter)
+        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -549,12 +549,12 @@ namespace PeachPDF.Html.Core.Parse
 
                         if (fontFaceDefinition.Local is not null)
                         {
-                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
+                            isLoaded = await renderContext.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
                         }
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
+                            isLoaded = await renderContext.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
                         }
 
                         if (isLoaded) break;
@@ -657,7 +657,7 @@ namespace PeachPDF.Html.Core.Parse
             // inside the previous page's true physical clip window, emitting a clipped-but-present
             // duplicate text run into that page's content stream (see MarginBoxRenderer.cs's own
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
-            var pixelsPerPoint = (htmlContainer.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (htmlContainer.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
             ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                 allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);

@@ -72,7 +72,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (subtract <= 0) return "100%";
 
-            var points = subtract / ((HtmlContainer?.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0);
+            var points = subtract / ((HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0);
             return "calc(100% - " + points.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt)";
         }
     }

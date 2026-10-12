@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Integration
 
         private static Task<(CssBox Root, HtmlContainerInt Container)> Layout(string html, double pageWidth, double pageHeight) =>
             LayoutHarness.LayoutAsync(html, pageWidth, pageHeight,
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, TestFont));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, TestFont));
 
         // A heading in 13pt type on the body's 12pt line has a negative half-leading, so its ink rises
         // above its line box (CSS 2.1 §10.8.1). A break moved the line to the next page's top, its ink

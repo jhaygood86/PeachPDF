@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
 {
     public class SvgTreeBuilderTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         // Mirrors the standalone-SVG loader (ImageLoadHandler.LoadSvgFromStream): builds an SVG-local
         // CssData from the markup's own <style> elements and cascades custom properties, so <style>-based
@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Svg
             var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
             if (cssData is not null)
                 SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
         }
 
         [Fact]
@@ -33,7 +33,7 @@ namespace PeachPDF.Tests.Svg
 
             Assert.NotNull(svgBox);
 
-            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), Adapter);
+            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), RenderContext);
 
             AssertExpectedStructure(document);
         }
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Svg
         public void Build_FromXmlDocument_ProducesEquivalentStructure()
         {
             var xdoc = XDocument.Parse(SvgTestFixture.Markup);
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), RenderContext);
 
             AssertExpectedStructure(document);
         }
@@ -541,7 +541,7 @@ namespace PeachPDF.Tests.Svg
         public void CurrentColor_ResolvesToContextColorPassedToBuild()
         {
             var xdoc = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>""");
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), Adapter, PaintColor.FromArgb(0x10, 0x20, 0x30));
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), RenderContext, PaintColor.FromArgb(0x10, 0x20, 0x30));
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
             Assert.Equal(SvgPaintKind.Solid, circle.Fill.Kind);
@@ -1105,7 +1105,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/x.png"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.NotNull(image.Image);
@@ -1122,7 +1122,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/inner.svg"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.Null(image.Image);
@@ -1148,7 +1148,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/inner.svg"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var outer = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.NotNull(outer.NestedDocument);
@@ -1169,7 +1169,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/inner.svg"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var outer = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.NotNull(outer.NestedDocument);
@@ -1195,7 +1195,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/styled.svg"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.NotNull(image.NestedDocument);
@@ -1212,7 +1212,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/broken.svg"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.Null(image.Image);
@@ -1228,7 +1228,7 @@ namespace PeachPDF.Tests.Svg
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/junk.png"/></svg>""").Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.Null(image.Image);

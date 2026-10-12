@@ -281,18 +281,18 @@ namespace PeachPDF.Html.Core.Dom
             Width = string.Create(CultureInfo.InvariantCulture, $"{size.Width}pt");
             Height = string.Create(CultureInfo.InvariantCulture, $"{size.Height}pt");
 
-            var adapter = HtmlContainer!.Adapter;
+            var renderContext = HtmlContainer!.RenderContext;
 
             if (_dynamicRasterResolver is { } rasterResolver)
             {
                 var bytes = rasterResolver(size);
-                SetDecodedContent(adapter.ImageFromStream(new MemoryStream(bytes)), null);
+                SetDecodedContent(renderContext.ImageFromStream(new MemoryStream(bytes)), null);
                 _dynamicRasterResolver = null;
             }
             else if (_dynamicSvgResolver is { } svgResolver)
             {
                 var markup = svgResolver(size);
-                var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(markup)), adapter);
+                var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(markup)), renderContext);
                 SetDecodedContent(null, document);
                 _dynamicSvgResolver = null;
             }

@@ -17,16 +17,16 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterTextTestSans";
 
-        private sealed record Fixture(PdfRenderContext Adapter, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
+        private sealed record Fixture(PdfRenderContext RenderContext, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
 
         private static async Task<Fixture> NewFixture(int width = 300, int height = 80)
         {
-            var adapter = new PdfRenderContext();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            var graphics = new RasterCanvas(adapter, surface, 1);
-            return new Fixture(adapter, graphics, style => adapter.GetFont(Family, 24, style)!);
+            var graphics = new RasterCanvas(renderContext, surface, 1);
+            return new Fixture(renderContext, graphics, style => renderContext.GetFont(Family, 24, style)!);
         }
 
         private static PaintColor Black => PaintColor.FromArgb(255, 0, 0, 0);

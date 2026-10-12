@@ -2494,14 +2494,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void InlineSvg_FilledPolyline_FillsAClosedShapeButStrokesTheOpenOne()
         {
-            var adapter = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
             var markup = """
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                   <polyline points="10,10 90,10 50,90" fill="#ff0000" stroke="#0000ff" stroke-width="4"/>
                 </svg>
                 """;
             var document = PeachPDF.Svg.SvgTreeBuilder.Build(
-                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), adapter);
+                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), renderContext);
             var g = new ClosureSpyGraphics();
 
             PeachPDF.Svg.SvgRenderer.RenderInto(g, document, new PeachDrawing.Core.Rect(0, 0, 100, 100));

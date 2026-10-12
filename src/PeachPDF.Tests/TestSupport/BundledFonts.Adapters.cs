@@ -6,7 +6,7 @@ namespace PeachPDF.Tests.TestSupport
     internal static partial class BundledFonts
     {
         /// <summary>
-        /// Registers <paramref name="fontPath"/> on <paramref name="adapter"/> under
+        /// Registers <paramref name="fontPath"/> on <paramref name="renderContext"/> under
         /// <paramref name="familyName"/> directly via <see cref="PdfRenderContext.AddFont(Stream, string?)"/>,
         /// bypassing CSS <c>@font-face</c> entirely. For a test whose actual subject is layout or paint
         /// (not CSS <c>@font-face</c> parsing/loading itself), prefer this over embedding the font as a
@@ -18,10 +18,10 @@ namespace PeachPDF.Tests.TestSupport
         /// registered family name, none of the CSS-parsing overhead neither the test nor its assertions
         /// have anything to do with.
         /// </summary>
-        internal static async Task RegisterFont(PdfRenderContext adapter, string fontPath, string familyName)
+        internal static async Task RegisterFont(PdfRenderContext renderContext, string fontPath, string familyName)
         {
             using var stream = File.OpenRead(fontPath);
-            await adapter.AddFont(stream, familyName);
+            await renderContext.AddFont(stream, familyName);
         }
 
         /// <summary>
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.TestSupport
         internal static string LiberationSans => Path.Combine(AppContext.BaseDirectory, "LiberationSans-Regular.woff");
 
         /// <summary>
-        /// Points the <c>sans-serif</c> generic at the bundled Liberation Sans on <paramref name="adapter"/>, so a
+        /// Points the <c>sans-serif</c> generic at the bundled Liberation Sans on <paramref name="renderContext"/>, so a
         /// fixture that says <c>font: 12px sans-serif</c> measures the same on every host. Without it the
         /// generic resolves to whatever the platform maps it to - Arial, Helvetica, DejaVu Sans, a fontconfig
         /// answer - and those differ in line height (Helvetica's ascent + descent is exactly 1em, Arial's is
@@ -40,13 +40,13 @@ namespace PeachPDF.Tests.TestSupport
         /// existing fixtures were written against.
         /// Use it for a layout fixture whose subject is not which font the host resolves.
         /// </summary>
-        internal static async Task PinSansSerifAsync(PdfRenderContext adapter)
+        internal static async Task PinSansSerifAsync(PdfRenderContext renderContext)
         {
             const string pinnedFamily = "PinnedSans";
-            await RegisterFont(adapter, LiberationSans, pinnedFamily);
-            adapter.AddFontFamilyMapping("sans-serif", pinnedFamily);
+            await RegisterFont(renderContext, LiberationSans, pinnedFamily);
+            renderContext.AddFontFamilyMapping("sans-serif", pinnedFamily);
             // Fixtures written against `Arial` get the same pinned metrics rather than a host fallback.
-            adapter.AddFontFamilyMapping("Arial", pinnedFamily);
+            renderContext.AddFontFamilyMapping("Arial", pinnedFamily);
         }
     }
 }

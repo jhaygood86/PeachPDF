@@ -108,8 +108,8 @@ namespace PeachPDF.Tests.TestSupport
 
         public override double PixelsPerPoint => PixelsPerPointOverride;
 
-        public RecordingGraphics(RenderContext adapter)
-            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+        public RecordingGraphics(RenderContext renderContext)
+            : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
         public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {

@@ -203,7 +203,7 @@ namespace PeachPDF.Tests.Integration
                 "</body></html>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(html,
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, "CJK"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Cjk, "CJK"));
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
             Assert.True(box!.ActualFont.HasVerticalMetrics, "the bundled CJK test font should carry real vhea/vmtx metrics");

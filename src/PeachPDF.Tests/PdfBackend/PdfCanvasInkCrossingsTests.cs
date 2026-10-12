@@ -234,13 +234,13 @@ namespace PeachPDF.Tests.PdfBackendTests
 
             internal static async Task<Fixture> CreateAsync(string? fontPath = null, string family = "InkTestFont")
             {
-                var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-                await BundledFonts.RegisterFont(adapter, fontPath ?? BundledFonts.Ttf, family);
+                var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+                await BundledFonts.RegisterFont(renderContext, fontPath ?? BundledFonts.Ttf, family);
 
                 var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-                var graphics = new PdfCanvas(adapter, measure, 1.0);
+                var graphics = new PdfCanvas(renderContext, measure, 1.0);
 
-                var font = adapter.GetFont(family, 40, PaintFontStyle.Regular);
+                var font = renderContext.GetFont(family, 40, PaintFontStyle.Regular);
                 Assert.NotNull(font);
 
                 return new Fixture(measure, graphics, font);

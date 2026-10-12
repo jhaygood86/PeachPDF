@@ -43,7 +43,7 @@ namespace PeachPDF.Html.Core.Dom
             int totalPages,
             double pageY,
             IReadOnlyList<NamedString> namedStrings,
-            RenderContext adapter,
+            RenderContext renderContext,
             StyleDeclaration? pageStyle,
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache,
@@ -74,7 +74,7 @@ namespace PeachPDF.Html.Core.Dom
                 // with no content at all) - gated on their own border-box rect rather than the content
                 // rect below, so a box whose content is empty/none still gets them.
                 await PaintBackgroundAndBorder(g, outerRect, pageSize, marginRule, pageStyle, remPt,
-                    cbWidth, cbHeight, adapter, htmlContainer, backgroundImageCache);
+                    cbWidth, cbHeight, renderContext, htmlContainer, backgroundImageCache);
 
                 if (string.IsNullOrEmpty(contentValue) ||
                     contentValue.Equals("none", StringComparison.OrdinalIgnoreCase) ||
@@ -85,7 +85,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
-                var image = await ResolveContentImage(contentValue, adapter, htmlContainer, imageCache);
+                var image = await ResolveContentImage(contentValue, renderContext, htmlContainer, imageCache);
                 if (image != null)
                 {
                     var position = ResolveImagePosition(marginRule.Style, pageStyle, boxName);
@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Dom
                     var emSizePt = image is CssImage.LinearGradient or CssImage.RadialGradient
                         ? ResolveFontSizePt(marginRule.Style, pageStyle)
                         : (double?)null;
-                    PaintImage(g, image, rect, position, adapter, htmlContainer, emSizePt);
+                    PaintImage(g, image, rect, position, renderContext, htmlContainer, emSizePt);
                     continue;
                 }
 
@@ -105,7 +105,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (text == null)
                     continue;
 
-                var font = BuildFont(marginRule.Style, pageStyle, adapter);
+                var font = BuildFont(marginRule.Style, pageStyle, renderContext);
                 var brush = BuildBrush(marginRule.Style);
                 var format = BuildStringFormat(marginRule.Style, pageStyle, boxName);
 
@@ -397,7 +397,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal static async Task<CssImage?> ResolveContentImage(
             string contentValue,
-            RenderContext adapter,
+            RenderContext renderContext,
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache)
         {
@@ -425,7 +425,7 @@ namespace PeachPDF.Html.Core.Dom
             if (imageCache.TryGetValue(contentValue, out var cached))
                 return cached;
 
-            var image = new CssValueParser(adapter).ParseImage(contentValue);
+            var image = new CssValueParser(renderContext).ParseImage(contentValue);
             if (image != null)
                 await image.EnsureLoadedAsync(htmlContainer);
 
@@ -451,7 +451,7 @@ namespace PeachPDF.Html.Core.Dom
         internal static async Task PaintBackgroundAndBorder(
             PdfGraphics g, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
-            RenderContext adapter, HtmlContainerInt htmlContainer,
+            RenderContext renderContext, HtmlContainerInt htmlContainer,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
             // Root is only ever null before the document's initial layout, which has already run by the
@@ -480,8 +480,8 @@ namespace PeachPDF.Html.Core.Dom
             var (paddingTop, paddingBottom) = PaddingExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
             var contentBoxRect = Shrink(paddingBoxRect, paddingLeft, paddingTop, paddingRight, paddingBottom);
 
-            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
-            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
 
             Rect ToPixelRect(Rect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
 
@@ -502,10 +502,10 @@ namespace PeachPDF.Html.Core.Dom
             };
 
             await LayeredBackgroundPainter.PaintAsync(
-                pdfCanvas, rule.Style, adapter, htmlContainer, rootBox, emPt,
+                pdfCanvas, rule.Style, renderContext, htmlContainer, rootBox, emPt,
                 ResolvePositioningRect, pageBoxPx, backgroundImageCache);
 
-            PaintBorder(pdfCanvas, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, adapter);
+            PaintBorder(pdfCanvas, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, renderContext);
         }
 
         /// <summary>
@@ -524,13 +524,13 @@ namespace PeachPDF.Html.Core.Dom
         /// too, via <see cref="PaintBackgroundAndBorder"/>) but identical box-model math (issue #1147).
         /// </summary>
         internal static void PaintBorder(Canvas g, Rect borderBoxRect, StyleDeclaration style,
-            double emPt, double remPt, double pixelsPerPoint, RenderContext adapter)
+            double emPt, double remPt, double pixelsPerPoint, RenderContext renderContext)
         {
             // borderBoxRect is already known positive-size here - the sole caller, PaintBackgroundAndBorder,
             // returns before this call otherwise. emPt is the same em-basis BorderExtent already used to
             // charge this box's own space - a border-*-width of "0.1em" must paint at the identical width
             // it was charged, or content would sit under (or float above) the stroke it made room for.
-            var colorParser = new CssValueParser(adapter);
+            var colorParser = new CssValueParser(renderContext);
             var textColor = string.IsNullOrEmpty(style.Color) ? PaintColor.Black : colorParser.GetActualColor(style.Color);
 
             // An edge with no explicit colour resolves currentColor exactly as
@@ -610,7 +610,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which <paramref name="htmlContainer"/>'s root box's own <see cref="CssBox.GetRemHeight"/>
         /// already correctly is.
         /// </summary>
-        private static void PaintImage(PdfGraphics g, CssImage image, Rect rect, string positionList, RenderContext adapter,
+        private static void PaintImage(PdfGraphics g, CssImage image, Rect rect, string positionList, RenderContext renderContext,
             HtmlContainerInt htmlContainer, double? emSizePt)
         {
             // Root is only ever null before the document's initial layout, which has already run by
@@ -619,8 +619,8 @@ namespace PeachPDF.Html.Core.Dom
             if (htmlContainer.Root is not { } rootBox)
                 return;
 
-            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
-            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
             var paintRect = new Rect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
 
             CssImagePainter.Paint(pdfCanvas, image, layerIndex: 0,
@@ -987,7 +987,7 @@ namespace PeachPDF.Html.Core.Dom
             DomParser.ParseLengthToPdfPoints(sizeStr)
             ?? FontSizeResolver.Resolve(sizeStr, DefaultFontResolver.FontSize, DefaultFontResolver.FontSize);
 
-        internal static TypefaceFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RenderContext adapter)
+        internal static TypefaceFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RenderContext renderContext)
         {
             var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? DefaultFontResolver.DefaultFont;
             var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);
@@ -1013,10 +1013,10 @@ namespace PeachPDF.Html.Core.Dom
             // division, pre-multiply so the two cancel out to the CSS-specified point size regardless of
             // PixelsPerPoint (normally 1.0, but not under ShrinkToFit/ScaleToPageSize or non-72
             // PixelsPerInch).
-            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var pixelSize = sizePt * pixelsPerPoint;
-            var resolvedFont = FontFamilyResolver.Resolve(adapter, familyList, pixelSize, fontStyle)
-                                ?? FontFamilyResolver.Resolve(adapter, DefaultFontResolver.DefaultFont, pixelSize, fontStyle);
+            var resolvedFont = FontFamilyResolver.Resolve(renderContext, familyList, pixelSize, fontStyle)
+                                ?? FontFamilyResolver.Resolve(renderContext, DefaultFontResolver.DefaultFont, pixelSize, fontStyle);
 
             if (resolvedFont is not PdfCanvasFont pdfCanvasFont)
             {

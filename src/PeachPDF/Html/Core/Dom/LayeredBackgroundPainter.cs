@@ -40,7 +40,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="g">the device to draw into</param>
         /// <param name="style">the resolved declaration to read background properties from</param>
-        /// <param name="adapter">used to parse colors/images with no box-tree context</param>
+        /// <param name="renderContext">used to parse colors/images with no box-tree context</param>
         /// <param name="htmlContainer">used only to load a url() image</param>
         /// <param name="lengthBasisBox">
         /// a real, laid-out box standing in for em/rem length resolution only - never consulted for its
@@ -72,7 +72,7 @@ namespace PeachPDF.Html.Core.Dom
         internal static async Task PaintAsync(
             Canvas g,
             StyleDeclaration? style,
-            RenderContext adapter,
+            RenderContext renderContext,
             HtmlContainerInt htmlContainer,
             CssBox lengthBasisBox,
             double? gradientEmSizePt,
@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Dom
             var colorStr = style.BackgroundColor;
             if (!string.IsNullOrEmpty(colorStr))
             {
-                var color = new CssValueParser(adapter).GetActualColor(colorStr);
+                var color = new CssValueParser(renderContext).GetActualColor(colorStr);
                 if (RenderUtils.IsColorVisible(color))
                 {
                     var colorRect = resolvePositioningRect(style.BackgroundClip);
@@ -107,7 +107,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (!imageCache.TryGetValue(imageValue, out var images))
             {
-                images = new CssValueParser(adapter).ParseImages(imageValue);
+                images = new CssValueParser(renderContext).ParseImages(imageValue);
                 if (images != null)
                 {
                     foreach (var image in images)

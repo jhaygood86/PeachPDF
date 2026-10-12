@@ -1166,8 +1166,8 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
-            var adapter = new PdfRenderContext();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintBox(container, el!, recording);
 
             // Exactly one PushTransform/DrawString/PopTransform triplet for the single word "Hi", in order
@@ -1204,8 +1204,8 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
-            var adapter = new PdfRenderContext();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintBox(container, el!, recording);
 
             Assert.DoesNotContain(recording.Log, op => op.Kind is PaintOpKind.PushTransform or PaintOpKind.PopTransform);

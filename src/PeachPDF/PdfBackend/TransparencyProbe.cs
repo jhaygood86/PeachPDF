@@ -23,16 +23,16 @@ internal sealed class TransparencyProbe : IDisposable
     [ThreadStatic]
     private static TransparencyProbe? s_current;
 
-    private readonly RenderContext _adapter;
+    private readonly RenderContext _renderContext;
     private readonly double _pixelsPerPoint;
     private PdfDocument? _document;
     private PdfGraphics? _xGraphics;
     private PdfCanvas? _graphics;
     private int _probes;
 
-    internal TransparencyProbe(RenderContext adapter, double pixelsPerPoint)
+    internal TransparencyProbe(RenderContext renderContext, double pixelsPerPoint)
     {
-        _adapter = adapter;
+        _renderContext = renderContext;
         _pixelsPerPoint = pixelsPerPoint;
     }
 
@@ -79,7 +79,7 @@ internal sealed class TransparencyProbe : IDisposable
         _document = new PdfDocument();
         var page = _document.AddPage();
         _xGraphics = PdfGraphics.FromPdfPage(page);
-        _graphics = new PdfCanvas(_adapter, _xGraphics, _pixelsPerPoint);
+        _graphics = new PdfCanvas(_renderContext, _xGraphics, _pixelsPerPoint);
         _probes = 1;
     }
 

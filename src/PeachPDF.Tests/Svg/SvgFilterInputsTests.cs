@@ -13,19 +13,19 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterInputsTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static SvgDocument Build(string body)
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">{body}</svg>""";
             var root = XDocument.Parse(markup).Root!;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
         }
 
         private static RasterCanvas Render(string body)
         {
             var document = Build(body);
-            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
             SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
             return host;
         }
@@ -195,8 +195,8 @@ namespace PeachPDF.Tests.Svg
             var filter = """<filter id="f" color-interpolation-filters="sRGB"><feOffset in="BackgroundImage" dx="10" dy="0"/></filter>""";
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 50 50"><defs>{filter}</defs><rect x="5" y="5" width="15" height="40" fill="rgb(0,255,0)"/><rect x="10" y="10" width="20" height="20" filter="url(#f)"/></svg>""";
             var root = XDocument.Parse(markup).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
-            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
 
             SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
 
@@ -221,8 +221,8 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
-            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
 
             SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
 
@@ -249,8 +249,8 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
-            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
 
             SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
 
@@ -283,7 +283,7 @@ namespace PeachPDF.Tests.Svg
             {
                 foreach (var document in new[] { other, bound })
                 {
-                    var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+                    var host = new RasterCanvas(RenderContext, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
                     SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
                 }
             }

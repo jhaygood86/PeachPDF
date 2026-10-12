@@ -82,7 +82,7 @@ namespace PeachPDF.Tests.Integration
                 + "The quick brown fox</span></div>");
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(Lines(g));
@@ -217,7 +217,7 @@ namespace PeachPDF.Tests.Integration
                 $"<div id='d' style=\"width:400pt; font:20pt '{Family}'; text-decoration:underline\">gy</div>");
             var d = LayoutHarness.FindById(root, "d")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, d, g);
 
             Assert.True(Lines(g).Count >= 2, "a block's propagated underline should break around descenders");
@@ -234,7 +234,7 @@ namespace PeachPDF.Tests.Integration
             var d = LayoutHarness.FindById(root, "d")!;
             var a = LayoutHarness.FindById(root, "a")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, d, g);
 
             var lines = Lines(g);
@@ -264,14 +264,14 @@ namespace PeachPDF.Tests.Integration
                 + $"<div style=\"width:400pt; font:20pt '{Family}', '{HebrewFallbackFamily}'\">"
                 + $"<span id='s' style='text-decoration:underline'>ab{hebrewFinalNun}</span></div>"
                 + "</body></html>",
-                configureRenderContext: async adapter =>
+                configureRenderContext: async renderContext =>
                 {
-                    await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
-                    await BundledFonts.RegisterFont(adapter, BundledFonts.Hebrew, HebrewFallbackFamily);
+                    await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
+                    await BundledFonts.RegisterFont(renderContext, BundledFonts.Hebrew, HebrewFallbackFamily);
                 });
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, s, g);
 
             Assert.True(g.InkQueryCount > 0, "the painter should have measured ink at all");
@@ -288,10 +288,10 @@ namespace PeachPDF.Tests.Integration
                 "<!DOCTYPE html><html><head></head><body style='margin:0'>"
                 + $"<div style=\"width:400pt; font:20pt '{CjkFamily}'\">"
                 + "<span id='s' style='text-decoration:underline'>你好</span></div></body></html>",
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Cjk, CjkFamily));
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, s, g);
 
             Assert.Equal(0, g.InkQueryCount);
@@ -306,10 +306,10 @@ namespace PeachPDF.Tests.Integration
                 "<!DOCTYPE html><html><head></head><body style='margin:0'>"
                 + $"<div style=\"width:400pt; font:20pt '{CjkFamily}'\">"
                 + "<span id='s' style='text-decoration:underline; text-decoration-skip-ink:all'>你好</span></div></body></html>",
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Cjk, CjkFamily));
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, s, g);
 
             Assert.True(g.InkQueryCount > 0, "'all' must interrupt regardless of script");
@@ -329,7 +329,7 @@ namespace PeachPDF.Tests.Integration
                 + $"font:20pt '{Family}'; text-decoration:underline\">gy</div>");
             var d = LayoutHarness.FindById(root, "d")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            using var g = new InkAwareRecordingGraphics(RenderContext(container));
             FragmentPaintHarness.PaintBox(container, d, g);
 
             Assert.Equal(0, g.InkQueryCount);
@@ -359,7 +359,7 @@ namespace PeachPDF.Tests.Integration
                 + "text-decoration:underline; text-decoration-skip-ink:all\">gy</div>");
             var d = LayoutHarness.FindById(root, "d")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container))
+            using var g = new InkAwareRecordingGraphics(RenderContext(container))
             {
                 ScriptedInk = q => [new InkSpan(q.BaselineOrigin.X + 5, q.BaselineOrigin.X + 15)]
             };
@@ -372,8 +372,8 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static PdfRenderContext Adapter(PeachPDF.Html.Core.HtmlContainerInt container) =>
-            (PdfRenderContext)container.Adapter;
+        private static PdfRenderContext RenderContext(PeachPDF.Html.Core.HtmlContainerInt container) =>
+            (PdfRenderContext)container.RenderContext;
 
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
             g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();
@@ -402,7 +402,7 @@ namespace PeachPDF.Tests.Integration
                 + $"<span id='s' style=\"text-decoration:{decoration}{skip}{resolvedThickness}\">{text}</span></div>");
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics(Adapter(container)) { ScriptedInk = scriptedInk };
+            using var g = new InkAwareRecordingGraphics(RenderContext(container)) { ScriptedInk = scriptedInk };
             FragmentPaintHarness.PaintBox(container, s, g);
 
             // Disposed here rather than by the caller. Everything a test reads afterwards - the recorded
@@ -415,6 +415,6 @@ namespace PeachPDF.Tests.Integration
         private static Task<(PeachPDF.Html.Core.Dom.CssBox Root, PeachPDF.Html.Core.HtmlContainerInt Container)> LayoutAsync(string body) =>
             LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>",
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family));
     }
 }

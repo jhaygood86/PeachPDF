@@ -55,11 +55,11 @@ namespace PeachPDF.Tests.TestSupport
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
             string html, PdfGenerateConfig config, Func<PdfRenderContext, Task>? configureRenderContext = null)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             if (configureRenderContext is not null)
             {
-                await configureRenderContext(adapter);
+                await configureRenderContext(renderContext);
             }
 
             var orgPageSize = config.PageSize != PageSize.Undefined
@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.TestSupport
                 orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
-            var container = new HtmlContainer(adapter);
+            var container = new HtmlContainer(renderContext);
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
@@ -99,7 +99,7 @@ namespace PeachPDF.Tests.TestSupport
         internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
             string html, PdfGenerateConfig config)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.TestSupport
                 orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
-            var container = new HtmlContainer(adapter);
+            var container = new HtmlContainer(renderContext);
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
@@ -138,14 +138,14 @@ namespace PeachPDF.Tests.TestSupport
 
                 var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
                     ? candidatePixelsPerPoint
-                    : adapter.PixelsPerPoint;
+                    : renderContext.PixelsPerPoint;
 
-                needsRescale = PdfGenerator.NeedsRescale(adapter.PixelsPerPoint, effectivePixelsPerPoint);
+                needsRescale = PdfGenerator.NeedsRescale(renderContext.PixelsPerPoint, effectivePixelsPerPoint);
 
                 if (needsRescale)
                 {
-                    adapter.ClearFontCache();
-                    adapter.PixelsPerPoint = effectivePixelsPerPoint;
+                    renderContext.ClearFontCache();
+                    renderContext.PixelsPerPoint = effectivePixelsPerPoint;
 
                     await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
@@ -162,7 +162,7 @@ namespace PeachPDF.Tests.TestSupport
 
             measure.Dispose();
 
-            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt, needsRescale, adapter.PixelsPerPoint);
+            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt, needsRescale, renderContext.PixelsPerPoint);
         }
     }
 }

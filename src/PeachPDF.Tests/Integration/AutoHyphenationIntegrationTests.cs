@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<html>", null)]
         public async Task DocumentLanguage_ReflectsHtmlLangAttribute(string htmlOpenTag, string? expected)
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml($"{htmlOpenTag}<body><p>text</p></body></html>", null);
 
             Assert.Equal(expected, container.DocumentLanguage);
@@ -116,8 +116,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultLanguage_FillsInOnlyWhenDocumentDeclaresNone()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainer(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
             await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new Size(600, 800));
@@ -128,8 +128,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultLanguage_DoesNotOverrideDocumentsOwnLang()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainer(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
             await PdfGenerator.SetContent(container, config, "<html lang=\"is\"><body>text</body></html>", null, new Size(600, 800));
@@ -140,8 +140,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultLanguage_Unset_LeavesLanguageNull_WhenDocumentDeclaresNone()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainer(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig();
 
             await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new Size(600, 800));
@@ -171,9 +171,9 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> FindWordsBoxAsync(string html)
         {
-            var adapter = new PdfRenderContext();
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

@@ -12,13 +12,13 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgRasterFilterEvaluatorTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static SvgDocument Build(string filterMarkup, string extraElements = "")
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{filterMarkup}</defs><rect id="target" x="20" y="20" width="40" height="40" filter="url(#f)"/>{extraElements}</svg>""";
             var root = XDocument.Parse(markup).Root!;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), RenderContext);
         }
 
         /// <summary>Renders <paramref name="paint"/> through the filter into a 100 x 100 host at <paramref name="pixelsPerUnit"/> pixels per unit.</summary>
@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Svg
             var document = Build(filterMarkup);
             var filter = document.Filters["f"];
             var size = (int)(100 * pixelsPerUnit);
-            var host = new RasterCanvas(Adapter, new RasterSurface(size, size, 0, 0, pixelsPerUnit, pixelsPerUnit), 1);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(size, size, 0, 0, pixelsPerUnit, pixelsPerUnit), 1);
 
             SvgFilterEvaluator.Render(host, filter, element ?? document.Children[0], new Rect(0, 0, 100, 100), paint);
             return host;
@@ -319,7 +319,7 @@ namespace PeachPDF.Tests.Svg
         {
             // Text has no static geometry, so an objectBoundingBox region falls back to the viewport instead of collapsing.
             var document = Build("""<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>""");
-            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
             var text = new SvgTextElement();
 
             SvgFilterEvaluator.Render(host, document.Filters["f"], text, new Rect(0, 0, 100, 100), g => Rect(g, Red, 40, 40, 10, 10));
@@ -332,7 +332,7 @@ namespace PeachPDF.Tests.Svg
         {
             var document = Build("""<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>""");
             // A tile-like host that hands out no raster surface: nothing is painted and nothing throws.
-            var host = new RasterCanvas(Adapter, new RasterSurface(10, 10, 500, 500, 1, 1), 1);
+            var host = new RasterCanvas(RenderContext, new RasterSurface(10, 10, 500, 500, 1, 1), 1);
 
             SvgFilterEvaluator.Render(host, document.Filters["f"], document.Children[0], new Rect(0, 0, 100, 100), g => Rect(g, Red));
 

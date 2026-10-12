@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextDecorationGeometryTests
     {
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         /// <summary>A canvas whose ink-crossing answer is fixed, standing in for a real glyph outline.</summary>
         private sealed class InkCanvas(IReadOnlyList<InkSpan>? crossings) : TestRecordingGraphics
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Svg
         private static T Render<T>(T g, string textAttrs, string text = "Hi", string svgAttrs = "") where T : TestRecordingGraphics
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" {svgAttrs}><text x="10" y="50" font-size="20" {textAttrs}>{text}</text></svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }

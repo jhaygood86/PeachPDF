@@ -27,88 +27,88 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void LegacyTwoColorLinearGradient_CmykColor1_Throws()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             Assert.Throws<NotSupportedException>(() =>
-                adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, RgbStop, 0));
+                renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, RgbStop, 0));
         }
 
         [Fact]
         public void LegacyTwoColorLinearGradient_CmykColor2_Throws()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             Assert.Throws<NotSupportedException>(() =>
-                adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, CmykStop, 0));
+                renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, CmykStop, 0));
         }
 
         [Fact]
         public void LegacyTwoColorLinearGradient_BothRgb_Succeeds()
         {
-            var adapter = new PdfRenderContext();
-            var brush = adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, RgbStop, 0);
+            var renderContext = new PdfRenderContext();
+            var brush = renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, RgbStop, 0);
             Assert.NotNull(brush);
         }
 
         [Fact]
         public void LegacyTwoColorLinearGradient_BothCmyk_Succeeds()
         {
-            var adapter = new PdfRenderContext();
-            var brush = adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, CmykStop2, 0);
+            var renderContext = new PdfRenderContext();
+            var brush = renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, CmykStop2, 0);
             Assert.NotNull(brush);
         }
 
         [Fact]
         public void MultiStopLinearGradient_MixedStop_Throws()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (RgbStop, 0), (CmykStop, 1) };
             Assert.Throws<NotSupportedException>(() =>
-                adapter.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops));
+                renderContext.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops));
         }
 
         [Fact]
         public void MultiStopLinearGradient_AllCmykStops_Succeeds()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (CmykStop, 0), (CmykStop2, 1) };
-            var brush = adapter.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops);
+            var brush = renderContext.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops);
             Assert.NotNull(brush);
         }
 
         [Fact]
         public void RadialGradient_MixedStop_Throws()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (RgbStop, 0), (CmykStop, 1) };
             Assert.Throws<NotSupportedException>(() =>
-                adapter.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops));
+                renderContext.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops));
         }
 
         [Fact]
         public void RadialGradient_AllCmykStops_Succeeds()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (CmykStop, 0), (CmykStop2, 1) };
-            var brush = adapter.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops);
+            var brush = renderContext.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops);
             Assert.NotNull(brush);
         }
 
         [Fact]
         public void ConicGradient_MixedStop_Throws()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var colors = new[] { RgbStop, CmykStop };
             var angles = new[] { 0.0, Math.PI };
             Assert.Throws<NotSupportedException>(() =>
-                adapter.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles));
+                renderContext.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles));
         }
 
         [Fact]
         public void ConicGradient_AllCmykStops_Succeeds()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
             var colors = new[] { CmykStop, CmykStop2 };
             var angles = new[] { 0.0, Math.PI };
-            var brush = adapter.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles);
+            var brush = renderContext.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles);
             Assert.NotNull(brush);
         }
 

@@ -43,24 +43,24 @@ namespace PeachPDF.Html.Core
         private static readonly object _defaultCssDataLock = new();
 
         /// <summary>
-        /// Get the default CSS stylesheet data, parsed (via <paramref name="adapter"/>, for any
+        /// Get the default CSS stylesheet data, parsed (via <paramref name="renderContext"/>, for any
         /// <c>@import</c> resource resolution it needs) once per process.
         /// </summary>
-        public static Task<CssData> GetAsync(RenderContext adapter)
+        public static Task<CssData> GetAsync(RenderContext renderContext)
         {
             if (_defaultCssDataTask is not null)
                 return _defaultCssDataTask;
 
             lock (_defaultCssDataLock)
             {
-                _defaultCssDataTask ??= CreateAsync(adapter);
+                _defaultCssDataTask ??= CreateAsync(renderContext);
             }
             return _defaultCssDataTask;
         }
 
-        private static async Task<CssData> CreateAsync(RenderContext adapter)
+        private static async Task<CssData> CreateAsync(RenderContext renderContext)
         {
-            var defaultCssData = await CssData.Parse(adapter, CssDefaults.DefaultStyleSheet, false);
+            var defaultCssData = await CssData.Parse(renderContext, CssDefaults.DefaultStyleSheet, false);
             foreach (var s in defaultCssData.Stylesheets)
                 s.IsUserAgent = true;
             return defaultCssData;

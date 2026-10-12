@@ -21,14 +21,14 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterEvaluatorTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static SvgRectElement NewElement() => new() { Width = 50, Height = 50 };
 
         [Fact]
         public void SingleFeFlood_DrawsFloodTileOntoPage()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilterBuilder().AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0).Build();
 
             SvgFilterEvaluator.Render(page, filter, NewElement(), _ => { });
@@ -41,7 +41,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ImplicitInput_FirstPrimitive_UsesSourceGraphic()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             // feOffset with no `in` - the first (and only) primitive, so its input must be SourceGraphic.
             var filter = new SvgFilterBuilder().AddOffset(dx: 5, dy: 5).Build();
 
@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ImplicitInput_LaterPrimitive_UsesPreviousResult_NotSourceGraphic()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             // feFlood(result="a") then feOffset with no `in` - must chain off "a" (the previous result),
             // not fall back to SourceGraphic.
             var filter = new SvgFilterBuilder()
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void NamedResult_ReferencedNonAdjacently_ResolvesCorrectly()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             // feFlood(result="a") -> feFlood(result="b", unrelated) -> feMerge[a, b]: "a" is TWO
             // primitives back, not the immediately-previous one - proves the resolution dictionary holds
             // every earlier result, not just `lastResult`.
@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void SourceAlpha_MaterializesOnce_AndIsSharedAcrossReferences()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             // Two primitives both reference SourceAlpha - it must be built exactly once (one AlphaMask op
             // against a fresh black tile), not once per reference.
             var filter = new SvgFilterBuilder()
@@ -136,7 +136,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("xor", 2)]
         public void FeComposite_EachOperator_ProducesExpectedOpCount(string op, int expectedOps)
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilterBuilder()
                 .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
                 .AddFlood(PaintColor.FromArgb(0, 0, 255), 1.0, result: "b")
@@ -152,7 +152,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void FeColorMatrix_LuminanceToAlpha_UsesLuminosityMask_NotAlphaMask()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilterBuilder().AddLuminanceToAlpha().Build();
 
             SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(PaintColor.Black), 0, 0, 10, 10));
@@ -165,7 +165,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void FeBlend_ForwardsBlendMode()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilterBuilder()
                 .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
                 .AddFlood(PaintColor.FromArgb(0, 0, 255), 1.0, result: "b")
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void FeColorMatrix_And_FeComponentTransfer_BothRouteThroughDrawImageWithColorMatrix()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var brightness = new ColorMatrix(Matrix4x4.CreateScale(1.5f), Vector4.Zero);
             var filter = new SvgFilterBuilder()
                 .AddColorMatrix(brightness, result: "a")
@@ -199,7 +199,7 @@ namespace PeachPDF.Tests.Svg
         {
             // See EvaluateFeTile's own remarks: without per-primitive subregions, feTile's cell IS the
             // whole filter region, so it degenerates to a single untiled copy of its input.
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilterBuilder()
                 .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
                 .AddTile("a")
@@ -221,7 +221,7 @@ namespace PeachPDF.Tests.Svg
             // into, which this FakeFilterGraphics mock doesn't record (destRect isn't logged) - so this
             // test's job is only to prove evaluation reaches and completes that branch without throwing,
             // producing the same single-draw shape a literal user-space offset would.
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilterBuilder(primitiveUnitsUserSpaceOnUse: false)
                 .AddOffset(dx: 0.1, dy: 0.2)
                 .Build();
@@ -240,7 +240,7 @@ namespace PeachPDF.Tests.Svg
             // bound (e.g. <text>, which needs font measurement) - ResolveFilterRect must still produce a
             // usable (non-empty) region rather than propagating the null, by falling back to the filter's
             // own literal X/Y/Width/Height fraction values unscaled.
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             var filter = new SvgFilter { FilterUnitsUserSpaceOnUse = false, X = 0, Y = 0, Width = 1, Height = 1, Primitives = [new FeFlood { PaintColor = PaintColor.Black, Opacity = 1 }] };
             var element = new SvgTextElement();
 
@@ -252,7 +252,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void EmptyRegion_ProducesNoDraw()
         {
-            var page = new FakeFilterGraphics(Adapter, null);
+            var page = new FakeFilterGraphics(RenderContext, null);
             // A zero-size userSpaceOnUse region resolves literally to zero width - no bounding box
             // involved (a zero-size SvgRectElement has no reportable bounding box at all per
             // SvgGeometryBounds, which would instead fall back to the filter's own -10%/120% DEFAULTS -
@@ -332,11 +332,11 @@ namespace PeachPDF.Tests.Svg
         /// <summary>Draw calls made directly on this instance when it is the "page" (not a tile) - <see cref="SvgFilterEvaluator.Render"/>'s final <c>DrawImage</c> lands here.</summary>
         public List<string> PageLog { get; }
 
-        public FakeFilterGraphics(RenderContext adapter, FakeImage? owner)
-            : this(adapter, owner, new Dictionary<int, FakeImage>(), []) { }
+        public FakeFilterGraphics(RenderContext renderContext, FakeImage? owner)
+            : this(renderContext, owner, new Dictionary<int, FakeImage>(), []) { }
 
-        private FakeFilterGraphics(RenderContext adapter, FakeImage? owner, Dictionary<int, FakeImage> tilesById, List<string> pageLog)
-            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue))
+        private FakeFilterGraphics(RenderContext renderContext, FakeImage? owner, Dictionary<int, FakeImage> tilesById, List<string> pageLog)
+            : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             _owner = owner;
             TilesById = tilesById;

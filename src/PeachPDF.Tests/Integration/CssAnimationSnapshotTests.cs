@@ -767,9 +767,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task KeyframeSet_UsesRevertOnlyForADeclarationThatSurvives()
         {
-            var adapter = new PdfRenderContext();
-            var overridden = RegisteredKeyframes.BuildRegistry(await CssData.Parse(adapter, "@keyframes k { to { opacity: revert; opacity: 1 } }"));
-            var used = RegisteredKeyframes.BuildRegistry(await CssData.Parse(adapter, "@keyframes k { to { opacity: revert } }"));
+            var renderContext = new PdfRenderContext();
+            var overridden = RegisteredKeyframes.BuildRegistry(await CssData.Parse(renderContext, "@keyframes k { to { opacity: revert; opacity: 1 } }"));
+            var used = RegisteredKeyframes.BuildRegistry(await CssData.Parse(renderContext, "@keyframes k { to { opacity: revert } }"));
 
             Assert.False(overridden["k"].UsesRevert);
             Assert.True(used["k"].UsesRevert);
@@ -1137,8 +1137,8 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildAsync(string html, double? progress)
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter) { AnimationProgress = progress };
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext) { AnimationProgress = progress };
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
@@ -1146,7 +1146,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

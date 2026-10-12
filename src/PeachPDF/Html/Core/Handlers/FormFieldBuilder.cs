@@ -17,10 +17,10 @@ namespace PeachPDF.Html.Core.Handlers
     /// <c>PdfGenerator.HandleFormFields</c>, a pass over the finished layout that runs after painting,
     /// the same way link annotations are placed by <c>PdfGenerator.HandleLinks</c>.
     /// </summary>
-    internal sealed class FormFieldBuilder(PdfDocument document, RenderContext adapter)
+    internal sealed class FormFieldBuilder(PdfDocument document, RenderContext renderContext)
     {
         internal PdfDocument Document { get; } = document;
-        internal RenderContext Adapter { get; } = adapter;
+        internal RenderContext RenderContext { get; } = renderContext;
 
         /// <summary>
         /// The container's real device-pixel-to-point scale, read fresh on every use (not captured at
@@ -29,7 +29,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <see cref="PdfRenderContext.PixelsPerPoint"/>, and <c>PdfGenerator.HandleFormFields</c> only
         /// runs once that has settled - mirrors <c>HtmlContainer.PixelsPerPoint</c>'s own idiom.
         /// </summary>
-        double PixelsPerPoint => ((PdfRenderContext)Adapter).PixelsPerPoint;
+        double PixelsPerPoint => ((PdfRenderContext)RenderContext).PixelsPerPoint;
 
         PdfDictionary? _helveticaFontResource;
         bool _acroFormInitialized;
@@ -153,7 +153,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var (drawnText, isPlaceholder) = DrawnText(c);
             var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height,
+                Document, RenderContext, PixelsPerPoint, box, rect.Width, rect.Height,
                 drawnText, c.AutoFontSize, c.Comb, isPlaceholder, out var fontSizePt);
 
             // "/DA" (as opposed to the baked "/AP /N" appearance above) is what a reader uses to
@@ -215,8 +215,8 @@ namespace PeachPDF.Html.Core.Handlers
 
             ApplyAlternateName(field, c.Attributes);
 
-            var onAppearance = FormFieldAppearanceBuilder.BuildCheckboxOnAppearance(Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height);
-            var offAppearance = FormFieldAppearanceBuilder.BuildCheckboxOffAppearance(Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height);
+            var onAppearance = FormFieldAppearanceBuilder.BuildCheckboxOnAppearance(Document, RenderContext, PixelsPerPoint, box, rect.Width, rect.Height);
+            var offAppearance = FormFieldAppearanceBuilder.BuildCheckboxOffAppearance(Document, RenderContext, PixelsPerPoint, box, rect.Width, rect.Height);
             SetTwoStateAppearance(field, onValue, onAppearance, offAppearance);
 
             page.Annotations.Add(field);
@@ -254,8 +254,8 @@ namespace PeachPDF.Html.Core.Handlers
                 AppearanceState = c.Checked ? "/" + onValue : "/Off",
             };
 
-            var onAppearance = FormFieldAppearanceBuilder.BuildRadioOnAppearance(Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height);
-            var offAppearance = FormFieldAppearanceBuilder.BuildRadioOffAppearance(Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height);
+            var onAppearance = FormFieldAppearanceBuilder.BuildRadioOnAppearance(Document, RenderContext, PixelsPerPoint, box, rect.Width, rect.Height);
+            var offAppearance = FormFieldAppearanceBuilder.BuildRadioOffAppearance(Document, RenderContext, PixelsPerPoint, box, rect.Width, rect.Height);
             SetTwoStateAppearance(widget, onValue, onAppearance, offAppearance);
 
             group.AddKid(widget);
@@ -287,7 +287,7 @@ namespace PeachPDF.Html.Core.Handlers
             field.SetOptions(options);
 
             var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height, selectedLabel,
+                Document, RenderContext, PixelsPerPoint, box, rect.Width, rect.Height, selectedLabel,
                 autoFontSize: false, combCells: null, isPlaceholder: false, out _);
             SetNormalAppearance(field, appearance);
 

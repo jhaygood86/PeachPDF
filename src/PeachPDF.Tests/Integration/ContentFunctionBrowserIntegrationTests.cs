@@ -341,8 +341,8 @@ isPseudoBefore: true,
             string selector,
          bool isPseudoBefore)
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
 
             await container.SetHtml(html, null);
 
@@ -351,7 +351,7 @@ isPseudoBefore: true,
             container.MaxSize = Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var elementBox = FindBoxBySelector(container.Root!, selector);

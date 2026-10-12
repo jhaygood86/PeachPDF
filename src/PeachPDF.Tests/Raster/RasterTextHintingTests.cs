@@ -18,12 +18,12 @@ namespace PeachPDF.Tests.Raster
 
         private static async Task<(RasterCanvas Graphics, Font Font)> Fixture(TextHinting hinting, double fontSize = 12, int width = 120, int height = 40)
         {
-            var adapter = new PdfRenderContext { TextHinting = hinting };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
+            var renderContext = new PdfRenderContext { TextHinting = hinting };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            var graphics = new RasterCanvas(adapter, surface, 1);
-            return (graphics, adapter.GetFont(Family, fontSize, PaintFontStyle.Regular)!);
+            var graphics = new RasterCanvas(renderContext, surface, 1);
+            return (graphics, renderContext.GetFont(Family, fontSize, PaintFontStyle.Regular)!);
         }
 
         private static void Draw(RasterCanvas graphics, Font font, string text = "Hxg", double y = 10)
@@ -56,12 +56,12 @@ namespace PeachPDF.Tests.Raster
         {
             // None is the default: the same pixels as an adapter that was never told anything about hinting
             var (plain, plainFont) = await Fixture(TextHinting.None);
-            var adapter = new PdfRenderContext();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
-            var untouched = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
+            var untouched = new RasterCanvas(renderContext, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
 
             Draw(plain, plainFont);
-            Draw(untouched, adapter.GetFont(Family, 12, PaintFontStyle.Regular)!);
+            Draw(untouched, renderContext.GetFont(Family, 12, PaintFontStyle.Regular)!);
 
             Assert.Equal(Pixels(untouched), Pixels(plain));
         }
@@ -185,10 +185,10 @@ namespace PeachPDF.Tests.Raster
         /// <summary>Text in a bundled font drawn with the given hinting and stem darkening; the alpha channel of the surface.</summary>
         private static async Task<byte[]> RenderWith(string fontPath, TextHinting hinting, bool stemDarkening, double fontSize = 9)
         {
-            var adapter = new PdfRenderContext { TextHinting = hinting, TextStemDarkening = stemDarkening };
-            await BundledFonts.RegisterFont(adapter, fontPath, "RasterDarkeningFont");
-            var graphics = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
-            var font = adapter.GetFont("RasterDarkeningFont", fontSize, PaintFontStyle.Regular)!;
+            var renderContext = new PdfRenderContext { TextHinting = hinting, TextStemDarkening = stemDarkening };
+            await BundledFonts.RegisterFont(renderContext, fontPath, "RasterDarkeningFont");
+            var graphics = new RasterCanvas(renderContext, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+            var font = renderContext.GetFont("RasterDarkeningFont", fontSize, PaintFontStyle.Regular)!;
             graphics.DrawString("Hlxn", font, Black, new PaintPoint(10, 10), graphics.MeasureString("Hlxn", font));
             return Pixels(graphics);
         }
@@ -220,10 +220,10 @@ namespace PeachPDF.Tests.Raster
         {
             async Task<byte[]> Draw(TextHinting hinting, double size)
             {
-                var adapter = new PdfRenderContext { TextHinting = hinting };
-                await BundledFonts.RegisterFont(adapter, BundledFonts.Gasp, "RasterGaspFont");
-                var graphics = new RasterCanvas(adapter, new RasterSurface(120, 60, 0, 0, 1, 1), 1);
-                var font = adapter.GetFont("RasterGaspFont", size, PaintFontStyle.Regular)!;
+                var renderContext = new PdfRenderContext { TextHinting = hinting };
+                await BundledFonts.RegisterFont(renderContext, BundledFonts.Gasp, "RasterGaspFont");
+                var graphics = new RasterCanvas(renderContext, new RasterSurface(120, 60, 0, 0, 1, 1), 1);
+                var font = renderContext.GetFont("RasterGaspFont", size, PaintFontStyle.Regular)!;
                 graphics.DrawString("AB", font, Black, new PaintPoint(10, 40), graphics.MeasureString("AB", font));
                 return Pixels(graphics);
             }
@@ -240,13 +240,13 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public async Task ItalicTextKeepsItsShearWhenHinted()
         {
-            var adapter = new PdfRenderContext { TextHinting = TextHinting.Standard };
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
+            var renderContext = new PdfRenderContext { TextHinting = TextHinting.Standard };
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
 
             RasterCanvas Draw(PaintFontStyle style)
             {
-                var g = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
-                var f = adapter.GetFont(Family, 24, style)!;
+                var g = new RasterCanvas(renderContext, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+                var f = renderContext.GetFont(Family, 24, style)!;
                 g.DrawString("IIII", f, Black, new PaintPoint(10, 5), g.MeasureString("IIII", f));
                 return g;
             }

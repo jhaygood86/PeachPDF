@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgClipPathUnitsTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static PaintPoint[] RenderAndCaptureClip(string clipUnitsAttr, string clipChildren)
         {
@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Svg
                   <rect x="20" y="20" width="40" height="30" clip-path="url(#c)"/>
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 100, 100));
             var clip = Assert.Single(g.ClipPaths);

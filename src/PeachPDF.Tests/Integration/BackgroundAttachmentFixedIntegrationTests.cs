@@ -92,8 +92,8 @@ namespace PeachPDF.Tests.Integration
                 + "background-attachment:fixed;background-position:100% 100%;background-size:10pt 10pt;\">"
                 + "</div></body></html>";
 
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             container.PageSize = new Size(500, 500);
@@ -101,14 +101,14 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = new Size(500, 0);
 
             var measure = PdfGraphics.CreateMeasureContext(new Size(500, 500));
-            using (var measureGraphics = new PdfCanvas(adapter, measure, 1.0))
+            using (var measureGraphics = new PdfCanvas(renderContext, measure, 1.0))
             {
                 await container.PerformLayout(measureGraphics);
             }
 
             container.PageClipOverride = pageClipOverride;
 
-            var recorder = new RecordingGraphics(adapter);
+            var recorder = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recorder);
             return recorder;
         }

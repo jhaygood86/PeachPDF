@@ -1081,8 +1081,8 @@ namespace PeachPDF.Tests.Integration
                 + "<h2 id='h2'>Head</h2>"
                 + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>");
 
-        private static Task RegisterResumedParagraphFont(PeachPDF.PdfBackend.PdfRenderContext adapter) =>
-            BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Early Break Fixture");
+        private static Task RegisterResumedParagraphFont(PeachPDF.PdfBackend.PdfRenderContext renderContext) =>
+            BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Early Break Fixture");
 
         /// <summary>
         /// Same shape as <see cref="ResumedParagraphDocument"/>, except a <c>marker</c> div with

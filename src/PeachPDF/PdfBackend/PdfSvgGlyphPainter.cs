@@ -22,7 +22,7 @@ namespace PeachPDF.PdfBackend
     internal sealed class PdfSvgGlyphPainter : ISvgGlyphPainter
     {
         private readonly Canvas _host;
-        private readonly RenderContext _adapter;
+        private readonly RenderContext _renderContext;
         // One set of drawings for each PDF document, so a glyph repeated across pages is built once and its form is shared: the form cache
         // of the SVG renderer is keyed by the drawing's identity. A graphics with no PDF document (the raster one) shares them per adapter.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, Dictionary<ColorGlyphFormCache.Selector, SvgDocument?>> Documents = new();
@@ -32,11 +32,11 @@ namespace PeachPDF.PdfBackend
         /// <summary>The graphics this draws on.</summary>
         internal Canvas Host => _host;
 
-        internal PdfSvgGlyphPainter(Canvas host, RenderContext adapter)
+        internal PdfSvgGlyphPainter(Canvas host, RenderContext renderContext)
         {
             _host = host;
-            _adapter = adapter;
-            _documents = Documents.GetOrCreateValue(host.TileCacheOwner ?? adapter);
+            _renderContext = renderContext;
+            _documents = Documents.GetOrCreateValue(host.TileCacheOwner ?? renderContext);
         }
 
         public bool TryPaint(Typeface typeface, ushort glyph, SvgGlyph svg, double fontSize, double originX, double baselineY,
@@ -48,7 +48,7 @@ namespace PeachPDF.PdfBackend
             if (!_documents.TryGetValue(key, out var document))
             {
                 document = SvgGlyphDocument.Build(svg, entry => PaletteColour(typeface, paletteIndex, overrides, entry),
-                    typeface.ColorPalette?.EntriesPerPalette ?? 0, foreground, _adapter);
+                    typeface.ColorPalette?.EntriesPerPalette ?? 0, foreground, _renderContext);
                 _documents[key] = document;
             }
 

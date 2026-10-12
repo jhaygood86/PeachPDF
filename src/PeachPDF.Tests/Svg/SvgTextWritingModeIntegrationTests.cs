@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextWritingModeIntegrationTests
     {
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         // U+30C6 "テ" (katakana TE, Vertical_Orientation=U) + "AB" (both R) - the same choice
         // TextOrientationIntegrationTests (HTML) uses and for the same reason: a CJK Unified Ideograph
@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 200));
             return g;
@@ -198,7 +198,7 @@ namespace PeachPDF.Tests.Svg
             // LayoutGlyphs/PaintUprightGlyph's real-vmtx path (issue #770) actually drives SVG's own
             // pen advance, not just HTML's.
             await using var stream = File.OpenRead(BundledFonts.Cjk);
-            await Adapter.AddFont(stream, "CjkVerticalMetricsTest");
+            await RenderContext.AddFont(stream, "CjkVerticalMetricsTest");
 
             var g = Render($"""<text x="10" y="50" font-size="20" font-family="CjkVerticalMetricsTest" writing-mode="vertical-rl" text-orientation="upright">{Upright}{Upright}</text>""");
 
@@ -224,7 +224,7 @@ namespace PeachPDF.Tests.Svg
             // painting-test convention) and that a font without real vertical metrics needs no clip at
             // all (its advance already equals its own painted span).
             await using var stream = File.OpenRead(BundledFonts.Cjk);
-            await Adapter.AddFont(stream, "CjkClipTest");
+            await RenderContext.AddFont(stream, "CjkClipTest");
 
             var real = Render($"""<text x="10" y="50" font-size="20" font-family="CjkClipTest" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
             var draw = Assert.Single(real.DrawStringCalls);
@@ -240,7 +240,7 @@ namespace PeachPDF.Tests.Svg
             // freshly bracketed - not by the total clip count being zero.
             // The default font has no glyph for the CJK character, so a host with a system CJK font (every Windows) would now fall back to
             // one that does carry vertical metrics; a registered Latin font that covers its text pins the case this half is about.
-            await BundledFonts.RegisterFont(Adapter, BundledFonts.LiberationSans, "NoVerticalMetricsTest");
+            await BundledFonts.RegisterFont(RenderContext, BundledFonts.LiberationSans, "NoVerticalMetricsTest");
             var fallback = Render("""<text x="10" y="50" font-size="20" font-family="NoVerticalMetricsTest" writing-mode="vertical-rl" text-orientation="upright">A</text>""");
             var fallbackDraw = Assert.Single(fallback.DrawStringCalls);
             Assert.False(fallbackDraw.Font.HasVerticalMetrics);
@@ -271,7 +271,7 @@ namespace PeachPDF.Tests.Svg
             vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgBytes))
-                await Adapter.AddFont(vorgStream, "OtfVorgTest");
+                await RenderContext.AddFont(vorgStream, "OtfVorgTest");
             var g = Render($"""<text x="10" y="50" font-size="20" font-family="OtfVorgTest" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
             var draw = g.DrawStringCalls[0];
             Assert.True(draw.Font.HasVerticalOrigin);
@@ -281,7 +281,7 @@ namespace PeachPDF.Tests.Svg
             Assert.NotEqual(0, expectedShift, precision: 3); // the shift is actually nonzero for this fixture
 
             await using (var plainStream = new MemoryStream(plainBytes))
-                await Adapter.AddFont(plainStream, "OtfPlainForVorgCompare");
+                await RenderContext.AddFont(plainStream, "OtfPlainForVorgCompare");
             var plainG = Render($"""<text x="10" y="50" font-size="20" font-family="OtfPlainForVorgCompare" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
             var plainDraw = plainG.DrawStringCalls[0];
             Assert.False(plainDraw.Font.HasVerticalOrigin);
@@ -300,13 +300,13 @@ namespace PeachPDF.Tests.Svg
             var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgBytes))
-                await Adapter.AddFont(vorgStream, "CjkVorgIgnoredTest");
+                await RenderContext.AddFont(vorgStream, "CjkVorgIgnoredTest");
             var withVorg = Render($"""<text x="10" y="50" font-size="20" font-family="CjkVorgIgnoredTest" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
             var withVorgDraw = Assert.Single(withVorg.DrawStringCalls);
             Assert.False(withVorgDraw.Font.HasVerticalOrigin);
 
             await using (var plainStream = new MemoryStream(plainBytes))
-                await Adapter.AddFont(plainStream, "CjkPlainForIgnoreCompare");
+                await RenderContext.AddFont(plainStream, "CjkPlainForIgnoreCompare");
             var plain = Render($"""<text x="10" y="50" font-size="20" font-family="CjkPlainForIgnoreCompare" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
             var plainDraw = Assert.Single(plain.DrawStringCalls);
 
@@ -330,7 +330,7 @@ namespace PeachPDF.Tests.Svg
             var vorgOnlyBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgOnlyBytes))
-                await Adapter.AddFont(vorgStream, "OtfVorgOnlyTest");
+                await RenderContext.AddFont(vorgStream, "OtfVorgOnlyTest");
             var g = Render($"""<text x="10" y="50" font-size="20" font-family="OtfVorgOnlyTest" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
             var draw = g.DrawStringCalls[0];
             Assert.True(draw.Font.HasVerticalOrigin);
@@ -345,7 +345,7 @@ namespace PeachPDF.Tests.Svg
             Assert.NotEqual(0, expectedShift, precision: 3);
 
             await using (var plainStream = new MemoryStream(plainBytes))
-                await Adapter.AddFont(plainStream, "OtfPlainForVorgOnlyCompare");
+                await RenderContext.AddFont(plainStream, "OtfPlainForVorgOnlyCompare");
             var plainG = Render($"""<text x="10" y="50" font-size="20" font-family="OtfPlainForVorgOnlyCompare" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
             var plainDraw = plainG.DrawStringCalls[0];
             Assert.False(plainDraw.Font.HasVerticalOrigin);

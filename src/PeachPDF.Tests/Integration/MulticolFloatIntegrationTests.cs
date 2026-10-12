@@ -288,9 +288,9 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string body)
         {
             var html = $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
-            var adapter = new PdfRenderContext();
-            adapter.PixelsPerPoint = 1.0;
-            var container = new HtmlContainerInt(adapter)
+            var renderContext = new PdfRenderContext();
+            renderContext.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = 0,
                 MarginLeft = 0,
@@ -299,7 +299,7 @@ namespace PeachPDF.Tests.Integration
             };
             // A bundled monospace font, so how many words fit a row does not depend on what `monospace`
             // resolves to on the machine running this.
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, "McFixture");
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, "McFixture");
             await container.SetHtml(html, null);
 
             var size = new Size(400, 1000);
@@ -307,7 +307,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextLanguageTests
     {
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body)
         {
@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
@@ -117,7 +117,7 @@ namespace PeachPDF.Tests.Svg
             var svgBox = DomUtils.GetBoxByTagName(root, "svg");
             Assert.NotNull(svgBox);
 
-            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), Adapter);
+            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
 
@@ -133,7 +133,7 @@ namespace PeachPDF.Tests.Svg
             var svgBox = DomUtils.GetBoxByTagName(root, "svg");
             Assert.NotNull(svgBox);
 
-            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), Adapter);
+            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
 

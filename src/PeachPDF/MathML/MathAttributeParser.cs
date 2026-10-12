@@ -182,12 +182,12 @@ namespace PeachPDF.MathML
         /// (background specifically also treats the CSS keyword <c>"transparent"</c> as "no color",
         /// consistent with how it's actually used - MathML 3's own <c>"none"</c> keyword also means this).
         /// </summary>
-        public static PaintColor? TryParseColor(string? value, RenderContext adapter)
+        public static PaintColor? TryParseColor(string? value, RenderContext renderContext)
         {
             if (string.IsNullOrWhiteSpace(value) || value.Trim() is "none" or "transparent")
                 return null;
 
-            var parsed = new Html.Core.Parse.CssValueParser(adapter).GetActualColor(value.Trim());
+            var parsed = new Html.Core.Parse.CssValueParser(renderContext).GetActualColor(value.Trim());
             return parsed.IsEmpty ? null : parsed;
         }
     }

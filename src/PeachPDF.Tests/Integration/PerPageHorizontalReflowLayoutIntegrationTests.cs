@@ -939,8 +939,8 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = ppp };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = ppp };
+            var container = new HtmlContainerInt(renderContext);
             // SetHtml runs CascadeApplyPageStyles: base @page margins land on the container (already
             // PixelsPerPoint-scaled) and PageRules are captured for per-page selection.
             await container.SetHtml(html, null);
@@ -953,7 +953,7 @@ namespace PeachPDF.Tests.Integration
 
             var measure = PdfGraphics.CreateMeasureContext(
                 new Size(container.PageSize.Width, container.PageSize.Height));
-            using var graphics = new PdfCanvas(adapter, measure, ppp);
+            using var graphics = new PdfCanvas(renderContext, measure, ppp);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -966,8 +966,8 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<HtmlContainerInt> BuildSmallPageLayoutAsync(string html)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             container.PageSize = new Size(
@@ -978,7 +978,7 @@ namespace PeachPDF.Tests.Integration
 
             var measure = PdfGraphics.CreateMeasureContext(
                 new Size(container.PageSize.Width, container.PageSize.Height));
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

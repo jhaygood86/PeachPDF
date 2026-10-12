@@ -405,7 +405,7 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(image);
             MarkTerminal();
-            var (decodedImage, svgDocument) = image.Resolve(properties.Adapter);
+            var (decodedImage, svgDocument) = image.Resolve(properties.RenderContext);
             CreateImageBox().SetDecodedContent(decodedImage, svgDocument);
         }
 
@@ -491,10 +491,10 @@ namespace PeachPDF.Layout
         }
 
         private Image DecodeRasterBytes(byte[] bytes) =>
-            properties.Adapter.ImageFromStream(new MemoryStream(bytes));
+            properties.RenderContext.ImageFromStream(new MemoryStream(bytes));
 
         private SvgDocument DecodeSvgMarkup(string svgMarkup) =>
-            SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(svgMarkup)), properties.Adapter);
+            SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(svgMarkup)), properties.RenderContext);
 
         /// <summary>
         /// Decodes raw SVG markup bytes - <see cref="StreamReader"/> with BOM detection (not
@@ -579,16 +579,16 @@ namespace PeachPDF.Layout
 
         private async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> BuildFragmentTreeAsync(string html, PeachPdfCssContent? stylesheet)
         {
-            var adapter = properties.Adapter;
+            var renderContext = properties.RenderContext;
 
             // Cloned so this fragment's own <style> tag collection (DomParser.GenerateFragmentCssTree's own
             // CascadeParseStyles call) never mutates a caller-shared PeachPdfCssContent instance, or the
             // adapter's cached UA-default CssData.
-            var cssData = (stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(adapter)).Clone();
+            var cssData = (stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(renderContext)).Clone();
 
-            var cssParser = new CssParser(adapter, htmlContainer: null);
+            var cssParser = new CssParser(renderContext, htmlContainer: null);
             var domParser = new DomParser(cssParser);
-            return await domParser.GenerateFragmentCssTree(html, adapter, cssData);
+            return await domParser.GenerateFragmentCssTree(html, renderContext, cssData);
         }
 
         private static void MarkFragmentStyled(CssBox box)

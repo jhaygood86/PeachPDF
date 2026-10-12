@@ -14,12 +14,12 @@ namespace PeachPDF
     public class PeachPdfCssContent
     {
         private readonly CssData _cssData;
-        private readonly RenderContext _adapter;
+        private readonly RenderContext _renderContext;
 
-        internal PeachPdfCssContent(CssData cssData, RenderContext adapter)
+        internal PeachPdfCssContent(CssData cssData, RenderContext renderContext)
         {
             _cssData = cssData;
-            _adapter = adapter;
+            _renderContext = renderContext;
         }
 
         internal CssData CssData => _cssData;
@@ -42,7 +42,7 @@ namespace PeachPDF
                 return;
             }
 
-            var parser = new CssParser(_adapter, null);
+            var parser = new CssParser(_renderContext, null);
             await parser.ParseStyleSheet(_cssData, stylesheet);
 
             // The selector index is built lazily and cached; adding a stylesheet after it has been
@@ -64,7 +64,7 @@ namespace PeachPDF
                 return;
             }
 
-            var parser = new CssParser(_adapter, null);
+            var parser = new CssParser(_renderContext, null);
             await parser.ParseStyleSheet(_cssData, stylesheet);
 
             _cssData.InvalidateIndex();

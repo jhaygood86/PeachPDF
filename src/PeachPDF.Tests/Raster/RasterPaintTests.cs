@@ -8,12 +8,12 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Gradients, pen styles, clips and images drawn through <see cref="RasterCanvas"/>.</summary>
     public class RasterPaintTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static RasterCanvas NewGraphics(int width, int height)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterCanvas(Adapter, surface, 1);
+            return new RasterCanvas(RenderContext, surface, 1);
         }
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();

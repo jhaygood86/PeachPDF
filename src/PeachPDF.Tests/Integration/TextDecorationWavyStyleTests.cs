@@ -171,10 +171,10 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<div style=\"width:400pt; font:20pt 'SkipInkWavyTestFont'\">"
                     + "<span id='s' style='text-decoration:underline wavy'>nnnjnnn</span></div>"),
-                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "SkipInkWavyTestFont"));
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "SkipInkWavyTestFont"));
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics((PdfRenderContext)container.Adapter);
+            using var g = new InkAwareRecordingGraphics((PdfRenderContext)container.RenderContext);
             FragmentPaintHarness.PaintBox(container, s, g);
 
             var paths = Paths(g);

@@ -15,5 +15,5 @@ namespace PeachPDF.MathML
         bool DisplayStyle,
         int ScriptLevel,
         double FontSizePt,
-        RenderContext Adapter);
+        RenderContext RenderContext);
 }

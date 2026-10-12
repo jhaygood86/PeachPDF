@@ -7,12 +7,12 @@ namespace PeachPDF.Tests.Raster
 {
     public class RasterGraphicsTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static RasterCanvas NewGraphics(int width, int height, double pixelsPerUnit = 1, double pixelsPerPoint = 1)
         {
             var surface = new RasterSurface(width, height, 0, 0, pixelsPerUnit, pixelsPerUnit);
-            return new RasterCanvas(Adapter, surface, pixelsPerPoint);
+            return new RasterCanvas(RenderContext, surface, pixelsPerPoint);
         }
 
         private static byte[] Pixel(RasterCanvas g, int x, int y)
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.Raster
         public void LayoutUnits_AreDividedByPixelsPerPoint_ThenScaledToPixels()
         {
             // 96 layout units per inch (ppp 96/72) painted at 288 dpi: 3 pixels per layout unit.
-            using var scope = RasterSurfaceFactory.Create(Adapter, 96.0 / 72.0, new Rect(0, 0, 10, 10), 288, 64_000_000);
+            using var scope = RasterSurfaceFactory.Create(RenderContext, 96.0 / 72.0, new Rect(0, 0, 10, 10), 288, 64_000_000);
 
             Assert.NotNull(scope);
             Assert.Equal(30, scope.Surface.Width);
@@ -89,7 +89,7 @@ namespace PeachPDF.Tests.Raster
             var pixelsPerPoint = pixelsPerInch / 72.0;
             var bounds = new Rect(0, 0, inchInLayoutUnits, inchInLayoutUnits);
 
-            using var scope = RasterSurfaceFactory.Create(Adapter, pixelsPerPoint, bounds, dpi, long.MaxValue);
+            using var scope = RasterSurfaceFactory.Create(RenderContext, pixelsPerPoint, bounds, dpi, long.MaxValue);
 
             Assert.NotNull(scope);
             var layout = scope.Surface.LayoutRect;
@@ -105,8 +105,8 @@ namespace PeachPDF.Tests.Raster
         public void SnappedSurface_CoversTheRequestedBounds_AndAdjacentSurfacesAbut()
         {
             const double ppp = 1;
-            var left = RasterSurfaceFactory.Create(Adapter, ppp, new Rect(0.3, 0.3, 10.2, 5), 100, long.MaxValue)!;
-            var right = RasterSurfaceFactory.Create(Adapter, ppp, new Rect(10.5, 0.3, 4, 5), 100, long.MaxValue)!;
+            var left = RasterSurfaceFactory.Create(RenderContext, ppp, new Rect(0.3, 0.3, 10.2, 5), 100, long.MaxValue)!;
+            var right = RasterSurfaceFactory.Create(RenderContext, ppp, new Rect(10.5, 0.3, 4, 5), 100, long.MaxValue)!;
 
             Assert.True(left.Surface.LayoutRect.Left <= 0.3 + 1e-9);
             Assert.True(left.Surface.LayoutRect.Right >= 10.5 - 1e-9);
@@ -125,7 +125,7 @@ namespace PeachPDF.Tests.Raster
         {
             var bounds = new Rect(0, 0, 720, 720);
 
-            using var scope = RasterSurfaceFactory.Create(Adapter, 1, bounds, 1200, 1_000_000);
+            using var scope = RasterSurfaceFactory.Create(RenderContext, 1, bounds, 1200, 1_000_000);
 
             Assert.NotNull(scope);
             Assert.True((long)scope.Surface.Width * scope.Surface.Height <= 1_000_000);
@@ -135,9 +135,9 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void EmptyOrInvalidBounds_YieldNoSurface()
         {
-            Assert.Null(RasterSurfaceFactory.Create(Adapter, 1, new Rect(0, 0, 0, 10), 300, long.MaxValue));
-            Assert.Null(RasterSurfaceFactory.Create(Adapter, 1, new Rect(0, 0, double.NaN, 10), 300, long.MaxValue));
-            Assert.Null(RasterSurfaceFactory.Create(Adapter, 1, new Rect(0, 0, 10, 10), 0, long.MaxValue));
+            Assert.Null(RasterSurfaceFactory.Create(RenderContext, 1, new Rect(0, 0, 0, 10), 300, long.MaxValue));
+            Assert.Null(RasterSurfaceFactory.Create(RenderContext, 1, new Rect(0, 0, double.NaN, 10), 300, long.MaxValue));
+            Assert.Null(RasterSurfaceFactory.Create(RenderContext, 1, new Rect(0, 0, 10, 10), 0, long.MaxValue));
         }
 
         [Fact]

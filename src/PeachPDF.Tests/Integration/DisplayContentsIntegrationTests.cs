@@ -957,12 +957,12 @@ namespace PeachPDF.Tests.Integration
         public async Task Declarative_ContentsOnTheRoot_IsBlockAndNotDropped()
         {
             var stylesheet = await new PdfGenerator().ParseStyleSheet("#root { display: contents }");
-            var adapter = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(adapter);
+            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(renderContext);
             var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
                 p => p.Content(c => c.Id("root").Text("hello")), properties);
 
-            using var container = new PeachPDF.HtmlContainer(adapter);
+            using var container = new PeachPDF.HtmlContainer(renderContext);
             await container.SetDeclarativeRoot(page.RootBox, null, stylesheet);
 
             Assert.Equal(DisplayMode.Block, page.RootBox.Display.Value);
@@ -987,12 +987,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Declarative_ATopLevelFragmentShell_StillReachesTheRealTree()
         {
-            var adapter = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(adapter);
+            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
+            var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(renderContext);
             var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
                 p => p.Content(c => c.Html("<p>before</p><div id='empty' style='display:contents'></div>")), properties);
 
-            using var container = new PeachPDF.HtmlContainer(adapter);
+            using var container = new PeachPDF.HtmlContainer(renderContext);
             await container.SetDeclarativeRoot(page.RootBox, null, null, properties.DisplayContentsShells);
 
             var shell = Assert.Single(container.HtmlContainerInt.DisplayContentsShells);

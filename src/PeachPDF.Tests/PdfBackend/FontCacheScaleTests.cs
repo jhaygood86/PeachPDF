@@ -22,17 +22,17 @@ namespace PeachPDF.Tests.PdfBackendTests
     {
         private static readonly string Family = DefaultFontResolver.DefaultFont;
 
-        private static PdfCanvasFont Font(PdfRenderContext adapter, double size) =>
-            (PdfCanvasFont)adapter.GetFont(Family, size, PaintFontStyle.Regular)!;
+        private static PdfCanvasFont Font(PdfRenderContext renderContext, double size) =>
+            (PdfCanvasFont)renderContext.GetFont(Family, size, PaintFontStyle.Regular)!;
 
         [Fact]
         public void TheSameSizeAtADifferentScaleIsADifferentFont()
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var atOne = Font(adapter, 10);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var atOne = Font(renderContext, 10);
 
-            adapter.PixelsPerPoint = 1.25;
-            var atOneAndAQuarter = Font(adapter, 10);
+            renderContext.PixelsPerPoint = 1.25;
+            var atOneAndAQuarter = Font(renderContext, 10);
 
             // 10 layout units at 1.25 layout units per point is an 8pt font, not the 10pt one cached at scale 1.
             Assert.Equal(10, atOne.Font.Size, 6);
@@ -43,15 +43,15 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ReturningToAScaleFindsItsOwnCachedFontAgain()
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var first = Font(adapter, 10);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var first = Font(renderContext, 10);
 
-            adapter.PixelsPerPoint = 1.25;
-            _ = Font(adapter, 10);
-            adapter.PixelsPerPoint = 1.0;
+            renderContext.PixelsPerPoint = 1.25;
+            _ = Font(renderContext, 10);
+            renderContext.PixelsPerPoint = 1.0;
 
             // Keying by scale must not turn the cache off: the same (size, scale) is still one instance.
-            Assert.Same(first, Font(adapter, 10));
+            Assert.Same(first, Font(renderContext, 10));
         }
 
         [Fact]
@@ -59,11 +59,11 @@ namespace PeachPDF.Tests.PdfBackendTests
         {
             // "monospace" is a mapped generic family: GetCachedFont's mapped-family branch stores the font
             // under the mapped name as well, and that path has its own cache write.
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var atOne = (PdfCanvasFont)adapter.GetFont("monospace", 12, PaintFontStyle.Regular)!;
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var atOne = (PdfCanvasFont)renderContext.GetFont("monospace", 12, PaintFontStyle.Regular)!;
 
-            adapter.PixelsPerPoint = 1.5;
-            var atOneAndAHalf = (PdfCanvasFont)adapter.GetFont("monospace", 12, PaintFontStyle.Regular)!;
+            renderContext.PixelsPerPoint = 1.5;
+            var atOneAndAHalf = (PdfCanvasFont)renderContext.GetFont("monospace", 12, PaintFontStyle.Regular)!;
 
             Assert.Equal(12, atOne.Font.Size, 6);
             Assert.Equal(8, atOneAndAHalf.Font.Size, 6);
@@ -72,11 +72,11 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void APerCodepointFontIsKeyedByScaleToo()
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var atOne = adapter.GetFontForCodepoint(Family, 10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var atOne = renderContext.GetFontForCodepoint(Family, 10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
 
-            adapter.PixelsPerPoint = 1.25;
-            var atOneAndAQuarter = adapter.GetFontForCodepoint(Family, 10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
+            renderContext.PixelsPerPoint = 1.25;
+            var atOneAndAQuarter = renderContext.GetFontForCodepoint(Family, 10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
 
             Assert.NotNull(atOne);
             Assert.NotNull(atOneAndAQuarter);
@@ -87,11 +87,11 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ASystemFallbackFontIsKeyedByScaleToo()
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var atOne = adapter.GetSystemFallbackFontForCodepoint(10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var atOne = renderContext.GetSystemFallbackFontForCodepoint(10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
 
-            adapter.PixelsPerPoint = 1.25;
-            var atOneAndAQuarter = adapter.GetSystemFallbackFontForCodepoint(10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
+            renderContext.PixelsPerPoint = 1.25;
+            var atOneAndAQuarter = renderContext.GetSystemFallbackFontForCodepoint(10, PaintFontStyle.Regular, new Rune('A')) as PdfCanvasFont;
 
             // A host with no installed family covering 'A' answers null at both scales, which says nothing about
             // the key - only a real answer at each scale can be compared. Whether a font is found must not
@@ -106,12 +106,12 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ClearingTheCacheStillDropsEveryScale()
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var before = Font(adapter, 10);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var before = Font(renderContext, 10);
 
-            adapter.ClearFontCache();
+            renderContext.ClearFontCache();
 
-            Assert.NotSame(before, Font(adapter, 10));
+            Assert.NotSame(before, Font(renderContext, 10));
         }
     }
 }

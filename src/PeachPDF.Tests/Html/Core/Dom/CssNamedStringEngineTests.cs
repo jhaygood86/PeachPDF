@@ -293,8 +293,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private HtmlContainerInt CreateContainer()
         {
-            var adapter = new PdfRenderContext();
-            return new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            return new HtmlContainerInt(renderContext);
         }
     }
 }

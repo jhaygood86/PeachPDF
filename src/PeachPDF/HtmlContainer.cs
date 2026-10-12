@@ -35,9 +35,9 @@ namespace PeachPDF
         /// <summary>
         /// Init.
         /// </summary>
-        internal HtmlContainer(PdfRenderContext adapter)
+        internal HtmlContainer(PdfRenderContext renderContext)
         {
-            HtmlContainerInt = new HtmlContainerInt(adapter);
+            HtmlContainerInt = new HtmlContainerInt(renderContext);
         }
 
         /// <summary>
@@ -153,7 +153,7 @@ namespace PeachPDF
             }
         }
 
-        internal double PixelsPerPoint => ((PdfRenderContext)HtmlContainerInt.Adapter).PixelsPerPoint;
+        internal double PixelsPerPoint => ((PdfRenderContext)HtmlContainerInt.RenderContext).PixelsPerPoint;
 
         internal HtmlDocumentMetadata? DocumentMetadata => HtmlContainerInt.DocumentMetadata;
 
@@ -235,7 +235,7 @@ namespace PeachPDF
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new PdfCanvas(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            using var ig = new PdfCanvas(HtmlContainerInt.RenderContext, g, PixelsPerPoint);
             await HtmlContainerInt.PerformLayout(ig);
         }
 
@@ -248,7 +248,7 @@ namespace PeachPDF
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new PdfCanvas(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            using var ig = new PdfCanvas(HtmlContainerInt.RenderContext, g, PixelsPerPoint);
             HtmlContainerInt.PerformPaint(ig, fragmentainer);
         }
 

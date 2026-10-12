@@ -31,19 +31,19 @@ namespace PeachPDF.Tests.Html.Core
             return null;
         }
 
-        private sealed record Layout(PdfRenderContext Adapter, CssBox Root)
+        private sealed record Layout(PdfRenderContext RenderContext, CssBox Root)
         {
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
         }
 
         private static async Task<Layout> LayoutAsync(string css, string body)
         {
-            var adapter = new PdfRenderContext();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "AdjustFam");
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, "OtherFam");
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSupsFam");
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "AdjustFam");
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, "OtherFam");
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSupsFam");
 
-            var container = new HtmlContainerInt(adapter);
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml($"<html><head><style>body {{ margin: 0 }} {css}</style></head><body>{body}</body></html>", null);
 
             var size = new Size(595, 842);
@@ -51,10 +51,10 @@ namespace PeachPDF.Tests.Html.Core
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
-            return new Layout(adapter, container.Root!);
+            return new Layout(renderContext, container.Root!);
         }
 
         // ---- font-size-adjust ----------------------------------------------------------------------

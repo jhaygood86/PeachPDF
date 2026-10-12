@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextPathStretchTests
     {
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private const string Gradient = """<linearGradient id="grad"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>""";
 
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return (g, document);
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Svg
         public void Method_IsParsed(string textPath, bool stretch)
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><defs>{Arc}</defs><text font-size="20">{textPath}</text></svg>""";
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
             var run = Assert.Single(text.Spans);
 

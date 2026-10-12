@@ -27,13 +27,13 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             var family = TypefaceFixtures.FamilyNameOf(fontPath);
             // Keep the adapter's PixelsPerPoint equal to the PdfCanvas's (as the real pipeline
             // always does) so font size and outline scale stay in the same 1:1 unit space.
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
             await using (var stream = File.OpenRead(fontPath))
-                await adapter.AddFont(stream, family);
+                await renderContext.AddFont(stream, family);
 
             var measure = PdfGraphics.CreateMeasureContext(new Size(600, 600));
-            var graphics = new PdfCanvas(adapter, measure, 1.0);
-            var font = adapter.GetFont(family, size, PaintFontStyle.Regular)!;
+            var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            var font = renderContext.GetFont(family, size, PaintFontStyle.Regular)!;
             return (graphics, font);
         }
 

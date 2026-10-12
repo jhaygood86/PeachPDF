@@ -211,8 +211,8 @@ body {{ font-family: '{family}'; width: 400px; }}
         private static async Task<HtmlContainerInt> LayoutHtml(string body, string fontPath, string format, string family)
         {
             var fontBase64 = Convert.ToBase64String(File.ReadAllBytes(fontPath));
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body, fontBase64, format, family), null);
 
             var size = new Size(595, 842);
@@ -220,7 +220,7 @@ body {{ font-family: '{family}'; width: 400px; }}
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

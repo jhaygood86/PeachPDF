@@ -30,10 +30,10 @@ namespace PeachPDF.Tests.Html.Core.Paint
             Assert.Contains(recording.Log, op => op.Kind == PaintOpKind.FillRect);
         }
 
-        private static RasterCanvas NewPage(int width, int height, PdfRenderContext adapter)
+        private static RasterCanvas NewPage(int width, int height, PdfRenderContext renderContext)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterCanvas(adapter, surface, 1);
+            return new RasterCanvas(renderContext, surface, 1);
         }
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();

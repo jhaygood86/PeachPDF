@@ -299,8 +299,8 @@ namespace PeachPDF.Tests.CSS
 
         private static async Task<CssBox> FindDivBox(string css)
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(
                 $"<!DOCTYPE html><html><head><style>div {{ width: 200px; height: 100px; {css} }}</style></head><body><div>Text</div></body></html>",
                 null);
@@ -310,7 +310,7 @@ namespace PeachPDF.Tests.CSS
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -319,8 +319,8 @@ namespace PeachPDF.Tests.CSS
 
         private static async Task<CssBox> FindTextBox(string css, string text)
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(
                 $"<!DOCTYPE html><html><head><style>div {{ font: 10pt Arial; margin:0; {css} }}</style></head><body style=\"margin:0\"><div>{text}</div></body></html>",
                 null);
@@ -330,7 +330,7 @@ namespace PeachPDF.Tests.CSS
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return Find(container.Root!, "div")!;

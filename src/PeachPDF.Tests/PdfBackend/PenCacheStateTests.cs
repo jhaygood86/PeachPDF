@@ -13,11 +13,11 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void GetPen_SameColorTwice_ReturnsTheSameCachedInstance()
         {
-            var adapter = new TestPdfCanvas();
+            var renderContext = new TestPdfCanvas();
             var g = new TestRecordingGraphics();
 
             // Sanity for the tests below: without a shared instance there would be nothing to leak.
-            Assert.Same(adapter.GetPen(PaintColor.FromArgb(1, 2, 3)), adapter.GetPen(PaintColor.FromArgb(1, 2, 3)));
+            Assert.Same(renderContext.GetPen(PaintColor.FromArgb(1, 2, 3)), renderContext.GetPen(PaintColor.FromArgb(1, 2, 3)));
             Assert.Same(g.GetPen(PaintColor.FromArgb(1, 2, 3)), g.GetPen(PaintColor.FromArgb(1, 2, 3)));
         }
 

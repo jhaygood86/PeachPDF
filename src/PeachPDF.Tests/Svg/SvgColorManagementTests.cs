@@ -11,12 +11,12 @@ namespace PeachPDF.Tests.Svg
     /// <summary>SVG 1.1 §11.2 <c>icc-color()</c>/<c>&lt;color-profile&gt;</c> and §11.9.1 <c>color-interpolation</c> on gradients.</summary>
     public class SvgColorManagementTests
     {
-        private static readonly PdfRenderContext Adapter = new();
+        private static readonly PdfRenderContext RenderContext = new();
 
         private static SvgDocument BuildFrom(string markup)
         {
             var root = XDocument.Parse(markup).Root!;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext);
         }
 
         private static string DataUri(byte[] bytes) => "data:application/vnd.iccprofile;base64," + Convert.ToBase64String(bytes);
@@ -116,7 +116,7 @@ namespace PeachPDF.Tests.Svg
                 ["profiles/p.icc"] = new(IccProfileFixture.BuildRgbProfile(), IsSvg: false),
             };
 
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), RenderContext, prefetchedImages: prefetched);
 
             Assert.NotEqual(255, FillOf(document).R);
         }

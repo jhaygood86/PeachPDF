@@ -653,7 +653,7 @@ namespace PeachPDF.Html.Core.Dom
                 // ShrinkToFit/ScaleToPageSize (issue #631). The result is later re-parsed through
                 // ParseLength - so serialize as "pt" (identity), not "px" (which now resolves at the
                 // spec-correct 0.75pt and would shrink the value on re-parse).
-                var pixelsPerPoint = (HtmlContainer?.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                var pixelsPerPoint = (HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
                 length = len.ConvertEmToPoints(GetEmHeight() * pixelsPerPoint).ToString();
             }
             return length;
@@ -718,7 +718,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (matches)
                 {
-                    var pixelsPerPoint = (HtmlContainer?.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                    var pixelsPerPoint = (HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
                     var parentSizePt = parent.GetEmHeight() * pixelsPerPoint;
 
                     var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: parent.DerivedStyle);
@@ -750,7 +750,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // ActualLineHeight is in the container's inflated layout space; the "pt" it is re-parsed as gets the
             // PixelsPerPoint catch-up multiply back, so divide it out here (see NoEms).
-            var pixelsPerPoint = (HtmlContainer?.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var points = dimension.Value * parent.ActualLineHeight / pixelsPerPoint;
             return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
         }

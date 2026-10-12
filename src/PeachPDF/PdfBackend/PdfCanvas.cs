@@ -79,12 +79,12 @@ namespace PeachPDF.PdfBackend
         /// <summary>
         /// Init.
         /// </summary>
-        /// <param name="adapter">the adapter</param>
+        /// <param name="renderContext">the adapter</param>
         /// <param name="g">the win forms graphics object to use</param>
         /// <param name="pixelsPerPoint">The number of pixels in each point</param>
         /// <param name="releaseGraphics">optional: if to release the graphics object on dispose (default - false)</param>
-        public PdfCanvas(RenderContext adapter, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
-            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue))
+        public PdfCanvas(RenderContext renderContext, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
+            : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             ArgumentNullException.ThrowIfNull(g);
 
@@ -93,9 +93,9 @@ namespace PeachPDF.PdfBackend
 
             PixelsPerPoint = pixelsPerPoint;
             _previousSvgGlyphPainter = _g.PdfSvgGlyphPainter;
-            _g.PdfSvgGlyphPainter = new PdfSvgGlyphPainter(this, adapter);
+            _g.PdfSvgGlyphPainter = new PdfSvgGlyphPainter(this, renderContext);
             _previousRasterContext = _g.RasterContext;
-            _g.RasterContext = adapter;
+            _g.RasterContext = renderContext;
         }
 
         private readonly RenderContext? _previousRasterContext;
@@ -103,7 +103,7 @@ namespace PeachPDF.PdfBackend
         private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
 
         /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
-        internal RenderContext Adapter => _adapter;
+        internal RenderContext RenderContext => _adapter;
 
         public override void PopClip()
         {

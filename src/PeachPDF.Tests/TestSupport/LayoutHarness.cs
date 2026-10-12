@@ -53,12 +53,12 @@ namespace PeachPDF.Tests.TestSupport
             double pixelsPerPoint = 1.0,
             Func<PdfRenderContext, Task>? configureRenderContext = null)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
             if (configureRenderContext is not null)
             {
-                await configureRenderContext(adapter);
+                await configureRenderContext(renderContext);
             }
-            var container = new HtmlContainerInt(adapter)
+            var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = margin,
                 MarginBottom = margin,
@@ -87,7 +87,7 @@ namespace PeachPDF.Tests.TestSupport
             container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
             var measure = PdfGraphics.CreateMeasureContext(sheet);
-            using var graphics = new PdfCanvas(adapter, measure, pixelsPerPoint);
+            using var graphics = new PdfCanvas(renderContext, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -119,8 +119,8 @@ namespace PeachPDF.Tests.TestSupport
             double pageHeight = 842,
             double margin = 20)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-            var container = new HtmlContainerInt(adapter)
+            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = margin,
                 MarginBottom = margin,
@@ -140,7 +140,7 @@ namespace PeachPDF.Tests.TestSupport
             container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(sheet);
-            using var graphics = new PdfCanvas(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
 
             var results = new List<T>(passes);
 

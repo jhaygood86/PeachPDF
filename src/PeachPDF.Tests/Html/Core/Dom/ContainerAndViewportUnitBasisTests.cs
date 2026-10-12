@@ -176,8 +176,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void GetViewportUnitBasis_HorizontalRoot_InlineIsWidthAndBlockIsHeight()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter)
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(800, 600),
                 RootWritingMode = WritingMode.HorizontalTb
@@ -195,8 +195,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void GetViewportUnitBasis_VerticalRoot_InlineIsHeightAndBlockIsWidth()
         {
-            var adapter = new PdfRenderContext();
-            var container = new HtmlContainerInt(adapter)
+            var renderContext = new PdfRenderContext();
+            var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(800, 600),
                 RootWritingMode = WritingMode.VerticalRl

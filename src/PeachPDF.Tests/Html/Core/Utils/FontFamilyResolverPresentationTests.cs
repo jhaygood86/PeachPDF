@@ -50,18 +50,18 @@ namespace PeachPDF.Tests.Html.Core.Utils
         private static readonly ScriptedFont Colour = new("colour", isColour: true);
         private static readonly ScriptedFont Text = new("text", isColour: false);
 
-        private static string? Resolve(ScriptedRenderContext adapter, string stack, EmojiPresentation presentation)
+        private static string? Resolve(ScriptedRenderContext renderContext, string stack, EmojiPresentation presentation)
         {
-            var font = FontFamilyResolver.Resolve(adapter, stack, 12, PaintFontStyle.Regular, Heart, presentation: presentation);
+            var font = FontFamilyResolver.Resolve(renderContext, stack, 12, PaintFontStyle.Regular, Heart, presentation: presentation);
             return (font as ScriptedFont)?.Name;
         }
 
-        private static ScriptedRenderContext Adapter(params ScriptedFont[] families)
+        private static ScriptedRenderContext RenderContext(params ScriptedFont[] families)
         {
-            var adapter = new ScriptedRenderContext();
+            var renderContext = new ScriptedRenderContext();
             foreach (var font in families)
-                adapter.Families[font.Name] = font;
-            return adapter;
+                renderContext.Families[font.Name] = font;
+            return renderContext;
         }
 
         [Theory]
@@ -69,10 +69,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("text, colour", "text")]
         public void NoPreference_IsStackOrder_AndNeverAsksSystemFallback(string stack, string expected)
         {
-            var adapter = Adapter(Colour, Text);
+            var renderContext = RenderContext(Colour, Text);
 
-            Assert.Equal(expected, Resolve(adapter, stack, EmojiPresentation.NoPreference));
-            Assert.Empty(adapter.SystemFallbackRequests);
+            Assert.Equal(expected, Resolve(renderContext, stack, EmojiPresentation.NoPreference));
+            Assert.Empty(renderContext.SystemFallbackRequests);
         }
 
         [Theory]
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("text, colour")]
         public void EmojiPresentation_SkipsAnOutlineFontThatCoversTheCharacter(string stack)
         {
-            Assert.Equal("colour", Resolve(Adapter(Colour, Text), stack, EmojiPresentation.Emoji));
+            Assert.Equal("colour", Resolve(RenderContext(Colour, Text), stack, EmojiPresentation.Emoji));
         }
 
         [Theory]
@@ -88,18 +88,18 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("text, colour")]
         public void TextPresentation_SkipsAColourFontThatCoversTheCharacter(string stack)
         {
-            Assert.Equal("text", Resolve(Adapter(Colour, Text), stack, EmojiPresentation.Text));
+            Assert.Equal("text", Resolve(RenderContext(Colour, Text), stack, EmojiPresentation.Text));
         }
 
         [Fact]
         public void NoFontInTheStackMatches_SystemFallbackIsAskedForTheRequestedPresentation_BeforeTheSelectorIsIgnored()
         {
             var systemColour = new ScriptedFont("system-colour", isColour: true);
-            var adapter = Adapter(Text);
-            adapter.SystemFallback[EmojiPresentation.Emoji] = systemColour;
+            var renderContext = RenderContext(Text);
+            renderContext.SystemFallback[EmojiPresentation.Emoji] = systemColour;
 
-            Assert.Equal("system-colour", Resolve(adapter, "text", EmojiPresentation.Emoji));
-            Assert.Equal([EmojiPresentation.Emoji], adapter.SystemFallbackRequests);
+            Assert.Equal("system-colour", Resolve(renderContext, "text", EmojiPresentation.Emoji));
+            Assert.Equal([EmojiPresentation.Emoji], renderContext.SystemFallbackRequests);
         }
 
         [Theory]
@@ -110,22 +110,22 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var presentation = System.Enum.Parse<EmojiPresentation>(requested);
             // Only one family, and it is the wrong kind; system fallback has nothing better. CSS Fonts 4 §5.3
             // step 3: match the base character alone and ignore the variation selector.
-            var adapter = Adapter(Colour, Text);
+            var renderContext = RenderContext(Colour, Text);
 
-            Assert.Equal(onlyFamily, Resolve(adapter, onlyFamily, presentation));
-            Assert.Equal([presentation], adapter.SystemFallbackRequests);
+            Assert.Equal(onlyFamily, Resolve(renderContext, onlyFamily, presentation));
+            Assert.Equal([presentation], renderContext.SystemFallbackRequests);
         }
 
         [Fact]
         public void TheStackCoversNothing_TakesTheUnfilteredSystemFallback_WhenNoMatchingOneExists()
         {
             var anySystem = new ScriptedFont("system-any", isColour: false);
-            var adapter = Adapter(new ScriptedFont("text", isColour: false, coversHeart: false));
-            adapter.SystemFallback[EmojiPresentation.NoPreference] = anySystem;
+            var renderContext = RenderContext(new ScriptedFont("text", isColour: false, coversHeart: false));
+            renderContext.SystemFallback[EmojiPresentation.NoPreference] = anySystem;
 
             // Asks first for a matching font, gets none, then takes the unfiltered system answer.
-            Assert.Equal("system-any", Resolve(adapter, "text", EmojiPresentation.Emoji));
-            Assert.Equal([EmojiPresentation.Emoji, EmojiPresentation.NoPreference], adapter.SystemFallbackRequests);
+            Assert.Equal("system-any", Resolve(renderContext, "text", EmojiPresentation.Emoji));
+            Assert.Equal([EmojiPresentation.Emoji, EmojiPresentation.NoPreference], renderContext.SystemFallbackRequests);
         }
 
         [Fact]
@@ -142,9 +142,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void NothingAnywhereCoversTheCharacter_ReturnsNull()
         {
-            var adapter = Adapter(new ScriptedFont("text", isColour: false, coversHeart: false));
+            var renderContext = RenderContext(new ScriptedFont("text", isColour: false, coversHeart: false));
 
-            Assert.Null(FontFamilyResolver.Resolve(adapter, "text", 12, PaintFontStyle.Regular, Heart, presentation: EmojiPresentation.Text));
+            Assert.Null(FontFamilyResolver.Resolve(renderContext, "text", 12, PaintFontStyle.Regular, Heart, presentation: EmojiPresentation.Text));
         }
 
         [Fact]
@@ -152,16 +152,16 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var textFallback = new ScriptedFont("sys-text", isColour: false);
             var colourFallback = new ScriptedFont("sys-colour", isColour: true);
-            var adapter = Adapter(new ScriptedFont("none", isColour: false, coversHeart: false));
-            adapter.SystemFallback[EmojiPresentation.Text] = textFallback;
-            adapter.SystemFallback[EmojiPresentation.Emoji] = colourFallback;
+            var renderContext = RenderContext(new ScriptedFont("none", isColour: false, coversHeart: false));
+            renderContext.SystemFallback[EmojiPresentation.Text] = textFallback;
+            renderContext.SystemFallback[EmojiPresentation.Emoji] = colourFallback;
 
-            Assert.Equal("sys-text", Resolve(adapter, "none", EmojiPresentation.Text));
-            Assert.Equal("sys-colour", Resolve(adapter, "none", EmojiPresentation.Emoji));
+            Assert.Equal("sys-text", Resolve(renderContext, "none", EmojiPresentation.Text));
+            Assert.Equal("sys-colour", Resolve(renderContext, "none", EmojiPresentation.Emoji));
             // A second identical request is served from the handler's cache rather than asking the adapter again.
-            Assert.Equal("sys-text", Resolve(adapter, "none", EmojiPresentation.Text));
+            Assert.Equal("sys-text", Resolve(renderContext, "none", EmojiPresentation.Text));
 
-            Assert.Equal([EmojiPresentation.Text, EmojiPresentation.Emoji], adapter.SystemFallbackRequests);
+            Assert.Equal([EmojiPresentation.Text, EmojiPresentation.Emoji], renderContext.SystemFallbackRequests);
         }
     }
 }

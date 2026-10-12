@@ -18,9 +18,9 @@ namespace PeachPDF.Tests.PdfBackendTests
         [InlineData("Blue", 0, 0, 255)]
         public void GetColor_KnownColorName_ResolvesToRgb(string name, byte r, byte g, byte b)
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
 
-            var color = adapter.GetColor(name);
+            var color = renderContext.GetColor(name);
 
             Assert.False(color.IsEmpty);
             Assert.Equal(r, color.R);
@@ -31,9 +31,9 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void GetColor_UnknownColorName_ReturnsEmpty()
         {
-            var adapter = new PdfRenderContext();
+            var renderContext = new PdfRenderContext();
 
-            var color = adapter.GetColor("not-a-real-color-name");
+            var color = renderContext.GetColor("not-a-real-color-name");
 
             Assert.True(color.IsEmpty);
         }

@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextFontStretchTests
     {
-        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static SvgDocument Build(string body)
         {
@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Svg
                   {{body}}
                 </svg>
                 """;
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
         }
 
         private static SvgTextElement TextRoot(SvgDocument document) => Assert.IsType<SvgTextElement>(document.Children[0]);

@@ -25,9 +25,9 @@ namespace PeachPDF.Tests.Raster
                 return ctx;
             }
 
-            var adapter = new PdfRenderContext();
-            await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "SynthSwitchSans");
-            return adapter;
+            var renderContext = new PdfRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "SynthSwitchSans");
+            return renderContext;
         }
 
         [Theory]

@@ -374,8 +374,8 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = ppp };
-            var container = new HtmlContainerInt(adapter);
+            var renderContext = new PdfRenderContext { PixelsPerPoint = ppp };
+            var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
             container.PageSize = new Size(
@@ -386,7 +386,7 @@ namespace PeachPDF.Tests.Integration
 
             var measure = PdfGraphics.CreateMeasureContext(
                 new Size(container.PageSize.Width, container.PageSize.Height));
-            using var graphics = new PdfCanvas(adapter, measure, ppp);
+            using var graphics = new PdfCanvas(renderContext, measure, ppp);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

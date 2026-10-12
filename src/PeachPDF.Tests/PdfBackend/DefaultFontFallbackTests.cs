@@ -21,49 +21,49 @@ namespace PeachPDF.Tests.PdfBackendTests
 
         private static PdfRenderContext RenderContextWithRegisteredFamily(string familyName)
         {
-            var adapter = new PdfRenderContext();
-            adapter.AddFontFamily(new PdfCanvasFontFamily(familyName));
-            return adapter;
+            var renderContext = new PdfRenderContext();
+            renderContext.AddFontFamily(new PdfCanvasFontFamily(familyName));
+            return renderContext;
         }
 
         [Fact]
         public void DefaultFontMissing_AdoptsTheRegisteredFamily()
         {
-            var adapter = RenderContextWithRegisteredFamily("First Family");
-            Assert.False(adapter.IsFontExists(UnresolvableDefault));
+            var renderContext = RenderContextWithRegisteredFamily("First Family");
+            Assert.False(renderContext.IsFontExists(UnresolvableDefault));
 
-            adapter.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: false);
+            renderContext.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: false);
 
             // IsFontExists follows one mapping hop, so the default now resolves even though no family
             // literally named UnresolvableDefault was ever registered.
-            Assert.True(adapter.IsFontExists(UnresolvableDefault));
+            Assert.True(renderContext.IsFontExists(UnresolvableDefault));
         }
 
         [Fact]
         public void DefaultFontAlreadyResolves_LeavesItAlone()
         {
-            var adapter = RenderContextWithRegisteredFamily("First Family");
+            var renderContext = RenderContextWithRegisteredFamily("First Family");
 
-            adapter.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: true);
+            renderContext.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: true);
 
-            Assert.False(adapter.IsFontExists(UnresolvableDefault));
+            Assert.False(renderContext.IsFontExists(UnresolvableDefault));
         }
 
         [Fact]
         public void FirstRegisteredFamilyWins_NotTheLast()
         {
-            var adapter = RenderContextWithRegisteredFamily("First Family");
+            var renderContext = RenderContextWithRegisteredFamily("First Family");
 
-            adapter.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: false);
+            renderContext.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: false);
 
             // The real caller re-asks after every registration, and the first mapping makes the answer true -
             // which is the whole latch. Feeding that recomputed answer back in is what makes this a test of
             // the latch rather than of the branch in isolation.
-            adapter.AdoptDefaultFontIfMissing(
-                UnresolvableDefault, "Second Family Never Registered", adapter.IsFontExists(UnresolvableDefault));
+            renderContext.AdoptDefaultFontIfMissing(
+                UnresolvableDefault, "Second Family Never Registered", renderContext.IsFontExists(UnresolvableDefault));
 
             // If the latch failed, the default would now point at an unregistered family and stop resolving.
-            Assert.True(adapter.IsFontExists(UnresolvableDefault));
+            Assert.True(renderContext.IsFontExists(UnresolvableDefault));
         }
     }
 }

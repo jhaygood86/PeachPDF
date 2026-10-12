@@ -47,10 +47,10 @@ internal static partial class PaintedWords
         string html, Func<PdfRenderContext, Task>? extraFonts = null)
     {
         var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
-            html, new PdfGenerateConfig(), async adapter =>
+            html, new PdfGenerateConfig(), async renderContext =>
             {
-                await BundledFonts.PinSansSerifAsync(adapter);
-                if (extraFonts is not null) await extraFonts(adapter);
+                await BundledFonts.PinSansSerifAsync(renderContext);
+                if (extraFonts is not null) await extraFonts(renderContext);
             });
 
         List<string> visible = [];

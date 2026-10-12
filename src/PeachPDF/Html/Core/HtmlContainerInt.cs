@@ -284,12 +284,12 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Init.
         /// </summary>
-        public HtmlContainerInt(RenderContext adapter)
+        public HtmlContainerInt(RenderContext renderContext)
         {
-            ArgumentNullException.ThrowIfNull(adapter);
+            ArgumentNullException.ThrowIfNull(renderContext);
 
-            Adapter = adapter;
-            CssParser = new CssParser(adapter, this);
+            RenderContext = renderContext;
+            CssParser = new CssParser(renderContext, this);
             PageGeometry = new PageGeometryTable(this);
         }
 
@@ -304,7 +304,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// 
         /// </summary>
-        internal RenderContext Adapter { get; }
+        internal RenderContext RenderContext { get; }
 
         /// <summary>
         /// parser for CSS data
@@ -1143,7 +1143,7 @@ namespace PeachPDF.Html.Core
                 // assigned and <base> is honoured.) The early return is only a fast path - the memo key
                 // already handles a null root, since the next read against a real tree fails
                 // ReferenceEquals and re-walks.
-                if (Root is null) return Adapter.BaseUri;
+                if (Root is null) return RenderContext.BaseUri;
 
                 if (!ReferenceEquals(_documentBaseRoot, Root))
                 {
@@ -1154,7 +1154,7 @@ namespace PeachPDF.Html.Core
                     _documentBaseRoot = Root;
                 }
 
-                return _documentBase ?? Adapter.BaseUri;
+                return _documentBase ?? RenderContext.BaseUri;
             }
         }
 
@@ -1250,7 +1250,7 @@ namespace PeachPDF.Html.Core
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
 
-            CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(Adapter);
+            CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(RenderContext);
 
             DomParser parser = new(CssParser);
             (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
@@ -1404,20 +1404,20 @@ namespace PeachPDF.Html.Core
             // Mirrors SetHtml's own "use the caller's CssData directly" idiom (no clone) - there is nothing
             // appended to it on this path (no <style>/<link> discovery step exists for a declarative tree),
             // so there is nothing a clone would need to protect the caller's PeachPdfCssContent instance from.
-            CssData = stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(Adapter);
+            CssData = stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(RenderContext);
 
             if (stylesheet is not null)
             {
-                await DomParser.CascadeApplyStyleFonts(CssData, Adapter);
+                await DomParser.CascadeApplyStyleFonts(CssData, RenderContext);
 
-                var cssValueParser = new CssValueParser(Adapter);
+                var cssValueParser = new CssValueParser(RenderContext);
                 RegisteredProperties = RegisteredProperty.BuildRegistry(CssData, cssValueParser);
                 FontPaletteValues = RegisteredFontPalette.BuildRegistry(CssData, cssValueParser);
                 CounterStyles = CounterStyleRegistry.BuildRegistry(CssData);
                 FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(CssData);
 
                 var media = MediaQueryContext.FromContainer(this, Media);
-                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, Adapter, DisplayContentsShells);
+                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, RenderContext, DisplayContentsShells);
             }
 
             // Mirrors DomParser.GenerateCssTree's own ordering (AssignBidiLevels, then the tree walk that
@@ -1428,7 +1428,7 @@ namespace PeachPDF.Html.Core
             // After bidi, as in GenerateCssTree: a stylesheet-assigned display: contents is spliced only
             // once the passes that read the as-authored tree are done. A fragment's own shells were
             // already spliced when it was built, and are skipped.
-            DomParser.FlattenDisplayContents(DisplayContentsShells, new CssValueParser(Adapter));
+            DomParser.FlattenDisplayContents(DisplayContentsShells, new CssValueParser(RenderContext));
 
             ParseToWordsRecursive(root);
         }
@@ -1637,7 +1637,7 @@ namespace PeachPDF.Html.Core
         private ContainerQuerySizes BuildContainerQuerySizes()
         {
             var byId = new Dictionary<uint, ContainerQueryContext>();
-            var pixelsPerPoint = (Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
             void Walk(CssBox box)
             {
@@ -2212,7 +2212,7 @@ namespace PeachPDF.Html.Core
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
                 return tree;
 
-            var ppp = (Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var ppp = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
@@ -5082,7 +5082,7 @@ namespace PeachPDF.Html.Core
         /// <returns></returns>
         internal string GetCssMediaType(IEnumerable<string> mediaTypesAvailable)
         {
-            return Adapter.GetCssMediaType(mediaTypesAvailable);
+            return RenderContext.GetCssMediaType(mediaTypesAvailable);
         }
 
         /// <summary>

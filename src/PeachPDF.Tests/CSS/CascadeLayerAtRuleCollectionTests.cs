@@ -116,8 +116,8 @@ public class CascadeLayerAtRuleCollectionTests
 
     private static async Task<HtmlContainerInt> BuildContainer(string html)
     {
-        var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
-        var container = new HtmlContainerInt(adapter);
+        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var container = new HtmlContainerInt(renderContext);
 
         var size = new Size(595, 842);
         container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
@@ -125,7 +125,7 @@ public class CascadeLayerAtRuleCollectionTests
         await container.SetHtml(html, null);
 
         var measure = PdfGraphics.CreateMeasureContext(size);
-        using var graphics = new PdfCanvas(adapter, measure, 1.0);
+        using var graphics = new PdfCanvas(renderContext, measure, 1.0);
         await container.PerformLayout(graphics);
         return container;
     }

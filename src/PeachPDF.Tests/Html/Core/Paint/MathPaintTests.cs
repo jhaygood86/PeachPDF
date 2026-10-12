@@ -17,8 +17,8 @@ namespace PeachPDF.Tests.Html.Core.Paint
         static string Wrap(string mathHtml) =>
             $"<html><head><style>math {{ font-family: TestMath; }}</style></head><body style='margin:0'>{mathHtml}</body></html>";
 
-        static Task RegisterMathFont(PdfRenderContext adapter) =>
-            BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
+        static Task RegisterMathFont(PdfRenderContext renderContext) =>
+            BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "TestMath");
 
         [Fact]
         public async Task Fraction_DrawsRuleBetweenNumeratorAndDenominatorTokenDraws()
@@ -28,8 +28,8 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var adapter = new PdfRenderContext();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
             var kinds = recording.Log.Where(op => op.Kind is PaintOpKind.FillRect or PaintOpKind.DrawString).ToList();
@@ -55,8 +55,8 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var adapter = new PdfRenderContext();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
             // A stretched fence paints via the raw-glyph-index primitive (Canvas.DrawGlyphs), not
@@ -72,8 +72,8 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var adapter = new PdfRenderContext();
-            var recording = new RecordingGraphics(adapter);
+            var renderContext = new PdfRenderContext();
+            var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
             var strings = recording.Log.Where(op => op.Kind == PaintOpKind.DrawString).Select(op => op.Text).ToList();

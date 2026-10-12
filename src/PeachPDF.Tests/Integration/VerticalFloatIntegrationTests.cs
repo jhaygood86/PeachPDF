@@ -31,8 +31,8 @@ namespace PeachPDF.Tests.Integration
             return (wrapper, boxes);
         }
 
-        private static Task RegisterFont(PdfRenderContext adapter) =>
-            BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Vertical Float Fixture");
+        private static Task RegisterFont(PdfRenderContext renderContext) =>
+            BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Vertical Float Fixture");
 
         [Theory]
         [InlineData("vertical-rl", "ltr", "left", true)]

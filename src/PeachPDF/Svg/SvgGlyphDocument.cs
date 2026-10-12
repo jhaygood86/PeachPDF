@@ -56,8 +56,8 @@ namespace PeachPDF.Svg
         /// <param name="palette">The colour of a <c>CPAL</c> entry, or <see langword="null"/> when it has none (the document's own fallback applies).</param>
         /// <param name="entryCount">How many palette entries there are: <c>--color0</c> up to one less.</param>
         /// <param name="foreground">The text colour.</param>
-        /// <param name="adapter">The adapter that resolves the document's fonts and images.</param>
-        internal static SvgDocument? Build(SvgGlyph svg, Func<int, PaintColor?> palette, int entryCount, PaintColor foreground, RenderContext adapter)
+        /// <param name="renderContext">The adapter that resolves the document's fonts and images.</param>
+        internal static SvgDocument? Build(SvgGlyph svg, Func<int, PaintColor?> palette, int entryCount, PaintColor foreground, RenderContext renderContext)
         {
             try
             {
@@ -92,7 +92,7 @@ namespace PeachPDF.Svg
                 // The custom properties (--color0 ...) are on the root's style attribute, so the cascade has to run even when the
                 // document has no stylesheet of its own.
                 var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root)) ?? new CssData();
-                var valueParser = new CssValueParser(adapter);
+                var valueParser = new CssValueParser(renderContext);
                 var registered = RegisteredProperty.BuildRegistry(cssData, valueParser);
                 CssVarResolver.VarContext? varContext = registered.Count > 0 ? new CssVarResolver.VarContext(registered, valueParser) : null;
 
@@ -102,7 +102,7 @@ namespace PeachPDF.Svg
                 // The text is the context element of a glyph document (what Firefox does, and what the OpenType SVG note on context paint
                 // describes): context-fill is the text's fill, which is its colour. The text has no stroke here (there is no text stroke in the
                 // HTML this draws for), so context-stroke is no paint, as it is for any text without one.
-                var document = SvgTreeBuilder.Build(sourceNode, adapter, foreground, contextFill: SvgPaint.Solid(foreground), contextStroke: SvgPaint.None);
+                var document = SvgTreeBuilder.Build(sourceNode, renderContext, foreground, contextFill: SvgPaint.Solid(foreground), contextStroke: SvgPaint.None);
 
                 // The canvas the document was built on is the least one; a glyph that draws beyond it gets one that holds its artwork, so it is
                 // not cut off where the em box ends (OpenType SVG does not clip a glyph to the viewport).
