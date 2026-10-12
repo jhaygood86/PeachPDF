@@ -21,62 +21,6 @@ internal sealed class PdfExtGState : PdfDictionary
     }
 
     /// <summary>
-    /// Used in Edf.Xps.
-    /// </summary>
-    internal void SetDefault1()
-    {
-        //<<
-        //  /AIS false
-        //  /BM /Normal
-        //  /ca 1
-        //  /CA 1
-        //  /op false
-        //  /OP false
-        //  /OPM 1
-        //  /SA true
-        //  /SMask /None
-        //  /Type /ExtGState
-        //>>
-        Elements.SetBoolean(Keys.AIS, false);
-        if (Elements.ContainsKey(Keys.BM)) Elements.SetName(Keys.BM, "/Normal");
-        StrokeAlpha = 1;
-        NonStrokeAlpha = 1;
-        Elements.SetBoolean(Keys.op, false);
-        Elements.SetBoolean(Keys.OP, false);
-        Elements.SetBoolean(Keys.SA, true);
-        Elements.SetName(Keys.SMask, "/None");
-    }
-
-    /// <summary>
-    /// Used in Edf.Xps.
-    /// ...for shading patterns
-    /// </summary>
-    internal void SetDefault2()
-    {
-        //<<
-        //  /AIS false
-        //  /BM /Normal
-        //  /ca 1
-        //  /CA 1
-        //  /op true
-        //  /OP true
-        //  /OPM 1
-        //  /SA true
-        //  /SMask /None
-        //  /Type /ExtGState
-        //>>
-        Elements.SetBoolean(Keys.AIS, false);
-        Elements.SetName(Keys.BM, "/Normal");
-        StrokeAlpha = 1;
-        NonStrokeAlpha = 1;
-        Elements.SetBoolean(Keys.op, true);
-        Elements.SetBoolean(Keys.OP, true);
-        Elements.SetInteger(Keys.OPM, 1);
-        Elements.SetBoolean(Keys.SA, true);
-        Elements.SetName(Keys.SMask, "/None");
-    }
-
-    /// <summary>
     /// Sets the alpha value for stroking operations.
     /// </summary>
     public double StrokeAlpha
@@ -131,14 +75,6 @@ internal sealed class PdfExtGState : PdfDictionary
         }
     }
     bool _nonStrokeOverprint;
-
-    /// <summary>
-    /// Sets a soft mask object.
-    /// </summary>
-    public PdfSoftMask SoftMask
-    {
-        set { Elements.SetReference(Keys.SMask, value); }
-    }
 
     /// <summary>
     /// Sets the <c>/TR</c> transfer function - a Type 4 function (see <see cref="PdfType4Function"/>),

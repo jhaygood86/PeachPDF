@@ -26,7 +26,7 @@ internal partial class PdfDictionary
     /// Represents the interface to the elements of a PDF dictionary.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    internal sealed class DictionaryElements : IDictionary<string, PdfItem>, ICloneable
+    internal sealed class DictionaryElements : IDictionary<string, PdfItem>
     {
         internal DictionaryElements(PdfDictionary ownerDictionary)
         {
@@ -34,20 +34,15 @@ internal partial class PdfDictionary
             _ownerDictionary = ownerDictionary;
         }
 
-        object ICloneable.Clone()
-        {
-            DictionaryElements dictionaryElements = (DictionaryElements)MemberwiseClone();
-            dictionaryElements._elements = new Dictionary<string, PdfItem>(dictionaryElements._elements);
-            dictionaryElements._ownerDictionary = null;
-            return dictionaryElements;
-        }
-
         /// <summary>
         /// Creates a shallow copy of this object. The clone is not owned by a dictionary anymore.
         /// </summary>
         public DictionaryElements Clone()
         {
-            return (DictionaryElements)((ICloneable)this).Clone();
+            DictionaryElements dictionaryElements = (DictionaryElements)MemberwiseClone();
+            dictionaryElements._elements = new Dictionary<string, PdfItem>(dictionaryElements._elements);
+            dictionaryElements._ownerDictionary = null;
+            return dictionaryElements;
         }
 
         /// <summary>

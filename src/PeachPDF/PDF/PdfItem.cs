@@ -8,14 +8,9 @@ namespace PeachPDF.PDF;
 /// <summary>
 /// The base class of all PDF objects and simple PDF types.
 /// </summary>
-internal abstract class PdfItem : ICloneable
+internal abstract class PdfItem
 {
     // All simple types (i.e. derived from PdfItem but not from PdfObject) must be immutable.
-
-    object ICloneable.Clone()
-    {
-        return Copy();
-    }
 
     /// <summary>
     /// Creates a copy of this object.

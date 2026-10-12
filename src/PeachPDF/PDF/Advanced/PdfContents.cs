@@ -53,24 +53,6 @@ internal sealed class PdfContents : PdfArray
         return content;
     }
 
-    /// <summary>
-    /// Replaces the current content of the page with the specified bytes.
-    /// </summary>
-    PdfContent ReplaceContent(byte[] contentBytes)
-    {
-        Debug.Assert(Owner is not null);
-
-        PdfContent content = new PdfContent(Owner);
-
-        content.CreateStream(contentBytes);
-
-        Owner._irefTable.Add(content);
-        Elements.Clear();
-        Elements.Add(content.Reference);
-
-        return content;
-    }
-
     void SetModified()
     {
         if (!_modified)

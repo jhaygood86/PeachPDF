@@ -658,10 +658,6 @@ internal sealed class PdfGraphics : IDisposable
     //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
     //public void DrawImage(PdfRasterImage image, Rectangle destRect, double srcX, double srcY, double srcWidth, double srcHeight, GraphicsUnit srcUnit);
 
-    void DrawMissingImageRect(Rect rect)
-    {
-    }
-
     /// <summary>
     /// Checks whether drawing is allowed and disposes the PdfGraphics object, if necessary.
     /// </summary>
@@ -730,12 +726,6 @@ internal sealed class PdfGraphics : IDisposable
             throw new InvalidOperationException("Cannot restore without preceding save operation.");
         Restore(_gsStack.Current.State);
     }
-
-    /// <summary>
-    /// Gets the current graphics state level. The default value is 0. Each call of Save or BeginContainer
-    /// increased and each call of Restore or EndContainer decreased the value by 1.
-    /// </summary>
-    public int GraphicsStateLevel => _gsStack.Count;
 
     // --------------------------------------------------------------------------------------------
 

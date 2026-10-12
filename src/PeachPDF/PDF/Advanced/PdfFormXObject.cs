@@ -30,20 +30,6 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         //{ }
     }
 
-    internal double DpiX
-    {
-        get => _dpiX;
-        set => _dpiX = value;
-    }
-    double _dpiX = 72;
-
-    internal double DpiY
-    {
-        get => _dpiY;
-        set => _dpiY = value;
-    }
-    double _dpiY = 72;
-
     /// <summary>
     /// Gets the PdfResources object of this form.
     /// </summary>

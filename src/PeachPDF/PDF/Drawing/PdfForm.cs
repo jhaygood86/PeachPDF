@@ -105,24 +105,6 @@ internal class PdfForm : PdfRasterImage, IContentStream
     { }
 
     /// <summary>
-    /// This function should be called when drawing the content of this form is finished.
-    /// The PdfGraphics object used for drawing the content is disposed by this function and 
-    /// cannot be used for any further drawing operations.
-    /// PDFsharp automatically calls this function when this form was used the first time
-    /// in a DrawImage function. 
-    /// </summary>
-    public void DrawingFinished()
-    {
-        if (_formState == FormState.Finished)
-            return;
-
-        if (_formState == FormState.NotATemplate)
-            throw new InvalidOperationException("This object is an imported PDF page and you cannot finish drawing on it because you must not draw on it at all.");
-
-        Finish();
-    }
-
-    /// <summary>
     /// Called from PdfGraphics constructor that creates an instance that work on this form.
     /// </summary>
     internal void AssociateGraphics(PdfGraphics gfx)
@@ -268,16 +250,6 @@ internal class PdfForm : PdfRasterImage, IContentStream
     /// Gets 72 always, the vertical resolution by design of a form object.
     /// </summary>
     public override double VerticalResolution => 72;
-
-    /// <summary>
-    /// Gets or sets the bounding box.
-    /// </summary>
-    public Rect BoundingBox
-    {
-        get => _boundingBox;
-        set { _boundingBox = value; }  // TODO: pdfForm = null
-    }
-    Rect _boundingBox;
 
     /// <summary>
     /// Gets or sets the transformation matrix.

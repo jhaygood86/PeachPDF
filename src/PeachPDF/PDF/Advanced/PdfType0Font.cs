@@ -53,7 +53,6 @@ internal sealed class PdfType0Font : PdfFont
         set { Elements.SetName(Keys.BaseFont, value); }
     }
 
-    internal PdfCidFont DescendantFont => _descendantFont;
     readonly PdfCidFont _descendantFont = null!;
 
     internal override void PrepareForSave()

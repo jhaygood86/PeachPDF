@@ -95,24 +95,6 @@ internal sealed class PdfAnnotations : PdfArray
     PdfPage _page = null!;
 
     /// <summary>
-    /// Fixes the /P element in imported annotation.
-    /// </summary>
-    internal static void FixImportedAnnotation(PdfPage page)
-    {
-        PdfArray annots = page.Elements.GetArray(PdfPage.Keys.Annots);
-        if (annots is not null)
-        {
-            int count = annots.Elements.Count;
-            for (int idx = 0; idx < count; idx++)
-            {
-                PdfDictionary annot = annots.Elements.GetDictionary(idx);
-                if (annot is not null && annot.Elements.ContainsKey("/P"))
-                    annot.Elements["/P"] = page.Reference;
-            }
-        }
-    }
-
-    /// <summary>
     /// Returns an enumerator that iterates through a collection.
     /// </summary>
     public override IEnumerator<PdfItem> GetEnumerator()

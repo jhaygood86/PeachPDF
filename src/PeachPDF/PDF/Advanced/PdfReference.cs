@@ -57,19 +57,6 @@ internal sealed class PdfReference : PdfItem
     }
 
     /// <summary>
-    /// Writes the object in PDF iref table format.
-    /// </summary>
-    internal void WriteXRefEnty(PdfWriter writer)
-    {
-        // PDFsharp does not yet support PDF 1.5 object streams.
-
-        // Each line must be exactly 20 bytes long, otherwise Acrobat repairs the file.
-        string text = string.Format("{0:0000000000} {1:00000} n\n",
-          _position, _objectId.GenerationNumber); // InUse ? 'n' : 'f');
-        writer.WriteRaw(text);
-    }
-
-    /// <summary>
     /// Writes an indirect reference.
     /// </summary>
     internal override void WriteObject(PdfWriter writer)

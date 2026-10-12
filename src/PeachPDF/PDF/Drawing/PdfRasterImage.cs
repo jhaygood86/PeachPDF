@@ -110,15 +110,6 @@ internal class PdfRasterImage : IDisposable
         return new PdfRasterImage(imageSouce);
     }
 
-    /// <summary>
-    /// Tests if a file exists.
-    /// </summary>
-    /// <param name="path">The path to a BMP, PNG, GIF, JPEG, WebP, AVIF, TIFF, or JPEG XL file.</param>
-    public static bool ExistsFile(string path)
-    {
-        return false;
-    }
-
     internal PdfImageState PdfImageState
     {
         get => _xImageState;

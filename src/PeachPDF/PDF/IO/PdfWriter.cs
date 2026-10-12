@@ -216,16 +216,6 @@ internal sealed class PdfWriter
         _lastCat = CharCat.Delimiter;
     }
 
-    public void WriteDocStringHex(string text)
-    {
-        WriteSeparator(CharCat.Delimiter);
-        //WriteRaw(PdfEncoders.DocEncodeHex(text));
-        byte[] bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
-        bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, true);
-        _stream.Write(bytes, 0, bytes.Length);
-        _lastCat = CharCat.Delimiter;
-    }
-
     /// <summary>
     /// Begins a direct or indirect dictionary or array.
     /// </summary>

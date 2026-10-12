@@ -26,26 +26,6 @@ internal class PdfNamedDestinationParameters
 
     /// <summary>
     /// Creates a PdfNamedDestinationParameters object for a named destination.
-    /// Moving to this destination will only move to the destination page, without changing the left, top and zoom values for the displayed area.
-    /// </summary>
-    public static PdfNamedDestinationParameters CreateUnchangedPosition()
-    {
-        return CreateXYZ(null, null, null);
-    }
-
-    /// <summary>
-    /// Creates a PdfNamedDestinationParameters object for a named destination.
-    /// Moving to this destination will move to the desired top value and the optional zoom value on the destination page. The left value for the displayed area and null values are retained unchanged.
-    /// </summary>
-    /// <param name="top">The top value of the displayed area in PDF world space units.</param>
-    /// <param name="zoom">Optional: The zoom value for the displayed area. 1 = 100%, 2 = 200% etc.</param>
-    public static PdfNamedDestinationParameters CreateVerticalPosition(double? top, double? zoom = null)
-    {
-        return CreateXYZ(null, top, zoom);
-    }
-
-    /// <summary>
-    /// Creates a PdfNamedDestinationParameters object for a named destination.
     /// Moving to this destination will move to the desired left and top value and the optional zoom value on the destination page. Null values are retained unchanged.
     /// </summary>
     /// <param name="left">The left value of the displayed area in PDF world space units.</param>
@@ -65,15 +45,6 @@ internal class PdfNamedDestinationParameters
     public static PdfNamedDestinationParameters CreatePosition(PaintPoint position, double? zoom = null)
     {
         return CreateXYZ(position.X, position.Y, zoom);
-    }
-
-    /// <summary>
-    /// Creates a PdfNamedDestinationParameters object for a named destination.
-    /// Moving to this destination will move to the destination page, displaying the whole page.
-    /// </summary>
-    public static PdfNamedDestinationParameters CreateFit()
-    {
-        return new PdfNamedDestinationParameters("/Fit");
     }
 
     /// <summary>
@@ -132,37 +103,6 @@ internal class PdfNamedDestinationParameters
         double left = System.Math.Min(point1.X, point2.X);
         double top = System.Math.Min(point1.Y, point2.Y);
         return CreateFitRectangle(new Rect(left, top, System.Math.Max(point1.X, point2.X) - left, System.Math.Max(point1.Y, point2.Y) - top));
-    }
-
-    /// <summary>
-    /// Creates a PdfNamedDestinationParameters object for a named destination.
-    /// Moving to this destination will move to the destination page. The page’s bounding box is fitted to the window.
-    /// </summary>
-    public static PdfNamedDestinationParameters CreateFitBoundingBox()
-    {
-        return new PdfNamedDestinationParameters("/FitB");
-    }
-
-    /// <summary>
-    /// Creates a PdfNamedDestinationParameters object for a named destination.
-    /// Moving to this destination will move to the desired top value on the destination page.
-    /// The page’s bounding box width is fitted to the window. Null values are retained unchanged.
-    /// </summary>
-    /// <param name="top">The top value of the displayed area in PDF world space units.</param>
-    public static PdfNamedDestinationParameters CreateFitBoundingBoxHorizontally(double? top)
-    {
-        return new PdfNamedDestinationParameters(Format("/FitBH {0}", top));
-    }
-
-    /// <summary>
-    /// Creates a PdfNamedDestinationParameters object for a named destination.
-    /// Moving to this destination will move to the desired left value on the destination page.
-    /// The page’s bounding box height is fitted to the window. Null values are retained unchanged.
-    /// </summary>
-    /// <param name="left">The left value of the displayed area in PDF world space units.</param>
-    public static PdfNamedDestinationParameters CreateFitBoundingBoxVertically(double? left)
-    {
-        return new PdfNamedDestinationParameters(Format("/FitBV {0}", left));
     }
 
     static string Format(string format, params double?[] values)

@@ -824,17 +824,6 @@ internal sealed class PdfGraphicsRenderer
     // --------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Appends a Bézier curve for a cardinal spline through pt1 and pt2.
-    /// </summary>
-    void AppendCurveSegment(PaintPoint pt0, PaintPoint pt1, PaintPoint pt2, PaintPoint pt3, double tension3)
-    {
-        AppendBezier(
-            pt1.X + tension3 * (pt2.X - pt0.X), pt1.Y + tension3 * (pt2.Y - pt0.Y),
-            pt2.X - tension3 * (pt3.X - pt1.X), pt2.Y - tension3 * (pt3.Y - pt1.Y),
-            pt2.X, pt2.Y);
-    }
-
-    /// <summary>
     /// Appends the outline of a path: each contour as a move, its lines and curves, and a close when it is closed.
     /// </summary>
     internal void AppendPath(GraphicsPath path)
@@ -920,25 +909,6 @@ internal sealed class PdfGraphicsRenderer
         _content.Append(' ');
         AppendPdfNumber(_content, point3.Y, format);
         _content.Append(" c\n");
-    }
-
-    private void AppendMatrix(double x1, double y1, double x2, double y2, double x3, double y3)
-    {
-        PaintPoint point1 = WorldToView(new PaintPoint(x1, y1));
-        PaintPoint point2 = WorldToView(new PaintPoint(x2, y2));
-        PaintPoint point3 = WorldToView(new PaintPoint(x3, y3));
-        AppendPdfNumber(_content, point1.X, PdfNumberFormats.SevenDecimals);
-        _content.Append(' ');
-        AppendPdfNumber(_content, point1.Y, PdfNumberFormats.SevenDecimals);
-        _content.Append(' ');
-        AppendPdfNumber(_content, point2.X, PdfNumberFormats.SevenDecimals);
-        _content.Append(' ');
-        AppendPdfNumber(_content, point2.Y, PdfNumberFormats.SevenDecimals);
-        _content.Append(' ');
-        AppendPdfNumber(_content, point3.X, PdfNumberFormats.SevenDecimals);
-        _content.Append(' ');
-        AppendPdfNumber(_content, point3.Y, PdfNumberFormats.SevenDecimals);
-        _content.Append(" cm ");
     }
 
     internal static void AppendPdfNumber(PdfContentWriter content, double value, string format) => content.Append(value, format);

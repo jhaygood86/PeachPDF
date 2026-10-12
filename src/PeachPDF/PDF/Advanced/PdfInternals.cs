@@ -45,11 +45,6 @@ internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInte
         set { _document._trailer.SetDocumentId(1, value); }
     }
 
-    /// <summary>
-    /// Gets the first document identifier as GUID.
-    /// </summary>
-    public Guid SecondDocumentGuid => GuidFromString(_document._trailer.GetDocumentId(0));
-
     Guid GuidFromString(string id)
     {
         if (id is null || id.Length != 16)

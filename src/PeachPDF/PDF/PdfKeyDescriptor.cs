@@ -68,8 +68,6 @@ internal sealed class PdfKeyDescriptor
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
     Type _objectType;
 
-    public bool CanBeIndirect => (_keyType & PdfKeyType.MustNotBeIndirect) == 0;
-
     // These types are not yet used/implemented.
     static readonly FrozenSet<PdfKeyType> NotYetImplementedKeyTypes = new HashSet<PdfKeyType>
     {

@@ -75,21 +75,6 @@ internal static class PdfStringFormats
     }
 
     /// <summary>
-    /// Gets a new PdfStringFormat object that centers the text in the middle of the base line.
-    /// </summary>
-    public static PdfStringFormat BaseLineCenter
-    {
-        get
-        {
-            // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
-            format.Alignment = PdfStringAlignment.Center;
-            format.LineAlignment = PdfLineAlignment.BaseLine;
-            return format;
-        }
-    }
-
-    /// <summary>
     /// Gets a new PdfStringFormat object that centers the text at the top of the layout rectangle.
     /// </summary>
     public static PdfStringFormat TopCenter
@@ -130,21 +115,6 @@ internal static class PdfStringFormats
             PdfStringFormat format = new PdfStringFormat();
             format.Alignment = PdfStringAlignment.Center;
             format.LineAlignment = PdfLineAlignment.Far;
-            return format;
-        }
-    }
-
-    /// <summary>
-    /// Gets a new PdfStringFormat object that aligns the text in right on the base line.
-    /// </summary>
-    public static PdfStringFormat BaseLineRight
-    {
-        get
-        {
-            // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
-            format.Alignment = PdfStringAlignment.Far;
-            format.LineAlignment = PdfLineAlignment.BaseLine;
             return format;
         }
     }

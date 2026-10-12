@@ -364,12 +364,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     PdfDocumentSettings _settings = null!;
 
     /// <summary>
-    /// NYI Indicates whether large objects are written immediately to the output stream to relieve
-    /// memory consumption.
-    /// </summary>
-    internal bool EarlyWrite => false;
-
-    /// <summary>
     /// Gets or sets the PDF version number. Return value 14 e.g. means PDF 1.4 / Acrobat 5 etc.
     /// PDF has no 1.8/1.9 - the only value above 17 this accepts is 20, meaning PDF 2.0
     /// (ISO 32000-2); see <see cref="PeachPDF.PdfVersion"/>/<see cref="PeachPDF.PdfGenerateConfig.PdfVersion"/>
@@ -404,11 +398,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Gets the file size of the document.
-    /// </summary>
-    public long FileSize => _fileSize;
-    internal long _fileSize; // TODO: make private
+// TODO: make private
 
     /// <summary>
     /// Gets the full qualified file name if the document was read form a file, or an empty string otherwise.
@@ -432,11 +422,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     /// Returns a value indicating whether the document is read only or can be modified.
     /// </summary>
     public bool IsReadOnly => (_openMode != PdfDocumentOpenMode.Modify);
-
-    internal Exception DocumentNotImported()
-    {
-        return new InvalidOperationException("Document not imported.");
-    }
 
     /// <summary>
     /// Gets information about the document.
@@ -582,16 +567,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         if (!CanModify)
             throw new InvalidOperationException("The document cannot be modified.");
         return Catalog.Pages.Add();
-    }
-
-    /// <summary>
-    /// Creates a new page and inserts it in this document at the specified position.
-    /// </summary>
-    public PdfPage InsertPage(int index)
-    {
-        if (!CanModify)
-            throw new InvalidOperationException("The document cannot be modified.");
-        return Catalog.Pages.Insert(index);
     }
 
     public void AddNamedDestination(string destinationName, int destinationPage, PdfNamedDestinationParameters parameters)

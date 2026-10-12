@@ -141,24 +141,6 @@ internal sealed class PdfResources : PdfDictionary
     }
 
     /// <summary>
-    /// Adds the specified shading to this resource dictionary
-    /// and returns its local resource name.
-    /// </summary>
-    public string AddShading(PdfShading shading)
-    {
-        string name;
-        if (!_resources.TryGetValue(shading, out name))
-        {
-            name = NextShadingName;
-            _resources[shading] = name;
-            if (shading.Reference is null)
-                Owner._irefTable.Add(shading);
-            Shadings.Elements[name] = shading.Reference;
-        }
-        return name;
-    }
-
-    /// <summary>
     /// Gets the fonts map.
     /// </summary>
     internal PdfResourceMap Fonts => _fonts ?? (_fonts = (PdfResourceMap)Elements.GetValue(Keys.Font, ValueCreationFlags.Create));
@@ -259,20 +241,6 @@ internal sealed class PdfResources : PdfDictionary
         }
     }
     int _patternNumber;
-
-    /// <summary>
-    /// Gets a new local name for this resource.
-    /// </summary>
-    string NextShadingName
-    {
-        get
-        {
-            string name;
-            while (ExistsResourceNames(name = string.Format("/Sh{0}", _shadingNumber++))) ;
-            return name;
-        }
-    }
-    int _shadingNumber;
 
     /// <summary>
     /// Check whether a resource name is already used in the context of this resource dictionary.

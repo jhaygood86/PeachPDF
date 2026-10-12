@@ -132,7 +132,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     /// <summary>
     /// Represents the elements of an PdfArray.
     /// </summary>
-    internal sealed class ArrayElements : IList<PdfItem>, ICloneable
+    internal sealed class ArrayElements : IList<PdfItem>
     {
         internal ArrayElements(PdfArray array)
         {
@@ -140,20 +140,15 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             _ownerArray = array;
         }
 
-        object ICloneable.Clone()
-        {
-            ArrayElements elements = (ArrayElements)MemberwiseClone();
-            elements._elements = new List<PdfItem>(elements._elements);
-            elements._ownerArray = null;
-            return elements;
-        }
-
         /// <summary>
         /// Creates a shallow copy of this object.
         /// </summary>
         public ArrayElements Clone()
         {
-            return (ArrayElements)((ICloneable)this).Clone();
+            ArrayElements elements = (ArrayElements)MemberwiseClone();
+            elements._elements = new List<PdfItem>(elements._elements);
+            elements._ownerArray = null;
+            return elements;
         }
 
         /// <summary>

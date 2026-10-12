@@ -19,9 +19,6 @@ internal static class PdfMatrix
     public static Matrix3x2 Translation(double offsetX, double offsetY)
         => new(1f, 0f, 0f, 1f, (float)offsetX, (float)offsetY);
 
-    /// <summary>A scaling about the origin.</summary>
-    public static Matrix3x2 Scaling(double scaleX, double scaleY)
-        => new((float)scaleX, 0f, 0f, (float)scaleY, 0f, 0f);
 }
 
 internal static class PdfMatrixExtensions

@@ -140,20 +140,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     }
 
     /// <summary>
-    /// Gets an array of all object identifiers. For debugging purposes only.
-    /// </summary>
-    internal PdfObjectId[] AllObjectIds
-    {
-        get
-        {
-            ICollection collection = ObjectTable.Keys;
-            PdfObjectId[] objectIds = new PdfObjectId[collection.Count];
-            collection.CopyTo(objectIds, 0);
-            return objectIds;
-        }
-    }
-
-    /// <summary>
     /// Gets an array of all cross references ordered ascendingly by their object identifier.
     /// </summary>
     internal PdfReference[] AllReferences
@@ -168,9 +154,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             return irefs;
         }
     }
-
-    internal void HandleOrphanedReferences()
-    { }
 
     /// <summary>
     /// Removes all objects that cannot be reached from the trailer.
@@ -365,23 +348,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         }
     }
 
-    /// <summary>
-    /// Gets the cross reference to an objects used for undefined indirect references.
-    /// </summary>
-    public PdfReference DeadObject
-    {
-        get
-        {
-            if (_deadObject is null)
-            {
-                _deadObject = new PdfDictionary(_document);
-                Add(_deadObject);
-                _deadObject.Elements.Add("/DeadObjectCount", new PdfInteger());
-            }
-            return _deadObject.Reference;
-        }
-    }
-    PdfDictionary _deadObject = null!;
 }
 
 ///// <summary>

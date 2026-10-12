@@ -27,7 +27,6 @@ internal sealed partial class ColorGlyphPainter
 
     private static PaintColor ToPaintColor(PaintColor color) => color.ToRgbColor();
 
-    private static PaintColor ToXColor(PaintColor color) => PaintColor.FromArgb(color.A, color.R, color.G, color.B);
 
     private static Dictionary<int, PaintColor>? ToPaintOverrides(IReadOnlyDictionary<int, PaintColor>? overrides)
     {
@@ -58,7 +57,7 @@ internal sealed partial class ColorGlyphPainter
                 return;
             }
 
-            owner._gfx.DrawPath(new SolidBrush(ToXColor(color)), BuildPath(outline, transform));
+            owner._gfx.DrawPath(new SolidBrush(color), BuildPath(outline, transform));
         }
 
         public void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
@@ -138,7 +137,7 @@ internal sealed partial class ColorGlyphPainter
             switch (paint)
             {
                 case SolidColorGlyphPaint solid:
-                    return new SolidBrush(ToXColor(solid.Color));
+                    return new SolidBrush(solid.Color);
 
                 case LinearColorGlyphPaint linear:
                     return new LinearGradientBrush(new PaintPoint(linear.Start.X, linear.Start.Y), new PaintPoint(linear.End.X, linear.End.Y),
@@ -162,16 +161,8 @@ internal sealed partial class ColorGlyphPainter
         {
             var stops = new GradientStop[colors.Count];
             for (int i = 0; i < stops.Length; i++)
-                stops[i] = new GradientStop(ToXColor(colors[i]), positions[i]);
+                stops[i] = new GradientStop(colors[i], positions[i]);
             return stops;
-        }
-
-        private static PaintColor[] ToXColors(IReadOnlyList<PaintColor> colors)
-        {
-            var converted = new PaintColor[colors.Count];
-            for (int i = 0; i < converted.Length; i++)
-                converted[i] = ToXColor(colors[i]);
-            return converted;
         }
 
         private static GraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)

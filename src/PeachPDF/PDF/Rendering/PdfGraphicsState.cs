@@ -23,7 +23,7 @@ namespace PeachPDF.PDF.Rendering;
 /// <remarks>
 /// Completely revised for PDFsharp 1.4.
 /// </remarks>
-internal sealed class PdfGraphicsState : ICloneable
+internal sealed class PdfGraphicsState
 {
     public PdfGraphicsState(PdfGraphicsRenderer renderer)
     {
@@ -37,26 +37,9 @@ internal sealed class PdfGraphicsState : ICloneable
         return state;
     }
 
-    object ICloneable.Clone()
-    {
-        return Clone();
-    }
-
     internal int Level;
 
     internal InternalGraphicsState InternalState = null!;
-
-    public void PushState()
-    {
-        // BeginGraphic
-        _renderer.Append("q/n");
-    }
-
-    public void PopState()
-    {
-        //BeginGraphic
-        _renderer.Append("Q/n");
-    }
 
     double _realizedLineWith = -1;
     int _realizedLineCap = -1;
@@ -559,13 +542,6 @@ internal sealed class PdfGraphicsState : ICloneable
             // painted under it is visible, so fall back to identity rather than abort the document.
             InverseEffectiveCtm = EffectiveCtm.TryInvert(out var inverse) ? inverse : Matrix3x2.Identity;
         }
-    }
-
-    public void SetAndRealizeClipRect(Rect clipRect)
-    {
-        GraphicsPath clipPath = new PdfGraphicsPath();
-        clipPath.AddRectangle(clipRect);
-        RealizeClipPath(clipPath);
     }
 
     public void SetAndRealizeClipPath(GraphicsPath clipPath)
