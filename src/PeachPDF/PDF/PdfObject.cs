@@ -41,26 +41,7 @@ internal abstract class PdfObject : PdfItem
             obj._iref.Value = this;
     }
 
-    /// <summary>
-    /// Creates a copy of this object. The clone does not belong to a document, i.e. its owner and its iref are null.
-    /// </summary>
-    public new PdfObject Clone()
-    {
-        return (PdfObject)Copy();
-    }
-
-    /// <summary>
-    /// Implements the copy mechanism. Must be overridden in derived classes.
-    /// </summary>
-    protected override object Copy()
-    {
-        PdfObject obj = (PdfObject)base.Copy();
-        obj._document = null!;
-        obj._iref = null;
-        return obj;
-    }
-
-    /// <summary>
+/// <summary>
     /// Sets the object and generation number.
     /// Setting the object identifier makes this object an indirect object, i.e. the object gets
     /// a PdfReference entry in the PdfReferenceTable.

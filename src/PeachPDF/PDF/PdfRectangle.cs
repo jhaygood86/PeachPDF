@@ -73,45 +73,7 @@ internal sealed class PdfRectangle : PdfItem
         _y2 = rect.Y + rect.Height;
     }
 
-    /// <summary>
-    /// Initializes a new instance of the PdfRectangle class with the specified PdfArray.
-    /// </summary>
-    internal PdfRectangle(PdfItem item)
-    {
-        if (item is null)
-            return;
-
-        if (item is PdfReference)
-            item = ((PdfReference)item).Value;
-
-        PdfArray? array = item as PdfArray;
-        if (array is null)
-            throw new InvalidOperationException("Unexpected token in PDF file. The PDF file may be corrupt. If it is not, please send us the file for service.");
-
-        _x1 = array.Elements.GetReal(0);
-        _y1 = array.Elements.GetReal(1);
-        _x2 = array.Elements.GetReal(2);
-        _y2 = array.Elements.GetReal(3);
-    }
-
-    /// <summary>
-    /// Clones this instance.
-    /// </summary>
-    public new PdfRectangle Clone()
-    {
-        return (PdfRectangle)Copy();
-    }
-
-    /// <summary>
-    /// Implements cloning this instance.
-    /// </summary>
-    protected override object Copy()
-    {
-        PdfRectangle rect = (PdfRectangle)base.Copy();
-        return rect;
-    }
-
-    /// <summary>
+/// <summary>
     /// Tests whether all coordinate are zero.
     /// </summary>
     public bool IsEmpty

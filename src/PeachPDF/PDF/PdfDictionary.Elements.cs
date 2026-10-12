@@ -32,18 +32,7 @@ internal partial class PdfDictionary
             _ownerDictionary = ownerDictionary;
         }
 
-        /// <summary>
-        /// Creates a shallow copy of this object. The clone is not owned by a dictionary anymore.
-        /// </summary>
-        public DictionaryElements Clone()
-        {
-            DictionaryElements dictionaryElements = (DictionaryElements)MemberwiseClone();
-            dictionaryElements._elements = new Dictionary<string, PdfItem>(dictionaryElements._elements);
-            dictionaryElements._ownerDictionary = null!;
-            return dictionaryElements;
-        }
-
-        /// <summary>
+/// <summary>
         /// Moves this instance to another dictionary during object type transformation.
         /// </summary>
         internal void ChangeOwner(PdfDictionary ownerDictionary)

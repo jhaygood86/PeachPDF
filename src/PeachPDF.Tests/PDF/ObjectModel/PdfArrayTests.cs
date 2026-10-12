@@ -285,19 +285,6 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void Clone_ProducesIndependentCopy()
-        {
-            var array = new PdfArray();
-            array.Elements.Add(new PdfInteger(1));
-
-            var clone = array.Elements.Clone();
-            clone.Add(new PdfInteger(2));
-
-            Assert.Single(array.Elements);
-            Assert.Equal(2, clone.Count);
-        }
-
-        [Fact]
         public void ToString_ProducesBracketedRepresentation()
         {
             var array = new PdfArray();

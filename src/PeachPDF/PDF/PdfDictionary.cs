@@ -51,48 +51,7 @@ internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<strin
             dict._stream.ChangeOwner(this);
     }
 
-    /// <summary>
-    /// Creates a copy of this dictionary. Direct values are deep copied. Indirect references are not
-    /// modified.
-    /// </summary>
-    public new PdfDictionary Clone()
-    {
-        return (PdfDictionary)Copy();
-    }
-
-    /// <summary>
-    /// This function is useful for importing objects from external documents. The returned object is not
-    /// yet complete. irefs refer to external objects and directed objects are cloned but their document
-    /// property is null. A cloned dictionary or array needs a 'fix-up' to be a valid object.
-    /// </summary>
-    protected override object Copy()
-    {
-        PdfDictionary dict = (PdfDictionary)base.Copy();
-        if (dict._elements is not null)
-        {
-            dict._elements = dict._elements.Clone();
-            dict._elements.ChangeOwner(dict);
-            PdfName[] names = dict._elements.KeyNames;
-            foreach (PdfName name in names)
-            {
-                PdfObject? obj = dict._elements[name] as PdfObject;
-                if (obj is not null)
-                {
-                    obj = obj.Clone();
-                    // Recall that obj.Document is now null.
-                    dict._elements[name] = obj;
-                }
-            }
-        }
-        if (dict._stream is not null)
-        {
-            dict._stream = dict._stream.Clone();
-            dict._stream.ChangeOwner(dict);
-        }
-        return dict;
-    }
-
-    /// <summary>
+/// <summary>
     /// Gets the dictionary containing the elements of this dictionary.
     /// </summary>
     public DictionaryElements Elements => _elements ?? (_elements = new DictionaryElements(this));
@@ -115,27 +74,7 @@ internal partial class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<strin
         return GetEnumerator();
     }
 
-    /// <summary>
-    /// Returns a string with the content of this object in a readable form. Useful for debugging purposes only.
-    /// </summary>
-    public override string ToString()
-    {
-        // Get keys and sort.
-        PdfName[] keys = Elements.KeyNames;
-        List<PdfName> list = new List<PdfName>(keys);
-        list.Sort(PdfName.Comparer);
-        list.CopyTo(keys, 0);
-
-        StringBuilder pdf = new StringBuilder();
-        pdf.Append("<< ");
-        foreach (PdfName key in keys)
-            pdf.Append(key + " " + Elements[key] + " ");
-        pdf.Append(">>");
-
-        return pdf.ToString();
-    }
-
-    internal override void WriteObject(PdfWriter writer)
+internal override void WriteObject(PdfWriter writer)
     {
         writer.WriteBeginObject(this);
         //int count = Elements.Count;

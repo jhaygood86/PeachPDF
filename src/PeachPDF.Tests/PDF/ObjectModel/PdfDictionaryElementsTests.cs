@@ -410,19 +410,6 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void Clone_ProducesIndependentCopy()
-        {
-            var dict = new PdfDictionary();
-            dict.Elements.SetInteger("/A", 1);
-
-            var clone = dict.Elements.Clone();
-            clone.SetInteger("/A", 2);
-
-            Assert.Equal(1, dict.Elements.GetInteger("/A"));
-            Assert.Equal(2, clone.GetInteger("/A"));
-        }
-
-        [Fact]
         public void Rectangle_TryGet_ExistingDirectRectangle_ReturnsTrue()
         {
             var dict = new PdfDictionary();

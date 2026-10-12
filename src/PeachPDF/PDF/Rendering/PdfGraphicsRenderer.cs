@@ -285,37 +285,7 @@ internal sealed partial class PdfGraphicsRenderer
         _gfxState.SetAndRealizeClipPath(path);
     }
 
-    /// <summary>
-    /// Sets the clip path empty. Only possible if graphic state level has the same value as it has when
-    /// the first time SetClip was invoked.
-    /// </summary>
-    public void ResetClip()
-    {
-        // No clip level means no clipping occurs and nothing is to do.
-        if (_clipLevel == 0)
-            return;
-
-        // Only at the clipLevel the clipping can be reset.
-        if (_clipLevel != _gfxState.Level)
-            throw new NotImplementedException("Cannot reset clip region in an inner graphic state level.");
-
-        // Must be in graphical mode before popping the graphics state.
-        BeginGraphicMode();
-
-        // Save InternalGraphicsState and transformation of the current graphical state.
-        InternalGraphicsState state = _gfxState.InternalState;
-        Matrix3x2 ctm = _gfxState.EffectiveCtm;
-        // Empty clip path by switching back to the previous state.
-        RestoreState();
-        SaveState();
-        // Save internal state
-        _gfxState.InternalState = state;
-        // Restore CTM
-        // TODO: check rest of clip
-        //GfxState.Transform = ctm;
-    }
-
-    /// <summary>
+/// <summary>
     /// The nesting level of the PDF graphics state stack when the clip region was set to non empty.
     /// Because of the way PDF is made the clip region can only be reset at this level.
     /// </summary>

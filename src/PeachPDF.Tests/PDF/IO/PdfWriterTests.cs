@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.PdfEngineTests.IO
         private static (PdfWriter Writer, MemoryStream Stream) CreateWriter()
         {
             var stream = new MemoryStream();
-            var writer = new PdfWriter(stream) { Layout = PdfWriterLayout.Compact };
+            var writer = new PdfWriter(stream);
             return (writer, stream);
         }
 
@@ -306,16 +306,6 @@ namespace PeachPDF.Tests.PdfEngineTests.IO
 
             var ex = Record.Exception(() => stream.Position);
             Assert.Null(ex);
-        }
-
-        [Fact]
-        public void Indent_RoundTrips()
-        {
-            var (writer, _) = CreateWriter();
-
-            writer.Indent = 4;
-
-            Assert.Equal(4, writer.Indent);
         }
 
         [Fact]

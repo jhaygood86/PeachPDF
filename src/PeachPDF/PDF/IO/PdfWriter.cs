@@ -36,16 +36,6 @@ internal sealed class PdfWriter
 
     public long Position => _stream.Position;
 
-    /// <summary>
-    /// Gets or sets the kind of layout.
-    /// </summary>
-    public PdfWriterLayout Layout
-    {
-        get => _layout;
-        set => _layout = value;
-    }
-    PdfWriterLayout _layout;
-
     public PdfWriterOptions Options
     {
         get => _options;
@@ -227,8 +217,6 @@ internal sealed class PdfWriter
                 _lastCat = CharCat.NewLine;
             }
         }
-        if (_layout == PdfWriterLayout.Verbose)
-            IncreaseIndent();
     }
 
     /// <summary>
@@ -244,8 +232,6 @@ internal sealed class PdfWriter
 
         PdfObject value = stackItem.Object;
         bool indirect = value.IsIndirect;
-        if (_layout == PdfWriterLayout.Verbose)
-            DecreaseIndent();
         if (value is PdfArray)
         {
             if (indirect)
@@ -278,8 +264,6 @@ internal sealed class PdfWriter
         {
             NewLine();
             WriteRaw("endobj\n");
-            if (_layout == PdfWriterLayout.Verbose)
-                WriteRaw("%--------------------------------------------------------------------------------------------------\n");
         }
     }
 
@@ -386,25 +370,13 @@ internal sealed class PdfWriter
     void WriteObjectAddress(PdfObject value)
     {
         PdfObjectId identity = value.ObjectId;
-        WriteRaw(_layout == PdfWriterLayout.Verbose
-            ? string.Create(CultureInfo.InvariantCulture, $"{identity.ObjectNumber} {identity.GenerationNumber} obj   % {value.GetType().FullName}\n")
-            : string.Create(CultureInfo.InvariantCulture, $"{identity.ObjectNumber} {identity.GenerationNumber} obj\n"));
+        WriteRaw(string.Create(CultureInfo.InvariantCulture, $"{identity.ObjectNumber} {identity.GenerationNumber} obj\n"));
     }
 
     public void WriteFileHeader(PdfDocument document)
     {
         int version = document._version;
         WriteRaw(string.Create(CultureInfo.InvariantCulture, $"%PDF-{version / 10}.{version % 10}\n%\xD3\xF4\xCC\xE1\n"));
-
-        if (_layout == PdfWriterLayout.Verbose)
-        {
-            WriteRaw($"% PDFsharp Version {PdfProductInfo.Version} (verbose mode)\n");
-            // Keep some space for later fix-up.
-            _commentPosition = (int)_stream.Position + 2;
-            for (int line = 0; line < 5; line++)
-                WriteRaw("%                                                \n");
-            WriteRaw("%--------------------------------------------------------------------------------------------------\n");
-        }
     }
 
     public void WriteEof(PdfDocument document, long startxref)
@@ -412,96 +384,12 @@ internal sealed class PdfWriter
         WriteRaw("startxref\n");
         WriteRaw(startxref.ToString(CultureInfo.InvariantCulture));
         WriteRaw("\n%%EOF\n");
-        var fileSize = _stream.Position;
-        if (_layout == PdfWriterLayout.Verbose)
-        {
-            TimeSpan duration = DateTime.Now - document._creation;
-
-            _stream.Position = _commentPosition;
-            // Without InvariantCulture parameter the following line fails if the current culture is e.g.
-            // a Far East culture, because the date string contains non-ASCII characters.
-            // So never never never never use ToString without a culture info.
-            WriteRaw("Creation date: " + document._creation.ToString("G", CultureInfo.InvariantCulture));
-            _stream.Position = _commentPosition + 50;
-            WriteRaw("Creation time: " + duration.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture) + " seconds");
-            _stream.Position = _commentPosition + 100;
-            WriteRaw("File size: " + fileSize.ToString(CultureInfo.InvariantCulture) + " bytes");
-            _stream.Position = _commentPosition + 150;
-            WriteRaw("Pages: " + document.Pages.Count.ToString(CultureInfo.InvariantCulture));
-            _stream.Position = _commentPosition + 200;
-            WriteRaw("Objects: " + document._irefTable.Count.ToString(CultureInfo.InvariantCulture));
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets the indentation for a new indentation level.
-    /// </summary>
-    internal int Indent
-    {
-        get => _indent;
-        set => _indent = value;
-    }
-    int _indent = 2;
-    int _writeIndent;
-
-    /// <summary>
-    /// Increases indent level.
-    /// </summary>
-    void IncreaseIndent()
-    {
-        _writeIndent += _indent;
-    }
-
-    /// <summary>
-    /// Decreases indent level.
-    /// </summary>
-    void DecreaseIndent()
-    {
-        _writeIndent -= _indent;
-    }
-
-    ///// <summary>
-    ///// Returns an indent string of blanks.
-    ///// </summary>
-
-    /// <summary>
-    /// Gets an indent string of current indent.
-    /// </summary>
-    string IndentBlanks
-    {
-        get => new string(' ', _writeIndent);
-    }
-
-    void WriteIndent()
-    {
-        WriteRaw(IndentBlanks);
     }
 
     void WriteSeparator(CharCat cat, char ch)
     {
-        switch (_lastCat)
-        {
-            case CharCat.NewLine:
-                if (_layout == PdfWriterLayout.Verbose)
-                    WriteIndent();
-                break;
-
-            case CharCat.Delimiter:
-                break;
-
-            case CharCat.Character:
-                if (_layout == PdfWriterLayout.Verbose)
-                {
-                    //if (cat == CharCat.Character || ch == '/')
-                    _stream.WriteByte((byte)' ');
-                }
-                else
-                {
-                    //if (cat == CharCat.Character)
-                    _stream.WriteByte((byte)' ');
-                }
-                break;
-        }
+        if (_lastCat == CharCat.Character)
+            _stream.WriteByte((byte)' ');
     }
 
     void WriteSeparator(CharCat cat)
@@ -552,5 +440,4 @@ internal sealed class PdfWriter
     }
 
     readonly List<StackItem> _stack = [];
-    int _commentPosition;
 }

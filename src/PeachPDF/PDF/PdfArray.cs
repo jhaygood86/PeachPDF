@@ -54,36 +54,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             array._elements.ChangeOwner(this);
     }
 
-    /// <summary>
-    /// Creates a copy of this array. Direct elements are deep copied.
-    /// Indirect references are not modified.
-    /// </summary>
-    public new PdfArray Clone()
-    {
-        return (PdfArray)Copy();
-    }
-
-    /// <summary>
-    /// Implements the copy mechanism.
-    /// </summary>
-    protected override object Copy()
-    {
-        PdfArray array = (PdfArray)base.Copy();
-        if (array._elements is not null)
-        {
-            array._elements = array._elements.Clone();
-            int count = array._elements.Count;
-            for (int idx = 0; idx < count; idx++)
-            {
-                PdfItem item = array._elements[idx];
-                if (item is PdfObject)
-                    array._elements[idx] = item.Clone();
-            }
-        }
-        return array;
-    }
-
-    /// <summary>
+/// <summary>
     /// Gets the collection containing the elements of this object.
     /// </summary>
     public ArrayElements Elements => _elements ?? (_elements = new ArrayElements(this));
@@ -138,18 +109,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
             _ownerArray = array;
         }
 
-        /// <summary>
-        /// Creates a shallow copy of this object.
-        /// </summary>
-        public ArrayElements Clone()
-        {
-            ArrayElements elements = (ArrayElements)MemberwiseClone();
-            elements._elements = new List<PdfItem>(elements._elements);
-            elements._ownerArray = null!;
-            return elements;
-        }
-
-        /// <summary>
+/// <summary>
         /// Moves this instance to another array during object type transformation.
         /// </summary>
         internal void ChangeOwner(PdfArray array)

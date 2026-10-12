@@ -39,22 +39,7 @@ internal partial class PdfDictionary
             _value = value;
         }
 
-        /// <summary>
-        /// Clones this stream by creating a deep copy.
-        /// </summary>
-        public PdfStream Clone()
-        {
-            PdfStream stream = (PdfStream)MemberwiseClone();
-            stream._ownerDictionary = null!;
-            if (stream._value is not null)
-            {
-                stream._value = new byte[stream._value.Length];
-                _value.CopyTo(stream._value, 0);
-            }
-            return stream;
-        }
-
-        /// <summary>
+/// <summary>
         /// Moves this instance to another dictionary during object type transformation.
         /// </summary>
         internal void ChangeOwner(PdfDictionary dict)

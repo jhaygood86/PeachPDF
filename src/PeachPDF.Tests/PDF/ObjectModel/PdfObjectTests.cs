@@ -49,22 +49,6 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void Clone_ProducesObjectWithoutOwnerOrReference()
-        {
-            var doc = new PdfDocument();
-            var dict = new PdfDictionary();
-            doc.Internals.AddObject(dict);
-            dict.Elements.SetInteger("/Foo", 1);
-
-            var clone = dict.Clone();
-
-            Assert.Null(clone.Owner);
-            Assert.Null(clone.Reference);
-            Assert.False(clone.IsIndirect);
-            Assert.Equal(1, clone.Elements.GetInteger("/Foo"));
-        }
-
-        [Fact]
         public void Document_Setter_CannotBeChangedOnceSet()
         {
             var doc1 = new PdfDocument();
