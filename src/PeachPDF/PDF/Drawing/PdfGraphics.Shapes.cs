@@ -53,26 +53,6 @@ internal sealed partial class PdfGraphics : IDisposable
             _renderer.DrawLines(pen, points);
     }
 
-    /// <summary>
-    /// Draws a series of line segments that connect an array of x and y pairs.
-    /// </summary>
-    public void DrawLines(Pen pen, double x, double y, params double[] value)
-    {
-        ArgumentNullException.ThrowIfNull(pen);
-        ArgumentNullException.ThrowIfNull(value);
-
-        int length = value.Length;
-        PaintPoint[] points = new PaintPoint[length / 2 + 1];
-        points[0].X = x;
-        points[0].Y = y;
-        for (int idx = 0; idx < length / 2; idx++)
-        {
-            points[idx + 1].X = value[2 * idx];
-            points[idx + 1].Y = value[2 * idx + 1];
-        }
-        DrawLines(pen, points);
-    }
-
     // ----- DrawBezier ---------------------------------------------------------------------------
     // ----- DrawBeziers --------------------------------------------------------------------------
 

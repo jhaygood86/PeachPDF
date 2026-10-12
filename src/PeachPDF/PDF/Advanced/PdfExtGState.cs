@@ -49,34 +49,6 @@ internal sealed class PdfExtGState : PdfDictionary
     double _nonStrokeAlpha;
 
     /// <summary>
-    /// Sets the overprint value for stroking operations.
-    /// </summary>
-    public bool StrokeOverprint
-    {
-        set
-        {
-            _strokeOverprint = value;
-            Elements.SetBoolean(Keys.OP, value);
-            UpdateKey();
-        }
-    }
-    bool _strokeOverprint;
-
-    /// <summary>
-    /// Sets the overprint value for nonstroking operations.
-    /// </summary>
-    public bool NonStrokeOverprint
-    {
-        set
-        {
-            _nonStrokeOverprint = value;
-            Elements.SetBoolean(Keys.op, value);
-            UpdateKey();
-        }
-    }
-    bool _nonStrokeOverprint;
-
-    /// <summary>
     /// Sets the <c>/TR</c> transfer function - a Type 4 function (see <see cref="PdfType4Function"/>),
     /// or an array of up to four (ISO 32000-1 §8.6.5.3). Plain element assignment rather than
     /// <c>Elements.SetReference</c>: a single function is an indirect stream object and gets
@@ -96,16 +68,12 @@ internal sealed class PdfExtGState : PdfDictionary
     void UpdateKey()
     {
         _key = ((int)(1000 * _strokeAlpha)).ToString(CultureInfo.InvariantCulture) +
-                     ((int)(1000 * _nonStrokeAlpha)).ToString(CultureInfo.InvariantCulture) +
-                     (_strokeOverprint ? "S" : "s") + (_nonStrokeOverprint ? "N" : "n");
+                     ((int)(1000 * _nonStrokeAlpha)).ToString(CultureInfo.InvariantCulture);
+
     }
     string _key = null!;
 
-    internal static string MakeKey(double alpha, bool overPaint)
-    {
-        string key = ((int)(1000 * alpha)).ToString(CultureInfo.InvariantCulture) + (overPaint ? "O" : "0");
-        return key;
-    }
+    internal static string MakeKey(double alpha) => ((int)(1000 * alpha)).ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Common keys for all streams.

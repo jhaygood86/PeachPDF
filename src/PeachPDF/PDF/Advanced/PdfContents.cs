@@ -28,7 +28,6 @@ internal sealed class PdfContents : PdfArray
     {
         Debug.Assert(Owner is not null);
 
-        SetModified();
         PdfContent content = new PdfContent(Owner);
         Owner._irefTable.Add(content);
         Debug.Assert(content.Reference is not null);
@@ -43,58 +42,12 @@ internal sealed class PdfContents : PdfArray
     {
         Debug.Assert(Owner is not null);
 
-        SetModified();
         PdfContent content = new PdfContent(Owner);
         Owner._irefTable.Add(content);
         Debug.Assert(content.Reference is not null);
         Elements.Insert(0, content.Reference);
         return content;
     }
-
-    void SetModified()
-    {
-        if (!_modified)
-        {
-            _modified = true;
-            int count = Elements.Count;
-
-            if (count == 1)
-            {
-                PdfContent content = (PdfContent)((PdfReference)Elements[0]).Value;
-                content.PreserveGraphicsState();
-            }
-            else if (count > 1)
-            {
-                // Surround content streams with q/Q operations
-                byte[] value;
-                int length;
-                PdfContent content = (PdfContent)((PdfReference)Elements[0]).Value;
-                if (content is not null && content.Stream is not null)
-                {
-                    length = content.Stream.Length;
-                    value = new byte[length + 2];
-                    value[0] = (byte)'q';
-                    value[1] = (byte)'\n';
-                    Array.Copy(content.Stream.Value, 0, value, 2, length);
-                    content.Stream.Value = value;
-                    content.Elements.SetInteger("/Length", length + 2);
-                }
-                content = (PdfContent)((PdfReference)Elements[count - 1]).Value;
-                if (content is not null && content.Stream is not null)
-                {
-                    length = content.Stream.Length;
-                    value = new byte[length + 3];
-                    Array.Copy(content.Stream.Value, 0, value, 0, length);
-                    value[length] = (byte)' ';
-                    value[length + 1] = (byte)'Q';
-                    value[length + 2] = (byte)'\n';
-                    content.Stream.Value = value;
-                    content.Elements.SetInteger("/Length", length + 3);
-                }
-            }
-        }
-    }
-    bool _modified;
 
     internal override void WriteObject(PdfWriter writer)
     {

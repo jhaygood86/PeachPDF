@@ -50,34 +50,6 @@ internal sealed class PdfContent : PdfDictionary
         }
     }
 
-    /// <summary>
-    /// Surround content with q/Q operations if necessary.
-    /// </summary>
-    internal void PreserveGraphicsState()
-    {
-        // If a content stream is touched by PDFsharp it is typically because graphical operations are
-        // prepended or appended. Some nasty PDF tools does not preserve the graphical state correctly.
-        // Therefore we try to relieve the problem by surrounding the content stream with push/restore 
-        // graphic state operation.
-        if (Stream is not null)
-        {
-            byte[] value = Stream.Value;
-            int length = value.Length;
-            if (length != 0 && ((value[0] != (byte)'q' || value[1] != (byte)'\n')))
-            {
-                byte[] newValue = new byte[length + 2 + 3];
-                newValue[0] = (byte)'q';
-                newValue[1] = (byte)'\n';
-                Array.Copy(value, 0, newValue, 2, length);
-                newValue[length + 2] = (byte)' ';
-                newValue[length + 3] = (byte)'Q';
-                newValue[length + 4] = (byte)'\n';
-                Stream.Value = newValue;
-                Elements.SetInteger("/Length", Stream.Length);
-            }
-        }
-    }
-
     internal override void WriteObject(PdfWriter writer)
     {
         if (_pdfRenderer is not null)

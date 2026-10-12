@@ -435,19 +435,6 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     }
 
     /// <summary>
-    /// Tries to get the resource name of the specified font data within this page.
-    /// Returns null if no such font exists.
-    /// </summary>
-    internal string? TryGetFontName(string idName, out PdfFont? pdfFont)
-    {
-        pdfFont = _document.FontTable.TryGetFont(idName);
-        string? name = null;
-        if (pdfFont is not null)
-            name = Resources.AddFont(pdfFont);
-        return name;
-    }
-
-    /// <summary>
     /// Gets the resource name of the specified image within this page.
     /// </summary>
     internal string GetImageName(PdfRasterImage image, double width, double height)

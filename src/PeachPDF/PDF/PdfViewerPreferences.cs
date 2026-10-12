@@ -19,57 +19,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     { }
 
     /// <summary>
-    /// Gets or sets a value indicating whether to hide the viewer application's tool
-    /// bars when the document is active.
-    /// </summary>
-    public bool HideToolbar
-    {
-        get => Elements.GetBoolean(Keys.HideToolbar);
-        set { Elements.SetBoolean(Keys.HideToolbar, value); }
-    }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to hide the viewer application's
-    /// menu bar when the document is active.
-    /// </summary>
-    public bool HideMenubar
-    {
-        get => Elements.GetBoolean(Keys.HideMenubar);
-        set { Elements.SetBoolean(Keys.HideMenubar, value); }
-    }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to hide user interface elements in
-    /// the document's window (such as scroll bars and navigation controls),
-    /// leaving only the document's contents displayed.
-    /// </summary>
-    public bool HideWindowUI
-    {
-        get => Elements.GetBoolean(Keys.HideWindowUI);
-        set { Elements.SetBoolean(Keys.HideWindowUI, value); }
-    }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to resize the document's window to
-    /// fit the size of the first displayed page.
-    /// </summary>
-    public bool FitWindow
-    {
-        get => Elements.GetBoolean(Keys.FitWindow);
-        set { Elements.SetBoolean(Keys.FitWindow, value); }
-    }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to position the document's window
-    /// in the center of the screen.
-    /// </summary>
-    public bool CenterWindow
-    {
-        get => Elements.GetBoolean(Keys.CenterWindow);
-        set { Elements.SetBoolean(Keys.CenterWindow, value); }
-    }
-
-    /// <summary>
     /// Gets or sets a value indicating whether the window's title bar
     /// should display the document title taken from the Title entry of the document
     /// information dictionary. If false, the title bar should instead display the name
@@ -79,47 +28,6 @@ internal sealed class PdfViewerPreferences : PdfDictionary
     {
         get => Elements.GetBoolean(Keys.DisplayDocTitle);
         set { Elements.SetBoolean(Keys.DisplayDocTitle, value); }
-    }
-
-    /// <summary>
-    /// The predominant reading order for text: LeftToRight or RightToLeft 
-    /// (including vertical writing systems, such as Chinese, Japanese, and Korean).
-    /// This entry has no direct effect on the document's contents or page numbering
-    /// but can be used to determine the relative positioning of pages when displayed 
-    /// side by side or printed n-up. Default value: LeftToRight.
-    /// </summary>
-    public PdfReadingDirection? Direction
-    {
-        get
-        {
-            switch (Elements.GetName(Keys.Direction))
-            {
-                case "L2R":
-                    return PdfReadingDirection.LeftToRight;
-
-                case "R2L":
-                    return PdfReadingDirection.RightToLeft;
-            }
-            return null;
-        }
-        set
-        {
-            if (value.HasValue)
-            {
-                switch (value.Value)
-                {
-                    case PdfReadingDirection.RightToLeft:
-                        Elements.SetName(Keys.Direction, "R2L");
-                        break;
-
-                    default:
-                        Elements.SetName(Keys.Direction, "L2R");
-                        break;
-                }
-            }
-            else
-                Elements.Remove(Keys.Direction);
-        }
     }
 
     /// <summary>

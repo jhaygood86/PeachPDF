@@ -182,20 +182,6 @@ internal sealed class PdfWriter
         _lastCat = CharCat.Character;
     }
 
-    public void WriteDocString(string text, bool unicode)
-    {
-        WriteSeparator(CharCat.Delimiter);
-        //WriteRaw(PdfEncoders.DocEncode(text, unicode));
-        byte[] bytes;
-        if (!unicode)
-            bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
-        else
-            bytes = PdfEncoders.UnicodeEncoding.GetBytes(text);
-        bytes = PdfEncoders.FormatStringLiteral(bytes, unicode, true, false);
-        Write(bytes);
-        _lastCat = CharCat.Delimiter;
-    }
-
     public void WriteDocString(string text)
     {
         WriteSeparator(CharCat.Delimiter);

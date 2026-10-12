@@ -46,14 +46,12 @@ internal sealed class PdfGraphicsState
     DashStyle _realizedDashStyle = (DashStyle)(-1);
     string _realizedDashPattern = null!;
     PaintColor _realizedStrokeColor = PaintColor.Empty;
-    bool _realizedStrokeOverPrint;
 
     public void RealizePen(Pen pen, PdfColorMode colorMode)
     {
         const string twoDecimals = PdfNumberFormats.TwoDecimals;
         const string format = PdfNumberFormats.ThreeDecimals;
         PaintColor color = pen.Paint is SolidBrush solidPaint ? solidPaint.PaintColor : PaintColor.Empty;
-        const bool overPrint = false;
         color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
         color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
         color = PdfXColorSpaceGuard.RequireAllowedOrConvert(_renderer.Owner, color,
@@ -189,7 +187,7 @@ internal sealed class PdfGraphicsState
         // 0 (e.g. right after any opaque solid stroke).
         double strokeAlpha = pen.Paint is not SolidBrush ? 1.0 : color.Opacity();
 
-        if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.Opacity() != strokeAlpha || _realizedStrokeOverPrint != overPrint))
+        if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.Opacity() != strokeAlpha))
         {
             // The IsEmpty guard mirrors RealizeFillColor's identical fix: a fresh PdfGraphicsState,
             // or right after a brush stroke resets _realizedStrokeColor to Empty (line 247 below),
@@ -205,7 +203,7 @@ internal sealed class PdfGraphicsState
                     "A stroke with alpha less than 1 (CSS/SVG stroke-opacity or a semi-transparent stroke color)");
             }
 
-            PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateStroke(strokeAlpha, overPrint);
+            PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateStroke(strokeAlpha);
             string gs = _renderer.Resources.AddExtGState(extGState);
             _renderer.AppendFormatString("{0} gs\n", gs);
         }
@@ -214,11 +212,9 @@ internal sealed class PdfGraphicsState
         // following solid stroke re-establishes its own DeviceRGB/CMYK color instead of reusing this
         // pattern. Solid strokes keep tracking their realized color for the dedup above.
         _realizedStrokeColor = pen.Paint is not SolidBrush ? PaintColor.Empty : color;
-        _realizedStrokeOverPrint = overPrint;
     }
 
     PaintColor _realizedFillColor = PaintColor.Empty;
-    bool _realizedNonStrokeOverPrint;
 
     public void RealizeBrush(Brush brush, PdfColorMode colorMode, int renderingMode, double fontEmSize, bool isForPen = false)
     {
@@ -232,16 +228,15 @@ internal sealed class PdfGraphicsState
         if (solidBrush is not null)
         {
             PaintColor color = solidBrush.PaintColor;
-            const bool overPrint = false;
 
             if (renderingMode == 0)
             {
-                RealizeFillColor(color, overPrint, colorMode);
+                RealizeFillColor(color, colorMode);
             }
             else if (renderingMode == 2)
             {
                 // Come here in case of bold simulation.
-                RealizeFillColor(color, false, colorMode);
+                RealizeFillColor(color, colorMode);
                 //color = PaintColor.FromArgb(0, 128, 0);
                 RealizePen(PdfPaints.CreatePen(color, fontEmSize * PdfConstants.BoldEmphasis), colorMode);
             }
@@ -274,7 +269,7 @@ internal sealed class PdfGraphicsState
                 // The ambient fill alpha left by the last solid fill would otherwise carry over onto the pattern; see the gradient branch.
                 if (!isForPen)
                 {
-                    RealizeFillColor(_realizedFillColor.WithOpacity(1), false, colorMode);
+                    RealizeFillColor(_realizedFillColor.WithOpacity(1), colorMode);
                 }
 
                 if (isForPen)
@@ -315,12 +310,8 @@ internal sealed class PdfGraphicsState
                     // stroke side already guards against the identical leak (see RealizePen's
                     // `strokeAlpha = pen.Brush != null ? 1.0 : color.A` and its own remarks) - mirror
                     // it here for fills via the same reset Realize(PdfRasterImage,...) uses. Call
-                    // RealizeFillColor directly (rather than RealizeNonStrokeTransparency) with an
-                    // explicit overPrint:false - the pattern has no overprint of its own, and
-                    // RealizeNonStrokeTransparency would otherwise carry over
-                    // _realizedNonStrokeOverPrint, the ambient overprint flag left by that same last
-                    // solid-color fill.
-                    RealizeFillColor(_realizedFillColor.WithOpacity(1), false, colorMode);
+                    // RealizeFillColor directly (rather than RealizeNonStrokeTransparency).
+                    RealizeFillColor(_realizedFillColor.WithOpacity(1), colorMode);
                 }
 
                 if (isForPen)
@@ -355,7 +346,7 @@ internal sealed class PdfGraphicsState
         return color.IsCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
     }
 
-    private void RealizeFillColor(PaintColor color, bool overPrint, PdfColorMode colorMode)
+    private void RealizeFillColor(PaintColor color, PdfColorMode colorMode)
     {
         color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
         color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
@@ -384,7 +375,7 @@ internal sealed class PdfGraphicsState
             }
         }
 
-        if (_renderer.Owner.Version >= 14 && (_realizedFillColor.IsEmpty || _realizedFillColor.Opacity() != color.Opacity() || _realizedNonStrokeOverPrint != overPrint))
+        if (_renderer.Owner.Version >= 14 && (_realizedFillColor.IsEmpty || _realizedFillColor.Opacity() != color.Opacity()))
         {
             // The IsEmpty guard mirrors the RGB-change check above: a fresh PdfGraphicsState (new
             // renderer/form, or right after RealizeBrush's gradient-pattern branch invalidates the
@@ -401,17 +392,16 @@ internal sealed class PdfGraphicsState
                     "A fill with alpha less than 1 (CSS/SVG fill-opacity or a semi-transparent fill color)");
             }
 
-            PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateNonStroke(color.Opacity(), overPrint);
+            PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateNonStroke(color.Opacity());
             string gs = _renderer.Resources.AddExtGState(extGState);
             _renderer.AppendFormatString("{0} gs\n", gs);
         }
         _realizedFillColor = color;
-        _realizedNonStrokeOverPrint = overPrint;
     }
 
     internal void RealizeNonStrokeTransparency(double transparency, PdfColorMode colorMode)
     {
-        RealizeFillColor(_realizedFillColor.WithOpacity(transparency), _realizedNonStrokeOverPrint, colorMode);
+        RealizeFillColor(_realizedFillColor.WithOpacity(transparency), colorMode);
     }
 
     internal PdfFont? _realizedFont;

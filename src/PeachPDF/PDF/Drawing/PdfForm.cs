@@ -295,20 +295,6 @@ internal class PdfForm : PdfRasterImage, IContentStream
     }
 
     /// <summary>
-    /// Tries to get the resource name of the specified font data within this form.
-    /// Returns null if no such font exists.
-    /// </summary>
-    internal string? TryGetFontName(string idName, out PdfFont? pdfFont)
-    {
-        Debug.Assert(IsTemplate, "This function is for form templates only.");
-        pdfFont = _document.FontTable.TryGetFont(idName);
-        string? name = null;
-        if (pdfFont is not null)
-            name = Resources.AddFont(pdfFont);
-        return name;
-    }
-
-    /// <summary>
     /// Gets the resource name of the specified image within this form.
     /// </summary>
     internal string GetImageName(PdfRasterImage image, double width, double height)
