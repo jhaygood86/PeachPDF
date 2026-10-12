@@ -6196,9 +6196,19 @@ namespace PeachPDF.Html.Core.Dom
             // that placed it survives untouched - which is precisely §2's one-inline-size rule.
             var top = ContentTopOfTheContainingBlockIn(fragmentainer, ContainingBlock);
 
-            Location = new PaintPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
-            ActualBottom = Location.Y;
+            _resumingIntoTheNextFragmentainer = true;
+            try
+            {
+                Location = new PaintPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
+                ActualBottom = Location.Y;
+            }
+            finally
+            {
+                _resumingIntoTheNextFragmentainer = false;
+            }
         }
+
+        private bool _resumingIntoTheNextFragmentainer;
 
         /// <summary>
         /// The left edge of this in-flow block's border box within its containing block, resolved against
@@ -10141,6 +10151,14 @@ namespace PeachPDF.Html.Core.Dom
                 && container.PageIndexOf(fromY) != container.PageIndexOf(toY))
             {
                 container.ClearCapturedInstances(this);
+            }
+
+            // Resuming into the next fragmentainer moves where the rest of this box starts; what it already
+            // placed in the earlier one stays exactly where it was, so that fragmentainer is not superseded.
+            if (_resumingIntoTheNextFragmentainer)
+            {
+                DiscardEmittedNothing();
+                return;
             }
 
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);

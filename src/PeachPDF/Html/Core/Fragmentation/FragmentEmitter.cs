@@ -1878,6 +1878,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     // own contiguous range, _stale can (and here does) skip slots in between that this
                     // call never re-walks, so an earlier stale slot has no guarantee that everything above
                     // it - within this specific call - has already been confirmed.
+                    container.RecordCatchUpSlotEmit();
                     EmitSlot(stale, mayWrite: true, site: $"CatchUpStaleSlotsBehind(slot={slot})");
 
                     // Always false, never stale >= _lastEmittedSlot: that comparison assumes nothing has

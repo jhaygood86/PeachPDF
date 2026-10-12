@@ -891,6 +891,17 @@ namespace PeachPDF.Html.Core
         internal void RecordBuildDraftCall() => BuildDraftCalls++;
 
         /// <summary>
+        /// How many already-frozen fragmentainers <c>FragmentEmitter.CatchUpStaleSlotsBehind</c> re-emitted
+        /// during the current <see cref="PerformLayoutOnePass"/> call. Each costs a walk of the document, so a
+        /// layout that has to repeat one per page is quadratic however cheap the walk gets - the figure a test
+        /// asserts to say a change reopens fewer of them, independent of how long any one takes.
+        /// </summary>
+        internal long CatchUpSlotEmits { get; private set; }
+
+        /// <summary>Records that <c>FragmentEmitter</c> re-emitted one stale slot behind the driver.</summary>
+        internal void RecordCatchUpSlotEmit() => CatchUpSlotEmits++;
+
+        /// <summary>
         /// Whether any box in the current document asks for <c>box-decoration-break: clone</c>. Reserving room
         /// for a cloned border and padding at a break (css-break-3 §6.2) means asking, for a great many words,
         /// what a box's ancestors declared; this settles the answer once so a document that clones nothing —
@@ -1694,6 +1705,7 @@ namespace PeachPDF.Html.Core
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;
             BuildDraftCalls = 0;
+            CatchUpSlotEmits = 0;
             if (Root is null) return;
 
             // A document with per-page left/right margins settles its box->page assignment in the reflow
