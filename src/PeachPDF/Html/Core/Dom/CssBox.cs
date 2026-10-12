@@ -10105,7 +10105,24 @@ namespace PeachPDF.Html.Core.Dom
             var top = double.MaxValue;
 
             foreach (var rect in Rectangles.Values) top = Math.Min(top, rect.Top);
-            foreach (var word in Words) top = Math.Min(top, word.Top);
+
+            // A word awaiting the next fragmentainer is deliberately not parked at a coordinate (see
+            // CssRect.AwaitsTheNextFragmentainer), so its Top is whatever it held before - 0 for a word that
+            // was never placed. Counting it dragged this box's top to the document's, and the emitter then
+            // re-opened every fragmentainer from the first one on, for each such box: cost cubic in pages.
+            var placedWord = false;
+            foreach (var word in Words)
+            {
+                if (word.AwaitsTheNextFragmentainer) continue;
+                placedWord = true;
+                top = Math.Min(top, word.Top);
+            }
+
+            // Nothing placed at all (every word still awaits): no better answer than the one every word gave.
+            if (!placedWord && Rectangles.Count == 0)
+            {
+                foreach (var word in Words) top = Math.Min(top, word.Top);
+            }
 
             return top;
         }
