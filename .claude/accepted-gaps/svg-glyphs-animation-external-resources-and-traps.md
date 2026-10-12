@@ -1,6 +1,6 @@
 # SVG-in-OpenType glyphs: animation, external resources, and what to know before touching them
 
-A glyph's SVG document is drawn by `SvgGlyphPainter` (on the PDF graphics and on the raster one) from `SvgGlyphDocument`. On purpose it leaves out:
+A glyph's SVG document is drawn by `PdfSvgGlyphPainter` (on the PDF graphics and on the raster one) from `SvgGlyphDocument`. On purpose it leaves out:
 
 - **Animation** (a PDF has no timeline; OpenType SVG asks for a static rendering, which is what this is).
 - **Any external resource** (only `data:` images resolve: the document comes from a font file and is untrusted).

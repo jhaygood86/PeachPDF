@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+﻿using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -1843,7 +1843,7 @@ Assert.NotNull(tbody);
                 if (pass > 0)
                 {
                     var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-                    using var graphics = new GraphicsAdapter((PdfSharpAdapter)container.Adapter, measure, 1.0);
+                    using var graphics = new PdfCanvas((PdfRenderContext)container.Adapter, measure, 1.0);
                     await container.PerformLayout(graphics);
                 }
 
@@ -3182,7 +3182,7 @@ Assert.NotNull(tbody);
     string html, 
  double pageHeight = 842) // A4 height by default
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
        var container = new HtmlContainerInt(adapter);
 
           await container.SetHtml(html, null);
@@ -3194,7 +3194,7 @@ Assert.NotNull(tbody);
         container.MarginBottom = 20;
 
    var measure = PdfGraphics.CreateMeasureContext(size);
-using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
       Assert.NotNull(container.Root);

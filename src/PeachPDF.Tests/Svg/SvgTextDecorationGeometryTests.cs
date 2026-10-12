@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextDecorationGeometryTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         /// <summary>A canvas whose ink-crossing answer is fixed, standing in for a real glyph outline.</summary>
         private sealed class InkCanvas(IReadOnlyList<InkSpan>? crossings) : TestRecordingGraphics

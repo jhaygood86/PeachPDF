@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.PDF;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>Auto-wrapped SVG text (SVG 2 §11.7): <c>inline-size</c>, <c>shape-inside</c>/<c>shape-subtract</c> and the CSS text properties that act on its line boxes.</summary>
     public class SvgTextWrappingTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static string Num(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 

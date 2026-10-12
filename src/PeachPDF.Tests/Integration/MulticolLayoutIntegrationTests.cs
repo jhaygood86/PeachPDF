@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -880,7 +880,7 @@ namespace PeachPDF.Tests.Integration
         {
             public int DrawLineCallCount { get; private set; }
 
-            public DrawLineSpyGraphics() : base(new PdfSharpAdapter(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public DrawLineSpyGraphics() : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) => DrawLineCallCount++;
 
@@ -1006,7 +1006,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html, double pageHeight)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             container.MarginTop = 0;
@@ -1020,7 +1020,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize  = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

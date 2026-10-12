@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
     {
         // PixelsPerPoint=1 so the resolved font Size matches the SVG user-unit font-size, keeping glyph
         // advances (used for textPath placement/drop-off) in the same 1:1 units as the path lengths.
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body, string defs = "")
         {

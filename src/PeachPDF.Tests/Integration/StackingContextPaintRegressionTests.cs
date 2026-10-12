@@ -2,7 +2,7 @@ using PeachDrawing.Text.Shaping;
 using System.Numerics;
 using System.Text;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.PDF;
@@ -189,7 +189,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<int> CountDrawOperationsAsync(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -198,7 +198,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using (var layoutGraphics = new GraphicsAdapter(adapter, measure, 1.0))
+            using (var layoutGraphics = new PdfCanvas(adapter, measure, 1.0))
             {
                 await container.PerformLayout(layoutGraphics);
             }

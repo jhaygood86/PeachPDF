@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Svg
     {
         private static async Task<(TestRecordingGraphics G, string Nabla, string Recursive)> Render(string familyAttr, string text, string extra = "")
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var nabla = TypefaceFixtures.FamilyNameOf(BundledFonts.Nabla);
             var recursive = TypefaceFixtures.FamilyNameOf(BundledFonts.Recursive);
             await BundledFonts.RegisterFont(adapter, BundledFonts.Nabla, nabla);

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>SVG 1.1 §11.2 <c>icc-color()</c>/<c>&lt;color-profile&gt;</c> and §11.9.1 <c>color-interpolation</c> on gradients.</summary>
     public class SvgColorManagementTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static SvgDocument BuildFrom(string markup)
         {

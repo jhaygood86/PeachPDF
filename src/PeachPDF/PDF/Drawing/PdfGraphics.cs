@@ -540,7 +540,7 @@ namespace PeachPDF.PDF.Drawing
         public bool InvisibleText { get; set; }
 
         /// <summary>What draws the SVG documents of a font's glyphs (OpenType SVG) on this graphics, or <see langword="null"/> when nothing does.</summary>
-        internal PeachDrawing.Core.ISvgGlyphPainter? SvgGlyphPainter { get; set; }
+        internal PeachDrawing.Core.ISvgGlyphPainter? PdfSvgGlyphPainter { get; set; }
 
         /// <summary>The render context pixel canvases are built from when a glyph is drawn through the raster backend, or <see langword="null"/> when there is none.</summary>
         internal PeachDrawing.Core.RenderContext? RasterContext { get; set; }

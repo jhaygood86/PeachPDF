@@ -6,11 +6,11 @@ using PeachPDF.PDF.Rendering;
 using PeachPDF.Svg;
 using System.Collections.Generic;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Draws the SVG document of a font's glyph (OpenType SVG) through the SVG renderer, onto a graphics: the PDF one a
-    /// <see cref="GraphicsAdapter"/> wraps, or a raster surface.
+    /// <see cref="PdfCanvas"/> wraps, or a raster surface.
     /// </summary>
     /// <remarks>
     /// A document is built once per glyph, palette and text colour (<see cref="SvgGlyphDocument"/>) and painted through
@@ -19,7 +19,7 @@ namespace PeachPDF.Adapters
     /// painted into directly, so a filter, a shadow or a flattened region sees the real glyph. A document that cannot be built is remembered
     /// as such and the glyph is drawn as its outline.
     /// </remarks>
-    internal sealed class SvgGlyphPainter : ISvgGlyphPainter
+    internal sealed class PdfSvgGlyphPainter : ISvgGlyphPainter
     {
         private readonly Canvas _host;
         private readonly RenderContext _adapter;
@@ -32,7 +32,7 @@ namespace PeachPDF.Adapters
         /// <summary>The graphics this draws on.</summary>
         internal Canvas Host => _host;
 
-        internal SvgGlyphPainter(Canvas host, RenderContext adapter)
+        internal PdfSvgGlyphPainter(Canvas host, RenderContext adapter)
         {
             _host = host;
             _adapter = adapter;

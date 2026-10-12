@@ -1,5 +1,5 @@
 ﻿using Microsoft.Playwright;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -135,7 +135,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private async Task<(CssBox box, Dictionary<string, NamedString> namedStrings)> BuildCssBoxTree(string html, string selector)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
 
             // Parse HTML and build CSS box tree
@@ -147,7 +147,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             // Find the box matching the selector

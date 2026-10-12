@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -98,7 +98,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>";
 
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
+            var adapter = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -107,7 +107,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            using var graphics = new PdfCanvas(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

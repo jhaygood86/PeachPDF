@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>SVG text reading the <c>font</c>, <c>font-variant</c> and <c>text-decoration</c> shorthands from <c>style=""</c>, a presentation attribute and a stylesheet.</summary>
     public class SvgTextShorthandTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static SvgTextElement BuildText(string svgBody)
         {

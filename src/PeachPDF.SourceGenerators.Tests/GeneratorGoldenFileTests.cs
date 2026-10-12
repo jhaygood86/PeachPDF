@@ -52,7 +52,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains("internal static bool SupportsDeclaration(string name, string value) =>", generated);
-            Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.Adapters.PdfSharpAdapter()), name, value);", generated);
+            Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.PdfBackend.PdfRenderContext()), name, value);", generated);
         }
 
         [Fact]

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Svg;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgContextPaintTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static readonly (byte R, byte G, byte B) Red = (255, 0, 0);
         private static readonly (byte R, byte G, byte B) Blue = (0, 0, 255);

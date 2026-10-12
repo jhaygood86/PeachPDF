@@ -1,4 +1,4 @@
-namespace PeachPDF.Adapters;
+namespace PeachPDF.PdfBackend;
 
 /// <summary>
 /// Implemented by a <see cref="PeachDrawing.Core.Canvas"/> that can answer whether painting something would need transparency

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Issue #814: <c>PdfGenerateConfig.PixelsPerInch</c> sets <c>PdfSharpAdapter.PixelsPerPoint</c>
+    /// Issue #814: <c>PdfGenerateConfig.PixelsPerInch</c> sets <c>PdfRenderContext.PixelsPerPoint</c>
     /// (<c>PixelsPerInch / 72</c>), which the public <c>HtmlContainer</c> wrapper uses to inflate
     /// <c>HtmlContainerInt</c>'s whole internal layout coordinate space relative to true PDF points
     /// (see <c>HtmlContainer.PageSize</c>/<c>Location</c>/margin properties). Percentage/content-relative
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var img = FindById(root, "i")!;
-            var ppp = ((PdfSharpAdapter)container.Adapter).PixelsPerPoint;
+            var ppp = ((PdfRenderContext)container.Adapter).PixelsPerPoint;
 
             // A bare <img> (default display: inline, the only body content - not flex-blockified the
             // way FlexReplacedElementIntegrationTests's items are) carries its resolved size on its own
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var svg = (CssBoxSvg)FindById(root, "s")!;
-            var ppp = ((PdfSharpAdapter)container.Adapter).PixelsPerPoint;
+            var ppp = ((PdfRenderContext)container.Adapter).PixelsPerPoint;
 
             // See ImgWidthHeight_...'s identical comment: a bare, non-flex-blockified <svg> carries its
             // resolved size on its own phantom word (SvgWord), not on ActualBoxSizingWidth/Height.
@@ -113,7 +113,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var img = FindById(root, "i")!;
             var svg = FindById(root, "s")!;
-            var ppp = ((PdfSharpAdapter)container.Adapter).PixelsPerPoint;
+            var ppp = ((PdfRenderContext)container.Adapter).PixelsPerPoint;
 
             Assert.Equal(25.5, img.ActualBoxSizingWidth / ppp, 3);
             Assert.Equal(25.5, img.ActualBoxSizingHeight / ppp, 3);
@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
-            var ppp = ((PdfSharpAdapter)container.Adapter).PixelsPerPoint;
+            var ppp = ((PdfRenderContext)container.Adapter).PixelsPerPoint;
             Assert.True(ppp > 1.0, "fixture must exercise a non-default PixelsPerPoint");
 
             var g = new RecordingGraphics(container.Adapter) { PixelsPerPointOverride = ppp };
@@ -156,11 +156,11 @@ namespace PeachPDF.Tests.Integration
             var matrix = Assert.Single(g.Log, e => e.Kind == PaintOpKind.PushTransform).Matrix!.Value;
 
             // RecordingGraphics logs exactly what was passed to PushClip/PushTransform, with none of
-            // GraphicsAdapter's own real-backend conversion - PushClip's rect and a transform's own
+            // PdfCanvas's own real-backend conversion - PushClip's rect and a transform's own
             // OffsetX/OffsetY are still in the box's internal (PixelsPerPoint-inflated) coordinate space,
             // dividing by PixelsPerPoint only once actually reaching the PDF (see Canvas.PixelsPerPoint's
             // own doc comment). The transform's linear part (M11/M22) is the one exception, already
-            // pre-divided by SvgRenderer itself (issue #814) - the fix under test - since GraphicsAdapter's
+            // pre-divided by SvgRenderer itself (issue #814) - the fix under test - since PdfCanvas's
             // own PushTransform never touches it. Dividing the clip and the offset by ppp here mirrors
             // that real conversion, so this comparison matches what the actual PDF page content stream
             // ends up with.
@@ -205,7 +205,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var div = FindById(root, "d")!;
-            var ppp = ((PdfSharpAdapter)container.Adapter).PixelsPerPoint;
+            var ppp = ((PdfRenderContext)container.Adapter).PixelsPerPoint;
 
             // 100px * 0.75 = 75pt; 50px * 0.75 = 37.5pt.
             Assert.Equal(75.0, div.ActualBoxSizingWidth / ppp, 3);
@@ -233,7 +233,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var inner = FindById(root, "inner")!;
-            var ppp = ((PdfSharpAdapter)container.Adapter).PixelsPerPoint;
+            var ppp = ((PdfRenderContext)container.Adapter).PixelsPerPoint;
 
             Assert.Equal(75.0, inner.ActualBoxSizingWidth / ppp, 3);
         }

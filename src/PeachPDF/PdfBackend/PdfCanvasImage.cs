@@ -13,12 +13,12 @@
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Adapter for WinForms Image object for core.
     /// </summary>
-    internal sealed class ImageAdapter : Image
+    internal sealed class PdfCanvasImage : Image
     {
         /// <summary>
         /// the underline win-forms image.
@@ -28,7 +28,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// Initializes a new instance of the <see cref="T:System.Object"/> class.
         /// </summary>
-        public ImageAdapter(PdfRasterImage image)
+        public PdfCanvasImage(PdfRasterImage image)
         {
             _image = image;
         }
@@ -47,7 +47,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// This image's natural size. A raster <see cref="PdfRasterImage"/> reports its pixel count, which the
         /// caller converts; an <see cref="PdfForm"/> — a vector Form XObject, as
-        /// <see cref="GraphicsAdapter.CreateTile"/> produces — has no pixels at all, so it reports the exact
+        /// <see cref="PdfCanvas.CreateTile"/> produces — has no pixels at all, so it reports the exact
         /// point size it was created at.
         /// </summary>
         /// <remarks>

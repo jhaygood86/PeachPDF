@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF;
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -60,7 +60,7 @@ namespace PeachPDF.Tests.Integration
 
         private static CssBox FindById(CssBox root, string id) => Find(root, id) ?? throw new InvalidOperationException("No box with the id " + id);
 
-        private static Typeface TypefaceOf(CssBox box) => ((FontAdapter)box.ActualFont).Font.Typeface;
+        private static Typeface TypefaceOf(CssBox box) => ((PdfCanvasFont)box.ActualFont).Font.Typeface;
 
         private static double Axis(CssBox box, string tag) => TypefaceOf(box).AxisSettings.Single(s => s.Tag == tag).Value;
 
@@ -117,9 +117,9 @@ namespace PeachPDF.Tests.Integration
 
             var root = await BuildBoxTree(html);
 
-            Assert.True(((FontAdapter)FindById(root, "a").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
-            Assert.False(((FontAdapter)FindById(root, "b").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
-            Assert.Equal(SyntheticStyle.None, ((FontAdapter)FindById(root, "c").ActualFont).Font.SyntheticStyle);
+            Assert.True(((PdfCanvasFont)FindById(root, "a").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.False(((PdfCanvasFont)FindById(root, "b").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.Equal(SyntheticStyle.None, ((PdfCanvasFont)FindById(root, "c").ActualFont).Font.SyntheticStyle);
         }
 
         // ---- the requested angle chooses among oblique ranges -----------------------------------------------------------------------

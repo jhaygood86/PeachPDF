@@ -1962,7 +1962,7 @@ namespace PeachPDF.Svg
         {
             if (resolved is null || FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is not { } adjust) return resolved;
 
-            var pixelsPerPoint = (_adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (_adapter as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var ratio = FontMetricMeasurement.Ratio(resolved, FontSizeAdjustGrammar.ToFontMetric(adjust.Metric), pixelsPerPoint);
             var target = double.IsNaN(adjust.Value) ? fromFontRatio ?? ratio : adjust.Value;
             var adjustedSize = size * target / ratio;
@@ -2050,7 +2050,7 @@ namespace PeachPDF.Svg
                 if (_ratios[(int)metric] is { } cached) return cached;
 
                 var font = _builder.RealizeFont(Font);
-                var pixelsPerPoint = (_builder._adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                var pixelsPerPoint = (_builder._adapter as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
                 return (_ratios[(int)metric] = FontMetricMeasurement.Ratio(font, metric, pixelsPerPoint)).Value;
             }
         }
@@ -2178,7 +2178,7 @@ namespace PeachPDF.Svg
             var fontStyle = StyleFlagsFor(font);
             var variations = EncodeVariations(font);
             var baseSize = Math.Max(font.Size, 1);
-            var pixelsPerPoint = (_adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (_adapter as PeachPDF.PdfBackend.PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             double? primaryRatio = FontSizeAdjustGrammar.Resolve(font.SizeAdjust) is { } primaryAdjust
                 ? FontMetricMeasurement.Ratio(primary, FontSizeAdjustGrammar.ToFontMetric(primaryAdjust.Metric), pixelsPerPoint)
                 : null;

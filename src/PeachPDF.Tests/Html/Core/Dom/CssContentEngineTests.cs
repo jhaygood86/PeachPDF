@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -712,7 +712,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private static async Task<HtmlContainerInt> BuildContainer(string bodyHtml)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml($"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>", null);
             return container;
@@ -720,7 +720,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private static async Task<HtmlContainerInt> BuildContainerWithHead(string styleCss, string bodyHtml)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(
                 $"<!DOCTYPE html><html><head><style>{styleCss}</style></head><body>{bodyHtml}</body></html>", null);
@@ -743,7 +743,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private HtmlContainerInt CreateContainer()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             return new HtmlContainerInt(adapter);
         }
     }

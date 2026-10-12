@@ -2,7 +2,7 @@ using PeachDrawing.Text.Shaping;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -12,7 +12,7 @@ using PeachDrawing.Text;
 namespace PeachPDF.Tests.PdfEngineTests.Fonts
 {
     /// <summary>
-    /// Coverage for <see cref="GraphicsAdapter.GetTextOutline"/>: decoding a text run into a
+    /// Coverage for <see cref="PdfCanvas.GetTextOutline"/>: decoding a text run into a
     /// fillable/strokeable vector path (the enabling seam for gradient/pattern fill, stroke,
     /// <c>&lt;textPath&gt;</c> on SVG text, and <c>background-clip: text</c>). Uses the bundled Source
     /// Sans 3 (TrueType/glyf, via the engine's glyf outline decoder) and Source Code Pro
@@ -22,17 +22,17 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
     {
         private const byte StartOfSubpath = 0; // CoreGraphicsPath.PathPointTypeStart
 
-        private static async Task<(GraphicsAdapter Graphics, Font Font)> Setup(string fontPath, double size)
+        private static async Task<(PdfCanvas Graphics, Font Font)> Setup(string fontPath, double size)
         {
             var family = TypefaceFixtures.FamilyNameOf(fontPath);
-            // Keep the adapter's PixelsPerPoint equal to the GraphicsAdapter's (as the real pipeline
+            // Keep the adapter's PixelsPerPoint equal to the PdfCanvas's (as the real pipeline
             // always does) so font size and outline scale stay in the same 1:1 unit space.
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             await using (var stream = File.OpenRead(fontPath))
                 await adapter.AddFont(stream, family);
 
             var measure = PdfGraphics.CreateMeasureContext(new Size(600, 600));
-            var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            var graphics = new PdfCanvas(adapter, measure, 1.0);
             var font = adapter.GetFont(family, size, PaintFontStyle.Regular)!;
             return (graphics, font);
         }

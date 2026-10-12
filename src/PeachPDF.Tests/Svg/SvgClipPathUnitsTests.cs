@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgClipPathUnitsTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static PaintPoint[] RenderAndCaptureClip(string clipUnitsAttr, string clipChildren)
         {

@@ -295,7 +295,7 @@ namespace PeachPDF.PDF.Rendering
                 return true;
             }
 
-            _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new Rect(left, top, width, height));
+            _gfx.DrawImage(PeachPDF.PdfBackend.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new Rect(left, top, width, height));
             return true;
         }
 
@@ -306,7 +306,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         private bool PaintSvgGlyph(int glyphId, double originX, double originYOffset)
         {
-            if (_measuring || !_typeface.HasSvgGlyphs || _gfx.SvgGlyphPainter is not { } painter
+            if (_measuring || !_typeface.HasSvgGlyphs || _gfx.PdfSvgGlyphPainter is not { } painter
                 || _typeface.GetColorPaint((ushort)glyphId) is not null
                 || _typeface.TryGetColorLayers((ushort)glyphId, out _)
                 || !_typeface.TryGetSvgGlyph((ushort)glyphId, out var svg))

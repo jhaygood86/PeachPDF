@@ -1,8 +1,8 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// Direct unit tests for <see cref="PeachDrawing.Core.RenderContext.AddFontFamilyFromUrl"/>'s
@@ -10,12 +10,12 @@ namespace PeachPDF.Tests.Html.Adapters
     /// Both must fail gracefully (font simply doesn't load) rather than throwing and crashing the whole
     /// render, per the type's own documented contract.
     /// </summary>
-    public class RAdapterAddFontFamilyFromUrlTests
+    public class RenderContextAddFontFamilyFromUrlTests
     {
         [Fact]
         public async Task MalformedUrl_DoesNotThrow()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
 
             // A control character makes this an invalid URI even under UriKind.RelativeOrAbsolute.
             await adapter.AddFontFamilyFromUrl("TestFont", "http://\x01invalid", null);
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Html.Adapters
         [Fact]
         public async Task RelativeUrl_WithNoBaseUri_DoesNotThrow()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
 
             await adapter.AddFontFamilyFromUrl("TestFont", "fonts/relative.ttf", null, baseUri: null);
         }
@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Html.Adapters
         [Fact]
         public async Task AbsoluteUrl_MissingResource_ReturnsFalse()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
 
             // An absolute file: URL that resolves but has nothing behind it: GetResourceStream returns
             // null, so the font simply doesn't load (no throw, returns false).

@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// Verifies <c>::first-letter</c> - previously parsed (see <c>PseudoElementSelectorFactory</c>)
     /// but never matched anything (<c>CssData.DoesSelectorMatch(PseudoElementSelector, ...)</c> only
     /// handled <c>before</c>/<c>after</c>/<c>marker</c>), and had no box-splitting logic at all. Uses
-    /// real layout via <see cref="HtmlContainerInt"/>/<see cref="PdfSharpAdapter"/> and asserts on the
+    /// real layout via <see cref="HtmlContainerInt"/>/<see cref="PdfRenderContext"/> and asserts on the
     /// resulting box tree - see <c>DomParser.ApplyFirstLetterPseudoElements</c> for the implementation.
     /// </summary>
     public class FirstLetterPseudoElementIntegrationTests
@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

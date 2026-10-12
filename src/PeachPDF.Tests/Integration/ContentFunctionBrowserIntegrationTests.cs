@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using Microsoft.Playwright;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -341,7 +341,7 @@ isPseudoBefore: true,
             string selector,
          bool isPseudoBefore)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
 
             await container.SetHtml(html, null);
@@ -351,7 +351,7 @@ isPseudoBefore: true,
             container.MaxSize = Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var elementBox = FindBoxBySelector(container.Root!, selector);

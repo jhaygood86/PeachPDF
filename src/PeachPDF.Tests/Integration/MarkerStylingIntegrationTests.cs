@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Verifies that author-set properties on <c>::marker</c> (color, font, content, direction) are
     /// actually read by the marker box itself and take visible effect - the gap this feature closes.
-    /// Layout runs through the real <see cref="PdfSharpAdapter"/>/<see cref="GraphicsAdapter"/> (for
+    /// Layout runs through the real <see cref="PdfRenderContext"/>/<see cref="PdfCanvas"/> (for
     /// accurate font metrics, matching real usage); paint verification for color/text assertions runs
     /// through <see cref="TestRecordingGraphics"/> instead, since it's the only way to introspect the
     /// exact <see cref="PaintColor"/> a brush/pen was created with (see its doc comment).
@@ -218,7 +218,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -228,7 +228,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

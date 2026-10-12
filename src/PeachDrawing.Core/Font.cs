@@ -30,7 +30,7 @@ namespace PeachDrawing.Core
         /// The matched typeface this font instance is built from - <see cref="PeachDrawing.Text"/>'s own
         /// public glyph/shaping/outline surface, reachable here without a backend needing to downcast to a
         /// concrete <see cref="Font"/> to reach it (as raster's glyph painting used to,
-        /// <c>((FontAdapter)font).Font.Typeface</c>). Null only for a font stub with no real typeface
+        /// <c>((PdfCanvasFont)font).Font.Typeface</c>). Null only for a font stub with no real typeface
         /// behind it (a test double).
         /// </summary>
         public virtual Typeface? Typeface => null;

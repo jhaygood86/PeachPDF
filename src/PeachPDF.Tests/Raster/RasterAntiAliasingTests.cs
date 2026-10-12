@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Raster
     {
         private static RasterCanvas NewGraphics(bool antiAlias, int width = 20, int height = 20)
         {
-            var adapter = new PdfSharpAdapter { RasterAntiAliasing = antiAlias };
+            var adapter = new PdfRenderContext { RasterAntiAliasing = antiAlias };
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
             return new RasterCanvas(adapter, surface, 1);
         }
@@ -116,9 +116,9 @@ namespace PeachPDF.Tests.Raster
         {
             const string family = "RasterAntiAliasingTestSans";
 
-            var adapterOn = new PdfSharpAdapter { RasterAntiAliasing = true };
+            var adapterOn = new PdfRenderContext { RasterAntiAliasing = true };
             await BundledFonts.RegisterFont(adapterOn, BundledFonts.Ttf, family);
-            var adapterOff = new PdfSharpAdapter { RasterAntiAliasing = false };
+            var adapterOff = new PdfRenderContext { RasterAntiAliasing = false };
             await BundledFonts.RegisterFont(adapterOff, BundledFonts.Ttf, family);
 
             var on = new RasterCanvas(adapterOn, new RasterSurface(200, 60, 0, 0, 1, 1), 1);

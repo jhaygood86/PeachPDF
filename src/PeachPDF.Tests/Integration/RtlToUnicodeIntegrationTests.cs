@@ -1,5 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal("(BA)", word.Text);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, bdo, recorder);
 
             var op = Assert.Single(recorder.Log, o => o.Kind == PaintOpKind.DrawString);
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal("(BA)", word.Text);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, p, recorder);
 
             // One DrawString call per character: '(' 'B' 'A' ')' (the painted/visual order), each
@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(pElement);
             var p = FindWordsBox(pElement!);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, p, recorder);
 
             var op = Assert.Single(recorder.Log, o => o.Kind == PaintOpKind.DrawString);

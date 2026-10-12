@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PDF.Drawing;
@@ -429,7 +429,7 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private PageBandGeometry Compute(int pageIndex, double top, int ruleSelectionPageNumber)
         {
-            var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var ppp = (container.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var baseLPt = container.MarginLeft / ppp;
             var baseTPt = container.MarginTop / ppp;
             var baseRPt = container.MarginRight / ppp;

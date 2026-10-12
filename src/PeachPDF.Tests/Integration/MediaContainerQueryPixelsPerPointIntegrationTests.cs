@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -160,12 +160,12 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> FindByTag(string html, string tag, double pixelsPerPoint)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
+            var adapter = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
             // Mirrors production (PdfGenerator.SetContent/AddPdfPages): PageSize/MaxSize and the
-            // GraphicsAdapter's own scale all use the same pixelsPerPoint, so the box tree's internal
+            // PdfCanvas's own scale all use the same pixelsPerPoint, so the box tree's internal
             // coordinate space is consistently inflated end to end - see
             // PixelsPerPointEmResolutionIntegrationTests.BuildAndLayout's identical rationale.
             var size = new Size(800, 600);
@@ -173,7 +173,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            using var graphics = new PdfCanvas(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

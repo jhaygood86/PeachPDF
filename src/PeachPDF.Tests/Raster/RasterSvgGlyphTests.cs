@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF;
 using PeachDrawing;
@@ -16,9 +16,9 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterSvgTestFace";
 
-        private static async Task<(RasterCanvas Graphics, Font Font, PdfSharpAdapter Adapter)> NewFixture(int width = 160, int height = 120)
+        private static async Task<(RasterCanvas Graphics, Font Font, PdfRenderContext Adapter)> NewFixture(int width = 160, int height = 120)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             await BundledFonts.RegisterFont(adapter, BundledFonts.SvgTest, Family);
             var graphics = new RasterCanvas(adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
             return (graphics, adapter.GetFont(Family, 60, PaintFontStyle.Regular)!, adapter);
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Raster
         public async Task TheGlyphIsWhereThePdfPlacesIt_TheOriginOnTheBaseline()
         {
             var (g, font, _) = await NewFixture();
-            var real = ((FontAdapter)font).Font;
+            var real = ((PdfCanvasFont)font).Font;
 
             Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 

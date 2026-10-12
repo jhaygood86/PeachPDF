@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Integration
         {
             foreach (var bytes in new[] { OrientedImageFixture.Jpeg(exif), OrientedImageFixture.Png(exif) })
             {
-                var adapter = new ImageAdapter(PdfRasterImage.FromStream(() => new MemoryStream(bytes)));
+                var adapter = new PdfCanvasImage(PdfRasterImage.FromStream(() => new MemoryStream(bytes)));
                 Assert.Equal(exif, adapter.ExifOrientation);
                 Assert.Equal(exif, ImageOrientationResolver.ExifOrientationOf(adapter));
                 Assert.Equal(24, adapter.Width);   // the stored raster, never swapped
@@ -149,7 +149,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData(0)] [InlineData(9)] [InlineData(255)]
         public void DecodedImages_WithAnOutOfRangeOrientationTagAreUpright(int exif)
         {
-            var adapter = new ImageAdapter(PdfRasterImage.FromStream(() => new MemoryStream(OrientedImageFixture.Jpeg(exif))));
+            var adapter = new PdfCanvasImage(PdfRasterImage.FromStream(() => new MemoryStream(OrientedImageFixture.Jpeg(exif))));
             Assert.Equal(1, adapter.ExifOrientation);
         }
 
@@ -259,7 +259,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<TestRecordingGraphics> PaintAsync(string body)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml($"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>", null);
 
@@ -267,7 +267,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var recorder = new TestRecordingGraphics();

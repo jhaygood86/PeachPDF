@@ -1,5 +1,5 @@
 using System.Linq;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// <c>TextOrientationIntegrationTests</c> (HTML). Renders through <see cref="SvgRenderer.RenderInto"/>
     /// into a <see cref="TestRecordingGraphics"/> and asserts the actual painted <c>DrawString</c>
     /// sequence and rotation transforms - not just that the properties parse. Uses the real
-    /// <c>PdfSharpAdapter</c> (matching <c>SvgTextBidiTests</c>'s own established pattern), so - unlike
+    /// <c>PdfRenderContext</c> (matching <c>SvgTextBidiTests</c>'s own established pattern), so - unlike
     /// the HTML pipeline's <c>TextOrientationIntegrationTests</c>, which can use a deterministic
     /// <c>TestFont</c> - a resolved glyph's exact width/height/ascent are whatever font this environment
     /// actually resolves and are deliberately not asserted on; a rotated glyph's own <c>Px</c> (the pen's
@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextWritingModeIntegrationTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         // U+30C6 "テ" (katakana TE, Vertical_Orientation=U) + "AB" (both R) - the same choice
         // TextOrientationIntegrationTests (HTML) uses and for the same reason: a CJK Unified Ideograph
@@ -194,7 +194,7 @@ namespace PeachPDF.Tests.Svg
             // VerticalMetricsTablesTests.RealBundledCjkFont_HasVerticalMetrics_AdvanceComesFromARealVmtxEntry)
             // on the real Adapter that SvgTreeBuilder.Build resolves <text font-family> against, so
             // gi.Font here (unlike this file's other tests, which deliberately don't assert on exact
-            // font metrics) is a real FontAdapter with real vertical metrics to consult - proving
+            // font metrics) is a real PdfCanvasFont with real vertical metrics to consult - proving
             // LayoutGlyphs/PaintUprightGlyph's real-vmtx path (issue #770) actually drives SVG's own
             // pen advance, not just HTML's.
             await using var stream = File.OpenRead(BundledFonts.Cjk);

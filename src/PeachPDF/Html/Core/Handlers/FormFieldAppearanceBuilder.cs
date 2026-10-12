@@ -1,5 +1,5 @@
 using System;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
@@ -13,8 +13,8 @@ namespace PeachPDF.Html.Core.Handlers
     /// <summary>
     /// Builds the "/AP /N" (and, for a two-state field, "/AP /D") appearance-stream
     /// <see cref="PdfFormXObject"/>s for interactive PDF form fields, through PeachPDF's own real
-    /// rendering pipeline (<see cref="GraphicsAdapter"/> over a fresh <see cref="PdfForm"/>, exactly
-    /// the recipe <c>GraphicsAdapter.CreateTile</c> already uses for SVG mask/pattern tiles) rather
+    /// rendering pipeline (<see cref="PdfCanvas"/> over a fresh <see cref="PdfForm"/>, exactly
+    /// the recipe <c>PdfCanvas.CreateTile</c> already uses for SVG mask/pattern tiles) rather
     /// than hand-written content-stream operators - the field's real resolved CSS border/background
     /// (<see cref="FormFieldChrome"/>, shared with the flag-on static page painter) and its real
     /// resolved font/color/padding (<see cref="CssBox.ActualFont"/>/<see cref="CssBox.ActualColor"/>)
@@ -28,7 +28,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// (already-in-points) width/height back UP by <c>pixelsPerPoint</c> before handing it to
     /// <see cref="FormFieldChrome"/>/<see cref="BordersDrawHandler"/>/<see cref="FragmentPainter"/> -
     /// each of those, like every other paint call in PeachPDF, divides back down by the
-    /// <see cref="GraphicsAdapter"/>'s own <c>pixelsPerPoint</c> exactly once when it actually draws,
+    /// <see cref="PdfCanvas"/>'s own <c>pixelsPerPoint</c> exactly once when it actually draws,
     /// so passing the SAME <c>pixelsPerPoint</c> the box was laid out with is what keeps a field's
     /// border/padding/font sized consistently with the rest of the box, including under
     /// <c>ShrinkToFit</c>/a non-default <c>PixelsPerInch</c> (see <see cref="CssBox.ActualFont"/>'s
@@ -68,7 +68,7 @@ namespace PeachPDF.Html.Core.Handlers
         {
             var form = new PdfForm(document, new Size(widthPt, heightPt));
             var formGraphics = PdfGraphics.FromForm(form);
-            using (var g = new GraphicsAdapter(adapter, formGraphics, pixelsPerPoint, releaseGraphics: true))
+            using (var g = new PdfCanvas(adapter, formGraphics, pixelsPerPoint, releaseGraphics: true))
             {
                 draw(g, LayoutRect(widthPt, heightPt, pixelsPerPoint));
             }

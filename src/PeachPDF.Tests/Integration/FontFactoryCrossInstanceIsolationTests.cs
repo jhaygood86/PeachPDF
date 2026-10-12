@@ -93,7 +93,7 @@ body {{ font-family: 'SharedFamily'; font-size: 14pt; }}
         }
 
         // Isolated into its own method (not inlined into the test) so the JIT doesn't keep the
-        // PdfGenerator/PdfSharpAdapter/FontResolver chain rooted in a live stack-frame local past the
+        // PdfGenerator/PdfRenderContext/FontResolver chain rooted in a live stack-frame local past the
         // point this method returns.
         private static async Task<WeakReference> CreateAndUseGeneratorAsync()
         {

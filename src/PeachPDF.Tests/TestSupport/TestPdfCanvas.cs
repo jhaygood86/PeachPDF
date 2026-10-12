@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
     /// A minimal, non-sealed <see cref="RenderContext"/> for tests. The only concrete adapter in the
-    /// product, <c>PdfSharpAdapter</c>, is <c>sealed</c>, so a document that needs its own <see cref="RenderContext"/>
+    /// product, <c>PdfRenderContext</c>, is <c>sealed</c>, so a document that needs its own <see cref="RenderContext"/>
     /// (e.g. to control resource loading) needs a real, separate one like this one. Brush/pen creation
     /// needs no stub of its own any more - <see cref="Brush"/>'s subtypes (<see cref="SolidBrush"/>,
     /// <see cref="LinearGradientBrush"/>, etc.) and <see cref="Pen"/> are plain data now, so
@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.TestSupport
     /// Everything else here is a minimal stub, safe for the small, focused test documents this is used
     /// with - anything actually needed but not stubbed here will fail loudly rather than silently.
     /// </summary>
-    internal class TestGraphicsAdapter : RenderContext
+    internal class TestPdfCanvas : RenderContext
     {
         public override RUri? BaseUri => null;
 
@@ -66,7 +66,7 @@ namespace PeachPDF.Tests.TestSupport
     }
 
     /// <summary>A fixed-size image, independent of any real pixel decoding - see ImageFromStreamInt's
-    /// own comment for why TestGraphicsAdapter doesn't decode real image bytes.</summary>
+    /// own comment for why TestPdfCanvas doesn't decode real image bytes.</summary>
     internal sealed class TestImage(double width, double height) : Image
     {
         public override double Width => width;
@@ -196,7 +196,7 @@ namespace PeachPDF.Tests.TestSupport
     /// <summary>
     /// Records painting calls into a single ordered log (per this repo's painting-test convention -
     /// see <c>CssLayoutEngineTablePageBreakTests.RecordingGraphics</c>), backed by
-    /// <see cref="TestGraphicsAdapter"/> so brush/pen colors are introspectable directly off the real
+    /// <see cref="TestPdfCanvas"/> so brush/pen colors are introspectable directly off the real
     /// <see cref="SolidBrush"/>/<see cref="Pen"/> a draw call used. <see cref="PushClip(Rect)"/>/<see cref="PopClip"/>
     /// are also logged (as <see cref="PushClipCall"/>/<see cref="PopClipCall"/>) alongside the draw
     /// calls, not just tracked in the internal clip stack, so tests can assert clip pushes happen in
@@ -318,7 +318,7 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>
         /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #812/#814) without a
-        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
+        /// full <c>PdfCanvas</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
         /// no-op of <c>1.0</c>. A field-backed override (rather than an auto-property) since the base
         /// virtual member is get-only. Mirrors <c>RecordingGraphics.PixelsPerPointOverride</c>.
         /// </summary>
@@ -326,7 +326,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public override double PixelsPerPoint => PixelsPerPointOverride;
 
-        public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+        public TestRecordingGraphics() : base(new TestPdfCanvas(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null)
         {
@@ -485,7 +485,7 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>
         /// A synthetic glyph-run outline: one box subpath per non-whitespace rune, advancing along the
-        /// baseline. Faithful to the real <see cref="GraphicsAdapter.GetTextOutline"/> contract
+        /// baseline. Faithful to the real <see cref="PdfCanvas.GetTextOutline"/> contract
         /// (non-null exactly when there is fillable geometry, null for a whitespace-only/empty run)
         /// without needing a real <c>glyf</c> font, so SVG gradient/pattern-fill and stroke-on-text
         /// paths can be driven and their <see cref="DrawPath(Brush, GraphicsPath)"/>/

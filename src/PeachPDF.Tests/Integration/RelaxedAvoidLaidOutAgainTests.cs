@@ -24,7 +24,7 @@ public class RelaxedAvoidLaidOutAgainTests
         var (_, container) = await LayoutHarness.LayoutAsync(
             "<html><body style='margin:0;font:10pt/12pt \"Relaxed Fixture\"'>" + body + "</body></html>",
             pageWidth: 300, pageHeight: PageHeight, margin: Margin,
-            configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, "Relaxed Fixture"));
+            configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, "Relaxed Fixture"));
 
         var tree = container.FragmentTree!;
         var words = new List<(string, int, double)>();

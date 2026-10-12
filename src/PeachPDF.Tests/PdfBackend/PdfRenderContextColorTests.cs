@@ -1,15 +1,15 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
-    /// Direct unit tests for <see cref="PeachPDF.Adapters.PdfSharpAdapter"/>'s named-color resolution
+    /// Direct unit tests for <see cref="PeachPDF.PdfBackend.PdfRenderContext"/>'s named-color resolution
     /// (<c>GetColorInt</c>), which maps a CSS/system color name to an <c>PaintColor</c> via
     /// <see cref="System.Drawing.KnownColor"/>. Guards the trim/AOT-safe generic <c>Enum.TryParse&lt;KnownColor&gt;</c>
     /// path against regression.
     /// </summary>
-    public class PdfSharpAdapterColorTests
+    public class PdfRenderContextColorTests
     {
         [Theory]
         [InlineData("Red", 255, 0, 0)]
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Html.Adapters
         [InlineData("Blue", 0, 0, 255)]
         public void GetColor_KnownColorName_ResolvesToRgb(string name, byte r, byte g, byte b)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
 
             var color = adapter.GetColor(name);
 
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Html.Adapters
         [Fact]
         public void GetColor_UnknownColorName_ReturnsEmpty()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
 
             var color = adapter.GetColor("not-a-real-color-name");
 

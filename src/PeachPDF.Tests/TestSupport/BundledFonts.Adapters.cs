@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+﻿using PeachPDF.PdfBackend;
 
 namespace PeachPDF.Tests.TestSupport
 {
@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.TestSupport
     {
         /// <summary>
         /// Registers <paramref name="fontPath"/> on <paramref name="adapter"/> under
-        /// <paramref name="familyName"/> directly via <see cref="PdfSharpAdapter.AddFont(Stream, string?)"/>,
+        /// <paramref name="familyName"/> directly via <see cref="PdfRenderContext.AddFont(Stream, string?)"/>,
         /// bypassing CSS <c>@font-face</c> entirely. For a test whose actual subject is layout or paint
         /// (not CSS <c>@font-face</c> parsing/loading itself), prefer this over embedding the font as a
         /// <see cref="FontFaceRule"/> data: URI - CSS's <c>url()</c> value handling re-materializes a
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.TestSupport
         /// registered family name, none of the CSS-parsing overhead neither the test nor its assertions
         /// have anything to do with.
         /// </summary>
-        internal static async Task RegisterFont(PdfSharpAdapter adapter, string fontPath, string familyName)
+        internal static async Task RegisterFont(PdfRenderContext adapter, string fontPath, string familyName)
         {
             using var stream = File.OpenRead(fontPath);
             await adapter.AddFont(stream, familyName);
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.TestSupport
         /// existing fixtures were written against.
         /// Use it for a layout fixture whose subject is not which font the host resolves.
         /// </summary>
-        internal static async Task PinSansSerifAsync(PdfSharpAdapter adapter)
+        internal static async Task PinSansSerifAsync(PdfRenderContext adapter)
         {
             const string pinnedFamily = "PinnedSans";
             await RegisterFont(adapter, LiberationSans, pinnedFamily);

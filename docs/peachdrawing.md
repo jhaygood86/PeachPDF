@@ -13,7 +13,7 @@ dotnet add package PeachDrawing
 
 > **Status: pre-1.0.** `RasterCanvas`, `RasterRenderContext` and `RasterSurface` are the package's full
 > public surface today - see `PublicApi.txt` for the exact, machine-checked snapshot. PeachPDF is the
-> package's other consumer: `GraphicsAdapter.BeginRasterSurface` drives this exact `RasterCanvas`
+> package's other consumer: `PdfCanvas.BeginRasterSurface` drives this exact `RasterCanvas`
 > implementation as its own raster fallback for effects PDF can't express as vector content (`filter:
 > blur()`, `backdrop-filter`, and the like) - this is not a copy built for PeachPDF's benefit, it is the one
 > implementation both PeachPDF and a standalone caller use. Until 1.0, the public API may change between
@@ -50,7 +50,7 @@ Everything on the right of `.` above resolves inside `PeachDrawing`/`PeachDrawin
 installed on the machine (by name, under `FontSet.InstalledFamilyNames`), so `GetFont`/`GetFontForCodepoint`
 (both inherited from `RenderContext` - see [RenderContext: colors, fonts and paint
 objects](peachdrawing-core.md#rendercontext-colors-fonts-and-paint-objects)) work immediately with
-no setup. Unlike PeachPDF's own `PdfSharpAdapter`, it does **not** alias CSS generic family names
+no setup. Unlike PeachPDF's own `PdfRenderContext`, it does **not** alias CSS generic family names
 (`Helvetica`→`Arial`, `system-ui`, math-font resolution) - a standalone caller names a real family directly,
 since there is no CSS cascade here to resolve a generic keyword against.
 
@@ -119,7 +119,7 @@ If you need a different rendering target entirely - a hardware-accelerated backe
 different image library - implement `Canvas`/`RenderContext` directly against `PeachDrawing.Core`
 rather than using this package. See [Implementing your own
 Canvas](peachdrawing-core.md#implementing-your-own-canvas); `RasterCanvas`'s own source is a
-complete, real second worked example alongside PeachPDF's `GraphicsAdapter`.
+complete, real second worked example alongside PeachPDF's `PdfCanvas`.
 
 ## Licences
 

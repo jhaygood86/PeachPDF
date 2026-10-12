@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Html.Core
     /// </summary>
     public class RegisteredPropertyTests
     {
-        private static readonly CssValueParser ValueParser = new(new PdfSharpAdapter());
+        private static readonly CssValueParser ValueParser = new(new PdfRenderContext());
 
         private static RegisteredProperty? Register(string body)
         {

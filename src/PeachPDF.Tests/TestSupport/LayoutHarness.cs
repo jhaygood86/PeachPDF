@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+﻿using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
     /// The shared lightweight layout harness: builds an <see cref="HtmlContainerInt"/> over a real
-    /// <see cref="PdfSharpAdapter"/>, runs layout, and hands back the laid-out box tree plus the
+    /// <see cref="PdfRenderContext"/>, runs layout, and hands back the laid-out box tree plus the
     /// container (whose <c>FragmentTree</c> is layout's real output). Prefer this over hand-rolling
     /// another per-file <c>BuildAndLayout</c> copy.
     /// </summary>
@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.TestSupport
         /// one engine again over a box it already laid out, say. It runs before the graphics context is
         /// disposed, which is why it belongs here rather than after the call returns.
         /// </param>
-        /// <param name="configureAdapter">
+        /// <param name="configureRenderContext">
         /// Optional: run against the freshly-constructed adapter before <c>SetHtml</c> parses
         /// <paramref name="html"/> - for registering a font directly (e.g.
         /// <see cref="BundledFonts.RegisterFont"/>) instead of embedding it as a CSS <c>@font-face</c>
@@ -51,12 +51,12 @@ namespace PeachPDF.Tests.TestSupport
             Action<CssBox>? prepare = null,
             Func<CssBox, HtmlContainerInt, Canvas, Task>? after = null,
             double pixelsPerPoint = 1.0,
-            Func<PdfSharpAdapter, Task>? configureAdapter = null)
+            Func<PdfRenderContext, Task>? configureRenderContext = null)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
-            if (configureAdapter is not null)
+            var adapter = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            if (configureRenderContext is not null)
             {
-                await configureAdapter(adapter);
+                await configureRenderContext(adapter);
             }
             var container = new HtmlContainerInt(adapter)
             {
@@ -87,7 +87,7 @@ namespace PeachPDF.Tests.TestSupport
             container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
             var measure = PdfGraphics.CreateMeasureContext(sheet);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            using var graphics = new PdfCanvas(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.TestSupport
             double pageHeight = 842,
             double margin = 20)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
                 MarginTop = margin,
@@ -140,7 +140,7 @@ namespace PeachPDF.Tests.TestSupport
             container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(sheet);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
 
             var results = new List<T>(passes);
 

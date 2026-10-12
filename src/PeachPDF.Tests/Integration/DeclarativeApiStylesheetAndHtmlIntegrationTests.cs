@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -518,7 +518,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task CssData_ParseReadOnlyMemory_ProducesEquivalentDataToStringOverload()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             const string css = ".y { color: red; }";
 
             var fromString = await CssData.Parse(adapter, css);
@@ -638,7 +638,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Html_Bytes_And_Stream_OverloadsProduceTheSameStructureAsString()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(adapter);
             const string html = "<div>x</div>";
 
@@ -654,7 +654,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Html_IsTerminal_SecondCallThrows()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(adapter);
 
             DocumentBuilder.BuildPage(page =>
@@ -860,7 +860,7 @@ namespace PeachPDF.Tests.Integration
                 MarginLeft = 20,
                 MarginRight = 20
             };
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(adapter);
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
             PdfGenerator.ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);

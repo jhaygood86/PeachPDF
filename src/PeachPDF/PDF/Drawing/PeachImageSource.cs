@@ -5,7 +5,7 @@ using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Gif;
 using PeachImage.Formats.Jpeg;
 using PeachImage.Formats.Png;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,7 +27,7 @@ namespace PeachPDF.PDF.Drawing
         {
             using var stream = imageStream.Invoke();
 
-            // The sole production caller (PdfSharpAdapter.ImageFromStreamInt) already hands in a
+            // The sole production caller (PdfRenderContext.ImageFromStreamInt) already hands in a
             // freshly-positioned MemoryStream - reuse its buffer directly (ToArray()) rather than paying
             // for a second full copy via CopyTo. Anything else (a non-seekable network stream, a stream
             // already partway read) falls back to the original copy-into-a-fresh-buffer path.

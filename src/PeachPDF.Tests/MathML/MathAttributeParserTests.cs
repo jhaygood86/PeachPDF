@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.MathML
         [Fact]
         public void TryParseColor_None_ReturnsNull()
         {
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var adapter = new PeachPDF.PdfBackend.PdfRenderContext();
             Assert.Null(MathAttributeParser.TryParseColor(null, adapter));
             Assert.Null(MathAttributeParser.TryParseColor("", adapter));
             Assert.Null(MathAttributeParser.TryParseColor("none", adapter));
@@ -156,7 +156,7 @@ namespace PeachPDF.Tests.MathML
         [Fact]
         public void TryParseColor_ValidCssColor_ResolvesRealColor()
         {
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var adapter = new PeachPDF.PdfBackend.PdfRenderContext();
             var color = MathAttributeParser.TryParseColor("red", adapter);
             Assert.NotNull(color);
             Assert.Equal(255, color!.Value.R);

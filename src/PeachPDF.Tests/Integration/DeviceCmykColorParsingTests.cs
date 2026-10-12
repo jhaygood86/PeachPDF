@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using Xunit;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class DeviceCmykColorParsingTests
     {
-        private static CssValueParser Parser() => new(new PdfSharpAdapter());
+        private static CssValueParser Parser() => new(new PdfRenderContext());
 
         [Fact]
         public void FourNumbers_ResolvesToCmykComponents()

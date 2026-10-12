@@ -30,7 +30,7 @@ public sealed class RasterRenderContext : RenderContext
     /// <summary>Creates a render context with every font installed on the machine already registered by name.</summary>
     public RasterRenderContext()
     {
-        // Unlike PdfSharpAdapter's constructor, this deliberately skips CSS generic-family aliasing
+        // Unlike PdfRenderContext's constructor, this deliberately skips CSS generic-family aliasing
         // (Helvetica->Arial, system-ui, math, etc.) - a standalone canvas author names a real family
         // directly, not a CSS generic keyword, so there is no CSS cascade here to resolve one against.
         foreach (var familyName in FontSet.InstalledFamilyNames)
@@ -133,7 +133,7 @@ public sealed class RasterRenderContext : RenderContext
         }
         catch
         {
-            // Mirrors PdfSharpAdapter's own catch here: a candidate that passed the cmap-coverage
+            // Mirrors PdfRenderContext's own catch here: a candidate that passed the cmap-coverage
             // pre-check can still fail to actually load.
             return null;
         }

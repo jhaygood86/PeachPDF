@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -39,7 +39,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<CssBox> LayoutParagraph(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Html.Core
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return FindByTag(container.Root!, "p")!;
@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Html.Core
         private static string ResolvedFamilyName(CssBox ownerBox, char c)
         {
             var font = ownerBox.ActualFontForCodepoint(new Rune(c));
-            return ((FontAdapter)font).Font.Typeface.FamilyName;
+            return ((PdfCanvasFont)font).Font.Typeface.FamilyName;
         }
 
         [Fact]

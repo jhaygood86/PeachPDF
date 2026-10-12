@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// a gradient whose stops are all <c>device-cmyk()</c> now interpolates directly in C/M/Y/K space and
     /// writes a real <c>/DeviceCMYK</c> shading, rather than being rejected outright. A gradient mixing
     /// <c>device-cmyk()</c> and RGB-authored stops still has no defined conversion and keeps throwing - see
-    /// <c>PdfSharpAdapterCmykGradientTests</c> for the adapter-level guard behavior and
+    /// <c>PdfRenderContextCmykGradientTests</c> for the adapter-level guard behavior and
     /// <c>.claude/recent-fixes/</c> for why this doesn't extend to mixed-space gradients. These are
     /// structural assertions on the actual shading dictionary (component count, color space name), not
     /// just token presence - a passing content-stream-substring check alone would not catch a component

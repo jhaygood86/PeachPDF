@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.Html.Core
     /// <summary>
     /// HTML-layer regression test verifying that a real WOFF2 font (Inter-Medium.woff2) declared
     /// via @font-face is loaded and resolved during HTML/CSS layout -- i.e. the DomParser's
-    /// async font-face handling (AddFontFamilyFromUrl -> PdfSharpAdapter.AddFont ->
+    /// async font-face handling (AddFontFamilyFromUrl -> PdfRenderContext.AddFont ->
     /// FontFormatConverter.ToOpenType -> Woff2Converter.Convert) completes and the box tree ends
     /// up using the custom family rather than silently falling back to the default font.
     /// </summary>
@@ -45,7 +45,7 @@ p {{ width: 300px; }}
 <body><p>Hello WOFF2</p></body>
 </html>";
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -54,7 +54,7 @@ p {{ width: 300px; }}
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -65,8 +65,8 @@ p {{ width: 300px; }}
             // 'name' table after WOFF2->OpenType conversion), not the @font-face CSS alias --
             // this confirms the real WOFF2 font was decoded and actually used, not silently
             // falling back to a default/system font.
-            var fontAdapter = Assert.IsType<FontAdapter>(paragraph!.ActualFont);
-            Assert.Equal("Inter Medium", fontAdapter.Font.Typeface.FamilyName);
+            var pdfCanvasFont = Assert.IsType<PdfCanvasFont>(paragraph!.ActualFont);
+            Assert.Equal("Inter Medium", pdfCanvasFont.Font.Typeface.FamilyName);
         }
     }
 }

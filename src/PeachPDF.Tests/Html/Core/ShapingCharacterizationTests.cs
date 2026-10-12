@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachPDF.PDF.Advanced;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -151,7 +151,7 @@ namespace PeachPDF.Tests.Html.Core
             // Drives the real font-metrics path (FontHelper.MeasureString) through the rune-based loop with
             // a line feed (which starts a new measured line), a tab (treated as a space), and a control
             // character (skipped) - the branches a mock measurement adapter never exercises.
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml("<!DOCTYPE html><html><body><p style=\"font-size:14pt\">x</p></body></html>", null);
 
@@ -160,7 +160,7 @@ namespace PeachPDF.Tests.Html.Core
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var font = FindByTag(container.Root!, "p")!.ActualFont;
@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<CssBox> LayoutParagraph(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -185,7 +185,7 @@ namespace PeachPDF.Tests.Html.Core
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return FindByTag(container.Root!, "p")!;

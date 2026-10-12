@@ -11,7 +11,7 @@ ordinary SVG path (the one SVG filters already use), at whatever pixel pitch the
 
 **Placement is the PDF path's, unit for unit.** `DrawString` already holds the glyph origin in points (pen position plus the GPOS offset,
 baseline from the cell ascent); the painter multiplies by `PixelsPerPoint` to get the layout-unit canvas rectangle, exactly as
-`DrawBitmapGlyph` does. That is the `raster-graphics-mirrors-graphicsadapters-unit-conventions` rule, and the reason no separate raster
+`DrawBitmapGlyph` does. That is the `raster-graphics-mirrors-pdfcanvas-unit-conventions` rule, and the reason no separate raster
 canvas maths exists. Clip and transform come for free: `RenderInto` pushes the canvas clip and the viewBox transform on the raster graphics.
 
 **Order in the glyph loop:** bitmap glyph, then SVG glyph (only when the glyph has no COLR paint or layers, as in `ColorGlyphPainter`), then

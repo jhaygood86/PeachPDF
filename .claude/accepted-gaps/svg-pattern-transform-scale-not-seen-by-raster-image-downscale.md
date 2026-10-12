@@ -8,8 +8,8 @@ both apply through the same page-level CTM the image is ultimately drawn against
 
 It does not cover a raster `<image>` painted inside an SVG `<pattern>` whose `patternTransform` scales the
 tile up. `SvgRenderer.PaintPatternFill` renders the pattern's content into its own Form XObject via
-`GraphicsAdapter.CreateTile` at the pattern's native `width`/`height`, then places that tile on the page
-wrapped in a separate `patternTransform` scale (`Adapters/GraphicsAdapter.cs`'s `CreateTile` /
+`PdfCanvas.CreateTile` at the pattern's native `width`/`height`, then places that tile on the page
+wrapped in a separate `patternTransform` scale (`PdfBackend/PdfCanvas.cs`'s `CreateTile` /
 `SvgRenderer.cs`'s `PaintPatternFill`). A `<image>` drawn inside the tile's own content stream computes its
 downscale target from the CTM realized *within that tile* — which has no visibility into the extra scale
 `patternTransform` applies only when the finished tile is placed on the page, in a different content

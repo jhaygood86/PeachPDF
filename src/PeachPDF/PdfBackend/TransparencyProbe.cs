@@ -3,7 +3,7 @@ using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 using System;
 
-namespace PeachPDF.Adapters;
+namespace PeachPDF.PdfBackend;
 
 /// <summary>
 /// Answers "would painting this need PDF transparency?" by painting it into a scratch page that is never saved, with the
@@ -27,7 +27,7 @@ internal sealed class TransparencyProbe : IDisposable
     private readonly double _pixelsPerPoint;
     private PdfDocument? _document;
     private PdfGraphics? _xGraphics;
-    private GraphicsAdapter? _graphics;
+    private PdfCanvas? _graphics;
     private int _probes;
 
     internal TransparencyProbe(RenderContext adapter, double pixelsPerPoint)
@@ -79,7 +79,7 @@ internal sealed class TransparencyProbe : IDisposable
         _document = new PdfDocument();
         var page = _document.AddPage();
         _xGraphics = PdfGraphics.FromPdfPage(page);
-        _graphics = new GraphicsAdapter(_adapter, _xGraphics, _pixelsPerPoint);
+        _graphics = new PdfCanvas(_adapter, _xGraphics, _pixelsPerPoint);
         _probes = 1;
     }
 

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -264,7 +264,7 @@ namespace PeachPDF.Tests.Integration
                 + $"<div style=\"width:400pt; font:20pt '{Family}', '{HebrewFallbackFamily}'\">"
                 + $"<span id='s' style='text-decoration:underline'>ab{hebrewFinalNun}</span></div>"
                 + "</body></html>",
-                configureAdapter: async adapter =>
+                configureRenderContext: async adapter =>
                 {
                     await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
                     await BundledFonts.RegisterFont(adapter, BundledFonts.Hebrew, HebrewFallbackFamily);
@@ -288,7 +288,7 @@ namespace PeachPDF.Tests.Integration
                 "<!DOCTYPE html><html><head></head><body style='margin:0'>"
                 + $"<div style=\"width:400pt; font:20pt '{CjkFamily}'\">"
                 + "<span id='s' style='text-decoration:underline'>你好</span></div></body></html>",
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
+                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
             var s = LayoutHarness.FindById(root, "s")!;
 
             using var g = new InkAwareRecordingGraphics(Adapter(container));
@@ -306,7 +306,7 @@ namespace PeachPDF.Tests.Integration
                 "<!DOCTYPE html><html><head></head><body style='margin:0'>"
                 + $"<div style=\"width:400pt; font:20pt '{CjkFamily}'\">"
                 + "<span id='s' style='text-decoration:underline; text-decoration-skip-ink:all'>你好</span></div></body></html>",
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
+                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
             var s = LayoutHarness.FindById(root, "s")!;
 
             using var g = new InkAwareRecordingGraphics(Adapter(container));
@@ -372,8 +372,8 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static PdfSharpAdapter Adapter(PeachPDF.Html.Core.HtmlContainerInt container) =>
-            (PdfSharpAdapter)container.Adapter;
+        private static PdfRenderContext Adapter(PeachPDF.Html.Core.HtmlContainerInt container) =>
+            (PdfRenderContext)container.Adapter;
 
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
             g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();
@@ -407,7 +407,7 @@ namespace PeachPDF.Tests.Integration
 
             // Disposed here rather than by the caller. Everything a test reads afterwards - the recorded
             // draw calls and ink queries - is plain recorded data that outlives disposal, while what
-            // Dispose releases (the delegate GraphicsAdapter and its measure context) is only needed
+            // Dispose releases (the delegate PdfCanvas and its measure context) is only needed
             // while painting. Handing back an undisposed instance is what leaked one per test.
             return (Lines(g), g);
         }
@@ -415,6 +415,6 @@ namespace PeachPDF.Tests.Integration
         private static Task<(PeachPDF.Html.Core.Dom.CssBox Root, PeachPDF.Html.Core.HtmlContainerInt Container)> LayoutAsync(string body) =>
             LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>",
-                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family));
+                configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family));
     }
 }

@@ -1,6 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.PDF;
@@ -268,7 +268,7 @@ namespace PeachPDF.Tests.Integration
                 "<tfoot><tr><th>Footer</th></tr></tfoot>" +
                 "</table></body></html>";
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -278,7 +278,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var measureGraphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(measureGraphics);
 
             var recorder = new DrawStringRecordingGraphics(adapter);

@@ -3,8 +3,8 @@
 // The MathML Core layout algorithm: turns a MathNode tree into a positioned MathBox tree. Every
 // structural measurement (fraction bars, radical rules, script shifts, stack gaps) comes from the
 // resolved math font's OpenType MATH table (MathTable.cs) when it has one, scaled by
-// sizePt / unitsPerEm * g.PixelsPerPoint - the exact formula FontAdapter itself already uses for
-// vertical metrics (see FontAdapter.ScaleDesignUnits), so MathBox geometry lands in the same working
+// sizePt / unitsPerEm * g.PixelsPerPoint - the exact formula PdfCanvasFont itself already uses for
+// vertical metrics (see PdfCanvasFont.ScaleDesignUnits), so MathBox geometry lands in the same working
 // unit space as everything else Canvas measures/draws in. A font with no MATH table falls back to
 // fixed, TeX-book-derived approximate ratios (MathML Core's own documented fallback strategy for
 // exactly this case) rather than refusing to lay the formula out at all.

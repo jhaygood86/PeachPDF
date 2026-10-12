@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using System.Numerics;
@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.Raster
 {
     public class RasterGraphicsTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static RasterCanvas NewGraphics(int width, int height, double pixelsPerUnit = 1, double pixelsPerPoint = 1)
         {

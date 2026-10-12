@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.PDF;
@@ -92,7 +92,7 @@ namespace PeachPDF.Tests.Integration
                 + "background-attachment:fixed;background-position:100% 100%;background-size:10pt 10pt;\">"
                 + "</div></body></html>";
 
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -101,7 +101,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = new Size(500, 0);
 
             var measure = PdfGraphics.CreateMeasureContext(new Size(500, 500));
-            using (var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0))
+            using (var measureGraphics = new PdfCanvas(adapter, measure, 1.0))
             {
                 await container.PerformLayout(measureGraphics);
             }

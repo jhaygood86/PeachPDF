@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Svg
         private static SvgGlyph Glyph(string document, string id = "glyph2", int first = 2, int last = 2) => new(document, id, first, last, 1000);
 
         private static SvgDocument? Build(SvgGlyph glyph, params PaintColor?[] palette) =>
-            SvgGlyphDocument.Build(glyph, i => i < palette.Length ? palette[i] : null, palette.Length, Text, new TestGraphicsAdapter());
+            SvgGlyphDocument.Build(glyph, i => i < palette.Length ? palette[i] : null, palette.Length, Text, new TestPdfCanvas());
 
         private static SvgElement Only(SvgDocument document) => Assert.Single(Flatten(document.Children));
 

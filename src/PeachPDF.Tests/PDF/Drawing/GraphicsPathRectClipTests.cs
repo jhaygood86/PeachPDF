@@ -1,5 +1,5 @@
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System.Collections.Generic;

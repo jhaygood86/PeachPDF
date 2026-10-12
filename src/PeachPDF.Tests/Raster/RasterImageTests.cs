@@ -1,5 +1,5 @@
 using PeachImage;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachDrawing;
@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Decoded images drawn into a raster surface: every source kind the PDF embedder distinguishes has to yield pixels.</summary>
     public class RasterImageTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static RasterCanvas NewGraphics(int width, int height)
         {
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Raster
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
-        private static ImageAdapter Load(byte[] bytes) => new(PdfRasterImage.FromStream(() => new MemoryStream(bytes)));
+        private static PdfCanvasImage Load(byte[] bytes) => new(PdfRasterImage.FromStream(() => new MemoryStream(bytes)));
 
         /// <summary>A 2 x 2 image: red, green / blue, white.</summary>
         private static byte[] QuadrantPng() => RasterPngFixture.MakeRgbaPngBytes(2, 2, (x, y) => (x, y) switch

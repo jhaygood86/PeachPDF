@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -166,7 +166,7 @@ namespace PeachPDF.Tests.Integration
             // UA-default) margin in place, not silently resolved to zero. This is the base-rule analog of
             // FirstPageViewportUnitMargin_FallsBackToBaseMargin's per-page assertion. ch is NOT one of
             // these units — see BaseRule_ChUnitMargin_ResolvesAsHalfEm below.
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
                 PageSize = new Size(SheetW, SheetH),
@@ -204,7 +204,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Regression guard for the #154 fix: a resolvable base margin still overrides the
             // configured value (the null-aware routing must not drop valid declarations).
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
                 PageSize = new Size(SheetW, SheetH),
@@ -290,7 +290,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<HtmlContainerInt> BuildAsync(string html, double ppp = 1.0)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = ppp };
+            var adapter = new PdfRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(adapter)
             {
                 PageSize = new Size(SheetW * ppp, SheetH * ppp)
@@ -306,7 +306,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = ppp };
+            var adapter = new PdfRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(adapter)
             {
                 PageSize = new Size(SheetW * ppp, SheetH * ppp)
@@ -321,7 +321,7 @@ namespace PeachPDF.Tests.Integration
 
             var measure = PdfGraphics.CreateMeasureContext(
                 new Size(container.PageSize.Width, container.PageSize.Height));
-            using var graphics = new GraphicsAdapter(adapter, measure, ppp);
+            using var graphics = new PdfCanvas(adapter, measure, ppp);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

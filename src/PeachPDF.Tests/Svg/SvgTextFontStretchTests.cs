@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextFontStretchTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static SvgDocument Build(string body)
         {

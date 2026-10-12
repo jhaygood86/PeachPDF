@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Html.Core
     /// <summary>
     /// HTML-layer regression test for the bug where a `@font-face src: url(...)` with no `format()`
     /// hint at all (valid CSS - format() is an optional hint) was silently dropped by
-    /// <c>PdfSharpAdapter.AddFontFromStream</c>'s format allowlist, which had no case for a missing
+    /// <c>PdfRenderContext.AddFontFromStream</c>'s format allowlist, which had no case for a missing
     /// hint. Real-world stylesheets (e.g. css4.pub's Icelandic dictionary page: `src: url("Satyr10.otf")`,
     /// no format()) hit this exactly, causing the custom font to silently fall back to a default/system
     /// font instead of rendering. Mirrors <see cref="FontFaceWoff2RenderingTests"/>'s direct-layout
@@ -49,7 +49,7 @@ p {{ width: 300px; }}
 <body><p>Hello CFF, no format hint</p></body>
 </html>";
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -58,7 +58,7 @@ p {{ width: 300px; }}
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -68,8 +68,8 @@ p {{ width: 300px; }}
             // The resolved TypefaceFont reports the font's own internal name (read from its 'name' table),
             // not the @font-face CSS alias and not a fallback - confirms the real OTF was actually
             // loaded and used despite the missing format() hint, not silently falling back.
-            var fontAdapter = Assert.IsType<FontAdapter>(paragraph!.ActualFont);
-            Assert.Equal(expectedFontName, fontAdapter.Font.Typeface.FamilyName);
+            var pdfCanvasFont = Assert.IsType<PdfCanvasFont>(paragraph!.ActualFont);
+            Assert.Equal(expectedFontName, pdfCanvasFont.Font.Typeface.FamilyName);
         }
     }
 }

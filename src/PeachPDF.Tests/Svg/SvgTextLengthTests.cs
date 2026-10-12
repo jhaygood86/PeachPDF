@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>textLength</c> and <c>lengthAdjust</c> on SVG text: straight, <c>&lt;textPath&gt;</c> and vertical.</summary>
     public class SvgTextLengthTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string textAttrs, string content, string svgAttrs = "")
         {

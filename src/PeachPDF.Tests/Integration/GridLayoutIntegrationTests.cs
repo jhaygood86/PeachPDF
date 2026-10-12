@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Integration tests for the CSS Grid layout engine (issue #232), built stage by stage on the same
-    /// <c>HtmlContainerInt</c> + <c>PdfSharpAdapter</c> harness as <see cref="FlexboxIntegrationTests"/>:
+    /// <c>HtmlContainerInt</c> + <c>PdfRenderContext</c> harness as <see cref="FlexboxIntegrationTests"/>:
     /// build, <c>PerformLayout</c>, walk the box tree, and assert <c>Location</c>/<c>ActualRight</c>/
     /// <c>ActualBottom</c> geometry.
     /// </summary>
@@ -1534,7 +1534,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -1544,7 +1544,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize  = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

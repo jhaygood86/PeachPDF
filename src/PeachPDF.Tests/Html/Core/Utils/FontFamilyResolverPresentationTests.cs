@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
                 presentation == EmojiPresentation.NoPreference || isColour == (presentation == EmojiPresentation.Emoji);
         }
 
-        private sealed class ScriptedAdapter : TestGraphicsAdapter
+        private sealed class ScriptedRenderContext : TestPdfCanvas
         {
             public Dictionary<string, ScriptedFont> Families { get; } = new(System.StringComparer.OrdinalIgnoreCase);
 
@@ -50,15 +50,15 @@ namespace PeachPDF.Tests.Html.Core.Utils
         private static readonly ScriptedFont Colour = new("colour", isColour: true);
         private static readonly ScriptedFont Text = new("text", isColour: false);
 
-        private static string? Resolve(ScriptedAdapter adapter, string stack, EmojiPresentation presentation)
+        private static string? Resolve(ScriptedRenderContext adapter, string stack, EmojiPresentation presentation)
         {
             var font = FontFamilyResolver.Resolve(adapter, stack, 12, PaintFontStyle.Regular, Heart, presentation: presentation);
             return (font as ScriptedFont)?.Name;
         }
 
-        private static ScriptedAdapter Adapter(params ScriptedFont[] families)
+        private static ScriptedRenderContext Adapter(params ScriptedFont[] families)
         {
-            var adapter = new ScriptedAdapter();
+            var adapter = new ScriptedRenderContext();
             foreach (var font in families)
                 adapter.Families[font.Name] = font;
             return adapter;

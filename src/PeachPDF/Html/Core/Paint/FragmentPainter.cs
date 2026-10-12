@@ -121,7 +121,7 @@ namespace PeachPDF.Html.Core.Paint
         /// is exactly what lets a <c>position: fixed</c> box's own paint reach its spec-correct containing block (the
         /// page box, margins included, per CSS2.1 §10.1): <c>Canvas.SuspendClipping</c> pops the clip
         /// stack down to exactly one entry, which is always the unconditionally-infinite clip
-        /// <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor pushes before this method ever
+        /// <see cref="PeachPDF.PdfBackend.PdfCanvas"/>'s constructor pushes before this method ever
         /// runs - not "one level below whatever is on top" - so a single push here is already as far out
         /// as suspension can ever reach; a second, wider clip pushed above it would be popped by the same
         /// loop and change nothing. What DOES need to be single-level is that this push go through

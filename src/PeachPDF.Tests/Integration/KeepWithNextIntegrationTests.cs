@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -473,7 +473,7 @@ h2, h3 { margin: 6pt 0; }
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
             await container.SetHtml(html, null);
@@ -485,7 +485,7 @@ h2, h3 { margin: 6pt 0; }
             container.MarginBottom = 20;
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

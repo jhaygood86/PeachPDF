@@ -29,7 +29,7 @@ namespace PeachDrawing.Text.Internal.Text
     ///
     /// This is the single glyph-walk every text-drawing/measuring call site shares
     /// (<c>FontHelper.MeasureString</c>, <c>PdfGraphicsRenderer.DrawString</c>,
-    /// <c>ColorGlyphPainter.Paint</c>, <c>GraphicsAdapter.GetTextOutline</c>, <c>CharacterMapInfo</c>) -
+    /// <c>ColorGlyphPainter.Paint</c>, <c>PdfCanvas.GetTextOutline</c>, <c>CharacterMapInfo</c>) -
     /// previously each re-derived "codepoint to glyph" independently.
     /// </summary>
     internal static class GsubShaper

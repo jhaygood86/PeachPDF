@@ -13,19 +13,19 @@
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Adapter for WinForms Font object for core.
     /// </summary>
-    internal sealed class FontFamilyAdapter : FontFamily
+    internal sealed class PdfCanvasFontFamily : FontFamily
     {
         private readonly string _name;
 
         /// <summary>
         /// Init.
         /// </summary>
-        public FontFamilyAdapter(string name)
+        public PdfCanvasFontFamily(string name)
         {
             _name = name;
         }

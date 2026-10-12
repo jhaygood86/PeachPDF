@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         static string Wrap(string mathHtml) =>
             $"<html><head><style>math {{ font-family: TestMath; }}</style></head><body style='margin:0'>{mathHtml}</body></html>";
 
-        static Task RegisterMathFont(PdfSharpAdapter adapter) =>
+        static Task RegisterMathFont(PdfRenderContext adapter) =>
             BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
 
         [Fact]
@@ -25,10 +25,10 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var html = Wrap("<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, configureAdapter: RegisterMathFont);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -52,10 +52,10 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var html = Wrap("<math><mrow><mo stretchy=\"true\">(</mo><mfrac><mi>x</mi><mi>y</mi></mfrac><mo stretchy=\"true\">)</mo></mrow></math>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, configureAdapter: RegisterMathFont);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -69,10 +69,10 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var html = Wrap("<math><mi>a</mi><mo>+</mo><mi>b</mi></math>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, configureAdapter: RegisterMathFont);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 

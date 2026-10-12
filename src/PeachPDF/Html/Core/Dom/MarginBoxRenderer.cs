@@ -1,7 +1,7 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
@@ -480,8 +480,8 @@ namespace PeachPDF.Html.Core.Dom
             var (paddingTop, paddingBottom) = PaddingExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
             var contentBoxRect = Shrink(paddingBoxRect, paddingLeft, paddingTop, paddingRight, paddingBottom);
 
-            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
 
             Rect ToPixelRect(Rect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
 
@@ -502,10 +502,10 @@ namespace PeachPDF.Html.Core.Dom
             };
 
             await LayeredBackgroundPainter.PaintAsync(
-                graphicsAdapter, rule.Style, adapter, htmlContainer, rootBox, emPt,
+                pdfCanvas, rule.Style, adapter, htmlContainer, rootBox, emPt,
                 ResolvePositioningRect, pageBoxPx, backgroundImageCache);
 
-            PaintBorder(graphicsAdapter, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, adapter);
+            PaintBorder(pdfCanvas, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, adapter);
         }
 
         /// <summary>
@@ -594,7 +594,7 @@ namespace PeachPDF.Html.Core.Dom
         /// box's resolved <c>text-align</c>/<c>vertical-align</c>, so an image follows the same
         /// alignment its text content would - CSS Paged Media Level 3 §7.2), clipped to the box, no
         /// repeat. <paramref name="g"/> paints in raw, unshrunk PDF-point space (see <see cref="BuildFont"/>'s
-        /// own doc comment), so it's wrapped in a <see cref="GraphicsAdapter"/> with the rect
+        /// own doc comment), so it's wrapped in a <see cref="PdfCanvas"/> with the rect
         /// pre-multiplied by <c>PixelsPerPoint</c> to cancel that adapter's own division back out.
         /// <paramref name="htmlContainer"/>'s root box stands in for the (non-existent, for a margin
         /// box) owning <c>CssBox</c> that <see cref="BackgroundLayerResolver"/> needs for potential
@@ -619,17 +619,17 @@ namespace PeachPDF.Html.Core.Dom
             if (htmlContainer.Root is not { } rootBox)
                 return;
 
-            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
             var paintRect = new Rect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
 
-            CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0,
+            CssImagePainter.Paint(pdfCanvas, image, layerIndex: 0,
                 originRect: paintRect, clipRect: paintRect, roundedClipPath: null,
                 positionList: positionList, sizeList: Keywords.Auto, repeatList: "no-repeat",
                 attachmentList: Keywords.Scroll, viewportRect: paintRect, box: rootBox,
                 drawBrush: brush =>
                 {
-                    graphicsAdapter.DrawRectangle(brush, paintRect.X, paintRect.Y, paintRect.Width, paintRect.Height);
+                    pdfCanvas.DrawRectangle(brush, paintRect.X, paintRect.Y, paintRect.Width, paintRect.Height);
                     brush.Dispose();
                 },
                 gradientEmSizePt: emSizePt);
@@ -1006,26 +1006,26 @@ namespace PeachPDF.Html.Core.Dom
                 fontStyle |= PaintFontStyle.Italic;
 
             // MarginBoxRenderer paints in raw, unshrunk PDF-point space (margin-box rects are computed
-            // directly from orgPageSize/margins), but RenderContext.GetFont -> PdfSharpAdapter.CreateFontInt
+            // directly from orgPageSize/margins), but RenderContext.GetFont -> PdfRenderContext.CreateFontInt
             // divides its `size` argument by PixelsPerPoint (matching in-flow content, whose entire
             // coordinate system - including font size - is uniformly in "pixel" space and shrunk together
             // by that same later division). Since margin-box rect positions never go through that
             // division, pre-multiply so the two cancel out to the CSS-specified point size regardless of
             // PixelsPerPoint (normally 1.0, but not under ShrinkToFit/ScaleToPageSize or non-72
             // PixelsPerInch).
-            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var pixelSize = sizePt * pixelsPerPoint;
             var resolvedFont = FontFamilyResolver.Resolve(adapter, familyList, pixelSize, fontStyle)
                                 ?? FontFamilyResolver.Resolve(adapter, DefaultFontResolver.DefaultFont, pixelSize, fontStyle);
 
-            if (resolvedFont is not FontAdapter fontAdapter)
+            if (resolvedFont is not PdfCanvasFont pdfCanvasFont)
             {
                 throw new HtmlRenderException(
                     $"Cannot find font: {familyList} and Default Font {DefaultFontResolver.DefaultFont} is not installed",
                     HtmlRenderErrorType.General);
             }
 
-            return fontAdapter.Font;
+            return pdfCanvasFont.Font;
         }
 
         private static string? FirstNonEmpty(string? a, string? b) =>

@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -201,7 +201,7 @@ body {{ font-family: 'LatinOnly'; margin: 0 }}
             var wordsBox = FindWordsBox(container.Root!, "w");
             var font = wordsBox.ActualFont;
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             Assert.True(font.HasVerticalMetrics);
@@ -226,7 +226,7 @@ body {{ font-family: 'LatinOnly'; margin: 0 }}
             var realHtml = Wrap($"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px\">{Upright}</div>", "mixed");
             var realContainer = await LayoutHtml(realHtml);
             var realBox = FindById(realContainer.Root!, "w")!;
-            var realRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            var realRecorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(realContainer, realBox, realRecorder);
 
             Assert.Equal(2, realRecorder.DrawStringCalls.Count); // Upright = "テキ", one call per character
@@ -247,7 +247,7 @@ body {{ font-family: 'LatinOnly'; margin: 0 }}
 </style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Latin}</div></body></html>";
             var fallbackContainer = await LayoutHtml(fallbackHtml);
             var fallbackBox = FindById(fallbackContainer.Root!, "w")!;
-            var fallbackRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            var fallbackRecorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(fallbackContainer, fallbackBox, fallbackRecorder);
 
             Assert.False(fallbackRecorder.DrawStringCalls[0].Font.HasVerticalMetrics);
@@ -275,7 +275,7 @@ body {{ font-family: 'VorgTest'; margin: 0 }}
             var font = wordsBox.ActualFont;
             Assert.True(font.HasVerticalOrigin);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, box, recorder);
 
             var rune = System.Text.Rune.GetRuneAt(Latin, 0);
@@ -307,7 +307,7 @@ body {{ font-family: 'VorgOnTtf'; margin: 0 }}
             var withVorgBox = FindById(withVorgContainer.Root!, "w")!;
             var withVorgWordsBox = FindWordsBox(withVorgContainer.Root!, "w");
             Assert.False(withVorgWordsBox.ActualFont.HasVerticalOrigin);
-            var withVorgRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            var withVorgRecorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(withVorgContainer, withVorgBox, withVorgRecorder);
 
             var plainBase64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Cjk));
@@ -318,7 +318,7 @@ body {{ font-family: 'PlainCjk'; margin: 0 }}
 </style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Upright}</div></body></html>";
             var plainContainer = await LayoutHtml(plainHtml);
             var plainBox = FindById(plainContainer.Root!, "w")!;
-            var plainRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            var plainRecorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(plainContainer, plainBox, plainRecorder);
 
             Assert.Equal(plainRecorder.DrawStringCalls.Count, withVorgRecorder.DrawStringCalls.Count);
@@ -353,7 +353,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
             Assert.True(font.HasVerticalOrigin);
             Assert.False(font.HasVerticalMetrics);
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, box, recorder);
 
             var draw = recorder.DrawStringCalls[0];
@@ -402,7 +402,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
             var container = await LayoutHtml(html);
             var elementBox = FindById(container.Root!, "w")!;
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             // The upright run ("テキ") paints one DrawString call per character - PaintUprightVerticalRun
@@ -429,7 +429,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
             var container = await LayoutHtml(html);
             var elementBox = FindById(container.Root!, "w")!;
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count); // one call per character: "A", "B"
@@ -447,7 +447,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
             var container = await LayoutHtml(html);
             var elementBox = FindById(container.Root!, "w")!;
 
-            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            var recorder = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             Assert.Single(recorder.DrawStringCalls); // one call for the whole (unsplit) fragment
@@ -489,7 +489,7 @@ body {{ font-family: 'CJK'; margin: 0 }}
 
         private static async Task<HtmlContainerInt> LayoutHtml(string body)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(body, null);
 
@@ -498,7 +498,7 @@ body {{ font-family: 'CJK'; margin: 0 }}
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

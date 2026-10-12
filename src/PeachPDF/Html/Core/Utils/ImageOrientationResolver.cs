@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using System;
@@ -35,7 +35,7 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>The stored Exif Orientation of <paramref name="image"/> (1 when it has none, or is not a decoded raster).</summary>
-        public static int ExifOrientationOf(Image image) => image is ImageAdapter adapter ? adapter.ExifOrientation : 1;
+        public static int ExifOrientationOf(Image image) => image is PdfCanvasImage adapter ? adapter.ExifOrientation : 1;
 
         private static ImageOrientation Computed(CssBox box)
         {

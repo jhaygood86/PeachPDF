@@ -374,7 +374,7 @@ p {{ writing-mode: vertical-rl; text-orientation: sideways; height: 400px; }}
 
         // Routed through the shared LayoutHarness (see its own remarks: "prefer this over hand-rolling
         // another per-file BuildAndLayout copy") rather than this file's own HtmlContainerInt/
-        // PdfSharpAdapter/GraphicsAdapter wiring - margin: 0 matches this file's own prior no-margin setup,
+        // PdfRenderContext/PdfCanvas wiring - margin: 0 matches this file's own prior no-margin setup,
         // since these tests assert word-level shaping properties, not page-margin-relative coordinates.
         private static async Task<CssRectWord> LayoutWord(string html)
         {

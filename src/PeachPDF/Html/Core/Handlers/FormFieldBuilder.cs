@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF;
@@ -26,10 +26,10 @@ namespace PeachPDF.Html.Core.Handlers
         /// The container's real device-pixel-to-point scale, read fresh on every use (not captured at
         /// construction) - <c>PdfGenerator.GeneratePdf</c> constructs this builder before the
         /// <c>ShrinkToFit</c>/<c>ScaleToPageSize</c> rescale pass may still adjust
-        /// <see cref="PdfSharpAdapter.PixelsPerPoint"/>, and <c>PdfGenerator.HandleFormFields</c> only
+        /// <see cref="PdfRenderContext.PixelsPerPoint"/>, and <c>PdfGenerator.HandleFormFields</c> only
         /// runs once that has settled - mirrors <c>HtmlContainer.PixelsPerPoint</c>'s own idiom.
         /// </summary>
-        double PixelsPerPoint => ((PdfSharpAdapter)Adapter).PixelsPerPoint;
+        double PixelsPerPoint => ((PdfRenderContext)Adapter).PixelsPerPoint;
 
         PdfDictionary? _helveticaFontResource;
         bool _acroFormInitialized;

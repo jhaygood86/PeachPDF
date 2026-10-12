@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("not-a-color")]
         public void Fill_Matches_SvgValueParsers(string value)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var contextColor = PaintColor.Black;
 
             var expectedApplies = SvgValueParsers.TryParsePaint(value, adapter, contextColor, out var expectedPaint);
@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("not-a-color")]
         public void Stroke_Matches_SvgValueParsers(string value)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var contextColor = PaintColor.Black;
 
             var expectedApplies = SvgValueParsers.TryParsePaint(value, adapter, contextColor, out var expectedPaint);
@@ -79,7 +79,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expected = SvgValueParsers.ParseLength(value, ViewportDiagonal);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-width", value, in ctx);
 
@@ -98,7 +98,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expected = SvgValueParsers.ParseLength(value, ViewportDiagonal);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-miterlimit", value, in ctx);
 
@@ -118,7 +118,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expected = SvgValueParsers.ParseLength(value, ViewportDiagonal);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-dashoffset", value, in ctx);
 
@@ -139,7 +139,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expected = SvgValueParsers.ParseDashArray(value, ViewportDiagonal);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-dasharray", value, in ctx);
 
@@ -160,7 +160,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expectedApplies = SvgValueParsers.TryParseOpacity(value, out var expectedOpacity);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "opacity", value, in ctx);
 
@@ -179,7 +179,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expectedApplies = SvgValueParsers.TryParseOpacity(value, out var expectedOpacity);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "fill-opacity", value, in ctx);
 
@@ -198,7 +198,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expectedApplies = SvgValueParsers.TryParseOpacity(value, out var expectedOpacity);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-opacity", value, in ctx);
 
@@ -217,7 +217,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expectedApplies = SvgValueParsers.TryParseFillRule(value, out var expectedRule);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "fill-rule", value, in ctx);
 
@@ -237,7 +237,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expectedApplies = SvgValueParsers.TryParseLineCap(value, out var expectedCap);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-linecap", value, in ctx);
 
@@ -257,7 +257,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var expectedApplies = SvgValueParsers.TryParseLineJoin(value, out var expectedJoin);
 
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal, static p => p);
             var applied = SvgPropertyRegistry.TrySet(element, "stroke-linejoin", value, in ctx);
 
@@ -274,7 +274,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // on the struct) requires a delegate that reclassifies it, distinguishable from the
             // identity function every other test above uses.
             var element = new SvgGroupElement();
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var ctx = new SvgPropertyContext(adapter, PaintColor.Black, ViewportDiagonal,
                 p => p.Kind == SvgPaintKind.GradientRef ? SvgPaint.PatternRef(p.ReferenceId!) : p);
 

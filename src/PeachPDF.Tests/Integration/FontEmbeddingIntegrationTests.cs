@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Integration
     /// Checks:
     ///   TTF  → /FontFile2 (TrueType key)
     ///   CFF  → /FontFile3 /Subtype /OpenType  (fix in PdfCidFont.PrepareForSave)
-    ///   WOFF → converted to OpenType before parsing (fix in PdfSharpAdapter.AddFont)
+    ///   WOFF → converted to OpenType before parsing (fix in PdfRenderContext.AddFont)
     /// </summary>
     public class FontEmbeddingIntegrationTests
     {
@@ -87,7 +87,7 @@ body {{ font-family: 'TestTtfNoFormat', serif; font-size: 14pt; }}
             var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
             var b64 = Convert.ToBase64String(ttfBytes);
 
-            // The first candidate declares a format PdfSharpAdapter explicitly rejects
+            // The first candidate declares a format PdfRenderContext explicitly rejects
             // (embedded-opentype), so it must be skipped without loading; the second candidate (no
             // format hint, same real TTF bytes) must still be tried and must succeed.
             var html = $@"<!DOCTYPE html>

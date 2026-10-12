@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// <c>RenderContext.GetPen(PaintColor)</c> hands back a pen cached per color, so two unrelated strokes in the
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void GetPen_SameColorTwice_ReturnsTheSameCachedInstance()
         {
-            var adapter = new TestGraphicsAdapter();
+            var adapter = new TestPdfCanvas();
             var g = new TestRecordingGraphics();
 
             // Sanity for the tests below: without a shared instance there would be nothing to leak.

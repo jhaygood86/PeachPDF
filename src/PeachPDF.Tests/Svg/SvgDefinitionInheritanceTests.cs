@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Linq;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgDefinitionInheritanceTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static readonly PaintColor White = PaintColor.FromArgb(0xff, 0xff, 0xff);
 

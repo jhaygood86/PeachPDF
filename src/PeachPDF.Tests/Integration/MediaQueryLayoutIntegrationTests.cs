@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -148,7 +148,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildAtPage(string html, double widthPt, double heightPt, PdfColorScheme scheme)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
             var size = new Size(widthPt, heightPt);
@@ -161,7 +161,7 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

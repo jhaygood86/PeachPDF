@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class ModernColorParsingTests
     {
-        private static PaintColor Parse(string value) => new CssValueParser(new PdfSharpAdapter()).GetActualColor(value);
+        private static PaintColor Parse(string value) => new CssValueParser(new PdfRenderContext()).GetActualColor(value);
 
         // ── hsl()/hwb() as solid colors (previously stack-overflowed at resolve time) ──
 
@@ -242,20 +242,20 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual("transparent", box.BackgroundColor);
             Assert.False(string.IsNullOrEmpty(box.BackgroundColor));
             // And the carried value resolves to a real (reddish) color, not black.
-            var resolved = new CssValueParser(new PdfSharpAdapter()).GetActualColor(box.BackgroundColor);
+            var resolved = new CssValueParser(new PdfRenderContext()).GetActualColor(box.BackgroundColor);
             Assert.True(resolved.R > resolved.G && resolved.R > resolved.B, $"expected reddish, got {resolved.R},{resolved.G},{resolved.B}");
         }
 
         private static async Task<CssBox> BuildBox(string html, string tag)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
             var box = DomUtils.GetBoxByTagName(container.Root!, tag);
             Assert.NotNull(box);
@@ -266,14 +266,14 @@ namespace PeachPDF.Tests.Integration
         public async Task Oklch_Color_ResolvesOnElement_NotBlack()
         {
             var html = "<!DOCTYPE html><html><head><style>p { color: oklch(0.63 0.26 29); }</style></head><body><p>x</p></body></html>";
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var p = DomUtils.GetBoxByTagName(container.Root!, "p");
@@ -324,7 +324,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void NamedColor_InvalidIdentifier_StillRejected()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var parser = new CssValueParser(adapter);
             Assert.False(parser.IsColorValid("notacolor"));
         }
@@ -336,7 +336,7 @@ namespace PeachPDF.Tests.Integration
             // (it's a separate "current-color" cssDataType handled elsewhere in the union for the real
             // "color" property) - the fast path's dictionary miss must fall through to the existing
             // tokenizer route unchanged, which also returns false here, both before and after this change.
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var parser = new CssValueParser(adapter);
             Assert.False(parser.IsColorValid("currentcolor"));
         }

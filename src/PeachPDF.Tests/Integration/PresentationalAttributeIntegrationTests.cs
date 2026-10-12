@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+﻿using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -430,7 +430,7 @@ namespace PeachPDF.Tests.Integration
             // resolved this" from "resolution was skipped entirely and the fallback papered over it".
             // Picking an installed family that ISN'T the platform default keeps this test meaningful
             // across the CI matrix (Windows/macOS/Linux each resolve a different default).
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var alternativeFont = DefaultFontResolver.GetInstalledFontFamilyNames()
                 .First(f => !f.Equals(DefaultFontResolver.DefaultFont, StringComparison.OrdinalIgnoreCase) && adapter.IsFontExists(f));
 
@@ -463,7 +463,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -473,7 +473,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

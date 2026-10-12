@@ -29,7 +29,7 @@ public class FloatBesideTextPaginationTests
     private static async Task<(List<(int Page, string Text, double X, double Y)> Words, int Pages)> PaintAsync(string html, double pageHeight = PageHeight)
     {
         var (_, container) = await LayoutAsync(html, PageWidth, pageHeight, Margin,
-            configureAdapter: BundledFonts.PinSansSerifAsync);
+            configureRenderContext: BundledFonts.PinSansSerifAsync);
         var pages = container.FragmentTree!.Fragmentainers.Count;
         List<(int, string, double, double)> words = [];
 

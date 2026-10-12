@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -64,7 +64,7 @@ namespace PeachPDF
     /// </remarks>
     public class PdfGenerator
     {
-        private readonly PdfSharpAdapter _pdfSharpAdapter = new();
+        private readonly PdfRenderContext _renderContext = new();
 
         /// <summary>
         /// Adds a font mapping from <paramref name="fromFamily"/> to <paramref name="toFamily"/> iff the <paramref name="fromFamily"/> is not found.<br/>
@@ -81,7 +81,7 @@ namespace PeachPDF
             ArgChecker.AssertArgNotNullOrEmpty(fromFamily, "fromFamily");
             ArgChecker.AssertArgNotNullOrEmpty(toFamily, "toFamily");
 
-            _pdfSharpAdapter.AddFontFamilyMapping(fromFamily, toFamily);
+            _renderContext.AddFontFamilyMapping(fromFamily, toFamily);
         }
 
         /// <summary>
@@ -90,7 +90,7 @@ namespace PeachPDF
         /// <param name="stream">Font stream</param>
         public async Task AddFontFromStream(Stream stream)
         {
-            await _pdfSharpAdapter.AddFont(stream, null);
+            await _renderContext.AddFont(stream, null);
         }
 
         /// <summary>
@@ -112,7 +112,7 @@ namespace PeachPDF
                     ranges.Add(new RuneInterval(range.Start, range.End));
             }
 
-            await _pdfSharpAdapter.AddFont(stream, null, default, ranges);
+            await _renderContext.AddFont(stream, null, default, ranges);
         }
 
         /// <summary>
@@ -125,8 +125,8 @@ namespace PeachPDF
         /// <returns>the parsed css data</returns>
         public async Task<PeachPdfCssContent> ParseStyleSheet(string stylesheet, bool combineWithDefault = true)
         {
-            var cssData = await CssData.Parse(_pdfSharpAdapter, stylesheet, combineWithDefault);
-            return new PeachPdfCssContent(cssData, _pdfSharpAdapter);
+            var cssData = await CssData.Parse(_renderContext, stylesheet, combineWithDefault);
+            return new PeachPdfCssContent(cssData, _renderContext);
         }
 
         /// <summary>
@@ -140,8 +140,8 @@ namespace PeachPDF
         /// <returns>the parsed css data</returns>
         public async Task<PeachPdfCssContent> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
-            var cssData = await CssData.Parse(_pdfSharpAdapter, stylesheet, combineWithDefault);
-            return new PeachPdfCssContent(cssData, _pdfSharpAdapter);
+            var cssData = await CssData.Parse(_renderContext, stylesheet, combineWithDefault);
+            return new PeachPdfCssContent(cssData, _renderContext);
         }
 
         /// <summary>
@@ -227,11 +227,11 @@ namespace PeachPDF
                     "PdfGenerateConfig.TextHinting is not a defined TextHinting value.");
             }
 
-            _pdfSharpAdapter.RasterizationDpi = config.RasterizationDpi;
-            _pdfSharpAdapter.MaxRasterPixels = config.MaxRasterPixels;
-            _pdfSharpAdapter.TextHinting = config.TextHinting;
-            _pdfSharpAdapter.TextStemDarkening = config.TextStemDarkening;
-            _pdfSharpAdapter.RasterAntiAliasing = config.RasterAntiAliasing;
+            _renderContext.RasterizationDpi = config.RasterizationDpi;
+            _renderContext.MaxRasterPixels = config.MaxRasterPixels;
+            _renderContext.TextHinting = config.TextHinting;
+            _renderContext.TextStemDarkening = config.TextStemDarkening;
+            _renderContext.RasterAntiAliasing = config.RasterAntiAliasing;
         }
 
         /// <summary>
@@ -261,14 +261,14 @@ namespace PeachPDF
 
             EstablishDocumentOptions(document, config);
 
-            _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
-            _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
-            _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
+            _renderContext.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
+            _renderContext.AllowLocalFileAccess = config.AllowLocalFileAccess;
+            _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
             ApplyRasterizationSettings(config);
 
-            html ??= await _pdfSharpAdapter.NetworkLoader.GetPrimaryContents();
+            html ??= await _renderContext.NetworkLoader.GetPrimaryContents();
 
-            using var container = new HtmlContainer(_pdfSharpAdapter);
+            using var container = new HtmlContainer(_renderContext);
 
             await SetContent(container, config, html, cssData, orgPageSize);
 
@@ -314,14 +314,14 @@ namespace PeachPDF
 
                 var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
                     ? candidatePixelsPerPoint
-                    : _pdfSharpAdapter.PixelsPerPoint;
+                    : _renderContext.PixelsPerPoint;
 
-                needsRescale = NeedsRescale(_pdfSharpAdapter.PixelsPerPoint, effectivePixelsPerPoint);
+                needsRescale = NeedsRescale(_renderContext.PixelsPerPoint, effectivePixelsPerPoint);
 
                 if (needsRescale)
                 {
-                    _pdfSharpAdapter.ClearFontCache();
-                    _pdfSharpAdapter.PixelsPerPoint = effectivePixelsPerPoint;
+                    _renderContext.ClearFontCache();
+                    _renderContext.PixelsPerPoint = effectivePixelsPerPoint;
 
                     await SetContent(container, config, html, cssData, orgPageSize);
 
@@ -583,7 +583,7 @@ namespace PeachPDF
             var documentBuilder = new DocumentBuilder();
             handler(documentBuilder);
 
-            var properties = new CssPropertyFactory(_pdfSharpAdapter);
+            var properties = new CssPropertyFactory(_renderContext);
 
             foreach (var pageHandler in documentBuilder.PageHandlers)
             {
@@ -623,12 +623,12 @@ namespace PeachPDF
                 orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
             }
 
-            _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
-            _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
-            _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
+            _renderContext.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
+            _renderContext.AllowLocalFileAccess = config.AllowLocalFileAccess;
+            _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
             ApplyRasterizationSettings(config);
 
-            using var container = new HtmlContainer(_pdfSharpAdapter);
+            using var container = new HtmlContainer(_renderContext);
 
             container.MarginTop = pageDescriptor.MarginTopOverride ?? config.MarginTop;
             container.MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom;
@@ -1026,7 +1026,7 @@ namespace PeachPDF
                 using var g = PdfGraphics.FromPdfPage(page);
 
                 var sheetRect = new Rect(0, 0,
-                    page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint);
+                    page.Width * _renderContext.PixelsPerPoint, page.Height * _renderContext.PixelsPerPoint);
 
                 // The page box's own border-box/padding-box/content-box rects (css-page-3 §3's box
                 // model), resolved in true PDF points then converted to px - the same border-box ->
@@ -1041,9 +1041,9 @@ namespace PeachPDF
                 var paddingBoxRectPt = MarginBoxRenderer.Shrink(borderBoxRectPt, bL, bT, bR, bB);
                 var contentBoxRectPt = MarginBoxRenderer.Shrink(paddingBoxRectPt, pL, pT, pR, pB);
 
-                var borderBoxRect = Utils.ToPixels(borderBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
-                var paddingBoxRect = Utils.ToPixels(paddingBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
-                var contentBoxRect = Utils.ToPixels(contentBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+                var borderBoxRect = Utils.ToPixels(borderBoxRectPt, _renderContext.PixelsPerPoint);
+                var paddingBoxRect = Utils.ToPixels(paddingBoxRectPt, _renderContext.PixelsPerPoint);
+                var contentBoxRect = Utils.ToPixels(contentBoxRectPt, _renderContext.PixelsPerPoint);
 
                 Rect ResolvePagePositioningRect(string value) => value switch
                 {
@@ -1077,10 +1077,10 @@ namespace PeachPDF
                 // background already does.
                 if (container.HtmlContainerInt.Root is { } rootBoxForPageBackground && applicablePageStyle is not null)
                 {
-                    using var pageBackgroundGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
+                    using var pageBackgroundGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
 
                     await LayeredBackgroundPainter.PaintAsync(
-                        pageBackgroundGraphics, applicablePageStyle, _pdfSharpAdapter, container.HtmlContainerInt,
+                        pageBackgroundGraphics, applicablePageStyle, _renderContext, container.HtmlContainerInt,
                         rootBoxForPageBackground, pageEmSizePt,
                         resolvePositioningRect: ResolvePagePositioningRect,
                         viewportRect: sheetRect,
@@ -1094,7 +1094,7 @@ namespace PeachPDF
                     // just the content rect. The canvas fill is a distinct paint step from the page box's
                     // own background above - CSS2.1 §14.2's canvas propagation always fills the whole
                     // sheet regardless of the page box's own border/padding, exactly as before #1147.
-                    using var canvasGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
+                    using var canvasGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
                     FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, sheetRect);
                 }
 
@@ -1107,10 +1107,10 @@ namespace PeachPDF
                 // never fragments/shares a corner with a neighboring page either.
                 if (applicablePageStyle is not null && (bL > 0 || bT > 0 || bR > 0 || bB > 0))
                 {
-                    using var pageBorderGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
+                    using var pageBorderGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
                     MarginBoxRenderer.PaintBorder(
                         pageBorderGraphics, borderBoxRect, applicablePageStyle,
-                        pageEmSizePt, pageRemPt, _pdfSharpAdapter.PixelsPerPoint, _pdfSharpAdapter);
+                        pageEmSizePt, pageRemPt, _renderContext.PixelsPerPoint, _renderContext);
                 }
 
                 // Save state so the content transform can be undone for margin box rendering
@@ -1148,7 +1148,7 @@ namespace PeachPDF
                 container.HtmlContainerInt.PageClipOverride = new Rect(
                     container.HtmlContainerInt.MarginLeft,
                     container.HtmlContainerInt.MarginTop,
-                    (page.Width - mL) * _pdfSharpAdapter.PixelsPerPoint,
+                    (page.Width - mL) * _renderContext.PixelsPerPoint,
                     geom.BandHeight);
 
                 container.PerformPaint(g, fragmentainer);
@@ -1166,7 +1166,7 @@ namespace PeachPDF
                 // here needs to distinguish them.
                 foreach (var footnoteArea in fragmentainer.FootnoteAreas ?? [])
                 {
-                    PaintFootnoteArea(g, _pdfSharpAdapter, container.HtmlContainerInt, footnoteArea);
+                    PaintFootnoteArea(g, _renderContext, container.HtmlContainerInt, footnoteArea);
                 }
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
@@ -1186,7 +1186,7 @@ namespace PeachPDF
                         totalPages,
                         pageY,
                         container.NamedStrings,
-                        _pdfSharpAdapter,
+                        _renderContext,
                         applicablePageStyle,
                         container.HtmlContainerInt,
                         marginBoxImageCache,
@@ -1201,7 +1201,7 @@ namespace PeachPDF
                     !string.IsNullOrEmpty(m.Style.Content) && MarginBoxRenderer.TryParseElementFunction(m.Style.Content, out _, out _));
                 if (hasElementMarginBoxes)
                 {
-                    await PaintElementMarginBoxes(g, _pdfSharpAdapter, container.HtmlContainerInt, fragmentainer.MarginBoxes,
+                    await PaintElementMarginBoxes(g, _renderContext, container.HtmlContainerInt, fragmentainer.MarginBoxes,
                         new Size(page.Width, page.Height), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
                         marginBoxBackgroundImageCache);
                 }
@@ -1322,7 +1322,7 @@ namespace PeachPDF
         /// <summary>
         /// Whether a <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> render needs its font-cache clear,
         /// full HTML/CSS re-parse, and second layout pass, or whether the measurement pass already
-        /// used the correct <see cref="PdfSharpAdapter.PixelsPerPoint"/> (the common case: ordinary
+        /// used the correct <see cref="PdfRenderContext.PixelsPerPoint"/> (the common case: ordinary
         /// non-overflowing content already fits the page, so no rescale is needed). The comparison
         /// is exact rather than epsilon-based - <paramref name="effectivePixelsPerPoint"/> is either
         /// <paramref name="currentPixelsPerPoint"/> read back unchanged (no rescale needed) or a
@@ -1405,7 +1405,7 @@ namespace PeachPDF
         /// </summary>
         /// <remarks>
         /// Mirrors <see cref="MarginBoxRenderer"/>'s own <c>PaintImage</c> precedent for going from a
-        /// point-space margin-box rect to a fresh, scoped <see cref="GraphicsAdapter"/> - <see cref="MarginBoxFragment.Content"/>'s
+        /// point-space margin-box rect to a fresh, scoped <see cref="PdfCanvas"/> - <see cref="MarginBoxFragment.Content"/>'s
         /// coordinates are already in that same pixel space (<see cref="RunningElementLayout.LayoutRunningElementFor"/>
         /// laid it out directly against the pixel-converted rect), so no further conversion happens here.
         /// <para>
@@ -1435,8 +1435,8 @@ namespace PeachPDF
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
-            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
             var painter = new FragmentPainter(htmlContainer);
             var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
             var resolvedBoxNames = marginBoxes.Count > 0
@@ -1459,7 +1459,7 @@ namespace PeachPDF
                 if (MarginBoxRenderer.FindMargin(margins, marginBox.BoxName) is { } rule)
                     await PaintRuleOwnBackgroundAndBorder(marginBox.BoxName, rule);
 
-                painter.PaintDetached(graphicsAdapter, marginBox.Content);
+                painter.PaintDetached(pdfCanvas, marginBox.Content);
             }
 
             foreach (var rule in margins)
@@ -1492,10 +1492,10 @@ namespace PeachPDF
         /// </summary>
         private static void PaintFootnoteArea(PdfGraphics g, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
-            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+            var pixelsPerPoint = (adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            using var pdfCanvas = new PdfCanvas(adapter, g, pixelsPerPoint);
 
-            PaintFootnoteArea(graphicsAdapter, adapter, htmlContainer, footnoteArea);
+            PaintFootnoteArea(pdfCanvas, adapter, htmlContainer, footnoteArea);
         }
 
         /// <summary>
@@ -1505,28 +1505,28 @@ namespace PeachPDF
         /// completes without error or that a fragment holds the right data - see this repo's own testing
         /// conventions on why a token/page-count check alone is not proof a paint path isn't a no-op.
         /// </summary>
-        internal static void PaintFootnoteArea(Canvas graphicsAdapter, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        internal static void PaintFootnoteArea(Canvas pdfCanvas, RenderContext adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
             // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
             // wrapper), so it needs its own content-area bound - previously provided for free by a raw
             // PdfGraphics.IntersectClip AddPdfPages applied ahead of this call, removed because it also
             // (wrongly) bounded position: fixed content the same way; see AddPdfPages's own remarks.
-            graphicsAdapter.PushClip(htmlContainer.PageClipOverride ?? htmlContainer.PageBoxRect);
+            pdfCanvas.PushClip(htmlContainer.PageClipOverride ?? htmlContainer.PageBoxRect);
 
             var rect = footnoteArea.DividerRect;
             if (rect.Height > 0)
             {
                 var dividerColor = ResolveFootnoteDividerColor(footnoteArea.DividerColor, adapter);
-                graphicsAdapter.DrawRectangle(graphicsAdapter.GetSolidBrush(dividerColor), rect.X, rect.Y, rect.Width, rect.Height);
+                pdfCanvas.DrawRectangle(pdfCanvas.GetSolidBrush(dividerColor), rect.X, rect.Y, rect.Width, rect.Height);
             }
 
             var painter = new FragmentPainter(htmlContainer);
             foreach (var body in footnoteArea.Bodies)
             {
-                painter.PaintDetached(graphicsAdapter, body);
+                painter.PaintDetached(pdfCanvas, body);
             }
 
-            graphicsAdapter.PopClip();
+            pdfCanvas.PopClip();
         }
 
         /// <summary>

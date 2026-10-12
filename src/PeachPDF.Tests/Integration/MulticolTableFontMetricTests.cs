@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration;
 /// </summary>
 public class MulticolTableFontMetricTests
 {
-    private static Task RegisterSourceSans(PeachPDF.Adapters.PdfSharpAdapter adapter) =>
+    private static Task RegisterSourceSans(PeachPDF.PdfBackend.PdfRenderContext adapter) =>
         BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Metric Fixture");
 
     [Theory]

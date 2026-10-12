@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgClipPathTransformTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         /// <summary>Builds the document, renders it, and returns the points of the single clip path
         /// pushed for the one clipped element in the fixture.</summary>

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
 using PeachPDF.PDF.Drawing;
@@ -9,28 +9,28 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// A <see cref="TileBrush"/> or <see cref="HatchBrush"/> painted through the production PDF adapter becomes a real tiling pattern:
     /// the tile is written once and the pattern repeats it. These read the PDF that comes out.
     /// </summary>
-    public class GraphicsAdapterTileBrushTests
+    public class PdfCanvasTileBrushTests
     {
         private const string Png4X4 =
             "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGM8YWTEAANMcBZeDgA8MgE0GRiVCQAAAABJRU5ErkJggg==";
 
-        private static (PdfDocument Document, PdfGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext Adapter) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var adapter = new PdfSharpAdapter();
-            return (document, pageGfx, new GraphicsAdapter(adapter, pageGfx, 1.0), adapter);
+            var adapter = new PdfRenderContext();
+            return (document, pageGfx, new PdfCanvas(adapter, pageGfx, 1.0), adapter);
         }
 
-        private static Image NewTile(GraphicsAdapter graphics, RenderContext adapter, double size)
+        private static Image NewTile(PdfCanvas graphics, RenderContext adapter, double size)
         {
             var (tileGraphics, image) = graphics.CreateTile(size, size)!.Value;
             tileGraphics.DrawRectangle(adapter.GetSolidBrush(PaintColor.FromArgb(200, 30, 30)), 0, 0, size / 2, size);
@@ -70,8 +70,8 @@ namespace PeachPDF.Tests.Adapters
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var pageGfx = PdfGraphics.FromPdfPage(document.AddPage());
-            var adapter = new PdfSharpAdapter();
-            var graphics = new GraphicsAdapter(adapter, pageGfx, 2.0);
+            var adapter = new PdfRenderContext();
+            var graphics = new PdfCanvas(adapter, pageGfx, 2.0);
             var brush = new TileBrush(NewTile(graphics, adapter, 40), 40, 40);
 
             graphics.DrawRectangle(brush, 0, 0, 200, 100);

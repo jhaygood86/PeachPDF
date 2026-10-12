@@ -4,10 +4,10 @@ using PeachPDF.PDF.Drawing;
 using System;
 using System.Runtime.CompilerServices;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
-    /// Implemented by an image source that can hand its decoded pixels to <see cref="ImageAdapter.GetPixels"/>.
+    /// Implemented by an image source that can hand its decoded pixels to <see cref="PdfCanvasImage.GetPixels"/>.
     /// Optional on purpose: <c>ImageSource.IImageSource</c> is the PDF embedder's contract and has no need
     /// for pixel access.
     /// </summary>
@@ -22,7 +22,7 @@ namespace PeachPDF.Adapters
 
     /// <summary>
     /// Decodes an <see cref="PdfRasterImage"/> to a premultiplied-RGBA8 <see cref="PixelBuffer"/> once and remembers
-    /// the result for the image's lifetime - the cache <see cref="ImageAdapter.GetPixels"/> reads through.
+    /// the result for the image's lifetime - the cache <see cref="PdfCanvasImage.GetPixels"/> reads through.
     /// This is PDF-embedding-specific (keyed on <see cref="PdfRasterImage"/>) and deliberately lives here rather than
     /// in <c>PeachDrawing</c>: the raster backend's own pixel math (<see cref="PixelMath"/>'s premultiply
     /// helpers) has no <see cref="PdfRasterImage"/> concept at all, so the decode-and-cache step belongs on the PDF

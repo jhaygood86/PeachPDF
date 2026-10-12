@@ -1,6 +1,6 @@
 using System.Numerics;
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>text-shadow</c> on SVG glyphs painted under their own transform: along a <c>&lt;textPath&gt;</c>, and blurred under an explicit <c>rotate</c>.</summary>
     public class SvgTextShadowTransformTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         /// <summary>A canvas that can begin an effect layer: it records each layer's options and draws the layer's content straight onto itself, so the log shows it.</summary>
         private sealed class LayerCanvas : TestRecordingGraphics

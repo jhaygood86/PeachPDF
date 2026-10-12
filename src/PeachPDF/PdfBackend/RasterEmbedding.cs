@@ -3,7 +3,7 @@ using PeachPDF.PDF.Drawing;
 using PeachDrawing;
 using System.IO;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Turns a finished <see cref="RasterSurface"/> into an <see cref="PdfRasterImage"/> the PDF writer can embed -

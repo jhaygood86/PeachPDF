@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -381,7 +381,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             {
                 PropertyNames.FontFamily,
             };
-            var parser = new CssValueParser(new PdfSharpAdapter());
+            var parser = new CssValueParser(new PdfRenderContext());
             var unexpectedlyNotNoOp = new List<string>();
 
             foreach (var (name, initial) in CssDefaults.InitialValues)

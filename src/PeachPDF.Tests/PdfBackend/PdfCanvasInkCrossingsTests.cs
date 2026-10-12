@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -6,10 +6,10 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
-    /// <see cref="GraphicsAdapter.GetInkCrossings"/> — the real-font half of
+    /// <see cref="PdfCanvas.GetInkCrossings"/> — the real-font half of
     /// <c>text-decoration-skip-ink</c>: where a run's glyphs actually cross a horizontal band.
     /// </summary>
     /// <remarks>
@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Adapters
     /// the engine's Type2 charstring interpreter (issue #1117) - a CID-keyed CFF
     /// or bitmap font remains the actual "no ink known" case, per the accepted-gap note this narrowed.
     /// </remarks>
-    public class GraphicsAdapterInkCrossingsTests
+    public class PdfCanvasInkCrossingsTests
     {
         [Fact]
         public async Task ADescender_CrossesABandBelowTheBaseline()
@@ -33,7 +33,7 @@ namespace PeachPDF.Tests.Adapters
             // One crossing, not two: a band through the open loop of a descender cuts both its walls,
             // but each glyph is reported as a single hulled range so the decoration breaks once around
             // the letter instead of leaving a wisp of underline stranded inside the loop. See
-            // GraphicsAdapter.MeasureInkCrossings and Canvas.GetInkCrossings.
+            // PdfCanvas.MeasureInkCrossings and Canvas.GetInkCrossings.
             var only = Assert.Single(crossings);
             Assert.True(only.End > only.Start, "the crossing should be a real interval");
             Assert.True(only.Start >= -0.01 && only.End <= fixture.Advance("g") + 0.01,
@@ -107,7 +107,7 @@ namespace PeachPDF.Tests.Adapters
             // negative letter-spacing here, but a GPOS-attached mark or a tightly kerned pair does the
             // same thing. Overlapping spans have to be unioned into one range rather than handed over as
             // two, or the decoration would break twice where the ink is continuous and draw a wisp of
-            // line in between. See GraphicsAdapter.MergeSpans.
+            // line in between. See PdfCanvas.MergeSpans.
             using var fixture = await Fixture.CreateAsync();
 
             var apart = fixture.Crossings("nn", below: -4, height: 1)!;
@@ -222,10 +222,10 @@ namespace PeachPDF.Tests.Adapters
         private sealed class Fixture : IDisposable
         {
             private readonly PdfGraphics _measure;
-            private readonly GraphicsAdapter _graphics;
+            private readonly PdfCanvas _graphics;
             private readonly Font _font;
 
-            private Fixture(PdfGraphics measure, GraphicsAdapter graphics, Font font)
+            private Fixture(PdfGraphics measure, PdfCanvas graphics, Font font)
             {
                 _measure = measure;
                 _graphics = graphics;
@@ -234,11 +234,11 @@ namespace PeachPDF.Tests.Adapters
 
             internal static async Task<Fixture> CreateAsync(string? fontPath = null, string family = "InkTestFont")
             {
-                var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+                var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
                 await BundledFonts.RegisterFont(adapter, fontPath ?? BundledFonts.Ttf, family);
 
                 var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-                var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+                var graphics = new PdfCanvas(adapter, measure, 1.0);
 
                 var font = adapter.GetFont(family, 40, PaintFontStyle.Regular);
                 Assert.NotNull(font);

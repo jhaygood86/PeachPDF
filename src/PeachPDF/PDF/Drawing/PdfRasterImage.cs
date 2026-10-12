@@ -31,7 +31,7 @@
 
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.IO;
 using System;

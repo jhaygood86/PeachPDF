@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
     /// A <see cref="TestRecordingGraphics"/> that answers <see cref="Canvas.GetInkCrossings"/> with
-    /// <b>real</b> glyph ink, measured by a real <see cref="GraphicsAdapter"/> over the same fonts layout
+    /// <b>real</b> glyph ink, measured by a real <see cref="PdfCanvas"/> over the same fonts layout
     /// used, while still recording every draw call the way the plain recorder does — and recording every
     /// ink query, so a test can assert which band the painter actually asked about.
     /// </summary>
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.TestSupport
     /// <para>
     /// <c>text-decoration-skip-ink</c> cannot be tested through the plain recorder: it has no font
     /// subsystem, so its inherited <c>GetInkCrossings</c> returns null and the painter correctly skips
-    /// nothing — a test would pass while the feature did nothing at all. <see cref="GraphicsAdapter"/> is
+    /// nothing — a test would pass while the feature did nothing at all. <see cref="PdfCanvas"/> is
     /// <c>sealed</c>, so the real implementation cannot be subclassed to add recording; delegating one
     /// method to an instance of it is what gets both halves.
     /// </para>
@@ -36,12 +36,12 @@ namespace PeachPDF.Tests.TestSupport
     internal sealed class InkAwareRecordingGraphics : TestRecordingGraphics
     {
         private readonly PdfGraphics _measure;
-        private readonly GraphicsAdapter _real;
+        private readonly PdfCanvas _real;
 
-        internal InkAwareRecordingGraphics(PdfSharpAdapter adapter, double pixelsPerPoint = 1.0)
+        internal InkAwareRecordingGraphics(PdfRenderContext adapter, double pixelsPerPoint = 1.0)
         {
             _measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-            _real = new GraphicsAdapter(adapter, _measure, pixelsPerPoint);
+            _real = new PdfCanvas(adapter, _measure, pixelsPerPoint);
         }
 
         /// <summary>One <see cref="Canvas.GetInkCrossings"/> call the painter made.</summary>

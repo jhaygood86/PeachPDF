@@ -615,7 +615,7 @@ namespace PeachPDF.PDF.Rendering
 
                 // XOffset is a placement-only shift (doesn't move where the next glyph starts) - the
                 // pen only ever advances by the natural width plus GPOS's own XAdvanceDelta, matching
-                // FontHelper.MeasureString/GraphicsAdapter.GetTextOutline's identical advance math.
+                // FontHelper.MeasureString/PdfCanvas.GetTextOutline's identical advance math.
                 penX += (font.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
                 (lastGlyphX, lastGlyphY) = (glyphX, glyphY);
             }
@@ -736,7 +736,7 @@ namespace PeachPDF.PDF.Rendering
         /// Draws all of <paramref name="image"/> into <paramref name="destRect"/>. <paramref name="srcRect"/>
         /// is NOT honored and cannot be at this level: PDF has no "draw this sub-rectangle of an XObject"
         /// operator, so cropping is a clip plus an off-destination placement of the whole image, which
-        /// <c>GraphicsAdapter.DrawImage</c> composes above. Callers wanting a portion of an image must go
+        /// <c>PdfCanvas.DrawImage</c> composes above. Callers wanting a portion of an image must go
         /// through that; this overload exists so a whole-image draw keeps emitting the operators it always
         /// has. (Silently dropping srcRect here is what once made every <c>border-image</c> slice paint the
         /// entire source squashed into its own ninth of the frame.)
@@ -1796,9 +1796,9 @@ namespace PeachPDF.PDF.Rendering
         /// see <see cref="Canvas.DrawImageBlendedOver"/> for the motivating SVG
         /// <c>feBlend</c> use case. <paramref name="pdfBlendModeName"/> crosses from
         /// <c>PaintBlendMode</c> as a plain string (via <c>PaintBlendMode.ToString()</c> at the
-        /// <c>GraphicsAdapter</c> call site) rather than as a typed enum, matching the same crossing
-        /// point <see cref="SetBlendMode"/> already uses - <c>PdfSharpCore</c> sits below
-        /// <c>Html.Adapters</c> in this codebase's layering, so it cannot reference
+        /// <c>PdfCanvas</c> call site) rather than as a typed enum, matching the same crossing
+        /// point <see cref="SetBlendMode"/> already uses - The PDF engine sits below
+        /// the HTML layers in this codebase's layering, so it cannot reference
         /// <c>PaintBlendMode</c> directly (see <see cref="SetBlendMode"/>).
         /// </summary>
         internal void DrawImageBlendedOver(PdfForm top, PdfForm bottom, Rect destRect, string pdfBlendModeName)

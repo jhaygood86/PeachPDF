@@ -205,7 +205,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             var info = resolver.ResolveFace(familyName, new FaceRequest(options.Weight, options.IsItalic, options.WidthPercent, codepoint, options.ObliqueAngle));
             if (info == null)
             {
-                // The caller (PdfSharpAdapter) pre-checks coverage before ever building the TypefaceFont, so a
+                // The caller (PdfRenderContext) pre-checks coverage before ever building the TypefaceFont, so a
                 // null here is not expected - guard defensively rather than dereferencing null.
                 throw new InvalidOperationException("No appropriate font found.");
             }

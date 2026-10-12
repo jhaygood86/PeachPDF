@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Xml.Linq;
@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>The conservative box of what a document draws: shapes, their strokes, transforms, <c>use</c>, nested viewports and images.</summary>
     public class SvgInkExtentTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private const string Svg = "xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"";
 

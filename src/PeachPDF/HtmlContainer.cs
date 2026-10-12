@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -35,7 +35,7 @@ namespace PeachPDF
         /// <summary>
         /// Init.
         /// </summary>
-        internal HtmlContainer(PdfSharpAdapter adapter)
+        internal HtmlContainer(PdfRenderContext adapter)
         {
             HtmlContainerInt = new HtmlContainerInt(adapter);
         }
@@ -153,7 +153,7 @@ namespace PeachPDF
             }
         }
 
-        internal double PixelsPerPoint => ((PdfSharpAdapter)HtmlContainerInt.Adapter).PixelsPerPoint;
+        internal double PixelsPerPoint => ((PdfRenderContext)HtmlContainerInt.Adapter).PixelsPerPoint;
 
         internal HtmlDocumentMetadata? DocumentMetadata => HtmlContainerInt.DocumentMetadata;
 
@@ -235,7 +235,7 @@ namespace PeachPDF
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            using var ig = new PdfCanvas(HtmlContainerInt.Adapter, g, PixelsPerPoint);
             await HtmlContainerInt.PerformLayout(ig);
         }
 
@@ -248,7 +248,7 @@ namespace PeachPDF
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            using var ig = new PdfCanvas(HtmlContainerInt.Adapter, g, PixelsPerPoint);
             HtmlContainerInt.PerformPaint(ig, fragmentainer);
         }
 

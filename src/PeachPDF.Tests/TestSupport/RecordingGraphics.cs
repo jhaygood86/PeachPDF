@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>
         /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #814) without a
-        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
+        /// full <c>PdfCanvas</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
         /// no-op of <c>1.0</c>. A field-backed override (rather than an auto-property) since the base
         /// virtual member is get-only.
         /// </summary>
@@ -161,7 +161,7 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>
         /// A path clip (the rounded-corner curve of a `border-radius` + `overflow: hidden` box, e.g.)
         /// doesn't have a rectangular bound this mock can track precisely, so - like the real
-        /// GraphicsAdapter's own clip-stack bookkeeping (RenderUtils.cs remarks) - it keeps the
+        /// PdfCanvas's own clip-stack bookkeeping (RenderUtils.cs remarks) - it keeps the
         /// enclosing rect on the tracked stack rather than attempting one. It still logs and counts the
         /// push/pop like any other clip, so PushCount/PopCount balance and Log preserves push order
         /// (rect clip, then path clip) for a caller asserting on it.

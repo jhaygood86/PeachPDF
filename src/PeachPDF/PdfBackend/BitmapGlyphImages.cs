@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 
-namespace PeachPDF.Adapters;
+namespace PeachPDF.PdfBackend;
 
 /// <summary>
 /// The <see cref="PdfRasterImage"/> of a bitmap colour glyph (CBDT/sbix), made once per font, glyph and strike so a glyph used many times in a

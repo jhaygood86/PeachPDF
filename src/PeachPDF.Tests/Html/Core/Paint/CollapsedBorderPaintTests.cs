@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html);
             var table = FindTable(root);
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 

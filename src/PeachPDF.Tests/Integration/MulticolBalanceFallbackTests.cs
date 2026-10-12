@@ -28,7 +28,7 @@ public class MulticolBalanceFallbackTests
         var (_, container) = await LayoutHarness.LayoutAsync(
             "<html><body style='margin:0;font:10pt/10pt \"Balance Fixture\"'>" + body + "</body></html>",
             pageWidth: 240, pageHeight: 150.5, margin: 20,
-            configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, "Balance Fixture"));
+            configureRenderContext: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, "Balance Fixture"));
 
         var tree = container.FragmentTree!;
         var words = new List<(string, int)>();

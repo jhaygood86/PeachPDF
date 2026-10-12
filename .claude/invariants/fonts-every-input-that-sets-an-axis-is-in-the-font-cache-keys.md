@@ -17,7 +17,7 @@ between the box and the PDF has to carry them, and a cache that keys by less ser
   share a face name** (the internal name) while declaring different ranges, so the resolved face's declared ranges are part of that key
   too. Without them a second `@font-face` rule for the same file was served the first rule's typeface, at the first rule's axis range.
 - A `Typeface` for one location is one object (`WithVariation` memoizes on the normalized location), so anything keyed by a typeface's
-  identity or `VariationKey` (the PDF font table, `FontAdapter.FaceKey`) follows for free.
+  identity or `VariationKey` (the PDF font table, `PdfCanvasFont.FaceKey`) follows for free.
 
 A new input to the axes (a new query field that becomes an axis setting) has to be added to all of the above at once. The symptom of a
 miss is a document whose output depends on which box asked first.

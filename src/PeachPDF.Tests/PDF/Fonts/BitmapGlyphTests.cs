@@ -1,5 +1,5 @@
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachDrawing;
@@ -158,9 +158,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
 
         // ---- drawing -------------------------------------------------------------------------------------
 
-        private static async Task<(PdfSharpAdapter Adapter, string Family, byte[] Font)> Register(string family, Func<byte[], byte[]> addTables)
+        private static async Task<(PdfRenderContext Adapter, string Family, byte[] Font)> Register(string family, Func<byte[], byte[]> addTables)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var bytes = addTables(BaseFont());
             using var stream = new MemoryStream(bytes);
             await adapter.AddFont(stream, family);

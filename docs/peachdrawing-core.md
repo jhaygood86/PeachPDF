@@ -13,7 +13,7 @@ dotnet add package PeachDrawing.Core
 
 > **Status: pre-1.0.** Every type described below is the package's full public surface today - see
 > `PublicApi.txt` for the exact, machine-checked snapshot. Two concrete `Canvas`/`RenderContext`
-> implementations exist today: `PeachPDF` (`PdfSharpAdapter`/`GraphicsAdapter`, writing PDF, and
+> implementations exist today: `PeachPDF` (`PdfRenderContext`/`PdfCanvas`, writing PDF, and
 > `RasterCanvas`/`RasterRenderContext` as PeachPDF's own raster fallback for effects PDF can't express as
 > vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
 > with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
@@ -47,7 +47,7 @@ the life of one render, and is where you register fonts before drawing with them
 ```csharp
 using PeachDrawing.Core;
 
-// A concrete RenderContext implementation - PeachPDF's own PdfSharpAdapter, or your own.
+// A concrete RenderContext implementation - PeachPDF's own PdfRenderContext, or your own.
 RenderContext context = ...;
 
 context.AddFontFamily(myFontFamily);
@@ -329,7 +329,7 @@ needs to:
    entirely.
 4. Derive from `Image`/`FontFamily`/`Font` as your backend's font/image loading needs.
 
-PeachPDF's own `PdfSharpAdapter`/`GraphicsAdapter` (writing vector PDF content), its `RasterCanvas`
+PeachPDF's own `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), its `RasterCanvas`
 (rasterizing effects PDF can't express as vector content, such as `filter: blur()`), and `PeachDrawing`'s
 own standalone `RasterCanvas`/`RasterRenderContext` (see [docs/peachdrawing.md](peachdrawing.md)) are all
 independent, complete implementations of exactly this - reading their source is the closest thing to a

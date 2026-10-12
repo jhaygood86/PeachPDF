@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
@@ -158,7 +158,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             public List<string> Log { get; } = [];
 
             public RecordingGraphics(bool isOffscreenTile)
-                : base(new PdfSharpAdapter(), new Rect(0, 0, double.MaxValue, double.MaxValue))
+                : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue))
             {
                 _isOffscreenTile = isOffscreenTile;
             }

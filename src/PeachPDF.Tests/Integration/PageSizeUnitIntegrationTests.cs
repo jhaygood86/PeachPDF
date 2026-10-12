@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.PDF.Drawing;
@@ -233,7 +233,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<HtmlContainerInt> BuildAsync(
             string html, double configuredWidth = SheetW, double configuredHeight = SheetH)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
                 PageSize = new Size(configuredWidth, configuredHeight)

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>dominant-baseline</c>, <c>alignment-baseline</c> and <c>baseline-shift</c> on horizontal SVG text, asserted on where each run is drawn.</summary>
     public class SvgTextBaselineTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string textAttrs, string content = "Hi", string svgAttrs = "")
         {

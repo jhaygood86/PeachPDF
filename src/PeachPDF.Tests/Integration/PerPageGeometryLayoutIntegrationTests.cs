@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Fragments;
@@ -319,7 +319,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = ppp };
+            var adapter = new PdfRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(adapter);
             // SetHtml runs CascadeApplyPageStyles: base @page margins land on the container
             // (already PixelsPerPoint-scaled) and PageRules are captured for per-page selection.
@@ -333,7 +333,7 @@ namespace PeachPDF.Tests.Integration
 
             var measure = PdfGraphics.CreateMeasureContext(
                 new Size(container.PageSize.Width, container.PageSize.Height));
-            using var graphics = new GraphicsAdapter(adapter, measure, ppp);
+            using var graphics = new PdfCanvas(adapter, measure, ppp);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

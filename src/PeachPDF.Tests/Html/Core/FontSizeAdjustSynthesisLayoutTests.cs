@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF.Drawing;
@@ -31,14 +31,14 @@ namespace PeachPDF.Tests.Html.Core
             return null;
         }
 
-        private sealed record Layout(PdfSharpAdapter Adapter, CssBox Root)
+        private sealed record Layout(PdfRenderContext Adapter, CssBox Root)
         {
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
         }
 
         private static async Task<Layout> LayoutAsync(string css, string body)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "AdjustFam");
             await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, "OtherFam");
             await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "NoSupsFam");
@@ -51,7 +51,7 @@ namespace PeachPDF.Tests.Html.Core
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return new Layout(adapter, container.Root!);

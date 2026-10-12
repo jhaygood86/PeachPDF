@@ -1,8 +1,8 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// A host with no discoverable system fonts - browser/WebAssembly, where
@@ -19,17 +19,17 @@ namespace PeachPDF.Tests.Adapters
     {
         private const string UnresolvableDefault = "PeachPDF Test Default That Is Not Installed";
 
-        private static PdfSharpAdapter AdapterWithRegisteredFamily(string familyName)
+        private static PdfRenderContext RenderContextWithRegisteredFamily(string familyName)
         {
-            var adapter = new PdfSharpAdapter();
-            adapter.AddFontFamily(new FontFamilyAdapter(familyName));
+            var adapter = new PdfRenderContext();
+            adapter.AddFontFamily(new PdfCanvasFontFamily(familyName));
             return adapter;
         }
 
         [Fact]
         public void DefaultFontMissing_AdoptsTheRegisteredFamily()
         {
-            var adapter = AdapterWithRegisteredFamily("First Family");
+            var adapter = RenderContextWithRegisteredFamily("First Family");
             Assert.False(adapter.IsFontExists(UnresolvableDefault));
 
             adapter.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: false);
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void DefaultFontAlreadyResolves_LeavesItAlone()
         {
-            var adapter = AdapterWithRegisteredFamily("First Family");
+            var adapter = RenderContextWithRegisteredFamily("First Family");
 
             adapter.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: true);
 
@@ -52,7 +52,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void FirstRegisteredFamilyWins_NotTheLast()
         {
-            var adapter = AdapterWithRegisteredFamily("First Family");
+            var adapter = RenderContextWithRegisteredFamily("First Family");
 
             adapter.AdoptDefaultFontIfMissing(UnresolvableDefault, "First Family", defaultFontExists: false);
 

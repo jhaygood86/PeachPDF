@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using System;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// <see cref="EllipticalArc.TryGetCenterParameterization"/> - the SVG 1.1 Appendix F.6.5 endpoint-to-

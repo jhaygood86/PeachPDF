@@ -13,7 +13,7 @@ every adapter/`XGraphics`-level test uses — gets an **A4** page (595x842pt) on
 This only matters where the test asserts a literal page-space coordinate, which for a PDF content
 stream is almost every interesting assertion: PDF's y-up space measures from the page's *bottom*, so
 every y a drawing operator emits is `pageHeight - layoutY`, and the page height is exactly what
-changes. The measured symptom, from `GraphicsAdapterImageCropTests`: the same cropped-image draw
+changes. The measured symptom, from `PdfCanvasImageCropTests`: the same cropped-image draw
 emits
 
 ```

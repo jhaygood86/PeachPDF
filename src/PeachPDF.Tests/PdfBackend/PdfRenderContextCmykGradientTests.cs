@@ -1,9 +1,9 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using System;
 using Xunit;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// <c>RenderContext.RejectMixedColorSpaceGradientStops</c>: a gradient mixing <c>device-cmyk()</c>
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Adapters
     /// overload has no CSS/SVG caller at all today (confirmed by inspection - every real gradient goes
     /// through the multi-stop overloads) and so is otherwise unreachable from an integration test.
     /// </summary>
-    public class PdfSharpAdapterCmykGradientTests
+    public class PdfRenderContextCmykGradientTests
     {
         private static readonly PaintColor CmykStop = PaintColor.FromCmyk(255, 0f, 1f, 1f, 0f);
         private static readonly PaintColor CmykStop2 = PaintColor.FromCmyk(255, 1f, 0f, 0f, 0f);
@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void LegacyTwoColorLinearGradient_CmykColor1_Throws()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             Assert.Throws<NotSupportedException>(() =>
                 adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, RgbStop, 0));
         }
@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void LegacyTwoColorLinearGradient_CmykColor2_Throws()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             Assert.Throws<NotSupportedException>(() =>
                 adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, CmykStop, 0));
         }
@@ -43,7 +43,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void LegacyTwoColorLinearGradient_BothRgb_Succeeds()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var brush = adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, RgbStop, 0);
             Assert.NotNull(brush);
         }
@@ -51,7 +51,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void LegacyTwoColorLinearGradient_BothCmyk_Succeeds()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var brush = adapter.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, CmykStop2, 0);
             Assert.NotNull(brush);
         }
@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void MultiStopLinearGradient_MixedStop_Throws()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (RgbStop, 0), (CmykStop, 1) };
             Assert.Throws<NotSupportedException>(() =>
                 adapter.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops));
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void MultiStopLinearGradient_AllCmykStops_Succeeds()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (CmykStop, 0), (CmykStop2, 1) };
             var brush = adapter.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops);
             Assert.NotNull(brush);
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void RadialGradient_MixedStop_Throws()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (RgbStop, 0), (CmykStop, 1) };
             Assert.Throws<NotSupportedException>(() =>
                 adapter.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops));
@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void RadialGradient_AllCmykStops_Succeeds()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var stops = new (PaintColor PaintColor, double Position)[] { (CmykStop, 0), (CmykStop2, 1) };
             var brush = adapter.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops);
             Assert.NotNull(brush);
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void ConicGradient_MixedStop_Throws()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var colors = new[] { RgbStop, CmykStop };
             var angles = new[] { 0.0, Math.PI };
             Assert.Throws<NotSupportedException>(() =>
@@ -105,7 +105,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void ConicGradient_AllCmykStops_Succeeds()
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var colors = new[] { CmykStop, CmykStop2 };
             var angles = new[] { 0.0, Math.PI };
             var brush = adapter.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles);

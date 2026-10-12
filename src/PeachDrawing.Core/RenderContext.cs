@@ -283,7 +283,7 @@ namespace PeachDrawing.Core
             }
 
             // Dispose the response stream once the font is loaded - AddFontFromStream copies the bytes up
-            // front (see PdfSharpAdapter.AddFont's CopyToAsync), so nothing needs it afterward. Critically,
+            // front (see PdfRenderContext.AddFont's CopyToAsync), so nothing needs it afterward. Critically,
             // for a local FileUriNetworkLoader font this is a FileStream, and leaving it open keeps a handle
             // on the file - which locks it on Windows (a real bug, and it broke temp-file cleanup in tests).
             using var fontStream = resourceStream.ResourceStream;

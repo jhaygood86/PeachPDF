@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -6,10 +6,10 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
-    /// <see cref="GraphicsAdapter.DrawImage(Image, Rect, Rect)"/> must draw only the requested portion of
+    /// <see cref="PdfCanvas.DrawImage(Image, Rect, Rect)"/> must draw only the requested portion of
     /// the image. PDF has no "draw this sub-rectangle of an XObject" operator and PdfSharpCore's own
     /// <c>srcRect</c> overload never implemented one - it silently drew the whole image into the destination
     /// rectangle, so every <c>border-image</c> slice painted the entire source squashed into its own ninth of
@@ -17,9 +17,9 @@ namespace PeachPDF.Tests.Adapters
     /// image, and that is what these tests assert: the arithmetic directly, and the emitted operators
     /// structurally (a clip is established before the <c>Do</c> it bounds).
     /// </summary>
-    public class GraphicsAdapterImageCropTests
+    public class PdfCanvasImageCropTests
     {
-        private static (PdfDocument Document, PdfGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext Adapter) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
@@ -29,12 +29,12 @@ namespace PeachPDF.Tests.Adapters
             // metric region and fails on a US-region machine (as CI's runners are) purely on page height.
             page.Size = PageSize.A4;
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var adapter = new PdfSharpAdapter();
-            var graphics = new GraphicsAdapter(adapter, pageGfx, 1.0);
+            var adapter = new PdfRenderContext();
+            var graphics = new PdfCanvas(adapter, pageGfx, 1.0);
             return (document, pageGfx, graphics, adapter);
         }
 
-        private static Image NewTile(GraphicsAdapter graphics, RenderContext adapter, double size, PaintColor color)
+        private static Image NewTile(PdfCanvas graphics, RenderContext adapter, double size, PaintColor color)
         {
             var (tileGraphics, image) = graphics.CreateTile(size, size)!.Value;
             tileGraphics.DrawRectangle(adapter.GetSolidBrush(color), 0, 0, size, size);
@@ -55,7 +55,7 @@ namespace PeachPDF.Tests.Adapters
             // The bottom-right quarter of a 40x40 image drawn into a 20x20 destination: the whole image
             // must land at its natural scale (20/20), shifted up and left by the slice's own offset so
             // that quarter comes to rest exactly on the destination.
-            var placement = GraphicsAdapter.ComputeCroppedPlacement(
+            var placement = PdfCanvas.ComputeCroppedPlacement(
                 new Rect(10, 10, 20, 20), new Rect(20, 20, 20, 20), naturalWidth: 40, naturalHeight: 40);
 
             Assert.Equal(-10, placement.X, 4);
@@ -69,7 +69,7 @@ namespace PeachPDF.Tests.Adapters
         {
             // A border-image edge slice: 2 source pixels tall stretched over a 12pt border, 8 wide over
             // 96pt - a 6x vertical and 12x horizontal scale of the same 12x12 source.
-            var placement = GraphicsAdapter.ComputeCroppedPlacement(
+            var placement = PdfCanvas.ComputeCroppedPlacement(
                 new Rect(0, 0, 96, 12), new Rect(2, 0, 8, 2), naturalWidth: 12, naturalHeight: 12);
 
             Assert.Equal(-24, placement.X, 4);   // 2 source px left of the destination, at 12x
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Adapters
         [Fact]
         public void ComputeCroppedPlacement_TopLeftSlice_KeepsTheDestinationOrigin()
         {
-            var placement = GraphicsAdapter.ComputeCroppedPlacement(
+            var placement = PdfCanvas.ComputeCroppedPlacement(
                 new Rect(30, 40, 10, 10), new Rect(0, 0, 5, 5), naturalWidth: 20, naturalHeight: 20);
 
             Assert.Equal(30, placement.X, 4);

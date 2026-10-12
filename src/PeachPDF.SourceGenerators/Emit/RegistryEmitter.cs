@@ -70,7 +70,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine();
             sb.AppendLine("        /// <summary>Nominal-context overload for a caller (e.g. an @supports condition leaf) with no live parser/adapter of its own — grammar validation needs *an* adapter, not the document's real one.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(string name, string value) =>");
-            sb.AppendLine("            SupportsDeclaration(new CssValueParser(new global::PeachPDF.Adapters.PdfSharpAdapter()), name, value);");
+            sb.AppendLine("            SupportsDeclaration(new CssValueParser(new global::PeachPDF.PdfBackend.PdfRenderContext()), name, value);");
 
             sb.AppendLine("    }");
             sb.AppendLine("}");
@@ -420,7 +420,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>Validation only, with a nominal default context — the @supports render-layer oracle for SVG.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(string name, string value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            var ctx = new SvgPropertyContext(new global::PeachPDF.Adapters.PdfSharpAdapter(), PaintColor.Black, null, static p => p);");
+            sb.AppendLine("            var ctx = new SvgPropertyContext(new global::PeachPDF.PdfBackend.PdfRenderContext(), PaintColor.Black, null, static p => p);");
             sb.AppendLine("            return _validators.TryGetValue(name, out var validator) && validator(ctx, value);");
             sb.AppendLine("        }");
 

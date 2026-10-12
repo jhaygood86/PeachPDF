@@ -32,8 +32,8 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal static void RequireAllowed(PdfDocument document, string featureDescription)
         {
-            // A probe (see PeachPDF.Adapters.TransparencyProbe) only wants to know whether something needs transparency.
-            if (PeachPDF.Adapters.TransparencyProbe.Observe())
+            // A probe (see PeachPDF.PdfBackend.TransparencyProbe) only wants to know whether something needs transparency.
+            if (PeachPDF.PdfBackend.TransparencyProbe.Observe())
                 return;
 
             var conformance = document.Options.PdfAConformance;

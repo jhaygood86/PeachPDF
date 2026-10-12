@@ -96,7 +96,7 @@ namespace PeachPDF.PDF.Rendering
 
             /// <summary>
             /// A CSS font-palette's overrides reach the backend as a fresh dictionary per
-            /// <c>DrawString</c> (see <c>GraphicsAdapter.ToGlyphPalette</c>), so identity comparison would
+            /// <c>DrawString</c> (see <c>PdfCanvas.ToGlyphPalette</c>), so identity comparison would
             /// dedupe nothing - compare by value, order-independently, the way a dictionary itself is equal.
             /// </summary>
             private static bool OverridesEqual(IReadOnlyDictionary<int, PaintColor>? left, IReadOnlyDictionary<int, PaintColor>? right)

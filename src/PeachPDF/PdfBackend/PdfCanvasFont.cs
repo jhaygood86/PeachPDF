@@ -20,12 +20,12 @@ using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using System;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Adapter for WinForms Font object for core.
     /// </summary>
-    internal sealed class FontAdapter : Font
+    internal sealed class PdfCanvasFont : Font
     {
         /// <summary>
         /// the vertical offset of the font underline location from the top of the font.
@@ -78,7 +78,7 @@ namespace PeachPDF.Adapters
         /// pipelines (see <c>CssLayoutEngine.NaturalWordSize</c>'s and <c>SvgRenderer.LayoutGlyphs</c>'s own
         /// remarks) before either pipeline had gotten around to actually measuring a string with this font.
         /// </summary>
-        public FontAdapter(TypefaceFont font, double pixelsPerPoint)
+        public PdfCanvasFont(TypefaceFont font, double pixelsPerPoint)
         {
             Font = font;
             PixelsPerPoint = pixelsPerPoint;

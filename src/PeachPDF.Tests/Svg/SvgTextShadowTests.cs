@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>text-shadow</c> on SVG text, asserted on the ordered <c>DrawString</c> calls.</summary>
     public class SvgTextShadowTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string textAttrs, string svgAttrs = "", string text = "Hi")
         {

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -25,10 +25,10 @@ namespace PeachPDF.Tests.Integration
         {
             var marginStyle = ParseDeclarations("font-family: monospace;");
             var pageStyle = ParseDeclarations("font-family: serif;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
@@ -40,10 +40,10 @@ namespace PeachPDF.Tests.Integration
             // the enclosing @page rule does. Direct regression test for the missing inheritance path.
             var marginStyle = ParseDeclarations("content: \"x\";");
             var pageStyle = ParseDeclarations("font-family: monospace;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
@@ -52,10 +52,10 @@ namespace PeachPDF.Tests.Integration
         public void NeitherSet_FallsBackToDefaultFontResolverDefaults()
         {
             var marginStyle = ParseDeclarations("content: \"x\";");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
             Assert.Equal(DefaultFontResolver.FontSize, font.Size, 3);
@@ -65,10 +65,10 @@ namespace PeachPDF.Tests.Integration
         public void CommaSeparatedFallback_SkipsUnresolvableFirstFamily()
         {
             var marginStyle = ParseDeclarations("font-family: \"NonexistentFontXYZ\", monospace;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
         }
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Integration
         public void FontWeightBold_ResolvesToBoldFont()
         {
             var marginStyle = ParseDeclarations("font-weight: bold;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.Integration
         public void FontWeightNumeric700_ResolvesToBoldFont()
         {
             var marginStyle = ParseDeclarations("font-weight: 700;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
@@ -99,7 +99,7 @@ namespace PeachPDF.Tests.Integration
         public void FontStyleItalic_ResolvesToItalicFont()
         {
             var marginStyle = ParseDeclarations("font-style: italic;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Integration
         public void KeywordFontSize_ResolvesViaSharedTable()
         {
             var marginStyle = ParseDeclarations("font-size: large;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
@@ -121,7 +121,7 @@ namespace PeachPDF.Tests.Integration
         public void PixelsPerPointScaling_StillYieldsCssSpecifiedPointSize()
         {
             var marginStyle = ParseDeclarations("font-size: 20pt;");
-            var adapter = NewAdapter();
+            var adapter = NewRenderContext();
             adapter.PixelsPerPoint = 1.5;
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
@@ -144,9 +144,9 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static PdfSharpAdapter NewAdapter()
+        private static PdfRenderContext NewRenderContext()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             return adapter;
         }
 

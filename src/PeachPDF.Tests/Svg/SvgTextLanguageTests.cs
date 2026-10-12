@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextLanguageTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body)
         {

@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -26,12 +26,12 @@ namespace PeachPDF.Tests.Html.Core
         private const string EmojiSelector = "&#xFE0F;";
         private const string ThumbsUp = "&#x1F44D;";
 
-        private sealed record Layout(PdfSharpAdapter Adapter, CssBox Root)
+        private sealed record Layout(PdfRenderContext Adapter, CssBox Root)
         {
             public string ColourName => FontName("ColourFam");
             public string TextName => FontName("TextFam");
 
-            private string FontName(string family) => ((FontAdapter)Adapter.GetFont(family, 12, PaintFontStyle.Regular)!).Font.Typeface.FamilyName;
+            private string FontName(string family) => ((PdfCanvasFont)Adapter.GetFont(family, 12, PaintFontStyle.Regular)!).Font.Typeface.FamilyName;
 
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
 
@@ -41,7 +41,7 @@ namespace PeachPDF.Tests.Html.Core
                 var box = Box(id);
                 var words = new List<CssRectWord>();
                 Collect(box, words);
-                return words.Select(w => ((FontAdapter)CssBox.ResolveWordFont(w, w.OwnerBox)).Font.Typeface.FamilyName).ToList();
+                return words.Select(w => ((PdfCanvasFont)CssBox.ResolveWordFont(w, w.OwnerBox)).Font.Typeface.FamilyName).ToList();
             }
 
             private static CssBox? Find(CssBox box, string id)
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<Layout> LayoutAsync(string css, string body)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             await BundledFonts.RegisterFont(adapter, BundledFonts.ColorEmoji, "ColourFam");
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "TextFam");
 
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.Html.Core
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             return new Layout(adapter, container.Root!);
@@ -235,7 +235,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             // U+1F44D THUMBS UP SIGN has Emoji_Presentation=Yes and is a participant (it has a variation
             // sequence); Noto Color Emoji and Source Sans 3 do not both cover it, so use the mono Noto Emoji.
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             await BundledFonts.RegisterFont(adapter, BundledFonts.ColorEmoji, "ColourFam");
             await BundledFonts.RegisterFont(adapter, BundledFonts.Emoji, "OutlineEmojiFam");
 
@@ -246,11 +246,11 @@ namespace PeachPDF.Tests.Html.Core
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             var layout = new Layout(adapter, container.Root!);
-            var expected = ((FontAdapter)adapter.GetFont("ColourFam", 12, PaintFontStyle.Regular)!).Font.Typeface.FamilyName;
+            var expected = ((PdfCanvasFont)adapter.GetFont("ColourFam", 12, PaintFontStyle.Regular)!).Font.Typeface.FamilyName;
 
             Assert.Equal([expected], layout.WordFonts("p"));
         }

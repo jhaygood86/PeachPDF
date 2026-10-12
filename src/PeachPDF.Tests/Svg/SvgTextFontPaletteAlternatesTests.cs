@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<TestRecordingGraphics> Render(string fontPath, string css, string textAttrs, string text = "a", string wrapperAttrs = "")
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var family = TypefaceFixtures.FamilyNameOf(fontPath);
             await BundledFonts.RegisterFont(adapter, fontPath, family);
 
@@ -93,11 +93,11 @@ namespace PeachPDF.Tests.Svg
             var plain = await Render(BundledFonts.Recursive, FeatureValues, "");
             var alt = await Render(BundledFonts.Recursive, FeatureValues, """font-variant-alternates="styleset(simple-a)" """);
 
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Recursive);
             await BundledFonts.RegisterFont(adapter, BundledFonts.Recursive, family);
             var font = adapter.GetFont(family, 40, PaintFontStyle.Regular)!;
-            using var g = new PeachPDF.Adapters.GraphicsAdapter(adapter,
+            using var g = new PeachPDF.PdfBackend.PdfCanvas(adapter,
                 PeachPDF.PDF.Drawing.PdfGraphics.CreateMeasureContext(new PeachDrawing.Core.Size(595, 842)), 1.0);
             using var a = g.GetTextOutline("a", font, new PaintPoint(0, 40), features: plain.DrawStringCalls[0].Features)!;
             using var b = g.GetTextOutline("a", font, new PaintPoint(0, 40), features: alt.DrawStringCalls[0].Features)!;

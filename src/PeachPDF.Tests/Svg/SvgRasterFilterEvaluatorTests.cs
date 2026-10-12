@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Svg;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgRasterFilterEvaluatorTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static SvgDocument Build(string filterMarkup, string extraElements = "")
         {

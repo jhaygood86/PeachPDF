@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Text;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
@@ -7,18 +7,18 @@ using Xunit;
 namespace PeachPDF.Tests.PdfEngineTests.Fonts
 {
     /// <summary>
-    /// <c>FontAdapter.NormalLineHeight</c> scaling (issue #956): the selection of the raw <c>hhea</c> triple or the OS/2
+    /// <c>PdfCanvasFont.NormalLineHeight</c> scaling (issue #956): the selection of the raw <c>hhea</c> triple or the OS/2
     /// typo triple is the engine's, and is covered by <c>NormalLineHeightMetricsTests</c> in the engine's own tests.
     /// </summary>
-    public class FontAdapterNormalLineHeightTests
+    public class PdfCanvasFontNormalLineHeightTests
     {
-        // Regression guard for a bug caught in review: FontAdapter.NormalLineHeight originally rounded
+        // Regression guard for a bug caught in review: PdfCanvasFont.NormalLineHeight originally rounded
         // each ascent/descent/gap component to a whole CSS pixel *after* multiplying by PixelsPerPoint,
         // instead of before - correct only by coincidence at the default PixelsPerPoint=1 every other test
         // in this repo uses, since Length.PointsPerPx is a fixed pt-per-CSS-px ratio, not a
-        // pt-per-internal-layout-unit one. Two FontAdapters wrapping the *same* TypefaceFont (so both share
+        // pt-per-internal-layout-unit one. Two PdfCanvasFonts wrapping the *same* TypefaceFont (so both share
         // identical ascent/descent/gap component values in real-point space, unaffected by
-        // PixelsPerPoint - see FontAdapter's own remarks on why TypefaceFont.Size is a true, unscaled point size)
+        // PixelsPerPoint - see PdfCanvasFont's own remarks on why TypefaceFont.Size is a true, unscaled point size)
         // isolate the fix precisely: with each component correctly rounded once, in real-point space,
         // before the single final multiply, NormalLineHeight must scale by *exactly* PixelsPerPoint. The
         // bug this guards against instead re-rounds at a different (wrong) granularity per PixelsPerPoint
@@ -31,8 +31,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             fontSet.AddFile(BundledFonts.Ttf, new AddOptions { FamilyName = "bundled" });
             var font = TestFonts.Create("bundled", 20, fontSet: fontSet);
 
-            var unscaled = new FontAdapter(font, pixelsPerPoint: 1.0);
-            var scaled = new FontAdapter(font, pixelsPerPoint: 2.0);
+            var unscaled = new PdfCanvasFont(font, pixelsPerPoint: 1.0);
+            var scaled = new PdfCanvasFont(font, pixelsPerPoint: 2.0);
 
             Assert.Equal(2.0 * unscaled.NormalLineHeight, scaled.NormalLineHeight, 9);
         }

@@ -285,7 +285,7 @@ namespace PeachPDF.Html.Core.Paint
                 if (union is null)
                 {
                     union = g.GetGraphicsPath();
-                    // Matches GetTextOutline's own per-glyph path (GraphicsAdapter.GetTextOutline
+                    // Matches GetTextOutline's own per-glyph path (PdfCanvas.GetTextOutline
                     // sets this on each outline it builds) - required for a glyph with a nested
                     // counter (the hole in "e"/"o"/"a"/...) to fill correctly regardless of its
                     // contours' winding direction, rather than an even-odd default that happens to

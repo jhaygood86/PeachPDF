@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Raster
 
         private static async Task<(RasterCanvas Graphics, Font Font)> Fixture(TextHinting hinting, double fontSize = 12, int width = 120, int height = 40)
         {
-            var adapter = new PdfSharpAdapter { TextHinting = hinting };
+            var adapter = new PdfRenderContext { TextHinting = hinting };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
@@ -56,7 +56,7 @@ namespace PeachPDF.Tests.Raster
         {
             // None is the default: the same pixels as an adapter that was never told anything about hinting
             var (plain, plainFont) = await Fixture(TextHinting.None);
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
             var untouched = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
 
@@ -185,7 +185,7 @@ namespace PeachPDF.Tests.Raster
         /// <summary>Text in a bundled font drawn with the given hinting and stem darkening; the alpha channel of the surface.</summary>
         private static async Task<byte[]> RenderWith(string fontPath, TextHinting hinting, bool stemDarkening, double fontSize = 9)
         {
-            var adapter = new PdfSharpAdapter { TextHinting = hinting, TextStemDarkening = stemDarkening };
+            var adapter = new PdfRenderContext { TextHinting = hinting, TextStemDarkening = stemDarkening };
             await BundledFonts.RegisterFont(adapter, fontPath, "RasterDarkeningFont");
             var graphics = new RasterCanvas(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
             var font = adapter.GetFont("RasterDarkeningFont", fontSize, PaintFontStyle.Regular)!;
@@ -220,7 +220,7 @@ namespace PeachPDF.Tests.Raster
         {
             async Task<byte[]> Draw(TextHinting hinting, double size)
             {
-                var adapter = new PdfSharpAdapter { TextHinting = hinting };
+                var adapter = new PdfRenderContext { TextHinting = hinting };
                 await BundledFonts.RegisterFont(adapter, BundledFonts.Gasp, "RasterGaspFont");
                 var graphics = new RasterCanvas(adapter, new RasterSurface(120, 60, 0, 0, 1, 1), 1);
                 var font = adapter.GetFont("RasterGaspFont", size, PaintFontStyle.Regular)!;
@@ -240,7 +240,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public async Task ItalicTextKeepsItsShearWhenHinted()
         {
-            var adapter = new PdfSharpAdapter { TextHinting = TextHinting.Standard };
+            var adapter = new PdfRenderContext { TextHinting = TextHinting.Standard };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
 
             RasterCanvas Draw(PaintFontStyle style)

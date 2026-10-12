@@ -24,12 +24,12 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Adapter for WinForms Graphics for core.
     /// </summary>
-    internal sealed class GraphicsAdapter : Canvas, ITransparencyProbeSource
+    internal sealed class PdfCanvas : Canvas, ITransparencyProbeSource
     {
         /// <summary>
         /// The wrapped WinForms graphics object
@@ -67,7 +67,7 @@ namespace PeachPDF.Adapters
         /// </summary>
         private static readonly PdfStringFormat _stringFormat;
 
-        static GraphicsAdapter()
+        static PdfCanvas()
         {
             _stringFormat = new PdfStringFormat
             {
@@ -83,7 +83,7 @@ namespace PeachPDF.Adapters
         /// <param name="g">the win forms graphics object to use</param>
         /// <param name="pixelsPerPoint">The number of pixels in each point</param>
         /// <param name="releaseGraphics">optional: if to release the graphics object on dispose (default - false)</param>
-        public GraphicsAdapter(RenderContext adapter, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
+        public PdfCanvas(RenderContext adapter, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
             : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             ArgumentNullException.ThrowIfNull(g);
@@ -92,8 +92,8 @@ namespace PeachPDF.Adapters
             _releaseGraphics = releaseGraphics;
 
             PixelsPerPoint = pixelsPerPoint;
-            _previousSvgGlyphPainter = _g.SvgGlyphPainter;
-            _g.SvgGlyphPainter = new SvgGlyphPainter(this, adapter);
+            _previousSvgGlyphPainter = _g.PdfSvgGlyphPainter;
+            _g.PdfSvgGlyphPainter = new PdfSvgGlyphPainter(this, adapter);
             _previousRasterContext = _g.RasterContext;
             _g.RasterContext = adapter;
         }
@@ -192,14 +192,14 @@ namespace PeachPDF.Adapters
 
         public override Size MeasureString(string str, Font font, ShapeSettings? features = null)
         {
-            var realFont = ((FontAdapter)font).Font;
+            var realFont = ((PdfCanvasFont)font).Font;
             var size = _g.MeasureString(str, realFont, _stringFormat, features ?? ShapeSettings.Default);
             return Utils.ToPixels(size, PixelsPerPoint);
         }
 
         public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null)
         {
-            // Real production fonts always resolve a typeface (FontAdapter.Typeface never returns null);
+            // Real production fonts always resolve a typeface (PdfCanvasFont.Typeface never returns null);
             // only a test double's font stub can, and this PDF-writing path never sees one of those.
             return Shaper.Shape(font.Typeface!, str, features ?? ShapeSettings.Default).Glyphs.Count;
         }
@@ -233,7 +233,7 @@ namespace PeachPDF.Adapters
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
             try
             {
-                _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
+                _g.DrawString(str, ((PdfCanvasFont)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
             }
             finally
             {
@@ -255,7 +255,7 @@ namespace PeachPDF.Adapters
                 positioned[i] = (glyph.GlyphIndex, point.X, point.Y);
             }
 
-            _g.DrawGlyphsAtPositions(positioned, ((FontAdapter)font).Font, xBrush);
+            _g.DrawGlyphsAtPositions(positioned, ((PdfCanvasFont)font).Font, xBrush);
         }
 
         public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
@@ -266,14 +266,14 @@ namespace PeachPDF.Adapters
             string str, Font font, PaintPoint origin, double bandTop, double bandBottom,
             double letterSpacing = 0, ShapeSettings? features = null)
         {
-            var realFont = ((FontAdapter)font).Font;
+            var realFont = ((PdfCanvasFont)font).Font;
             var typeface = realFont.Typeface;
             if (typeface.Metrics.UnitsPerEm == 0 || bandBottom <= bandTop)
                 return null;
 
             // The baseline this run is actually painted at. Deliberately recomputed here from the font's
             // own metrics, exactly as PdfGraphicsRenderer.DrawString does, rather than taken as
-            // `origin.Y + Font.Ascent`: that property rounds to a whole unit (FontAdapter.Ascent), and
+            // `origin.Y + Font.Ascent`: that property rounds to a whole unit (PdfCanvasFont.Ascent), and
             // an underline's band is one unit tall at the default thickness, so borrowing the rounded
             // value would shift the band by up to half its own height and flip whether a glyph that just
             // grazes the line is skipped.
@@ -350,7 +350,7 @@ namespace PeachPDF.Adapters
             // /BBox is a real PDF construct measured in actual page points with no conversion of its own.
             // Divide by PixelsPerPoint here so the form's declared size already matches what the content
             // painted into it will occupy once ITS OWN drawing calls apply this same division (every
-            // GraphicsAdapter method does, via Utils.Convert). Skipping this - as an earlier version did -
+            // PdfCanvas method does, via Utils.Convert). Skipping this - as an earlier version did -
             // left the /BBox sized in undivided layout units while the content inside was already
             // correctly point-sized; PdfGraphicsRenderer.DrawImage's own placement scale
             // (destRect.Width / image.PointWidth) then divided the whole form by PixelsPerPoint a SECOND
@@ -368,14 +368,14 @@ namespace PeachPDF.Adapters
             // underlying PdfGraphics, which is what actually calls PdfForm.Finish() and closes out the
             // Form XObject's content stream (see PdfGraphics.Dispose()). Without this, the tile's
             // drawing commands would never get flushed into the PDF at all.
-            var tileGraphics = new GraphicsAdapter(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
+            var tileGraphics = new PdfCanvas(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
             // See CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only, see SeedTransform)
             // lets a reader inside the tile (a gradient/pattern reaching it through context-fill/context-stroke,
             // chiefly) relate the tile's coordinate space back to whatever space content outside it is measured
             // in - the tile's own drawing commands are unaffected, since the form's native PDF graphics state
             // (formGraphics, just created above) starts at its own identity regardless.
             tileGraphics.SeedTransform(_accumulated);
-            return (tileGraphics, new ImageAdapter(form));
+            return (tileGraphics, new PdfCanvasImage(form));
         }
 
         protected override bool SupportsLayerEffects => true;
@@ -421,31 +421,31 @@ namespace PeachPDF.Adapters
 
         public override void DrawImageMasked(Image image, Image maskImage, Rect destRect)
         {
-            if (((ImageAdapter)image).Image is PdfForm imageForm && ((ImageAdapter)maskImage).Image is PdfForm maskForm)
+            if (((PdfCanvasImage)image).Image is PdfForm imageForm && ((PdfCanvasImage)maskImage).Image is PdfForm maskForm)
                 _g.DrawImageMasked(imageForm, maskForm, Utils.ToPoints(destRect, PixelsPerPoint));
         }
 
         public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal)
         {
-            if (((ImageAdapter)image).Image is PdfForm imageForm)
+            if (((PdfCanvasImage)image).Image is PdfForm imageForm)
                 _g.DrawImageWithOpacity(imageForm, Utils.ToPoints(destRect, PixelsPerPoint), opacity, blendMode.ToString());
         }
 
         public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
         {
-            if (((ImageAdapter)image).Image is PdfForm imageForm)
+            if (((PdfCanvasImage)image).Image is PdfForm imageForm)
                 _g.DrawImageWithColorMatrix(imageForm, Utils.ToPoints(destRect, PixelsPerPoint), matrix);
         }
 
         public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false)
         {
-            if (((ImageAdapter)image).Image is PdfForm imageForm && ((ImageAdapter)maskImage).Image is PdfForm maskForm)
+            if (((PdfCanvasImage)image).Image is PdfForm imageForm && ((PdfCanvasImage)maskImage).Image is PdfForm maskForm)
                 _g.DrawImageAlphaMasked(imageForm, maskForm, Utils.ToPoints(destRect, PixelsPerPoint), invert);
         }
 
         public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
         {
-            if (((ImageAdapter)top).Image is PdfForm topForm && ((ImageAdapter)bottom).Image is PdfForm bottomForm)
+            if (((PdfCanvasImage)top).Image is PdfForm topForm && ((PdfCanvasImage)bottom).Image is PdfForm bottomForm)
                 _g.DrawImageBlendedOver(topForm, bottomForm, Utils.ToPoints(destRect, PixelsPerPoint), blendMode.ToString());
         }
 
@@ -480,8 +480,8 @@ namespace PeachPDF.Adapters
             _probe = null;
 
             // Graphics wrapped one after another over one PdfGraphics: what draws SVG glyphs goes back to the adapter that had it.
-            if (_g.SvgGlyphPainter is SvgGlyphPainter own && ReferenceEquals(own.Host, this))
-                _g.SvgGlyphPainter = _previousSvgGlyphPainter;
+            if (_g.PdfSvgGlyphPainter is PdfSvgGlyphPainter own && ReferenceEquals(own.Host, this))
+                _g.PdfSvgGlyphPainter = _previousSvgGlyphPainter;
 
             if (ReferenceEquals(_g.RasterContext, _adapter))
                 _g.RasterContext = _previousRasterContext;
@@ -568,7 +568,7 @@ namespace PeachPDF.Adapters
         /// </summary>
         private void DrawWhole(Image image, Rect rect)
         {
-            var xImage = ((ImageAdapter)image).Image;
+            var xImage = ((PdfCanvasImage)image).Image;
             _g.DrawImage(xImage, Utils.ToPoints(rect, PixelsPerPoint),
                 new Rect(0, 0, xImage.PointWidth, xImage.PointHeight));
         }
@@ -606,7 +606,7 @@ namespace PeachPDF.Adapters
 
         public override void DrawImage(Image image, Rect destRect)
         {
-            _g.DrawImage(((ImageAdapter)image).Image, Utils.ToPoints(destRect, PixelsPerPoint));
+            _g.DrawImage(((PdfCanvasImage)image).Image, Utils.ToPoints(destRect, PixelsPerPoint));
         }
 
         public override void DrawPath(Pen pen, GraphicsPath path)
@@ -766,7 +766,7 @@ namespace PeachPDF.Adapters
         /// <summary>A repeating tile as a PDF tiling pattern: a tile made by <see cref="CreateTile"/> stays vector content, any other image is embedded once.</summary>
         private PdfTilingBrush ToXTilingBrush(TileBrush tile)
         {
-            if (tile.Tile is not ImageAdapter { Image: { } image })
+            if (tile.Tile is not PdfCanvasImage { Image: { } image })
                 throw new NotSupportedException("A tile brush on a PDF canvas needs a tile made by this canvas or decoded by its render context.");
 
             // Cell size and the translation are in layout units; the linear part of a transform is unit-free. See ToXBrush's gradients.
@@ -783,7 +783,7 @@ namespace PeachPDF.Adapters
         }
 
         /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent
-        /// cases, the same optimization <c>PdfSharpAdapter.CreateSolidBrush</c> used to apply.</summary>
+        /// cases, the same optimization <c>PdfRenderContext.CreateSolidBrush</c> used to apply.</summary>
         private static Brush ToXSolidBrush(PaintColor color)
         {
             if (color == PaintColor.White)
@@ -797,7 +797,7 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// Builds this backend's own <see cref="Pen"/> from a self-describing <see cref="Pen"/> - the
-        /// PDF-specific half of what <c>PenAdapter</c> used to do directly.
+        /// PDF-specific half of what <c>pen conversion</c> used to do directly.
         /// </summary>
         /// <remarks>
         /// A solid-colour pen goes through <see cref="Pen"/>'s <c>PaintColor</c> constructor rather than its
@@ -807,7 +807,7 @@ namespace PeachPDF.Adapters
         /// built via the brush constructor would keep <c>_color</c>'s default (opaque) value and silently
         /// lose the colour's real alpha (e.g. from an SVG <c>stroke-opacity</c>). Only a gradient-painted
         /// pen (<see cref="RenderContext.GetPen(Brush)"/>, e.g. SVG <c>stroke="url(#gradient)"</c>) needs the
-        /// brush constructor - mirroring the split PdfSharpAdapter's own <c>CreatePen(PaintColor)</c>/
+        /// brush constructor - mirroring the split PdfRenderContext's own <c>CreatePen(PaintColor)</c>/
         /// <c>CreatePen(Brush)</c> used to make explicitly, before both collapsed into this one method.
         /// </remarks>
         private Pen ToXPen(Pen pen)

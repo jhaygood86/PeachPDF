@@ -147,12 +147,12 @@ namespace PeachPDF.Tests.Integration
                 RegexOptions.Compiled);
 
         /// <summary>
-        /// Regression test for the tile-compositing double-scale bug: <c>GraphicsAdapter.CreateTile</c>
+        /// Regression test for the tile-compositing double-scale bug: <c>PdfCanvas.CreateTile</c>
         /// used to size a tile's Form XObject <c>/BBox</c> directly from its caller's width/height, which
         /// arrive in the engine's own "inflated" (pre-<c>PixelsPerPoint</c>-division) layout-unit space -
         /// the same space <c>FragmentPainter.PaintWithOpacity</c> also uses, unconverted, for the
         /// <c>destRect</c> it later composites that same tile with. Content painted INSIDE the tile was
-        /// already correctly divided by <c>PixelsPerPoint</c> (every <see cref="GraphicsAdapter"/> draw
+        /// already correctly divided by <c>PixelsPerPoint</c> (every <see cref="PdfCanvas"/> draw
         /// call does that), so as long as <c>PixelsPerPoint == 1</c> (the common case - no
         /// <c>ShrinkToFit</c>/<c>ScaleToPageSize</c> rescale, default <c>PixelsPerInch</c>) the mismatch
         /// was invisible. Under a real rescale (<c>PixelsPerPoint != 1</c>, exactly what

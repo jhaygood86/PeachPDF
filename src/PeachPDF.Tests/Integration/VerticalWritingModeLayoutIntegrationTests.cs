@@ -1,6 +1,6 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -1166,7 +1166,7 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintBox(container, el!, recording);
 
@@ -1204,7 +1204,7 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintBox(container, el!, recording);
 

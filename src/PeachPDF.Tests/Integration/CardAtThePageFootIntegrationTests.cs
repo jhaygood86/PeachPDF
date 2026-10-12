@@ -1,5 +1,5 @@
 using System.Globalization;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
@@ -50,7 +50,7 @@ public class CardAtThePageFootIntegrationTests
         List<string> painted = [];
         for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
         {
-            using var graphics = new RecordingGraphics(new PdfSharpAdapter());
+            using var graphics = new RecordingGraphics(new PdfRenderContext());
             FragmentPaintHarness.PaintPage(container, graphics, page);
             painted.AddRange(graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString).Select(op => op.Text!));
         }

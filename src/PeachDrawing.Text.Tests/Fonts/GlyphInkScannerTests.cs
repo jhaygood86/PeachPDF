@@ -51,7 +51,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             // is what keeps this class an honest report of where the glyph is painted: the hole in an 'o'
             // is genuinely unpainted, so it comes back as a gap between two runs. Whether a decoration
             // line is nevertheless broken across that gap is the caller's decision, not this one's - see
-            // GraphicsAdapter.MeasureInkCrossings, which hulls a glyph's runs per CSS Text Decoration 4
+            // PdfCanvas.MeasureInkCrossings, which hulls a glyph's runs per CSS Text Decoration 4
             // §2.10.5. Were this to report (0, 100) instead, that choice would no longer be the caller's
             // to make and a genuinely two-piece glyph could not be told from a solid one.
             var outline = Outline(Square(0, 0, 100, 100), ReversedSquare(20, 20, 80, 80));

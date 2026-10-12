@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
@@ -174,7 +174,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
 
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -196,7 +196,7 @@ namespace PeachPDF.Tests.Integration
             }
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var measureGraphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(measureGraphics);
 
             var recorder = new RecordingGraphics(adapter);

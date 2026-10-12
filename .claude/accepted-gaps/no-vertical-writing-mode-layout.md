@@ -315,7 +315,7 @@ garbled glyphs).
 now consulted for an upright run's down-the-column advance, in both the HTML and SVG pipelines, when the
 resolved font actually carries real `vhea`/`vmtx` data (`OpenTypeDescriptor.HasVerticalMetrics`/
 `GlyphIndexToVerticalAdvance`, exposed to layout/paint via `RFont.HasVerticalMetrics`/`GetVerticalAdvance`,
-only overridden by `FontAdapter`). Gated deliberately: the large majority of fonts carry no vertical metrics
+only overridden by `PdfCanvasFont`). Gated deliberately: the large majority of fonts carry no vertical metrics
 at all, so `CssLayoutEngine.NaturalWordSize`'s and `FragmentPainter.Text.cs`'s `PaintUprightVerticalRun`'s
 upright branches (and their SVG counterparts, `SvgRenderer.LayoutGlyphs`/`PaintUprightGlyph`) fall back to
 the pre-existing line-height approximation above byte-for-byte whenever `HasVerticalMetrics` is false — this
@@ -427,7 +427,7 @@ feature was temporarily disabled) and both PDFium and MuPDF rasterization of the
 showcase.
 
 Finding this working took one non-obvious fix: `RFont.Height`/`.Ascent` are lazily primed by that font's
-own *first-ever* `MeasureString` call (`GraphicsAdapter.MeasureString` only calls `FontAdapter.SetMetrics`
+own *first-ever* `MeasureString` call (`PdfCanvas.MeasureString` only calls `PdfCanvasFont.SetMetrics`
 the first time it runs for a given font instance — before that, both properties read back a `-1`
 sentinel). HTML's `CssLayoutEngine.NaturalWordSize` never hits this because `CssBox.MeasureWordsSize`
 always measures a word's natural horizontal size earlier in layout, priming the font before
@@ -451,7 +451,7 @@ not strings); and every glyph was shaped twice (once in `LayoutGlyphs` to prime 
 `Advance`, again independently in `PaintUprightGlyph`/`PaintRotatedGlyph` at paint time) — `GlyphInfo` now
 caches its measured `Size` once in layout for paint to read back. The review also flagged a real
 architectural question, fixed as an immediate follow-up rather than left as a tracked issue:
-`FontAdapter.Height`/`.Ascent`/`.UnderlineOffset` are now resolved eagerly in `FontAdapter`'s own
+`PdfCanvasFont.Height`/`.Ascent`/`.UnderlineOffset` are now resolved eagerly in `PdfCanvasFont`'s own
 constructor instead of lazily on that font's first `MeasureString` call — the underlying `XFont`'s
 descriptor/metrics are already fully resolved by the time its own constructor returns
 (`XFont.Initialize`/`CreateDescriptorAndInitializeFontMetrics` run synchronously), so the old lazy

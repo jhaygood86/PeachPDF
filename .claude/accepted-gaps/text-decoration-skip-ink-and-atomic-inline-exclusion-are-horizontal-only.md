@@ -11,7 +11,7 @@ Release CLI and rasterizing with both PDFium and MuPDF.
 What #1075 deliberately left out of scope, tracked separately as
 [#1145](https://github.com/jhaygood86/PeachPDF/issues/1145): `text-decoration-skip-ink` (#1064) and the
 atomic-inline exclusion (#1066) are *also* x-axis-shaped band reasoning — a margin box measured left to
-right, a band swept horizontally across glyph ink via `GraphicsAdapter.GetInkCrossings`. #1145 closed
+right, a band swept horizontally across glyph ink via `PdfCanvas.GetInkCrossings`. #1145 closed
 the ink-crossing half for a **rotated** (sideways) run: it is one ordinary horizontal glyph run
 reoriented as a whole (`DrawWordGlyphs`'s sideways branch), so `FragmentPainter.AddInkExclusions` can
 measure it once the band is mapped into that run's own pre-rotation ("natural") frame and the resulting

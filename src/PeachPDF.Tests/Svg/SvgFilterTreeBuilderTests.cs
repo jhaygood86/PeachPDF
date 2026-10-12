@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Linq;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterTreeBuilderTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         private static SvgDocument BuildFrom(string filterMarkup)
         {

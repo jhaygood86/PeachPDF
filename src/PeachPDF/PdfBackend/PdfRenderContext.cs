@@ -27,12 +27,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Adapters
+namespace PeachPDF.PdfBackend
 {
     /// <summary>
     /// Adapter for PdfSharp library platform.
     /// </summary>
-    internal sealed class PdfSharpAdapter : RenderContext
+    internal sealed class PdfRenderContext : RenderContext
     {
         /// <summary>The fonts this adapter renders with: the installed fonts plus everything registered on it.</summary>
         private readonly FontSet _fontSet;
@@ -40,7 +40,7 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// Init color resolve.
         /// </summary>
-        internal PdfSharpAdapter()
+        internal PdfRenderContext()
         {
             AddFontFamilyMapping("Helvetica", "Arial");
 
@@ -49,12 +49,12 @@ namespace PeachPDF.Adapters
             // The engine's static constructor already opened and parsed every system font file once,
             // process-wide (including filtering out any file that failed to parse) -
             // registering family names here from that cache instead of re-reading every file avoids paying
-            // that cost again on every single PdfSharpAdapter construction (see the fontconfig-caching fix
+            // that cost again on every single PdfRenderContext construction (see the fontconfig-caching fix
             // in .claude/recent-fixes/2026-09-10-fontconfig-is-asked-once-per-family.md for the same shape
             // of bug one loop earlier in this constructor).
             foreach (var familyName in FontSet.InstalledFamilyNames)
             {
-                AddFontFamily(new FontFamilyAdapter(familyName));
+                AddFontFamily(new PdfCanvasFontFamily(familyName));
             }
 
             // "Arial" itself isn't installed on most Linux distros; fall back to whatever
@@ -184,10 +184,10 @@ namespace PeachPDF.Adapters
 
         /// <summary>
         /// Every PeachPDF-driven canvas (the PDF one, and the raster fallback) shares PeachPDF's own SVG
-        /// engine through <see cref="SvgGlyphPainter"/> - the only <see cref="RenderContext"/> in this
+        /// engine through <see cref="PdfSvgGlyphPainter"/> - the only <see cref="RenderContext"/> in this
         /// codebase with one to offer.
         /// </summary>
-        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new SvgGlyphPainter(host, this);
+        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new PdfSvgGlyphPainter(host, this);
 
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
@@ -216,7 +216,7 @@ namespace PeachPDF.Adapters
                 UnicodeRanges = unicodeRanges
             });
 
-            AddFontFamily(new FontFamilyAdapter(family.Name));
+            AddFontFamily(new PdfCanvasFontFamily(family.Name));
 
             AdoptDefaultFontIfMissing(DefaultFontResolver.DefaultFont, family.Name, IsFontExists(DefaultFontResolver.DefaultFont));
         }
@@ -260,7 +260,7 @@ namespace PeachPDF.Adapters
 
         protected override Image ImageFromStreamInt(Stream memoryStream)
         {
-            return new ImageAdapter(PdfRasterImage.FromStream(() => memoryStream));
+            return new PdfCanvasImage(PdfRasterImage.FromStream(() => memoryStream));
         }
 
         protected override Font CreateFontInt(string family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
@@ -270,16 +270,16 @@ namespace PeachPDF.Adapters
 
         protected override Font CreateFontInt(FontFamily family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
+            return MatchAndCreateFont(((PdfCanvasFontFamily)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        private FontAdapter MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
+        private PdfCanvasFont MatchAndCreateFont(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             var fontStyle = WithoutSynthesisSwitches(style);
             var isItalic = (fontStyle & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
             var match = _fontSet.MatchOrFallback(family, QueryFor(weight, stretch, isItalic, null, size, obliqueSkewSinus, variations));
-            return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
+            return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
         }
 
         /// <summary>
@@ -312,7 +312,7 @@ namespace PeachPDF.Adapters
             return synthesis == match.Synthesis ? match : match with { Synthesis = synthesis };
         }
 
-        private FontAdapter CreateFontAdapter(double size, PaintFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
+        private PdfCanvasFont CreatePdfCanvasFont(double size, PaintFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
         {
             // A face with a slant axis draws the oblique itself, so the renderer must not shear it as well.
             if (obliqueSkewSinus is not null && match.Typeface.Axes.Any(a => a.Tag == AxisTags.Slant))
@@ -321,7 +321,7 @@ namespace PeachPDF.Adapters
             }
 
             var xFont = new TypefaceFont(match.Typeface, size / PixelsPerPoint, match.Synthesis, obliqueSkewSinus);
-            return new FontAdapter(xFont, PixelsPerPoint);
+            return new PdfCanvasFont(xFont, PixelsPerPoint);
         }
 
         protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
@@ -337,7 +337,7 @@ namespace PeachPDF.Adapters
                 return null;
             }
 
-            return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
+            return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
         }
 
         protected override Font? CreateSystemFallbackFontForCodepointInt(double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
@@ -353,7 +353,7 @@ namespace PeachPDF.Adapters
                 if (!fallbackFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
                     return null;
 
-                return CreateFontAdapter(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
+                return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
             }
             catch
             {

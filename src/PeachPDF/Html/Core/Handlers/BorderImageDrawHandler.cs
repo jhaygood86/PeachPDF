@@ -73,7 +73,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
 
             // Every region is cut out of the source with a clip (there is no "draw this sub-rectangle"
-            // operator in PDF - see GraphicsAdapter.DrawImage's own note), and a smoothing renderer
+            // operator in PDF - see PdfCanvas.DrawImage's own note), and a smoothing renderer
             // samples across that clip edge: the neighbouring slice's pixels bleed half a source pixel
             // into this one, which at a slice-to-border scale of 6x is a quarter of the whole border. Any
             // seam between two tiles of a repeated edge smooths the same way. Nearest-neighbour keeps each

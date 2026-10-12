@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -16,14 +16,14 @@ namespace PeachPDF.Tests.Integration
     /// <item>
     /// <b>Magnitude</b>: <see cref="DerivedStyle.ActualFont"/>'s <c>parentSize</c>/<c>remSize</c> inputs
     /// (read from <c>parentBox.ActualFont.Size</c>/<c>GetRemHeight()</c>) are in the adapter's
-    /// device-scaled font-measurement space, not true CSS points - <c>PdfSharpAdapter.CreateFontInt</c>
+    /// device-scaled font-measurement space, not true CSS points - <c>PdfRenderContext.CreateFontInt</c>
     /// divides a requested size by <c>PixelsPerPoint</c> once to get there. Feeding that already-divided
     /// value back in as a relative-resolution reference, whose own result is then divided by
     /// <c>PixelsPerPoint</c> *again* when its font is created, produces a font roughly
     /// <c>PixelsPerPoint</c> times too small - invisible only because most of this suite (and the
     /// library's own default <see cref="PeachPDF.PdfGenerateConfig"/>) happens to use a
     /// <c>PixelsPerPoint</c> of <c>1.0</c>. These tests deliberately build through a bare
-    /// <see cref="PdfSharpAdapter"/> (default <c>PixelsPerPoint</c> of 72) to actually exercise the
+    /// <see cref="PdfRenderContext"/> (default <c>PixelsPerPoint</c> of 72) to actually exercise the
     /// scaling.
     /// </item>
     /// <item>
@@ -259,7 +259,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -268,7 +268,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new PdfCanvas(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

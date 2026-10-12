@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Svg
                     stroke="black"/>
                 </svg>
                 """).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfSharpAdapter());
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfRenderContext());
             var graphics = new RealPathRecordingGraphics();
 
             SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Svg
                   <path d="M50 10 A40 40 0 0 0 50 90" fill="none" stroke="black"/>
                 </svg>
                 """).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfSharpAdapter());
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfRenderContext());
             var graphics = new RealPathRecordingGraphics();
 
             SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));

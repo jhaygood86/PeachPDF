@@ -138,7 +138,7 @@ namespace PeachPDF.PDF.Rendering
             finally
             {
                 // Closes the form's content stream (PdfGraphics.Dispose -> PdfForm.Finish), the same
-                // ownership the tile graphics from GraphicsAdapter.CreateTile has.
+                // ownership the tile graphics from PdfCanvas.CreateTile has.
                 formGraphics.Dispose();
             }
 

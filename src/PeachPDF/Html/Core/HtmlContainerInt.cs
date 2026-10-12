@@ -13,7 +13,7 @@
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -1637,7 +1637,7 @@ namespace PeachPDF.Html.Core
         private ContainerQuerySizes BuildContainerQuerySizes()
         {
             var byId = new Dictionary<uint, ContainerQueryContext>();
-            var pixelsPerPoint = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
             void Walk(CssBox box)
             {
@@ -2212,7 +2212,7 @@ namespace PeachPDF.Html.Core
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
                 return tree;
 
-            var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var ppp = (Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
             var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
@@ -4721,7 +4721,7 @@ namespace PeachPDF.Html.Core
         /// box's own wider containing block (the page box, margins included, per CSS2.1 §10.1): a
         /// <c>position: fixed</c> box's own paint reaches past this via
         /// <c>Canvas.SuspendClipping</c>, which always unwinds the whole clip stack down to the single
-        /// unconditionally-infinite clip <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor
+        /// unconditionally-infinite clip <see cref="PeachPDF.PdfBackend.PdfCanvas"/>'s constructor
         /// establishes before this is ever pushed - so this is the only page-level clip that needs to
         /// exist, provided it is pushed through <c>Canvas.PushClip</c> and not intersected directly on
         /// the raw graphics object (see <c>FragmentPainter.Paint</c>'s own remarks, and issue #880).

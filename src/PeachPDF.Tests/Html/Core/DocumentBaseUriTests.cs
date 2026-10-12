@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Html.Core
         private static readonly RUri LoaderBase = new("https://loader.test/docs/page.html");
 
         private static HtmlContainerInt NewContainer() =>
-            new(new PdfSharpAdapter
+            new(new PdfRenderContext
                 {
                     PixelsPerPoint = 1.0,
                     NetworkLoader = new InMemoryNetworkLoader(LoaderBase, string.Empty)

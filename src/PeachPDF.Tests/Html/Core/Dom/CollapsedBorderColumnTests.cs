@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 </table>"));
 
             var table = LayoutHarness.Descendants(root).First(x => x.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable);
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var adapter = new PeachPDF.PdfBackend.PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -104,7 +104,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                     <tr><td>a</td></tr>
                 </table>"));
 
-            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var adapter = new PeachPDF.PdfBackend.PdfRenderContext();
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 

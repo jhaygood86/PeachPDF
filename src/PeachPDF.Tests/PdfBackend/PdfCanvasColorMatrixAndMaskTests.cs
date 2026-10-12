@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -6,30 +6,30 @@ using System.IO;
 using System.Numerics;
 using System.Text;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// Exercises the new tile-compositing primitives through the actual production adapter
-    /// (<see cref="GraphicsAdapter"/>) rather than the lower-level <c>PdfGraphics</c> calls
+    /// (<see cref="PdfCanvas"/>) rather than the lower-level <c>PdfGraphics</c> calls
     /// <c>PdfGraphicsRendererColorMatrixAndMaskTests</c> drives directly - this is what proves the
     /// <c>Canvas</c>-to-<c>PdfGraphics</c> forwarding (including the <c>PaintBlendMode</c>-to-string
     /// crossing at this exact boundary - see <c>PdfGraphicsRenderer.DrawImageBlendedOver</c>'s remarks)
     /// actually works end to end, not just that the lower-level primitive does.
     /// </summary>
-    public class GraphicsAdapterColorMatrixAndMaskTests
+    public class PdfCanvasColorMatrixAndMaskTests
     {
-        private static (PdfDocument Document, PdfGraphics PageGfx, GraphicsAdapter Graphics, PdfSharpAdapter Adapter) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext Adapter) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var adapter = new PdfSharpAdapter();
-            var graphics = new GraphicsAdapter(adapter, pageGfx, 1.0);
+            var adapter = new PdfRenderContext();
+            var graphics = new PdfCanvas(adapter, pageGfx, 1.0);
             return (document, pageGfx, graphics, adapter);
         }
 
-        private static Image NewTile(GraphicsAdapter graphics, RenderContext adapter, double size, PaintColor color)
+        private static Image NewTile(PdfCanvas graphics, RenderContext adapter, double size, PaintColor color)
         {
             var (tileGraphics, image) = graphics.CreateTile(size, size)!.Value;
             tileGraphics.DrawRectangle(adapter.GetSolidBrush(color), 0, 0, size, size);
@@ -122,7 +122,7 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageWithColorMatrix_NonTileImage_IsNoOp()
         {
             // Contract shared with DrawImageMasked/DrawImageWithOpacity - a no-op if the image wasn't
-            // created via CreateTile on this same Canvas (a raster ImageAdapter, not an PdfForm-backed one).
+            // created via CreateTile on this same Canvas (a raster PdfCanvasImage, not an PdfForm-backed one).
             var (document, pageGfx, graphics, adapter) = NewPage();
             var pngBytes = PeachPDF.Tests.TestSupport.RasterPngFixture.MakeSolidRgbaPngBytes(2, 2, 255, 0, 0);
             var nonTileImage = adapter.ImageFromStream(new MemoryStream(pngBytes));

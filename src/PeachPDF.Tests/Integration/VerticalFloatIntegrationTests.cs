@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -24,14 +24,14 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, _) = await LayoutHarness.LayoutAsync(
                 "<style>html { font-family: 'Vertical Float Fixture' }</style>" + LayoutHarness.Wrap(html),
-                configureAdapter: RegisterFont);
+                configureRenderContext: RegisterFont);
 
             var wrapper = LayoutHarness.FindById(root, "wrapper")!;
             var boxes = ids.ToDictionary(id => id, id => LayoutHarness.FindById(root, id)!);
             return (wrapper, boxes);
         }
 
-        private static Task RegisterFont(PdfSharpAdapter adapter) =>
+        private static Task RegisterFont(PdfRenderContext adapter) =>
             BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Vertical Float Fixture");
 
         [Theory]

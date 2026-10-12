@@ -2,7 +2,7 @@
 
 The engine is its own assembly, `src/PeachDrawing.Text` (NuGet package `PeachDrawing.Text`), which PeachPDF references.
 It therefore cannot reference PeachPDF back: not `PeachPDF.PdfSharpCore`, `PeachPDF.CSS`, `PeachPDF.Html`, `PeachPDF.Svg`,
-`PeachPDF.Adapters`, `PeachPDF.Raster`, `PeachPDF.MathML`, and not the root namespace's types (`PdfGenerator`, `RuneRange`).
+`PeachPDF.PdfBackend`, `PeachPDF.Raster`, `PeachPDF.MathML`, and not the root namespace's types (`PdfGenerator`, `RuneRange`).
 The project reference direction enforces it at compile time; there is no separate guard test. (Before the assembly existed,
 a source-scan test held the same line for the `Fonts/` and `Text/` folders, so the move was a rename and not a rewrite.)
 

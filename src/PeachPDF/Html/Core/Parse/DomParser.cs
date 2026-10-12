@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Animation;
@@ -657,7 +657,7 @@ namespace PeachPDF.Html.Core.Parse
             // inside the previous page's true physical clip window, emitting a clipped-but-present
             // duplicate text run into that page's content stream (see MarginBoxRenderer.cs's own
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
-            var pixelsPerPoint = (htmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = (htmlContainer.Adapter as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
 
             ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                 allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);

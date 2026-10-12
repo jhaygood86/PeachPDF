@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
 {
     public class SvgTreeBuilderTests
     {
-        private static readonly PdfSharpAdapter Adapter = new();
+        private static readonly PdfRenderContext Adapter = new();
 
         // Mirrors the standalone-SVG loader (ImageLoadHandler.LoadSvgFromStream): builds an SVG-local
         // CssData from the markup's own <style> elements and cascades custom properties, so <style>-based
@@ -1387,7 +1387,7 @@ namespace PeachPDF.Tests.Svg
             var span = Assert.Single(text.Spans);
             // Font.Size reports the underlying TypefaceFont's own (adapter-internal-units) size, not the raw
             // SVG font-size value directly - assert the ratio instead of an absolute value so this
-            // isn't coupled to PdfSharpAdapter.PixelsPerPoint's default.
+            // isn't coupled to PdfRenderContext.PixelsPerPoint's default.
             Assert.Equal(3.0, span.Font!.Size / text.Font!.Size, 3);
         }
 

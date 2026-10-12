@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<SvgTextElement> BuildText(string textAttributes, string content = "Hi")
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
 
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><text x="10" y="50" font-family="{Family}" {textAttributes}>{content}</text></svg>""";

@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PDF;
@@ -53,13 +53,13 @@ namespace PeachPDF.Tests.TestSupport
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
-            string html, PdfGenerateConfig config, Func<PdfSharpAdapter, Task>? configureAdapter = null)
+            string html, PdfGenerateConfig config, Func<PdfRenderContext, Task>? configureRenderContext = null)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var adapter = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
-            if (configureAdapter is not null)
+            if (configureRenderContext is not null)
             {
-                await configureAdapter(adapter);
+                await configureRenderContext(adapter);
             }
 
             var orgPageSize = config.PageSize != PageSize.Undefined
@@ -99,7 +99,7 @@ namespace PeachPDF.Tests.TestSupport
         internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
             string html, PdfGenerateConfig config)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var adapter = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             var orgPageSize = config.PageSize != PageSize.Undefined
                 ? PageSizeConverter.ToSize(config.PageSize)

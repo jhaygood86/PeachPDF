@@ -27,7 +27,7 @@ namespace PeachPDF
         // across a separate CreateDocument/AddPages call) re-resolves rather than risking a PDF resource
         // that assumes single-document ownership - see this repo's own PdfSharpCore fork, whose form/image
         // XObjects are written against one specific PdfDocument.
-        private RenderContext? _resolvedByAdapter;
+        private RenderContext? _resolvedByRenderContext;
         private Image? _resolvedImage;
         private SvgDocument? _resolvedSvgDocument;
 
@@ -70,7 +70,7 @@ namespace PeachPDF
         /// </summary>
         internal (Image? Image, SvgDocument? SvgDocument) Resolve(RenderContext adapter)
         {
-            if (_resolvedByAdapter == adapter)
+            if (_resolvedByRenderContext == adapter)
             {
                 return (_resolvedImage, _resolvedSvgDocument);
             }
@@ -97,7 +97,7 @@ namespace PeachPDF
                 _resolvedSvgDocument = null;
             }
 
-            _resolvedByAdapter = adapter;
+            _resolvedByRenderContext = adapter;
             return (_resolvedImage, _resolvedSvgDocument);
         }
 

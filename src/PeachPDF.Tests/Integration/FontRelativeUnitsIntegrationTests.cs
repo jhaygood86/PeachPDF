@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox Root, HtmlContainerInt Container)> Layout(string body, string css = "", double pixelsPerPoint = 1.0)
         {
             var html = $"<html><head><style>body {{ margin:0; font-family:{Mono}; font-size:20pt; }} {css}</style></head><body>{body}</body></html>";
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
+            var adapter = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, Mono);
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Sans);
             var container = new HtmlContainerInt(adapter);
@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.Integration
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
+            using var graphics = new PdfCanvas(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
             return (container.Root!, container);
         }

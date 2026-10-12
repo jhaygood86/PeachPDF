@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<SvgDocument> Build(string markup)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfRenderContext();
             await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, Mono);
             var root = XDocument.Parse(markup).Root!;
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), adapter);
@@ -153,7 +153,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public async Task Lh_UnderNonDefaultPixelsPerPoint_IsTheFontsNormalLineHeightInUserUnits()
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 96.0 / 72.0 };
+            var adapter = new PdfRenderContext { PixelsPerPoint = 96.0 / 72.0 };
             await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, Mono);
             var root = XDocument.Parse(Svg("font-size=\"20\"", """<rect x="1lh" width="1" height="1"/><text>Hi</text>""")).Root!;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), adapter);

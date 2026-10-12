@@ -12,7 +12,7 @@ namespace PeachDrawing;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Coordinates follow <c>GraphicsAdapter</c> exactly</b>, because the same paint code drives both: rects,
+/// <b>Coordinates follow <c>PdfCanvas</c> exactly</b>, because the same paint code drives both: rects,
 /// lines, polygons, images, strings and clips arrive in layout units and are divided by
 /// <see cref="PixelsPerPoint"/> to reach user space (points); paths, pen widths, dash lengths and gradient
 /// geometry are already in user space and used as they are. The current transform maps user space onward, and
@@ -171,7 +171,7 @@ public sealed partial class RasterCanvas : Canvas
         _layoutTransforms.Push(_layoutCtm);
         _layoutCtm = matrix.Then(_layoutCtm);
 
-        // Only the translation is divided by PixelsPerPoint, exactly as GraphicsAdapter does: the linear
+        // Only the translation is divided by PixelsPerPoint, exactly as PdfCanvas does: the linear
         // part is already scale-neutral (see Canvas.PixelsPerPoint).
         var m = new Affine(matrix.M11, matrix.M12, matrix.M21, matrix.M22,
             matrix.M31 / _pixelsPerPoint, matrix.M32 / _pixelsPerPoint);
@@ -661,7 +661,7 @@ public sealed partial class RasterCanvas : Canvas
 
         if (image.GetPixels() is { } buffer)
         {
-            // ImageAdapter.GetPixels() wraps its own cached decode's array as-is (no copy on its side),
+            // PdfCanvasImage.GetPixels() wraps its own cached decode's array as-is (no copy on its side),
             // so this recovers that same array with none here either - important since a tiled background
             // draws the same image many times, and re-copying its pixels on every tile would show up.
             var bytes = System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer.PremultipliedRgba, out var segment) && segment.Offset == 0 && segment.Count == segment.Array!.Length

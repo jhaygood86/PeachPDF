@@ -126,7 +126,7 @@ namespace PeachPDF.Network
             "tga" => "image/x-tga",
             "psd" => "image/vnd.adobe.photoshop",
             "hdr" => "image/vnd.radiance",
-            // RFC 8081 font MIME types, matching the formats PdfSharpAdapter.AddFontFamilyFromUrl accepts.
+            // RFC 8081 font MIME types, matching the formats PdfRenderContext.AddFontFamilyFromUrl accepts.
             "ttf" => "font/ttf",
             "otf" => "font/otf",
             "woff" => "font/woff",

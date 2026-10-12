@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary><c>paint-order</c> on stroked SVG text: which of fill and stroke is painted first.</summary>
     public class SvgTextPaintOrderTests
     {
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         /// <summary>The stroked flag of each path the text painted, in paint order.</summary>
         private static bool[] StrokedOrder(string attrs, string svgAttrs = "")

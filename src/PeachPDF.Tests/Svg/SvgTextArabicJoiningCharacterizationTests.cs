@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Svg
         private const string Alef = "ا";
         private const string Lam = "ل";
 
-        private static readonly PdfSharpAdapter Adapter = new() { PixelsPerPoint = 1.0 };
+        private static readonly PdfRenderContext Adapter = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics.DrawStringCall RenderSingleCall(string body)
         {

@@ -49,7 +49,7 @@ namespace PeachDrawing.Core
 
         /// <summary>
         /// This image's decoded pixels, or null when it has none to decode (a vector Form XObject tile -
-        /// see <c>GraphicsAdapter.CreateTile</c> - has no raster content at all). Lets any
+        /// see <c>PdfCanvas.CreateTile</c> - has no raster content at all). Lets any
         /// <see cref="Canvas"/> backend sample an image's actual pixels without knowing which concrete
         /// <see cref="Image"/> decoded them - the backend-agnostic replacement for downcasting to a
         /// specific concrete image type and reading its native decoded form directly.

@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.Adapters;
+using PeachPDF.PdfBackend;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 
-namespace PeachPDF.Tests.Adapters
+namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
     /// A Form XObject tile reports the exact point size it was created at, not a whole-point count.
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Adapters
             document.AddPage();
 
             var form = new PdfForm(document, new Size(32.6518, 10.4));
-            var image = new ImageAdapter(form);
+            var image = new PdfCanvasImage(form);
 
             Assert.Equal(32.6518, image.Width, 4);
             Assert.Equal(10.4, image.Height, 4);
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Adapters
             using var document = new PdfDocument();
             document.AddPage();
 
-            var tile = new ImageAdapter(new PdfForm(document, new Size(100, boxHeight / 4)));
+            var tile = new PdfCanvasImage(new PdfForm(document, new Size(100, boxHeight / 4)));
 
             Assert.Equal(boxHeight, tile.Height * 4, 3);
         }
