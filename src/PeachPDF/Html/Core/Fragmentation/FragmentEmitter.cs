@@ -2682,29 +2682,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             // its fragments carry raw document coordinates (CSS Position 3: a fixed box's containing
             // block is the page box itself).
             var isFixed = box.IsFixed;
-
-            // Established exactly where a box IS the fixed root (not merely descends from one - only the
-            // root's own left/top ever resolve against the page), and inherited unchanged by descendants
-            // the same way `displacement` is: the whole subtree moves as one rigid unit, since only the
-            // fixed root's own position is ever page-relative.
-            if (box.Position.Value is PositionMode.Fixed)
-                fixedOffset = ComputeFixedPageOffset(box, slot);
-
-            // Unlike fixedOffset, deliberately NOT threaded to descendants: a percentage width/height
-            // resize is this box's own outer extent only (ExtentOf), never its content's - see
-            // Draft.FixedSizeDeltaWidth's own remarks on why the subtree's own layout is not re-flowed.
-            var fixedSizeDelta = box.Position.Value is PositionMode.Fixed
-                ? ComputeFixedSizeOverride(box, slot)
-                : default;
-
-            // Also not threaded to descendants - unlike the fixed case above, this is deliberate for a
-            // different reason: each descendant box asks this same question independently, of its OWN
-            // containing block (exactly as CssLayoutEngine.GetBoxWidth/LineContentRightOf already do), so
-            // a nested box that isn't itself eligible (its containing block isn't root/html/body) simply
-            // gets 0 here on its own, without needing to inherit anything from an ancestor that IS
-            // eligible - see ComputeInlineExtentDelta's own remarks.
-            var inlineExtentDeltaWidth = ComputeInlineExtentDelta(box, slot);
-
             // A run being sliced across bands displaces its whole subtree, so an inherited displacement
             // stands until a box states one of its own - which only the root of such a run does.
             //
@@ -2715,18 +2692,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             // so a fixed box that kept the shift would be claimed by a band a strip away from the one it
             // is drawn in, and would then be clipped to that strip as well.
             displacement = isFixed ? null : DisplacementIn(box, slot.Index) ?? displacement;
-            var shift = displacement?.Shift ?? 0;
-
-            // Subtracting the displacement here is what draws the box lower in this fragmentainer than its
-            // own geometry says, and it reaches every coordinate Localize touches - words, lines, bounds -
-            // in one place. Membership is the other half and cannot ride on it: the region test below is
-            // asked of where the geometry *lands*, so it takes the displaced rectangle explicitly.
-            var originY = isFixed ? 0 : slot.LocalOriginY - shift;
-
-            // A fixed box belongs to the page rather than to any captured instance inside it: it is
-            // emitted in every fragmentainer at identical coordinates, so a column's own extent says
-            // nothing about where it lands.
-            var region = isFixed || capture is null ? PageRegionOf(isFixed, slot) : capture.Value.Region;
 
             // Whether an "emitted nothing here" observation about this box could be relied on later at
             // all. Asked before the observation is read as well as before one is made, so a box that
@@ -2736,7 +2701,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             // (per-visit - which repeating-group page, which column), and whether the box's content is
             // contiguous at all (a property of the box, and therefore of every ancestor that contains it).
             var ownPrunable = MayBeObservedEmpty(box, capture, isFixed, displacement);
-            var contiguous = ContentStaysInOneRun(box, isFixed);
 
             // Skip the whole subtree: the emitter has already walked it once this layout, found it
             // empty at a slot at or before this one, and nothing has written to it since (every write
@@ -2762,6 +2726,69 @@ namespace PeachPDF.Html.Core.Fragmentation
                 if (box.EmittedNothingAtOrBefore(slot.Index, scopeOwner, HistoryFor(scopeOwner)))
                     return null;
             }
+
+            return BuildDraftCore(
+                box, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
+                displacement, fixedOffset, isFixed, ownPrunable);
+        }
+
+        /// <summary>
+        /// The rest of <see cref="BuildDraft"/> once the box is known to need a walk: everything that is not an early
+        /// exit. Split from it so the closures below - local functions and lambdas capturing the parameters, which C#
+        /// allocates when the method is entered, not where they are first used - are only paid for by a box that gets
+        /// this far, rather than by every visit, most of which return at an "emitted nothing here" mark.
+        /// </summary>
+        private Draft? BuildDraftCore(
+            CssBox box,
+            BoxGeometrySnapshot? snapshot,
+            Slot slot,
+            CapturedInstance? capture,
+            int instance,
+            ref bool hasPrintableContent,
+            ref bool subtreePrunable,
+            (CssBox Root, double Shift, Rect Band)? displacement,
+            (double Dx, double Dy) fixedOffset,
+            bool isFixed,
+            bool ownPrunable)
+        {
+
+            // Established exactly where a box IS the fixed root (not merely descends from one - only the
+            // root's own left/top ever resolve against the page), and inherited unchanged by descendants
+            // the same way `displacement` is: the whole subtree moves as one rigid unit, since only the
+            // fixed root's own position is ever page-relative.
+            if (box.Position.Value is PositionMode.Fixed)
+                fixedOffset = ComputeFixedPageOffset(box, slot);
+
+            // Unlike fixedOffset, deliberately NOT threaded to descendants: a percentage width/height
+            // resize is this box's own outer extent only (ExtentOf), never its content's - see
+            // Draft.FixedSizeDeltaWidth's own remarks on why the subtree's own layout is not re-flowed.
+            var fixedSizeDelta = box.Position.Value is PositionMode.Fixed
+                ? ComputeFixedSizeOverride(box, slot)
+                : default;
+
+            // Also not threaded to descendants - unlike the fixed case above, this is deliberate for a
+            // different reason: each descendant box asks this same question independently, of its OWN
+            // containing block (exactly as CssLayoutEngine.GetBoxWidth/LineContentRightOf already do), so
+            // a nested box that isn't itself eligible (its containing block isn't root/html/body) simply
+            // gets 0 here on its own, without needing to inherit anything from an ancestor that IS
+            // eligible - see ComputeInlineExtentDelta's own remarks.
+            var inlineExtentDeltaWidth = ComputeInlineExtentDelta(box, slot);
+
+            var shift = displacement?.Shift ?? 0;
+
+
+            // Subtracting the displacement here is what draws the box lower in this fragmentainer than its
+            // own geometry says, and it reaches every coordinate Localize touches - words, lines, bounds -
+            // in one place. Membership is the other half and cannot ride on it: the region test below is
+            // asked of where the geometry *lands*, so it takes the displaced rectangle explicitly.
+            var originY = isFixed ? 0 : slot.LocalOriginY - shift;
+
+            // A fixed box belongs to the page rather than to any captured instance inside it: it is
+            // emitted in every fragmentainer at identical coordinates, so a column's own extent says
+            // nothing about where it lands.
+            var region = isFixed || capture is null ? PageRegionOf(isFixed, slot) : capture.Value.Region;
+
+            var contiguous = ContentStaysInOneRun(box, isFixed);
 
             List<(CssLineBox Line, Rect Rect)> lines = [];
             List<TextFragment> words = [];
@@ -2853,21 +2880,48 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             List<Draft> children = [];
 
-            foreach (var (childBox, childSnapshot, childCapture, childInstance)
-                     in ChildrenOf(box, snapshot, slot, capture, instance))
+            // Almost every box is ordinary content: not a rowspan placeholder and holding no captured instance at this slot,
+            // so what ChildrenOf would yield is just the shared ordinary walk. Done here as a plain loop, since the iterator
+            // costs a state machine and its closure per call, for every box visited, to say that.
+            if (box is not CssSpacingBox
+                && !(_capturedInstances.TryGetValue((box, slot.Index), out var heldHere) && heldHere.Count > 0))
             {
-                // A child that cannot be relied on makes this box unreliable too: the observation is
-                // about the whole subtree, so it is only as good as its weakest member.
-                var childPrunable = true;
+                for (var i = OrdinaryChildrenStart(box, slot); i < box.Boxes.Count; i++)
+                {
+                    var childBox = box.Boxes[i];
 
-                var childDraft = BuildDraft(
-                    childBox, childSnapshot, slot, childCapture, childInstance,
-                    ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
+                    if (!OrdinaryChildIsVisited(box, childBox, snapshot, slot, capture)) continue;
 
-                contiguous &= childPrunable;
+                    // A child that cannot be relied on makes this box unreliable too: the observation is
+                    // about the whole subtree, so it is only as good as its weakest member.
+                    var childPrunable = true;
 
-                if (childDraft is not null)
-                    children.Add(childDraft);
+                    var childDraft = BuildDraft(
+                        childBox, snapshot, slot, capture, instance,
+                        ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
+
+                    contiguous &= childPrunable;
+
+                    if (childDraft is not null)
+                        children.Add(childDraft);
+                }
+            }
+            else
+            {
+                foreach (var (childBox, childSnapshot, childCapture, childInstance)
+                         in ChildrenOf(box, snapshot, slot, capture, instance))
+                {
+                    var childPrunable = true;
+
+                    var childDraft = BuildDraft(
+                        childBox, childSnapshot, slot, childCapture, childInstance,
+                        ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
+
+                    contiguous &= childPrunable;
+
+                    if (childDraft is not null)
+                        children.Add(childDraft);
+                }
             }
 
             // A box with no per-line rectangles still needs its bounds tested somewhere, and the draft has to
@@ -3501,6 +3555,27 @@ namespace PeachPDF.Html.Core.Fragmentation
                 }
             }
 
+            // Ordinary content: see OrdinaryChildrenStart / OrdinaryChildIsVisited, which the allocation-free walk in
+            // BuildDraftCore shares.
+            var startIndex = OrdinaryChildrenStart(box, slot);
+
+            for (var i = startIndex; i < box.Boxes.Count; i++)
+            {
+                var childBox = box.Boxes[i];
+
+                if (!OrdinaryChildIsVisited(box, childBox, snapshot, slot, capture)) continue;
+
+                yield return (childBox, snapshot, capture, instance);
+            }
+        }
+
+        /// <summary>
+        /// Where <see cref="ChildrenOf"/>'s ordinary-content walk of <paramref name="box"/> begins at <paramref name="slot"/>:
+        /// past any leading run of children already confirmed to hold nothing at or before it. Shared by the iterator and
+        /// by <c>BuildDraftCore</c>'s own loop, which walks an ordinary box without allocating one.
+        /// </summary>
+        private int OrdinaryChildrenStart(CssBox box, Slot slot)
+        {
             // Ordinary content: start past any leading run of children already individually confirmed to
             // hold nothing at or before this slot, rather than re-checking (and re-yielding a BuildDraft
             // call for) each of them again on every later slot - see CssBox.LiveChildStartFor's own remarks.
@@ -3555,90 +3630,100 @@ namespace PeachPDF.Html.Core.Fragmentation
                 box.RecordLiveChildStart(startIndex, slot.Index);
             }
 
-            for (var i = startIndex; i < box.Boxes.Count; i++)
-            {
-                var childBox = box.Boxes[i];
-                if (childBox.IsFragmentWalkPlaceholder) continue;
 
-                // A per-visit skip, never a persisted mark: unlike the cursor above (and
-                // CommitGeometricallySettledObservations' own "behind" proof), this makes no claim
-                // beyond "not here, this slot" - re-derived fresh on every call, so a child correctly
-                // skipped for an earlier slot is simply re-examined, not assumed empty, once its own
-                // slot arrives. That is the fix for the one mark-based version of this got wrong
-                // (RecordEmittedNothingAt states "empty from this slot on, forever" -
-                // EmittedNothingAtOrBefore's own >= check - which is right for content already finished
-                // but not for content that has not started: it would have permanently hidden a row's own,
-                // later, real appearance). Gated on _currentPassIsFinal for the same reason
-                // CommitGeometricallySettledObservations' "behind" proof needs Root.PerformLayout to have
-                // completed the whole range already - only once nothing will ever call it again is a
-                // child's own settled top trustworthy for "not yet started" rather than a still-open
-                // pass's provisional placement (PageBreakTableKeepWithNextIntegrationTests.GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting
-                // is the same class of fixture that makes an intermediate pass's reading unsafe). Gated on
-                // !container.HasOutOfFlowBoxes for a second reason with no cheap per-box test: an
-                // in-flow child can still contain a fixed or absolutely-positioned descendant whose own
-                // visual position does not follow from this child's - skipping the visit would also skip
-                // ever reaching that descendant, the same risk FragmentPainter's own Bounds-based
-                // page-visibility pruning already excludes out-of-flow documents from for. Gated on
-                // !_capturedInstanceOwnerAncestors.Contains(childBox) for the same class of reason: a
-                // captured-instance owner nested anywhere inside this child (a relocated card wrapping a
-                // repeating-header table, say) can still hold a captured instance at a slot this child's
-                // own settled position no longer overlaps - a leftover of an abandoned layout attempt that
-                // BuildDraft's own per-visit recursion would otherwise discover and this filter must not
-                // hide by skipping the visit outright (see _capturedInstanceOwnerAncestors' own remarks).
-                // Gated on !HoldsARowspanContinuation(childBox) for a third: a table row that closes a
-                // rowspan can legitimately start on a later page while the spanning cell's own content -
-                // reachable only through this row's direct CssSpacingBox child, which yields the cell
-                // itself (see this method's own top) - still belongs to an earlier one. Skipping the row
-                // because its own geometry looks "ahead" would skip ever reaching that child too; unlike
-                // the reverted early-break's version of this exclusion, this one does not need to stop an
-                // entire ordered walk over it, only decline to skip this one row.
-                // Gated on snapshot is null for a fourth, structural reason: a non-null snapshot means this
-                // child is being read through a captured instance's own geometry (a repeating header's
-                // source subtree, re-snapshotted and repositioned once per page it repeats on, or a
-                // multi-column column's own fill) rather than the box's live position at all -
-                // OwnGeometryTop reads Rectangles/Words/Location directly off the box, which is one
-                // specific page's translated position, not the geometry this particular slot's draft is
-                // actually being built from (RectanglesOf/BoundsOf read the snapshot, not the live box,
-                // for exactly this reason). Checking the wrong geometry here found exactly this failure:
-                // a repeating header's own row, reached through the header's captured snapshot, still
-                // read its live Location - wherever the live box last happened to sit - rather than this
-                // page's own snapshotted position.
-                // Gated on !SharesAnOversizedLine(childBox) for a fifth (issue #1184): OwnGeometryTop is
-                // this child's OWN top, but a physical line is the monolithic break unit (css-break-3
-                // §4.1, ClaimsLine's own remarks), and once a line sharing this child's content cannot fit
-                // any single fragmentainer, membership is decided by the LINE's own top, not this child's -
-                // which can be a much later slot than the one the line as a whole is actually clipped to
-                // (an ordinary sibling's baseline-driven position beside an oversized replaced element or
-                // an oversized sibling span, say). Skipping this child here on the strength of its own,
-                // now-irrelevant top would drop it from every slot outright: it is never visited at the
-                // earlier slot the line is actually claimed by (this guard is exactly what would have
-                // skipped it), and by the time its own later slot comes around, ClaimsLine itself now
-                // correctly declines the claim there too. Cheap to ask: unlike ClaimsLine's own aggregate
-                // (which must be snapshot-aware to read a repeating header's own captured geometry
-                // correctly), this call site already requires snapshot is null, so the physical line's own
-                // live CssLineBox.Rectangles - already keyed by every box sharing it - can be read
-                // directly, with no walk of CssLineBox.Words needed (see SharesAnOversizedLine's own
-                // remarks on why that reads Rectangles directly rather than LineTop/LineBottom).
-                if (_currentPassIsFinal && !container.HasOutOfFlowBoxes && !_forcingUnprunedReferenceWalk
-                    && snapshot is null
-                    && childBox is not CssSpacingBox
-                    && !childBox.NeverTouchedThisLayout
-                    && !_capturedInstanceOwnerAncestors.Contains(childBox)
-                    && !_capturedInstanceOwners.Contains(childBox)
-                    && !HoldsARowspanContinuation(childBox)
-                    && childBox.OwnGeometryTop() >= container.PageTopOf(slot.Index + 1)
-                    && !SharesAnOversizedLine(childBox))
-                {
-                    continue;
-                }
-
-                // A float the column's fill did not place - it stopped before reaching it, so it is in the next column's flow - is
-                // not in the column's snapshot, and what the box holds now is where a later column put it.
-                if (capture is not null && snapshot is not null && childBox.IsFloated && !snapshot.Holds(childBox)) continue;
-
-                yield return (childBox, snapshot, capture, instance);
-            }
+            return startIndex;
         }
+
+        /// <summary>
+        /// Whether <see cref="ChildrenOf"/>'s ordinary-content walk of <paramref name="box"/> yields
+        /// <paramref name="childBox"/>: false for a placeholder, for a child that cannot show anything in this fragmentainer,
+        /// and for a float the column's fill did not place.
+        /// </summary>
+        private bool OrdinaryChildIsVisited(CssBox box, CssBox childBox, BoxGeometrySnapshot? snapshot, Slot slot,
+            CapturedInstance? capture)
+        {
+            if (childBox.IsFragmentWalkPlaceholder) return false;
+
+            // A per-visit skip, never a persisted mark: unlike the cursor above (and
+            // CommitGeometricallySettledObservations' own "behind" proof), this makes no claim
+            // beyond "not here, this slot" - re-derived fresh on every call, so a child correctly
+            // skipped for an earlier slot is simply re-examined, not assumed empty, once its own
+            // slot arrives. That is the fix for the one mark-based version of this got wrong
+            // (RecordEmittedNothingAt states "empty from this slot on, forever" -
+            // EmittedNothingAtOrBefore's own >= check - which is right for content already finished
+            // but not for content that has not started: it would have permanently hidden a row's own,
+            // later, real appearance). Gated on _currentPassIsFinal for the same reason
+            // CommitGeometricallySettledObservations' "behind" proof needs Root.PerformLayout to have
+            // completed the whole range already - only once nothing will ever call it again is a
+            // child's own settled top trustworthy for "not yet started" rather than a still-open
+            // pass's provisional placement (PageBreakTableKeepWithNextIntegrationTests.GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting
+            // is the same class of fixture that makes an intermediate pass's reading unsafe). Gated on
+            // !container.HasOutOfFlowBoxes for a second reason with no cheap per-box test: an
+            // in-flow child can still contain a fixed or absolutely-positioned descendant whose own
+            // visual position does not follow from this child's - skipping the visit would also skip
+            // ever reaching that descendant, the same risk FragmentPainter's own Bounds-based
+            // page-visibility pruning already excludes out-of-flow documents from for. Gated on
+            // !_capturedInstanceOwnerAncestors.Contains(childBox) for the same class of reason: a
+            // captured-instance owner nested anywhere inside this child (a relocated card wrapping a
+            // repeating-header table, say) can still hold a captured instance at a slot this child's
+            // own settled position no longer overlaps - a leftover of an abandoned layout attempt that
+            // BuildDraft's own per-visit recursion would otherwise discover and this filter must not
+            // hide by skipping the visit outright (see _capturedInstanceOwnerAncestors' own remarks).
+            // Gated on !HoldsARowspanContinuation(childBox) for a third: a table row that closes a
+            // rowspan can legitimately start on a later page while the spanning cell's own content -
+            // reachable only through this row's direct CssSpacingBox child, which yields the cell
+            // itself (see this method's own top) - still belongs to an earlier one. Skipping the row
+            // because its own geometry looks "ahead" would skip ever reaching that child too; unlike
+            // the reverted early-break's version of this exclusion, this one does not need to stop an
+            // entire ordered walk over it, only decline to skip this one row.
+            // Gated on snapshot is null for a fourth, structural reason: a non-null snapshot means this
+            // child is being read through a captured instance's own geometry (a repeating header's
+            // source subtree, re-snapshotted and repositioned once per page it repeats on, or a
+            // multi-column column's own fill) rather than the box's live position at all -
+            // OwnGeometryTop reads Rectangles/Words/Location directly off the box, which is one
+            // specific page's translated position, not the geometry this particular slot's draft is
+            // actually being built from (RectanglesOf/BoundsOf read the snapshot, not the live box,
+            // for exactly this reason). Checking the wrong geometry here found exactly this failure:
+            // a repeating header's own row, reached through the header's captured snapshot, still
+            // read its live Location - wherever the live box last happened to sit - rather than this
+            // page's own snapshotted position.
+            // Gated on !SharesAnOversizedLine(childBox) for a fifth (issue #1184): OwnGeometryTop is
+            // this child's OWN top, but a physical line is the monolithic break unit (css-break-3
+            // §4.1, ClaimsLine's own remarks), and once a line sharing this child's content cannot fit
+            // any single fragmentainer, membership is decided by the LINE's own top, not this child's -
+            // which can be a much later slot than the one the line as a whole is actually clipped to
+            // (an ordinary sibling's baseline-driven position beside an oversized replaced element or
+            // an oversized sibling span, say). Skipping this child here on the strength of its own,
+            // now-irrelevant top would drop it from every slot outright: it is never visited at the
+            // earlier slot the line is actually claimed by (this guard is exactly what would have
+            // skipped it), and by the time its own later slot comes around, ClaimsLine itself now
+            // correctly declines the claim there too. Cheap to ask: unlike ClaimsLine's own aggregate
+            // (which must be snapshot-aware to read a repeating header's own captured geometry
+            // correctly), this call site already requires snapshot is null, so the physical line's own
+            // live CssLineBox.Rectangles - already keyed by every box sharing it - can be read
+            // directly, with no walk of CssLineBox.Words needed (see SharesAnOversizedLine's own
+            // remarks on why that reads Rectangles directly rather than LineTop/LineBottom).
+            if (_currentPassIsFinal && !container.HasOutOfFlowBoxes && !_forcingUnprunedReferenceWalk
+                && snapshot is null
+                && childBox is not CssSpacingBox
+                && !childBox.NeverTouchedThisLayout
+                && !_capturedInstanceOwnerAncestors.Contains(childBox)
+                && !_capturedInstanceOwners.Contains(childBox)
+                && !HoldsARowspanContinuation(childBox)
+                && childBox.OwnGeometryTop() >= container.PageTopOf(slot.Index + 1)
+                && !SharesAnOversizedLine(childBox))
+            {
+                return false;
+            }
+
+            // A float the column's fill did not place - it stopped before reaching it, so it is in the next column's flow - is
+            // not in the column's snapshot, and what the box holds now is where a later column put it.
+            if (capture is not null && snapshot is not null && childBox.IsFloated && !snapshot.Holds(childBox)) return false;
+
+
+            return true;
+        }
+
 
         /// <summary>
         /// Whether <paramref name="box"/> directly holds a <see cref="CssSpacingBox"/> child - a rowspan
