@@ -4,6 +4,7 @@ using PeachPDF.PDF.Filters;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Text;
 
 namespace PeachPDF.PDF.Advanced;
@@ -70,26 +71,22 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
             glyphIndexToText[index] = entry.Value;
         }
 
-        MemoryStream ms = new MemoryStream();
-        StreamWriter wrt = new StreamWriter(ms, Encoding.UTF8);
-        wrt.Write(prefix);
-
-        wrt.WriteLine("1 begincodespacerange");
-        wrt.WriteLine(string.Format("<{0:X4}><{1:X4}>", lowIndex, hiIndex));
-        wrt.WriteLine("endcodespacerange");
+        // Lines end with a plain line feed on every platform, so the same document gives the same bytes everywhere.
+        var cmap = new StringBuilder(prefix);
+        cmap.Append("1 begincodespacerange\n");
+        cmap.Append($"<{lowIndex:X4}><{hiIndex:X4}>\n");
+        cmap.Append("endcodespacerange\n");
 
         // Sorting seems not necessary. The limit is 100 entries, we will see.
-        wrt.WriteLine(string.Format("{0} beginbfrange", glyphIndexToText.Count));
+        cmap.Append(glyphIndexToText.Count).Append(" beginbfrange\n");
         foreach (KeyValuePair<int, string> entry in glyphIndexToText)
-            wrt.WriteLine(string.Format("<{0:X4}><{0:X4}><{1}>", entry.Key, Utf16BigEndianHex(entry.Value)));
-        wrt.WriteLine("endbfrange");
+            cmap.Append($"<{entry.Key:X4}><{entry.Key:X4}><").Append(Utf16BigEndianHex(entry.Value)).Append(">\n");
+        cmap.Append("endbfrange\n");
+        cmap.Append(suffix);
 
-        wrt.Write(suffix);
-        wrt.Dispose();
-
+        // The stream starts with a UTF-8 byte order mark, as it always has.
+        byte[] bytes = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(cmap.ToString())];
         // Compress like content streams
-        byte[] bytes = ms.ToArray();
-        ms.Dispose();
         if (Owner.Options.CompressContentStreams)
         {
             bytes = StreamCompression.Encode(_document.Options, bytes, out var filterName);
@@ -120,10 +117,10 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
     /// </summary>
     private static string Utf16BigEndianHex(string text)
     {
-        StringBuilder sb = new StringBuilder(text.Length * 4);
+        var hex = new StringBuilder(text.Length * 4);
         foreach (char c in text)
-            sb.Append(((int)c).ToString("X4"));
-        return sb.ToString();
+            hex.Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+        return hex.ToString();
     }
 
     internal sealed class Keys : PdfStream.Keys
