@@ -8,11 +8,11 @@ reasoning and the traps.
 
 **Method.** Every step was checked by rendering the 218 TestHarness showcases and hashing each PDF's decompressed
 objects and streams against a baseline taken before the step (dates, font subset tags, `/ID`, `/NM`, `/M` stripped;
-two runs of one build give identical hashes). Almost every step was byte-identical. Four were not, on purpose, and
+two runs of one build give identical hashes). Almost every step was byte-identical. Three were not, on purpose, and
 each was re-baselined only after checking that the difference was what the step intended: float matrices
 (61 PDFs, at most 0.0003 pt), path emission from Core's contours (116 PDFs differ in text, none rasterizes
-differently in PDFium/MuPDF at 96 and 200 dpi), the ToUnicode CMap (line feeds on every platform: it used
-`WriteLine`, so Windows wrote CRLF), and nothing else.
+differently in PDFium/MuPDF at 96 and 200 dpi), and the ToUnicode CMap (line feeds on every platform: it used
+`WriteLine`, so Windows wrote CRLF).
 
 **Defects found by running rather than reading.**
 - `PdfImage.ReadTrueColorMemoryBitmap`'s header guard was a no-op through an operator-precedence mistake; the
