@@ -70,7 +70,7 @@ namespace PeachPDF.PDF
             get
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.PageIndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index of a page is out of range.");
 
                 PdfDictionary dict = (PdfDictionary)((PdfReference)PagesArray.Elements[index]).Value;
                 if (!(dict is PdfPage))
@@ -139,7 +139,7 @@ namespace PeachPDF.PDF
                 for (int idx = 0; idx < count; idx++)
                 {
                     if (ReferenceEquals(this[idx], page))
-                        throw new InvalidOperationException(PSSR.MultiplePageInsert);
+                        throw new InvalidOperationException("The page cannot be added to this document because the document already owned this page.");
                 }
 
                 // TODO: check this case
@@ -226,7 +226,7 @@ namespace PeachPDF.PDF
             get
             {
                 if (_pagesArray == null)
-                    _pagesArray = (PdfArray)Elements.GetValue(Keys.Kids, VCF.Create);
+                    _pagesArray = (PdfArray)Elements.GetValue(Keys.Kids, ValueCreationFlags.Create);
                 return _pagesArray;
             }
         }
@@ -295,7 +295,7 @@ namespace PeachPDF.PDF
                 get
                 {
                     if (_index == -1 || _index >= _list.Count)
-                        throw new InvalidOperationException(PSSR.ListEnumCurrentOutOfRange);
+                        throw new InvalidOperationException("Enumeration out of range.");
                     return _currentElement!;
                 }
             }

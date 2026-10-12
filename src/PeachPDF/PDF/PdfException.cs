@@ -27,23 +27,38 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using System;
+
 namespace PeachPDF.PDF
 {
     /// <summary>
-    /// Version info of this assembly.
+    /// Base class of all exceptions in the PDFsharp frame work.
     /// </summary>
-    static class VersionInfo
+    internal class PdfException : Exception
     {
-        public const string Title = ProductVersionInfo.Title;
-        public const string Description = ProductVersionInfo.Description;
-        public const string Producer = ProductVersionInfo.Producer;
-        public const string Version = ProductVersionInfo.Version;
-        public const string Url = ProductVersionInfo.Url;
-        public const string Configuration = "";
-        public const string Company = ProductVersionInfo.Company;
-        public const string Product = ProductVersionInfo.Product;
-        public const string Copyright = ProductVersionInfo.Copyright;
-        public const string Trademark = ProductVersionInfo.Trademark;
-        public const string Culture = "";
+        // The class is not yet used
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PdfException"/> class.
+        /// </summary>
+        public PdfException()
+        { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PdfException"/> class.
+        /// </summary>
+        /// <param name="message">The exception message.</param>
+        public PdfException(string message)
+            : base(message)
+        { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PdfException"/> class.
+        /// </summary>
+        /// <param name="message">The exception message.</param>
+        /// <param name="innerException">The inner exception.</param>
+        public PdfException(string message, Exception innerException) :
+            base(message, innerException)
+        { }
     }
 }

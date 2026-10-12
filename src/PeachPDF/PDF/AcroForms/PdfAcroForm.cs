@@ -17,7 +17,7 @@ namespace PeachPDF.PDF.AcroForms
         /// <summary>The document's top-level fields ("/Fields") - one entry per text/checkbox/radio-group/combo field; a radio group's own widget kids are not listed here.</summary>
         public PdfArray Fields
         {
-            get { return _fields ??= (PdfArray)Elements.GetValue(Keys.Fields, VCF.CreateIndirect); }
+            get { return _fields ??= (PdfArray)Elements.GetValue(Keys.Fields, ValueCreationFlags.CreateIndirect); }
         }
         PdfArray _fields = null!;
 
@@ -38,7 +38,7 @@ namespace PeachPDF.PDF.AcroForms
         /// <summary>The default resource dictionary ("/DR") - the shared Helvetica font resource every field's "/DA" and generated appearance stream references.</summary>
         public PdfDictionary DefaultResources
         {
-            get { return _defaultResources ??= (PdfDictionary)Elements.GetValue(Keys.DR, VCF.Create); }
+            get { return _defaultResources ??= (PdfDictionary)Elements.GetValue(Keys.DR, ValueCreationFlags.Create); }
         }
         PdfDictionary _defaultResources = null!;
 

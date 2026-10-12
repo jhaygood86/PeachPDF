@@ -189,7 +189,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ActualTextOwnership_UsesPositionallyAlignedLogicalTextForBidiTransformedRun()
         {
-            // Mirrors CMapInfo.AddShapedText's contract. The displayed RTL run was reversed/mirrored
+            // Mirrors CharacterMapInfo.AddShapedText's contract. The displayed RTL run was reversed/mirrored
             // from source "(AB)" into "(BA)"; ReverseRunes(source) = ")BA(" is the logical source
             // aligned position-for-position with the displayed glyphs.
             PlacedGlyph[] glyphs =

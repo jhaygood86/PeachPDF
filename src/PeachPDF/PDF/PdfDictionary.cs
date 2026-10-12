@@ -50,7 +50,7 @@ namespace PeachPDF.PDF
     /// Value creation flags. Specifies whether and how a value that does not exist is created.
     /// </summary>
     // ReSharper disable InconsistentNaming
-    internal enum VCF
+    internal enum ValueCreationFlags
     // ReSharper restore InconsistentNaming
     {
         /// <summary>
@@ -873,12 +873,12 @@ namespace PeachPDF.PDF
             /// <summary>
             /// Gets the value for the specified key. If the value does not exist, it is optionally created.
             /// </summary>
-            public PdfItem GetValue(string key, VCF options)
+            public PdfItem GetValue(string key, ValueCreationFlags options)
             {
                 PdfItem value = this[key];
 
                 if (value == null)
-                    return options == VCF.None ? null : CreateMissingValue(key, options);
+                    return options == ValueCreationFlags.None ? null : CreateMissingValue(key, options);
 
                 if (value is PdfReference iref)
                     return ResolveIndirectValue(key, iref);
@@ -896,7 +896,7 @@ namespace PeachPDF.PDF
             /// <summary>
             /// Creates and stores the value for a key that has no value yet, per GetValue's options.
             /// </summary>
-            PdfItem CreateMissingValue(string key, VCF options)
+            PdfItem CreateMissingValue(string key, ValueCreationFlags options)
             {
                 Type type = GetValueType(key) ?? throw new NotImplementedException("Cannot create value for key: " + key);
 
@@ -906,7 +906,7 @@ namespace PeachPDF.PDF
                     : typeof(PdfArray).IsAssignableFrom(type) ? CreateArray(type, null)
                     : throw new NotImplementedException("Type other than array or dictionary.");
 
-                if (options == VCF.CreateIndirect)
+                if (options == ValueCreationFlags.CreateIndirect)
                 {
                     _ownerDictionary.Owner._irefTable.Add(obj);
                     this[key] = obj.Reference;
@@ -965,11 +965,11 @@ namespace PeachPDF.PDF
             }
 
             /// <summary>
-            /// Short cut for GetValue(key, VCF.None).
+            /// Short cut for GetValue(key, ValueCreationFlags.None).
             /// </summary>
             public PdfItem GetValue(string key)
             {
-                return GetValue(key, VCF.None);
+                return GetValue(key, ValueCreationFlags.None);
             }
 
             /// <summary>

@@ -41,9 +41,9 @@ namespace PeachPDF.PDF.Advanced
     /// <summary>
     /// Helper class that determines the characters used in a particular font.
     /// </summary>
-    internal class CMapInfo
+    internal class CharacterMapInfo
     {
-        public CMapInfo(Typeface typeface)
+        public CharacterMapInfo(Typeface typeface)
         {
             Debug.Assert(typeface != null);
             _typeface = typeface;

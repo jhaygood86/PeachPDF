@@ -207,7 +207,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         [Fact]
         public void HasAnnotations_WithNoAnnotsEntry_Throws()
         {
-            // HasAnnotations's getter does `Elements.GetValue(Keys.Annots)` (no VCF.Create), which
+            // HasAnnotations's getter does `Elements.GetValue(Keys.Annots)` (no ValueCreationFlags.Create), which
             // returns null when the page has no /Annots entry yet, then immediately dereferences it
             // via `_annotations.Page = this` -- a real, pre-existing NullReferenceException bug for
             // any page that hasn't had an annotation added yet. Documented here, not fixed.

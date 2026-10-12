@@ -59,7 +59,7 @@ namespace PeachPDF.PDF
             if (value == null)
                 throw new ArgumentNullException("value");
             if (value.Length == 0 || value[0] != '/')
-                throw new ArgumentException(PSSR.NameMustStartWithSlash);
+                throw new ArgumentException("A PDF name must start with a slash (/).");
 
             _value = value;
         }

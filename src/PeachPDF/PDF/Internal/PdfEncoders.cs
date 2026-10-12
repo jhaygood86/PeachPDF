@@ -492,7 +492,7 @@ namespace PeachPDF.PDF.Internal
         /// </summary>
         public static string ToString(double val)
         {
-            return val.ToString(Config.SignificantFigures3, CultureInfo.InvariantCulture);
+            return val.ToString(PdfNumberFormats.ThreeDecimals, CultureInfo.InvariantCulture);
         }
 
         /// <summary>
@@ -500,7 +500,7 @@ namespace PeachPDF.PDF.Internal
         /// </summary>
         public static string ToString(PaintColor color, PdfColorMode colorMode, bool withAlpha = false)
         {
-            const string format = Config.SignificantFigures3;
+            const string format = PdfNumberFormats.ThreeDecimals;
 
             // If not defined let color decide
             if (colorMode == PdfColorMode.Undefined)
@@ -532,7 +532,7 @@ namespace PeachPDF.PDF.Internal
         /// </summary>
         public static string ToString(Matrix3x2 matrix)
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
             return String.Format(CultureInfo.InvariantCulture,
                 "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "}",
                 matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.M31, matrix.M32);

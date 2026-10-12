@@ -30,7 +30,7 @@
 namespace PeachPDF.PDF
 {
     /// <summary>
-    /// Sets the mode for the Deflater (FlateEncoder).
+    /// Sets the mode for the Deflater (PdfFlateEncoder).
     /// </summary>
     internal enum PdfFlateEncodeMode
     {

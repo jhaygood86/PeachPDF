@@ -79,7 +79,7 @@ namespace PeachPDF.PDF.Advanced
             get
             {
                 if (_resources == null)
-                    _resources = (PdfResources)Elements.GetValue(Keys.Resources, VCF.Create);
+                    _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create);
                 return _resources;
             }
         }

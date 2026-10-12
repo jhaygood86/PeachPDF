@@ -98,8 +98,8 @@ namespace PeachPDF.PDF.Rendering
 
         public void RealizePen(Pen pen, PdfColorMode colorMode)
         {
-            const string frmt2 = Config.SignificantFigures2;
-            const string format = Config.SignificantFigures3;
+            const string twoDecimals = PdfNumberFormats.TwoDecimals;
+            const string format = PdfNumberFormats.ThreeDecimals;
             PaintColor color = pen.Paint is SolidBrush solidPaint ? solidPaint.PaintColor : PaintColor.Empty;
             const bool overPrint = false;
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
@@ -151,19 +151,19 @@ namespace PeachPDF.PDF.Rendering
                         break;
 
                     case DashStyle.Dash:
-                        _renderer.AppendFormatArgs("[{0:" + frmt2 + "} {1:" + frmt2 + "}]0 d\n", dash, dot);
+                        _renderer.AppendFormatArgs("[{0:" + twoDecimals + "} {1:" + twoDecimals + "}]0 d\n", dash, dot);
                         break;
 
                     case DashStyle.Dot:
-                        _renderer.AppendFormatArgs("[{0:" + frmt2 + "}]0 d\n", dot);
+                        _renderer.AppendFormatArgs("[{0:" + twoDecimals + "}]0 d\n", dot);
                         break;
 
                     case DashStyle.DashDot:
-                        _renderer.AppendFormatArgs("[{0:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "}]0 d\n", dash, dot);
+                        _renderer.AppendFormatArgs("[{0:" + twoDecimals + "} {1:" + twoDecimals + "} {1:" + twoDecimals + "} {1:" + twoDecimals + "}]0 d\n", dash, dot);
                         break;
 
                     case DashStyle.DashDotDot:
-                        _renderer.AppendFormatArgs("[{0:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "} {1:" + frmt2 + "}]0 d\n", dash, dot);
+                        _renderer.AppendFormatArgs("[{0:" + twoDecimals + "} {1:" + twoDecimals + "} {1:" + twoDecimals + "} {1:" + twoDecimals + "} {1:" + twoDecimals + "} {1:" + twoDecimals + "}]0 d\n", dash, dot);
                         break;
 
                     case DashStyle.Custom:
@@ -295,7 +295,7 @@ namespace PeachPDF.PDF.Rendering
                     // Come here in case of bold simulation.
                     RealizeFillColor(color, false, colorMode);
                     //color = PaintColor.FromArgb(0, 128, 0);
-                    RealizePen(PdfPaints.CreatePen(color, fontEmSize * Const.BoldEmphasis), colorMode);
+                    RealizePen(PdfPaints.CreatePen(color, fontEmSize * PdfConstants.BoldEmphasis), colorMode);
                 }
                 else
                     throw new InvalidOperationException("Only rendering modes 0 and 2 are currently supported.");
@@ -481,7 +481,7 @@ namespace PeachPDF.PDF.Rendering
 
         public void RealizeFont(TypefaceFont font, Brush brush, int renderingMode, double letterSpacing = 0)
         {
-            const string format = Config.SignificantFigures3;
+            const string format = PdfNumberFormats.ThreeDecimals;
 
             // Modes 0 (fill), 2 (fill then stroke), and 3 (neither: invisible extraction text).
             RealizeBrush(brush, _renderer._colorMode, renderingMode, font.Size); // _renderer.page.document.Options.ColorMode);
@@ -508,7 +508,7 @@ namespace PeachPDF.PDF.Rendering
             {
                 // Bold-emphasis simulation already uses Tc for its own purpose (thickening strokes) -
                 // letter-spacing adds on top of that, rather than overriding it.
-                double charSpace = font.Size * Const.BoldEmphasis + letterSpacing;
+                double charSpace = font.Size * PdfConstants.BoldEmphasis + letterSpacing;
                 if (_realizedCharSpace != charSpace)
                 {
                     _renderer.AppendFormatDouble("{0:" + format + "} Tc\n", charSpace);
@@ -608,7 +608,7 @@ namespace PeachPDF.PDF.Rendering
             {
                 Debug.Assert(!UnrealizedCtm.IsIdentity, "mrCtm is unnecessarily set.");
 
-                const string format = Config.SignificantFigures7;
+                const string format = PdfNumberFormats.SevenDecimals;
 
                 Matrix3x2 matrix = UnrealizedCtm;
                 // Use up to six decimal digits to prevent round up problems.

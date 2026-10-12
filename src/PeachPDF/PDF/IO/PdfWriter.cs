@@ -172,7 +172,7 @@ namespace PeachPDF.PDF.IO
         public void Write(double value)
         {
             WriteSeparator(CharCat.Character);
-            WriteRaw(value.ToString(Config.SignificantFigures7, CultureInfo.InvariantCulture));
+            WriteRaw(value.ToString(PdfNumberFormats.SevenDecimals, CultureInfo.InvariantCulture));
             _lastCat = CharCat.Character;
         }
 
@@ -182,7 +182,7 @@ namespace PeachPDF.PDF.IO
         public void Write(PdfReal value)
         {
             WriteSeparator(CharCat.Character);
-            WriteRaw(value.Value.ToString(Config.SignificantFigures7, CultureInfo.InvariantCulture));
+            WriteRaw(value.Value.ToString(PdfNumberFormats.SevenDecimals, CultureInfo.InvariantCulture));
             _lastCat = CharCat.Character;
         }
 
@@ -246,7 +246,7 @@ namespace PeachPDF.PDF.IO
 
         public void Write(PdfRectangle rect)
         {
-            const string format = Config.SignificantFigures3;
+            const string format = PdfNumberFormats.ThreeDecimals;
             WriteSeparator(CharCat.Delimiter, '/');
             WriteRaw(PdfEncoders.Format("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", rect.X1, rect.Y1, rect.X2, rect.Y2));
             _lastCat = CharCat.Delimiter;
@@ -469,7 +469,7 @@ namespace PeachPDF.PDF.IO
 
             if (_layout == PdfWriterLayout.Verbose)
             {
-                WriteRaw(String.Format("% PDFsharp Version {0} (verbose mode)\n", VersionInfo.Version));
+                WriteRaw(String.Format("% PDFsharp Version {0} (verbose mode)\n", PdfProductInfo.Version));
                 // Keep some space for later fix-up.
                 _commentPosition = (int)_stream.Position + 2;
                 WriteRaw("%                                                \n");
@@ -599,7 +599,7 @@ namespace PeachPDF.PDF.IO
                 ch == '[' || ch == ']' || ch == '{' || ch == '}' ||
                 ch == '/' || ch == '%')
                 return CharCat.Delimiter;
-            if (ch == Chars.LF)
+            if (ch == '\n')
                 return CharCat.NewLine;
             return CharCat.Character;
         }

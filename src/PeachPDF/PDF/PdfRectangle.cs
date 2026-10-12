@@ -115,7 +115,7 @@ namespace PeachPDF.PDF
 
             PdfArray array = item as PdfArray;
             if (array == null)
-                throw new InvalidOperationException(PSSR.UnexpectedTokenInPdfFile);
+                throw new InvalidOperationException("Unexpected token in PDF file. The PDF file may be corrupt. If it is not, please send us the file for service.");
 
             _x1 = array.Elements.GetReal(0);
             _y1 = array.Elements.GetReal(1);
@@ -320,7 +320,7 @@ namespace PeachPDF.PDF
         /// </summary>
         public override string ToString()
         {
-            const string format = Config.SignificantFigures3;
+            const string format = PdfNumberFormats.ThreeDecimals;
             return PdfEncoders.Format("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", _x1, _y1, _x2, _y2);
         }
 
@@ -341,7 +341,7 @@ namespace PeachPDF.PDF
         {
             get
             {
-                const string format = Config.SignificantFigures10;
+                const string format = PdfNumberFormats.TenDecimals;
                 return String.Format(CultureInfo.InvariantCulture,
                     "X1={0:" + format + "}, X2={1:" + format + "}, Y1={2:" + format + "}, Y2={3:" + format + "}", _x1, _y1, X2, _y2);
             }

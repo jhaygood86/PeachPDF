@@ -343,7 +343,7 @@ namespace PeachPDF.PDF.Drawing
                 Debug.Assert(IsTemplate, "This function is for form templates only.");
                 return FormXObject.Resources;
                 //if (resources == null)
-                //  resources = (PdfResources)pdfForm.Elements.GetValue(PdfFormXObject.Keys.Resources, VCF.Create); // VCF.CreateIndirect
+                //  resources = (PdfResources)pdfForm.Elements.GetValue(PdfFormXObject.Keys.Resources, ValueCreationFlags.Create); // ValueCreationFlags.CreateIndirect
                 //return resources;
             }
         }

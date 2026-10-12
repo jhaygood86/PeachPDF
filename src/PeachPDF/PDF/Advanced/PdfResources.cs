@@ -190,7 +190,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfResourceMap Fonts
         {
-            get { return _fonts ?? (_fonts = (PdfResourceMap)Elements.GetValue(Keys.Font, VCF.Create)); }
+            get { return _fonts ?? (_fonts = (PdfResourceMap)Elements.GetValue(Keys.Font, ValueCreationFlags.Create)); }
         }
         PdfResourceMap _fonts = null!;
 
@@ -199,7 +199,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfResourceMap XObjects
         {
-            get { return _xObjects ?? (_xObjects = (PdfResourceMap)Elements.GetValue(Keys.XObject, VCF.Create)); }
+            get { return _xObjects ?? (_xObjects = (PdfResourceMap)Elements.GetValue(Keys.XObject, ValueCreationFlags.Create)); }
         }
         PdfResourceMap _xObjects = null!;
 
@@ -208,7 +208,7 @@ namespace PeachPDF.PDF.Advanced
         {
             get
             {
-                return _extGStates ?? (_extGStates = (PdfResourceMap)Elements.GetValue(Keys.ExtGState, VCF.Create));
+                return _extGStates ?? (_extGStates = (PdfResourceMap)Elements.GetValue(Keys.ExtGState, ValueCreationFlags.Create));
             }
         }
         PdfResourceMap _extGStates = null!;
@@ -216,28 +216,28 @@ namespace PeachPDF.PDF.Advanced
         // TODO: make own class
         internal PdfResourceMap ColorSpaces
         {
-            get { return _colorSpaces ?? (_colorSpaces = (PdfResourceMap)Elements.GetValue(Keys.ColorSpace, VCF.Create)); }
+            get { return _colorSpaces ?? (_colorSpaces = (PdfResourceMap)Elements.GetValue(Keys.ColorSpace, ValueCreationFlags.Create)); }
         }
         PdfResourceMap _colorSpaces = null!;
 
         // TODO: make own class
         internal PdfResourceMap Patterns
         {
-            get { return _patterns ?? (_patterns = (PdfResourceMap)Elements.GetValue(Keys.Pattern, VCF.Create)); }
+            get { return _patterns ?? (_patterns = (PdfResourceMap)Elements.GetValue(Keys.Pattern, ValueCreationFlags.Create)); }
         }
         PdfResourceMap _patterns = null!;
 
         // TODO: make own class
         internal PdfResourceMap Shadings
         {
-            get { return _shadings ?? (_shadings = (PdfResourceMap)Elements.GetValue(Keys.Shading, VCF.Create)); }
+            get { return _shadings ?? (_shadings = (PdfResourceMap)Elements.GetValue(Keys.Shading, ValueCreationFlags.Create)); }
         }
         PdfResourceMap _shadings = null!;
 
         // TODO: make own class
         internal PdfResourceMap Properties
         {
-            get { return _properties ?? (_properties = (PdfResourceMap)Elements.GetValue(Keys.Properties, VCF.Create)); }
+            get { return _properties ?? (_properties = (PdfResourceMap)Elements.GetValue(Keys.Properties, ValueCreationFlags.Create)); }
         }
         PdfResourceMap _properties = null!;
 

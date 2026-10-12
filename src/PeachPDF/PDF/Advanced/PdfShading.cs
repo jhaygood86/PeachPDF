@@ -144,7 +144,7 @@ namespace PeachPDF.PDF.Advanced
             double ry_v = Math.Abs(topEdge_v.Y - center_v.Y);
 
             bool isEllipse = Math.Abs(rx_v - ry_v) > 0.01;
-            const string fmt = Config.SignificantFigures3;
+            const string fmt = PdfNumberFormats.ThreeDecimals;
 
             // Set for a shading whose /Coords are the unit circle (focal point included) and whose real
             // position, size and orientation ride in this matrix; shared with the alpha soft mask below.
@@ -241,7 +241,7 @@ namespace PeachPDF.PDF.Advanced
                 alphaFn.Elements["/N"] = new PdfInteger(1);
             }
 
-            const string fmt = Config.SignificantFigures3;
+            const string fmt = PdfNumberFormats.ThreeDecimals;
             var grayShading = new PdfDictionary();
             grayShading.Elements["/ShadingType"] = new PdfInteger(3);
             grayShading.Elements["/ColorSpace"] = new PdfName("/DeviceGray");
@@ -347,7 +347,7 @@ namespace PeachPDF.PDF.Advanced
             double x2 = pt2.X;
             double y2 = pt2.Y;
 
-            const string format = Config.SignificantFigures3;
+            const string format = PdfNumberFormats.ThreeDecimals;
             Elements[Keys.Coords] = new PdfLiteral("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", x1, y1, x2, y2);
 
             Elements[Keys.Extend] = new PdfLiteral((brush.Spread == GradientSpread.Repeat) ? "[false false]" : "[true true]");
@@ -400,7 +400,7 @@ namespace PeachPDF.PDF.Advanced
             }
 
             // DeviceGray axial shading with same axis as color shading
-            const string fmt = Config.SignificantFigures3;
+            const string fmt = PdfNumberFormats.ThreeDecimals;
             var grayShading = new PdfDictionary();
             grayShading.Elements["/ShadingType"] = new PdfInteger(2);
             grayShading.Elements["/ColorSpace"] = new PdfName("/DeviceGray");

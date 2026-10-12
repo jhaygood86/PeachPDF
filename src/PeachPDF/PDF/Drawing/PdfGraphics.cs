@@ -270,7 +270,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (points == null)
                 throw new ArgumentNullException("points");
             if (points.Length < 2)
-                throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
+                throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
             if (_renderer != null)
                 _renderer.DrawLines(pen, points);
@@ -373,7 +373,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         public void DrawRectangle(Pen pen, Brush brush, double x, double y, double width, double height)
         {
             if (pen == null && brush == null)
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
+                throw new ArgumentNullException("pen and brush", "Pen or Brush or both must not be null.");
 
             if (_renderer != null)
                 _renderer.DrawRectangle(pen, brush, x, y, width, height);
@@ -413,7 +413,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (points == null)
                 throw new ArgumentNullException("points");
             if (points.Length < 2)
-                throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
+                throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
             if (_renderer != null)
                 _renderer.DrawPolygon(pen, null, points, FillMode.EvenOdd);  // FillMode is ignored
@@ -431,7 +431,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (points == null)
                 throw new ArgumentNullException("points");
             if (points.Length < 2)
-                throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
+                throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
             if (_renderer != null)
                 _renderer.DrawPolygon(null, brush, points, fillmode);
@@ -445,11 +445,11 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
         public void DrawPolygon(Pen pen, Brush brush, PaintPoint[] points, FillMode fillmode)
         {
             if (pen == null && brush == null)
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
+                throw new ArgumentNullException("pen and brush", "Pen or Brush or both must not be null.");
             if (points == null)
                 throw new ArgumentNullException("points");
             if (points.Length < 2)
-                throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
+                throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
             if (_renderer != null)
                 _renderer.DrawPolygon(pen, brush, points, fillmode);
@@ -517,7 +517,7 @@ namespace PeachPDF.PDF.Drawing  // #??? aufr�umen
             if (pen == null && brush == null)
             {
                 // ReSharper disable once NotResolvedInText
-                throw new ArgumentNullException("pen and brush", PSSR.NeedPenOrBrush);
+                throw new ArgumentNullException("pen and brush", "Pen or Brush or both must not be null.");
             }
             if (path == null)
                 throw new ArgumentNullException("path");

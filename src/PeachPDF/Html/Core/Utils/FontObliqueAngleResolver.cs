@@ -7,7 +7,7 @@ namespace PeachPDF.Html.Core.Utils
     /// Resolves a <c>font-style</c> value's CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c> form (e.g.
     /// <c>oblique 10deg</c>) to the sine of that angle - the exact quantity the faux-italic renderer
     /// needs as its glyph-shear factor (see <c>PdfGraphicsRenderer</c>'s use of
-    /// <c>Const.ItalicSkewAngleSinus</c>, a fixed sin(20°) approximation used whenever no explicit angle
+    /// <c>PdfConstants.ItalicSkewAngleSinus</c>, a fixed sin(20°) approximation used whenever no explicit angle
     /// was declared). Reuses <see cref="PeachPDF.CSS.Angle"/> (the same angle grammar/unit conversion the
     /// CSS-OM layer already uses for <c>transform: skewX()</c> etc.) rather than re-parsing angle units
     /// independently - see CLAUDE.md's shared-parser convention.

@@ -212,7 +212,7 @@ namespace PeachPDF.PDF
             public bool GetBoolean(int index)
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.IndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
                 object obj = this[index];
                 if (obj == null || obj is PdfNull)
@@ -238,7 +238,7 @@ namespace PeachPDF.PDF
             public int GetInteger(int index)
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.IndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
                 object obj = this[index];
                 if (obj == null || obj is PdfNull)
@@ -264,7 +264,7 @@ namespace PeachPDF.PDF
             public double GetReal(int index)
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.IndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
                 object obj = this[index];
                 if (obj == null || obj is PdfNull)
@@ -298,7 +298,7 @@ namespace PeachPDF.PDF
             public string GetString(int index)
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.IndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
                 object obj = this[index];
                 if (obj == null || obj is PdfNull)
@@ -324,7 +324,7 @@ namespace PeachPDF.PDF
             public string GetName(int index)
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.IndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
                 object obj = this[index];
                 if (obj == null || obj is PdfNull)
@@ -348,7 +348,7 @@ namespace PeachPDF.PDF
             public PdfObject GetObject(int index)
             {
                 if (index < 0 || index >= Count)
-                    throw new ArgumentOutOfRangeException("index", index, PSSR.IndexOutOfRange);
+                    throw new ArgumentOutOfRangeException("index", index, "The index is out of range.");
 
                 PdfItem item = this[index];
                 PdfReference reference = item as PdfReference;

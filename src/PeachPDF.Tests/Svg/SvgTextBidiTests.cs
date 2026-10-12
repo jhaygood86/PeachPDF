@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Svg
 
             // One DrawString call per character, in painted (visual, post-reorder) order: '(' 'B' 'A' ')'.
             // 'B'/'A' were never mirrored, so GlyphInfo.LogicalGlyph (unlike HTML's whole-word logicalText)
-            // stays null for them - there is nothing distinct to recover per character, and CMapInfo
+            // stays null for them - there is nothing distinct to recover per character, and CharacterMapInfo
             // treats null the same as "identical to what's painted".
             Assert.Equal(4, g.DrawStringCalls.Count);
             Assert.Equal([("(", ")"), ("B", null), ("A", null), (")", "(")],

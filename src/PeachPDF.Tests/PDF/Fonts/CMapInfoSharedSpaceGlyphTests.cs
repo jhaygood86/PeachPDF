@@ -13,9 +13,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
     /// </summary>
     public class CMapInfoSharedSpaceGlyphTests
     {
-        private static CMapInfo NewCMapInfo() => new(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+        private static CharacterMapInfo NewCMapInfo() => new(TypefaceFixtures.FromFile(BundledFonts.Ttf));
 
-        private static int SpaceGlyph(CMapInfo cmapInfo)
+        private static int SpaceGlyph(CharacterMapInfo cmapInfo)
         {
             cmapInfo.AddShapedText(" ", ShapeSettings.Default);
             return Assert.Single(cmapInfo.LigatureGlyphToText, e => e.Value == " ").Key;

@@ -169,7 +169,7 @@ namespace PeachPDF.PDF.Rendering
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush");
 
-            const string format = Config.SignificantFigures3;
+            const string format = PdfNumberFormats.ThreeDecimals;
 
             Realize(pen, brush);
             //AppendFormat123("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} re\n", x, y, width, -height);
@@ -197,7 +197,7 @@ namespace PeachPDF.PDF.Rendering
 
             int count = points.Length;
             if (points.Length < 2)
-                throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
+                throw new ArgumentException("The point array must contain 2 or more points.", "points");
 
             AppendPathPoint(points[0].X, points[0].Y, 'm');
             for (int idx = 1; idx < count; idx++)
@@ -401,7 +401,7 @@ namespace PeachPDF.PDF.Rendering
             }
             
 
-            const string format2 = Config.SignificantFigures4;
+            const string format2 = PdfNumberFormats.FourDecimals;
 
             if (isColorFont)
             {
@@ -449,7 +449,7 @@ namespace PeachPDF.PDF.Rendering
                 {
                     // Adjust baseline in case of bold simulation???
                     // No, because this would change the center of the glyphs.
-                    //verticalOffset = font.Size * Const.BoldEmphasis / 2;
+                    //verticalOffset = font.Size * PdfConstants.BoldEmphasis / 2;
                 }
 
                 double laidOutEndX = x + width + (shapedGlyphs?.Count ?? 0) * letterSpacing;
@@ -460,7 +460,7 @@ namespace PeachPDF.PDF.Rendering
                 // A declared "oblique <angle>" (see TypefaceFont.ObliqueSkewSinus) drives the exact shear amount;
                 // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
                 // sin(20°) approximation this renderer has always used.
-                double skewSinus = font.ObliqueSkewSinus ?? Const.ItalicSkewAngleSinus;
+                double skewSinus = font.ObliqueSkewSinus ?? PdfConstants.ItalicSkewAngleSinus;
 
                 if (italicSimulation)
                 {
@@ -540,7 +540,7 @@ namespace PeachPDF.PDF.Rendering
                 int characterCount = 0;
                 foreach (Rune _ in text.EnumerateRunes())
                     characterCount++;
-                width += characterCount * font.Size * Const.BoldEmphasis;
+                width += characterCount * font.Size * PdfConstants.BoldEmphasis;
             }
 
             return width;
@@ -589,7 +589,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, TypefaceFont font, PaintPoint startPos, double laidOutEndX)
         {
-            const string format2 = Config.SignificantFigures4;
+            const string format2 = PdfNumberFormats.FourDecimals;
             double scale = font.Size / font.Typeface.Metrics.UnitsPerEm;
 
             double penX = startPos.X;
@@ -653,7 +653,7 @@ namespace PeachPDF.PDF.Rendering
             foreach (var glyph in glyphs)
                 realizedFont?.AddShapedGlyph(glyph.GlyphIndex, "");
 
-            const string format2 = Config.SignificantFigures4;
+            const string format2 = PdfNumberFormats.FourDecimals;
             foreach (var glyph in glyphs)
             {
                 PaintPoint pos = WorldToView(new PaintPoint(glyph.X, glyph.Y));
@@ -702,7 +702,7 @@ namespace PeachPDF.PDF.Rendering
 
         public void DrawImage(PdfRasterImage image, double x, double y, double width, double height)
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             string name = Realize(image, width, height);
             if (!(image is PdfForm))
@@ -743,7 +743,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         public void DrawImage(PdfRasterImage image, Rect destRect, Rect srcRect)
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             double x = destRect.X;
             double y = destRect.Y;
@@ -1037,7 +1037,7 @@ namespace PeachPDF.PDF.Rendering
             _content.AppendFormat(CultureInfo.InvariantCulture, format, d);
         }
 
-        private void AppendPathPoint(double x, double y, char operation, string format = Config.SignificantFigures4)
+        private void AppendPathPoint(double x, double y, char operation, string format = PdfNumberFormats.FourDecimals)
         {
             PaintPoint result = WorldToView(new PaintPoint(x, y));
             AppendPdfNumber(_content, result.X, format);
@@ -1053,7 +1053,7 @@ namespace PeachPDF.PDF.Rendering
         }
 
         private void AppendBezier(double x1, double y1, double x2, double y2, double x3, double y3,
-            string format = Config.SignificantFigures4)
+            string format = PdfNumberFormats.FourDecimals)
         {
             PaintPoint point1 = WorldToView(new PaintPoint(x1, y1));
             PaintPoint point2 = WorldToView(new PaintPoint(x2, y2));
@@ -1077,17 +1077,17 @@ namespace PeachPDF.PDF.Rendering
             PaintPoint point1 = WorldToView(new PaintPoint(x1, y1));
             PaintPoint point2 = WorldToView(new PaintPoint(x2, y2));
             PaintPoint point3 = WorldToView(new PaintPoint(x3, y3));
-            AppendPdfNumber(_content, point1.X, Config.SignificantFigures7);
+            AppendPdfNumber(_content, point1.X, PdfNumberFormats.SevenDecimals);
             _content.Append(' ');
-            AppendPdfNumber(_content, point1.Y, Config.SignificantFigures7);
+            AppendPdfNumber(_content, point1.Y, PdfNumberFormats.SevenDecimals);
             _content.Append(' ');
-            AppendPdfNumber(_content, point2.X, Config.SignificantFigures7);
+            AppendPdfNumber(_content, point2.X, PdfNumberFormats.SevenDecimals);
             _content.Append(' ');
-            AppendPdfNumber(_content, point2.Y, Config.SignificantFigures7);
+            AppendPdfNumber(_content, point2.Y, PdfNumberFormats.SevenDecimals);
             _content.Append(' ');
-            AppendPdfNumber(_content, point3.X, Config.SignificantFigures7);
+            AppendPdfNumber(_content, point3.X, PdfNumberFormats.SevenDecimals);
             _content.Append(' ');
-            AppendPdfNumber(_content, point3.Y, Config.SignificantFigures7);
+            AppendPdfNumber(_content, point3.Y, PdfNumberFormats.SevenDecimals);
             _content.Append(" cm ");
         }
 
@@ -1202,7 +1202,7 @@ namespace PeachPDF.PDF.Rendering
             if (!DefaultViewMatrix.IsIdentity)
             {
                 Debug.Assert(_gfxState.RealizedCtm.IsIdentity);
-                const string format = Config.SignificantFigures7;
+                const string format = PdfNumberFormats.SevenDecimals;
                 Matrix3x2 cm = DefaultViewMatrix;
                 AppendFormatArgs("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
                              cm.M11, cm.M12, cm.M21, cm.M22, cm.M31, cm.M32);
@@ -1584,7 +1584,7 @@ namespace PeachPDF.PDF.Rendering
         /// </remarks>
         internal void DrawImageMasked(PdfForm image, PdfForm maskImage, Rect destRect)
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             double x = destRect.X;
             double y = destRect.Y;
@@ -1665,7 +1665,7 @@ namespace PeachPDF.PDF.Rendering
         /// </remarks>
         internal void DrawImageWithOpacity(PdfForm image, Rect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             double x = destRect.X;
             double y = destRect.Y;
@@ -1744,7 +1744,7 @@ namespace PeachPDF.PDF.Rendering
                     "drop-in replacement for compositing an already-rendered vector tile.");
             }
 
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             double x = destRect.X;
             double y = destRect.Y;
@@ -1800,7 +1800,7 @@ namespace PeachPDF.PDF.Rendering
         /// </remarks>
         internal void DrawImageAlphaMasked(PdfForm image, PdfForm maskImage, Rect destRect, bool invert = false)
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             double x = destRect.X;
             double y = destRect.Y;
@@ -1864,7 +1864,7 @@ namespace PeachPDF.PDF.Rendering
         /// </summary>
         internal void DrawImageBlendedOver(PdfForm top, PdfForm bottom, Rect destRect, string pdfBlendModeName)
         {
-            const string format = Config.SignificantFigures4;
+            const string format = PdfNumberFormats.FourDecimals;
 
             double x = destRect.X;
             double y = destRect.Y;

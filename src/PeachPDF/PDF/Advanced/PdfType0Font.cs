@@ -52,12 +52,12 @@ namespace PeachPDF.PDF.Advanced
             Elements.SetName(Keys.Encoding, "/Identity-H");
 
             FontDescriptor = new PdfFontDescriptor(document, font.Typeface);
-            _cmapInfo = new CMapInfo(font.Typeface);
-            _descendantFont = new PdfCIDFont(document, FontDescriptor, font);
-            _descendantFont.CMapInfo = _cmapInfo;
+            _characterMapInfo = new CharacterMapInfo(font.Typeface);
+            _descendantFont = new PdfCidFont(document, FontDescriptor, font);
+            _descendantFont.CharacterMapInfo = _characterMapInfo;
 
             // Create ToUnicode map
-            _toUnicode = new PdfToUnicodeMap(document, _cmapInfo);
+            _toUnicode = new PdfToUnicodeMap(document, _characterMapInfo);
             document.Internals.AddObject(_toUnicode);
             Elements.Add(Keys.ToUnicode, _toUnicode);
 
@@ -80,11 +80,11 @@ namespace PeachPDF.PDF.Advanced
             set { Elements.SetName(Keys.BaseFont, value); }
         }
 
-        internal PdfCIDFont DescendantFont
+        internal PdfCidFont DescendantFont
         {
             get { return _descendantFont; }
         }
-        readonly PdfCIDFont _descendantFont = null!;
+        readonly PdfCidFont _descendantFont = null!;
 
         internal override void PrepareForSave()
         {
@@ -93,9 +93,9 @@ namespace PeachPDF.PDF.Advanced
             // Use GetGlyphIndices to create the widths array.
             Typeface typeface = FontDescriptor._typeface;
             StringBuilder w = new StringBuilder("[");
-            if (_cmapInfo != null)
+            if (_characterMapInfo != null)
             {
-                int[] glyphIndices = _cmapInfo.GetGlyphIndices();
+                int[] glyphIndices = _characterMapInfo.GetGlyphIndices();
                 int count = glyphIndices.Length;
                 int[] glyphWidths = new int[count];
 
@@ -107,7 +107,7 @@ namespace PeachPDF.PDF.Advanced
                 for (int idx = 0; idx < count; idx++)
                     w.AppendFormat("{0}[{1}]", glyphIndices[idx], glyphWidths[idx]);
                 w.Append("]");
-                _descendantFont.Elements.SetValue(PdfCIDFont.Keys.W, new PdfLiteral(w.ToString()));
+                _descendantFont.Elements.SetValue(PdfCidFont.Keys.W, new PdfLiteral(w.ToString()));
 
             }
             _descendantFont.PrepareForSave();

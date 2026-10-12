@@ -60,8 +60,6 @@
 		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<None Remove="PDF\Resources\Messages.restext" />
-		<EmbeddedResource Include="PDF\Resources\Messages.restext" />
 		<None Remove="PDF\Resources\ColorProfiles\sRGB2014.icc" />
 		<EmbeddedResource Include="PDF\Resources\ColorProfiles\sRGB2014.icc" />
 	</ItemGroup>

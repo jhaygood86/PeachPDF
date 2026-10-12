@@ -69,37 +69,37 @@ namespace PeachPDF.PDF.Advanced
 
         internal void AddChars(string text)
         {
-            if (_cmapInfo != null)
-                _cmapInfo.AddChars(text);
+            if (_characterMapInfo != null)
+                _characterMapInfo.AddChars(text);
         }
 
         internal void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
         {
-            if (_cmapInfo != null)
-                _cmapInfo.AddShapedText(text, features, logicalText);
+            if (_characterMapInfo != null)
+                _characterMapInfo.AddShapedText(text, features, logicalText);
         }
 
         internal void AddGlyphIndices(string glyphIndices)
         {
-            if (_cmapInfo != null)
-                _cmapInfo.AddGlyphIndices(glyphIndices);
+            if (_characterMapInfo != null)
+                _characterMapInfo.AddGlyphIndices(glyphIndices);
         }
 
         internal void AddShapedGlyph(int glyphIndex, string sourceText)
         {
-            if (_cmapInfo != null)
-                _cmapInfo.AddShapedGlyph(glyphIndex, sourceText);
+            if (_characterMapInfo != null)
+                _characterMapInfo.AddShapedGlyph(glyphIndex, sourceText);
         }
 
         /// <summary>
-        /// Gets or sets the CMapInfo.
+        /// Gets or sets the CharacterMapInfo.
         /// </summary>
-        internal CMapInfo CMapInfo
+        internal CharacterMapInfo CharacterMapInfo
         {
-            get { return _cmapInfo; }
-            set { _cmapInfo = value; }
+            get { return _characterMapInfo; }
+            set { _characterMapInfo = value; }
         }
-        internal CMapInfo _cmapInfo = null!;
+        internal CharacterMapInfo _characterMapInfo = null!;
 
         /// <summary>
         /// Gets or sets ToUnicodeMap.

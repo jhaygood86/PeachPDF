@@ -69,7 +69,7 @@ namespace PeachPDF.PDF
         /// </summary>
         public override string ToString()
         {
-            return _value.ToString(Config.SignificantFigures3, CultureInfo.InvariantCulture);
+            return _value.ToString(PdfNumberFormats.ThreeDecimals, CultureInfo.InvariantCulture);
         }
 
         /// <summary>

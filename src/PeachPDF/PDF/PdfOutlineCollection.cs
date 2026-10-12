@@ -199,7 +199,7 @@ namespace PeachPDF.PDF
             if (outline == null)
                 throw new ArgumentNullException(nameof(outline));
             if (index < 0 || index >= _outlines.Count)
-                throw new ArgumentOutOfRangeException(nameof(index), index, PSSR.OutlineIndexOutOfRange);
+                throw new ArgumentOutOfRangeException(nameof(index), index, "The index of an outline is out of range.");
 
             AddToOutlinesTree(outline);
             _outlines.Insert(index, outline);
@@ -223,15 +223,15 @@ namespace PeachPDF.PDF
             get
             {
                 if (index < 0 || index >= _outlines.Count)
-                    throw new ArgumentOutOfRangeException(nameof(index), index, PSSR.OutlineIndexOutOfRange);
+                    throw new ArgumentOutOfRangeException(nameof(index), index, "The index of an outline is out of range.");
                 return _outlines[index];
             }
             set
             {
                 if (index < 0 || index >= _outlines.Count)
-                    throw new ArgumentOutOfRangeException(nameof(index), index, PSSR.OutlineIndexOutOfRange);
+                    throw new ArgumentOutOfRangeException(nameof(index), index, "The index of an outline is out of range.");
                 if (value == null)
-                    throw new ArgumentOutOfRangeException(nameof(value), null, PSSR.SetValueMustNotBeNull);
+                    throw new ArgumentOutOfRangeException(nameof(value), null, "The set value property must not be null.");
 
                 AddToOutlinesTree(value);
                 _outlines[index] = value;

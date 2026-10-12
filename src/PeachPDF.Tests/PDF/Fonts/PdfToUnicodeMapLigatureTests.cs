@@ -11,10 +11,10 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
 {
     /// <summary>
     /// Direct (non-end-to-end) coverage for <see cref="PdfToUnicodeMap.PrepareForSave"/> merging both
-    /// of <see cref="CMapInfo"/>'s sources - the legacy codepoint-keyed <see cref="CMapInfo.CharacterToGlyphIndex"/>
-    /// (still populated only by the direct-call <see cref="CMapInfo.AddChars"/> API the low-level
-    /// cmap tests use) and the GSUB-ligature-aware <see cref="CMapInfo.LigatureGlyphToText"/> (populated
-    /// by <see cref="CMapInfo.AddShapedText"/>, the pipeline's real entry point). The full pipeline
+    /// of <see cref="CharacterMapInfo"/>'s sources - the legacy codepoint-keyed <see cref="CharacterMapInfo.CharacterToGlyphIndex"/>
+    /// (still populated only by the direct-call <see cref="CharacterMapInfo.AddChars"/> API the low-level
+    /// cmap tests use) and the GSUB-ligature-aware <see cref="CharacterMapInfo.LigatureGlyphToText"/> (populated
+    /// by <see cref="CharacterMapInfo.AddShapedText"/>, the pipeline's real entry point). The full pipeline
     /// round-trip (<c>FontVariantLigaturesIntegrationTests.Ligature_RendersEmbedsAndRoundTripsToUnicode</c>)
     /// only exercises the ligature source; this exercises both together at the ToUnicode-map layer directly.
     /// </summary>
@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
         public void PrepareForSave_MergesCharacterAndLigatureSources()
         {
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var cmapInfo = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             cmapInfo.AddChars("A"); // populates the legacy codepoint-keyed CharacterToGlyphIndex
             int aGlyph = cmapInfo.CharacterToGlyphIndex['A'];
 

@@ -205,8 +205,7 @@ namespace PeachPDF.PDF.Advanced
             bool tryFlateDecode = _document.Options.UseFlateDecoderForJpegImages == PdfUseFlateDecoderForJpegImages.Automatic;
             bool useFlateDecode = _document.Options.UseFlateDecoderForJpegImages == PdfUseFlateDecoderForJpegImages.Always;
 
-            FlateDecode fd = new FlateDecode();
-            byte[] imageDataCompressed = (useFlateDecode || tryFlateDecode) ? fd.Encode(imageBits, _document.Options.FlateEncodeMode) : null;
+            byte[] imageDataCompressed = (useFlateDecode || tryFlateDecode) ? PdfFlateEncoder.Encode(imageBits, _document.Options.FlateEncodeMode) : null;
             if (useFlateDecode || tryFlateDecode && imageDataCompressed.Length < imageBits.Length)
             {
                 Stream = new PdfStream(imageDataCompressed, this);

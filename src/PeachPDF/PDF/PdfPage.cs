@@ -401,7 +401,7 @@ namespace PeachPDF.PDF
                 if (_annotations == null)
                 {
                     // Get or create annotations array.
-                    _annotations = (PdfAnnotations)Elements.GetValue(Keys.Annots, VCF.Create);
+                    _annotations = (PdfAnnotations)Elements.GetValue(Keys.Annots, ValueCreationFlags.Create);
                     _annotations.Page = this;
                 }
                 return _annotations;
@@ -467,7 +467,7 @@ namespace PeachPDF.PDF
             get
             {
                 if (_resources == null)
-                    _resources = (PdfResources)Elements.GetValue(Keys.Resources, VCF.Create); //VCF.CreateIndirect
+                    _resources = (PdfResources)Elements.GetValue(Keys.Resources, ValueCreationFlags.Create); //ValueCreationFlags.CreateIndirect
                 return _resources;
             }
         }

@@ -1137,7 +1137,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="pageStyle">the page context's declarations, as a <c>direction</c> fallback</param>
         /// <param name="logicalText">
         /// <paramref name="text"/>'s true logical-order source, positionally aligned with the returned
-        /// visual string (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks on that
+        /// visual string (see <c>PeachPDF.PDF.Advanced.CharacterMapInfo.AddShapedText</c>'s own remarks on that
         /// contract) - populated via <c>Bidi.Reverse</c> (position only, no
         /// mirroring - mirroring only changes a character's value, reversal alone already recovers its
         /// position) when the returned visual string is a single run's whole-string reversal+mirror

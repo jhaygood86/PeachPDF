@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Html.Core
             var descriptor = Descriptor(BundledFonts.Ttf); // Source Sans 3
             var f = descriptor.GlyphOf(new Rune('f'));
 
-            var cmap = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var cmap = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             cmap.AddShapedText("ff", new ShapeSettings(LigatureSet.Default));
 
             // The merged ligature glyph is not the plain 'f' glyph, and its source text ("ff") is
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Html.Core
         public void AddShapedText_NullText_IsANoOp()
         {
             var descriptor = Descriptor(BundledFonts.Ttf);
-            var cmap = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var cmap = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
 
             cmap.AddShapedText(null!, new ShapeSettings(LigatureSet.Default));
 
@@ -98,9 +98,9 @@ namespace PeachPDF.Tests.Html.Core
             // this font's ligatures, so this remains neighbor-independent even with GSUB wired up.)
             var descriptor = Descriptor(BundledFonts.Ttf);
 
-            var alone = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var alone = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             alone.AddChars("a");
-            var inWord = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var inWord = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             inWord.AddChars("cat");
 
             Assert.Equal(alone.CharacterToGlyphIndex['a'], inWord.CharacterToGlyphIndex['a']);

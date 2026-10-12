@@ -40,13 +40,13 @@ namespace PeachPDF.PDF.Advanced
     /// <summary>
     /// Represents a CIDFont dictionary.
     /// </summary>
-    internal class PdfCIDFont : PdfFont
+    internal class PdfCidFont : PdfFont
     {
-        public PdfCIDFont(PdfDocument document)
+        public PdfCidFont(PdfDocument document)
             : base(document)
         { }
 
-        public PdfCIDFont(PdfDocument document, PdfFontDescriptor fontDescriptor, TypefaceFont font)
+        public PdfCidFont(PdfDocument document, PdfFontDescriptor fontDescriptor, TypefaceFont font)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/Font");
@@ -87,7 +87,7 @@ namespace PeachPDF.PDF.Advanced
             base.PrepareForSave();
 
             // CID fonts must be always embedded. PDFsharp embedds automatically a subset.
-            ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _cmapInfo.GlyphIndices.Keys, keepCharacterMap: false);
+            ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _characterMapInfo.GlyphIndices.Keys, keepCharacterMap: false);
             byte[] fontData = subSet.Data.ToArray();
             PdfDictionary fontStream = new PdfDictionary(Owner);
             Owner.Internals.AddObject(fontStream);
@@ -115,7 +115,7 @@ namespace PeachPDF.PDF.Advanced
             // here (see /CIDToGIDMap above), and glyph 0 (.notdef) is always part of the subset.
             if (Owner.Options.PdfAConformance is PeachPDF.PdfAConformance.PdfA1B or PeachPDF.PdfAConformance.PdfA1A)
             {
-                var cids = _cmapInfo.GlyphIndices.Keys.Append(0).ToArray();
+                var cids = _characterMapInfo.GlyphIndices.Keys.Append(0).ToArray();
                 var cidSet = new byte[cids.Max() / 8 + 1];
                 foreach (var cid in cids)
                     cidSet[cid >> 3] |= (byte)(0x80 >> (cid & 7));

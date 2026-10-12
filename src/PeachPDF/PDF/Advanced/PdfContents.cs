@@ -196,7 +196,7 @@ namespace PeachPDF.PDF.Advanced
                 get
                 {
                     if (_index == -1 || _index >= _contents.Elements.Count)
-                        throw new InvalidOperationException(PSSR.ListEnumCurrentOutOfRange);
+                        throw new InvalidOperationException("Enumeration out of range.");
                     return _currentElement!;
                 }
             }

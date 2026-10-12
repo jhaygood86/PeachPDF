@@ -12,7 +12,7 @@ using PeachDrawing.Text;
 namespace PeachPDF.Tests.PdfEngineTests.Fonts
 {
     /// <summary>
-    /// Regression coverage for <see cref="CMapInfo.AddShapedText"/>'s <c>logicalText</c> remap - the
+    /// Regression coverage for <see cref="CharacterMapInfo.AddShapedText"/>'s <c>logicalText</c> remap - the
     /// fix for a real text-extraction defect confirmed against actual MuPDF/PDFium output: a word whose
     /// own <c>Text</c> was reversed/mirrored for RTL display (<c>CssLayoutEngine.MirrorWordTextIfNeeded</c>)
     /// used to have its ToUnicode CMap built directly from that already-mirrored string, so each glyph's
@@ -20,11 +20,11 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
     /// *painted* string, not the true logical-order character it actually came from - most visibly wrong
     /// for a mirrored pair like parentheses, where the extracted character isn't just out of order but
     /// the wrong character entirely. <c>logicalText</c> itself must be positionally aligned with the
-    /// visual string passed alongside it (see <see cref="CMapInfo.AddShapedText"/>'s own remarks) - these
+    /// visual string passed alongside it (see <see cref="CharacterMapInfo.AddShapedText"/>'s own remarks) - these
     /// tests build it via <see cref="Bidi.Reverse"/> from a stable source string, the
     /// same way a real caller (<c>FragmentPainter.Text.cs</c>, <c>MarginBoxRenderer</c>) does.
     /// </summary>
-    public class CMapInfoLogicalTextTests
+    public class CharacterMapInfoLogicalTextTests
     {
         private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Ttf);
 
@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
         public void AddShapedText_WithDifferingLogicalText_RemapsEachGlyphToItsTrueLogicalSource()
         {
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var characterMapInfo = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
 
             // "(AB)" is what the source document actually contains, in true logical reading order.
             // BidiMirrorResolver.ApplyMirroring's whole-string reversal + per-character mirroring (what
@@ -47,17 +47,17 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             const string visual = "(BA)";
             var logicalText = Bidi.Reverse(source);
 
-            cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
+            characterMapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
             // The '(' glyph painted at the start of the visual string is standing in for the source
             // string's closing ')' - extracting it must recover ')', not the '(' it visually is.
-            Assert.Equal(")", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, '(')]);
+            Assert.Equal(")", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, '(')]);
             // Likewise the trailing ')' glyph stands in for the source's opening '('.
-            Assert.Equal("(", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, ')')]);
+            Assert.Equal("(", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, ')')]);
             // 'A'/'B' don't change identity under mirroring, only position - confirms the remap tracks
             // position correctly even when the character value itself is unaffected.
-            Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
-            Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
+            Assert.Equal("A", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
+            Assert.Equal("B", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
         }
 
         [Fact]
@@ -74,8 +74,8 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             var logicalText = Bidi.Reverse(source);
 
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
-            cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
+            var characterMapInfo = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            characterMapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
             var shaped = descriptor.ShapeGlyphs(visual, ShapeSettings.Default);
             var ligatureGlyph = Assert.Single(shaped, g => g.ClusterLength > 1);
@@ -85,13 +85,13 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             // itself (neither 'f' mirrors), but its recovered text must still come from the correct
             // logical-order position (source's own "ff", at positions 2-3 of "(o**ff**)"), not an
             // arbitrary or shifted substring.
-            Assert.Equal("ff", cmapInfo.LigatureGlyphToText[ligatureGlyph.GlyphIndex]);
+            Assert.Equal("ff", characterMapInfo.LigatureGlyphToText[ligatureGlyph.GlyphIndex]);
             // The asymmetric neighbors on each side of the ligature confirm the remap didn't just get the
             // ligature right by accident - '(' (visual position 0) stands in for source's closing ')',
             // and the trailing ')' (visual position 4) stands in for source's opening '('.
-            Assert.Equal(")", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, '(')]);
-            Assert.Equal("(", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, ')')]);
-            Assert.Equal("o", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'o')]);
+            Assert.Equal(")", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, '(')]);
+            Assert.Equal("(", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, ')')]);
+            Assert.Equal("o", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'o')]);
         }
 
         [Fact]
@@ -100,12 +100,12 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             // The overwhelming common case (LTR text, or any word never reversed/mirrored for display):
             // omitting logicalText must behave exactly as before this parameter existed.
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var characterMapInfo = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
 
-            cmapInfo.AddShapedText("AB", ShapeSettings.Default);
+            characterMapInfo.AddShapedText("AB", ShapeSettings.Default);
 
-            Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
-            Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
+            Assert.Equal("A", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
+            Assert.Equal("B", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
         }
 
         [Fact]
@@ -115,12 +115,12 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             // AddShapedText must recognize this as "nothing to remap" rather than running the remap
             // formula needlessly.
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
+            var characterMapInfo = new CharacterMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
 
-            cmapInfo.AddShapedText("AB", ShapeSettings.Default, logicalText: "AB");
+            characterMapInfo.AddShapedText("AB", ShapeSettings.Default, logicalText: "AB");
 
-            Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
-            Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
+            Assert.Equal("A", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
+            Assert.Equal("B", characterMapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
         }
     }
 }

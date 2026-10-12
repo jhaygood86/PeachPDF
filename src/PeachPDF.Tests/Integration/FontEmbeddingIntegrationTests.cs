@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     ///
     /// Checks:
     ///   TTF  → /FontFile2 (TrueType key)
-    ///   CFF  → /FontFile3 /Subtype /OpenType  (fix in PdfCIDFont.PrepareForSave)
+    ///   CFF  → /FontFile3 /Subtype /OpenType  (fix in PdfCidFont.PrepareForSave)
     ///   WOFF → converted to OpenType before parsing (fix in PdfSharpAdapter.AddFont)
     /// </summary>
     public class FontEmbeddingIntegrationTests

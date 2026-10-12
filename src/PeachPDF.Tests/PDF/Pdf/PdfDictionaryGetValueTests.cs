@@ -6,7 +6,7 @@ using Xunit;
 namespace PeachPDF.Tests.PdfEngineTests.Pdf
 {
     /// <summary>
-    /// Exercises <see cref="PdfDictionary.DictionaryElements.GetValue(string, VCF)"/>'s private helpers
+    /// Exercises <see cref="PdfDictionary.DictionaryElements.GetValue(string, ValueCreationFlags)"/>'s private helpers
     /// (CreateMissingValue/ResolveIndirectValue/CoerceDictionary/CoerceArray) directly, using a
     /// test-only dictionary type whose <c>Keys</c> declare object types under our control - the real
     /// PDF dictionary types don't expose a scenario for every branch (e.g. a key declared as one
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var (_, dict) = CreateOwned();
 
-            Assert.Null(dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, VCF.None));
+            Assert.Null(dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, ValueCreationFlags.None));
         }
 
         [Fact]
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var (_, dict) = CreateOwned();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, VCF.Create);
+            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, ValueCreationFlags.Create);
 
             var sub = Assert.IsType<TestSubDictionary>(value);
             Assert.Same(sub, dict.Elements[TestKeyedDictionary.Keys.SubDict]);
@@ -83,7 +83,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var (_, dict) = CreateOwned();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, VCF.CreateIndirect);
+            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubDict, ValueCreationFlags.CreateIndirect);
 
             var sub = Assert.IsType<TestSubDictionary>(value);
             Assert.True(sub.IsIndirect);
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
         {
             var (_, dict) = CreateOwned();
 
-            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubArray, VCF.Create);
+            var value = dict.Elements.GetValue(TestKeyedDictionary.Keys.SubArray, ValueCreationFlags.Create);
 
             Assert.IsType<TestSubArray>(value);
         }
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
             var (_, dict) = CreateOwned();
 
             var ex = Assert.Throws<NotImplementedException>(
-                () => dict.Elements.GetValue("/Undeclared", VCF.Create));
+                () => dict.Elements.GetValue("/Undeclared", ValueCreationFlags.Create));
             Assert.Contains("Cannot create value for key", ex.Message);
         }
 
@@ -116,7 +116,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf
             var (_, dict) = CreateOwned();
 
             var ex = Assert.Throws<NotImplementedException>(
-                () => dict.Elements.GetValue(TestKeyedDictionary.Keys.BadType, VCF.Create));
+                () => dict.Elements.GetValue(TestKeyedDictionary.Keys.BadType, ValueCreationFlags.Create));
             Assert.Contains("Type other than array or dictionary", ex.Message);
         }
 

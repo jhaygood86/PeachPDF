@@ -24,7 +24,7 @@ namespace PeachPDF.PDF
         { }
 
         /// <summary>
-        /// Constructor required for lazy auto-creation via VCF.CreateIndirect (see
+        /// Constructor required for lazy auto-creation via ValueCreationFlags.CreateIndirect (see
         /// DictionaryElements.CreateDictionary, which specifically looks for a single-PdfDocument
         /// constructor) - used by PdfStructureTreeRoot.ParentTree.
         /// </summary>

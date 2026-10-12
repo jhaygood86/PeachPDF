@@ -91,7 +91,7 @@ namespace PeachPDF.PDF.Advanced
 
         public PdfDocumentInformation Info
         {
-            get { return (PdfDocumentInformation)Elements.GetValue(Keys.Info, VCF.CreateIndirect); }
+            get { return (PdfDocumentInformation)Elements.GetValue(Keys.Info, ValueCreationFlags.CreateIndirect); }
         }
 
         /// <summary>
@@ -100,7 +100,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         public PdfCatalog Root
         {
-            get { return (PdfCatalog)Elements.GetValue(PdfTrailer.Keys.Root, VCF.CreateIndirect); }
+            get { return (PdfCatalog)Elements.GetValue(PdfTrailer.Keys.Root, ValueCreationFlags.CreateIndirect); }
         }
 
         /// <summary>

@@ -45,24 +45,24 @@ namespace PeachPDF.PDF.Advanced
             : base(document)
         { }
 
-        public PdfToUnicodeMap(PdfDocument document, CMapInfo cmapInfo)
+        public PdfToUnicodeMap(PdfDocument document, CharacterMapInfo characterMapInfo)
             : base(document)
         {
-            _cmapInfo = cmapInfo;
+            _characterMapInfo = characterMapInfo;
         }
 
         /// <summary>
         /// Gets or sets the CMap info.
         /// </summary>
-        public CMapInfo CMapInfo
+        public CharacterMapInfo CharacterMapInfo
         {
-            get { return _cmapInfo; }
-            set { _cmapInfo = value; }
+            get { return _characterMapInfo; }
+            set { _characterMapInfo = value; }
         }
-        CMapInfo _cmapInfo = null!;
+        CharacterMapInfo _characterMapInfo = null!;
 
         /// <summary>
-        /// Creates the ToUnicode map from the CMapInfo.
+        /// Creates the ToUnicode map from the CharacterMapInfo.
         /// </summary>
         internal override void PrepareForSave()
         {
@@ -79,18 +79,18 @@ namespace PeachPDF.PDF.Advanced
 
             // Glyph index -> its source text. Most entries are a single character (from
             // CharacterToGlyphIndex, keyed by Unicode scalar value); a GSUB ligature glyph (from
-            // LigatureGlyphToText, populated by CMapInfo.AddShapedText) has no single scalar value
+            // LigatureGlyphToText, populated by CharacterMapInfo.AddShapedText) has no single scalar value
             // to key on, so its multi-character source text is carried directly instead.
             Dictionary<int, string> glyphIndexToText = new Dictionary<int, string>();
             int lowIndex = 65536, hiIndex = -1;
-            foreach (KeyValuePair<int, int> entry in _cmapInfo.CharacterToGlyphIndex)
+            foreach (KeyValuePair<int, int> entry in _characterMapInfo.CharacterToGlyphIndex)
             {
                 int index = entry.Value;         // glyph index
                 lowIndex = Math.Min(lowIndex, index);
                 hiIndex = Math.Max(hiIndex, index);
                 glyphIndexToText[index] = char.ConvertFromUtf32(entry.Key);
             }
-            foreach (KeyValuePair<int, string> entry in _cmapInfo.LigatureGlyphToText)
+            foreach (KeyValuePair<int, string> entry in _characterMapInfo.LigatureGlyphToText)
             {
                 int index = entry.Key;
                 lowIndex = Math.Min(lowIndex, index);

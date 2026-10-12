@@ -150,7 +150,7 @@ namespace PeachPDF.PDF.Rendering
             if (text.Length == 0 || glyphs.Count == 0)
                 return result;
 
-            // Matches CMapInfo.AddShapedText's contract: logicalText differs only when it is a
+            // Matches CharacterMapInfo.AddShapedText's contract: logicalText differs only when it is a
             // positionally-aligned source for an already bidi-transformed display string.
             string source = logicalText != null && logicalText.Length == text.Length && logicalText != text
                 ? logicalText

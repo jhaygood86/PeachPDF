@@ -42,26 +42,23 @@ namespace PeachPDF.Tests.PdfEngineTests.Pdf.Filters
         }
 
         [Fact]
-        public void BrotliDecode_EncodesEveryModeToDecodableData()
+        public void BrotliEncoder_EncodesEveryModeToDecodableData()
         {
-            var filter = new BrotliDecode();
-
-            Assert.True(BrotliDecode.IsAvailable);
-            Assert.Equal("/BrotliDecode", BrotliDecode.Name);
-            Assert.Equal(Sample, Unbrotli(filter.Encode(Sample)));
+            Assert.True(PdfBrotliEncoder.IsAvailable);
+            Assert.Equal("/BrotliDecode", PdfBrotliEncoder.Name);
+            Assert.Equal(Sample, Unbrotli(PdfBrotliEncoder.TryEncode(Sample)!));
             foreach (var mode in Enum.GetValues<PdfFlateEncodeMode>())
-                Assert.Equal(Sample, Unbrotli(filter.Encode(Sample, mode)!));
+                Assert.Equal(Sample, Unbrotli(PdfBrotliEncoder.TryEncode(Sample, mode)!));
         }
 
         [Fact]
-        public void BrotliDecode_ReturnsNull_WhenNoEncoderIsAvailable()
+        public void BrotliEncoder_ReturnsNull_WhenNoEncoderIsAvailable()
         {
             try
             {
                 BrotliCompression.SetCompressor((_, _) => throw new PlatformNotSupportedException());
 
-                Assert.Null(new BrotliDecode().Encode(Sample, PdfFlateEncodeMode.Default));
-                Assert.Equal(Sample, new BrotliDecode().Encode(Sample));
+                Assert.Null(PdfBrotliEncoder.TryEncode(Sample, PdfFlateEncodeMode.Default));
             }
             finally
             {

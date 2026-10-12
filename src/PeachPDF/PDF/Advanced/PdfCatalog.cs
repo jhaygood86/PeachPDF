@@ -66,7 +66,7 @@ namespace PeachPDF.PDF.Advanced
         {
             get
             {
-                _pages ??= (PdfPages)Elements.GetValue(Keys.Pages, VCF.CreateIndirect);
+                _pages ??= (PdfPages)Elements.GetValue(Keys.Pages, ValueCreationFlags.CreateIndirect);
                 return _pages;
             }
         }
@@ -97,7 +97,7 @@ namespace PeachPDF.PDF.Advanced
         {
             get
             {
-                return _viewerPreferences ??= (PdfViewerPreferences)Elements.GetValue(Keys.ViewerPreferences, VCF.CreateIndirect);
+                return _viewerPreferences ??= (PdfViewerPreferences)Elements.GetValue(Keys.ViewerPreferences, ValueCreationFlags.CreateIndirect);
             }
         }
         PdfViewerPreferences _viewerPreferences = null!;
@@ -109,7 +109,7 @@ namespace PeachPDF.PDF.Advanced
         {
             get
             {
-                _outline ??= (PdfOutline)Elements.GetValue(Keys.Outlines, VCF.CreateIndirect);
+                _outline ??= (PdfOutline)Elements.GetValue(Keys.Outlines, ValueCreationFlags.CreateIndirect);
                 return _outline.Outlines;
             }
         }
@@ -162,7 +162,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfStructureTreeRoot StructureTreeRoot
         {
-            get { return _structureTreeRoot ??= (PdfStructureTreeRoot)Elements.GetValue(Keys.StructTreeRoot, VCF.CreateIndirect); }
+            get { return _structureTreeRoot ??= (PdfStructureTreeRoot)Elements.GetValue(Keys.StructTreeRoot, ValueCreationFlags.CreateIndirect); }
         }
         PdfStructureTreeRoot _structureTreeRoot = null!;
 
@@ -173,7 +173,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfAcroForm AcroForm
         {
-            get { return _acroForm ??= (PdfAcroForm)Elements.GetValue(Keys.AcroForm, VCF.CreateIndirect); }
+            get { return _acroForm ??= (PdfAcroForm)Elements.GetValue(Keys.AcroForm, ValueCreationFlags.CreateIndirect); }
         }
         PdfAcroForm _acroForm = null!;
 
@@ -182,7 +182,7 @@ namespace PeachPDF.PDF.Advanced
         /// </summary>
         internal PdfMarkInformation MarkInfo
         {
-            get { return _markInfo ??= (PdfMarkInformation)Elements.GetValue(Keys.MarkInfo, VCF.CreateIndirect); }
+            get { return _markInfo ??= (PdfMarkInformation)Elements.GetValue(Keys.MarkInfo, ValueCreationFlags.CreateIndirect); }
         }
         PdfMarkInformation _markInfo = null!;
 

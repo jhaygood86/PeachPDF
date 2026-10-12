@@ -32,7 +32,7 @@ namespace PeachPDF.PDF.Structure
         /// </summary>
         public PdfNumberTreeNode ParentTree
         {
-            get { return _parentTree ??= (PdfNumberTreeNode)Elements.GetValue(Keys.ParentTree, VCF.CreateIndirect); }
+            get { return _parentTree ??= (PdfNumberTreeNode)Elements.GetValue(Keys.ParentTree, ValueCreationFlags.CreateIndirect); }
         }
         PdfNumberTreeNode _parentTree = null!;
 

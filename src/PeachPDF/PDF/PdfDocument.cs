@@ -190,7 +190,7 @@ namespace PeachPDF.PDF
         public void Close()
         {
             if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
+                throw new InvalidOperationException("The document cannot be modified.");
 
             if (_outStream != null)
             {
@@ -212,7 +212,7 @@ namespace PeachPDF.PDF
         public void Save(string path)
         {
             if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
+                throw new InvalidOperationException("The document cannot be modified.");
 
 
             using (Stream stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -227,12 +227,12 @@ namespace PeachPDF.PDF
         public void Save(Stream stream, bool closeStream)
         {
             if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
+                throw new InvalidOperationException("The document cannot be modified.");
 
             // TODO: more diagnostic checks
             string message = "";
             if (!CanSave(ref message))
-                throw new PdfSharpException(message);
+                throw new PdfException(message);
 
             PdfWriter writer = null;
             try
@@ -336,10 +336,7 @@ namespace PeachPDF.PDF
         {
             PdfDocumentInformation info = Info;
 
-            // Add patch level to producer if it is not '0'.
-            string pdfSharpProducer = VersionInfo.Producer;
-            if (!ProductVersionInfo.VersionPatch.Equals("0"))
-                pdfSharpProducer = ProductVersionInfo.Producer2;
+            string pdfSharpProducer = PdfProductInfo.Producer;
 
             // Set Creator if value is undefined.
             if (info.Elements[PdfDocumentInformation.Keys.Creator] == null)
@@ -426,9 +423,9 @@ namespace PeachPDF.PDF
             set
             {
                 if (!CanModify)
-                    throw new InvalidOperationException(PSSR.CannotModify);
+                    throw new InvalidOperationException("The document cannot be modified.");
                 if (value < 12 || (value > 17 && value != 20))
-                    throw new ArgumentException(PSSR.InvalidVersionNumber, "value");
+                    throw new ArgumentException("Invalid version number. Valid values are 12, 13, and 14.", "value");
                 _version = value;
             }
         }
@@ -535,7 +532,7 @@ namespace PeachPDF.PDF
             set
             {
                 if (!CanModify)
-                    throw new InvalidOperationException(PSSR.CannotModify);
+                    throw new InvalidOperationException("The document cannot be modified.");
                 Catalog.PageLayout = value;
             }
         }
@@ -549,7 +546,7 @@ namespace PeachPDF.PDF
             set
             {
                 if (!CanModify)
-                    throw new InvalidOperationException(PSSR.CannotModify);
+                    throw new InvalidOperationException("The document cannot be modified.");
                 Catalog.PageMode = value;
             }
         }
@@ -661,7 +658,7 @@ namespace PeachPDF.PDF
         public PdfPage AddPage()
         {
             if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
+                throw new InvalidOperationException("The document cannot be modified.");
             return Catalog.Pages.Add();
         }
 
@@ -671,7 +668,7 @@ namespace PeachPDF.PDF
         public PdfPage InsertPage(int index)
         {
             if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
+                throw new InvalidOperationException("The document cannot be modified.");
             return Catalog.Pages.Insert(index);
         }
 
