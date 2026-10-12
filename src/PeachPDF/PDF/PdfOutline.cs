@@ -594,8 +594,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
-        static PdfDictionaryMetadata _meta = null!;
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
         // ReSharper restore InconsistentNaming
     }

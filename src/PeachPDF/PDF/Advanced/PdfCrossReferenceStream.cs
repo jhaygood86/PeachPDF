@@ -107,8 +107,7 @@ internal sealed class PdfCrossReferenceStream : PdfTrailer  // Reference: 3.4.7 
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static new PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
-        static PdfDictionaryMetadata _meta = null!;
+        public static new PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
 
     /// <summary>

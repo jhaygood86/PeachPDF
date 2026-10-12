@@ -857,8 +857,7 @@ internal sealed class PdfShading : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
-        static PdfDictionaryMetadata _meta = null!;
+        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
 
     /// <summary>

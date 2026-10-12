@@ -111,9 +111,8 @@ internal abstract class PdfAcroField : PdfAnnotation
         [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string Opt = "/Opt";
 
-        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
-        static PdfDictionaryMetadata _meta = null!;
     }
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;

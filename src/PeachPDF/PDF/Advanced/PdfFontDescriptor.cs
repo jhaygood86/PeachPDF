@@ -313,16 +313,7 @@ internal sealed class PdfFontDescriptor : PdfDictionary
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get
-            {
-                if (_meta is null)
-                    _meta = CreateMeta(typeof(Keys));
-                return _meta;
-            }
-        }
-        static PdfDictionaryMetadata _meta = null!;
+        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
 
     /// <summary>

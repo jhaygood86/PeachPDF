@@ -257,9 +257,8 @@ internal sealed class PdfNumberTreeNode : PdfDictionary
         [PdfKey(PdfKeyType.Array)]
         public const string Limits = "/Limits";
 
-        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
-        static PdfDictionaryMetadata? _meta;
     }
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;

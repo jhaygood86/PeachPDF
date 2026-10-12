@@ -204,8 +204,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        public static PdfDictionaryMetadata Meta => _meta ?? (_meta = CreateMeta(typeof(Keys)));
-        static PdfDictionaryMetadata _meta = null!;
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
 
     /// <summary>

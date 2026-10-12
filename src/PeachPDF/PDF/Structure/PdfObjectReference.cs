@@ -54,9 +54,8 @@ internal sealed class PdfObjectReference : PdfDictionary
         [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required)]
         public const string Obj = "/Obj";
 
-        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
-        static PdfDictionaryMetadata _meta = null!;
     }
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;

@@ -62,9 +62,8 @@ internal sealed class PdfAcroForm : PdfDictionary
         [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
         public const string Q = "/Q";
 
-        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
-        static PdfDictionaryMetadata _meta = null!;
     }
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;

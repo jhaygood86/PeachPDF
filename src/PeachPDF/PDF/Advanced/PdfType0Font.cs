@@ -141,16 +141,7 @@ internal sealed class PdfType0Font : PdfFont
         /// <summary>
         /// Gets the KeysMeta for these keys.
         /// </summary>
-        internal static PdfDictionaryMetadata Meta
-        {
-            get
-            {
-                if (Keys._meta is null)
-                    Keys._meta = CreateMeta(typeof(Keys));
-                return Keys._meta = null!;
-            }
-        }
-        static PdfDictionaryMetadata _meta = null!;
+        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
     }
 
     /// <summary>

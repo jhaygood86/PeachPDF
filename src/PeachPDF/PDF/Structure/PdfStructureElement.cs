@@ -196,9 +196,8 @@ internal sealed class PdfStructureElement : PdfDictionary
         [PdfKey(PdfKeyType.Array | PdfKeyType.Optional)]
         public const string AF = "/AF";
 
-        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
-        static PdfDictionaryMetadata _meta = null!;
     }
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;

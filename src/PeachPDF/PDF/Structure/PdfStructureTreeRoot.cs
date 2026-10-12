@@ -78,9 +78,8 @@ internal sealed class PdfStructureTreeRoot : PdfDictionary
         [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Optional)]
         public const string ClassMap = "/ClassMap";
 
-        public static PdfDictionaryMetadata Meta => _meta ??= CreateMeta(typeof(Keys));
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
 
-        static PdfDictionaryMetadata _meta = null!;
     }
 
     internal override PdfDictionaryMetadata Meta => Keys.Meta;
