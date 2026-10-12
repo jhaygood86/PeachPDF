@@ -4,309 +4,194 @@ using PeachDrawing.Core;
 using System.Numerics;
 using PeachPDF.PDF.Drawing;
 using System;
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
 namespace PeachPDF.PDF.Internal;
 
 /// <summary>
-/// Groups a set of static encoding helper functions.
+/// Contains all used encodings for PDF.
 /// </summary>
 internal static class PdfEncoders
 {
     /// <summary>
-    /// Gets the raw encoding.
+    /// Gets the encoding in which every character is the byte of the same value.
     /// </summary>
-    public static Encoding LatinOneByteEncoding => _rawEncoding ?? (_rawEncoding = new LatinOneByteEncoding());
-    static Encoding _rawEncoding = null!;
+    public static Encoding LatinOneByteEncoding { get; } = new LatinOneByteEncoding();
 
     /// <summary>
-    /// Gets the raw Unicode encoding.
+    /// Gets the UTF-16 big-endian encoding without a byte order mark.
     /// </summary>
-    public static Encoding RawBigEndianUnicodeEncoding => _rawUnicodeEncoding ?? (_rawUnicodeEncoding = new RawBigEndianUnicodeEncoding());
-    static Encoding _rawUnicodeEncoding = null!;
+    public static Encoding RawBigEndianUnicodeEncoding { get; } = new RawBigEndianUnicodeEncoding();
 
     /// <summary>
-    /// Gets the Windows 1252 (ANSI) encoding.
+    /// Gets the Windows ANSI (code page 1252) encoding.
     /// </summary>
-    public static Encoding WinAnsiEncoding
-    {
-        get
+    public static Encoding WinAnsiEncoding { get; } = new WindowsAnsiEncoding();
+
+    /// <summary>
+    /// Gets the PDFDocEncoding encoding.
+    /// </summary>
+    public static Encoding PdfDocumentEncoding { get; } = new PdfDocumentEncoding();
+
+    /// <summary>
+    /// Gets the Unicode (UTF-16 little-endian) encoding.
+    /// </summary>
+    public static Encoding UnicodeEncoding => Encoding.Unicode;
+
+    private static byte[] GetBytes(string text, PdfStringEncoding encoding) =>
+        encoding switch
         {
-            if (_winAnsiEncoding is null)
-            {
-                // Use own implementation in Silverlight and WinRT
-                _winAnsiEncoding = new WindowsAnsiEncoding();
-            }
-            return _winAnsiEncoding;
-        }
-    }
-    static Encoding _winAnsiEncoding = null!;
+            PdfStringEncoding.LatinOneByteEncoding => LatinOneByteEncoding.GetBytes(text),
+            PdfStringEncoding.WinAnsiEncoding => WinAnsiEncoding.GetBytes(text),
+            PdfStringEncoding.PDFDocEncoding => PdfDocumentEncoding.GetBytes(text),
+            PdfStringEncoding.Unicode => RawBigEndianUnicodeEncoding.GetBytes(text),
+            _ => throw new NotImplementedException(encoding.ToString()),
+        };
+
+    private static string LatinOneByteString(byte[] bytes) => LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
 
     /// <summary>
-    /// Gets the PDF PdfDocumentEncoding encoding.
-    /// </summary>
-    public static Encoding PdfDocumentEncoding => _docEncoding ?? (_docEncoding = new PdfDocumentEncoding());
-    static Encoding _docEncoding = null!;
-
-    /// <summary>
-    /// Gets the UNICODE little-endian encoding.
-    /// </summary>
-    public static Encoding UnicodeEncoding => _unicodeEncoding ?? (_unicodeEncoding = Encoding.Unicode);
-    static Encoding _unicodeEncoding = null!;
-
-    ///// <summary>
-    ///// Encodes a string from a byte array. Each character gets the code of the corresponding byte.
-    ///// </summary>
-
-    /// <summary>
-    /// Converts a raw string into a raw string literal.
+    /// Converts a string into a string literal.
     /// </summary>
     public static string ToStringLiteral(string text, PdfStringEncoding encoding)
     {
         if (string.IsNullOrEmpty(text))
             return "()";
 
-        byte[] bytes;
-        switch (encoding)
-        {
-            case PdfStringEncoding.LatinOneByteEncoding:
-                bytes = LatinOneByteEncoding.GetBytes(text);
-                break;
-
-            case PdfStringEncoding.WinAnsiEncoding:
-                bytes = WinAnsiEncoding.GetBytes(text);
-                break;
-
-            case PdfStringEncoding.PDFDocEncoding:
-                bytes = PdfDocumentEncoding.GetBytes(text);
-                break;
-
-            case PdfStringEncoding.Unicode:
-                bytes = RawBigEndianUnicodeEncoding.GetBytes(text);
-                break;
-
-            default:
-                throw new NotImplementedException(encoding.ToString());
-        }
-        byte[] temp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, false);
-        return LatinOneByteEncoding.GetString(temp, 0, temp.Length);
+        return LatinOneByteString(FormatStringLiteral(GetBytes(text, encoding), encoding == PdfStringEncoding.Unicode, true, false));
     }
 
     /// <summary>
-    /// Converts a raw string into a raw string literal.
+    /// Converts a byte array into a string literal.
     /// </summary>
-    public static string ToStringLiteral(byte[] bytes, bool unicode)
+    public static string ToStringLiteral(byte[]? bytes, bool unicode)
     {
         if (bytes is null || bytes.Length == 0)
             return "()";
 
-        byte[] temp = FormatStringLiteral(bytes, unicode, true, false);
-        return LatinOneByteEncoding.GetString(temp, 0, temp.Length);
+        return LatinOneByteString(FormatStringLiteral(bytes, unicode, true, false));
     }
 
     /// <summary>
-    /// Converts a raw string into a raw hexadecimal string literal.
+    /// Converts a string into a hexadecimal string literal.
     /// </summary>
     public static string ToHexStringLiteral(string text, PdfStringEncoding encoding)
     {
         if (string.IsNullOrEmpty(text))
             return "<>";
 
-        byte[] bytes;
-        switch (encoding)
-        {
-            case PdfStringEncoding.LatinOneByteEncoding:
-                bytes = LatinOneByteEncoding.GetBytes(text);
-                break;
-
-            case PdfStringEncoding.WinAnsiEncoding:
-                bytes = WinAnsiEncoding.GetBytes(text);
-                break;
-
-            case PdfStringEncoding.PDFDocEncoding:
-                bytes = PdfDocumentEncoding.GetBytes(text);
-                break;
-
-            case PdfStringEncoding.Unicode:
-                bytes = RawBigEndianUnicodeEncoding.GetBytes(text);
-                break;
-
-            default:
-                throw new NotImplementedException(encoding.ToString());
-        }
-
-        byte[] agTemp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, true);
-        return LatinOneByteEncoding.GetString(agTemp, 0, agTemp.Length);
+        return LatinOneByteString(FormatStringLiteral(GetBytes(text, encoding), encoding == PdfStringEncoding.Unicode, true, true));
     }
 
     /// <summary>
-    /// Converts a raw string into a raw hexadecimal string literal.
+    /// Converts a byte array into a hexadecimal string literal.
     /// </summary>
-    public static string ToHexStringLiteral(byte[] bytes, bool unicode)
+    public static string ToHexStringLiteral(byte[]? bytes, bool unicode)
     {
         if (bytes is null || bytes.Length == 0)
             return "<>";
 
-        byte[] agTemp = FormatStringLiteral(bytes, unicode, true, true);
-        return LatinOneByteEncoding.GetString(agTemp, 0, agTemp.Length);
+        return LatinOneByteString(FormatStringLiteral(bytes, unicode, true, true));
     }
 
     /// <summary>
-    /// Converts the specified byte array into a byte array representing a string literal.
+    /// Converts the bytes of a string into the bytes of a PDF string literal: a parenthesized literal with the
+    /// necessary escapes, or a hexadecimal one. Unicode strings are always written as hexadecimal literals.
     /// </summary>
-    /// <param name="bytes">The bytes of the string.</param>
-    /// <param name="unicode">Indicates whether one or two bytes are one character.</param>
-    /// <param name="prefix">Indicates whether to use Unicode prefix.</param>
-    /// <param name="hex">Indicates whether to create a hexadecimal string literal.</param>
-    /// <returns>The PDF bytes.</returns>
-    public static byte[] FormatStringLiteral(byte[] bytes, bool unicode, bool prefix, bool hex)
+    public static byte[] FormatStringLiteral(byte[]? bytes, bool unicode, bool prefix, bool hex)
     {
         if (bytes is null || bytes.Length == 0)
-            return hex ? new byte[] { (byte)'<', (byte)'>' } : new byte[] { (byte)'(', (byte)')' };
+            return hex ? "<>"u8.ToArray() : "()"u8.ToArray();
 
-        Debug.Assert(!unicode || bytes.Length % 2 == 0, "Odd number of bytes in Unicode string.");
+        System.Diagnostics.Debug.Assert(!unicode || bytes.Length % 2 == 0, "Odd number of bytes in Unicode string.");
 
-        bool encrypted = false;
+        if (unicode)
+            return FormatUnicodeHexLiteral(bytes, prefix);
 
-        int count = bytes.Length;
-        StringBuilder pdf = new StringBuilder();
-        if (!unicode)
-        {
-            if (!hex)
-            {
-                pdf.Append("(");
-                for (int idx = 0; idx < count; idx++)
-                {
-                    char ch = (char)bytes[idx];
-                    if (ch < 32)
-                    {
-                        switch (ch)
-                        {
-                            case '\n':
-                                pdf.Append("\\n");
-                                break;
-
-                            case '\r':
-                                pdf.Append("\\r");
-                                break;
-
-                            case '\t':
-                                pdf.Append("\\t");
-                                break;
-
-                            case '\b':
-                                pdf.Append("\\b");
-                                break;
-
-                            // Corrupts encrypted text.
-                            //case '\f':
-                            //  pdf.Append("\\f");
-                            //  break;
-
-                            default:
-                                // Don't escape characters less than 32 if the string is encrypted, because it is
-                                // unreadable anyway.
-                                encrypted = true;
-                                if (!encrypted)
-                                {
-                                    pdf.Append("\\0");
-                                    pdf.Append((char)(ch % 8 + '0'));
-                                    pdf.Append((char)(ch / 8 + '0'));
-                                }
-                                else
-                                    pdf.Append(ch);
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        switch (ch)
-                        {
-                            case '(':
-                                pdf.Append("\\(");
-                                break;
-
-                            case ')':
-                                pdf.Append("\\)");
-                                break;
-
-                            case '\\':
-                                pdf.Append("\\\\");
-                                break;
-
-                            default:
-                                pdf.Append(ch);
-                                break;
-                        }
-                    }
-                }
-                pdf.Append(')');
-            }
-            else
-            {
-                pdf.Append('<');
-                for (int idx = 0; idx < count; idx++)
-                    pdf.AppendFormat("{0:X2}", bytes[idx]);
-                pdf.Append('>');
-            }
-        }
-        else
-        {
-            Hex:
-            if (hex)
-            {
-                pdf.Append(prefix ? "<FEFF" : "<");
-                for (int idx = 0; idx < count; idx += 2)
-                {
-                    pdf.AppendFormat("{0:X2}{1:X2}", bytes[idx], bytes[idx + 1]);
-                    if (idx != 0 && (idx % 48) == 0)
-                        pdf.Append("\n");
-                }
-                pdf.Append(">");
-            }
-            else
-            {
-                // TODO non hex literals... not sure how to treat linefeeds, '(', '\' etc.
-                hex = true;
-                goto Hex;
-            }
-        }
-        return LatinOneByteEncoding.GetBytes(pdf.ToString());
+        return hex ? FormatHexLiteral(bytes) : FormatParenthesizedLiteral(bytes);
     }
 
-    /// <summary>
-    /// Converts WinAnsi to DocEncode characters. Incomplete, just maps ? and some other characters.
-    /// </summary>
-    static byte[] docencode_______ = new byte[256]
+    private static ReadOnlySpan<byte> HexDigits => "0123456789ABCDEF"u8;
+
+    private static byte[] FormatHexLiteral(byte[] bytes)
     {
-        // TODO: 
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
-        0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
-        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
-        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
-        0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F,
-        0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
-        0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F,
-        0xA0, 0x7F, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
-        0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x8A, 0x8C, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,
-        0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
-        0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
-        0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
-        0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF,
-        0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF,
-        0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF,
-    };
+        byte[] result = new byte[bytes.Length * 2 + 2];
+        result[0] = (byte)'<';
+        WriteHex(bytes, result.AsSpan(1));
+        result[^1] = (byte)'>';
+        return result;
+    }
 
-    ///// <summary>
-    ///// Encodes a hexadecimal doc-encoded string literal.
-    ///// </summary>
+    private static void WriteHex(ReadOnlySpan<byte> source, Span<byte> destination)
+    {
+        ReadOnlySpan<byte> digits = HexDigits;
+        for (int i = 0; i < source.Length; i++)
+        {
+            destination[2 * i] = digits[source[i] >> 4];
+            destination[2 * i + 1] = digits[source[i] & 0xF];
+        }
+    }
+
+    private static byte[] FormatUnicodeHexLiteral(byte[] bytes, bool prefix)
+    {
+        // A line break follows every 24th UTF-16 unit, except the first.
+        int lineBreaks = (bytes.Length - 1) / 48;
+        int head = prefix ? 5 : 1;
+        byte[] result = new byte[head + bytes.Length * 2 + lineBreaks + 1];
+        Span<byte> output = result;
+        (prefix ? "<FEFF"u8 : "<"u8).CopyTo(output);
+        int position = head;
+        for (int index = 0; index < bytes.Length; index += 2)
+        {
+            WriteHex(bytes.AsSpan(index, 2), output[position..]);
+            position += 4;
+            if (index != 0 && index % 48 == 0)
+                output[position++] = (byte)'\n';
+        }
+        output[position] = (byte)'>';
+        return result;
+    }
+
+    private static byte[] FormatParenthesizedLiteral(byte[] bytes)
+    {
+        int length = 2;
+        foreach (byte value in bytes)
+            length += NeedsEscape(value) ? 2 : 1;
+
+        byte[] result = new byte[length];
+        Span<byte> output = result;
+        output[0] = (byte)'(';
+        int position = 1;
+        foreach (byte value in bytes)
+        {
+            if (NeedsEscape(value))
+            {
+                output[position++] = (byte)'\\';
+                output[position++] = value switch
+                {
+                    (byte)'\n' => (byte)'n',
+                    (byte)'\r' => (byte)'r',
+                    (byte)'\t' => (byte)'t',
+                    (byte)'\b' => (byte)'b',
+                    _ => value,
+                };
+            }
+            else
+            {
+                output[position++] = value;
+            }
+        }
+        output[position] = (byte)')';
+        return result;
+    }
+
+    // Control characters other than the four with a short escape stay as they are: the string may be encrypted.
+    private static bool NeedsEscape(byte value) =>
+        value is (byte)'\n' or (byte)'\r' or (byte)'\t' or (byte)'\b' or (byte)'(' or (byte)')' or (byte)'\\';
 
     /// <summary>
-    /// ...because I always forget CultureInfo.InvariantCulture and wonder why Acrobat
-    /// cannot understand my German decimal separator...
+    /// Formats text with the invariant culture.
     /// </summary>
     public static string Format(string format, params object[] args)
     {
@@ -314,7 +199,7 @@ internal static class PdfEncoders
     }
 
     /// <summary>
-    /// Converts a float into a string with up to 3 decimal digits and a decimal point.
+    /// Converts a double to a string with at most three decimals.
     /// </summary>
     public static string ToString(double val)
     {
@@ -322,45 +207,59 @@ internal static class PdfEncoders
     }
 
     /// <summary>
-    /// Converts an PaintColor into a string with up to 3 decimal digits and a decimal point.
+    /// Converts a color into the operands of a PDF color operator.
     /// </summary>
     public static string ToString(PaintColor color, PdfColorMode colorMode, bool withAlpha = false)
     {
-        const string format = PdfNumberFormats.ThreeDecimals;
-
         // If not defined let color decide
         if (colorMode == PdfColorMode.Undefined)
             colorMode = color.IsCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
 
-        switch (colorMode)
+        if (colorMode == PdfColorMode.Cmyk)
         {
-            case PdfColorMode.Cmyk:
-                {
-                    var (cyan, magenta, yellow, black) = color.ToCmyk();
-                    return string.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}",
-                      cyan, magenta, yellow, black);
-                }
-
-            default:
-                {
-                    var (red, green, blue) = color.ToRgb();
-                    if (withAlpha)
-                        return string.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}", red / 255.0, green / 255.0, blue / 255.0, color.Opacity());
-                    else
-                        return string.Format(CultureInfo.InvariantCulture, "{0:" + format + "} {1:" + format + "} {2:" + format + "}", red / 255.0, green / 255.0, blue / 255.0);
-
-                }
+            var (cyan, magenta, yellow, black) = color.ToCmyk();
+            return JoinNumbers(PdfNumberFormats.ThreeDecimals, [cyan, magenta, yellow, black]);
         }
+
+        var (red, green, blue) = color.ToRgb();
+        string rgb = JoinNumbers(PdfNumberFormats.ThreeDecimals, [red / 255.0, green / 255.0, blue / 255.0]);
+
+        // The opacity is a single-precision value, and rounds at three decimals as such.
+        return withAlpha ? rgb + " " + color.Opacity().ToString(PdfNumberFormats.ThreeDecimals, CultureInfo.InvariantCulture) : rgb;
     }
 
     /// <summary>
-    /// Converts an Matrix3x2 into a string with up to 4 decimal digits and a decimal point.
+    /// Converts a matrix into the six operands of a PDF matrix.
     /// </summary>
     public static string ToString(Matrix3x2 matrix)
     {
-        const string format = PdfNumberFormats.FourDecimals;
-        return string.Format(CultureInfo.InvariantCulture,
-            "{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "}",
-            matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.M31, matrix.M32);
+        // The matrix elements are single-precision and round at four decimals as such; widening them first would
+        // change the last digit of some values.
+        return JoinNumbers(PdfNumberFormats.FourDecimals,
+            [matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.M31, matrix.M32]);
+    }
+
+    /// <summary>
+    /// Formats the numbers with the invariant culture, separated by single spaces.
+    /// </summary>
+    private static string JoinNumbers<T>(string format, ReadOnlySpan<T> values) where T : ISpanFormattable
+    {
+        Span<char> buffer = stackalloc char[values.Length * 32];
+        int length = 0;
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (i > 0)
+                buffer[length++] = ' ';
+            if (!values[i].TryFormat(buffer[length..], out int written, format, CultureInfo.InvariantCulture))
+            {
+                // Only a huge magnitude needs more than the reserved room.
+                var texts = new string[values.Length];
+                for (int j = 0; j < texts.Length; j++)
+                    texts[j] = values[j].ToString(format, CultureInfo.InvariantCulture);
+                return string.Join(' ', texts);
+            }
+            length += written;
+        }
+        return new string(buffer[..length]);
     }
 }
