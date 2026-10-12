@@ -275,4 +275,26 @@ internal sealed class PdfDocumentOptions
         set => _embeddingApplied = value;
     }
     bool _embeddingApplied;
+
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.Encryption"/> - the password protection to write, or <c>null</c> for none.
+    /// </summary>
+    internal PeachPDF.PdfEncryptionOptions? Encryption
+    {
+        get => _encryption;
+        set => _encryption = value;
+    }
+    PeachPDF.PdfEncryptionOptions? _encryption;
+
+    /// <summary>
+    /// Whether <see cref="Encryption"/> has been established by a prior <c>AddPdfPages</c>/<c>AddPages</c> call. Encryption
+    /// is a whole-document property, so a later call must ask for the same protection - the same reasoning as
+    /// <see cref="PdfAConformanceEstablished"/>.
+    /// </summary>
+    internal bool EncryptionEstablished
+    {
+        get => _encryptionEstablished;
+        set => _encryptionEstablished = value;
+    }
+    bool _encryptionEstablished;
 }

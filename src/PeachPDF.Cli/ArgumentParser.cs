@@ -144,6 +144,14 @@ internal static class ArgumentParser
                 case "attach": AddAttachment(_options, RequireValue(name, inlineValue)); break;
                 case "facturx-xml": _options.FacturXXmlPath = RequireValue(name, inlineValue) ?? _options.FacturXXmlPath; break;
                 case "facturx-profile": ParseFacturXProfile(_options, RequireValue(name, inlineValue)); break;
+                case "user-password": _options.UserPassword = RequireValue(name, inlineValue) ?? _options.UserPassword; break;
+                case "owner-password": _options.OwnerPassword = RequireValue(name, inlineValue) ?? _options.OwnerPassword; break;
+                case "user-password-file": _options.UserPassword = ReadPasswordFile(_options, name, RequireValue(name, inlineValue)) ?? _options.UserPassword; break;
+                case "owner-password-file": _options.OwnerPassword = ReadPasswordFile(_options, name, RequireValue(name, inlineValue)) ?? _options.OwnerPassword; break;
+                case "user-password-env": _options.UserPassword = ReadPasswordEnvironment(_options, name, RequireValue(name, inlineValue)) ?? _options.UserPassword; break;
+                case "owner-password-env": _options.OwnerPassword = ReadPasswordEnvironment(_options, name, RequireValue(name, inlineValue)) ?? _options.OwnerPassword; break;
+                case "permissions": ParsePermissions(_options, RequireValue(name, inlineValue)); break;
+                case "no-encrypt-metadata": _options.NoEncryptMetadata = true; break;
 
                 case "http-timeout": SetTimeout(_options, RequireValue(name, inlineValue)); break;
                 case "http-header": AddHeader(_options, RequireValue(name, inlineValue)); break;
@@ -334,6 +342,79 @@ internal static class ArgumentParser
         {
             options.Errors.Add($"invalid --pdfa value '{value}' (expected one of {string.Join(", ", PdfALevels.Keys)})");
         }
+    }
+
+    private static readonly Dictionary<string, PdfPermissions> PermissionNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["none"] = PdfPermissions.None,
+        ["all"] = PdfPermissions.All,
+        ["read-only"] = PdfPermissions.ReadOnly,
+        ["print"] = PdfPermissions.AllowPrint | PdfPermissions.AllowHighQualityPrint,
+        ["print-low"] = PdfPermissions.AllowPrint,
+        ["copy"] = PdfPermissions.AllowCopy,
+        ["modify"] = PdfPermissions.AllowModify,
+        ["annotate"] = PdfPermissions.AllowAnnotations,
+        ["fill-forms"] = PdfPermissions.AllowFillForms,
+        ["accessibility"] = PdfPermissions.AllowAccessibilityExtract,
+        ["assemble"] = PdfPermissions.AllowAssemble,
+    };
+
+    // A comma-separated list, each name adding to what a reader may do ("none" is the empty start, so "none" alone locks everything).
+    private static void ParsePermissions(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        var permissions = PdfPermissions.None;
+        foreach (var name in value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!PermissionNames.TryGetValue(name, out var flag))
+            {
+                options.Errors.Add($"invalid --permissions value '{name}' (expected a comma-separated list of {string.Join(", ", PermissionNames.Keys)})");
+                return;
+            }
+
+            permissions |= flag;
+        }
+
+        options.Permissions = permissions;
+    }
+
+    // A password file holds just the password; the line ending an editor adds is not part of it.
+    private static string? ReadPasswordFile(CliOptions options, string option, string? path)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return File.ReadAllText(path).TrimEnd('\r', '\n');
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            options.Errors.Add($"cannot read --{option} '{path}': {ex.Message}");
+            return null;
+        }
+    }
+
+    private static string? ReadPasswordEnvironment(CliOptions options, string option, string? variable)
+    {
+        if (variable is null)
+        {
+            return null;
+        }
+
+        var value = Environment.GetEnvironmentVariable(variable);
+        if (value is null)
+        {
+            options.Errors.Add($"--{option} names the environment variable '{variable}', which is not set");
+        }
+
+        return value;
     }
 
     private static void ParseCreationDate(CliOptions options, string? value)
@@ -655,6 +736,11 @@ internal static class ArgumentParser
         if (options.FacturXXmlPath is not null && options.PdfA is not (PdfAConformance.PdfA3A or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U))
         {
             options.Errors.Add("--facturx-xml requires a PDF/A-3 level: add --pdfa=3a (recommended), --pdfa=3b or --pdfa=3u");
+        }
+
+        if (options.WantsEncryption && options.PdfA is not null)
+        {
+            options.Errors.Add("PDF encryption cannot be combined with --pdfa: PDF/A documents must not be encrypted");
         }
 
         // Without an explicit -o, the output name is derived from the first input's file name, which

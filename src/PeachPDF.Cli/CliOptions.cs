@@ -126,6 +126,21 @@ internal sealed class CliOptions
     public string? FacturXXmlPath { get; set; }
     public FacturXProfile? FacturXProfile { get; set; }
 
+    /// <summary>The password that opens the PDF (<c>--user-password</c>, <c>-file</c> or <c>-env</c>).</summary>
+    public string? UserPassword { get; set; }
+
+    /// <summary>The password that lifts the PDF's restrictions (<c>--owner-password</c>, <c>-file</c> or <c>-env</c>).</summary>
+    public string? OwnerPassword { get; set; }
+
+    /// <summary>What a reader may do without the owner password (<c>--permissions</c>); null allows everything.</summary>
+    public PdfPermissions? Permissions { get; set; }
+
+    /// <summary>Leave the XMP metadata stream unencrypted (<c>--no-encrypt-metadata</c>).</summary>
+    public bool NoEncryptMetadata { get; set; }
+
+    /// <summary>Whether any option asks for an encrypted PDF.</summary>
+    public bool WantsEncryption => UserPassword is not null || OwnerPassword is not null || Permissions is not null || NoEncryptMetadata;
+
     // --- Network ---
     public int? HttpTimeoutSeconds { get; set; }
     public List<string> HttpHeaders { get; } = [];

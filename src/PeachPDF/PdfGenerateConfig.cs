@@ -530,6 +530,15 @@ namespace PeachPDF
         public PdfXConformance PdfXConformance { get; set; } = PdfXConformance.None;
 
         /// <summary>
+        /// Password protection and permissions for the generated PDF (AES-256, standard security handler revision 6).
+        /// <see langword="null"/> (the default) leaves the document unencrypted. See <see cref="PdfEncryptionOptions"/>.
+        /// A whole-document property: every <c>AddPdfPages</c>/<c>AddPages</c> call on one document must ask for the same
+        /// protection. Cannot be combined with <see cref="PdfAConformance"/> or <see cref="PdfXConformance"/>, both of which
+        /// forbid encryption - generation throws if it is.
+        /// </summary>
+        public PdfEncryptionOptions? Encryption { get; set; }
+
+        /// <summary>
         /// Print color-management options - ICC output intent, black generation, and real ICC
         /// device-to-device color conversion (<see cref="ColorOptions.ConversionMode"/> - see
         /// <see cref="PeachPDF.ColorOptions"/>'s remarks). <see langword="null"/> (the default) behaves as

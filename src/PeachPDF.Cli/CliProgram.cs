@@ -101,6 +101,20 @@ internal static class CliProgram
               --facturx-profile=NAME Set the e-invoice profile instead of reading it from
                                      the XML: minimum, basic-wl, basic, en16931,
                                      extended or xrechnung.
+              --user-password=PASS   Encrypt the PDF (AES-256): the password that opens it.
+              --owner-password=PASS  Password that lifts the --permissions restrictions.
+                                     Without one, the restrictions can never be lifted.
+              --user-password-file=FILE, --owner-password-file=FILE
+                                     Read the password from a file (keeps it out of the
+                                     process list and shell history).
+              --user-password-env=VAR, --owner-password-env=VAR
+                                     Read the password from an environment variable.
+              --permissions=LIST     What a reader may do without the owner password; a
+                                     comma-separated list of: print, print-low, copy,
+                                     modify, annotate, fill-forms, accessibility,
+                                     assemble, or the shorthands read-only, all, none.
+                                     Default: all.
+              --no-encrypt-metadata  Leave the XMP metadata unencrypted.
               --tagged-pdf           Emit a tagged (PDF/UA) structure tree.
               --snap-box-decorations-to-css-pixels
                                      Snap box backgrounds and borders to whole CSS pixels,

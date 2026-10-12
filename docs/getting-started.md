@@ -30,7 +30,7 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
 
-For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, generating PDF/A-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
+For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, generating PDF/A-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), password-protecting and restricting PDFs with AES-256 encryption, and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
 
 ## Thread safety
 

@@ -2,6 +2,7 @@
 
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Internal;
+using PeachPDF.PDF.Security;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -105,7 +106,33 @@ internal sealed class PdfWriter
         WriteSeparator(CharCat.Delimiter);
         PdfStringEncoding encoding = (PdfStringEncoding)(value.Flags & PdfStringFlags.EncodingMask);
         bool hex = (value.Flags & PdfStringFlags.HexLiteral) != 0;
+        if (StringsAreEncrypted)
+        {
+            // A Unicode string's byte-order mark is part of what the reader decrypts, so it goes in before encryption.
+            byte[] plain = value.EncryptionValue;
+            if (encoding == PdfStringEncoding.Unicode)
+                plain = [0xFE, 0xFF, .. plain];
+            WriteEncryptedString(plain);
+            return;
+        }
         Write(PdfEncoders.FormatStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode, true, hex));
+        _lastCat = CharCat.Delimiter;
+    }
+
+    /// <summary>
+    /// The handler that encrypts what this writer writes, or null when the document is not encrypted.
+    /// </summary>
+    public PdfAes256SecurityHandler? Encryption { get; set; }
+
+    // Only strings inside an indirect object are encrypted: the trailer (/ID) and the direct /Encrypt dictionary in it are not.
+    bool _inIndirectObject;
+
+    bool StringsAreEncrypted => Encryption is not null && _inIndirectObject;
+
+    // Ciphertext is binary, and hexadecimal is the one literal form that carries it without escaping rules.
+    void WriteEncryptedString(byte[] plain)
+    {
+        Write(PdfEncoders.FormatStringLiteral(Encryption!.Encrypt(plain), false, false, true));
         _lastCat = CharCat.Delimiter;
     }
 
@@ -175,8 +202,12 @@ internal sealed class PdfWriter
     public void WriteDocString(string text)
     {
         WriteSeparator(CharCat.Delimiter);
-        //WriteRaw(PdfEncoders.DocEncode(text, false));
         byte[] bytes = PdfEncoders.PdfDocumentEncoding.GetBytes(text);
+        if (StringsAreEncrypted)
+        {
+            WriteEncryptedString(bytes);
+            return;
+        }
         bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, false);
         Write(bytes);
         _lastCat = CharCat.Delimiter;
@@ -191,6 +222,7 @@ internal sealed class PdfWriter
         if (indirect)
         {
             WriteObjectAddress(obj);
+            _inIndirectObject = true;
         }
         _stack.Add(new StackItem(obj));
         if (indirect)
@@ -264,6 +296,7 @@ internal sealed class PdfWriter
         {
             NewLine();
             WriteRaw("endobj\n");
+            _inIndirectObject = false;
         }
     }
 
@@ -305,6 +338,12 @@ internal sealed class PdfWriter
     }
 
     /// <summary>
+    /// The ciphertext to write in place of the current dictionary's stream bytes, set by the dictionary that encrypted them
+    /// (its /Length has to describe the ciphertext, and /Length is written before the bytes).
+    /// </summary>
+    internal byte[]? EncryptedStreamBytes { get; set; }
+
+    /// <summary>
     /// Writes the stream of the specified dictionary.
     /// </summary>
     public void WriteStream(PdfDictionary value, bool omitStream)
@@ -322,7 +361,7 @@ internal sealed class PdfWriter
         }
         else
         {
-            byte[] bytes = value.Stream.Value;
+            byte[] bytes = EncryptedStreamBytes ?? value.Stream.Value;
             if (bytes.Length != 0)
             {
                 Write(bytes);
