@@ -55,7 +55,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             cid.Elements.SetInteger("/Supplement", 0);
             Elements.SetValue(Keys.CIDSystemInfo, cid);
 
-            // Always Identity, and always written explicitly (not left to the /Identity default) -
+            // Identity for a CIDFontType2 descendant, written explicitly (not left to the /Identity default) -
             // required for PDF/A (ISO 19005-2 §6.2.11.3 / ISO 32000-1 Table 117), which does not allow
             // relying on a key's spec-default value being absent. This is also the semantically correct
             // value, not just the spec-legal default: OpenTypeFontface.CreateFontSubSet (the only place
@@ -94,10 +94,21 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (isCff)
             {
                 FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile3] = fontStream.Reference;
-                // The subtype follows the bytes: a subsetted CID-keyed CFF is the bare CFF table (header 01 00), which is what
-                // a CIDFontType0 descendant carries. Anything else is an OpenType file, including a variable font's CFF2
-                // outlines written as a static CFF inside one, which a CIDFontType0C stream must not be.
-                fontStream.Elements.SetName("/Subtype", fontData is [1, 0, ..] ? "/CIDFontType0C" : "/OpenType");
+                // A CID-keyed CFF table is the program of a CIDFontType0 descendant, which resolves each CID through the CFF charset.
+                // The subsetter writes that charset as the identity, so the glyph indices the content stream writes are the CIDs,
+                // and CIDToGIDMap, which only a CIDFontType2 has, is dropped.
+                if (subSet.Format == ExportedFontFormat.CompactFontFormat)
+                {
+                    Elements.SetName(Keys.Subtype, "/CIDFontType0");
+                    Elements.Remove(Keys.CIDToGIDMap);
+                    fontStream.Elements.SetName("/Subtype", "/CIDFontType0C");
+                }
+                else
+                {
+                    // A whole face stays a CIDFontType2 with Identity. Its charset maps glyph indices to names or to CIDs the
+                    // content stream does not write, so a CIDFontType0 descendant would not resolve the glyphs the stream draws.
+                    fontStream.Elements.SetName("/Subtype", "/OpenType");
+                }
             }
             else
             {

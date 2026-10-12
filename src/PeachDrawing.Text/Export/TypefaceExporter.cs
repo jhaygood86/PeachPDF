@@ -19,7 +19,8 @@ namespace PeachDrawing.Text.Export
         /// its own, whose visible shapes are its layers, is given a small outline so that a reader can still select it.
         /// The typeface of a variable font at a location (<see cref="Typeface.WithAxes"/>) is written as a static font: its glyphs have
         /// the location's variations applied and carry no hinting instructions, since a PDF cannot embed a variable font.
-        /// A TrueType font is cut down, and a font with CFF outlines is returned whole, which
+        /// A TrueType font is cut down. A CID-keyed CFF font is cut down to a bare CFF table (<see cref="ExportedFont.Format"/> is
+        /// <see cref="ExportedFontFormat.CompactFontFormat"/>), and any other font with CFF outlines is returned whole, which
         /// <see cref="ExportedFont.IsSubset"/> reports; the glyphs asked for are not looked at then.
         /// The exception is a variable font with CFF2 outlines, which is always written afresh, whatever its location, as a static
         /// font with CFF outlines that holds only the glyphs asked for: each outline is drawn at the location and written as a
@@ -62,7 +63,7 @@ namespace PeachDrawing.Text.Export
             if (isCff2)
             {
                 byte[] cff = StaticCffFontBuilder.Build(face, typeface.Face.Descriptor, wanted.Keys, keepCharacterMap);
-                return new ExportedFont(cff, hasCffOutlines: true, isSubset: true);
+                return new ExportedFont(cff, hasCffOutlines: true, isSubset: true, ExportedFontFormat.OpenType);
             }
 
             if (face.loca == null)
@@ -77,14 +78,14 @@ namespace PeachDrawing.Text.Export
                 byte[]? subsetCff = TrySubsetCff(face, wanted.Keys);
                 if (subsetCff is not null)
                 {
-                    return new ExportedFont(subsetCff, hasCffOutlines: true, isSubset: true);
+                    return new ExportedFont(subsetCff, hasCffOutlines: true, isSubset: true, ExportedFontFormat.CompactFontFormat);
                 }
 
-                return new ExportedFont(face.FontSource.Bytes, hasCffOutlines: true, isSubset: false);
+                return new ExportedFont(face.FontSource.Bytes, hasCffOutlines: true, isSubset: false, ExportedFontFormat.OpenType);
             }
 
             OpenTypeFontface subset = face.CreateFontSubSet(wanted, cidFont: !keepCharacterMap, typeface.Face.Variation);
-            return new ExportedFont(subset.FontSource.Bytes, hasCffOutlines: false, isSubset: true);
+            return new ExportedFont(subset.FontSource.Bytes, hasCffOutlines: false, isSubset: true, ExportedFontFormat.OpenType);
         }
 
         /// <summary>

@@ -240,15 +240,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     Pushed();
                     return 2;
 
-                case 255:
-                    // 16.16 fixed; only its whole part could name a subroutine.
+                default:
+                    // 255: a 16.16 fixed-point number, and the only operand byte left once the others are handled; only its whole part could name a subroutine.
                     _top = (short)((code[pos + 1] << 8) | code[pos + 2]);
                     Pushed();
                     return 5;
-
-                default:
-                    Complete = false;
-                    return code.Length;
             }
         }
 

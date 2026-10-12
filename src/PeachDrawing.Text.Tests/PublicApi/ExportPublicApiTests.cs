@@ -82,6 +82,7 @@ namespace PeachDrawing.Text.Tests.PublicApi
             Assert.True(exported.HasCffOutlines);
             Assert.False(exported.IsSubset);
             Assert.Equal(File.ReadAllBytes(BundledFonts.Otf), exported.Data.ToArray());
+            Assert.Equal(ExportedFontFormat.OpenType, exported.Format);
         }
 
         [Fact]
@@ -96,6 +97,7 @@ namespace PeachDrawing.Text.Tests.PublicApi
             Assert.True(exported.IsSubset);
             Assert.True(subset.IsCidKeyed);
             Assert.True(subset.IsSupported);
+            Assert.Equal(ExportedFontFormat.CompactFontFormat, exported.Format);
         }
 
         [Fact]
