@@ -902,6 +902,16 @@ namespace PeachPDF.Html.Core
         internal void RecordCatchUpSlotEmit() => CatchUpSlotEmits++;
 
         /// <summary>
+        /// How many children of a multi-column container a page's emission left unvisited because they begin past the top
+        /// of the next page and no column of this page holds them, during the current <see cref="PerformLayoutOnePass"/>
+        /// call. Each is a subtree the walk would otherwise have recursed into, on every page.
+        /// </summary>
+        internal long UnheldChildrenSkipped { get; private set; }
+
+        /// <summary>Records that <c>FragmentEmitter</c> skipped one unheld child that lies past the page.</summary>
+        internal void RecordUnheldChildSkipped() => UnheldChildrenSkipped++;
+
+        /// <summary>
         /// Whether any box in the current document asks for <c>box-decoration-break: clone</c>. Reserving room
         /// for a cloned border and padding at a break (css-break-3 §6.2) means asking, for a great many words,
         /// what a box's ancestors declared; this settles the answer once so a document that clones nothing —
@@ -1706,6 +1716,7 @@ namespace PeachPDF.Html.Core
             FloatScanBoxVisits = 0;
             BuildDraftCalls = 0;
             CatchUpSlotEmits = 0;
+            UnheldChildrenSkipped = 0;
             if (Root is null) return;
 
             // A document with per-page left/right margins settles its box->page assignment in the reflow

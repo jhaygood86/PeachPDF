@@ -3453,6 +3453,34 @@ namespace PeachPDF.Html.Core.Fragmentation
                             // drawn again at its final position over the page's whole region.
                             if (capture is not null && !childBox.IsExcludedFromFlow) continue;
 
+                            // Held by none of this slot's columns, so read live - which a long container pays for on
+                            // every page, once per child, and recursing into each. A child that begins past the top of
+                            // the next page cannot show anything here, so it is not visited.
+                            //
+                            // Strictly past, not at: a box that continues from one column into the next has its
+                            // Location moved to where the remainder resumes (CssBox.ResumeInTheNextFragmentainer), so a
+                            // paragraph split across this page and the next reports the next page's content top while
+                            // its first lines are on this one. Equality is the continuation's signature and has to be
+                            // visited. Only a multi-column container's: a table's captured instances (a repeating
+                            // header) place its rows by other rules, and skipping its children dropped fragments the
+                            // pruning oracle caught. The same guards as the ordinary ahead-of-slot skip apply, minus its
+                            // _currentPassIsFinal: this walk is of children no capture claims, whose live geometry is
+                            // what places them, and a box that later moves into this page reopens it
+                            // (InvalidateFrom) rather than relying on having been visited now.
+                            if (capture is null && snapshot is null
+                                && box.EstablishesMultiColumnContext
+                                && !_forcingUnprunedReferenceWalk
+                                && !container.HasOutOfFlowBoxes
+                                && !childBox.NeverTouchedThisLayout
+                                && !_capturedInstanceOwnerAncestors.Contains(childBox)
+                                && !_capturedInstanceOwners.Contains(childBox)
+                                && childBox.OwnGeometryTop() > container.PageTopOf(slot.Index + 1) + 1
+                                && !SharesAnOversizedLine(childBox))
+                            {
+                                container.RecordUnheldChildSkipped();
+                                continue;
+                            }
+
                             yield return (childBox, snapshot, null, instance);
                         }
                     }
