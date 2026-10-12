@@ -182,6 +182,11 @@ namespace PeachPDF.Html.Core.Paint
                 if (childBox.ActualTransform4 is null && !childBox.IsBackfaceHidden && !DomUtils.EstablishesPreserve3d(childBox))
                     continue;
 
+                // A singular transformation matrix renders nothing, with its subtree (PaintFragment's own guard, which the plane's parent
+                // reaches when it paints this child as part of its plane): it is not a plane of the context.
+                if (childBox.ActualTransform4 is { } childTransform && !IsInvertible4(childTransform))
+                    continue;
+
                 CollectPlanes(children[i], childTail, planes, index);
             }
         }
@@ -227,6 +232,31 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// Records the boxes of the planes <paramref name="culled"/> marks as not drawn, so the links and fields in them are not written.
+        /// A culled plane is left unrecorded while a plane below it is still drawn: that plane is composed on its own account (a
+        /// <c>rotateY(-90deg)</c> inside a <c>rotateY(90deg)</c> faces the viewer again), and the collectors skip a recorded box's whole
+        /// subtree, which would take its live links with it. The price is that what is coplanar with the culled plane keeps its links.
+        /// "Drawn" means composed (<c>HasSource</c>); a culled plane counts only if something below it is. Planes are in tree order,
+        /// parents before children.
+        /// </summary>
+        private void NoteCulledPlanes(Span<Plane> planes, ReadOnlySpan<bool> culled)
+        {
+            Span<bool> hasLiveChild = planes.Length <= StackPlanes ? stackalloc bool[StackPlanes] : new bool[planes.Length];
+            hasLiveChild = hasLiveChild[..planes.Length];
+            hasLiveChild.Clear();
+
+            for (var i = planes.Length - 1; i >= 0; i--)
+            {
+                var live = planes[i].HasSource || hasLiveChild[i];
+                if (live && planes[i].Parent >= 0)
+                    hasLiveChild[planes[i].Parent] = true;
+
+                if (culled[i] && !hasLiveChild[i])
+                    NoteNotRendered(planes[i].Fragment.Box);
+            }
+        }
+
+        /// <summary>
         /// Paints every plane of <paramref name="planes"/> into a shared bitmap through a depth test and draws it, then supplies their text.
         /// </summary>
         /// <returns>false, having painted nothing, when <paramref name="g"/> cannot rasterize.</returns>
@@ -237,6 +267,9 @@ namespace PeachPDF.Html.Core.Paint
             var any = false;
             Span<DepthKey> keys = planes.Length <= StackPlanes ? stackalloc DepthKey[StackPlanes] : new DepthKey[planes.Length];
             var ordered = 0;
+            Span<bool> culled = planes.Length <= StackPlanes ? stackalloc bool[StackPlanes] : new bool[planes.Length];
+            culled = culled[..planes.Length];
+            culled.Clear();
 
             for (var i = 0; i < planes.Length; i++)
             {
@@ -252,13 +285,28 @@ namespace PeachPDF.Html.Core.Paint
                 if (plane.Parent >= 0)
                     plane.SortDepth = Math.Max(plane.SortDepth, planes[plane.Parent].SortDepth);
 
-                if (plane.Hidden || SubtreeExtent(plane.Fragment, _contextMembers) is not { } extent)
+                if (plane.Hidden)
+                {
+                    culled[i] = true;
+                    continue;
+                }
+
+                if (SubtreeExtent(plane.Fragment, _contextMembers) is not { } extent)
                     continue;
 
                 plane.Source = Inflate(extent, SubtreeBleed(plane.Fragment, _contextMembers));
                 if (!plane.Map.TryProjectRectangleBounds(plane.Source.Left, plane.Source.Top, plane.Source.Right, plane.Source.Bottom,
                         out var left, out var top, out var right, out var bottom))
+                {
+                    culled[i] = true;
                     continue; // wholly behind the viewer
+                }
+
+                if (ProjectsToSliver(plane.Map, plane.Source))
+                {
+                    culled[i] = true;
+                    continue; // edge-on: a hairline at most
+                }
 
                 plane.HasSource = true;
                 any = true;
@@ -268,6 +316,8 @@ namespace PeachPDF.Html.Core.Paint
                 maxY = Math.Max(maxY, bottom);
                 keys[ordered++] = new DepthKey { Depth = plane.SortDepth, Plane = i };
             }
+
+            NoteCulledPlanes(planes, culled);
 
             if (!any)
                 return true; // everything is turned away or behind the viewer: nothing is drawn

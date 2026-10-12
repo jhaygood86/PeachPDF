@@ -48,6 +48,21 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RunningElementLink_UnderATransformWithNoVisibleArea_ProducesNoAnnotation()
+        {
+            // The header's link sits in an element that is not drawn, so it is not clickable - the same rule as in the main tree.
+            var html = LinkFixture().Replace("Chapter <a href=\"https://example.com/\">One</a>",
+                "Chapter <span style=\"display:inline-block;transform:scale(0)\"><a href=\"https://example.com/\">One</a></span>");
+            Assert.Contains("scale(0)", html);
+
+            var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A6);
+
+            Assert.True(doc.PageCount > 1, "fixture does not paginate, so it asserts nothing");
+            for (var i = 0; i < doc.PageCount; i++)
+                Assert.Empty(doc.Pages[i].Annotations);
+        }
+
+        [Fact]
         public async Task RunningElementLink_AnnotationSitsWithinTopMarginBand()
         {
             var doc = await new PdfGenerator().GeneratePdf(LinkFixture(), PageSize.A6);

@@ -228,11 +228,52 @@ namespace PeachPDF.Html.Core.Paint
         /// it tolerates being singular (<c>PdfGraphicsState.RealizeCtm</c>). Computed in double, since the float determinant of a small
         /// but real scale underflows.
         /// </summary>
-        private static bool IsInvertible(in Matrix3x2 matrix)
+        internal static bool IsInvertible(in Matrix3x2 matrix)
         {
             var determinant = (double)matrix.M11 * matrix.M22 - (double)matrix.M12 * matrix.M21;
             return float.IsFinite(matrix.M11) && float.IsFinite(matrix.M12) && float.IsFinite(matrix.M21) && float.IsFinite(matrix.M22) &&
                    float.IsFinite(matrix.M31) && float.IsFinite(matrix.M32) && Math.Abs(determinant) >= 1e-12;
+        }
+
+        /// <summary>
+        /// Tells the box's own container (the one the link and widget collectors read; a running element's content is painted by another
+        /// painter than the one that owns its boxes) that nothing was drawn for <paramref name="box"/> and its subtree.
+        /// </summary>
+        private void NoteNotRendered(CssBox box) => (box.HtmlContainer ?? container).NoteNotRendered(box);
+
+        /// <summary>
+        /// Whether the full 4x4 <paramref name="matrix"/> has an inverse (finite, with a determinant of at least <c>1e-18</c>, computed in
+        /// double for the reason <see cref="IsInvertible"/> is). The cut-off is lower than the 2D one because a determinant over three scaled
+        /// axes is the cube of the scale, not the square (<c>1e-18</c> is a uniform scale of <c>1e-6</c>): this test is after a matrix that
+        /// is singular, not one that is merely small, which the element's own 2D checks still judge. css-transforms-1 §"Transform Rendering" speaks of the element's
+        /// transformation matrix, which for a 3D transform is this one: <c>scaleZ(0)</c>, <c>scale3d(1, 1, 0)</c> or a <c>matrix3d</c> with a
+        /// zero z-row is not invertible and renders nothing, although its projection onto the z=0 plane may be perfectly invertible. The
+        /// converse does not hold - <c>rotateX(90deg)</c> is a rotation, invertible in 4x4, while its projection is edge-on - which is why
+        /// the 2D checks stay for the element's own plane.
+        /// </summary>
+        internal static bool IsInvertible4(in Matrix4x4 matrix)
+        {
+            double a11 = matrix.M11, a12 = matrix.M12, a13 = matrix.M13, a14 = matrix.M14;
+            double a21 = matrix.M21, a22 = matrix.M22, a23 = matrix.M23, a24 = matrix.M24;
+            double a31 = matrix.M31, a32 = matrix.M32, a33 = matrix.M33, a34 = matrix.M34;
+            double a41 = matrix.M41, a42 = matrix.M42, a43 = matrix.M43, a44 = matrix.M44;
+
+            // Laplace expansion along the first row, over the 2x2 minors of the lower two rows.
+            var s0 = a33 * a44 - a34 * a43;
+            var s1 = a32 * a44 - a34 * a42;
+            var s2 = a32 * a43 - a33 * a42;
+            var s3 = a31 * a44 - a34 * a41;
+            var s4 = a31 * a43 - a33 * a41;
+            var s5 = a31 * a42 - a32 * a41;
+
+            var determinant =
+                a11 * (a22 * s0 - a23 * s1 + a24 * s2) -
+                a12 * (a21 * s0 - a23 * s3 + a24 * s4) +
+                a13 * (a21 * s1 - a22 * s3 + a24 * s5) -
+                a14 * (a21 * s2 - a22 * s4 + a23 * s5);
+
+            return double.IsFinite(determinant) && Math.Abs(determinant) >= 1e-18 &&
+                   float.IsFinite(matrix.M41) && float.IsFinite(matrix.M42) && float.IsFinite(matrix.M43);
         }
 
         /// <summary>
@@ -346,6 +387,11 @@ namespace PeachPDF.Html.Core.Paint
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.None || box.Visibility.Value != Visibility.Visible) return;
 
+                // css-transforms-1 §"Transform Rendering": an element whose transformation matrix is not invertible - the 4x4, so a
+                // transform that is flat in x/y but collapses z counts - has no visible area and is not rendered, and neither is anything in
+                // its subtree. This comes before the 3D rendering context is composed: a collapsed root has no picture to compose.
+                if (box.ActualTransform4 is { } transform4 && !IsInvertible4(transform4)) return;
+
                 // use initial clip to draw blocks with Position = fixed. I.e. ignore page margins
                 if (box.Position.Value == PositionMode.Fixed)
                 {
@@ -374,7 +420,10 @@ namespace PeachPDF.Html.Core.Paint
                     // rendered (its layout box is unchanged). The PDF writer inverts the CTM it realizes, so pushing it would throw.
                     var degenerate = transformed && !LeavesVisibleArea(box.ActualTransformMatrix, fragment);
                     if (degenerate)
+                    {
                         transformed = false;
+                        NoteNotRendered(box);
+                    }
 
                     if (transformed)
                     {
