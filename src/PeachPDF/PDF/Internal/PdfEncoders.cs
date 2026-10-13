@@ -114,6 +114,43 @@ internal static class PdfEncoders
 
     private static ReadOnlySpan<byte> HexDigits => "0123456789ABCDEF"u8;
 
+    /// <summary>
+    /// The text of <see cref="FormatStringLiteral"/> (unicode, no byte-order mark, hex) for a string whose UTF-16 units are the
+    /// glyph indices of <paramref name="glyphs"/> - <c>&lt;</c>, four hex digits a glyph with a line break after every 24th unit
+    /// but the first, <c>&gt;</c> - without the intermediate string and byte arrays.
+    /// </summary>
+    internal static string FormatGlyphIdsAsHexLiteral(System.Collections.Generic.IReadOnlyList<PeachDrawing.Text.Shaping.PlacedGlyph> glyphs)
+    {
+        int count = glyphs.Count;
+        if (count == 0) return "<>";
+
+        // One unit is two bytes; the same break rule as FormatUnicodeHexLiteral (every 48th byte, except the first).
+        int lineBreaks = (count * 2 - 1) / 48;
+
+        return string.Create(count * 4 + lineBreaks + 2, glyphs, static (output, source) =>
+        {
+            ReadOnlySpan<byte> digits = HexDigits;
+            int position = 0;
+            output[position++] = '<';
+
+            for (int unit = 0; unit < source.Count; unit++)
+            {
+                int id = (char)source[unit].GlyphIndex;
+                output[position] = (char)digits[(id >> 12) & 0xF];
+                output[position + 1] = (char)digits[(id >> 8) & 0xF];
+                output[position + 2] = (char)digits[(id >> 4) & 0xF];
+                output[position + 3] = (char)digits[id & 0xF];
+                position += 4;
+
+                int byteIndex = unit * 2;
+                if (byteIndex != 0 && byteIndex % 48 == 0)
+                    output[position++] = '\n';
+            }
+
+            output[position] = '>';
+        });
+    }
+
     private static byte[] FormatHexLiteral(byte[] bytes)
     {
         byte[] result = new byte[bytes.Length * 2 + 2];

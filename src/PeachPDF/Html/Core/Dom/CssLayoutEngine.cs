@@ -6760,14 +6760,32 @@ namespace PeachPDF.Html.Core.Dom
             return text.IsEmpty ? precedingCount + count : count;
         }
 
+        private static readonly string[] AsciiStrings = Enumerable.Range(0, 128).Select(c => ((char)c).ToString()).ToArray();
+
         internal static string UpdateTrailingGraphemeContext(string precedingContext, string text)
         {
+            // Run for every word: plain ASCII after an ASCII (or no) context is the overwhelming case, and there every character is its
+            // own grapheme cluster (CR LF, the one pair that is not, is left to the general path), so the last cluster is the last
+            // character. Spares the concatenation, the boundary array and the substring.
+            if (text.Length > 0 && precedingContext.Length <= 1 && IsAsciiWithoutLineBreak(text) && IsAsciiWithoutLineBreak(precedingContext))
+                return AsciiStrings[text[^1]];
+
             var combined = string.Concat(precedingContext, text);
             if (combined.Length == 0)
                 return string.Empty;
 
             var boundaries = StringInfo.ParseCombiningCharacters(combined);
             return combined[boundaries[^1]..];
+        }
+
+        private static bool IsAsciiWithoutLineBreak(string text)
+        {
+            foreach (var c in text)
+            {
+                if (c >= 0x80 || c is '\r' or '\n') return false;
+            }
+
+            return true;
         }
 
         private static (int RegionalIndicatorCount, string GraphemeContext) UpdateTrailingTextState(

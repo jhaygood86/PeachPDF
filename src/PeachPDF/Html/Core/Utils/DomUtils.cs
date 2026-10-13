@@ -1096,6 +1096,15 @@ namespace PeachPDF.Html.Core.Utils
 
         public static CssBox? GetLastLeftIntersectingFloatBox(CssBox box, CssLineBoxCoordinates coordinates)
         {
+            // Asked for every word of every line: with no float anywhere in the document the answer is known before the
+            // coordinates object below is built, and building it was a fifth of a multi-column document's allocation. The one
+            // lookup the loop would have made is still counted.
+            if (box.HtmlContainer is { HasFloatedBoxes: false } noFloats)
+            {
+                noFloats.RecordFloatScanCall();
+                return null;
+            }
+
             var left = coordinates.CurrentX;
             CssBox? lastIntersectingFloat = null;
 

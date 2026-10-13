@@ -494,6 +494,25 @@ namespace PeachPDF.Html.Core.Dom
         private static List<ColumnSegment> BuildSegments(List<CssBox> children)
         {
             var segments = new List<ColumnSegment>();
+
+            // No column-span:all child (nearly every container): the one run is the children list itself. Copying it was a pass's
+            // worth of the whole container's children per fragmentainer - quadratic for a container holding the whole document.
+            var hasSpanning = false;
+            foreach (var child in children)
+            {
+                if (child.ColumnSpan.Value == ColumnSpanMode.All)
+                {
+                    hasSpanning = true;
+                    break;
+                }
+            }
+
+            if (!hasSpanning)
+            {
+                segments.Add(new ColumnSegment(children, IsSpanning: false));
+                return segments;
+            }
+
             var run = new List<CssBox>();
 
             foreach (var child in children)
