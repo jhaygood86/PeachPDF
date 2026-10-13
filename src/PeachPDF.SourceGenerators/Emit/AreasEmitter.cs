@@ -61,7 +61,7 @@ namespace PeachPDF.SourceGenerators.Emit
         {
             sb.AppendLine($"    internal sealed partial record {area}");
             sb.AppendLine("    {");
-            sb.AppendLine($"        internal static readonly {area} Default = new();");
+            sb.AppendLine($"        internal static readonly {area} Default = global::PeachPDF.Html.Core.Dom.StyleTransitionCache.Root(new {area}());");
 
             foreach (var entry in entries)
             {

@@ -293,6 +293,9 @@ namespace PeachPDF.Html.Core
             PageGeometry = new PageGeometryTable(this);
         }
 
+        /// <summary>Remembers the style changes the cascade has made, so boxes that make the same one share the result.</summary>
+        internal StyleTransitionCache StyleTransitions { get; } = new();
+
         /// <summary>
         /// The per-page band-geometry table behind CSS Paged Media's page-box model — consulted by
         /// the grid helpers (<see cref="PageIndexOf"/>/<see cref="PageTopOf"/>/<see cref="PageBandHeightOf"/>)

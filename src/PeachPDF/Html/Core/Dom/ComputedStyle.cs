@@ -46,7 +46,7 @@ namespace PeachPDF.Html.Core.Dom
     internal sealed record ComputedStyle
     {
         /// <summary>What a fresh, unstyled <see cref="CssBox"/> starts with - every area at its own <c>Default</c>.</summary>
-        internal static readonly ComputedStyle Default = new();
+        internal static readonly ComputedStyle Default = StyleTransitionCache.Root(new ComputedStyle());
 
         /// <summary>
         /// Specified (not var()-resolved) values of this box's CSS custom properties (--foo), keyed by

@@ -101,9 +101,10 @@ namespace PeachPDF.SourceGenerators.Emit
                 EmitValueComputation(sb, html.ValueComputation, entry);
             }
 
+            sb.AppendLine("                var transitions = HtmlContainer?.StyleTransitions;");
             sb.AppendLine($"                var area = _computedStyle.{areaField};");
-            sb.AppendLine($"                var newArea = area.SetPropertyValue(area.{propertyPath}, {valueExpr}, static (a, v) => a with {{ {propertyPath} = v }});");
-            sb.AppendLine($"                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with {{ {areaField} = a }});");
+            sb.AppendLine($"                var newArea = area.SetPropertyValueShared(transitions, area.{propertyPath}, {valueExpr}, static (a, v) => a with {{ {propertyPath} = v }});");
+            sb.AppendLine($"                _computedStyle = _computedStyle.AdoptAreaShared(transitions, area, newArea, static (s, a) => s with {{ {areaField} = a }});");
 
             if (invalidates is { Count: > 0 })
             {
