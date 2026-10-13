@@ -28,6 +28,10 @@ namespace PeachPDF.Html.Core.Utils
             if (string.IsNullOrWhiteSpace(value))
                 return [string.Empty];
 
+            // No comma, one layer: the common case, without the splitting iterator.
+            if (value.IndexOf(',') < 0)
+                return [value.Trim()];
+
             return CssValueParser.SplitTopLevelCommas(value).Select(s => s.Trim()).ToArray();
         }
 

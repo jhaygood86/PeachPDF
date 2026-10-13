@@ -58,6 +58,19 @@ namespace PeachPDF.Html.Core.Paint
         /// </param>
         internal static void PaintBackground(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null)
         {
+            // Most boxes have no background at all. The work is in PaintBackgroundCore, whose local functions capture its parameters
+            // and so cost a closure allocation on every call, whether or not anything is painted; this is asked of every box first.
+            if (!RenderUtils.IsColorVisible(firstLineStyle?.ActualBackgroundColor ?? box.ActualBackgroundColor)
+                && box.BackgroundImages is not { Count: > 0 })
+            {
+                return;
+            }
+
+            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment);
+        }
+
+        private static void PaintBackgroundCore(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment)
+        {
             var rect = geometry.DecorationRect;
 
             if (rect is not { Width: > 0, Height: > 0 }) return;

@@ -557,10 +557,23 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        private static bool ContainsWhitespace(string value)
+        {
+            foreach (var c in value)
+            {
+                if (char.IsWhiteSpace(c)) return true;
+            }
+
+            return false;
+        }
+
         // Returns the first top-level-whitespace-delimited token in a CSS value string (paren-depth-aware,
         // so a calc()/min()/max()/clamp() value's internal spaces aren't mistaken for the delimiter).
         private static string FirstCssValue(string value)
         {
+            // One value with no whitespace (`0`, `8px`: nearly every radius) is its own first token.
+            if (!ContainsWhitespace(value)) return value;
+
             using var tokens = CssValueParser.SplitTopLevelWhitespace(value).GetEnumerator();
             return tokens.MoveNext() ? tokens.Current : value;
         }
@@ -569,6 +582,8 @@ namespace PeachPDF.Html.Core.Dom
         // (spec: omitted v-radius = h-radius).
         private static string SecondCssValue(string value)
         {
+            if (!ContainsWhitespace(value)) return value;
+
             var tokens = new List<string>(CssValueParser.SplitTopLevelWhitespace(value));
             return tokens.Count > 1 ? tokens[1] : value;
         }
@@ -935,6 +950,12 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateOpacity() => _actualOpacityComputed = false;
 
+        private static bool IsNoneOrEmpty(string? value)
+        {
+            var trimmed = (value ?? string.Empty).AsSpan().Trim();
+            return trimmed.IsEmpty || trimmed.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+        }
+
         // Nearly every box has no filter: one shared empty list instead of two per box.
         private static readonly List<FilterGrammar.FilterFunction> NoFilterFunctions = [];
 
@@ -956,8 +977,16 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_filterFunctionsComputed)
                 {
-                    using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.Filter))
+                    var filter = Style.VisualEffects.Filter;
+
+                    // `none` (and nothing at all) is the answer for nearly every box and needs no tokenizing: the same empty result.
+                    if (IsNoneOrEmpty(filter))
                     {
+                        _filterFunctions = null;
+                    }
+                    else
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(filter);
                         List<Token> tokens = pooledTokens;
                         _filterFunctions = FilterGrammar.TryParse(tokens);
                     }
@@ -982,8 +1011,15 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_backdropFilterFunctionsComputed)
                 {
-                    using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.BackdropFilter))
+                    var backdropFilter = Style.VisualEffects.BackdropFilter;
+
+                    if (IsNoneOrEmpty(backdropFilter))
                     {
+                        _backdropFilterFunctions = null;
+                    }
+                    else
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(backdropFilter);
                         List<Token> tokens = pooledTokens;
                         _backdropFilterFunctions = FilterGrammar.TryParse(tokens);
                     }
@@ -1129,6 +1165,13 @@ namespace PeachPDF.Html.Core.Dom
         private void EnsureTextIndentResolved()
         {
             if (!double.IsNaN(_actualTextIndent)) return;
+
+            // The initial `0` - nearly every box - is a zero indent with neither keyword, without tokenizing it.
+            if (Style.Text.TextIndent.AsSpan().Trim().SequenceEqual("0"))
+            {
+                _actualTextIndent = 0;
+                return;
+            }
 
             using var pooledTokens = CssValueParser.GetCssTokensPooled(Style.Text.TextIndent);
             List<Token> tokens = pooledTokens;
