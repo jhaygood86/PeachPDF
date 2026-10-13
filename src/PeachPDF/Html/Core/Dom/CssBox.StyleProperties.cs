@@ -269,19 +269,24 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (x is CSS.Overflow.Visible or CSS.Overflow.Clip && y is CSS.Overflow.Visible or CSS.Overflow.Clip)
                 {
-                    return CssProperty<CSS.Overflow>.FromValue(Keywords.Visible, CSS.Overflow.Visible);
+                    return UsedOverflowVisible;
                 }
 
                 if (x is CSS.Overflow.Hidden or CSS.Overflow.Clip || y is CSS.Overflow.Hidden or CSS.Overflow.Clip)
                 {
-                    return CssProperty<CSS.Overflow>.FromValue(Keywords.Hidden, CSS.Overflow.Hidden);
+                    return UsedOverflowHidden;
                 }
 
-                return x is CSS.Overflow.Scroll || y is CSS.Overflow.Scroll
-                    ? CssProperty<CSS.Overflow>.FromValue(Keywords.Scroll, CSS.Overflow.Scroll)
-                    : CssProperty<CSS.Overflow>.FromValue(Keywords.Auto, CSS.Overflow.Auto);
+                return x is CSS.Overflow.Scroll || y is CSS.Overflow.Scroll ? UsedOverflowScroll : UsedOverflowAuto;
             }
         }
+
+        // The four answers, built once: this is asked of every box by most of the layout and paint predicates, and a new immutable
+        // record per read was the largest allocation under the fragment emitter's clip computation.
+        private static readonly CssProperty<CSS.Overflow> UsedOverflowVisible = CssProperty<CSS.Overflow>.FromValue(Keywords.Visible, CSS.Overflow.Visible);
+        private static readonly CssProperty<CSS.Overflow> UsedOverflowHidden = CssProperty<CSS.Overflow>.FromValue(Keywords.Hidden, CSS.Overflow.Hidden);
+        private static readonly CssProperty<CSS.Overflow> UsedOverflowScroll = CssProperty<CSS.Overflow>.FromValue(Keywords.Scroll, CSS.Overflow.Scroll);
+        private static readonly CssProperty<CSS.Overflow> UsedOverflowAuto = CssProperty<CSS.Overflow>.FromValue(Keywords.Auto, CSS.Overflow.Auto);
 
         /// <summary>
         /// Whether either axis is <c>clip</c> while <see cref="Overflow"/> stays <c>visible</c>: the box

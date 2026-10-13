@@ -306,14 +306,49 @@ namespace PeachPDF.CSS
             Changed?.Invoke(CssText);
         }
 
-        public IEnumerator<IProperty> GetEnumerator()
+        /// <summary>
+        /// The declarations, as a struct enumerator: <c>foreach</c> over a style declaration runs per box per matched rule in the
+        /// cascade, and the <see cref="IEnumerable{T}"/> route allocated an <c>OfType</c> iterator and boxed its enumerator each time.
+        /// </summary>
+        public DeclarationEnumerator GetEnumerator() => new(ChildList);
+
+        IEnumerator<IProperty> IEnumerable<IProperty>.GetEnumerator()
         {
             return Declarations.GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return GetEnumerator();
+            return Declarations.GetEnumerator();
+        }
+
+        internal struct DeclarationEnumerator
+        {
+            private readonly IReadOnlyList<IStylesheetNode> _children;
+            private int _index;
+
+            internal DeclarationEnumerator(IReadOnlyList<IStylesheetNode> children)
+            {
+                _children = children;
+                _index = -1;
+                Current = null!;
+            }
+
+            public Property Current { get; private set; }
+
+            public bool MoveNext()
+            {
+                while (++_index < _children.Count)
+                {
+                    if (_children[_index] is Property property)
+                    {
+                        Current = property;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
         }
 
         public IRule Parent => _parent;

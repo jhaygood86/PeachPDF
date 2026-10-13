@@ -133,6 +133,14 @@ namespace PeachPDF.Html.Core.Dom
                     ? BaseDirection.Rtl
                     : BaseDirection.Ltr;
 
+            // Plain ASCII in a left-to-right paragraph with no embedding or override - nearly every paragraph of an English document -
+            // has one answer, so it is written out without running the analyses (see AssignPlainAscii).
+            if (overrides.Count == 0 && direction == BaseDirection.Ltr && IsPlainAscii(paragraphText))
+            {
+                AssignPlainAscii(paragraphText, ranges);
+                return;
+            }
+
             var result = Bidi.Analyze(paragraphText, direction, overrides);
             var (charScripts, joiningForms, useCategories, khmerCategories) = ResolveScriptsAndJoining(paragraphText);
 
@@ -163,6 +171,50 @@ namespace PeachPDF.Html.Core.Dom
                     Array.Copy(khmerCategories, start, categories, 0, length);
                     box.KhmerCategories = categories;
                 }
+            }
+        }
+
+        private static bool IsPlainAscii(string text)
+        {
+            foreach (var c in text)
+            {
+                if (c >= 0x80) return false;
+            }
+
+            return true;
+        }
+
+        private static bool ContainsAsciiLetter(string text)
+        {
+            foreach (var c in text)
+            {
+                if (c is >= 'a' and <= 'z' or >= 'A' and <= 'Z') return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// What <see cref="Bidi.Analyze"/> and <see cref="ResolveScriptsAndJoining"/> give for ASCII text in a left-to-right paragraph
+        /// with no overrides: every level 0 (no right-to-left or Arabic class exists to raise one; a European number takes the
+        /// preceding strong direction, which the paragraph's own is), every character joining as <see cref="ArabicJoiningForm.None"/>,
+        /// no USE or Khmer category, and one resolved script for the paragraph - Latin if it has a letter (the only script ASCII
+        /// has; Common characters take the script of the letters around them) and Common if it has none. Pinned against the real
+        /// analyses by <c>CssBidiParagraphResolverAsciiTests</c>.
+        /// </summary>
+        private static void AssignPlainAscii(string paragraphText, List<(CssBox Box, int Start, int Length)> ranges)
+        {
+            var script = ContainsAsciiLetter(paragraphText) ? "Latin" : "Common";
+
+            foreach (var (box, _, length) in ranges)
+            {
+                box.BidiLevels = new byte[length];
+
+                var scripts = new string[length];
+                Array.Fill(scripts, script);
+                box.CharScripts = scripts;
+
+                box.JoiningForms = new ArabicJoiningForm[length];
             }
         }
 

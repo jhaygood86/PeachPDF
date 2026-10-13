@@ -182,11 +182,34 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         internal static IEnumerable<List<StackingParticipant>> ByLayers(IEnumerable<StackingParticipant> participants)
         {
-            var boxesByLayer = new Dictionary<int, List<StackingParticipant>>();
+            // Nearly every stacking context has one layer (no participant has a z-index of its own), and this runs for every box that
+            // paints: that case is a list and a one-element array, with the dictionary and the sort only for a context that really
+            // has more.
+            List<StackingParticipant>? onlyLayer = null;
+            var onlyLayerIndex = 0;
+            Dictionary<int, List<StackingParticipant>>? boxesByLayer = null;
 
             foreach (var participant in participants)
             {
                 var zIndex = LayerOf(participant);
+
+                if (onlyLayer is null)
+                {
+                    onlyLayer = [participant];
+                    onlyLayerIndex = zIndex;
+                    continue;
+                }
+
+                if (boxesByLayer is null)
+                {
+                    if (zIndex == onlyLayerIndex)
+                    {
+                        onlyLayer.Add(participant);
+                        continue;
+                    }
+
+                    boxesByLayer = new Dictionary<int, List<StackingParticipant>> { [onlyLayerIndex] = onlyLayer };
+                }
 
                 if (!boxesByLayer.TryGetValue(zIndex, out var layer))
                 {
@@ -196,6 +219,9 @@ namespace PeachPDF.Html.Core.Paint
 
                 layer.Add(participant);
             }
+
+            if (onlyLayer is null) return [];
+            if (boxesByLayer is null) return [onlyLayer];
 
             return boxesByLayer.OrderBy(x => x.Key).Select(x => x.Value);
         }
