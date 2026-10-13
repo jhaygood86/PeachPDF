@@ -607,7 +607,7 @@ namespace PeachPDF.Html.Core.Dom
             var parent = box.ParentBox;
             if (parent is null) return null;
 
-            for (var i = parent.Boxes.IndexOf(box) - 1; i >= 0; i--)
+            for (var i = parent.IndexOfChild(box) - 1; i >= 0; i--)
             {
                 var sibling = parent.Boxes[i];
                 if (sibling.DerivedStyle.ActualDisplay != Keywords.None && !sibling.IsTableGridDecorationBox)

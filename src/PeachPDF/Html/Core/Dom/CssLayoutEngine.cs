@@ -1975,7 +1975,7 @@ namespace PeachPDF.Html.Core.Dom
             var startX = containingBox.ClientLeft;
             var startY = box.Location.Y;
 
-            var currentBoxIdx = containingBox.Boxes.IndexOf(box);
+            var currentBoxIdx = containingBox.IndexOfChild(box);
 
             switch (box.Float.Value)
             {
