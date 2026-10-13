@@ -103,14 +103,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="CapturedInstance.Self"/> - the same value <see cref="EnclosingContext"/> carries for
         /// such a fragment, named separately because the two answer different questions. A box split
         /// across multi-column columns is genuinely one box's content divided between fragments, which
-        /// <see cref="_fragmentRange"/>/<see cref="_fragmentsOf"/> must concatenate - so their key must
+        /// <see cref="_boxFragments"/> must concatenate - so their key must
         /// stay the <i>same</i> across a box's own column instances, the way the removed proxy-owner field
         /// naturally did (always null for multi-column). A repeating group's source root, read through a
         /// <i>different</i> page's instance, is the opposite: content repeated wholesale, never divided -
         /// concatenating two pages' worth into one "unbroken strip" would be nonsense, so their key must
         /// differ per page instead. <see cref="EnclosingContext"/> cannot serve both: it is deliberately
         /// unique per multi-column instance too (to separate nested captures - see its own remarks), which
-        /// is exactly the wrong answer for <see cref="_fragmentRange"/>/<see cref="_fragmentsOf"/>.
+        /// is exactly the wrong answer for <see cref="_boxFragments"/>.
         /// </param>
         private readonly record struct FragmentKey(
             CssBox Box, int Instance, FragmentainerContext? EnclosingContext = null,
@@ -560,23 +560,32 @@ namespace PeachPDF.Html.Core.Fragmentation
                 internal double InlineExtentDeltaWidth;
             }
 
-            internal List<(CssLineBox Line, Rect Rect)> Lines { get; private set; } = NoLines;
+            // The extent and the fragmentainer-local rectangle, once worked out (see FragmentEmitter._cacheEpoch).
+            internal Rect Extent;
+            internal int ExtentEpoch;
+            internal Rect LocalRect;
+            internal int LocalRectEpoch;
 
-            internal List<TextFragment> Words { get; private set; } = NoWords;
-            internal List<Draft> Children { get; private set; } = NoChildren;
+            internal (CssLineBox Line, Rect Rect)[] Lines { get; private set; } = NoLines;
 
-            // A draft is complete once built and its three lists are only read afterwards, so a list with nothing in it is one
-            // shared instance rather than one per draft: most boxes hold no line rectangles, or no words, or no child boxes.
-            private static readonly List<(CssLineBox Line, Rect Rect)> NoLines = [];
-            private static readonly List<TextFragment> NoWords = [];
-            private static readonly List<Draft> NoChildren = [];
+            internal TextFragment[] Words { get; private set; } = NoWords;
+            internal Draft[] Children { get; private set; } = NoChildren;
 
-            /// <summary>Takes over the lists the draft was built from (it does not copy them), leaving an empty one shared.</summary>
+            // A draft is complete once built and its three sequences are only read afterwards, so one with nothing in it is a shared
+            // empty array rather than one per draft: most boxes hold no line rectangles, or no words, or no child boxes.
+            private static readonly (CssLineBox Line, Rect Rect)[] NoLines = [];
+            private static readonly TextFragment[] NoWords = [];
+            private static readonly Draft[] NoChildren = [];
+
+            /// <summary>
+            /// Takes what the draft was built from, as arrays of exactly their length: the lists they were gathered in are scratch that
+            /// <c>BuildDraftCore</c> reuses for the next box, and a list kept per draft grew by doubling and held a spare half.
+            /// </summary>
             internal void Adopt(List<(CssLineBox Line, Rect Rect)> lines, List<TextFragment> words, List<Draft> children)
             {
-                if (lines.Count > 0) Lines = lines;
-                if (words.Count > 0) Words = words;
-                if (children.Count > 0) Children = children;
+                if (lines.Count > 0) Lines = lines.ToArray();
+                if (words.Count > 0) Words = words.ToArray();
+                if (children.Count > 0) Children = children.ToArray();
             }
         }
 
@@ -591,28 +600,31 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="FragmentKey.EnclosingContext"/> - see that field's own remarks for why this dictionary
         /// specifically needs the coarser key.
         /// </summary>
-        private readonly Dictionary<(CssBox Box, FragmentainerContext? RepeatingGroupInstance),
-            ((int Slot, int Instance) First, (int Slot, int Instance) Last)> _fragmentRange = [];
+        private readonly Dictionary<(CssBox Box, FragmentainerContext? RepeatingGroupInstance), BoxFragments> _boxFragments = [];
 
         /// <summary>
-        /// Every fragment of a box, in fill order — what §6.2's <b>block-axis</b> strip is the concatenation
-        /// of inside a nested fragmentainer. Kept as drafts rather than as extents so the measurement can be
-        /// taken lazily: an extent is a question about a draft's whole subtree, and the subtree is complete
-        /// only once every slot has been emitted. Keyed the same way as <see cref="_fragmentRange"/>, for the
-        /// same reason.
+        /// What <see cref="_boxFragments"/> keeps of one box: where its fragments begin and end in fill order and, once there is
+        /// more than one, every one of them in fill order - what §6.2's <b>block-axis</b> strip is the concatenation of inside a
+        /// nested fragmentainer. Kept as drafts rather than as extents so the measurement can be taken lazily: an extent is a
+        /// question about a draft's whole subtree, and the subtree is complete only once every slot has been emitted. Nearly every box
+        /// has one fragment, which is held by its entry and needs no list.
         /// </summary>
-        private readonly Dictionary<(CssBox Box, FragmentainerContext? RepeatingGroupInstance), List<Draft>> _fragmentsOf = [];
+        private struct BoxFragments
+        {
+            internal (int Slot, int Instance) First;
+            internal (int Slot, int Instance) Last;
+            internal Draft Only;
+            internal List<Draft>? All;
+        }
 
         /// <summary>
-        /// Memoized document-space extents and fragmentainer-local rectangles, one per draft. Both are
-        /// computed over the <i>draft</i> tree rather than over materialized fragments, which is what makes
-        /// the whole set available before the first fragment is built — the concatenated strip needs the
-        /// extent of a box's other fragments, and those are materialized later in the same walk.
+        /// Bumped when the memoized extents and fragmentainer-local rectangles on the drafts (<see cref="Draft.Extent"/>,
+        /// <see cref="Draft.LocalRect"/>) are discarded: a value is the current one when its epoch is. Both are computed over the
+        /// <i>draft</i> tree rather than over materialized fragments, which is what makes the whole set available before the first
+        /// fragment is built — the concatenated strip needs the extent of a box's other fragments, and those are materialized
+        /// later in the same walk.
         /// </summary>
-        private readonly Dictionary<Draft, Rect> _extents = new(ReferenceEqualityComparer.Instance);
-
-        /// <inheritdoc cref="_extents"/>
-        private readonly Dictionary<Draft, Rect> _rects = new(ReferenceEqualityComparer.Instance);
+        private int _cacheEpoch = 1;
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuedFrom = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuesInto = [];
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, Rect>> _rectangles = [];
@@ -2087,10 +2099,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             // describing a fragment that no longer exists.
             _spans.Clear();
             _rectangles.Clear();
-            _fragmentRange.Clear();
-            _fragmentsOf.Clear();
-            _extents.Clear();
-            _rects.Clear();
+            _boxFragments.Clear();
+            _cacheEpoch++;
             foreach (var (_, root, _) in _emitted.Values)
             {
                 RecordSpansAndRectangles(root);
@@ -2156,19 +2166,21 @@ namespace PeachPDF.Html.Core.Fragmentation
             var boxKey = (draft.Key.Box, draft.Key.RepeatingGroupInstance);
             var position = (draft.Slot.Index, draft.Key.Instance);
 
-            _fragmentRange[boxKey] = _fragmentRange.TryGetValue(boxKey, out var range)
-                ? (IsBefore(position, range.First) ? position : range.First,
-                   IsBefore(range.Last, position) ? position : range.Last)
-                : (position, position);
-
-            if (!_fragmentsOf.TryGetValue(boxKey, out var fragments))
+            ref var record = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(_boxFragments, boxKey, out var seen);
+            if (!seen)
             {
-                _fragmentsOf[boxKey] = fragments = [];
+                record.First = record.Last = position;
+                record.Only = draft;
             }
+            else
+            {
+                if (IsBefore(position, record.First)) record.First = position;
+                if (IsBefore(record.Last, position)) record.Last = position;
 
-            // Slot order is the walk's own (_emitted is sorted), and a slot's nested fragmentainers yield
-            // their children in fill order, so appending here is already fill order.
-            fragments.Add(draft);
+                // Slot order is the walk's own (_emitted is sorted), and a slot's nested fragmentainers yield
+                // their children in fill order, so appending here is already fill order.
+                (record.All ??= [record.Only]).Add(draft);
+            }
 
             foreach (var (line, rect) in draft.Lines)
             {
@@ -2423,27 +2435,27 @@ namespace PeachPDF.Html.Core.Fragmentation
                 throw PruningDiverged(slot, $"the displacement root of {box}",
                     pruned.DisplacementRoot?.ToString() ?? "none", full.DisplacementRoot?.ToString() ?? "none");
 
-            Same(pruned.Lines.Count, full.Lines.Count, "the number of decoration rectangles");
+            Same(pruned.Lines.Length, full.Lines.Length, "the number of decoration rectangles");
 
-            for (var i = 0; i < pruned.Lines.Count; i++)
+            for (var i = 0; i < pruned.Lines.Length; i++)
             {
                 if (!ReferenceEquals(pruned.Lines[i].Line, full.Lines[i].Line) || pruned.Lines[i].Rect != full.Lines[i].Rect)
                     throw PruningDiverged(slot, $"decoration rectangle {i} of {box}",
                         pruned.Lines[i].Rect.ToString(), full.Lines[i].Rect.ToString());
             }
 
-            Same(pruned.Words.Count, full.Words.Count, "the number of words");
+            Same(pruned.Words.Length, full.Words.Length, "the number of words");
 
-            for (var i = 0; i < pruned.Words.Count; i++)
+            for (var i = 0; i < pruned.Words.Length; i++)
             {
                 if (pruned.Words[i] != full.Words[i])
                     throw PruningDiverged(slot, $"word {i} of {box}",
                         pruned.Words[i].ToString(), full.Words[i].ToString());
             }
 
-            Same(pruned.Children.Count, full.Children.Count, "the number of child fragments");
+            Same(pruned.Children.Length, full.Children.Length, "the number of child fragments");
 
-            for (var i = 0; i < pruned.Children.Count; i++)
+            for (var i = 0; i < pruned.Children.Length; i++)
             {
                 AssertSameDraft(pruned.Children[i], full.Children[i], slot);
             }
@@ -2498,7 +2510,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private BoxFragment Materialize(Draft draft)
         {
-            var children = new List<BoxFragment>(draft.Children.Count);
+            var children = new List<BoxFragment>(draft.Children.Length);
 
             foreach (var child in draft.Children)
             {
@@ -2634,7 +2646,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private List<LineFragment> LinesOf(Draft draft, Rect bounds)
         {
-            var lines = new List<LineFragment>(draft.Lines.Count + 1);
+            var lines = new List<LineFragment>(draft.Lines.Length + 1);
 
             if (draft.UsesOwnBounds)
             {
@@ -2657,7 +2669,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 return lines;
             }
 
-            if (draft.Lines.Count == 0) return lines;
+            if (draft.Lines.Length == 0) return lines;
 
             var slices = SliceGeometriesOf(
                 draft.Box, _rectangles[draft.Key], draft.Region, draft.OriginY, draft.Shift);
@@ -2739,7 +2751,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private bool HasFragmentBeside(Draft draft, bool before)
         {
-            if (!_fragmentRange.TryGetValue((draft.Key.Box, draft.Key.RepeatingGroupInstance), out var range)) return false;
+            if (!_boxFragments.TryGetValue((draft.Key.Box, draft.Key.RepeatingGroupInstance), out var range)) return false;
 
             var position = (draft.Slot.Index, draft.Key.Instance);
 
@@ -2940,8 +2952,8 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             var contiguous = ContentStaysInOneRun(box, isFixed);
 
-            List<(CssLineBox Line, Rect Rect)> lines = [];
-            List<TextFragment> words = [];
+            var lines = RentLines();
+            var words = RentWords();
             var usesOwnBounds = false;
             Rect? shellRect = null;
 
@@ -3034,7 +3046,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 }
             }
 
-            List<Draft> children = [];
+            var children = RentChildren();
 
             // Almost every box is ordinary content: not a rowspan placeholder and holding no captured instance at this slot,
             // so what ChildrenOf would yield is just the shared ordinary walk. Done here as a plain loop, since the iterator
@@ -3124,6 +3136,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     }
 
                     subtreePrunable &= contiguous;
+                    ReleaseScratch(lines, words, children);
                     return null;
                 }
 
@@ -3201,7 +3214,33 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.ContinuesIntoTheNext = _continuesInto.Contains((passKey, slot.Index))
                 || (capture?.Continuing.Contains(box) ?? false);
 
+            ReleaseScratch(lines, words, children);
             return draft;
+        }
+
+        // The lists BuildDraftCore gathers a box's rectangles, words and child drafts in. It is recursive - a box's children are built
+        // while its own lists are still being filled - so they are taken from stacks, not one field each; a draft keeps arrays copied
+        // from them (Draft.Adopt), which is what lets the lists be handed to the next box instead of grown from nothing again.
+        // A path that forgets to give them back costs only the allocation it saved.
+        private readonly Stack<List<(CssLineBox Line, Rect Rect)>> _lineScratch = new();
+        private readonly Stack<List<TextFragment>> _wordScratch = new();
+        private readonly Stack<List<Draft>> _childScratch = new();
+
+        private List<(CssLineBox Line, Rect Rect)> RentLines() => _lineScratch.Count > 0 ? _lineScratch.Pop() : [];
+
+        private List<TextFragment> RentWords() => _wordScratch.Count > 0 ? _wordScratch.Pop() : [];
+
+        private List<Draft> RentChildren() => _childScratch.Count > 0 ? _childScratch.Pop() : [];
+
+        private void ReleaseScratch(List<(CssLineBox Line, Rect Rect)> lines, List<TextFragment> words, List<Draft> children)
+        {
+            lines.Clear();
+            words.Clear();
+            children.Clear();
+
+            _lineScratch.Push(lines);
+            _wordScratch.Push(words);
+            _childScratch.Push(children);
         }
 
         /// <summary>
@@ -4217,8 +4256,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             if (draft.Region.Left is null) return bounds;
 
-            if (!_fragmentsOf.TryGetValue((draft.Key.Box, draft.Key.RepeatingGroupInstance), out var fragments)
-                || fragments.Count < 2)
+            if (!_boxFragments.TryGetValue((draft.Key.Box, draft.Key.RepeatingGroupInstance), out var record)
+                || record.All is not { Count: >= 2 } fragments)
             {
                 return bounds;
             }
@@ -4271,7 +4310,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private Rect ExtentOf(Draft draft)
         {
-            if (_extents.TryGetValue(draft, out var cached)) return cached;
+            if (draft.ExtentEpoch == _cacheEpoch) return draft.Extent;
 
             // A stated fragment's extent is what was stated: the box's own bounds describe the
             // fragmentainer that placed it, which is a different one.
@@ -4388,7 +4427,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                     bounds = Rect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom);
             }
 
-            _extents[draft] = bounds;
+            draft.Extent = bounds;
+            draft.ExtentEpoch = _cacheEpoch;
             return bounds;
         }
 
@@ -4399,7 +4439,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         private Rect RectOf(Draft draft)
         {
-            if (_rects.TryGetValue(draft, out var cached)) return cached;
+            if (draft.LocalRectEpoch == _cacheEpoch) return draft.LocalRect;
 
             Rect? union = null;
 
@@ -4429,7 +4469,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             var fragmentRect = union ?? Rect.Empty;
-            _rects[draft] = fragmentRect;
+            draft.LocalRect = fragmentRect;
+            draft.LocalRectEpoch = _cacheEpoch;
 
             return fragmentRect;
         }

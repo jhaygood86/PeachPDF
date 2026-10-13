@@ -899,6 +899,10 @@ namespace PeachPDF.Html.Core.Paint
             // painted everything else (see FragmentPainter.Outlines.cs).
             List<OutlineRect>? outlinePaints = null;
 
+            // Only a box whose outline can draw anything collects the rectangles for it: nearly none has one, and a list with an array
+            // behind it for every rectangle of every box was a few percent of a table-heavy document's allocation.
+            var collectsOutline = box.OutlineStyle.Value is not (OutlineStyle.None or OutlineStyle.Hidden);
+
             // A text-only pass paints no shadows, backgrounds, borders or outlines.
             for (var i = 0; !_textOnly && i < lines.Count; i++)
             {
@@ -1036,12 +1040,15 @@ namespace PeachPDF.Html.Core.Paint
                 // (issue #769), so closing only the outline there would produce a ring that doesn't
                 // match its own box's inline extent.
                 var closesAtLineWrap = !IsVerticalDecorationGeometry(box);
-                (outlinePaints ??= []).Add(new OutlineRect(
-                    outlineRect,
-                    geometry.HasLeftEdge || closesAtLineWrap,
-                    geometry.HasRightEdge || closesAtLineWrap,
-                    geometry.HasTopEdge,
-                    geometry.HasBottomEdge));
+                if (collectsOutline)
+                {
+                    (outlinePaints ??= []).Add(new OutlineRect(
+                        outlineRect,
+                        geometry.HasLeftEdge || closesAtLineWrap,
+                        geometry.HasRightEdge || closesAtLineWrap,
+                        geometry.HasTopEdge,
+                        geometry.HasBottomEdge));
+                }
             }
 
             if (!_textOnly && box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
