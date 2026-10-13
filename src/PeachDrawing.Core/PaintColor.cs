@@ -6,7 +6,7 @@ namespace PeachDrawing.Core
     /// <summary>
     /// Represents an ARGB (alpha, red, green, blue) color.
     /// </summary>
-    public readonly struct PaintColor
+    public readonly struct PaintColor : IEquatable<PaintColor>
     {
         #region Fields and Consts
 
@@ -286,21 +286,24 @@ namespace PeachDrawing.Core
         /// </returns>
         /// <param name="obj">The object to test. </param>
         /// <filterpriority>1</filterpriority>
-        public override bool Equals(object? obj)
-        {
-            if (obj is PaintColor color)
-            {
-                if (_isCmyk || color._isCmyk)
-                {
-                    return _isCmyk == color._isCmyk && _value == color._value &&
-                           _cyan.Equals(color._cyan) && _magenta.Equals(color._magenta) &&
-                           _yellow.Equals(color._yellow) && _key.Equals(color._key);
-                }
+        public override bool Equals(object? obj) => obj is PaintColor color && Equals(color);
 
-                return _value == color._value;
+        /// <summary>
+        ///     Tests whether <paramref name="color" /> is the same color as this one. Without this typed overload every
+        ///     <c>==</c> and every dictionary lookup keyed on a color boxed it.
+        /// </summary>
+        /// <param name="color">The color to compare with.</param>
+        /// <returns>true if both are the same color; otherwise, false.</returns>
+        public bool Equals(PaintColor color)
+        {
+            if (_isCmyk || color._isCmyk)
+            {
+                return _isCmyk == color._isCmyk && _value == color._value &&
+                       _cyan.Equals(color._cyan) && _magenta.Equals(color._magenta) &&
+                       _yellow.Equals(color._yellow) && _key.Equals(color._key);
             }
 
-            return false;
+            return _value == color._value;
         }
 
         /// <summary>

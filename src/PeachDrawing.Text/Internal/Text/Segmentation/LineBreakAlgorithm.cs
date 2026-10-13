@@ -46,7 +46,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         /// </summary>
         internal static LineBreakOpportunity[] FindOpportunities(ReadOnlySpan<char> source, in LineBreakOptions options)
         {
-            var text = new ScalarText(source);
+            var text = new ScalarText(source, scratch: true);
             var result = new LineBreakOpportunity[source.Length + 1];
             result[source.Length] = LineBreakOpportunity.Mandatory;     // LB3 (and, for empty text, the only entry)
             if (text.Count == 0)
@@ -137,9 +137,28 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
 
         private static bool IsComplexContext(int codePoint) => (LineBreakClass)(SegmentationData.LineBreak(codePoint) & ClassMask) == LineBreakClass.SA;
 
+        // The units of the text being broken, kept for the next one on this thread: a unit is about 32 bytes and one is built per
+        // character of every run of text a document breaks into lines. Only the first unitCount are ever read.
+        [ThreadStatic]
+        private static Unit[]? t_units;
+
         private static Unit[] BuildUnits(in ScalarText text, in LineBreakOptions options, out int unitCount)
         {
-            var units = new Unit[text.Count];
+            Unit[] units;
+            if (text.Count <= ScalarText.ScratchLimit)
+            {
+                if (t_units is null || t_units.Length < text.Count)
+                {
+                    t_units = new Unit[Math.Max(text.Count, 256)];
+                }
+
+                units = t_units;
+            }
+            else
+            {
+                units = new Unit[text.Count];
+            }
+
             unitCount = 0;
 
             // CSS Text 3 leaves the sets of rules for line-break to the user agent, but requires some breaks: auto is normal.

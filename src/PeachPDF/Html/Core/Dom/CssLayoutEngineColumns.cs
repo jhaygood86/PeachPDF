@@ -150,10 +150,17 @@ namespace PeachPDF.Html.Core.Dom
                 runningChild.RegisterAsRunningElement(columnsBox);
             }
 
-            var children = columnsBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
-                            && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
-                .ToList();
+            // Sized once: this runs on every pass of a column container, and a container holding thousands of children
+            // grew a list by doubling each time.
+            var children = new List<CssBox>(columnsBox.Boxes.Count);
+            foreach (var b in columnsBox.Boxes)
+            {
+                if (b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
+                    && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
+                {
+                    children.Add(b);
+                }
+            }
 
             // column-gap is shared with flex/grid (same CSS property, see CssBox.FlexColumnGap); its
             // initial value "normal" (CSS Box Alignment Module Level 3 §8.3) behaves differently per

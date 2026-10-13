@@ -502,6 +502,7 @@ PeachDrawing.Core.PaintColor : struct
   method static PaintColor FromArgb(Int32 red, Int32 green, Int32 blue)
   method static PaintColor FromCmyk(Int32 alpha, Single cyan, Single magenta, Single yellow, Single key)
   method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PaintColor color)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property Boolean IsCmyk { get; }

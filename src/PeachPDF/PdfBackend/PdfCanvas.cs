@@ -782,18 +782,13 @@ namespace PeachPDF.PdfBackend
             return new PdfTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
         }
 
-        /// <summary>Reuses the PDF engine's built-in static brushes for the common opaque black/white/transparent
-        /// cases, the same optimization <c>PdfRenderContext.CreateSolidBrush</c> used to apply.</summary>
-        private static Brush ToXSolidBrush(PaintColor color)
-        {
-            if (color == PaintColor.White)
-                return new SolidBrush(PaintColor.White);
-            if (color == PaintColor.Black)
-                return new SolidBrush(PaintColor.Black);
-            if (color.A < 1)
-                return new SolidBrush(PaintColor.FromArgb(0, 255, 255, 255));
-            return new SolidBrush(color);
-        }
+        /// <summary>
+        /// The solid brush to draw <paramref name="color"/> with: a fully transparent color draws as one fully transparent
+        /// white, whatever its channels. The render context's own cached brush, since a solid brush holds nothing but its color and a
+        /// text run was allocating a second one for every draw.
+        /// </summary>
+        private Brush ToXSolidBrush(PaintColor color) =>
+            _renderContext.GetSolidBrush(color.A < 1 ? PaintColor.FromArgb(0, 255, 255, 255) : color);
 
         /// <summary>
         /// Builds this backend's own <see cref="Pen"/> from a self-describing <see cref="Pen"/> - the

@@ -1547,10 +1547,14 @@ namespace PeachPDF.Html.Core.Dom
 
         // Most boxes (every block, every box with no inline content of its own) have no per-line rectangles. The readers every box
         // goes through use these, which look without creating the dictionary; Rectangles above creates it for a writer.
-        private static readonly IReadOnlyDictionary<CssLineBox, Rect> NoRectangles = new Dictionary<CssLineBox, Rect>();
+        private static readonly Dictionary<CssLineBox, Rect> NoRectangles = new();
 
-        /// <summary>A read-only view of <see cref="Rectangles"/> that does not create the dictionary for a box that has none.</summary>
-        internal IReadOnlyDictionary<CssLineBox, Rect> RectanglesView => _rectangles ?? NoRectangles;
+        /// <summary>
+        /// A read-only view of <see cref="Rectangles"/> that does not create the dictionary for a box that has none. Typed as the
+        /// dictionary itself, not <see cref="IReadOnlyDictionary{TKey, TValue}"/>, so that enumerating it uses the struct
+        /// enumerator instead of boxing one per call; it must still never be written through.
+        /// </summary>
+        internal Dictionary<CssLineBox, Rect> RectanglesView => _rectangles ?? NoRectangles;
 
         internal int RectangleCount => _rectangles?.Count ?? 0;
 
