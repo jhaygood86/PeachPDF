@@ -78,7 +78,6 @@ namespace PeachPDF.Html.Core.Dom
         {
             internal LigatureSet? _actualFontVariantLigatures;
             internal CapsMode? _actualFontVariantCaps;
-            internal SubSuperMode? _requestedFontVariantPosition;
             internal SubSuperMode? _actualFontVariantPosition;
             internal NumeralSet? _actualFontVariantNumeric;
             internal EastAsianSet? _actualFontVariantEastAsian;
@@ -1348,7 +1347,7 @@ namespace PeachPDF.Html.Core.Dom
         /// has real <c>subs</c>/<c>sups</c> glyphs or the effect has to be synthesized.
         /// </summary>
         public SubSuperMode RequestedFontVariantPosition =>
-            Shaping._requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition.Value);
+            TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition.Value);
 
         /// <summary>
         /// The position feature that should actually be requested from the shaping layer:
@@ -1363,9 +1362,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (Shaping._actualFontVariantPosition is { } cached) return cached;
-
                 var requested = RequestedFontVariantPosition;
+
+                // Nothing requested (every box but a <sub>/<sup>): answer without creating the shaping caches.
+                if (requested == SubSuperMode.None) return SubSuperMode.None;
+
+                if (Shaping._actualFontVariantPosition is { } cached) return cached;
 
                 var resolved = requested != SubSuperMode.None && ActualFont.SupportsFontVariantPosition(requested)
                     ? requested
@@ -1800,9 +1802,13 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
+                var requested = RequestedFontVariantPosition;
+
+                // Nothing requested (every box but a <sub>/<sup>): no synthesis, and no shaping caches created to say so.
+                if (requested == SubSuperMode.None) return null;
+
                 if (Shaping._subSuperscriptSynthesisResolved) return Shaping._subSuperscriptSynthesis;
 
-                var requested = RequestedFontVariantPosition;
                 (double SizeScale, double BaselineShift)? resolved = null;
 
                 // Never synthesize what real GSUB substitution is already doing - requesting both would

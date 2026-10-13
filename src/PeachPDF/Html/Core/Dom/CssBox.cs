@@ -9713,8 +9713,16 @@ namespace PeachPDF.Html.Core.Dom
                  CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0);
             if (!minHeightZero) return false;
 
-            var inFlowChildren = Boxes.Where(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None && b != this).ToList();
-            return inFlowChildren.Count == 0 || inFlowChildren.All(b => b.IsMarginCollapseThrough(depth + 1));
+            // Every in-flow child must itself collapse through (an empty set trivially does); a loop, not a filtered list,
+            // since this is asked of every box on every margin fold.
+            foreach (var child in Boxes)
+            {
+                if (child.IsExcludedFromFlow || child.DerivedStyle.ActualDisplay == Keywords.None || child == this) continue;
+
+                if (!child.IsMarginCollapseThrough(depth + 1)) return false;
+            }
+
+            return true;
         }
 
         /// <summary>

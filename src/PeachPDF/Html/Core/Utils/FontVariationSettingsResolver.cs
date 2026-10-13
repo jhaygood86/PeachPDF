@@ -24,6 +24,13 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>The encoded settings for a box, or <see langword="null"/> when it has the initial values.</summary>
         internal static string? Encode(FontOpticalSizingMode opticalSizing, string cascaded)
         {
+            // The overwhelmingly common case - automatic optical sizing, no settings - asked of every box: nothing to encode.
+            if (opticalSizing != FontOpticalSizingMode.None
+                && (string.IsNullOrWhiteSpace(cascaded) || cascaded.AsSpan().Trim().SequenceEqual(Keywords.Normal)))
+            {
+                return null;
+            }
+
             var text = new StringBuilder();
             if (opticalSizing == FontOpticalSizingMode.None)
             {

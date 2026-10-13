@@ -528,7 +528,7 @@ namespace PeachPDF.Html.Core
         internal IEnumerable<IStyleRule> GetStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
             GetStyleRulesByOrigin(media, node, userAgentOnly: null, containerSizes: containerSizes);
 
-        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
+        internal List<IStyleRule> GetUserAgentStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
             GetStyleRulesByOrigin(media, node, userAgentOnly: true, containerSizes: containerSizes);
 
         internal IEnumerable<IStyleRule> GetAuthorStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
@@ -599,6 +599,41 @@ namespace PeachPDF.Html.Core
             var result = new List<LayeredStyleRule>(count);
             if (count == 0) return result;
 
+            var keys = SortKeys(matched, importantOrder, node, firstLineOnly: false);
+
+            for (var i = 0; i < count; i++)
+            {
+                result.Add(new LayeredStyleRule(keys[i].Rule, keys[i].Rank));
+                keys[i].Rule = null!;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The same ordering for the user-agent, <c>::first-line</c> and plain-author queries, which want just the rules.
+        /// <paramref name="firstLineOnly"/> orders by each selector's own specificity instead of the matched alternative's.
+        /// </summary>
+        private List<IStyleRule> SortRules(List<IndexedRule> matched, ICssDomNode node, bool firstLineOnly)
+        {
+            var count = matched.Count;
+            var result = new List<IStyleRule>(count);
+            if (count == 0) return result;
+
+            var keys = SortKeys(matched, importantOrder: false, node, firstLineOnly);
+
+            for (var i = 0; i < count; i++)
+            {
+                result.Add(keys[i].Rule);
+                keys[i].Rule = null!;
+            }
+
+            return result;
+        }
+
+        private CascadeKey[] SortKeys(List<IndexedRule> matched, bool importantOrder, ICssDomNode node, bool firstLineOnly)
+        {
+            var count = matched.Count;
             var keys = _cascadeKeys;
             if (keys is null || keys.Length < count) _cascadeKeys = keys = new CascadeKey[Math.Max(count, 16)];
 
@@ -609,7 +644,9 @@ namespace PeachPDF.Html.Core
                 {
                     Rule = indexed.Rule,
                     Rank = RankOf(indexed.LayerName),
-                    Specificity = count == 1 ? Priority.Zero : GetMatchedSpecificity(indexed.Rule.Selector, node),
+                    Specificity = firstLineOnly
+                        ? indexed.Rule.Selector.Specificity
+                        : count == 1 ? Priority.Zero : GetMatchedSpecificity(indexed.Rule.Selector, node),
                     DocumentOrder = indexed.DocumentOrder,
                 };
 
@@ -623,13 +660,7 @@ namespace PeachPDF.Html.Core
                 keys[at] = key;
             }
 
-            for (var i = 0; i < count; i++)
-            {
-                result.Add(new LayeredStyleRule(keys[i].Rule, keys[i].Rank));
-                keys[i].Rule = null!;
-            }
-
-            return result;
+            return keys;
         }
 
         private static bool Precedes(in CascadeKey a, in CascadeKey b, bool importantOrder)
@@ -642,7 +673,7 @@ namespace PeachPDF.Html.Core
             return a.DocumentOrder < b.DocumentOrder;
         }
 
-        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false, ContainerQuerySizes? containerSizes = null)
+        private List<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false, ContainerQuerySizes? containerSizes = null)
         {
             var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly, containerSizes);
 
@@ -660,11 +691,7 @@ namespace PeachPDF.Html.Core
             // layer (or an unlayered rule) regardless of specificity. Within one layer, specificity
             // then true document order break ties. (The !important layer-order reversal is handled by
             // GetAuthorStyleRulesForCascade for the author passes; UA/first-line have no layers.)
-            return matched
-                .OrderBy(indexed => RankOf(indexed.LayerName))
-                .ThenBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, node))
-                .ThenBy(indexed => indexed.DocumentOrder)
-                .Select(indexed => indexed.Rule);
+            return SortRules(matched, node, firstLineOnly);
         }
 
         /// <summary>
