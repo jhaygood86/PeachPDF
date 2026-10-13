@@ -41,7 +41,7 @@ rules of its own and none was verified.
 
 ## Not done, and why
 
-- **Tables** (#1251, [accepted gap](../accepted-gaps/table-inline-placement-rtl-and-single-auto-margin.md)): an rtl
+- **Tables** (#1251, [accepted gap](../accepted-gaps/table-inline-placement-rtl.md)): an rtl
   table stays at the left and `margin-left: auto` does not right-align one. Chrome 153 measured; confirmed by a
   throwaway probe test that was deleted rather than committed.
 - **Vertical writing modes**: the inline axis is the other one there, and `frame.BlockStartIsRight` already owns

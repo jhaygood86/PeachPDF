@@ -148,6 +148,156 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, CssLayoutEngine.GetActualMarginRight(table, 100.0), 3);
         }
 
+        // CSS 2.1 §10.3.3's other half: with exactly one auto margin, that margin takes whatever the
+        // width and the other margin leave over. A table reaches this the same way it reaches the
+        // centering case above - through the width its own engine settles and passes back - which is
+        // what these two pin, because the shrink-to-fit width makes IsInFlowBlockLevel report false
+        // and the rule would otherwise be skipped for a table entirely.
+        [Fact]
+        public async Task Table_MarginLeftAuto_TakesTheLeftoverSpace_AndSitsAtTheEndEdge()
+        {
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + "<table id='t' style='width:100pt; margin-left:auto; margin-right:0'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            // 200pt of containing block less the table's 100pt, all of it on the start side.
+            Assert.Equal(100.0, CssLayoutEngine.GetActualMarginLeft(table, 100.0), 3);
+            Assert.Equal(0.0, CssLayoutEngine.GetActualMarginRight(table, 100.0), 3);
+            Assert.Equal(100.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_MarginRightAuto_TakesTheLeftoverSpace_AndStaysAtTheStartEdge()
+        {
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + "<table id='t' style='width:100pt; margin-left:0; margin-right:auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            // The mirror of the case above. It looks the same on an LTR page, but the resolved margin
+            // is not the same number, and anything reading the table's own end edge sees the difference.
+            Assert.Equal(0.0, CssLayoutEngine.GetActualMarginLeft(table, 100.0), 3);
+            Assert.Equal(100.0, CssLayoutEngine.GetActualMarginRight(table, 100.0), 3);
+            Assert.Equal(0.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_MarginLeftAuto_WiderThanItsContainingBlock_ClampsToZero()
+        {
+            var html = Wrap("<div id='wrap' style='width:100pt'>"
+                + "<table id='t' style='width:200pt; margin-left:auto; margin-right:0'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            // Negative free space: the auto margin is 0, not a negative pull toward the start edge.
+            Assert.Equal(0.0, CssLayoutEngine.GetActualMarginLeft(table, 200.0), 3);
+            Assert.Equal(0.0, table.Location.X, 3);
+            Assert.Equal(200.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_MarginLeftAuto_WithNonZeroOtherMargin_TakesWhatTheOtherMarginLeavesOver()
+        {
+            // 200pt of containing block, less the table's 100pt, less the 30pt right margin: 70pt goes to the auto margin.
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + "<table id='t' style='width:100pt; margin-left:auto; margin-right:30pt'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(70.0, CssLayoutEngine.GetActualMarginLeft(table, 100.0), 3);
+            Assert.Equal(70.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
+        [Theory]
+        [InlineData("auto")]
+        [InlineData("fit-content")]
+        [InlineData("min-content")]
+        [InlineData("max-content")]
+        public async Task Table_MarginLeftAuto_IntrinsicWidth_EndsAtTheContainingBlockEdge(string width)
+        {
+            // Whatever width the table's own engine settles on, the auto margin takes the rest, so the
+            // table's end edge lands on the containing block's end edge.
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + $"<table id='t' style='width:{width}; margin-left:auto; margin-right:0'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(200.0, table.Location.X + table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_Floated_MarginLeftAuto_StaysAtItsFloatEdge()
+        {
+            // An auto margin on a float computes to 0 (CSS 2.1 §10.3.5), so float: right alone places the
+            // 100pt table at 200 - 100 = 100.
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + "<table id='t' style='float:right; width:100pt; margin-left:auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(100.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_InlineTable_MarginLeftAuto_StaysAtTheStartEdge()
+        {
+            // An inline-level box's auto margins compute to 0 (CSS 2.1 §10.3.2), so the inline-table sits at
+            // the start of its line.
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + "<table id='t' style='display:inline-table; width:100pt; margin-left:auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(0.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_FlexItem_MarginLeftAuto_IsPlacedOnceByTheFlexContainer()
+        {
+            // The flex container distributes the free space: the 190pt table sits at 400 - 190 = 210, and the
+            // table engine must not add the same space a second time.
+            var html = Wrap("<div id='flex' style='display:flex; width:400pt'>"
+                + "<table id='t' style='width:190pt; margin-left:auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(210.0, table.Location.X, 3);
+            Assert.Equal(190.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_AbsolutelyPositioned_MarginLeftAuto_StaysAtItsStaticPosition()
+        {
+            // With left and right both auto, the auto margins compute to 0 (CSS 2.1 §10.3.7), so the table keeps
+            // its static position: the start edge of the positioned wrapper.
+            var html = Wrap("<div id='wrap' style='position:relative; width:200pt; height:50pt'>"
+                + "<table id='t' style='position:absolute; top:0; width:100pt; margin-left:auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(0.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
+        [Fact]
+        public async Task Table_AbsolutelyPositioned_WithLeft_MarginLeftAuto_KeepsItsOffset()
+        {
+            // left is set, so the auto margin computes to 0 (CSS 2.1 §10.3.7) and the table sits at left: 50pt.
+            var html = Wrap("<div id='wrap' style='position:relative; width:200pt; height:50pt'>"
+                + "<table id='t' style='position:absolute; top:0; left:50pt; width:100pt; margin-left:auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(50.0, table.Location.X, 3);
+            Assert.Equal(100.0, table.ActualWidth, 3);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head><style>body,html{{margin:0}}</style></head><body>{body}</body></html>";
 

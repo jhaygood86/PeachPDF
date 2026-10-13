@@ -1,0 +1,7 @@
+# Single auto margins align in-flow tables
+
+**Before:** An in-flow `<table>` with `margin-left: auto` and a non-auto right margin stayed at the containing block's start edge instead of moving to its end edge. A lone `margin-right: auto` was likewise treated as zero. Both-auto margins already centered the table. The v0.9.22 support matrix documented the left-auto limitation.
+
+**Now:** A single auto horizontal margin on an in-flow `<table>` takes the remaining free space after the table's used width and other margin are accounted for, whatever the `width` resolves to: a length, a percentage, `auto`, `fit-content`, `min-content` or `max-content`. `margin-left: auto` aligns an LTR table to the end edge; `margin-right: auto` leaves it at the start edge. If the table is wider than its containing block, the auto margin resolves to zero. Floated, absolutely positioned, `inline-table` and flex or grid item tables keep their current placement. RTL table placement remains a separate limitation.
+
+**Why:** The table engine resolves the table's used width after sizing its columns, then supplies that width to the shared auto-margin resolver. This lets the resolver apply the remaining-space rule without estimating the table's width earlier in layout. The rule stays with in-flow tables because the other placements already fix the table's position, and adding the table engine's offset on top would move them a second time.

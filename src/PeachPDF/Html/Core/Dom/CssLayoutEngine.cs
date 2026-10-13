@@ -2063,7 +2063,9 @@ namespace PeachPDF.Html.Core.Dom
             // this pinned `margin-left: auto` boxes - and so `<hr align=right>`'s mapping - to the start edge.
             if (box.MarginRight.Value.IsValue)
             {
-                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, GetActualMarginRight(box, null, blockTop), blockTop) : 0;
+                return CanResolveASingleAutoMargin(box, boxWidth)
+                    ? ResolveSingleAutoHorizontalMargin(box, GetActualMarginRight(box, null, blockTop), blockTop, boxWidth)
+                    : 0;
             }
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
@@ -2097,7 +2099,9 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.MarginLeft.Value.IsValue)
             {
-                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, GetActualMarginLeft(box, null, blockTop), blockTop) : 0;
+                return CanResolveASingleAutoMargin(box, boxWidth)
+                    ? ResolveSingleAutoHorizontalMargin(box, GetActualMarginLeft(box, null, blockTop), blockTop, boxWidth)
+                    : 0;
             }
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
@@ -2142,14 +2146,33 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="box">the box whose <c>auto</c> margin is being resolved</param>
         /// <param name="otherMargin">the used value of its other, non-<c>auto</c> margin</param>
         /// <param name="blockTop">the document Y the box lands at, or null for its own location</param>
+        /// <param name="usedWidth">a used width the caller has already settled, or null to work one out from style</param>
         /// <remarks>
         /// Clamped at 0: an over-constrained box has no negative slack for an <c>auto</c> margin to take, and
         /// browsers resolve it to 0 rather than shifting the box. An <c>auto</c> width fills the containing
         /// block, so its slack is 0 unless a <c>max-width</c> narrows it - the same "definite" test the
         /// both-<c>auto</c> case makes.
         /// </remarks>
-        private static double ResolveSingleAutoHorizontalMargin(CssBox box, double otherMargin, double? blockTop) =>
-            Math.Max(0, FreeInlineSpace(box, blockTop) - otherMargin);
+        private static double ResolveSingleAutoHorizontalMargin(CssBox box, double otherMargin, double? blockTop, double? usedWidth = null) =>
+            Math.Max(0, FreeInlineSpace(box, blockTop, usedWidth) - otherMargin);
+
+        /// <summary>
+        /// Whether CSS 2.1 §10.3.3's "its used value follows from the equality" can be applied to
+        /// <paramref name="box"/> - which needs both a box the rule covers and a used width to subtract.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="IsInFlowBlockLevel"/> answers it for a box that fills its containing block, because
+        /// that box's own width is already known here. A shrink-to-fit table (CSS 2.1 §17.5.2) does not fill
+        /// it and has no settled width until its engine has run, so it fails that test even though the rule
+        /// covers an in-flow table just the same. The engine calls back with the width it settled on, and a
+        /// non-null <paramref name="usedWidth"/> is that callback. Only an in-flow table takes it: a floated or
+        /// absolutely positioned table is placed by its own rules, a flex or grid item by its container, and an
+        /// <c>inline-table</c> is inline-level, so its auto margins compute to 0. Applying the table engine's
+        /// offset to any of those would move the table a second time.
+        /// </remarks>
+        private static bool CanResolveASingleAutoMargin(CssBox box, double? usedWidth) =>
+            IsInFlowBlockLevel(box)
+            || (usedWidth is not null && box.DerivedStyle.ActualDisplay is Keywords.Table && IsInNormalFlow(box));
 
         /// <summary>
         /// Whether <paramref name="box"/> is an ordinary in-flow, block-level box - the only kind CSS 2.1
@@ -2175,8 +2198,15 @@ namespace PeachPDF.Html.Core.Dom
         /// it, ignoring its margins: the quantity <c>auto</c> margins are resolved from. Negative when the
         /// box is wider than the block, which callers clamp.
         /// </summary>
-        private static double FreeInlineSpace(CssBox box, double? blockTop)
+        private static double FreeInlineSpace(CssBox box, double? blockTop, double? usedWidth = null)
         {
+            // A width the caller already settled (the table engine's own callback) wins over every
+            // branch below, all of which exist to work one out from style.
+            if (usedWidth is not null)
+            {
+                return ContainingContentWidth(box, blockTop) - usedWidth.Value;
+            }
+
             // The containing block's CONTENT width, which is what §10.3.3's constraint is stated over
             // (§10.1 puts the containing block at the content edge of the nearest block container
             // ancestor). Size.Width is that only under `content-box`; under `border-box` it is the border
@@ -2471,17 +2501,23 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static bool FillsContainingBlockWidth(CssBox blockBox)
         {
-            if (blockBox.IsOutOfFlow) return false;
-
             if (blockBox.DerivedStyle.ActualDisplay is Keywords.TableCell or Keywords.Table
                 or Keywords.InlineTable or Keywords.TableCaption)
             {
                 return false;
             }
 
-            var parentDisplay = blockBox.ParentBox?.DerivedStyle.ActualDisplay;
-            return parentDisplay is not (Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid);
+            return IsInNormalFlow(blockBox);
         }
+
+
+        /// <summary>
+        /// Whether <paramref name="box"/> takes its place in normal flow: not floated or absolutely positioned, and
+        /// not an item of a flex or grid container, which distributes the free space itself.
+        /// </summary>
+        private static bool IsInNormalFlow(CssBox box) =>
+            !box.IsOutOfFlow
+            && box.ParentBox?.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid);
 
         /// <summary>
         /// The used inline size of <paramref name="box"/>.
