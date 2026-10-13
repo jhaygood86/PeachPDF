@@ -821,8 +821,11 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateOpacity() => _actualOpacityComputed = false;
 
+        // Nearly every box has no filter: one shared empty list instead of two per box.
+        private static readonly List<FilterGrammar.FilterFunction> NoFilterFunctions = [];
+
         private bool _filterFunctionsComputed;
-        private List<FilterGrammar.FilterFunction> _filterFunctions = [];
+        private List<FilterGrammar.FilterFunction>? _filterFunctions;
 
         /// <summary>
         /// Lazily parses the used value of the <c>filter</c> property (Filter Effects Level 1 §3) into its
@@ -842,18 +845,18 @@ namespace PeachPDF.Html.Core.Dom
                     using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.Filter))
                     {
                         List<Token> tokens = pooledTokens;
-                        _filterFunctions = FilterGrammar.TryParse(tokens) ?? [];
+                        _filterFunctions = FilterGrammar.TryParse(tokens);
                     }
                     _filterFunctionsComputed = true;
                 }
-                return _filterFunctions;
+                return _filterFunctions ?? NoFilterFunctions;
             }
         }
 
         internal void InvalidateFilter() => _filterFunctionsComputed = false;
 
         private bool _backdropFilterFunctionsComputed;
-        private List<FilterGrammar.FilterFunction> _backdropFilterFunctions = [];
+        private List<FilterGrammar.FilterFunction>? _backdropFilterFunctions;
 
         /// <summary>
         /// Lazily parses the used value of <c>backdrop-filter</c> (Filter Effects Level 2 §3.1) into its ordered function list -
@@ -868,13 +871,13 @@ namespace PeachPDF.Html.Core.Dom
                     using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.BackdropFilter))
                     {
                         List<Token> tokens = pooledTokens;
-                        _backdropFilterFunctions = FilterGrammar.TryParse(tokens) ?? [];
+                        _backdropFilterFunctions = FilterGrammar.TryParse(tokens);
                     }
 
                     _backdropFilterFunctionsComputed = true;
                 }
 
-                return _backdropFilterFunctions;
+                return _backdropFilterFunctions ?? NoFilterFunctions;
             }
         }
 

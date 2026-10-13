@@ -566,17 +566,7 @@ namespace PeachPDF.Html.Core
         {
             var matched = GatherMatchedRules(media, node, userAgentOnly: false, firstLineOnly: false, containerSizes);
 
-            List<LayeredStyleRule> Sort(bool importantOrder)
-            {
-                var ordered = importantOrder
-                    ? matched.OrderByDescending(indexed => RankOf(indexed.LayerName))
-                    : matched.OrderBy(indexed => RankOf(indexed.LayerName));
-                return ordered
-                    .ThenBy(indexed => GetMatchedSpecificity(indexed.Rule.Selector, node))
-                    .ThenBy(indexed => indexed.DocumentOrder)
-                    .Select(indexed => new LayeredStyleRule(indexed.Rule, RankOf(indexed.LayerName)))
-                    .ToList();
-            }
+            List<LayeredStyleRule> Sort(bool importantOrder) => SortForCascade(matched, importantOrder, node);
 
             var normal = Sort(importantOrder: false);
             // With no layers every rank is UnlayeredRank, so the important order is identical - reuse the
@@ -584,6 +574,72 @@ namespace PeachPDF.Html.Core
             // the same as before this feature).
             var important = HasCascadeLayers ? Sort(importantOrder: true) : normal;
             return (normal, important);
+        }
+
+        private struct CascadeKey
+        {
+            public IStyleRule Rule;
+            public int Rank;
+            public Priority Specificity;
+            public int DocumentOrder;
+        }
+
+        [ThreadStatic]
+        private static CascadeKey[]? _cascadeKeys;
+
+        /// <summary>
+        /// Orders the matched rules for the cascade: layer rank (reversed for <c>!important</c>), then specificity, then document
+        /// order. Plain keyed insertion sort over a reused buffer - a box usually matches a handful of rules, and the LINQ
+        /// <c>OrderBy/ThenBy/Select/ToList</c> chain this replaces allocated roughly a dozen objects per box. The key is total
+        /// (document order is unique per rule), so the result is the same as the stable sort it replaces.
+        /// </summary>
+        private List<LayeredStyleRule> SortForCascade(List<IndexedRule> matched, bool importantOrder, ICssDomNode node)
+        {
+            var count = matched.Count;
+            var result = new List<LayeredStyleRule>(count);
+            if (count == 0) return result;
+
+            var keys = _cascadeKeys;
+            if (keys is null || keys.Length < count) _cascadeKeys = keys = new CascadeKey[Math.Max(count, 16)];
+
+            for (var i = 0; i < count; i++)
+            {
+                var indexed = matched[i];
+                var key = new CascadeKey
+                {
+                    Rule = indexed.Rule,
+                    Rank = RankOf(indexed.LayerName),
+                    Specificity = count == 1 ? Priority.Zero : GetMatchedSpecificity(indexed.Rule.Selector, node),
+                    DocumentOrder = indexed.DocumentOrder,
+                };
+
+                var at = i;
+                while (at > 0 && Precedes(in key, in keys[at - 1], importantOrder))
+                {
+                    keys[at] = keys[at - 1];
+                    at--;
+                }
+
+                keys[at] = key;
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                result.Add(new LayeredStyleRule(keys[i].Rule, keys[i].Rank));
+                keys[i].Rule = null!;
+            }
+
+            return result;
+        }
+
+        private static bool Precedes(in CascadeKey a, in CascadeKey b, bool importantOrder)
+        {
+            if (a.Rank != b.Rank) return importantOrder ? a.Rank > b.Rank : a.Rank < b.Rank;
+
+            var bySpecificity = a.Specificity.CompareTo(b.Specificity);
+            if (bySpecificity != 0) return bySpecificity < 0;
+
+            return a.DocumentOrder < b.DocumentOrder;
         }
 
         private IEnumerable<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false, ContainerQuerySizes? containerSizes = null)
