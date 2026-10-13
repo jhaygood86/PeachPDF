@@ -99,6 +99,34 @@ namespace PeachPDF.Tests.MathML
         }
 
         [Fact]
+        public async Task StringSetContentText_OfATokenElement_ReadsItsText()
+        {
+            await WithMathAsync("<math><mi>x</mi><mo>+</mo></math>", math =>
+            {
+                var mi = math.Boxes.First(b => b.HtmlTag?.Name == "mi");
+                mi.StringSet = "token content(text)";
+
+                CssNamedStringEngine.ApplyStringSet(mi);
+
+                Assert.Equal("x", mi.NamedStrings["token"].Value);
+            });
+        }
+
+        [Fact]
+        public async Task StringSetContentText_OfAnElementHoldingMath_IncludesTheTokensText()
+        {
+            await WithMathAsync("<math><mi>x</mi><mo>+</mo><mn>2</mn></math>", math =>
+            {
+                var host = math.ParentBox!;
+                host.StringSet = "heading content(text)";
+
+                CssNamedStringEngine.ApplyStringSet(host);
+
+                Assert.Equal("x + 2", host.NamedStrings["heading"].Value);
+            });
+        }
+
+        [Fact]
         public async Task AnOrdinaryParagraphsTextBoxes_AreUnchanged()
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>plain <b>bold</b> text</p>"));
