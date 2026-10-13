@@ -34,6 +34,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Rectangle
         /// </summary>
+        private protected WordRareState? _rare;
+
+        /// <summary>Whether this word has allocated its <see cref="WordRareState"/>.</summary>
+        internal bool HasRareState => _rare is not null;
+
         private Rect _rect;
 
         #endregion
@@ -220,7 +225,7 @@ namespace PeachPDF.Html.Core.Dom
         /// any word that turns out to actually land on a later line once wrapping is known (see the
         /// boundary re-measurement it performs when a box's content straddles the line-1/2 boundary).
         /// </summary>
-        public CssBox? FirstLineStyle { get; set; }
+        public CssBox? FirstLineStyle { get => _rare is null ? default(CssBox?) : _rare.FirstLineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new WordRareState(); } _rare.FirstLineStyle = value; } }
 
         /// <summary>
         /// This word's natural (pre-rotation) size, cached once by
@@ -238,7 +243,7 @@ namespace PeachPDF.Html.Core.Dom
         /// The widest extended grapheme cluster in this word, measured for
         /// <c>overflow-wrap:anywhere</c>'s min-content contribution. Null until word measurement needs it.
         /// </summary>
-        internal double? OverflowWrapMinWidth { get; set; }
+        internal double? OverflowWrapMinWidth { get => _rare is null ? default(double?) : _rare.OverflowWrapMinWidth; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new WordRareState(); } _rare.OverflowWrapMinWidth = value; } }
 
         /// <summary>
         /// Height of the rectangle
@@ -337,7 +342,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssBox.RemeasureWordsTail"/>) for any word that turns out to land on a later line
         /// once wrapping is known.
         /// </summary>
-        public string? FirstLineText { get; set; }
+        public string? FirstLineText { get => _rare is null ? default(string?) : _rare.FirstLineText; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new WordRareState(); } _rare.FirstLineText = value; } }
 
         /// <summary>
         /// Multiplier applied to the owner box's <see cref="DerivedStyle.ActualFont"/> size when
@@ -345,7 +350,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (an upper-cased, originally-lowercase run is drawn smaller than the rest of its word) — 1.0
         /// (no-op) for every other <see cref="CssRect"/>. See <see cref="CssBox.ParseToWords"/>.
         /// </summary>
-        public double FontSizeScale { get; set; } = 1.0;
+        public double FontSizeScale { get => _rare is null ? 1.0 : _rare.FontSizeScale; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, 1.0)) return; _rare = new WordRareState(); } _rare.FontSizeScale = value; } }
 
         /// <summary>
         /// Which synthesis asked for this fragment's <see cref="FontSizeScale"/>, and so which of the
@@ -360,7 +365,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="Paint.FragmentPainter"/>, so a wrong answer here makes the two disagree about which
         /// font a word was drawn in - which shows up as a mis-aligned baseline, not as a failure.
         /// </remarks>
-        public ScaledFontKind ScaledFontKind { get; set; } = ScaledFontKind.None;
+        public ScaledFontKind ScaledFontKind { get => _rare is null ? ScaledFontKind.None : _rare.ScaledFontKind; set { if (_rare is null) { if (EqualityComparer<ScaledFontKind>.Default.Equals(value, ScaledFontKind.None)) return; _rare = new WordRareState(); } _rare.ScaledFontKind = value; } }
 
         /// <summary>
         /// When true, this fragment's font is resolved per-codepoint (its <see cref="Text"/>'s first
@@ -370,7 +375,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssBox.ParseToWords"/> only for boxes whose text actually needs it; every fragment in
         /// such a split shares one resolved face by construction. <c>false</c> for ordinary words.
         /// </summary>
-        public bool UsesPerCodepointFont { get; set; }
+        public bool UsesPerCodepointFont { get => _rare is null ? default(bool) : _rare.UsesPerCodepointFont; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new WordRareState(); } _rare.UsesPerCodepointFont = value; } }
 
         /// <summary>
         /// This fragment's effective Unicode <c>Vertical_Orientation</c> under <c>text-orientation:
@@ -386,7 +391,7 @@ namespace PeachPDF.Html.Core.Dom
         /// upright</c>/<c>sideways</c>, which apply one box-wide decision instead of a per-fragment one,
         /// and for a <c>horizontal-tb</c> box, where orientation has no meaning at all.
         /// </summary>
-        public bool IsUprightOrientation { get; set; }
+        public bool IsUprightOrientation { get => _rare is null ? default(bool) : _rare.IsUprightOrientation; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new WordRareState(); } _rare.IsUprightOrientation = value; } }
 
         /// <summary>
         /// When true, this fragment must never be treated as a line-break opportunity even if it would
@@ -394,7 +399,7 @@ namespace PeachPDF.Html.Core.Dom
         /// make up what was originally one word) back together so splitting a word into runs never
         /// introduces a spurious new wrap point. See <see cref="CssLayoutEngine.FlowBox"/>.
         /// </summary>
-        public bool SuppressWrapBefore { get; set; } = false;
+        public bool SuppressWrapBefore { get => _rare is null ? false : _rare.SuppressWrapBefore; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, false)) return; _rare = new WordRareState(); } _rare.SuppressWrapBefore = value; } }
 
         /// <summary>
         /// What the Unicode line breaking algorithm (UAX #14, with the CSS tailorings) says about breaking before this word, read
@@ -413,7 +418,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Null/empty for every word that isn't a hyphenation candidate. Consulted only at layout time,
         /// in <see cref="CssLayoutEngine.FlowBox"/>, when a word would otherwise overflow the line.
         /// </summary>
-        public IReadOnlyList<int>? HyphenationCandidates { get; set; }
+        public IReadOnlyList<int>? HyphenationCandidates { get => _rare is null ? default(IReadOnlyList<int>?) : _rare.HyphenationCandidates; set { if (_rare is null) { if (EqualityComparer<IReadOnlyList<int>?>.Default.Equals(value, default(IReadOnlyList<int>?))) return; _rare = new WordRareState(); } _rare.HyphenationCandidates = value; } }
 
         /// <summary>
         /// Represents this word for debugging purposes
