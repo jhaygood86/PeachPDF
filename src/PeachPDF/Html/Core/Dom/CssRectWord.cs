@@ -214,7 +214,7 @@ namespace PeachPDF.Html.Core.Dom
         /// undone by restoring this in place of the prefix/suffix pair - see
         /// <see cref="HyphenationSuffix"/> and issue #344.
         /// </summary>
-        internal CssRect? PreSplitWord { get; set; }
+        internal CssRect? PreSplitWord { get => _rare is null ? default(CssRect?) : _rare.PreSplitWord; set { if (_rare is null) { if (EqualityComparer<CssRect?>.Default.Equals(value, default(CssRect?))) return; _rare = new WordRareState(); } _rare.PreSplitWord = value; } }
 
         /// <summary>
         /// Set only on a hyphenation-created prefix: the suffix <c>TryHyphenateWord</c> created
@@ -227,7 +227,7 @@ namespace PeachPDF.Html.Core.Dom
         /// was made for is itself discarded at a break, so the resumed pass decides afresh instead of
         /// re-flowing a stale split.
         /// </summary>
-        internal CssRectWord? HyphenationSuffix { get; set; }
+        internal CssRectWord? HyphenationSuffix { get => _rare is null ? default(CssRectWord?) : _rare.HyphenationSuffix; set { if (_rare is null) { if (EqualityComparer<CssRectWord?>.Default.Equals(value, default(CssRectWord?))) return; _rare = new WordRareState(); } _rare.HyphenationSuffix = value; } }
 
         /// <summary>
         /// Set only on a hyphenation-created suffix: the prefix <c>TryHyphenateWord</c> created it
@@ -236,7 +236,7 @@ namespace PeachPDF.Html.Core.Dom
         /// fragmentainer's discarded line, that the line just kept before it ends in a hyphen that may
         /// have to be taken back.
         /// </summary>
-        internal CssRectWord? HyphenationPrefix { get; set; }
+        internal CssRectWord? HyphenationPrefix { get => _rare is null ? default(CssRectWord?) : _rare.HyphenationPrefix; set { if (_rare is null) { if (EqualityComparer<CssRectWord?>.Default.Equals(value, default(CssRectWord?))) return; _rare = new WordRareState(); } _rare.HyphenationPrefix = value; } }
 
         /// <summary>
         /// Set on an <c>overflow-wrap</c>-created prefix: the unsplit word from which this prefix and
@@ -244,13 +244,13 @@ namespace PeachPDF.Html.Core.Dom
         /// requested the emergency split is discarded, or before a fresh full reflow with a different
         /// available measure.
         /// </summary>
-        internal CssRectWord? PreOverflowWrapWord { get; set; }
+        internal CssRectWord? PreOverflowWrapWord { get => _rare is null ? default(CssRectWord?) : _rare.PreOverflowWrapWord; set { if (_rare is null) { if (EqualityComparer<CssRectWord?>.Default.Equals(value, default(CssRectWord?))) return; _rare = new WordRareState(); } _rare.PreOverflowWrapWord = value; } }
 
         /// <summary>The suffix created alongside an <c>overflow-wrap</c> prefix.</summary>
-        internal CssRectWord? OverflowWrapSuffix { get; set; }
+        internal CssRectWord? OverflowWrapSuffix { get => _rare is null ? default(CssRectWord?) : _rare.OverflowWrapSuffix; set { if (_rare is null) { if (EqualityComparer<CssRectWord?>.Default.Equals(value, default(CssRectWord?))) return; _rare = new WordRareState(); } _rare.OverflowWrapSuffix = value; } }
 
         /// <summary>The prefix created alongside an <c>overflow-wrap</c> suffix.</summary>
-        internal CssRectWord? OverflowWrapPrefix { get; set; }
+        internal CssRectWord? OverflowWrapPrefix { get => _rare is null ? default(CssRectWord?) : _rare.OverflowWrapPrefix; set { if (_rare is null) { if (EqualityComparer<CssRectWord?>.Default.Equals(value, default(CssRectWord?))) return; _rare = new WordRareState(); } _rare.OverflowWrapPrefix = value; } }
 
         /// <summary>
         /// Splits this word at a UTF-16 index that is already known to be an extended-grapheme-cluster
