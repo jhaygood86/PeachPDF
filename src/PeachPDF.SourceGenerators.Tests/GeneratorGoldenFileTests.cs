@@ -152,7 +152,8 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_ClipPath(CssValueParser parser, string value) => " +
-                "global::PeachPDF.CSS.BasicShapeGrammar.TryParse(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(value, inValueContext: true, preserveWhitespace: true)) is not null;",
+                "global::PeachPDF.Html.Core.Utils.GrammarMemo.Accepts(value, static v => " +
+                "global::PeachPDF.CSS.BasicShapeGrammar.TryParse(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(v, inValueContext: true, preserveWhitespace: true)) is not null);",
                 generated);
             // Validator-only: storage stays the plain default assignment, no dedicated Set_ override.
             Assert.Contains("box.Transform = value;", generated);
@@ -874,10 +875,10 @@ namespace PeachPDF.SourceGenerators.Tests
             Assert.Contains("get => _computedStyle.Text.TextAlign;", generated);
             Assert.Contains("var area = _computedStyle.Text;", generated);
             Assert.Contains(
-                "var newArea = area.SetPropertyValue(area.TextAlign, value, static (a, v) => a with { TextAlign = v });",
+                "var newArea = area.SetPropertyValueShared(transitions, area.TextAlign, value, static (a, v) => a with { TextAlign = v });",
                 generated);
             Assert.Contains(
-                "_computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });",
+                "_computedStyle = _computedStyle.AdoptAreaShared(transitions, area, newArea, static (s, a) => s with { Text = a });",
                 generated);
         }
 
@@ -970,7 +971,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.DoesNotContain("ResolveFontSizeValueComputation(value)", styleProperties);
             Assert.Contains(
-                "var newArea = area.SetPropertyValue(area.FontSize, value, static (a, v) => a with { FontSize = v });",
+                "var newArea = area.SetPropertyValueShared(transitions, area.FontSize, value, static (a, v) => a with { FontSize = v });",
                 styleProperties);
         }
 
@@ -995,7 +996,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains("var resolved = NoEms(value);", generated);
             Assert.Contains(
-                "var newArea = area.SetPropertyValue(area.WordSpacing, resolved, static (a, v) => a with { WordSpacing = v });",
+                "var newArea = area.SetPropertyValueShared(transitions, area.WordSpacing, resolved, static (a, v) => a with { WordSpacing = v });",
                 generated);
         }
 
@@ -1032,7 +1033,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.DoesNotContain("NoEms(value)", styleProperties);
             Assert.Contains(
-                "var newArea = area.SetPropertyValue(area.WordSpacing, value, static (a, v) => a with { WordSpacing = v });",
+                "var newArea = area.SetPropertyValueShared(transitions, area.WordSpacing, value, static (a, v) => a with { WordSpacing = v });",
                 styleProperties);
         }
 
