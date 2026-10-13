@@ -121,34 +121,41 @@ internal static class PdfEncoders
     /// </summary>
     internal static string FormatGlyphIdsAsHexLiteral(System.Collections.Generic.IReadOnlyList<PeachDrawing.Text.Shaping.PlacedGlyph> glyphs)
     {
-        int count = glyphs.Count;
-        if (count == 0) return "<>";
+        if (glyphs.Count == 0) return "<>";
 
+        return string.Create(GlyphIdsHexLiteralLength(glyphs.Count), glyphs, static (output, source) => WriteGlyphIdsAsHexLiteral(source, output));
+    }
+
+    /// <summary>The number of characters <see cref="WriteGlyphIdsAsHexLiteral"/> writes for <paramref name="glyphCount"/> glyphs.</summary>
+    internal static int GlyphIdsHexLiteralLength(int glyphCount) =>
         // One unit is two bytes; the same break rule as FormatUnicodeHexLiteral (every 48th byte, except the first).
-        int lineBreaks = (count * 2 - 1) / 48;
+        glyphCount == 0 ? 2 : glyphCount * 4 + (glyphCount * 2 - 1) / 48 + 2;
 
-        return string.Create(count * 4 + lineBreaks + 2, glyphs, static (output, source) =>
+    /// <summary>
+    /// Writes the literal <see cref="FormatGlyphIdsAsHexLiteral"/> returns into <paramref name="output"/>, which must hold
+    /// <see cref="GlyphIdsHexLiteralLength"/> characters, so a caller that appends it straight to a content stream allocates no string.
+    /// </summary>
+    internal static void WriteGlyphIdsAsHexLiteral(System.Collections.Generic.IReadOnlyList<PeachDrawing.Text.Shaping.PlacedGlyph> source, Span<char> output)
+    {
+        ReadOnlySpan<byte> digits = HexDigits;
+        int position = 0;
+        output[position++] = '<';
+
+        for (int unit = 0; unit < source.Count; unit++)
         {
-            ReadOnlySpan<byte> digits = HexDigits;
-            int position = 0;
-            output[position++] = '<';
+            int id = (char)source[unit].GlyphIndex;
+            output[position] = (char)digits[(id >> 12) & 0xF];
+            output[position + 1] = (char)digits[(id >> 8) & 0xF];
+            output[position + 2] = (char)digits[(id >> 4) & 0xF];
+            output[position + 3] = (char)digits[id & 0xF];
+            position += 4;
 
-            for (int unit = 0; unit < source.Count; unit++)
-            {
-                int id = (char)source[unit].GlyphIndex;
-                output[position] = (char)digits[(id >> 12) & 0xF];
-                output[position + 1] = (char)digits[(id >> 8) & 0xF];
-                output[position + 2] = (char)digits[(id >> 4) & 0xF];
-                output[position + 3] = (char)digits[id & 0xF];
-                position += 4;
+            int byteIndex = unit * 2;
+            if (byteIndex != 0 && byteIndex % 48 == 0)
+                output[position++] = '\n';
+        }
 
-                int byteIndex = unit * 2;
-                if (byteIndex != 0 && byteIndex % 48 == 0)
-                    output[position++] = '\n';
-            }
-
-            output[position] = '>';
-        });
+        output[position] = '>';
     }
 
     private static byte[] FormatHexLiteral(byte[] bytes)

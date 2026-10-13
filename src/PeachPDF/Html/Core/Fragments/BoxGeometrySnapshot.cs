@@ -25,12 +25,12 @@ namespace PeachPDF.Html.Core.Fragments
         /// location/right/bottom triple <see cref="CssBox.Bounds"/> derives from, so a
         /// snapshot describes exactly what the live box would have reported at capture time.
         /// </summary>
-        internal sealed class BoxGeometry
+        internal sealed class BoxGeometry(int rectangleCapacity = 0, int wordCapacity = 0)
         {
             internal PaintPoint Location { get; set; }
             internal double ActualRight { get; set; }
             internal double ActualBottom { get; set; }
-            internal Dictionary<CssLineBox, Rect> Rectangles { get; } = [];
+            internal Dictionary<CssLineBox, Rect> Rectangles { get; } = new(rectangleCapacity);
 
             /// <summary>
             /// Where each of the box's words sat, or null for one that belongs to the <i>next</i>
@@ -45,7 +45,7 @@ namespace PeachPDF.Html.Core.Fragments
             /// time instead: by then the resumed pass has re-placed the word and cleared the flag, while this
             /// snapshot still holds where it used to be.
             /// </remarks>
-            internal List<PaintPoint?> WordOrigins { get; } = [];
+            internal List<PaintPoint?> WordOrigins { get; } = new(wordCapacity);
 
             internal Rect Bounds => Rect.FromLTRB(Location.X, Location.Y, ActualRight, ActualBottom);
         }
@@ -119,14 +119,14 @@ namespace PeachPDF.Html.Core.Fragments
 
         private void CaptureBox(CssBox box, IBoxExclusion? excluded)
         {
-            var geometry = new BoxGeometry
+            var geometry = new BoxGeometry(box.RectangleCount, box.Words.Count)
             {
                 Location = box.Location,
                 ActualRight = box.ActualRight,
                 ActualBottom = box.ActualBottom
             };
 
-            foreach (var (line, rect) in box.Rectangles)
+            foreach (var (line, rect) in box.RectanglesView)
             {
                 geometry.Rectangles[line] = rect;
             }

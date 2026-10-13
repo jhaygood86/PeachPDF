@@ -121,5 +121,40 @@ namespace PeachDrawing.Core.Tests.Paint
             Assert.Equal(255, g);
             Assert.Equal(255, b);
         }
+
+        [Fact]
+        public void TheTypedEquals_AgreesWithTheObjectEquals_ForRgbColors()
+        {
+            var color = PaintColor.FromArgb(200, 1, 2, 3);
+
+            Assert.True(color.Equals(PaintColor.FromArgb(200, 1, 2, 3)));
+            Assert.True(color.Equals((object)PaintColor.FromArgb(200, 1, 2, 3)));
+            Assert.False(color.Equals(PaintColor.FromArgb(200, 1, 2, 4)));
+            Assert.False(color.Equals((object)PaintColor.FromArgb(200, 1, 2, 4)));
+            Assert.False(color.Equals("not a color"));
+            Assert.True(color == PaintColor.FromArgb(200, 1, 2, 3));
+            Assert.True(color != PaintColor.FromArgb(201, 1, 2, 3));
+        }
+
+        [Fact]
+        public void TheTypedEquals_ComparesEveryCmykChannel_AndNeverEqualsAnRgbColor()
+        {
+            var cmyk = PaintColor.FromCmyk(255, 0.1f, 0.2f, 0.3f, 0.4f);
+
+            Assert.True(cmyk.Equals(PaintColor.FromCmyk(255, 0.1f, 0.2f, 0.3f, 0.4f)));
+            Assert.False(cmyk.Equals(PaintColor.FromCmyk(255, 0.1f, 0.2f, 0.3f, 0.5f)));
+            Assert.False(cmyk.Equals(PaintColor.FromCmyk(255, 0.1f, 0.2f, 0.4f, 0.4f)));
+            Assert.False(cmyk.Equals(PaintColor.FromArgb(255, 0, 0, 0)));
+            Assert.False(PaintColor.FromArgb(255, 0, 0, 0).Equals(cmyk));
+        }
+
+        [Fact]
+        public void AColor_IsFoundInADictionaryByAnEqualColor()
+        {
+            var brushes = new Dictionary<PaintColor, string> { [PaintColor.FromArgb(9, 8, 7)] = "found" };
+
+            Assert.Equal("found", brushes[PaintColor.FromArgb(9, 8, 7)]);
+            Assert.False(brushes.ContainsKey(PaintColor.FromArgb(9, 8, 6)));
+        }
     }
 }

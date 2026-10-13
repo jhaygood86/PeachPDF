@@ -166,7 +166,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="bounds">the box's own bounds</param>
         /// <param name="isInline">whether the box is inline-level</param>
         /// <param name="rectangles">the box's per-line rectangles</param>
-        internal static Rect ClipSourceBoundsOf(Rect bounds, bool isInline, IReadOnlyDictionary<CssLineBox, Rect> rectangles)
+        internal static Rect ClipSourceBoundsOf(Rect bounds, bool isInline, Dictionary<CssLineBox, Rect> rectangles)
         {
             if (!isInline || rectangles.Count == 0) return bounds;
 

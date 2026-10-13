@@ -330,7 +330,20 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// fragment's extent is asked for, because the box's bounds describe a different
             /// fragmentainer entirely. See <see cref="_continuationShells"/>.
             /// </summary>
-            internal Rect? ShellRect { get; set; }
+            internal Rect? ShellRect
+            {
+                get => _rare is null ? default : _rare.ShellRect;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<Rect?>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.ShellRect = value;
+                }
+            }
 
             /// <summary>
             /// The band a displaced fragment is confined to, in document space, or null for an ordinary
@@ -339,7 +352,20 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// whole height and would otherwise redraw, under the repeated header, the strip an earlier
             /// band already showed.
             /// </summary>
-            internal Rect? ConfinedTo { get; set; }
+            internal Rect? ConfinedTo
+            {
+                get => _rare is null ? default : _rare.ConfinedTo;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<Rect?>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.ConfinedTo = value;
+                }
+            }
 
             /// <summary>
             /// How far lower than its own geometry this fragment draws — see
@@ -353,13 +379,39 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// last strip was shorter than the gaps above it tested as being in no band at all and lost
             /// its background and borders on that page entirely.
             /// </remarks>
-            internal double Shift { get; set; }
+            internal double Shift
+            {
+                get => _rare is null ? default : _rare.Shift;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<double>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.Shift = value;
+                }
+            }
 
             /// <summary>
             /// The box whose run this fragment is a slice of, or null for an ordinary fragment — see
             /// <see cref="ClipIsInsideTheDisplacedRun"/>, its only reader.
             /// </summary>
-            internal CssBox? DisplacementRoot { get; set; }
+            internal CssBox? DisplacementRoot
+            {
+                get => _rare is null ? default : _rare.DisplacementRoot;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<CssBox?>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.DisplacementRoot = value;
+                }
+            }
 
             /// <summary>
             /// How far this fragment's <c>position: fixed</c> subtree draws from its own (single,
@@ -374,10 +426,36 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// <see cref="Localize"/>/<see cref="Displaced"/>): a fixed fragment's own <c>Shift</c> and
             /// <c>OriginY</c> are always 0, so document space already IS this fragment's local space.
             /// </summary>
-            internal double FixedOffsetX { get; set; }
+            internal double FixedOffsetX
+            {
+                get => _rare is null ? default : _rare.FixedOffsetX;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<double>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.FixedOffsetX = value;
+                }
+            }
 
             /// <inheritdoc cref="FixedOffsetX"/>
-            internal double FixedOffsetY { get; set; }
+            internal double FixedOffsetY
+            {
+                get => _rare is null ? default : _rare.FixedOffsetY;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<double>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.FixedOffsetY = value;
+                }
+            }
 
             /// <summary>
             /// How far wider/taller this fragment's <c>position: fixed</c> subtree's own extent
@@ -395,10 +473,36 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// with content that does not re-wrap to fit it (an accepted gap - see
             /// docs/html-css-support.md's `position: fixed` per-page notes).
             /// </summary>
-            internal double FixedSizeDeltaWidth { get; set; }
+            internal double FixedSizeDeltaWidth
+            {
+                get => _rare is null ? default : _rare.FixedSizeDeltaWidth;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<double>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.FixedSizeDeltaWidth = value;
+                }
+            }
 
             /// <inheritdoc cref="FixedSizeDeltaWidth"/>
-            internal double FixedSizeDeltaHeight { get; set; }
+            internal double FixedSizeDeltaHeight
+            {
+                get => _rare is null ? default : _rare.FixedSizeDeltaHeight;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<double>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.FixedSizeDeltaHeight = value;
+                }
+            }
 
             /// <summary>
             /// How much wider this fragment's own outer frame is on THIS slot than the single,
@@ -416,17 +520,64 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// block-axis (height) counterpart: a box's height is already free to vary per fragment via
             /// <see cref="BoundsEndAtItsContent"/> - only the inline axis lacked a per-fragment seam.
             /// </summary>
-            internal double InlineExtentDeltaWidth { get; set; }
+            internal double InlineExtentDeltaWidth
+            {
+                get => _rare is null ? default : _rare.InlineExtentDeltaWidth;
+                set
+                {
+                    if (_rare is null)
+                    {
+                        if (EqualityComparer<double>.Default.Equals(value, default)) return;
+                        _rare = new DraftRare();
+                    }
+
+                    _rare.InlineExtentDeltaWidth = value;
+                }
+            }
 
             /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
             /// Kept raw because <see cref="SliceGeometry"/> is defined over <i>every</i> rectangle the box
             /// produces across every fragmentainer, and a later pass can still add one.
             /// </summary>
-            internal List<(CssLineBox Line, Rect Rect)> Lines { get; } = [];
+            /// <summary>
+            /// What only a displaced, fixed-position or continuation-shell fragment carries - the members above that read and write
+            /// through it. Nearly every draft has none of it, and a draft is built for every box in every fragmentainer it
+            /// lands in, so holding these inline was about 140 bytes in each of them.
+            /// </summary>
+            private DraftRare? _rare;
 
-            internal List<TextFragment> Words { get; } = [];
-            internal List<Draft> Children { get; } = [];
+            private sealed class DraftRare
+            {
+                internal Rect? ShellRect;
+                internal Rect? ConfinedTo;
+                internal double Shift;
+                internal CssBox? DisplacementRoot;
+                internal double FixedOffsetX;
+                internal double FixedOffsetY;
+                internal double FixedSizeDeltaWidth;
+                internal double FixedSizeDeltaHeight;
+                internal double InlineExtentDeltaWidth;
+            }
+
+            internal List<(CssLineBox Line, Rect Rect)> Lines { get; private set; } = NoLines;
+
+            internal List<TextFragment> Words { get; private set; } = NoWords;
+            internal List<Draft> Children { get; private set; } = NoChildren;
+
+            // A draft is complete once built and its three lists are only read afterwards, so a list with nothing in it is one
+            // shared instance rather than one per draft: most boxes hold no line rectangles, or no words, or no child boxes.
+            private static readonly List<(CssLineBox Line, Rect Rect)> NoLines = [];
+            private static readonly List<TextFragment> NoWords = [];
+            private static readonly List<Draft> NoChildren = [];
+
+            /// <summary>Takes over the lists the draft was built from (it does not copy them), leaving an empty one shared.</summary>
+            internal void Adopt(List<(CssLineBox Line, Rect Rect)> lines, List<TextFragment> words, List<Draft> children)
+            {
+                if (lines.Count > 0) Lines = lines;
+                if (words.Count > 0) Words = words;
+                if (children.Count > 0) Children = children;
+            }
         }
 
         private readonly SortedDictionary<int, (Slot Slot, Draft Root, bool HasPrintableContent)> _emitted = [];
@@ -2847,7 +2998,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
                             var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
                             claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop,
-                                snapshot is null && capture is null ? () => IsInSlicedContent(box) : null);
+                                snapshot is null && capture is null ? box : null);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -3022,9 +3173,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     capture is { DetachedSourceRoot: not null } ? capture.Value.Self : null),
                 box, slot, region, snapshot, originY);
 
-            draft.Lines.AddRange(lines);
-            draft.Words.AddRange(words);
-            draft.Children.AddRange(children);
+            draft.Adopt(lines, words, children);
             draft.IsFixed = isFixed;
             draft.IsMonolithic = MonolithicContent.IsMonolithicForFragmentation(box);
             draft.UsesOwnBounds = usesOwnBounds;
@@ -3143,7 +3292,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private bool ClaimsLine(
             Rect rect, Rect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop,
-            Func<bool>? slicesStraddlingLines = null)
+            CssBox? slicedContentOwner = null)
         {
             // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
             // own Y falls in would name a single page instead of all of them - exempt from every test below,
@@ -3183,8 +3332,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             // elements by slicing the element's graphical representation") is drawn by every page it overlaps,
             // each showing its own part, so the part past the foot of one page is not lost. Layout moves every
             // other straddling line to the next page, so only a line that still straddles is sliced.
-            if (slotIndex > nominalSlot && slicesStraddlingLines is not null && StraddlesIntoNominalBand(rect, claimTop)
-                && slicesStraddlingLines())
+            if (slotIndex > nominalSlot && slicedContentOwner is not null && StraddlesIntoNominalBand(rect, claimTop)
+                && IsInSlicedContent(slicedContentOwner))
             {
                 return true;
             }
@@ -4505,7 +4654,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;
 
-        private static IReadOnlyDictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+        private static Dictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.RectanglesView;
 
         /// <summary>

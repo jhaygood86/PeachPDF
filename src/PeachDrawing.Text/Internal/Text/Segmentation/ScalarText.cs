@@ -9,10 +9,40 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
     /// </summary>
     internal readonly struct ScalarText
     {
-        internal ScalarText(ReadOnlySpan<char> text)
+        /// <summary>The longest text whose buffers a scratch conversion keeps for the next one, so a huge paragraph is not retained.</summary>
+        internal const int ScratchLimit = 4096;
+
+        [ThreadStatic]
+        private static int[]? t_scratchCode;
+
+        [ThreadStatic]
+        private static int[]? t_scratchOffset;
+
+        /// <summary>
+        /// Converts <paramref name="text"/>. With <paramref name="scratch"/> the two arrays are this thread's own, reused by its next scratch
+        /// conversion, so they are valid only until then: for a caller that is finished with the result before it converts again, and
+        /// which was allocating them for every run of text it broke into lines.
+        /// </summary>
+        internal ScalarText(ReadOnlySpan<char> text, bool scratch = false)
         {
-            var code = new int[text.Length];
-            var offset = new int[text.Length + 1];
+            int[] code, offset;
+            if (scratch && text.Length <= ScratchLimit)
+            {
+                if (t_scratchCode is null || t_scratchCode.Length < text.Length)
+                {
+                    t_scratchCode = new int[Math.Max(text.Length, 256)];
+                    t_scratchOffset = new int[t_scratchCode.Length + 1];
+                }
+
+                code = t_scratchCode;
+                offset = t_scratchOffset!;
+            }
+            else
+            {
+                code = new int[text.Length];
+                offset = new int[text.Length + 1];
+            }
+
             int count = 0;
             int index = 0;
             while (index < text.Length)

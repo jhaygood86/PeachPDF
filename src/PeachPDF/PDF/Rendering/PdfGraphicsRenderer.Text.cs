@@ -67,7 +67,7 @@ internal sealed partial class PdfGraphicsRenderer
     /// advance horizontal, and a space has no ink to slant.
     /// </para>
     /// </remarks>
-    private bool TryShowAtPen(double x, double baselineY, string text, TypefaceFont font, int contentLengthAtEntry)
+    private bool TryShowAtPen(double x, double baselineY, ReadOnlySpan<char> text, TypefaceFont font, int contentLengthAtEntry)
     {
         double em = font.Size;
         if (_textRun is not { } run || run.ContentLength != contentLengthAtEntry
@@ -182,7 +182,6 @@ internal sealed partial class PdfGraphicsRenderer
             Debug.Assert(realizedFont is not null);
             realizedFont.AddShapedText(s, features, logicalText);
 
-            string? text = null;
             IReadOnlyList<PlacedGlyph>? shapedGlyphs = null;
             bool hasGposDeltas = false;
             shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
@@ -196,7 +195,11 @@ internal sealed partial class PdfGraphicsRenderer
 
             // The glyph ids as the hex string literal of a CID-keyed font, written once: this used to go through a StringBuilder,
             // a string, two byte arrays and a Latin-1 decode for every run, about a tenth of the document's allocation.
-            text = PdfEncoders.FormatGlyphIdsAsHexLiteral(shapedGlyphs);
+            // A run is a handful of glyphs, so the literal is built on the stack and appended from there rather than as a string.
+            int literalLength = PdfEncoders.GlyphIdsHexLiteralLength(shapedGlyphs.Count);
+            Span<char> literal = literalLength <= 512 ? stackalloc char[512] : new char[literalLength];
+            PdfEncoders.WriteGlyphIdsAsHexLiteral(shapedGlyphs, literal);
+            ReadOnlySpan<char> text = literal[..literalLength];
 
             // Map absolute position to PDF world space.
             PaintPoint pos = new PaintPoint(x, y);
