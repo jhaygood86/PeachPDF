@@ -1,6 +1,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.MathML;
 using System;
 using System.Collections.Frozen;
 
@@ -62,20 +63,46 @@ namespace PeachPDF.Html.Core.Utils
                     return null;
             }
 
-            if (box.Text is { Length: > 0 } text)
-            {
-                foreach (var rune in text.EnumerateRunes())
-                {
-                    var bidiClass = Bidi.ClassOf(rune);
-                    if (bidiClass == BidiClass.L) return Keywords.Ltr;
-                    if (bidiClass is BidiClass.R or BidiClass.AL) return Keywords.Rtl;
-                }
-            }
+            if (StrongDirectionOf(box.Text) is { } own) return own;
 
+            // A MathML token's text is held on its element (CssBox.ForeignText), not in a child text box.
+            if (StrongDirectionOf(box.ForeignText) is { } held) return held;
+
+            // An inline <math> still holding its markup as source elements has their text where its child boxes' would be: after a
+            // ::before box and ahead of everything else.
+            var source = (box as CssBoxMath)?.Source;
             foreach (var child in box.Boxes)
             {
+                if (source is not null && !child.IsBeforePseudoElement)
+                {
+                    if (StrongDirectionOfSource(source) is { } fromSource) return fromSource;
+                    source = null;
+                }
+
                 var found = ScanForStrongDirection(child);
                 if (found is not null) return found;
+            }
+
+            return source is not null ? StrongDirectionOfSource(source) : null;
+        }
+
+        private static string? StrongDirectionOfSource(MathSourceElement source)
+        {
+            var text = new System.Text.StringBuilder();
+            source.AppendRuns(text, null);
+
+            return StrongDirectionOf(text.ToString());
+        }
+
+        private static string? StrongDirectionOf(string? text)
+        {
+            if (text is not { Length: > 0 }) return null;
+
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var bidiClass = Bidi.ClassOf(rune);
+                if (bidiClass == BidiClass.L) return Keywords.Ltr;
+                if (bidiClass is BidiClass.R or BidiClass.AL) return Keywords.Rtl;
             }
 
             return null;

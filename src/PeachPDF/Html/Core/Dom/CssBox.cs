@@ -8190,11 +8190,20 @@ namespace PeachPDF.Html.Core.Dom
 
         ICssDomNode? ICssDomNode.Parent => ParentBox;
 
-        IReadOnlyList<ICssDomNode> ICssDomNode.Children => Boxes;
+        IReadOnlyList<ICssDomNode> ICssDomNode.Children => SelectorChildren;
+
+        /// <summary>
+        /// The children a selector sees. The boxes, except for an inline <c>&lt;math&gt;</c> still holding its markup as
+        /// <see cref="MathML.MathSourceElement"/>s, which answers those.
+        /// </summary>
+        internal virtual IReadOnlyList<ICssDomNode> SelectorChildren => Boxes;
 
         bool ICssDomNode.IsRoot => IsRoot;
 
-        bool ICssDomNode.IsEmpty => IsEmptyElement(this);
+        bool ICssDomNode.IsEmpty => IsEmptyForSelectors;
+
+        /// <summary><see cref="IsEmptyElement"/>, answered over the markup by an inline <c>&lt;math&gt;</c> that still holds it as source elements.</summary>
+        internal virtual bool IsEmptyForSelectors => IsEmptyElement(this);
 
         /// <summary>
         /// Selectors 4 §9.5's <c>:empty</c> test over the box tree: an element child, or a text child
@@ -8215,6 +8224,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal static bool IsEmptyElement(CssBox box)
         {
+            // A MathML token's text is held on its element, where it is the one text child it stands for.
+            if (box.ForeignText is { } foreignText && !HtmlUtils.IsNullOrCollapsibleWhitespace(foreignText)) return false;
+
             foreach (var child in box.Boxes)
             {
                 if (child.IsBeforePseudoElement || child.IsAfterPseudoElement || child.IsMarkerPseudoElement)

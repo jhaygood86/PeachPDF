@@ -1070,8 +1070,18 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var textBuilder = new StringBuilder();
+
+            // An inline <math> still holding its markup as source elements has their text where its child boxes' would be: after a
+            // ::before box and ahead of everything else.
+            var source = (box as CssBoxMath)?.Source;
             foreach (var childBox in box.ContentChildren)
             {
+                if (source is not null && !childBox.IsBeforePseudoElement)
+                {
+                    source.AppendRuns(textBuilder, null);
+                    source = null;
+                }
+
                 // A lifted child a later pass dropped (a whitespace-only text box) is no longer in the tree.
                 if (box.IsDisplayContentsShell && childBox.ParentBox is null)
                 {
@@ -1090,6 +1100,8 @@ namespace PeachPDF.Html.Core.Dom
                     textBuilder.Append(childText);
                 }
             }
+
+            source?.AppendRuns(textBuilder, null);
 
             return textBuilder.Length > 0 ? textBuilder.ToString() : null;
         }

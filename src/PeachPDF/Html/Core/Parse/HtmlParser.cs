@@ -13,10 +13,13 @@
 using MimeKit.Text;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.MathML;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using HtmlUtils = PeachPDF.Html.Core.Utils.HtmlUtils;
 
 namespace PeachPDF.Html.Core.Parse
@@ -36,6 +39,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             root ??= CssBox.CreateBlock();
             var curBox = root;
+            MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
             var tokenizer = new HtmlTokenizer(sourceReader);
@@ -46,12 +50,39 @@ namespace PeachPDF.Html.Core.Parse
                 Console.WriteLine($"parse token start : current box: {curBox}; tag: {token}");
 #endif
 
+                // Inside an inline <math> the markup goes into source elements, not boxes (see MathSourceElement), for as long as it
+                // stays within what that can take; the first token that does not is handed to the ordinary path below, after the
+                // elements so far have been turned into the boxes that path would have built.
+                if (mathParser is not null)
+                {
+                    var step = mathParser.Feed(token);
+                    if (step == MathStep.Continue) continue;
+
+                    if (step == MathStep.Ended)
+                    {
+                        curBox = mathParser.Box.ParentBox!;
+                        mathParser = null;
+                        continue;
+                    }
+
+                    curBox = mathParser.Box.MaterializeSource(mathParser.Current)!;
+                    mathParser = null;
+                }
+
                 switch (token.Kind)
                 {
                     case HtmlTokenKind.Tag:
                         {
                             var tag = (HtmlTagToken)token;
+                            var before = curBox;
                             ParseHtmlTag(tag, ref curBox);
+
+                            if (!tag.IsEndTag && !ReferenceEquals(before, curBox) && curBox is CssBoxMath { SourceStarted: false } mathBox
+                                && !ParseMathAsBoxes.Value && !IsInsideMath(mathBox))
+                            {
+                                mathParser = new MathSourceParser(mathBox);
+                            }
+
                             break;
                         }
                     case HtmlTokenKind.Data:
@@ -361,5 +392,106 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         #endregion
+
+        /// <summary>
+        /// Makes an inline <c>&lt;math&gt;</c> parse into boxes, as it did before it could parse into <see cref="MathSourceElement"/>s.
+        /// For tests that check the two agree.
+        /// </summary>
+        internal static readonly AsyncLocal<bool> ParseMathAsBoxes = new();
+
+        /// <summary>Whether <paramref name="box"/> is inside another inline <c>&lt;math&gt;</c>, whose builder reads the boxes under it.</summary>
+        private static bool IsInsideMath(CssBox box)
+        {
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor is CssBoxMath) return true;
+            }
+
+            return false;
+        }
+
+        private enum MathStep
+        {
+            Continue,
+            Ended,
+            Abandon
+        }
+
+        /// <summary>The MathML elements the source tree takes; any other name sends the markup down the ordinary path.</summary>
+        private static readonly FrozenSet<string> MathElementNames = new[]
+        {
+            "mi", "mo", "mn", "mtext", "ms", "mspace", "mglyph", "mrow", "mfrac", "msqrt", "mroot", "mstyle", "merror", "mpadded",
+            "mphantom", "mfenced", "menclose", "msub", "msup", "msubsup", "munder", "mover", "munderover", "mmultiscripts",
+            "mprescripts", "none", "mtable", "mtr", "mtd", "mlabeledtr", "maction", "semantics", "annotation", "annotation-xml",
+            "malignmark", "maligngroup"
+        }.ToFrozenSet(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Builds the source elements of one inline <c>&lt;math&gt;</c> from its tokens, doing what the ordinary path does for the same
+        /// tokens (<see cref="ParseHtmlTag(HtmlTagToken, ref CssBox)"/>) in the cases it takes, and answering
+        /// <see cref="MathStep.Abandon"/> before changing anything for a token it does not: an element that is not MathML, an end tag
+        /// for nothing it has open, a <c>&lt;/p&gt;</c>.
+        /// </summary>
+        private sealed class MathSourceParser
+        {
+            internal MathSourceParser(CssBoxMath box)
+            {
+                Box = box;
+                Current = box.BeginSource();
+            }
+
+            internal CssBoxMath Box { get; }
+
+            /// <summary>The element the next token goes into: the open one, or the <c>&lt;math&gt;</c> itself.</summary>
+            internal MathSourceElement Current { get; private set; }
+
+            internal MathStep Feed(HtmlToken token)
+            {
+                switch (token.Kind)
+                {
+                    case HtmlTokenKind.Tag:
+                        {
+                            var tag = (HtmlTagToken)token;
+                            return ParseHtmlTag(tag, out var name, out var attributes) ? Close(name) : Open(tag, name, attributes);
+                        }
+                    case HtmlTokenKind.Data:
+                        {
+                            if (((HtmlDataToken)token).Data is { } text) Current.AddText(text);
+                            return MathStep.Continue;
+                        }
+                    default:
+                        return MathStep.Continue;
+                }
+            }
+
+            private MathStep Open(HtmlTagToken token, string name, Dictionary<string, string>? attributes)
+            {
+                if (string.IsNullOrEmpty(name)) return MathStep.Continue;
+                if (!MathElementNames.Contains(name)) return MathStep.Abandon;
+
+                var isSingle = token.IsEmptyElement;
+                var element = Current.AddElement(new HtmlTag(name, isSingle, attributes));
+                if (!isSingle) Current = element;
+
+                return MathStep.Continue;
+            }
+
+            private MathStep Close(string name)
+            {
+                if (HtmlUtils.IsSingleTag(name.ToLowerInvariant())) return MathStep.Continue;
+                if (string.Equals(name, HtmlConstants.P, StringComparison.OrdinalIgnoreCase)) return MathStep.Abandon;
+
+                for (var element = Current; element is not null; element = element.ParentElement)
+                {
+                    if (!element.Tag!.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (element.IsRoot) return MathStep.Ended;
+
+                    Current = element.ParentElement!;
+                    return MathStep.Continue;
+                }
+
+                return MathStep.Abandon;
+            }
+        }
     }
 }

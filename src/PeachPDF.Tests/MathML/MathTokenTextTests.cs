@@ -1,4 +1,5 @@
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.MathML;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
@@ -8,21 +9,33 @@ namespace PeachPDF.Tests.MathML
     /// <summary>
     /// A MathML token's (<c>mi</c>, <c>mo</c>, <c>mn</c>, <c>mtext</c>, <c>ms</c>) text lives on its element's box
     /// (<see cref="CssBox.ForeignText"/>) rather than in a child text box. These pin that the rest of the pipeline still sees it
-    /// exactly as it saw the box.
+    /// exactly as it saw the box. The tests that look at the boxes parse the math into boxes (<see cref="HtmlParser.ParseMathAsBoxes"/>),
+    /// which is also what an inline math becomes when a rule can reach its elements; the readers of an element's text are checked
+    /// against both that and the source elements a math otherwise stays as.
     /// </summary>
     public class MathTokenTextTests
     {
         // The math box empties its own children when it is laid out (it keeps only the engine's output), so the tree is read
         // between parsing and layout.
-        private static async Task WithMathAsync(string mathMl, Action<CssBox> check)
+        private static async Task WithMathAsync(string mathMl, Action<CssBox> check, bool asBoxes = true)
         {
             var seen = false;
 
-            await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<p id='host'>{mathMl}</p>"), prepare: root =>
+            HtmlParser.ParseMathAsBoxes.Value = asBoxes;
+            try
             {
-                check(LayoutHarness.FindById(root, "host")!.Boxes.OfType<CssBoxMath>().Single());
-                seen = true;
-            });
+                await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<p id='host'>{mathMl}</p>"), prepare: root =>
+                {
+                    var math = LayoutHarness.FindById(root, "host")!.Boxes.OfType<CssBoxMath>().Single();
+                    Assert.Equal(!asBoxes, math.Source is not null);
+                    check(math);
+                    seen = true;
+                });
+            }
+            finally
+            {
+                HtmlParser.ParseMathAsBoxes.Value = false;
+            }
 
             Assert.True(seen);
         }
@@ -91,11 +104,13 @@ namespace PeachPDF.Tests.MathML
             });
         }
 
-        [Fact]
-        public async Task GeneratedContentThatReadsAnElementsText_SeesTheMathTokens()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GeneratedContentThatReadsAnElementsText_SeesTheMathTokens(bool asBoxes)
         {
             await WithMathAsync("<math><mi>x</mi><mo>+</mo><mi>y</mi></math>", math =>
-                Assert.Equal("x+y", CssContentEngine.ExtractText(math)));
+                Assert.Equal("x+y", CssContentEngine.ExtractText(math)), asBoxes);
         }
 
         [Fact]
@@ -112,8 +127,10 @@ namespace PeachPDF.Tests.MathML
             });
         }
 
-        [Fact]
-        public async Task StringSetContentText_OfAnElementHoldingMath_IncludesTheTokensText()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task StringSetContentText_OfAnElementHoldingMath_IncludesTheTokensText(bool asBoxes)
         {
             await WithMathAsync("<math><mi>x</mi><mo>+</mo><mn>2</mn></math>", math =>
             {
@@ -123,7 +140,7 @@ namespace PeachPDF.Tests.MathML
                 CssNamedStringEngine.ApplyStringSet(host);
 
                 Assert.Equal("x + 2", host.NamedStrings["heading"].Value);
-            });
+            }, asBoxes);
         }
 
         [Fact]

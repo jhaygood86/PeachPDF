@@ -92,6 +92,13 @@ namespace PeachPDF.Html.Core
         private Dictionary<string, List<IndexedRule>>? _idIndex;
         private List<IndexedRule>? _universalRules;
 
+        // The rules of the indexes above that declare a property other than the purely visual ones (see AnyConsequentialRuleMatches),
+        // which are few: a stylesheet's rules mostly set sizes, fonts and spacing.
+        private Dictionary<string, List<ConsequentialRule>>? _consequentialTagIndex;
+        private Dictionary<string, List<ConsequentialRule>>? _consequentialClassIndex;
+        private Dictionary<string, List<ConsequentialRule>>? _consequentialIdIndex;
+        private List<ConsequentialRule>? _consequentialUniversalRules;
+
         // Final @layer precedence ranks (qualified layer name -> rank; earlier/lower rank = lower
         // priority for normal declarations), computed once after the layer tree is fully walked.
         private Dictionary<string, int>? _layerRanks;
@@ -159,6 +166,7 @@ namespace PeachPDF.Html.Core
         internal void InvalidateIndex()
         {
             _universalRules = null;
+            _consequentialUniversalRules = null;
         }
 
         /// <summary>
@@ -766,6 +774,223 @@ namespace PeachPDF.Html.Core
             }
 
             return matched;
+        }
+
+        /// <summary>
+        /// Whether any rule applies to <paramref name="node"/> that declares a property other than a purely visual one of its own
+        /// box (fonts, spacing, borders, backgrounds, sizes: see <see cref="DeclaresAConsequentialProperty"/>). Asked of the elements
+        /// of an inline <c>&lt;math&gt;</c> by the cascade (see <c>CssBoxMath.SettleSource</c>): such an element is never laid out or
+        /// painted as a box, so a rule that only styles one does nothing, while a colour, generated content, a counter, a named
+        /// string, a bookmark and the like are read from it by the rest of the pipeline. It errs towards yes: a rule for
+        /// <c>::before</c>, <c>::after</c> or <c>::marker</c> counts for its element without its other conditions being tested.
+        /// It reads only the few rules that declare such a property, not every rule an element could match.
+        /// </summary>
+        internal bool AnyConsequentialRuleMatches(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null)
+        {
+            EnsureConsequentialIndex();
+
+            bool Applies(ConsequentialRule rule)
+            {
+                var indexed = rule.Indexed;
+                if (!MediaQueryMatcher.Matches(indexed.EnclosingMedia, media)) return false;
+                if (indexed.EnclosingContainers is not null && node is CssBox container
+                    && !ContainerQueryMatcher.Matches(indexed.EnclosingContainers, container, containerSizes))
+                    return false;
+
+                if (rule.GeneratesOnAnyElement) return true;
+
+                if (rule.GeneratedContentSubjects is { } subjects)
+                {
+                    for (var i = 0; i < subjects.Length; i++)
+                    {
+                        if (SubjectWithoutPseudoElementMatches(subjects[i], node)) return true;
+                    }
+                }
+
+                return !rule.EndsWithPseudoElement && DoesSelectorMatch(indexed.Rule.Selector, node);
+            }
+
+            var universal = _consequentialUniversalRules!;
+            for (var i = 0; i < universal.Count; i++)
+            {
+                if (Applies(universal[i])) return true;
+            }
+
+            if (node.TagName is not { } tagName) return false;
+
+            if (_consequentialTagIndex!.TryGetValue(tagName, out var tagRules))
+            {
+                for (var i = 0; i < tagRules.Count; i++)
+                {
+                    if (Applies(tagRules[i])) return true;
+                }
+            }
+
+            var classAttr = node.GetAttribute("class");
+            if (!string.IsNullOrEmpty(classAttr))
+            {
+                foreach (var className in classAttr.Split(' '))
+                {
+                    if (className.Length > 0 && _consequentialClassIndex!.TryGetValue(className, out var classRules))
+                    {
+                        for (var i = 0; i < classRules.Count; i++)
+                        {
+                            if (Applies(classRules[i])) return true;
+                        }
+                    }
+                }
+            }
+
+            var idAttr = node.GetAttribute("id");
+            if (!string.IsNullOrEmpty(idAttr) && _consequentialIdIndex!.TryGetValue(idAttr, out var idRules))
+            {
+                for (var i = 0; i < idRules.Count; i++)
+                {
+                    if (Applies(idRules[i])) return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// A rule of the index of rules <see cref="AnyConsequentialRuleMatches"/> reads, with what testing it against an element needs
+        /// worked out once: whether it is aimed at generated content (<c>::before</c>, <c>::after</c>, <c>::marker</c>) and, if so,
+        /// the compound selectors that end in that pseudo-element. The other pseudo-elements (the footnote ones among them) add
+        /// nothing to an element's own box.
+        /// </summary>
+        private sealed class ConsequentialRule
+        {
+            internal ConsequentialRule(IndexedRule indexed)
+            {
+                Indexed = indexed;
+                EndsWithPseudoElement = CssData.EndsWithPseudoElement(indexed.Rule.Selector);
+
+                var subjects = new List<CompoundSelector>();
+                var any = false;
+                CollectGeneratedContentSubjects(indexed.Rule.Selector, subjects, ref any);
+
+                GeneratesOnAnyElement = any;
+                GeneratedContentSubjects = subjects.Count > 0 ? subjects.ToArray() : null;
+            }
+
+            internal IndexedRule Indexed { get; }
+
+            internal bool EndsWithPseudoElement { get; }
+
+            /// <summary>Whether the selector is a bare generated-content pseudo-element, which any element can have.</summary>
+            internal bool GeneratesOnAnyElement { get; }
+
+            internal CompoundSelector[]? GeneratedContentSubjects { get; }
+
+            private static void CollectGeneratedContentSubjects(ISelector selector, List<CompoundSelector> subjects, ref bool any)
+            {
+                switch (selector)
+                {
+                    case ListSelector list:
+                        foreach (var alternative in list)
+                            CollectGeneratedContentSubjects(alternative, subjects, ref any);
+                        break;
+
+                    case ComplexSelector complex:
+                        if (complex.LastOrDefault().Selector is { } subject)
+                            CollectGeneratedContentSubjects(subject, subjects, ref any);
+                        break;
+
+                    case PseudoElementSelector pseudo:
+                        if (IsGeneratedContentPseudoElement(pseudo)) any = true;
+                        break;
+
+                    case CompoundSelector compound:
+                        if (compound.LastOrDefault() is PseudoElementSelector last && IsGeneratedContentPseudoElement(last))
+                            subjects.Add(compound);
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="compound"/>, a subject ending in a generated-content pseudo-element, matches the element without it.
+        /// The conditions further out in a complex selector are not tested, so it can answer yes where the rule would not apply,
+        /// never the reverse. A pure test: matching a pseudo-element compound against a box creates the pseudo-element box.
+        /// </summary>
+        private static bool SubjectWithoutPseudoElementMatches(CompoundSelector compound, ICssDomNode node)
+        {
+            for (var i = 0; i < compound.Length; i++)
+            {
+                var member = compound[i];
+                if (member is not PseudoElementSelector && !DoesSelectorMatch(member, node)) return false;
+            }
+
+            return true;
+        }
+
+        // ::first-letter is not generated content but it changes the boxes the same way: it splits the first letter off an element's text.
+        private static bool IsGeneratedContentPseudoElement(PseudoElementSelector pseudo) =>
+            pseudo.Name is PseudoElementNames.Before or PseudoElementNames.After or PseudoElementNames.Marker or PseudoElementNames.FirstLetter;
+
+        private void EnsureConsequentialIndex()
+        {
+            EnsureIndex();
+            if (_consequentialUniversalRules is not null) return;
+
+            static List<ConsequentialRule> Consequential(List<IndexedRule> rules)
+            {
+                var result = new List<ConsequentialRule>();
+                foreach (var indexed in rules)
+                {
+                    if (DeclaresAConsequentialProperty(indexed.Rule)) result.Add(new ConsequentialRule(indexed));
+                }
+
+                return result;
+            }
+
+            static Dictionary<string, List<ConsequentialRule>> ConsequentialByKey(Dictionary<string, List<IndexedRule>> index)
+            {
+                var result = new Dictionary<string, List<ConsequentialRule>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (key, rules) in index)
+                {
+                    var consequential = Consequential(rules);
+                    if (consequential.Count > 0) result[key] = consequential;
+                }
+
+                return result;
+            }
+
+            _consequentialTagIndex = ConsequentialByKey(_tagIndex!);
+            _consequentialClassIndex = ConsequentialByKey(_classIndex!);
+            _consequentialIdIndex = ConsequentialByKey(_idIndex!);
+            _consequentialUniversalRules = Consequential(_universalRules!);
+        }
+
+        /// <summary>
+        /// Whether the rule declares anything but properties that only change how the element's own box looks or is sized. The
+        /// allowlist is of the families authors write for MathML tokens and for resets: font, text, spacing, border, background,
+        /// outline, size and custom properties. <c>color</c> is deliberately not among them, nor is <c>display</c>, <c>content</c>,
+        /// the counter, string and bookmark properties, <c>all</c>, or an unfamiliar name.
+        /// </summary>
+        private static bool DeclaresAConsequentialProperty(IStyleRule rule)
+        {
+            foreach (var property in rule.Style)
+            {
+                var name = property.Name;
+                if (name.StartsWith("--", StringComparison.Ordinal)) continue;
+
+                if (name.StartsWith("font", StringComparison.Ordinal) || name.StartsWith("text-", StringComparison.Ordinal)
+                    || name.StartsWith("margin", StringComparison.Ordinal) || name.StartsWith("padding", StringComparison.Ordinal)
+                    || name.StartsWith("border", StringComparison.Ordinal) || name.StartsWith("background", StringComparison.Ordinal)
+                    || name.StartsWith("outline", StringComparison.Ordinal) || name.StartsWith("min-", StringComparison.Ordinal)
+                    || name.StartsWith("max-", StringComparison.Ordinal))
+                    continue;
+
+                if (name is "line-height" or "letter-spacing" or "word-spacing" or "box-sizing" or "box-shadow" or "width" or "height"
+                    or "vertical-align" or "white-space" or "opacity" or "cursor")
+                    continue;
+
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
