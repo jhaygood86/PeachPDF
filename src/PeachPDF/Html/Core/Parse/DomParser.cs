@@ -1277,6 +1277,13 @@ namespace PeachPDF.Html.Core.Parse
             // display: contents on one is ignored - see the accepted gap.
             var childShells = box is CssBoxSvg or CssBoxMath ? null : displayContentsShells;
 
+            // An inline <math> holds its markup as source elements, not boxes, while no rule could change what the math builder
+            // reads of them: this is where that is decided, now that the document's stylesheets are known.
+            if (box is CssBoxMath { Source: not null } mathBox)
+            {
+                mathBox.SettleSource(cssData, media, containerSizes);
+            }
+
             foreach (var childBox in box.Boxes)
             {
                 CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes, childShells);

@@ -1,6 +1,8 @@
 using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.MathML;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -30,12 +32,107 @@ namespace PeachPDF.Html.Core.Dom
         private MathDocument? _document;
         private MathBox? _layout;
         private string? _serializedSource;
+        private MathSourceElement? _source;
 
         public CssBoxMath(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
         {
             _mathWord = new CssRectMath(this);
             Words.Add(_mathWord);
+        }
+
+        /// <summary>
+        /// The markup of this <c>&lt;math&gt;</c> as source elements instead of child boxes, while the parser has built it that way
+        /// and no rule needs the elements to be boxes (see <see cref="SettleSource"/>); null once it has been materialized, once it
+        /// has been laid out, or when the markup was parsed into boxes. Its root is this element's own node.
+        /// </summary>
+        internal MathSourceElement? Source => _source;
+
+        /// <summary>Starts the source tree the parser then fills in, in place of child boxes.</summary>
+        internal MathSourceElement BeginSource()
+        {
+            SourceStarted = true;
+            return _source = new MathSourceElement(HtmlTag, this, null);
+        }
+
+        /// <summary>Whether the parser has started a source tree for this box, which ends the parser's offer of one for it.</summary>
+        internal bool SourceStarted { get; private set; }
+
+        internal override IReadOnlyList<ICssDomNode> SelectorChildren => _source is { } source ? source.ChildNodes : base.SelectorChildren;
+
+        internal override bool IsEmptyForSelectors => _source is { } source ? source.IsEmpty : base.IsEmptyForSelectors;
+
+        /// <summary>
+        /// Decides at the cascade whether the source tree can stay as it is. It can when no element in it has a style of its own that
+        /// anything reads: the math builder reads only an element's colour, and an element is never laid out or painted as a box, so
+        /// with no rule that declares more than purely visual properties (see
+        /// <see cref="CssData.AnyConsequentialRuleMatches"/>) matching it, and no <c>style</c>, <c>color</c> (a presentational hint for
+        /// the colour) or <c>id</c> (an anchor target) attribute on it, every element's colour is this box's own. Otherwise the
+        /// tree becomes the boxes the parser would have built, and the cascade goes on over those.
+        /// </summary>
+        internal void SettleSource(CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            if (_source is not null && !InheritsItsColour(_source, cssData, media, containerSizes))
+                MaterializeSource();
+        }
+
+        private static bool InheritsItsColour(MathSourceElement parent, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            foreach (var element in parent.ElementChildren)
+            {
+                var tag = element.Tag!;
+                if (tag.HasAttribute("style") || tag.HasAttribute("color") || tag.HasAttribute("id")) return false;
+                if (cssData.AnyConsequentialRuleMatches(media, element, containerSizes)) return false;
+                if (!InheritsItsColour(element, cssData, media, containerSizes)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>Turns the source tree into the child boxes the parser builds for markup, for a <c>&lt;math&gt;</c> whose content some rule can reach.</summary>
+        internal void MaterializeSource() => MaterializeSource(null);
+
+        /// <summary>As <see cref="MaterializeSource()"/>, and answers the box built for <paramref name="track"/> (this box for the root).</summary>
+        internal CssBox? MaterializeSource(MathSourceElement? track)
+        {
+            if (_source is not { } source) return null;
+
+            _source = null;
+            CssBox? tracked = ReferenceEquals(track, source) ? this : null;
+
+            // This box's own ::after was generated at its cascade, ahead of this: the children go in front of it, as they were when the
+            // parser built them before the cascade ran.
+            var generatedAfter = Boxes.Where(b => b.IsAfterPseudoElement).ToList();
+            foreach (var box in generatedAfter) Boxes.Remove(box);
+
+            foreach (var child in source.ChildNodes)
+            {
+                Materialize(this, child, track, ref tracked);
+            }
+
+            Boxes.AddRange(generatedAfter);
+
+            return tracked;
+        }
+
+        private static void Materialize(CssBox parent, MathSourceElement node, MathSourceElement? track, ref CssBox? tracked)
+        {
+            if (node.Tag is null)
+            {
+                CreateBox(parent).Text = node.Text;
+                return;
+            }
+
+            var box = CreateBox(node.Tag, parent);
+            if (ReferenceEquals(node, track)) tracked = box;
+
+            // A token's text sits on its element, as the parser keeps it.
+            if (node.Text is { } text && !box.TryAbsorbForeignText(text)) CreateBox(box).Text = text;
+
+            foreach (var child in node.ChildNodes)
+            {
+                Materialize(box, child, track, ref tracked);
+            }
         }
 
         internal override ValueTask MeasureWordsSize(Canvas g)
@@ -104,7 +201,7 @@ namespace PeachPDF.Html.Core.Dom
             if (_layout is not null)
                 return;
 
-            var sourceNode = new CssBoxMathSourceNode(this);
+            IMathSourceNode sourceNode = _source is { } source ? source : new CssBoxMathSourceNode(this);
             _serializedSource = MathMlSerializer.Serialize(sourceNode);
             _document = MathTreeBuilder.Build(sourceNode, HtmlContainer!.RenderContext);
 
@@ -122,6 +219,7 @@ namespace PeachPDF.Html.Core.Dom
             // border/content positioning. Clearing them makes this box a true leaf (one phantom word,
             // no children), exactly like CssBoxSvg/CssBoxImage.
             Boxes.Clear();
+            _source = null;
         }
     }
 }

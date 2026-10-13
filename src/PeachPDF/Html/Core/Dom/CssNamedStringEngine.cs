@@ -388,8 +388,17 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static void CollectTextFromChildren(CssBox box, StringBuilder builder)
         {
+            // An inline <math> still holding its markup as source elements has their text where its child boxes' would be: after a
+            // ::before box and ahead of everything else, each run followed by a space as a text box's is below.
+            var source = (box as CssBoxMath)?.Source;
             foreach (var childBox in box.ContentChildren)
             {
+                if (source is not null && !childBox.IsBeforePseudoElement)
+                {
+                    source.AppendRuns(builder, " ");
+                    source = null;
+                }
+
                 // A lifted child a later pass dropped (a whitespace-only text box) is no longer in the tree.
                 if (childBox.IsPseudoElement || (box.IsDisplayContentsShell && childBox.ParentBox is null))
                 {
@@ -412,6 +421,8 @@ namespace PeachPDF.Html.Core.Dom
                     CollectTextFromChildren(childBox, builder);
                 }
             }
+
+            source?.AppendRuns(builder, " ");
         }
 
         /// <summary>
