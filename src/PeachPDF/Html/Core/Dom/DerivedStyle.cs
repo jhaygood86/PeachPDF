@@ -35,6 +35,7 @@ namespace PeachPDF.Html.Core.Dom
         private ComputedStyle Style => Owner.ComputedStyle;
 
         private PaintExtras? _paint;
+        private BorderColorCache? _borderColors;
         private ShapingExtras? _shaping;
 
         /// <summary>Whether the paint-side caches (border colors, outline, radii, transform, ...) have been allocated.</summary>
@@ -44,15 +45,24 @@ namespace PeachPDF.Html.Core.Dom
         internal bool HasShapingExtras => _shaping is not null;
 
         private PaintExtras Paint => _paint ??= new PaintExtras();
+        private BorderColorCache BorderColors => _borderColors ??= new BorderColorCache();
         private ShapingExtras Shaping => _shaping ??= new ShapingExtras();
 
-        /// <summary>The paint-side caches most boxes never touch (border colors, outline, radii, transform, column rule), held apart so a box without them does not carry the space.</summary>
+        /// <summary>
+        /// The four border colors, for a box that paints a border. Held apart from <see cref="PaintExtras"/>: a table cell reads them
+        /// and nothing else of that, and its other caches (outline, radii, transform, column rule) are several times their size.
+        /// </summary>
+        internal sealed class BorderColorCache
+        {
+            internal PaintColor _top = PaintColor.Empty;
+            internal PaintColor _right = PaintColor.Empty;
+            internal PaintColor _bottom = PaintColor.Empty;
+            internal PaintColor _left = PaintColor.Empty;
+        }
+
+        /// <summary>The paint-side caches most boxes never touch (outline, radii, transform, column rule), held apart so a box without them does not carry the space.</summary>
         internal sealed class PaintExtras
         {
-            internal PaintColor _actualBorderTopColor = PaintColor.Empty;
-            internal PaintColor _actualBorderRightColor = PaintColor.Empty;
-            internal PaintColor _actualBorderBottomColor = PaintColor.Empty;
-            internal PaintColor _actualBorderLeftColor = PaintColor.Empty;
             internal double _actualColumnRuleWidth = double.NaN;
             internal PaintColor _actualColumnRuleColor = PaintColor.Empty;
             internal double _actualOutlineWidth = double.NaN;
@@ -247,9 +257,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (Paint._actualBorderTopColor.IsEmpty)
-                    Paint._actualBorderTopColor = ResolveBorderSideColor(Style.Border.BorderTopColor, Style.Border.BorderTopStyle.Value);
-                return Paint._actualBorderTopColor;
+                if (BorderColors._top.IsEmpty)
+                    BorderColors._top = ResolveBorderSideColor(Style.Border.BorderTopColor, Style.Border.BorderTopStyle.Value);
+                return BorderColors._top;
             }
         }
 
@@ -257,9 +267,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (Paint._actualBorderRightColor.IsEmpty)
-                    Paint._actualBorderRightColor = ResolveBorderSideColor(Style.Border.BorderRightColor, Style.Border.BorderRightStyle.Value);
-                return Paint._actualBorderRightColor;
+                if (BorderColors._right.IsEmpty)
+                    BorderColors._right = ResolveBorderSideColor(Style.Border.BorderRightColor, Style.Border.BorderRightStyle.Value);
+                return BorderColors._right;
             }
         }
 
@@ -267,9 +277,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (Paint._actualBorderBottomColor.IsEmpty)
-                    Paint._actualBorderBottomColor = ResolveBorderSideColor(Style.Border.BorderBottomColor, Style.Border.BorderBottomStyle.Value);
-                return Paint._actualBorderBottomColor;
+                if (BorderColors._bottom.IsEmpty)
+                    BorderColors._bottom = ResolveBorderSideColor(Style.Border.BorderBottomColor, Style.Border.BorderBottomStyle.Value);
+                return BorderColors._bottom;
             }
         }
 
@@ -277,9 +287,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (Paint._actualBorderLeftColor.IsEmpty)
-                    Paint._actualBorderLeftColor = ResolveBorderSideColor(Style.Border.BorderLeftColor, Style.Border.BorderLeftStyle.Value);
-                return Paint._actualBorderLeftColor;
+                if (BorderColors._left.IsEmpty)
+                    BorderColors._left = ResolveBorderSideColor(Style.Border.BorderLeftColor, Style.Border.BorderLeftStyle.Value);
+                return BorderColors._left;
             }
         }
 
@@ -344,30 +354,30 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateBorderTopColor()
         {
-            if (_paint is { } paintExtras)
+            if (_borderColors is { } borderColors)
             {
-                paintExtras._actualBorderTopColor = PaintColor.Empty;
+                borderColors._top = PaintColor.Empty;
             }
         }
         internal void InvalidateBorderRightColor()
         {
-            if (_paint is { } paintExtras)
+            if (_borderColors is { } borderColors)
             {
-                paintExtras._actualBorderRightColor = PaintColor.Empty;
+                borderColors._right = PaintColor.Empty;
             }
         }
         internal void InvalidateBorderBottomColor()
         {
-            if (_paint is { } paintExtras)
+            if (_borderColors is { } borderColors)
             {
-                paintExtras._actualBorderBottomColor = PaintColor.Empty;
+                borderColors._bottom = PaintColor.Empty;
             }
         }
         internal void InvalidateBorderLeftColor()
         {
-            if (_paint is { } paintExtras)
+            if (_borderColors is { } borderColors)
             {
-                paintExtras._actualBorderLeftColor = PaintColor.Empty;
+                borderColors._left = PaintColor.Empty;
             }
         }
 

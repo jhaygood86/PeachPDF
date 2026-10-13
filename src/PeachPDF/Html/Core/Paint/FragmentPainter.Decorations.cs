@@ -60,9 +60,20 @@ namespace PeachPDF.Html.Core.Paint
         {
             // Most boxes have no background at all. The work is in PaintBackgroundCore, whose local functions capture its parameters
             // and so cost a closure allocation on every call, whether or not anything is painted; this is asked of every box first.
-            if (!RenderUtils.IsColorVisible(firstLineStyle?.ActualBackgroundColor ?? box.ActualBackgroundColor)
-                && box.BackgroundImages is not { Count: > 0 })
+            var backgroundColor = firstLineStyle?.ActualBackgroundColor ?? box.ActualBackgroundColor;
+            var hasImages = box.BackgroundImages is { Count: > 0 };
+            if (!RenderUtils.IsColorVisible(backgroundColor) && !hasImages)
             {
+                return;
+            }
+
+            // The commonest one that does - a plain colour filling a square-cornered box's border box - is one fill, which does not
+            // need the layer, clip and text-clip machinery below, nor the closure it costs: each striped table row paid for it.
+            if (!hasImages && !box.IsRounded && box.BackgroundClip == Keywords.BorderBox)
+            {
+                var rect = geometry.DecorationRect;
+                if (rect is { Width: > 0, Height: > 0 }) PaintClippedBrush(g, box, g.GetSolidBrush(backgroundColor), rect, null);
+
                 return;
             }
 

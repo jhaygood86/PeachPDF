@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
@@ -57,6 +58,37 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             box.BorderTopLeftRadius = "2pt";
             Assert.Equal(2, box.DerivedStyle.ActualBorderTopLeftRadiusX, 3);
+        }
+
+        [Fact]
+        public async Task ABoxWithABorder_CachesItsBorderColours_WithoutTheOtherPaintExtras()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='border: 2pt solid #112233; width: 100pt; height: 50pt'>x</div>"));
+
+            var box = LayoutHarness.FindById(root, "b")!;
+            var style = box.DerivedStyle;
+
+            var before = style.ActualBorderTopColor;
+            Assert.Equal(PaintColor.FromArgb(0x11, 0x22, 0x33), before);
+            Assert.Equal(before, style.ActualBorderRightColor);
+            Assert.Equal(before, style.ActualBorderBottomColor);
+            Assert.Equal(before, style.ActualBorderLeftColor);
+            Assert.False(style.HasPaintExtras);
+
+            // An invalidated side is worked out again from the cascaded value; the others keep what they had.
+            box.BorderTopColor = "#445566";
+            box.BorderLeftColor = "#778899";
+            Assert.Equal(PaintColor.FromArgb(0x44, 0x55, 0x66), style.ActualBorderTopColor);
+            Assert.Equal(PaintColor.FromArgb(0x77, 0x88, 0x99), style.ActualBorderLeftColor);
+            Assert.Equal(before, style.ActualBorderRightColor);
+            Assert.Equal(before, style.ActualBorderBottomColor);
+
+            box.BorderRightColor = "#aabbcc";
+            box.BorderBottomColor = "#ddeeff";
+            Assert.Equal(PaintColor.FromArgb(0xaa, 0xbb, 0xcc), style.ActualBorderRightColor);
+            Assert.Equal(PaintColor.FromArgb(0xdd, 0xee, 0xff), style.ActualBorderBottomColor);
+            Assert.False(style.HasPaintExtras);
         }
 
         [Fact]
