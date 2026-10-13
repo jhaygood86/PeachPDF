@@ -2542,6 +2542,7 @@ namespace PeachPDF.Html.Core
                 // real conclusion" apart from "the loop ran out of passes" - a bare `break` only exits the
                 // loop, it does not skip the statements that follow it.
                 var concluded = false;
+                var stalledPasses = 0;
 
                 for (var pass = 0; pass < maxPasses; pass++)
                 {
@@ -2622,7 +2623,15 @@ namespace PeachPDF.Html.Core
                         break;
                     }
 
-                    if (next == token || HasAlreadyBeenEntered(next))
+                    // A pass that resumes exactly where the one before did, only one fragmentainer later, has placed nothing:
+                    // the next one is the same pass again. Its token never equals the previous one's (it names the slot it
+                    // resumes in, which advances every time), so neither check below sees it, and the loop would run to its
+                    // cap - 100,000 passes, minutes for a page of HTML - before the same last-resort recovery. Counting
+                    // consecutive such passes catches it; the threshold leaves room for a page-selector pattern
+                    // (`:nth()`, `:left`/`:right`) that makes slots differ for a few passes without any pass making progress.
+                    stalledPasses = token is not null && IsSameProgress(next, token) ? stalledPasses + 1 : 0;
+
+                    if (next == token || HasAlreadyBeenEntered(next) || stalledPasses >= MaxStalledPasses)
                     {
                         // The run has arrived somewhere it has already been — at the record this very
                         // pass was handed (a one-pass cycle), or at one an earlier pass was entered with
@@ -2822,6 +2831,48 @@ namespace PeachPDF.Html.Core
             foreach (var (slot, token) in _passEntries)
             {
                 if (token is not null) _passEntrySet.Add((slot, token));
+            }
+        }
+
+        /// <summary>
+        /// How many passes in a row may resume exactly where the one before did (see <see cref="IsSameProgress"/>) before the
+        /// driver stops walking and lays the remainder out in one piece.
+        /// </summary>
+        private const int MaxStalledPasses = 16;
+
+        /// <summary>
+        /// Whether two tokens name the same point in the content and differ only in which fragmentainer they resume in: the
+        /// comparison <c>==</c> cannot make, because every token carries the slot index it resumes in. The block, inline and table
+        /// kinds are compared (the chains a stall through ordinary flow or a table produces); any other kind is never "the same",
+        /// so the existing exact checks stay the only ones for flex and grid.
+        /// </summary>
+        internal static bool IsSameProgress(BreakToken a, BreakToken b) =>
+            SlotNeutral(a) is { } left && SlotNeutral(b) is { } right && left == right;
+
+        private static BreakToken? SlotNeutral(BreakToken token)
+        {
+            switch (token)
+            {
+                case BlockBreakToken block:
+                    if (block.ChildToken is null) return block with { ResumeSlotIndex = 0 };
+                    return SlotNeutral(block.ChildToken) is { } child ? block with { ResumeSlotIndex = 0, ChildToken = child } : null;
+
+                case InlineBreakToken inline:
+                    return inline with { ResumeSlotIndex = 0 };
+
+                case TableBreakToken table:
+                    var cells = new List<UnfinishedTableCell>(table.UnfinishedCells.Count);
+
+                    foreach (var cell in table.UnfinishedCells)
+                    {
+                        if (SlotNeutral(cell.Token) is not { } neutral) return null;
+                        cells.Add(cell with { Token = neutral });
+                    }
+
+                    return table with { ResumeSlotIndex = 0, UnfinishedCells = cells };
+
+                default:
+                    return null;
             }
         }
 
