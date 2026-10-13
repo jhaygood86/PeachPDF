@@ -13283,6 +13283,36 @@ await SaveShowcaseAsync("table_layout_fixed", "Layout", "Fixed vs Automatic Tabl
     + "row's width being correctly ignored.",
     tableLayoutHtml, pdfConfig);
 
+const string tableAutoMarginsHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 18mm }
+    body { font: 10pt Arial, sans-serif; color: #243247; margin: 0 }
+    h1 { font-size: 16pt; margin: 0 0 0.4em }
+    p { margin: 0 0 0.8em; color: #526174 }
+    .panel { width: 150mm; border: 1px solid #94a3b8; padding: 5mm; margin-bottom: 5mm }
+    .panel p { margin-bottom: 2mm }
+    table { width: 58mm; border-collapse: collapse; background: #eff6ff }
+    td { border: 1px solid #3b82f6; padding: 2mm 3mm }
+    .end { margin-left: auto; margin-right: 0 }
+    .start { margin-left: 0; margin-right: auto }
+    .center { margin-left: auto; margin-right: auto }
+    </style></head><body>
+    <h1>Auto margins on fixed-width tables</h1>
+    <p>Each table is 58mm wide inside the same 150mm panel. The one auto margin takes all the free space on its side.</p>
+    <div class="panel">
+      <p><code>margin-left: auto</code> puts the table at the end edge:</p>
+      <table class="end"><tr><td>Start-side space is absorbed</td></tr></table>
+      <p><code>margin-right: auto</code> keeps it at the start edge:</p>
+      <table class="start"><tr><td>End-side space is absorbed</td></tr></table>
+      <p>Both auto margins split the free space:</p>
+      <table class="center"><tr><td>Centered for comparison</td></tr></table>
+    </div>
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_auto_margins", "Layout", "Auto Margins on Tables",
+    "A fixed-width table with one auto horizontal margin takes all remaining space on that side: margin-left:auto aligns it to the end edge, margin-right:auto leaves it at the start, and two auto margins center it.",
+    tableAutoMarginsHtml, pdfConfig);
+
 // --- collapsed border conflict resolution showcase (issue #735) ---
 //
 // border-collapse: collapse previously overlapped adjacent rows/columns by a flat, hardcoded 1pt
