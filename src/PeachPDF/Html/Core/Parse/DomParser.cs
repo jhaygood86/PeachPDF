@@ -1005,10 +1005,92 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         internal static readonly System.Threading.AsyncLocal<SharedStyleCheck?> VerifySharedStyles = new();
 
+        /// <summary>
+        /// Whether <paramref name="shared"/> and the style the cascade just made for <paramref name="box"/> read the same, property by
+        /// property. Their own equality is not the question: the cascade makes a fresh list or gradient for each box that declares
+        /// one, which that compares by reference, and the shared style holds the first box's.
+        /// </summary>
+        private static bool StylesEquivalent(ComputedStyle? shared, CssBox box)
+        {
+            if (shared is null) return false;
+
+            var made = box.ComputedStyle;
+            if (Equals(shared, made)) return true;
+
+            var madeProperties = CssUtils.SnapshotProperties(box);
+            var madeCustom = CssUtils.SnapshotCustomProperties(box);
+
+            box.AdoptComputedStyle(shared);
+            var sharedProperties = CssUtils.SnapshotProperties(box);
+            var sharedCustom = CssUtils.SnapshotCustomProperties(box);
+            box.AdoptComputedStyle(made);
+
+            return madeProperties.Count == sharedProperties.Count
+                && madeProperties.All(pair => sharedProperties.TryGetValue(pair.Key, out var value) && value == pair.Value)
+                && (madeCustom?.Count ?? 0) == (sharedCustom?.Count ?? 0)
+                && (madeCustom is null || madeCustom.All(pair => sharedCustom!.TryGetValue(pair.Key, out var value) && value == pair.Value));
+        }
+
+
         /// <summary>What a verifying cascade found: how many cached styles it compared.</summary>
         internal sealed class SharedStyleCheck
         {
             internal int Verified;
+
+            /// <summary>How many of them were an element's, shared with a sibling (<see cref="Verified"/> counts the text and anonymous boxes').</summary>
+            internal int VerifiedElements;
+        }
+
+        /// <summary>Makes every element take its own cascade, as before siblings could share a style. For tests that check the two agree.</summary>
+        internal static readonly System.Threading.AsyncLocal<bool> DisableSiblingStyleSharing = new();
+
+        /// <summary>
+        /// The styles the children of one box have been given so far, by what they were given them for: tag, attributes, box type and
+        /// the style the box came into the cascade with. Lives for the loop over that box's children and no longer.
+        /// </summary>
+        private sealed class SiblingStyles
+        {
+            // A parent with this many different kinds of child is not a table row or a list; stop looking rather than scan.
+            private const int Limit = 8;
+
+            private List<SiblingStyle>? _entries;
+
+            internal SiblingStyle? Find(HtmlTag tag, Type boxType, ComputedStyle before)
+            {
+                if (_entries is null) return null;
+
+                foreach (var entry in _entries)
+                {
+                    if (ReferenceEquals(entry.Before, before) && entry.BoxType == boxType && entry.Tag.HasSameSignature(tag)) return entry;
+                }
+
+                return null;
+            }
+
+            internal SiblingStyle? Add(HtmlTag tag, Type boxType, ComputedStyle before, bool eligible)
+            {
+                _entries ??= [];
+                if (_entries.Count >= Limit) return null;
+
+                var entry = new SiblingStyle(tag, boxType, before, eligible);
+                _entries.Add(entry);
+                return entry;
+            }
+        }
+
+        private sealed class SiblingStyle(HtmlTag tag, Type boxType, ComputedStyle before, bool eligible)
+        {
+            internal HtmlTag Tag { get; } = tag;
+
+            internal Type BoxType { get; } = boxType;
+
+            internal ComputedStyle Before { get; } = before;
+
+            /// <summary>Whether siblings like it may share its style at all; decided once, for the first.</summary>
+            internal bool Eligible { get; } = eligible;
+
+            /// <summary>The style the first of them ended up with, once it has one worth sharing.</summary>
+            internal ComputedStyle? Style { get; set; }
         }
 
         /// <summary>
@@ -1026,7 +1108,9 @@ namespace PeachPDF.Html.Core.Parse
         /// order (this walk is pre-order), for <see cref="FlattenDisplayContents"/>. Null for a cascade of one
         /// synthesized box (a marker, a footnote call, a placeholder, a first-letter box), none of which can be
         /// spliced - <see cref="ResolveDisplayContents"/> computes such a box's <c>contents</c> to <c>inline</c>.</param>
-        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null, List<CssBox>? displayContentsShells = null)
+        /// <param name="siblings">The styles the box's earlier siblings were given, which it may share when it is the same element as
+        /// one of them (see <see cref="SiblingStyles"/>); null for a box cascaded on its own.</param>
+        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null, List<CssBox>? displayContentsShells = null, SiblingStyles? siblings = null)
         {
             // A text or anonymous box is not an element: no rule or attribute reaches it (CSS Cascade 4 §1.1/§7.2: it only inherits),
             // so what the steps below make of it is a function of the style it comes in with and its parent's. Every text box under
@@ -1047,6 +1131,46 @@ namespace PeachPDF.Html.Core.Parse
                     box.AdoptComputedStyle(sharedStyle);
                     goto styleSettled;
                 }
+            }
+
+            // An element is cascaded once per box, but the next element under the same parent with the same tag and attributes - the
+            // next cell of a row, the next row of a body - is usually given the same style by the same rules. When no rule that could
+            // reach it depends on anything else about it (CssData.CanShareStyleAmongSiblings: its position among its siblings, what it
+            // contains, a box or mark that matching it would add), it adopts the one the first of them ended up with and skips the
+            // matching and applying. The same things as for a text box are left out; so is foreign content, whose attribute names are
+            // case-sensitive. The check is made for the first of them, once.
+            SiblingStyle? sibling = null;
+            var verifyingSibling = false;
+            var boxesBefore = 0;
+            var shellsBefore = 0;
+            var firstLetterBefore = false;
+            if (!inheritedOnly && siblings is not null && box.HtmlTag is { } elementTag && !box.IsWithinForeignContent
+                && !DisableSiblingStyleSharing.Value
+                && box.ParentBox is { } elementParent && elementParent.ComputedStyle.CustomProperties is not { Count: > 0 }
+                && box.HtmlContainer?.AnimationProgress is null)
+            {
+                sibling = siblings.Find(elementTag, box.GetType(), box.ComputedStyle);
+                if (sibling is null)
+                {
+                    sibling = siblings.Add(elementTag, box.GetType(), box.ComputedStyle, cssData.CanShareStyleAmongSiblings(box));
+                }
+                else if (sibling.Style is { } siblingStyle)
+                {
+                    if (VerifySharedStyles.Value is not null)
+                    {
+                        verifyingSibling = true;
+                        sharedStyle = siblingStyle;
+                    }
+                    else
+                    {
+                        box.AdoptComputedStyle(siblingStyle);
+                        goto styleSettled;
+                    }
+                }
+
+                boxesBefore = box.Boxes.Count;
+                shellsBefore = displayContentsShells?.Count ?? 0;
+                firstLetterBefore = box.MatchesFirstLetterSelector;
             }
 
             // 1. Defaulting (CSS Cascade & Inheritance 4 §2.1): every property starts at its initial value,
@@ -1289,13 +1413,26 @@ namespace PeachPDF.Html.Core.Parse
 
             if (verifyingInheritedOnly)
             {
-                if (!Equals(sharedStyle, box.ComputedStyle))
+                if (!StylesEquivalent(sharedStyle, box))
                     throw new InvalidOperationException("A shared inherited-only style differs from the one the cascade made.");
                 VerifySharedStyles.Value!.Verified++;
             }
             else if (inheritedOnly)
             {
                 valueParser.InheritedOnlyStyles[inheritedOnlyKey] = box.ComputedStyle;
+            }
+            else if (verifyingSibling)
+            {
+                if (!StylesEquivalent(sharedStyle, box) || box.Boxes.Count != boxesBefore
+                    || (displayContentsShells?.Count ?? 0) != shellsBefore || box.MatchesFirstLetterSelector != firstLetterBefore)
+                    throw new InvalidOperationException("A style shared between siblings differs from the one the cascade made: " + $" boxes {boxesBefore}->{box.Boxes.Count} shells {shellsBefore}->{displayContentsShells?.Count ?? 0} firstLetter {firstLetterBefore}->{box.MatchesFirstLetterSelector} tag {box.HtmlTag?.Name}");
+                VerifySharedStyles.Value!.VerifiedElements++;
+            }
+            else if (sibling is { Eligible: true, Style: null } && box.Boxes.Count == boxesBefore
+                && (displayContentsShells?.Count ?? 0) == shellsBefore && box.MatchesFirstLetterSelector == firstLetterBefore
+                && box.CustomProperties is not { Count: > 0 })
+            {
+                sibling.Style = box.ComputedStyle;
             }
 
         styleSettled:
@@ -1329,9 +1466,10 @@ namespace PeachPDF.Html.Core.Parse
                 mathBox.SettleSource(cssData, media, containerSizes);
             }
 
+            var childSiblings = box.Boxes.Count > 1 ? new SiblingStyles() : null;
             foreach (var childBox in box.Boxes)
             {
-                CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes, childShells);
+                CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes, childShells, childSiblings);
             }
         }
 

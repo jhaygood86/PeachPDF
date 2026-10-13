@@ -66,7 +66,38 @@ namespace PeachPDF.Html.Core
         // (null = unlayered). The layer's numeric precedence rank is resolved lazily at sort time from
         // _layerRanks - which is only known after the whole layer tree has been walked (a nested
         // sub-layer's rank depends on where its parent first appeared), so it can't be baked in here.
-        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName);
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName, RuleSharing Sharing);
+
+        /// <summary>
+        /// What the cascade needs to know of a rule to let siblings share a computed style (see <see cref="CanShareStyleAmongSiblings"/>),
+        /// worked out once when the rule is indexed.
+        /// </summary>
+        private sealed class RuleSharing
+        {
+            internal static readonly RuleSharing Plain = new(stable: true, null);
+
+            private RuleSharing(bool stable, CompoundSelector[]? boxCreatingSubjects)
+            {
+                Stable = stable;
+                BoxCreatingSubjects = boxCreatingSubjects;
+            }
+
+            /// <summary>Whether its selector matches every sibling of the same tag and attributes alike (<see cref="SelectorSiblingStability"/>).</summary>
+            internal bool Stable { get; }
+
+            /// <summary>The compound selectors of it that add a box to, or mark, the element they match (see <see cref="SelectorSiblingStability.CollectBoxCreatingSubjects"/>).</summary>
+            internal CompoundSelector[]? BoxCreatingSubjects { get; }
+
+            internal static RuleSharing Of(ISelector selector)
+            {
+                var stable = SelectorSiblingStability.IsStable(selector);
+
+                var subjects = new List<CompoundSelector>();
+                SelectorSiblingStability.CollectBoxCreatingSubjects(selector, subjects);
+
+                return stable && subjects.Count == 0 ? Plain : new RuleSharing(stable, subjects.Count > 0 ? subjects.ToArray() : null);
+            }
+        }
 
         /// <summary>
         /// One level of an <c>@container</c> nesting chain a rule is indexed under: the rule's own
@@ -276,7 +307,7 @@ namespace PeachPDF.Html.Core
                 switch (rule)
                 {
                     case IStyleRule styleRule:
-                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer);
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer, RuleSharing.Of(styleRule.Selector));
 
                         if (!hasFirstLineRules && CouldMatchAsFirstLineSelector(styleRule.Selector))
                             hasFirstLineRules = true;
@@ -774,6 +805,82 @@ namespace PeachPDF.Html.Core
             }
 
             return matched;
+        }
+
+        /// <summary>
+        /// Whether an element with the same parent, tag and attributes as <paramref name="box"/> takes the same computed style from
+        /// the cascade as <paramref name="box"/> does, so that one can adopt the other's instead of matching and applying the rules
+        /// again. It does when no rule that could reach the element depends on anything else about it: its place among its siblings
+        /// or what it contains (<see cref="SelectorSiblingStability"/>), whether matching it adds a box to the element or marks it, or
+        /// an <c>@container</c> query, which looks at the element's surroundings in a way this does not follow.
+        /// </summary>
+        /// <remarks>
+        /// The rules asked are the candidates the index offers for the element (the universal ones and those under its tag, classes
+        /// and id), whatever their media: a superset of the rules that match, which can only answer no where yes was possible.
+        /// </remarks>
+        internal bool CanShareStyleAmongSiblings(CssBox box)
+        {
+            EnsureIndex();
+
+            var universal = _universalRules!;
+            for (var i = 0; i < universal.Count; i++)
+            {
+                if (!AllowsSharedStyle(universal[i], box)) return false;
+            }
+
+            ICssDomNode node = box;
+            if (node.TagName is not { } tagName) return false;
+
+            if (_tagIndex!.TryGetValue(tagName, out var tagRules))
+            {
+                for (var i = 0; i < tagRules.Count; i++)
+                {
+                    if (!AllowsSharedStyle(tagRules[i], box)) return false;
+                }
+            }
+
+            var classAttr = node.GetAttribute("class");
+            if (!string.IsNullOrEmpty(classAttr))
+            {
+                foreach (var className in classAttr.Split(' '))
+                {
+                    if (className.Length == 0 || !_classIndex!.TryGetValue(className, out var classRules)) continue;
+
+                    for (var i = 0; i < classRules.Count; i++)
+                    {
+                        if (!AllowsSharedStyle(classRules[i], box)) return false;
+                    }
+                }
+            }
+
+            var idAttr = node.GetAttribute("id");
+            if (!string.IsNullOrEmpty(idAttr) && _idIndex!.TryGetValue(idAttr, out var idRules))
+            {
+                for (var i = 0; i < idRules.Count; i++)
+                {
+                    if (!AllowsSharedStyle(idRules[i], box)) return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool AllowsSharedStyle(in IndexedRule indexed, CssBox box)
+        {
+            if (indexed.EnclosingContainers is not null) return false;
+
+            var sharing = indexed.Sharing;
+            if (!sharing.Stable) return false;
+
+            if (sharing.BoxCreatingSubjects is { } subjects)
+            {
+                for (var i = 0; i < subjects.Length; i++)
+                {
+                    if (SubjectWithoutPseudoElementMatches(subjects[i], box)) return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>

@@ -93,6 +93,28 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether <paramref name="other"/> is the same element as far as a selector or the cascade can tell: the same name and
+        /// exactly the same attributes, with the same values.
+        /// </summary>
+        internal bool HasSameSignature(HtmlTag other)
+        {
+            if (!string.Equals(Name, other.Name, StringComparison.OrdinalIgnoreCase)) return false;
+
+            var mine = Attributes;
+            var theirs = other.Attributes;
+            var count = mine?.Count ?? 0;
+            if (count != (theirs?.Count ?? 0)) return false;
+            if (count == 0) return true;
+
+            foreach (var (name, value) in mine!)
+            {
+                if (!theirs!.TryGetValue(name, out var otherValue) || !string.Equals(value, otherValue, StringComparison.Ordinal)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Sets an attribute's resolved value, creating the attribute dictionary if this tag had none. Used
         /// by the <c>dir="auto"</c>/<c>&lt;bdi&gt;</c> directionality pre-pass to write back the resolved
         /// <c>ltr</c>/<c>rtl</c> result so it rides the normal UA-stylesheet attribute-selector rules.
