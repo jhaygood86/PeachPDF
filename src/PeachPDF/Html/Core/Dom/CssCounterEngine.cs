@@ -408,7 +408,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (b.ParentBox == null) return null;
 
-            var index = b.ParentBox.Boxes.IndexOf(b);
+            var index = b.ParentBox.IndexOfChild(b);
             if (index <= 0) return null;
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];

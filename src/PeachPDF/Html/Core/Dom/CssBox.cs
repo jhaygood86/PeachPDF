@@ -313,6 +313,43 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public List<CssBox> Boxes { get; } = [];
 
+        // Where a child was last found in Boxes. Walks that ask for each child's neighbours in turn (the previous sibling of every row of
+        // a long table) would otherwise search the list from the start for each, which is quadratic in the number of siblings.
+        private int _childIndexHint;
+
+        /// <summary>Set when table layout put a <see cref="CssSpacingBox"/> (a rowspan continuation marker) among this box's children.</summary>
+        internal bool HoldsSpacingBox { get; set; }
+
+        /// <summary>
+        /// <c>Boxes.IndexOf(child)</c>, trying the neighbourhood of where the last lookup found a child first.
+        /// </summary>
+        internal int IndexOfChild(CssBox child)
+        {
+            var boxes = Boxes;
+            var hint = _childIndexHint;
+
+            if ((uint)hint < (uint)boxes.Count && ReferenceEquals(boxes[hint], child))
+                return hint;
+
+            // The children asked about come in document order, with a few boxes (white space between rows) in between.
+            for (var distance = 1; distance <= 8; distance++)
+            {
+                var ahead = hint + distance;
+                if ((uint)ahead < (uint)boxes.Count && ReferenceEquals(boxes[ahead], child))
+                    return _childIndexHint = ahead;
+
+                var behind = hint - distance;
+                if ((uint)behind < (uint)boxes.Count && ReferenceEquals(boxes[behind], child))
+                    return _childIndexHint = behind;
+            }
+
+            var index = boxes.IndexOf(child);
+            if (index >= 0)
+                _childIndexHint = index;
+
+            return index;
+        }
+
         private Dictionary<string, CssCounter>? _counters;
 
         /// <summary>The counters this box scopes; allocated on first write - read through <see cref="TryGetCounter"/> or <see cref="GetCounterOrNull"/> to look without allocating.</summary>
@@ -5798,7 +5835,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void FoldOwnTrailingBlockMargin(ref AdjoiningMarginSet trailingGroup)
         {
-            if (ParentBox is null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
+            if (ParentBox is null || ParentBox.IndexOfChild(this) != ParentBox.Boxes.Count - 1 ||
                 !(ParentBox.BlockEndMargin < 0.1) ||
                 !(BlockEndPadding < 0.1) || !(BlockEndBorderWidth < 0.1) ||
                 Overflow.Value != PeachPDF.CSS.Overflow.Visible ||

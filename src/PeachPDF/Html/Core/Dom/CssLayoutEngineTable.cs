@@ -2007,6 +2007,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (columnCount == realColumnIndex)
                     {
                         _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, openingBodyRow, endRowIndex));
+                        _bodyRows[i].HoldsSpacingBox = true;
                         inserted = true;
                         break;
                     }
@@ -2023,6 +2024,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!inserted && columnCount == realColumnIndex)
                 {
                     _bodyRows[i].Boxes.Add(new CssSpacingBox(_tableBox, ref cell, openingBodyRow, endRowIndex));
+                    _bodyRows[i].HoldsSpacingBox = true;
                 }
             }
         }

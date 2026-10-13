@@ -78,7 +78,7 @@ namespace PeachPDF.Html.Core.Dom
         internal IReadOnlyList<CssBox> LiftDisplayContentsChildren()
         {
             var parent = _parentBox;
-            var index = parent?.Boxes.IndexOf(this) ?? -1;
+            var index = parent?.IndexOfChild(this) ?? -1;
 
             if (parent is null || index < 0)
             {

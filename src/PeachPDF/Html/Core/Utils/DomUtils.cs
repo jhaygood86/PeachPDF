@@ -171,7 +171,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             if (b.ParentBox == null) return null;
 
-            var index = b.ParentBox.Boxes.IndexOf(b);
+            var index = b.ParentBox.IndexOfChild(b);
             if (index <= 0) return null;
             for (var i = index - 1; i >= 0; i--)
             {
@@ -290,7 +290,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             if (box.ParentBox == null) yield break;
 
-            var index = box.ParentBox.Boxes.IndexOf(box);
+            var index = box.ParentBox.IndexOfChild(box);
 
             const int diff = 1;
 
@@ -1078,7 +1078,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 isStartingLevel = false;
 
-                var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
+                var currentBoxIdx = reference.ParentBox.IndexOfChild(reference);
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
@@ -1298,7 +1298,7 @@ namespace PeachPDF.Html.Core.Utils
                 // already kept out of it (CssLayoutEngineColumns), so the float must not narrow the lines inside again.
                 if (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null) break;
 
-                var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
+                var currentBoxIdx = reference.ParentBox.IndexOfChild(reference);
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
@@ -1375,7 +1375,7 @@ namespace PeachPDF.Html.Core.Utils
 
             while (reference.ParentBox is not null)
             {
-                var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
+                var currentBoxIdx = reference.ParentBox.IndexOfChild(reference);
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {

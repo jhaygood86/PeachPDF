@@ -3902,8 +3902,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 && !childBox.NeverTouchedThisLayout
                 && !_capturedInstanceOwnerAncestors.Contains(childBox)
                 && !_capturedInstanceOwners.Contains(childBox)
-                && !HoldsARowspanContinuation(childBox)
                 && childBox.OwnGeometryTop() >= container.PageTopOf(slot.Index + 1)
+                && !HoldsARowspanContinuation(childBox)
                 && !SharesAnOversizedLine(childBox))
             {
                 return false;
@@ -3925,15 +3925,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// span, so a row holding one must never be skipped on the strength of the row's own geometry
         /// alone - see the call site's own remarks.
         /// </summary>
-        private static bool HoldsARowspanContinuation(CssBox box)
-        {
-            foreach (var child in box.Boxes)
-            {
-                if (child is CssSpacingBox) return true;
-            }
-
-            return false;
-        }
+        private static bool HoldsARowspanContinuation(CssBox box) => box.HoldsSpacingBox;
 
         /// <summary>
         /// Whether any physical line <paramref name="box"/> has its own words on is, in aggregate across
