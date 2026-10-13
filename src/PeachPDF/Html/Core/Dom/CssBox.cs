@@ -150,6 +150,7 @@ namespace PeachPDF.Html.Core.Dom
             if (parentBox != null)
             {
                 _parentBox = parentBox;
+                _parentBox.MaterializeForeignText();
                 _parentBox.Boxes.Add(this);
             }
 
@@ -213,8 +214,42 @@ namespace PeachPDF.Html.Core.Dom
                 _parentBox = value;
 
                 //Add to new parent
+                _parentBox?.MaterializeForeignText();
                 _parentBox?.Boxes.Add(this);
             }
+        }
+
+        /// <summary>
+        /// The text of a MathML token element (<c>mi</c>, <c>mo</c>, <c>mn</c>, <c>mtext</c>, <c>ms</c>) held on the element's own
+        /// box instead of in a child text box, or null. Inside a <c>&lt;math&gt;</c> the descendants are only a data source for
+        /// <c>MathTreeBuilder</c> (see <see cref="CssBoxMath"/>), and a text box for every token's one text node was 38% of the
+        /// boxes of an equation-heavy document. Set only while the element has no other children, so the text is the whole of
+        /// its content; the first child added turns it back into a real text box (<see cref="MaterializeForeignText"/>).
+        /// </summary>
+        internal string? ForeignText { get; private set; }
+
+        private static bool IsMathTokenName(string? name) => name is "mi" or "mo" or "mn" or "mtext" or "ms";
+
+        /// <summary>Takes <paramref name="text"/> as this MathML token element's content when it can; false when it must be a text box.</summary>
+        internal bool TryAbsorbForeignText(string text)
+        {
+            if (!IsWithinForeignContent || Boxes.Count != 0 || !IsMathTokenName(HtmlTag?.Name)) return false;
+
+            ForeignText = ForeignText is null ? text : ForeignText + text;
+            return true;
+        }
+
+        /// <summary>
+        /// Gives <see cref="ForeignText"/> back as the text box it stands for, ahead of whatever child is being added: the order
+        /// of the content is then what it would have been had the text always been a box.
+        /// </summary>
+        internal void MaterializeForeignText()
+        {
+            if (ForeignText is not { } text) return;
+
+            ForeignText = null;
+            var box = CreateBox(this);
+            box.Text = text;
         }
 
         /// <summary>

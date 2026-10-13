@@ -30,7 +30,7 @@ namespace PeachPDF.MathML
         public IEnumerable<IMathSourceNode> Children =>
             _box.Boxes.Where(b => b.HtmlTag is not null).Select(b => (IMathSourceNode)new CssBoxMathSourceNode(b));
 
-        public string GetTextContent() => string.Concat(_box.Boxes.Select(b => b.Text ?? string.Empty));
+        public string GetTextContent() => _box.ForeignText ?? string.Concat(_box.Boxes.Select(b => b.Text ?? string.Empty));
 
         public PaintColor PaintColor => _box.ActualColor;
 

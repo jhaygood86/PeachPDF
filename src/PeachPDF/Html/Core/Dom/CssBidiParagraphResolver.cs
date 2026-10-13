@@ -326,6 +326,13 @@ namespace PeachPDF.Html.Core.Dom
         private static void Flatten(
             CssBox box, StringBuilder text, List<(CssBox, int, int)> ranges, List<EmbeddingSpan> overrides)
         {
+            // A MathML token's text held on its element (CssBox.ForeignText) is the paragraph content its text box was.
+            if (box.ForeignText is { Length: > 0 } foreignText)
+            {
+                ranges.Add((box, text.Length, foreignText.Length));
+                text.Append(foreignText);
+            }
+
             foreach (var child in box.Boxes)
             {
                 // Same reasoning as AssignBidiLevels's own recursion guard - a display:none child

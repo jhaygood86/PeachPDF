@@ -1063,6 +1063,12 @@ namespace PeachPDF.Html.Core.Dom
                 return box.Text;
             }
 
+            // A MathML token's text held on its element (CssBox.ForeignText): the whole of its content.
+            if (!string.IsNullOrEmpty(box.ForeignText))
+            {
+                return box.ForeignText;
+            }
+
             var textBuilder = new StringBuilder();
             foreach (var childBox in box.ContentChildren)
             {
