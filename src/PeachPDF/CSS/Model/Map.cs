@@ -1,37 +1,36 @@
 ﻿using System;
-using System.Collections.Frozen;
 using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
     internal static class Map
     {
-        public static readonly FrozenDictionary<string, Whitespace> WhitespaceModes =
-            new Dictionary<string, Whitespace>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<Whitespace> WhitespaceModes =
+            new KeywordMap<Whitespace>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, Whitespace.Normal},
                 {Keywords.Pre, Whitespace.Pre},
                 {Keywords.Nowrap, Whitespace.NoWrap},
                 {Keywords.PreWrap, Whitespace.PreWrap},
                 {Keywords.PreLine, Whitespace.PreLine}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextOverflow> TextOverflowModes =
-            new Dictionary<string, TextOverflow>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextOverflow> TextOverflowModes =
+            new KeywordMap<TextOverflow>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Clip, TextOverflow.Clip},
                 {Keywords.Ellipsis, TextOverflow.Ellipsis}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextTransform> TextTransforms =
-            new Dictionary<string, TextTransform>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextTransform> TextTransforms =
+            new KeywordMap<TextTransform>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, TextTransform.None},
                 {Keywords.Capitalize, TextTransform.Capitalize},
                 {Keywords.Uppercase, TextTransform.Uppercase},
                 {Keywords.Lowercase, TextTransform.Lowercase},
                 {Keywords.FullWidth, TextTransform.FullWidth}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextAlignLast> TextAlignmentsLast =
-            new Dictionary<string, TextAlignLast>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextAlignLast> TextAlignmentsLast =
+            new KeywordMap<TextAlignLast>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextAlignLast.Auto},
                 {Keywords.Start, TextAlignLast.Start},
@@ -41,16 +40,16 @@ namespace PeachPDF.CSS
                 {Keywords.Center, TextAlignLast.Center},
                 {Keywords.Justify, TextAlignLast.Justify},
                 {Keywords.MatchParent, TextAlignLast.MatchParent}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextAnchor> TextAnchors =
-            new Dictionary<string, TextAnchor>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextAnchor> TextAnchors =
+            new KeywordMap<TextAnchor>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Start, TextAnchor.Start},
                 {Keywords.Middle, TextAnchor.Middle},
                 {Keywords.End, TextAnchor.End}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextJustify> TextJustifyOptions =
-            new Dictionary<string, TextJustify>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextJustify> TextJustifyOptions =
+            new KeywordMap<TextJustify>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextJustify.Auto},
                 {Keywords.Distribute, TextJustify.Distribute},
@@ -61,9 +60,9 @@ namespace PeachPDF.CSS
                 {Keywords.InterWord, TextJustify.InterWord},
                 {Keywords.Kashida, TextJustify.Kashida},
                 {Keywords.Newspaper, TextJustify.Newspaper}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, JustifyContent> JustifyContentOptions =
-            new Dictionary<string, JustifyContent>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<JustifyContent> JustifyContentOptions =
+            new KeywordMap<JustifyContent>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Start, JustifyContent.Start},
                 {Keywords.Center, JustifyContent.Center},
@@ -77,9 +76,9 @@ namespace PeachPDF.CSS
                 {Keywords.SpaceAround, JustifyContent.SpaceAround},
                 {Keywords.SpaceEvenly, JustifyContent.SpaceEvenly},
                 {Keywords.Stretch, JustifyContent.Stretch },
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, HorizontalAlignment> HorizontalAlignments =
-            new Dictionary<string, HorizontalAlignment>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<HorizontalAlignment> HorizontalAlignments =
+            new KeywordMap<HorizontalAlignment>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Left, HorizontalAlignment.Left},
                 {Keywords.Right, HorizontalAlignment.Right},
@@ -88,40 +87,40 @@ namespace PeachPDF.CSS
                 {Keywords.Start, HorizontalAlignment.Start},
                 {Keywords.End, HorizontalAlignment.End},
                 {Keywords.MatchParent, HorizontalAlignment.MatchParent}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextDecorationThicknessKeyword> TextDecorationThicknessKeywords =
-            new Dictionary<string, TextDecorationThicknessKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextDecorationThicknessKeyword> TextDecorationThicknessKeywords =
+            new KeywordMap<TextDecorationThicknessKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextDecorationThicknessKeyword.Auto},
                 {Keywords.FromFont, TextDecorationThicknessKeyword.FromFont}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextDecorationSkipInk> TextDecorationSkipInkModes =
-            new Dictionary<string, TextDecorationSkipInk>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextDecorationSkipInk> TextDecorationSkipInkModes =
+            new KeywordMap<TextDecorationSkipInk>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextDecorationSkipInk.Auto},
                 {Keywords.None, TextDecorationSkipInk.None},
                 {Keywords.All, TextDecorationSkipInk.All}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextUnderlineOffsetKeyword> TextUnderlineOffsetKeywords =
-            new Dictionary<string, TextUnderlineOffsetKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextUnderlineOffsetKeyword> TextUnderlineOffsetKeywords =
+            new KeywordMap<TextUnderlineOffsetKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextUnderlineOffsetKeyword.Auto}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextUnderlinePosition> TextUnderlinePositions =
-            new Dictionary<string, TextUnderlinePosition>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextUnderlinePosition> TextUnderlinePositions =
+            new KeywordMap<TextUnderlinePosition>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextUnderlinePosition.Auto},
                 {Keywords.FromFont, TextUnderlinePosition.FromFont},
                 {Keywords.Under, TextUnderlinePosition.Under}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextUnderlineSide> TextUnderlineSides =
-            new Dictionary<string, TextUnderlineSide>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextUnderlineSide> TextUnderlineSides =
+            new KeywordMap<TextUnderlineSide>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Left, TextUnderlineSide.Left},
                 {Keywords.Right, TextUnderlineSide.Right}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, VerticalAlignment> VerticalAlignments =
-            new Dictionary<string, VerticalAlignment>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<VerticalAlignment> VerticalAlignments =
+            new KeywordMap<VerticalAlignment>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Baseline, VerticalAlignment.Baseline},
                 {Keywords.Sub, VerticalAlignment.Sub},
@@ -131,9 +130,9 @@ namespace PeachPDF.CSS
                 {Keywords.Middle, VerticalAlignment.Middle},
                 {Keywords.Top, VerticalAlignment.Top},
                 {Keywords.Bottom, VerticalAlignment.Bottom}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, LineStyle> LineStyles =
-            new Dictionary<string, LineStyle>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<LineStyle> LineStyles =
+            new KeywordMap<LineStyle>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, LineStyle.None},
                 {Keywords.Solid, LineStyle.Solid},
@@ -145,9 +144,9 @@ namespace PeachPDF.CSS
                 {Keywords.Ridge, LineStyle.Ridge},
                 {Keywords.Groove, LineStyle.Groove},
                 {Keywords.Hidden, LineStyle.Hidden}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, OutlineStyle> OutlineStyles =
-            new Dictionary<string, OutlineStyle>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<OutlineStyle> OutlineStyles =
+            new KeywordMap<OutlineStyle>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, OutlineStyle.None},
                 {Keywords.Solid, OutlineStyle.Solid},
@@ -165,9 +164,9 @@ namespace PeachPDF.CSS
                 // `outline: 2px solid red` in the same rule keeps painting - which is the whole point.
                 // Mapping it instead made the declaration win and then paint nothing.
                 {Keywords.Auto, OutlineStyle.Auto}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, PdfTagType> PdfTagTypes =
-            new Dictionary<string, PdfTagType>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<PdfTagType> PdfTagTypes =
+            new KeywordMap<PdfTagType>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, PdfTagType.Auto},
                 {Keywords.None, PdfTagType.None},
@@ -212,9 +211,9 @@ namespace PeachPDF.CSS
                 {Keywords.Note, PdfTagType.Note},
                 {Keywords.Reference, PdfTagType.Reference},
                 {Keywords.Link, PdfTagType.Link}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, PdfFormFieldKeyword> PdfFormFieldKinds =
-            new Dictionary<string, PdfFormFieldKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<PdfFormFieldKeyword> PdfFormFieldKinds =
+            new KeywordMap<PdfFormFieldKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, PdfFormFieldKeyword.Auto},
                 {Keywords.None, PdfFormFieldKeyword.None},
@@ -222,27 +221,27 @@ namespace PeachPDF.CSS
                 {Keywords.Checkbox, PdfFormFieldKeyword.Checkbox},
                 {Keywords.Radio, PdfFormFieldKeyword.Radio},
                 {Keywords.Select, PdfFormFieldKeyword.Select}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BoxModel> BoxModels =
-            new Dictionary<string, BoxModel>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BoxModel> BoxModels =
+            new KeywordMap<BoxModel>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.BorderBox, BoxModel.BorderBox},
                 {Keywords.PaddingBox, BoxModel.PaddingBox},
                 {Keywords.ContentBox, BoxModel.ContentBox}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         // background-clip's own grammar - BoxModels' three values plus "text" (issue #1117). Kept
         // separate from BoxModels/BoxModel so background-origin/box-sizing (which share those) never
         // accept "text".
-        public static readonly FrozenDictionary<string, BackgroundClipKeyword> BackgroundClips =
-            new Dictionary<string, BackgroundClipKeyword>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<BackgroundClipKeyword> BackgroundClips =
+            new KeywordMap<BackgroundClipKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.BorderBox, BackgroundClipKeyword.BorderBox},
                 {Keywords.PaddingBox, BackgroundClipKeyword.PaddingBox},
                 {Keywords.ContentBox, BackgroundClipKeyword.ContentBox},
                 {Keywords.Text, BackgroundClipKeyword.Text}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ITimingFunction> TimingFunctions =
-            new Dictionary<string, ITimingFunction>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ITimingFunction> TimingFunctions =
+            new KeywordMap<ITimingFunction>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Ease, new CubicBezierTimingFunction(0.25f, 0.1f, 0.25f, 1f)},
                 {Keywords.EaseIn, new CubicBezierTimingFunction(0.42f, 0f, 1f, 1f)},
@@ -251,63 +250,63 @@ namespace PeachPDF.CSS
                 {Keywords.Linear, new CubicBezierTimingFunction(0f, 0f, 1f, 1f)},
                 {Keywords.StepStart, new StepsTimingFunction(1, true)},
                 {Keywords.StepEnd, new StepsTimingFunction(1)}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, AnimationFillStyle> AnimationFillStyles =
-            new Dictionary<string, AnimationFillStyle>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<AnimationFillStyle> AnimationFillStyles =
+            new KeywordMap<AnimationFillStyle>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, AnimationFillStyle.None},
                 {Keywords.Forwards, AnimationFillStyle.Forwards},
                 {Keywords.Backwards, AnimationFillStyle.Backwards},
                 {Keywords.Both, AnimationFillStyle.Both}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, AnimationDirection> AnimationDirections =
-            new Dictionary<string, AnimationDirection>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<AnimationDirection> AnimationDirections =
+            new KeywordMap<AnimationDirection>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, AnimationDirection.Normal},
                 {Keywords.Reverse, AnimationDirection.Reverse},
                 {Keywords.Alternate, AnimationDirection.Alternate},
                 {Keywords.AlternateReverse, AnimationDirection.AlternateReverse}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, Visibility> Visibilities =
-            new Dictionary<string, Visibility>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<Visibility> Visibilities =
+            new KeywordMap<Visibility>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Visible, Visibility.Visible},
                 {Keywords.Hidden, Visibility.Hidden},
                 {Keywords.Collapse, Visibility.Collapse}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, Hyphens> HyphensModes =
-            new Dictionary<string, Hyphens>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<Hyphens> HyphensModes =
+            new KeywordMap<Hyphens>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, Hyphens.None},
                 {Keywords.Manual, Hyphens.Manual},
                 {Keywords.Auto, Hyphens.Auto}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, HyphenateLimitLast> HyphenateLimitLastModes =
-            new Dictionary<string, HyphenateLimitLast>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<HyphenateLimitLast> HyphenateLimitLastModes =
+            new KeywordMap<HyphenateLimitLast>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, HyphenateLimitLast.None},
                 {Keywords.Always, HyphenateLimitLast.Always},
                 {Keywords.Column, HyphenateLimitLast.Column},
                 {Keywords.Page, HyphenateLimitLast.Page},
                 {Keywords.Spread, HyphenateLimitLast.Spread}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, NoLimitKeyword> NoLimitKeywords =
-            new Dictionary<string, NoLimitKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<NoLimitKeyword> NoLimitKeywords =
+            new KeywordMap<NoLimitKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.NoLimit, NoLimitKeyword.NoLimit}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, PlayState> PlayStates =
-            new Dictionary<string, PlayState>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<PlayState> PlayStates =
+            new KeywordMap<PlayState>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Running, PlayState.Running},
                 {Keywords.Paused, PlayState.Paused}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         // The full 7-keyword font-variant-caps grammar - the real longhand, and reachable from
         // standalone `font-variant`. Named *Keywords (plural), not FontVariantCaps, to avoid colliding
         // with the FontVariantCaps enum type itself - same convention as FontVariantLigatureTokens
         // (dict) vs. FontVariantLigatureToken (enum) below.
-        public static readonly FrozenDictionary<string, FontVariantCaps> FontVariantCapsKeywords =
-            new Dictionary<string, FontVariantCaps>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<FontVariantCaps> FontVariantCapsKeywords =
+            new KeywordMap<FontVariantCaps>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantCaps.Normal},
                 {Keywords.SmallCaps, FontVariantCaps.SmallCaps},
@@ -316,34 +315,34 @@ namespace PeachPDF.CSS
                 {Keywords.AllPetiteCaps, FontVariantCaps.AllPetiteCaps},
                 {Keywords.Unicase, FontVariantCaps.Unicase},
                 {Keywords.TitlingCaps, FontVariantCaps.TitlingCaps}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         // Named *Keywords (plural) rather than FontVariantPosition, to avoid colliding with the
         // FontVariantPosition enum type itself - same convention as FontVariantCapsKeywords above.
-        public static readonly FrozenDictionary<string, FontVariantPosition> FontVariantPositionKeywords =
-            new Dictionary<string, FontVariantPosition>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<FontVariantPosition> FontVariantPositionKeywords =
+            new KeywordMap<FontVariantPosition>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantPosition.Normal},
                 {Keywords.Sub, FontVariantPosition.Sub},
                 {Keywords.Super, FontVariantPosition.Super}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantEmoji> FontVariantEmojiKeywords =
-            new Dictionary<string, FontVariantEmoji>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantEmoji> FontVariantEmojiKeywords =
+            new KeywordMap<FontVariantEmoji>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantEmoji.Normal},
                 {Keywords.Text, FontVariantEmoji.Text},
                 {Keywords.Emoji, FontVariantEmoji.Emoji},
                 {Keywords.Unicode, FontVariantEmoji.Unicode}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         // The restricted `<font-variant-css2>` grammar (normal | small-caps) - the only caps values
         // reachable from inside the `font` shorthand's embedded variant slot, per spec.
-        public static readonly FrozenDictionary<string, FontVariantCaps> FontVariantCss2Keywords =
-            new Dictionary<string, FontVariantCaps>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<FontVariantCaps> FontVariantCss2Keywords =
+            new KeywordMap<FontVariantCaps>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantCaps.Normal},
                 {Keywords.SmallCaps, FontVariantCaps.SmallCaps}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantLigatureToken> FontVariantLigatureTokens =
-            new Dictionary<string, FontVariantLigatureToken>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantLigatureToken> FontVariantLigatureTokens =
+            new KeywordMap<FontVariantLigatureToken>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.CommonLigatures, FontVariantLigatureToken.CommonLigatures},
                 {Keywords.NoCommonLigatures, FontVariantLigatureToken.NoCommonLigatures},
@@ -353,9 +352,9 @@ namespace PeachPDF.CSS
                 {Keywords.NoHistoricalLigatures, FontVariantLigatureToken.NoHistoricalLigatures},
                 {Keywords.Contextual, FontVariantLigatureToken.Contextual},
                 {Keywords.NoContextual, FontVariantLigatureToken.NoContextual}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantNumericToken> FontVariantNumericTokens =
-            new Dictionary<string, FontVariantNumericToken>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantNumericToken> FontVariantNumericTokens =
+            new KeywordMap<FontVariantNumericToken>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.LiningNums, FontVariantNumericToken.LiningNums},
                 {Keywords.OldstyleNums, FontVariantNumericToken.OldstyleNums},
@@ -365,9 +364,9 @@ namespace PeachPDF.CSS
                 {Keywords.StackedFractions, FontVariantNumericToken.StackedFractions},
                 {Keywords.Ordinal, FontVariantNumericToken.Ordinal},
                 {Keywords.SlashedZero, FontVariantNumericToken.SlashedZero}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantEastAsianToken> FontVariantEastAsianTokens =
-            new Dictionary<string, FontVariantEastAsianToken>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantEastAsianToken> FontVariantEastAsianTokens =
+            new KeywordMap<FontVariantEastAsianToken>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Jis78Forms, FontVariantEastAsianToken.Jis78Forms},
                 {Keywords.Jis83Forms, FontVariantEastAsianToken.Jis83Forms},
@@ -378,71 +377,71 @@ namespace PeachPDF.CSS
                 {Keywords.FullWidth, FontVariantEastAsianToken.FullWidth},
                 {Keywords.ProportionalWidth, FontVariantEastAsianToken.ProportionalWidth},
                 {Keywords.Ruby, FontVariantEastAsianToken.Ruby}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, DirectionMode> DirectionModes =
-            new Dictionary<string, DirectionMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<DirectionMode> DirectionModes =
+            new KeywordMap<DirectionMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Ltr, DirectionMode.Ltr},
                 {Keywords.Rtl, DirectionMode.Rtl}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontSynthesisMode> FontSynthesisModes =
-            new Dictionary<string, FontSynthesisMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontSynthesisMode> FontSynthesisModes =
+            new KeywordMap<FontSynthesisMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, FontSynthesisMode.Auto},
                 {Keywords.None, FontSynthesisMode.None}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextRenderingMode> TextRenderingModes =
-            new Dictionary<string, TextRenderingMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextRenderingMode> TextRenderingModes =
+            new KeywordMap<TextRenderingMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TextRenderingMode.Auto},
                 {"optimizeSpeed", TextRenderingMode.OptimizeSpeed},
                 {"optimizeLegibility", TextRenderingMode.OptimizeLegibility},
                 {"geometricPrecision", TextRenderingMode.GeometricPrecision}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontKerningMode> FontKerningModes =
-            new Dictionary<string, FontKerningMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontKerningMode> FontKerningModes =
+            new KeywordMap<FontKerningMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, FontKerningMode.Auto},
                 {Keywords.Normal, FontKerningMode.Normal},
                 {Keywords.None, FontKerningMode.None}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontOpticalSizingMode> FontOpticalSizingModes =
-            new Dictionary<string, FontOpticalSizingMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontOpticalSizingMode> FontOpticalSizingModes =
+            new KeywordMap<FontOpticalSizingMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, FontOpticalSizingMode.Auto},
                 {Keywords.None, FontOpticalSizingMode.None}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, AutoKeyword> AutoKeywords =
-            new Dictionary<string, AutoKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<AutoKeyword> AutoKeywords =
+            new KeywordMap<AutoKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, AutoKeyword.Auto}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, NoneKeyword> NoneKeywords =
-            new Dictionary<string, NoneKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<NoneKeyword> NoneKeywords =
+            new KeywordMap<NoneKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, NoneKeyword.None}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BookmarkState> BookmarkStates =
-            new Dictionary<string, BookmarkState>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BookmarkState> BookmarkStates =
+            new KeywordMap<BookmarkState>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Open, BookmarkState.Open},
                 {Keywords.Closed, BookmarkState.Closed}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, NormalKeyword> NormalKeywords =
-            new Dictionary<string, NormalKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<NormalKeyword> NormalKeywords =
+            new KeywordMap<NormalKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, NormalKeyword.Normal}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontWeightKeyword> FontWeightKeywords =
-            new Dictionary<string, FontWeightKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontWeightKeyword> FontWeightKeywords =
+            new KeywordMap<FontWeightKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontWeightKeyword.Normal},
                 {Keywords.Bold, FontWeightKeyword.Bold},
                 {Keywords.Bolder, FontWeightKeyword.Bolder},
                 {Keywords.Lighter, FontWeightKeyword.Lighter}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontSizeKeyword> FontSizeKeywords =
-            new Dictionary<string, FontSizeKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontSizeKeyword> FontSizeKeywords =
+            new KeywordMap<FontSizeKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.XxSmall, FontSizeKeyword.XxSmall},
                 {Keywords.XSmall, FontSizeKeyword.XSmall},
@@ -453,108 +452,108 @@ namespace PeachPDF.CSS
                 {Keywords.XxLarge, FontSizeKeyword.XxLarge},
                 {Keywords.Smaller, FontSizeKeyword.Smaller},
                 {Keywords.Larger, FontSizeKeyword.Larger}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FlexBasisKeyword> FlexBasisKeywords =
-            new Dictionary<string, FlexBasisKeyword>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FlexBasisKeyword> FlexBasisKeywords =
+            new KeywordMap<FlexBasisKeyword>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, FlexBasisKeyword.Auto},
                 {Keywords.Content, FlexBasisKeyword.Content},
                 {Keywords.Stretch, FlexBasisKeyword.Stretch},
                 {"-webkit-fill-available", FlexBasisKeyword.Stretch},
                 {"-moz-available", FlexBasisKeyword.Stretch}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BoxSizingMode> BoxSizingModes =
-            new Dictionary<string, BoxSizingMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BoxSizingMode> BoxSizingModes =
+            new KeywordMap<BoxSizingMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.BorderBox, BoxSizingMode.BorderBox},
                 {Keywords.ContentBox, BoxSizingMode.ContentBox}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BoxDecorationBreakMode> BoxDecorationBreakModes =
-            new Dictionary<string, BoxDecorationBreakMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BoxDecorationBreakMode> BoxDecorationBreakModes =
+            new KeywordMap<BoxDecorationBreakMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Slice, BoxDecorationBreakMode.Slice},
                 {Keywords.Clone, BoxDecorationBreakMode.Clone}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ColumnFillMode> ColumnFillModes =
-            new Dictionary<string, ColumnFillMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ColumnFillMode> ColumnFillModes =
+            new KeywordMap<ColumnFillMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, ColumnFillMode.Auto},
                 {Keywords.Balance, ColumnFillMode.Balance}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ColumnSpanMode> ColumnSpanModes =
-            new Dictionary<string, ColumnSpanMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ColumnSpanMode> ColumnSpanModes =
+            new KeywordMap<ColumnSpanMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, ColumnSpanMode.None},
                 {Keywords.All, ColumnSpanMode.All}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TransformStyleMode> TransformStyleModes =
-            new Dictionary<string, TransformStyleMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TransformStyleMode> TransformStyleModes =
+            new KeywordMap<TransformStyleMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Flat, TransformStyleMode.Flat},
                 {Keywords.Preserve3d, TransformStyleMode.Preserve3d}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BackfaceVisibilityMode> BackfaceVisibilityModes =
-            new Dictionary<string, BackfaceVisibilityMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BackfaceVisibilityMode> BackfaceVisibilityModes =
+            new KeywordMap<BackfaceVisibilityMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Visible, BackfaceVisibilityMode.Visible},
                 {Keywords.Hidden, BackfaceVisibilityMode.Hidden}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BorderCollapseMode> BorderCollapseModes =
-            new Dictionary<string, BorderCollapseMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BorderCollapseMode> BorderCollapseModes =
+            new KeywordMap<BorderCollapseMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Separate, BorderCollapseMode.Separate},
                 {Keywords.Collapse, BorderCollapseMode.Collapse}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, EmptyCellsMode> EmptyCellsModes =
-            new Dictionary<string, EmptyCellsMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<EmptyCellsMode> EmptyCellsModes =
+            new KeywordMap<EmptyCellsMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Show, EmptyCellsMode.Show},
                 {Keywords.Hide, EmptyCellsMode.Hide}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, CaptionSideMode> CaptionSideModes =
-            new Dictionary<string, CaptionSideMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<CaptionSideMode> CaptionSideModes =
+            new KeywordMap<CaptionSideMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Top, CaptionSideMode.Top},
                 {Keywords.Bottom, CaptionSideMode.Bottom}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TableLayoutMode> TableLayoutModes =
-            new Dictionary<string, TableLayoutMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TableLayoutMode> TableLayoutModes =
+            new KeywordMap<TableLayoutMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, TableLayoutMode.Auto},
                 {Keywords.Fixed, TableLayoutMode.Fixed}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ListStylePositionMode> ListStylePositionModes =
-            new Dictionary<string, ListStylePositionMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ListStylePositionMode> ListStylePositionModes =
+            new KeywordMap<ListStylePositionMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Outside, ListStylePositionMode.Outside},
                 {Keywords.Inside, ListStylePositionMode.Inside}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextDecorationStyleMode> TextDecorationStyleModes =
-            new Dictionary<string, TextDecorationStyleMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextDecorationStyleMode> TextDecorationStyleModes =
+            new KeywordMap<TextDecorationStyleMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Solid, TextDecorationStyleMode.Solid},
                 {Keywords.Double, TextDecorationStyleMode.Double},
                 {Keywords.Dotted, TextDecorationStyleMode.Dotted},
                 {Keywords.Dashed, TextDecorationStyleMode.Dashed},
                 {Keywords.Wavy, TextDecorationStyleMode.Wavy}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantPositionMode> FontVariantPositionModes =
-            new Dictionary<string, FontVariantPositionMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantPositionMode> FontVariantPositionModes =
+            new KeywordMap<FontVariantPositionMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantPositionMode.Normal},
                 {Keywords.Sub, FontVariantPositionMode.Sub},
                 {Keywords.Super, FontVariantPositionMode.Super}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantEmojiMode> FontVariantEmojiModes =
-            new Dictionary<string, FontVariantEmojiMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantEmojiMode> FontVariantEmojiModes =
+            new KeywordMap<FontVariantEmojiMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantEmojiMode.Normal},
                 {Keywords.Text, FontVariantEmojiMode.Text},
                 {Keywords.Emoji, FontVariantEmojiMode.Emoji},
                 {Keywords.Unicode, FontVariantEmojiMode.Unicode}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariantCapsMode> FontVariantCapsModes =
-            new Dictionary<string, FontVariantCapsMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontVariantCapsMode> FontVariantCapsModes =
+            new KeywordMap<FontVariantCapsMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontVariantCapsMode.Normal},
                 {Keywords.SmallCaps, FontVariantCapsMode.SmallCaps},
@@ -563,34 +562,34 @@ namespace PeachPDF.CSS
                 {Keywords.AllPetiteCaps, FontVariantCapsMode.AllPetiteCaps},
                 {Keywords.Unicase, FontVariantCapsMode.Unicase},
                 {Keywords.TitlingCaps, FontVariantCapsMode.TitlingCaps}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ObjectFitMode> ObjectFitModes =
-            new Dictionary<string, ObjectFitMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ObjectFitMode> ObjectFitModes =
+            new KeywordMap<ObjectFitMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Fill, ObjectFitMode.Fill},
                 {Keywords.Contain, ObjectFitMode.Contain},
                 {Keywords.Cover, ObjectFitMode.Cover},
                 {Keywords.None, ObjectFitMode.None},
                 {Keywords.ScaleDown, ObjectFitMode.ScaleDown}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, WritingMode> WritingModes =
-            new Dictionary<string, WritingMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<WritingMode> WritingModes =
+            new KeywordMap<WritingMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.HorizontalTb, WritingMode.HorizontalTb},
                 {Keywords.VerticalRl, WritingMode.VerticalRl},
                 {Keywords.VerticalLr, WritingMode.VerticalLr},
                 {Keywords.SidewaysRl, WritingMode.SidewaysRl},
                 {Keywords.SidewaysLr, WritingMode.SidewaysLr}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextOrientation> TextOrientations =
-            new Dictionary<string, TextOrientation>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextOrientation> TextOrientations =
+            new KeywordMap<TextOrientation>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Mixed, TextOrientation.Mixed},
                 {Keywords.Upright, TextOrientation.Upright},
                 {Keywords.Sideways, TextOrientation.Sideways}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ListStyle> ListStyles =
-            new Dictionary<string, ListStyle>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ListStyle> ListStyles =
+            new KeywordMap<ListStyle>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Disc, ListStyle.Disc},
                 {Keywords.Circle, ListStyle.Circle},
@@ -638,15 +637,15 @@ namespace PeachPDF.CSS
                 {Keywords.Thai, ListStyle.Thai},
                 {Keywords.Tibetan, ListStyle.Tibetan},
                 {Keywords.None, ListStyle.None}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ListPosition> ListPositions =
-            new Dictionary<string, ListPosition>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ListPosition> ListPositions =
+            new KeywordMap<ListPosition>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Inside, ListPosition.Inside},
                 {Keywords.Outside, ListPosition.Outside}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontSize> FontSizes =
-            new Dictionary<string, FontSize>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontSize> FontSizes =
+            new KeywordMap<FontSize>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.XxSmall, FontSize.Tiny},
                 {Keywords.XSmall, FontSize.Little},
@@ -657,34 +656,34 @@ namespace PeachPDF.CSS
                 {Keywords.XxLarge, FontSize.Huge},
                 {Keywords.Larger, FontSize.Larger},
                 {Keywords.Smaller, FontSize.Smaller}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextDecorationStyle> TextDecorationStyles =
-            new Dictionary<string, TextDecorationStyle>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextDecorationStyle> TextDecorationStyles =
+            new KeywordMap<TextDecorationStyle>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Solid, TextDecorationStyle.Solid},
                 {Keywords.Double, TextDecorationStyle.Double},
                 {Keywords.Dotted, TextDecorationStyle.Dotted},
                 {Keywords.Dashed, TextDecorationStyle.Dashed},
                 {Keywords.Wavy, TextDecorationStyle.Wavy}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, TextDecorationLine> TextDecorationLines =
-            new Dictionary<string, TextDecorationLine>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<TextDecorationLine> TextDecorationLines =
+            new KeywordMap<TextDecorationLine>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Underline, TextDecorationLine.Underline},
                 {Keywords.Overline, TextDecorationLine.Overline},
                 {Keywords.LineThrough, TextDecorationLine.LineThrough},
                 {Keywords.Blink, TextDecorationLine.Blink}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BorderRepeat> BorderRepeatModes =
-            new Dictionary<string, BorderRepeat>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BorderRepeat> BorderRepeatModes =
+            new KeywordMap<BorderRepeat>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Stretch, BorderRepeat.Stretch},
                 {Keywords.Repeat, BorderRepeat.Repeat},
                 {Keywords.Round, BorderRepeat.Round},
                 {Keywords.Space, BorderRepeat.Space}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, string> DefaultFontFamilies =
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<string> DefaultFontFamilies =
+            new KeywordMap<string>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Serif, "Times New Roman"},
                 {Keywords.SansSerif, "Arial"},
@@ -692,23 +691,23 @@ namespace PeachPDF.CSS
                 {Keywords.Cursive, "Cursive"},
                 {Keywords.Fantasy, "Comic Sans"},
                 {Keywords.Math, "Cambria Math"}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BackgroundAttachment> BackgroundAttachments =
-            new Dictionary<string, BackgroundAttachment>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BackgroundAttachment> BackgroundAttachments =
+            new KeywordMap<BackgroundAttachment>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Fixed, BackgroundAttachment.Fixed},
                 {Keywords.Local, BackgroundAttachment.Local},
                 {Keywords.Scroll, BackgroundAttachment.Scroll}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontStyle> FontStyles =
-            new Dictionary<string, FontStyle>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontStyle> FontStyles =
+            new KeywordMap<FontStyle>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontStyle.Normal},
                 {Keywords.Italic, FontStyle.Italic},
                 {Keywords.Oblique, FontStyle.Oblique}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontStretch> FontStretches =
-            new Dictionary<string, FontStretch>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontStretch> FontStretches =
+            new KeywordMap<FontStretch>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontStretch.Normal},
                 {Keywords.UltraCondensed, FontStretch.UltraCondensed},
@@ -719,10 +718,10 @@ namespace PeachPDF.CSS
                 {Keywords.Expanded, FontStretch.Expanded},
                 {Keywords.ExtraExpanded, FontStretch.ExtraExpanded},
                 {Keywords.UltraExpanded, FontStretch.UltraExpanded}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         /// <summary>css-break-3 §3.1 break-before/break-after. Note "always" is not one of them - it is a legacy page-break-* value only.</summary>
-        public static readonly FrozenDictionary<string, BreakMode> BreakModes =
-            new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<BreakMode> BreakModes =
+            new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, BreakMode.Auto},
                 {Keywords.Avoid, BreakMode.Avoid},
@@ -736,50 +735,50 @@ namespace PeachPDF.CSS
                 {Keywords.Column, BreakMode.Column},
                 {Keywords.AvoidRegion, BreakMode.AvoidRegion},
                 {Keywords.Region, BreakMode.Region}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         /// <summary>css-break-3 §3.3 legacy page-break-before/page-break-after.</summary>
-        public static readonly FrozenDictionary<string, BreakMode> PageBreakModes =
-            new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<BreakMode> PageBreakModes =
+            new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, BreakMode.Auto},
                 {Keywords.Always, BreakMode.Always},
                 {Keywords.Avoid, BreakMode.Avoid},
                 {Keywords.Left, BreakMode.Left},
                 {Keywords.Right, BreakMode.Right}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         /// <summary>css-break-3 §3.2 break-inside.</summary>
-        public static readonly FrozenDictionary<string, BreakMode> BreakInsideModes =
-            new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<BreakMode> BreakInsideModes =
+            new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, BreakMode.Auto},
                 {Keywords.Avoid, BreakMode.Avoid},
                 {Keywords.AvoidPage, BreakMode.AvoidPage},
                 {Keywords.AvoidColumn, BreakMode.AvoidColumn},
                 {Keywords.AvoidRegion, BreakMode.AvoidRegion}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         /// <summary>css-break-3 §3.3 legacy page-break-inside.</summary>
-        public static readonly FrozenDictionary<string, BreakMode> PageBreakInsideModes =
-            new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<BreakMode> PageBreakInsideModes =
+            new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, BreakMode.Auto},
                 {Keywords.Avoid, BreakMode.Avoid}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, float> HorizontalModes =
-            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<float> HorizontalModes =
+            new KeywordMap<float>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Left, 0f},
                 {Keywords.Center, 0.5f},
                 {Keywords.Right, 1f}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, float> VerticalModes =
-            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<float> VerticalModes =
+            new KeywordMap<float>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Top, 0f},
                 {Keywords.Center, 0.5f},
                 {Keywords.Bottom, 1f}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, UnicodeMode> UnicodeModes =
-            new Dictionary<string, UnicodeMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<UnicodeMode> UnicodeModes =
+            new KeywordMap<UnicodeMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, UnicodeMode.Normal},
                 {Keywords.Embed, UnicodeMode.Embed},
@@ -787,9 +786,9 @@ namespace PeachPDF.CSS
                 {Keywords.IsolateOverride, UnicodeMode.IsolateOverride},
                 {Keywords.BidirectionalOverride, UnicodeMode.BidirectionalOverride},
                 {Keywords.Plaintext, UnicodeMode.Plaintext}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, SystemCursor> Cursors =
-            new Dictionary<string, SystemCursor>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<SystemCursor> Cursors =
+            new KeywordMap<SystemCursor>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, SystemCursor.Auto},
                 {Keywords.Default, SystemCursor.Default},
@@ -827,9 +826,9 @@ namespace PeachPDF.CSS
                 {Keywords.ZoomOut, SystemCursor.ZoomOut},
                 {Keywords.Grab, SystemCursor.Grab},
                 {Keywords.Grabbing, SystemCursor.Grabbing}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, PositionMode> PositionModes =
-            new Dictionary<string, PositionMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<PositionMode> PositionModes =
+            new KeywordMap<PositionMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Static, PositionMode.Static},
                 {Keywords.Relative, PositionMode.Relative},
@@ -837,18 +836,18 @@ namespace PeachPDF.CSS
                 {Keywords.Sticky, PositionMode.Sticky},
                 {Keywords.WebkitSticky, PositionMode.Sticky},
                 {Keywords.Fixed, PositionMode.Fixed}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, Overflow> OverflowModes =
-            new Dictionary<string, Overflow>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<Overflow> OverflowModes =
+            new KeywordMap<Overflow>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Visible, Overflow.Visible},
                 {Keywords.Hidden, Overflow.Hidden},
                 {Keywords.Scroll, Overflow.Scroll},
                 {Keywords.Auto, Overflow.Auto},
                 {Keywords.Clip, Overflow.Clip}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, Floating> FloatingModes =
-            new Dictionary<string, Floating>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<Floating> FloatingModes =
+            new KeywordMap<Floating>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, Floating.None},
                 {Keywords.Left, Floating.Left},
@@ -862,33 +861,33 @@ namespace PeachPDF.CSS
                 {Keywords.Outside, Floating.Outside},
                 {Keywords.InlineStart, Floating.InlineStart},
                 {Keywords.InlineEnd, Floating.InlineEnd}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
         // Named *References (plural), not FloatReference, to avoid colliding with the FloatReference
         // enum type itself - same convention as FloatingModes above.
-        public static readonly FrozenDictionary<string, FloatReference> FloatReferences =
-            new Dictionary<string, FloatReference>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<FloatReference> FloatReferences =
+            new KeywordMap<FloatReference>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Inline, FloatReference.Inline},
                 {Keywords.Column, FloatReference.Column},
                 {Keywords.Region, FloatReference.Region},
                 {Keywords.Page, FloatReference.Page}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FootnoteDisplayMode> FootnoteDisplayModes =
-            new Dictionary<string, FootnoteDisplayMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FootnoteDisplayMode> FootnoteDisplayModes =
+            new KeywordMap<FootnoteDisplayMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Block, FootnoteDisplayMode.Block},
                 {Keywords.Inline, FootnoteDisplayMode.Inline},
                 {Keywords.Compact, FootnoteDisplayMode.Compact}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FootnotePolicyMode> FootnotePolicyModes =
-            new Dictionary<string, FootnotePolicyMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FootnotePolicyMode> FootnotePolicyModes =
+            new KeywordMap<FootnotePolicyMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, FootnotePolicyMode.Auto},
                 {Keywords.Line, FootnotePolicyMode.Line},
                 {Keywords.Block, FootnotePolicyMode.Block}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, DisplayMode> DisplayModes =
-            new Dictionary<string, DisplayMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<DisplayMode> DisplayModes =
+            new KeywordMap<DisplayMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, DisplayMode.None},
                 {Keywords.Contents, DisplayMode.Contents},
@@ -919,9 +918,9 @@ namespace PeachPDF.CSS
                 {Keywords.MozInlineBox, DisplayMode.InlineFlex},
                 {Keywords.Grid, DisplayMode.Grid},
                 {Keywords.InlineGrid, DisplayMode.InlineGrid}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ClearMode> ClearModes =
-            new Dictionary<string, ClearMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ClearMode> ClearModes =
+            new KeywordMap<ClearMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, ClearMode.None},
                 {Keywords.Left, ClearMode.Left},
@@ -929,17 +928,17 @@ namespace PeachPDF.CSS
                 {Keywords.Both, ClearMode.Both},
                 {Keywords.InlineStart, ClearMode.InlineStart},
                 {Keywords.InlineEnd, ClearMode.InlineEnd}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BackgroundRepeat> BackgroundRepeats =
-            new Dictionary<string, BackgroundRepeat>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BackgroundRepeat> BackgroundRepeats =
+            new KeywordMap<BackgroundRepeat>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.NoRepeat, BackgroundRepeat.NoRepeat},
                 {Keywords.Repeat, BackgroundRepeat.Repeat},
                 {Keywords.Round, BackgroundRepeat.Round},
                 {Keywords.Space, BackgroundRepeat.Space}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, BlendMode> BlendModes =
-            new Dictionary<string, BlendMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<BlendMode> BlendModes =
+            new KeywordMap<BlendMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Color, BlendMode.Color},
                 {Keywords.ColorBurn, BlendMode.ColorBurn},
@@ -957,71 +956,71 @@ namespace PeachPDF.CSS
                 {Keywords.Saturation, BlendMode.Saturation},
                 {Keywords.Screen, BlendMode.Screen},
                 {Keywords.SoftLight, BlendMode.SoftLight}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, UpdateFrequency> UpdateFrequencies =
-            new Dictionary<string, UpdateFrequency>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<UpdateFrequency> UpdateFrequencies =
+            new KeywordMap<UpdateFrequency>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, UpdateFrequency.None},
                 {Keywords.Slow, UpdateFrequency.Slow},
                 {Keywords.Normal, UpdateFrequency.Normal}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ScriptingState> ScriptingStates =
-            new Dictionary<string, ScriptingState>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ScriptingState> ScriptingStates =
+            new KeywordMap<ScriptingState>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, ScriptingState.None},
                 {Keywords.InitialOnly, ScriptingState.InitialOnly},
                 {Keywords.Enabled, ScriptingState.Enabled}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, PointerAccuracy> PointerAccuracies =
-            new Dictionary<string, PointerAccuracy>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<PointerAccuracy> PointerAccuracies =
+            new KeywordMap<PointerAccuracy>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, PointerAccuracy.None},
                 {Keywords.Coarse, PointerAccuracy.Coarse},
                 {Keywords.Fine, PointerAccuracy.Fine}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, HoverAbility> HoverAbilities =
-            new Dictionary<string, HoverAbility>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<HoverAbility> HoverAbilities =
+            new KeywordMap<HoverAbility>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, HoverAbility.None},
                 {Keywords.OnDemand, HoverAbility.OnDemand},
                 {Keywords.Hover, HoverAbility.Hover}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, RadialGradient.SizeMode> RadialGradientSizeModes =
-            new Dictionary<string, RadialGradient.SizeMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<RadialGradient.SizeMode> RadialGradientSizeModes =
+            new KeywordMap<RadialGradient.SizeMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.ClosestSide, RadialGradient.SizeMode.ClosestSide},
                 {Keywords.FarthestSide, RadialGradient.SizeMode.FarthestSide},
                 {Keywords.ClosestCorner, RadialGradient.SizeMode.ClosestCorner},
                 {Keywords.FarthestCorner, RadialGradient.SizeMode.FarthestCorner}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ImageRenderingMode> ImageRenderingModes =
-            new Dictionary<string, ImageRenderingMode>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ImageRenderingMode> ImageRenderingModes =
+            new KeywordMap<ImageRenderingMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, ImageRenderingMode.Auto},
                 {Keywords.Smooth, ImageRenderingMode.Smooth},
                 {Keywords.HighQuality, ImageRenderingMode.HighQuality},
                 {Keywords.CrispEdges, ImageRenderingMode.CrispEdges},
                 {Keywords.Pixelated, ImageRenderingMode.Pixelated}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, ObjectFitting> ObjectFittings =
-            new Dictionary<string, ObjectFitting>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<ObjectFitting> ObjectFittings =
+            new KeywordMap<ObjectFitting>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, ObjectFitting.None},
                 {Keywords.Cover, ObjectFitting.Cover},
                 {Keywords.Contain, ObjectFitting.Contain},
                 {Keywords.Fill, ObjectFitting.Fill},
                 {Keywords.ScaleDown, ObjectFitting.ScaleDown}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontWeight> FontWeights =
-            new Dictionary<string, FontWeight>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FontWeight> FontWeights =
+            new KeywordMap<FontWeight>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, FontWeight.Normal},
                 {Keywords.Bold, FontWeight.Bold},
                 {Keywords.Bolder, FontWeight.Bolder},
                 {Keywords.Lighter, FontWeight.Lighter}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, SystemFont> SystemFonts =
-            new Dictionary<string, SystemFont>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<SystemFont> SystemFonts =
+            new KeywordMap<SystemFont>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Caption, SystemFont.Caption},
                 {Keywords.Icon, SystemFont.Icon},
@@ -1029,79 +1028,79 @@ namespace PeachPDF.CSS
                 {Keywords.MessageBox, SystemFont.MessageBox},
                 {Keywords.SmallCaption, SystemFont.SmallCaption},
                 {Keywords.StatusBar, SystemFont.StatusBar}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, StrokeLinecap> StrokeLinecaps =
-            new Dictionary<string, StrokeLinecap>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<StrokeLinecap> StrokeLinecaps =
+            new KeywordMap<StrokeLinecap>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Butt, StrokeLinecap.Butt},
                 {Keywords.Round, StrokeLinecap.Round},
                 {Keywords.Square, StrokeLinecap.Square}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, StrokeLinejoin> StrokeLinejoins =
-            new Dictionary<string, StrokeLinejoin>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<StrokeLinejoin> StrokeLinejoins =
+            new KeywordMap<StrokeLinejoin>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Miter, StrokeLinejoin.Miter},
                 {Keywords.Round, StrokeLinejoin.Round},
                 {Keywords.Bevel, StrokeLinejoin.Bevel}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, WordBreak> WordBreaks =
-            new Dictionary<string, WordBreak>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<WordBreak> WordBreaks =
+            new KeywordMap<WordBreak>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, WordBreak.Normal},
                 {Keywords.BreakAll, WordBreak.BreakAll},
                 {Keywords.KeepAll, WordBreak.KeepAll}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, LineBreak> LineBreaks =
-            new Dictionary<string, LineBreak>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<LineBreak> LineBreaks =
+            new KeywordMap<LineBreak>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, LineBreak.Auto},
                 {Keywords.Loose, LineBreak.Loose},
                 {Keywords.Normal, LineBreak.Normal},
                 {Keywords.Strict, LineBreak.Strict},
                 {Keywords.Anywhere, LineBreak.Anywhere}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, OverflowWrap> OverflowWraps =
-            new Dictionary<string, OverflowWrap>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<OverflowWrap> OverflowWraps =
+            new KeywordMap<OverflowWrap>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, OverflowWrap.Normal},
                 {Keywords.BreakWord, OverflowWrap.BreakWord},
                 {Keywords.Anywhere, OverflowWrap.Anywhere}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FillRule> FillRules =
-            new Dictionary<string, FillRule>(StringComparer.OrdinalIgnoreCase)
+            }.Freeze();
+        public static readonly KeywordMap<FillRule> FillRules =
+            new KeywordMap<FillRule>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Nonzero, FillRule.Nonzero},
                 {Keywords.Evenodd, FillRule.Evenodd}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, FlexDirection> FlexDirections =
-            new Dictionary<string, FlexDirection>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<FlexDirection> FlexDirections =
+            new KeywordMap<FlexDirection>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Row, FlexDirection.Row },
                 { Keywords.RowReverse, FlexDirection.RowReverse },
                 { Keywords.Column, FlexDirection.Column },
                 { Keywords.ColumnReverse, FlexDirection.ColumnReverse }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, FlexWrap> FlexWraps =
-            new Dictionary<string, FlexWrap>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<FlexWrap> FlexWraps =
+            new KeywordMap<FlexWrap>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Nowrap, FlexWrap.NoWrap },
                 { Keywords.Wrap, FlexWrap.Wrap },
                 { Keywords.WrapReverse, FlexWrap.WrapReverse }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, IntrinsicSizing> IntrinsicSizings =
-            new Dictionary<string, IntrinsicSizing>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<IntrinsicSizing> IntrinsicSizings =
+            new KeywordMap<IntrinsicSizing>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.MaxContent, IntrinsicSizing.MaxContent },
                 { Keywords.MinContent, IntrinsicSizing.MinContent },
                 { Keywords.FitContent, IntrinsicSizing.FitContent },
                 { Keywords.Content, IntrinsicSizing.Content }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, AlignContent> AlignContents =
-            new Dictionary<string, AlignContent>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<AlignContent> AlignContents =
+            new KeywordMap<AlignContent>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Center, AlignContent.Center },
                 { Keywords.Start, AlignContent.Start },
@@ -1114,10 +1113,10 @@ namespace PeachPDF.CSS
                 { Keywords.SpaceAround, AlignContent.SpaceAround },
                 { Keywords.SpaceEvenly, AlignContent.SpaceEvenly },
                 { Keywords.Stretch, AlignContent.Stretch },
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, AlignItem> AlignItems =
-            new Dictionary<string, AlignItem>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<AlignItem> AlignItems =
+            new KeywordMap<AlignItem>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Normal, AlignItem.Normal },
                 { Keywords.Stretch, AlignItem.Stretch },
@@ -1129,14 +1128,14 @@ namespace PeachPDF.CSS
                 { Keywords.SelfStart, AlignItem.SelfStart },
                 { Keywords.SelfEnd, AlignItem.SelfEnd },
                 { Keywords.Baseline, AlignItem.Baseline },
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
         // The four maps below back CssBox's cascaded align-items/align-self/justify-content/align-content
         // storage. CssLayoutEngineFlex/CssLayoutEngineGrid dispatch every keyword listed here - see
         // CssLayoutEngineFlex.ComputeMainOffsets/DistributeCrossSpace/ComputeCrossOffsets and
         // CssLayoutEngineGrid.PositionTracks/AlignmentOffset (issues #644/#645).
-        public static readonly FrozenDictionary<string, AlignItem> AlignItemKeywords =
-            new Dictionary<string, AlignItem>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<AlignItem> AlignItemKeywords =
+            new KeywordMap<AlignItem>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.FlexStart, AlignItem.FlexStart },
                 { Keywords.FlexEnd, AlignItem.FlexEnd },
@@ -1148,10 +1147,10 @@ namespace PeachPDF.CSS
                 { Keywords.Stretch, AlignItem.Stretch },
                 { Keywords.Normal, AlignItem.Normal },
                 { Keywords.Baseline, AlignItem.Baseline }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, AlignItem> AlignSelfKeywords =
-            new Dictionary<string, AlignItem>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<AlignItem> AlignSelfKeywords =
+            new KeywordMap<AlignItem>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Auto, AlignItem.Auto },
                 { Keywords.FlexStart, AlignItem.FlexStart },
@@ -1164,10 +1163,10 @@ namespace PeachPDF.CSS
                 { Keywords.Stretch, AlignItem.Stretch },
                 { Keywords.Normal, AlignItem.Normal },
                 { Keywords.Baseline, AlignItem.Baseline }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, JustifyContent> JustifyContentKeywords =
-            new Dictionary<string, JustifyContent>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<JustifyContent> JustifyContentKeywords =
+            new KeywordMap<JustifyContent>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Normal, JustifyContent.Normal },
                 { Keywords.FlexStart, JustifyContent.FlexStart },
@@ -1181,10 +1180,10 @@ namespace PeachPDF.CSS
                 { Keywords.SpaceAround, JustifyContent.SpaceAround },
                 { Keywords.SpaceEvenly, JustifyContent.SpaceEvenly },
                 { Keywords.Stretch, JustifyContent.Stretch }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, AlignContent> AlignContentKeywords =
-            new Dictionary<string, AlignContent>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<AlignContent> AlignContentKeywords =
+            new KeywordMap<AlignContent>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.FlexStart, AlignContent.FlexStart },
                 { Keywords.FlexEnd, AlignContent.FlexEnd },
@@ -1197,10 +1196,10 @@ namespace PeachPDF.CSS
                 { Keywords.Stretch, AlignContent.Stretch },
                 { Keywords.Baseline, AlignContent.Baseline },
                 { Keywords.Normal, AlignContent.Normal }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, JustifyItem> JustifyItemKeywords =
-            new Dictionary<string, JustifyItem>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<JustifyItem> JustifyItemKeywords =
+            new KeywordMap<JustifyItem>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Start, JustifyItem.Start },
                 { Keywords.End, JustifyItem.End },
@@ -1210,10 +1209,10 @@ namespace PeachPDF.CSS
                 { Keywords.Normal, JustifyItem.Normal },
                 { Keywords.Left, JustifyItem.Left },
                 { Keywords.Right, JustifyItem.Right }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, JustifyItem> JustifySelfKeywords =
-            new Dictionary<string, JustifyItem>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<JustifyItem> JustifySelfKeywords =
+            new KeywordMap<JustifyItem>(StringComparer.OrdinalIgnoreCase)
             {
                 { Keywords.Auto, JustifyItem.Auto },
                 { Keywords.Start, JustifyItem.Start },
@@ -1224,14 +1223,14 @@ namespace PeachPDF.CSS
                 { Keywords.Normal, JustifyItem.Normal },
                 { Keywords.Left, JustifyItem.Left },
                 { Keywords.Right, JustifyItem.Right }
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
 
-        public static readonly FrozenDictionary<string, ContainerType> ContainerTypes =
-            new Dictionary<string, ContainerType>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<ContainerType> ContainerTypes =
+            new KeywordMap<ContainerType>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, ContainerType.Normal},
                 {Keywords.Size, ContainerType.Size},
                 {Keywords.InlineSize, ContainerType.InlineSize}
-            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }.Freeze();
     }
 }
