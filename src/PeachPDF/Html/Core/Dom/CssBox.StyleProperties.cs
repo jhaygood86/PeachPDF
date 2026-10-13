@@ -47,6 +47,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal void ResetComputedStyleToInitial() => _computedStyle = ComputedStyle.Default;
 
+        /// <summary>Takes <paramref name="style"/> as this box's whole computed style: it is immutable, so boxes can hold the same instance.</summary>
+        internal void AdoptComputedStyle(ComputedStyle style) => _computedStyle = style;
+
         /// <summary>
         /// Adopts <paramref name="source"/>'s entire Border and Background style areas by reference -
         /// safe because each area is copy-on-write (see <see cref="InheritStyle"/>'s own remarks). Used

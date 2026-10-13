@@ -45,6 +45,26 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private readonly Dictionary<string, StyleRule> _inlineStyleRuleCache = new();
 
+        /// <summary>
+        /// The computed style a text or anonymous box ends up with, by the style it had going into the cascade and its parent's:
+        /// no rule or attribute reaches such a box, so those two are all the result depends on, and every text box under a
+        /// parent of one style (a table of identical cells) gets the same one. Compared by reference: computed styles are
+        /// shared, and equal ones that are not the same instance would only miss.
+        /// </summary>
+        internal Dictionary<(ComputedStyle Before, ComputedStyle Parent), ComputedStyle> InheritedOnlyStyles { get; } =
+            new(StylePairReferenceComparer.Instance);
+
+        private sealed class StylePairReferenceComparer : IEqualityComparer<(ComputedStyle Before, ComputedStyle Parent)>
+        {
+            internal static readonly StylePairReferenceComparer Instance = new();
+
+            public bool Equals((ComputedStyle Before, ComputedStyle Parent) x, (ComputedStyle Before, ComputedStyle Parent) y) =>
+                ReferenceEquals(x.Before, y.Before) && ReferenceEquals(x.Parent, y.Parent);
+
+            public int GetHashCode((ComputedStyle Before, ComputedStyle Parent) pair) =>
+                HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(pair.Before), System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(pair.Parent));
+        }
+
         #endregion
 
 
