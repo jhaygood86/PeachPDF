@@ -369,6 +369,12 @@ namespace PeachPDF.Html.Core.Dom
                 return WhitespaceRegex().Replace(cssBox.Text.Trim(), " ");
             }
 
+            if (!string.IsNullOrEmpty(cssBox.ForeignText))
+            {
+                // A MathML token's text held on its element (CssBox.ForeignText): what its one text box carried.
+                return WhitespaceRegex().Replace(cssBox.ForeignText.Trim(), " ");
+            }
+
             // If no direct text, collect text from child boxes
             var textBuilder = new StringBuilder();
             CollectTextFromChildren(cssBox, textBuilder);
@@ -393,6 +399,12 @@ namespace PeachPDF.Html.Core.Dom
                 if (!string.IsNullOrEmpty(childBox.Text))
                 {
                     builder.Append(childBox.Text);
+                    builder.Append(' ');
+                }
+                else if (!string.IsNullOrEmpty(childBox.ForeignText))
+                {
+                    // A MathML token's text held on its element (CssBox.ForeignText), as the text box it replaces was.
+                    builder.Append(childBox.ForeignText);
                     builder.Append(' ');
                 }
                 else

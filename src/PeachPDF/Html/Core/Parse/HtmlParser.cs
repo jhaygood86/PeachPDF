@@ -149,6 +149,9 @@ namespace PeachPDF.Html.Core.Parse
 
             if (text == null) return;
 
+            // A MathML token's text stays on its element (see CssBox.ForeignText).
+            if (curBox.TryAbsorbForeignText(text)) return;
+
             var box = CssBox.CreateBox(curBox);
             box.Text = text;
         }
