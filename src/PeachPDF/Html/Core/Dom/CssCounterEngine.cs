@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Dom
         public static CssCounter? GetCounter(CssBox box, string counterName)
         {
             InheritAndApplyCounter(box, counterName);
-            return box.Counters.GetValueOrDefault(counterName);
+            return box.GetCounterOrNull(counterName);
         }
 
         /// <summary>
@@ -108,7 +108,7 @@ namespace PeachPDF.Html.Core.Dom
                 var initialValue = entry.Value
                     ?? (entry.IsReversed ? CountScopeIncrements(box, entry.Name) + 1 : 0);
 
-                var parentScopeCounter = box.Counters.GetValueOrDefault(entry.Name);
+                var parentScopeCounter = box.GetCounterOrNull(entry.Name);
                 box.Counters[entry.Name] = new CssCounter(entry.Name, initialValue, entry.IsReversed, true, parentScopeCounter, ScopeParentOf(box, entry.Name));
             }
         }
@@ -124,7 +124,7 @@ namespace PeachPDF.Html.Core.Dom
 
         private static void SetCounterValue(CssBox box, string counterName, int value)
         {
-            var existing = box.Counters.GetValueOrDefault(counterName);
+            var existing = box.GetCounterOrNull(counterName);
             box.Counters[counterName] = existing is not null
                 ? existing with { Value = value }
                 : new CssCounter(counterName, value, false, false, null, ScopeParentOf(box, counterName));
@@ -150,13 +150,13 @@ namespace PeachPDF.Html.Core.Dom
             // element still wins (already captured above, so it's not overwritten below).
             if (box.DerivedStyle.ActualDisplay == Keywords.ListItem && !incrementValues.ContainsKey(Keywords.ListItem))
             {
-                var currentListItemCounter = box.Counters.GetValueOrDefault(Keywords.ListItem);
+                var currentListItemCounter = box.GetCounterOrNull(Keywords.ListItem);
                 incrementValues[Keywords.ListItem] = currentListItemCounter is { IsReversed: true } ? -1 : 1;
             }
 
             foreach (var incrementEntry in incrementValues)
             {
-                if (box.Counters.TryGetValue(incrementEntry.Key, out var counterValue))
+                if (box.TryGetCounter(incrementEntry.Key, out var counterValue))
                 {
                     var targetValue = counterValue.Value + incrementEntry.Value;
 
@@ -305,7 +305,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var hasNewScope = false;
 
-            if (currentBox.Counters.TryGetValue(counterName, out var currentBoxValue))
+            if (currentBox.TryGetCounter(counterName, out var currentBoxValue))
             {
                 hasNewScope = currentBoxValue.IsNewScope;
             }
@@ -316,7 +316,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 InheritAndApplyCounter(parentBox, counterName);
 
-                if (parentBox is not null && parentBox.Counters.TryGetValue(counterName, out var parentCounterValue)
+                if (parentBox is not null && parentBox.TryGetCounter(counterName, out var parentCounterValue)
                     && IsInScope(currentBox, parentCounterValue))
                 {
                     currentBox.Counters[counterName] = parentCounterValue with
@@ -333,7 +333,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     InheritAndApplyCounter(lastChildInScope, counterName);
 
-                    if (lastChildInScope.Counters.TryGetValue(counterName, out var lastChildCounterValue)
+                    if (lastChildInScope.TryGetCounter(counterName, out var lastChildCounterValue)
                         && IsInScope(currentBox, lastChildCounterValue))
                     {
                         currentBox.Counters[counterName] = lastChildCounterValue with
@@ -440,7 +440,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var childBox in box.Boxes)
                 {
-                    if (childBox.Counters.TryGetValue(counterName, out var counter))
+                    if (childBox.TryGetCounter(counterName, out var counter))
                     {
                         if (counter.IsNewScope)
                         {

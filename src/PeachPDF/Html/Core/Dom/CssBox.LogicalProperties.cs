@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -20,33 +21,33 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal partial class CssBox
     {
-        internal string? MarginBlockStart { get; set; }
-        internal string? MarginBlockEnd { get; set; }
-        internal string? MarginInlineStart { get; set; }
-        internal string? MarginInlineEnd { get; set; }
+        internal string? MarginBlockStart { get => _rare is null ? default(string?) : _rare.MarginBlockStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginBlockStart = value; } }
+        internal string? MarginBlockEnd { get => _rare is null ? default(string?) : _rare.MarginBlockEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginBlockEnd = value; } }
+        internal string? MarginInlineStart { get => _rare is null ? default(string?) : _rare.MarginInlineStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginInlineStart = value; } }
+        internal string? MarginInlineEnd { get => _rare is null ? default(string?) : _rare.MarginInlineEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.MarginInlineEnd = value; } }
 
-        internal string? PaddingBlockStart { get; set; }
-        internal string? PaddingBlockEnd { get; set; }
-        internal string? PaddingInlineStart { get; set; }
-        internal string? PaddingInlineEnd { get; set; }
+        internal string? PaddingBlockStart { get => _rare is null ? default(string?) : _rare.PaddingBlockStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.PaddingBlockStart = value; } }
+        internal string? PaddingBlockEnd { get => _rare is null ? default(string?) : _rare.PaddingBlockEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.PaddingBlockEnd = value; } }
+        internal string? PaddingInlineStart { get => _rare is null ? default(string?) : _rare.PaddingInlineStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.PaddingInlineStart = value; } }
+        internal string? PaddingInlineEnd { get => _rare is null ? default(string?) : _rare.PaddingInlineEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.PaddingInlineEnd = value; } }
 
-        internal string? InsetBlockStart { get; set; }
-        internal string? InsetBlockEnd { get; set; }
-        internal string? InsetInlineStart { get; set; }
-        internal string? InsetInlineEnd { get; set; }
+        internal string? InsetBlockStart { get => _rare is null ? default(string?) : _rare.InsetBlockStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.InsetBlockStart = value; } }
+        internal string? InsetBlockEnd { get => _rare is null ? default(string?) : _rare.InsetBlockEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.InsetBlockEnd = value; } }
+        internal string? InsetInlineStart { get => _rare is null ? default(string?) : _rare.InsetInlineStart; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.InsetInlineStart = value; } }
+        internal string? InsetInlineEnd { get => _rare is null ? default(string?) : _rare.InsetInlineEnd; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.InsetInlineEnd = value; } }
 
-        internal string? BorderBlockStartWidth { get; set; }
-        internal string? BorderBlockStartStyle { get; set; }
-        internal string? BorderBlockStartColor { get; set; }
-        internal string? BorderBlockEndWidth { get; set; }
-        internal string? BorderBlockEndStyle { get; set; }
-        internal string? BorderBlockEndColor { get; set; }
-        internal string? BorderInlineStartWidth { get; set; }
-        internal string? BorderInlineStartStyle { get; set; }
-        internal string? BorderInlineStartColor { get; set; }
-        internal string? BorderInlineEndWidth { get; set; }
-        internal string? BorderInlineEndStyle { get; set; }
-        internal string? BorderInlineEndColor { get; set; }
+        internal string? BorderBlockStartWidth { get => _rare is null ? default(string?) : _rare.BorderBlockStartWidth; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderBlockStartWidth = value; } }
+        internal string? BorderBlockStartStyle { get => _rare is null ? default(string?) : _rare.BorderBlockStartStyle; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderBlockStartStyle = value; } }
+        internal string? BorderBlockStartColor { get => _rare is null ? default(string?) : _rare.BorderBlockStartColor; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderBlockStartColor = value; } }
+        internal string? BorderBlockEndWidth { get => _rare is null ? default(string?) : _rare.BorderBlockEndWidth; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderBlockEndWidth = value; } }
+        internal string? BorderBlockEndStyle { get => _rare is null ? default(string?) : _rare.BorderBlockEndStyle; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderBlockEndStyle = value; } }
+        internal string? BorderBlockEndColor { get => _rare is null ? default(string?) : _rare.BorderBlockEndColor; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderBlockEndColor = value; } }
+        internal string? BorderInlineStartWidth { get => _rare is null ? default(string?) : _rare.BorderInlineStartWidth; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineStartWidth = value; } }
+        internal string? BorderInlineStartStyle { get => _rare is null ? default(string?) : _rare.BorderInlineStartStyle; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineStartStyle = value; } }
+        internal string? BorderInlineStartColor { get => _rare is null ? default(string?) : _rare.BorderInlineStartColor; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineStartColor = value; } }
+        internal string? BorderInlineEndWidth { get => _rare is null ? default(string?) : _rare.BorderInlineEndWidth; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineEndWidth = value; } }
+        internal string? BorderInlineEndStyle { get => _rare is null ? default(string?) : _rare.BorderInlineEndStyle; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineEndStyle = value; } }
+        internal string? BorderInlineEndColor { get => _rare is null ? default(string?) : _rare.BorderInlineEndColor; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineEndColor = value; } }
 
         /// <summary>
         /// Resolves every logical margin/padding/inset/border value cascaded onto this box (any of the

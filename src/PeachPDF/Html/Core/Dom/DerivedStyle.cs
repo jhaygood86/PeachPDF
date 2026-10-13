@@ -34,13 +34,75 @@ namespace PeachPDF.Html.Core.Dom
     {
         private ComputedStyle Style => Owner.ComputedStyle;
 
+        private PaintExtras? _paint;
+        private ShapingExtras? _shaping;
+
+        /// <summary>Whether the paint-side caches (border colors, outline, radii, transform, ...) have been allocated.</summary>
+        internal bool HasPaintExtras => _paint is not null;
+
+        /// <summary>Whether the text-shaping caches have been allocated.</summary>
+        internal bool HasShapingExtras => _shaping is not null;
+
+        private PaintExtras Paint => _paint ??= new PaintExtras();
+        private ShapingExtras Shaping => _shaping ??= new ShapingExtras();
+
+        /// <summary>The paint-side caches most boxes never touch (border colors, outline, radii, transform, column rule), held apart so a box without them does not carry the space.</summary>
+        internal sealed class PaintExtras
+        {
+            internal PaintColor _actualBorderTopColor = PaintColor.Empty;
+            internal PaintColor _actualBorderRightColor = PaintColor.Empty;
+            internal PaintColor _actualBorderBottomColor = PaintColor.Empty;
+            internal PaintColor _actualBorderLeftColor = PaintColor.Empty;
+            internal double _actualColumnRuleWidth = double.NaN;
+            internal PaintColor _actualColumnRuleColor = PaintColor.Empty;
+            internal double _actualOutlineWidth = double.NaN;
+            internal PaintColor _actualOutlineColor = PaintColor.Empty;
+            internal double _actualOutlineOffset = double.NaN;
+            internal double _actualBorderTopLeftRadiusX = double.NaN;
+            internal double _actualBorderTopLeftRadiusY = double.NaN;
+            internal double _actualBorderTopRightRadiusX = double.NaN;
+            internal double _actualBorderTopRightRadiusY = double.NaN;
+            internal double _actualBorderBottomRightRadiusX = double.NaN;
+            internal double _actualBorderBottomRightRadiusY = double.NaN;
+            internal double _actualBorderBottomLeftRadiusX = double.NaN;
+            internal double _actualBorderBottomLeftRadiusY = double.NaN;
+            internal bool _actualTransformComputed;
+            internal Matrix3x2 _actualTransformMatrix;
+            internal Matrix4x4? _actualTransform4;
+            internal bool? _hasTransform;
+            internal double _actualPerspective = double.NaN;
+        }
+
+        /// <summary>The text-shaping caches only a box that shapes text touches, held apart for the same reason.</summary>
+        internal sealed class ShapingExtras
+        {
+            internal LigatureSet? _actualFontVariantLigatures;
+            internal CapsMode? _actualFontVariantCaps;
+            internal SubSuperMode? _requestedFontVariantPosition;
+            internal SubSuperMode? _actualFontVariantPosition;
+            internal NumeralSet? _actualFontVariantNumeric;
+            internal EastAsianSet? _actualFontVariantEastAsian;
+            internal IReadOnlyList<(string Tag, int Value)>? _actualFontFeatureSettings;
+            internal IReadOnlyList<(string Tag, int Value)>? _actualFontVariantAlternates;
+            internal bool? _actualFontKerning;
+            internal ShapeSettings? _actualTextShapingFeatures;
+            internal Font? _smallCapsFont;
+            internal bool _subSuperscriptSynthesisResolved;
+            internal (double SizeScale, double BaselineShift)? _subSuperscriptSynthesis;
+            internal Font? _subSuperscriptFont;
+            internal Dictionary<(int Codepoint, double Scale, EmojiPresentation Presentation), Font>? _codepointFontCache;
+            internal double?[]? _fontRatioCache;
+            internal FontPalette? _actualFontPalette;
+            internal bool _actualFontPaletteResolved;
+        }
+
+
         #region Border widths
 
         private double _actualBorderTopWidth = double.NaN;
         private double _actualBorderRightWidth = double.NaN;
         private double _actualBorderBottomWidth = double.NaN;
         private double _actualBorderLeftWidth = double.NaN;
-        private double _actualColumnRuleWidth = double.NaN;
 
         public double ActualBorderTopWidth
         {
@@ -103,13 +165,13 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (!double.IsNaN(_actualColumnRuleWidth)) return _actualColumnRuleWidth;
+                if (!double.IsNaN(Paint._actualColumnRuleWidth)) return Paint._actualColumnRuleWidth;
 
-                _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(Style.MultiColumn.ColumnRuleWidth, Owner);
+                Paint._actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(Style.MultiColumn.ColumnRuleWidth, Owner);
                 if (Style.MultiColumn.ColumnRuleStyle.Value is LineStyle.None or LineStyle.Hidden)
-                    _actualColumnRuleWidth = 0f;
+                    Paint._actualColumnRuleWidth = 0f;
 
-                return _actualColumnRuleWidth;
+                return Paint._actualColumnRuleWidth;
             }
         }
 
@@ -181,19 +243,14 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Border colors
 
-        private PaintColor _actualBorderTopColor = PaintColor.Empty;
-        private PaintColor _actualBorderRightColor = PaintColor.Empty;
-        private PaintColor _actualBorderBottomColor = PaintColor.Empty;
-        private PaintColor _actualBorderLeftColor = PaintColor.Empty;
-        private PaintColor _actualColumnRuleColor = PaintColor.Empty;
 
         public PaintColor ActualBorderTopColor
         {
             get
             {
-                if (_actualBorderTopColor.IsEmpty)
-                    _actualBorderTopColor = ResolveBorderSideColor(Style.Border.BorderTopColor, Style.Border.BorderTopStyle.Value);
-                return _actualBorderTopColor;
+                if (Paint._actualBorderTopColor.IsEmpty)
+                    Paint._actualBorderTopColor = ResolveBorderSideColor(Style.Border.BorderTopColor, Style.Border.BorderTopStyle.Value);
+                return Paint._actualBorderTopColor;
             }
         }
 
@@ -201,9 +258,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderRightColor.IsEmpty)
-                    _actualBorderRightColor = ResolveBorderSideColor(Style.Border.BorderRightColor, Style.Border.BorderRightStyle.Value);
-                return _actualBorderRightColor;
+                if (Paint._actualBorderRightColor.IsEmpty)
+                    Paint._actualBorderRightColor = ResolveBorderSideColor(Style.Border.BorderRightColor, Style.Border.BorderRightStyle.Value);
+                return Paint._actualBorderRightColor;
             }
         }
 
@@ -211,9 +268,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderBottomColor.IsEmpty)
-                    _actualBorderBottomColor = ResolveBorderSideColor(Style.Border.BorderBottomColor, Style.Border.BorderBottomStyle.Value);
-                return _actualBorderBottomColor;
+                if (Paint._actualBorderBottomColor.IsEmpty)
+                    Paint._actualBorderBottomColor = ResolveBorderSideColor(Style.Border.BorderBottomColor, Style.Border.BorderBottomStyle.Value);
+                return Paint._actualBorderBottomColor;
             }
         }
 
@@ -221,9 +278,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderLeftColor.IsEmpty)
-                    _actualBorderLeftColor = ResolveBorderSideColor(Style.Border.BorderLeftColor, Style.Border.BorderLeftStyle.Value);
-                return _actualBorderLeftColor;
+                if (Paint._actualBorderLeftColor.IsEmpty)
+                    Paint._actualBorderLeftColor = ResolveBorderSideColor(Style.Border.BorderLeftColor, Style.Border.BorderLeftStyle.Value);
+                return Paint._actualBorderLeftColor;
             }
         }
 
@@ -281,35 +338,56 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualColumnRuleColor.IsEmpty) _actualColumnRuleColor = Owner.GetActualColor(Style.MultiColumn.ColumnRuleColor);
-                return _actualColumnRuleColor;
+                if (Paint._actualColumnRuleColor.IsEmpty) Paint._actualColumnRuleColor = Owner.GetActualColor(Style.MultiColumn.ColumnRuleColor);
+                return Paint._actualColumnRuleColor;
             }
         }
 
-        internal void InvalidateBorderTopColor() => _actualBorderTopColor = PaintColor.Empty;
-        internal void InvalidateBorderRightColor() => _actualBorderRightColor = PaintColor.Empty;
-        internal void InvalidateBorderBottomColor() => _actualBorderBottomColor = PaintColor.Empty;
-        internal void InvalidateBorderLeftColor() => _actualBorderLeftColor = PaintColor.Empty;
+        internal void InvalidateBorderTopColor()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderTopColor = PaintColor.Empty;
+            }
+        }
+        internal void InvalidateBorderRightColor()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderRightColor = PaintColor.Empty;
+            }
+        }
+        internal void InvalidateBorderBottomColor()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderBottomColor = PaintColor.Empty;
+            }
+        }
+        internal void InvalidateBorderLeftColor()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderLeftColor = PaintColor.Empty;
+            }
+        }
 
         #endregion
 
         #region Outline
 
-        private double _actualOutlineWidth = double.NaN;
-        private PaintColor _actualOutlineColor = PaintColor.Empty;
-        private double _actualOutlineOffset = double.NaN;
 
         public double ActualOutlineWidth
         {
             get
             {
-                if (!double.IsNaN(_actualOutlineWidth)) return _actualOutlineWidth;
+                if (!double.IsNaN(Paint._actualOutlineWidth)) return Paint._actualOutlineWidth;
 
-                _actualOutlineWidth = CssValueParser.GetActualBorderWidth(Style.Border.OutlineWidth, Owner);
+                Paint._actualOutlineWidth = CssValueParser.GetActualBorderWidth(Style.Border.OutlineWidth, Owner);
                 if (Style.Border.OutlineStyle.Value == OutlineStyle.None)
-                    _actualOutlineWidth = 0f;
+                    Paint._actualOutlineWidth = 0f;
 
-                return _actualOutlineWidth;
+                return Paint._actualOutlineWidth;
             }
         }
 
@@ -322,8 +400,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualOutlineColor.IsEmpty) _actualOutlineColor = Owner.GetActualColor(Style.Border.OutlineColor);
-                return _actualOutlineColor;
+                if (Paint._actualOutlineColor.IsEmpty) Paint._actualOutlineColor = Owner.GetActualColor(Style.Border.OutlineColor);
+                return Paint._actualOutlineColor;
             }
         }
 
@@ -331,36 +409,46 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (!double.IsNaN(_actualOutlineOffset)) return _actualOutlineOffset;
-                _actualOutlineOffset = CssValueParser.ParseLength(Style.Border.OutlineOffset, 0, Owner);
-                return _actualOutlineOffset;
+                if (!double.IsNaN(Paint._actualOutlineOffset)) return Paint._actualOutlineOffset;
+                Paint._actualOutlineOffset = CssValueParser.ParseLength(Style.Border.OutlineOffset, 0, Owner);
+                return Paint._actualOutlineOffset;
             }
         }
 
-        internal void InvalidateOutlineWidth() => _actualOutlineWidth = double.NaN;
-        internal void InvalidateOutlineColor() => _actualOutlineColor = PaintColor.Empty;
-        internal void InvalidateOutlineOffset() => _actualOutlineOffset = double.NaN;
+        internal void InvalidateOutlineWidth()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualOutlineWidth = double.NaN;
+            }
+        }
+        internal void InvalidateOutlineColor()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualOutlineColor = PaintColor.Empty;
+            }
+        }
+        internal void InvalidateOutlineOffset()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualOutlineOffset = double.NaN;
+            }
+        }
 
         #endregion
 
         #region Border radii
 
-        private double _actualBorderTopLeftRadiusX = double.NaN;
-        private double _actualBorderTopLeftRadiusY = double.NaN;
-        private double _actualBorderTopRightRadiusX = double.NaN;
-        private double _actualBorderTopRightRadiusY = double.NaN;
-        private double _actualBorderBottomRightRadiusX = double.NaN;
-        private double _actualBorderBottomRightRadiusY = double.NaN;
-        private double _actualBorderBottomLeftRadiusX = double.NaN;
-        private double _actualBorderBottomLeftRadiusY = double.NaN;
 
         public double ActualBorderTopLeftRadiusX
         {
             get
             {
-                if (double.IsNaN(_actualBorderTopLeftRadiusX))
-                    _actualBorderTopLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderTopLeftRadius), Owner.ActualBoxSizingWidth, Owner);
-                return _actualBorderTopLeftRadiusX;
+                if (double.IsNaN(Paint._actualBorderTopLeftRadiusX))
+                    Paint._actualBorderTopLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderTopLeftRadius), Owner.ActualBoxSizingWidth, Owner);
+                return Paint._actualBorderTopLeftRadiusX;
             }
         }
 
@@ -368,9 +456,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderTopLeftRadiusY))
-                    _actualBorderTopLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderTopLeftRadius), Owner.ActualBoxSizingHeight, Owner);
-                return _actualBorderTopLeftRadiusY;
+                if (double.IsNaN(Paint._actualBorderTopLeftRadiusY))
+                    Paint._actualBorderTopLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderTopLeftRadius), Owner.ActualBoxSizingHeight, Owner);
+                return Paint._actualBorderTopLeftRadiusY;
             }
         }
 
@@ -378,9 +466,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderTopRightRadiusX))
-                    _actualBorderTopRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderTopRightRadius), Owner.ActualBoxSizingWidth, Owner);
-                return _actualBorderTopRightRadiusX;
+                if (double.IsNaN(Paint._actualBorderTopRightRadiusX))
+                    Paint._actualBorderTopRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderTopRightRadius), Owner.ActualBoxSizingWidth, Owner);
+                return Paint._actualBorderTopRightRadiusX;
             }
         }
 
@@ -388,9 +476,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderTopRightRadiusY))
-                    _actualBorderTopRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderTopRightRadius), Owner.ActualBoxSizingHeight, Owner);
-                return _actualBorderTopRightRadiusY;
+                if (double.IsNaN(Paint._actualBorderTopRightRadiusY))
+                    Paint._actualBorderTopRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderTopRightRadius), Owner.ActualBoxSizingHeight, Owner);
+                return Paint._actualBorderTopRightRadiusY;
             }
         }
 
@@ -398,9 +486,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderBottomRightRadiusX))
-                    _actualBorderBottomRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderBottomRightRadius), Owner.ActualBoxSizingWidth, Owner);
-                return _actualBorderBottomRightRadiusX;
+                if (double.IsNaN(Paint._actualBorderBottomRightRadiusX))
+                    Paint._actualBorderBottomRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderBottomRightRadius), Owner.ActualBoxSizingWidth, Owner);
+                return Paint._actualBorderBottomRightRadiusX;
             }
         }
 
@@ -408,9 +496,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderBottomRightRadiusY))
-                    _actualBorderBottomRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderBottomRightRadius), Owner.ActualBoxSizingHeight, Owner);
-                return _actualBorderBottomRightRadiusY;
+                if (double.IsNaN(Paint._actualBorderBottomRightRadiusY))
+                    Paint._actualBorderBottomRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderBottomRightRadius), Owner.ActualBoxSizingHeight, Owner);
+                return Paint._actualBorderBottomRightRadiusY;
             }
         }
 
@@ -418,9 +506,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderBottomLeftRadiusX))
-                    _actualBorderBottomLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderBottomLeftRadius), Owner.ActualBoxSizingWidth, Owner);
-                return _actualBorderBottomLeftRadiusX;
+                if (double.IsNaN(Paint._actualBorderBottomLeftRadiusX))
+                    Paint._actualBorderBottomLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderBottomLeftRadius), Owner.ActualBoxSizingWidth, Owner);
+                return Paint._actualBorderBottomLeftRadiusX;
             }
         }
 
@@ -428,34 +516,46 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (double.IsNaN(_actualBorderBottomLeftRadiusY))
-                    _actualBorderBottomLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderBottomLeftRadius), Owner.ActualBoxSizingHeight, Owner);
-                return _actualBorderBottomLeftRadiusY;
+                if (double.IsNaN(Paint._actualBorderBottomLeftRadiusY))
+                    Paint._actualBorderBottomLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderBottomLeftRadius), Owner.ActualBoxSizingHeight, Owner);
+                return Paint._actualBorderBottomLeftRadiusY;
             }
         }
 
         internal void InvalidateBorderTopLeftRadius()
         {
-            _actualBorderTopLeftRadiusX = double.NaN;
-            _actualBorderTopLeftRadiusY = double.NaN;
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderTopLeftRadiusX = double.NaN;
+                paintExtras._actualBorderTopLeftRadiusY = double.NaN;
+            }
         }
 
         internal void InvalidateBorderTopRightRadius()
         {
-            _actualBorderTopRightRadiusX = double.NaN;
-            _actualBorderTopRightRadiusY = double.NaN;
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderTopRightRadiusX = double.NaN;
+                paintExtras._actualBorderTopRightRadiusY = double.NaN;
+            }
         }
 
         internal void InvalidateBorderBottomRightRadius()
         {
-            _actualBorderBottomRightRadiusX = double.NaN;
-            _actualBorderBottomRightRadiusY = double.NaN;
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderBottomRightRadiusX = double.NaN;
+                paintExtras._actualBorderBottomRightRadiusY = double.NaN;
+            }
         }
 
         internal void InvalidateBorderBottomLeftRadius()
         {
-            _actualBorderBottomLeftRadiusX = double.NaN;
-            _actualBorderBottomLeftRadiusY = double.NaN;
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualBorderBottomLeftRadiusX = double.NaN;
+                paintExtras._actualBorderBottomLeftRadiusY = double.NaN;
+            }
         }
 
         // Returns the first top-level-whitespace-delimited token in a CSS value string (paren-depth-aware,
@@ -664,9 +764,6 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Transform, opacity
 
-        private bool _actualTransformComputed;
-        private Matrix3x2 _actualTransformMatrix;
-        private Matrix4x4? _actualTransform4;
 
         /// <summary>
         /// Lazily computes the combined 2D transform matrix for the <c>transform</c>/<c>transform-origin</c>
@@ -677,14 +774,17 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (!_actualTransformComputed)
+                // Nearly every box has no transform: answer without a cache (and so without the paint extras).
+                if (_paint is not { _actualTransformComputed: true } && IsNoneValue(Style.VisualEffects.Transform)) return Matrix3x2.Identity;
+
+                if (!Paint._actualTransformComputed)
                 {
-                    (_actualTransformMatrix, _actualTransform4) = IsTransformable
+                    (Paint._actualTransformMatrix, Paint._actualTransform4) = IsTransformable
                         ? CssValueParser.ParseTransformFull(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner)
                         : (Matrix3x2.Identity, null);
-                    _actualTransformComputed = true;
+                    Paint._actualTransformComputed = true;
                 }
-                return _actualTransformMatrix;
+                return Paint._actualTransformMatrix;
             }
         }
 
@@ -696,8 +796,10 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
+                if (_paint is not { _actualTransformComputed: true } && IsNoneValue(Style.VisualEffects.Transform)) return null;
+
                 _ = ActualTransformMatrix;
-                return _actualTransform4;
+                return Paint._actualTransform4;
             }
         }
 
@@ -737,34 +839,38 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 // Cached: the stacking-context predicate asks this of every box from several places.
-                if (_hasTransform is { } cached) return cached;
+                if (_paint?._hasTransform is { } cached) return cached;
+                if (IsNoneValue(Style.VisualEffects.Transform)) return false;
 
                 var value = Style.VisualEffects.Transform;
                 var has = IsTransformable
                     && !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
-                _hasTransform = has;
+                Paint._hasTransform = has;
                 return has;
             }
         }
 
-        private bool? _hasTransform;
 
-        private double _actualPerspective = double.NaN;
 
         /// <summary>The <c>perspective</c> distance this box gives its children, in layout units; 0 for <c>none</c>.</summary>
+        private static bool IsNoneValue(string? value) =>
+            string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+
         public double ActualPerspective
         {
             get
             {
-                if (double.IsNaN(_actualPerspective))
+                if (_paint is null && IsNoneValue(Style.VisualEffects.Perspective)) return 0;
+
+                if (double.IsNaN(Paint._actualPerspective))
                 {
                     var value = Style.VisualEffects.Perspective;
-                    _actualPerspective = !IsTransformable || string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                    Paint._actualPerspective = !IsTransformable || string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
                         ? 0
                         : Math.Max(0, CssValueParser.ParseLength(value, 0, Owner));
                 }
 
-                return _actualPerspective;
+                return Paint._actualPerspective;
             }
         }
 
@@ -788,11 +894,20 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateTransform()
         {
-            _actualTransformComputed = false;
-            _hasTransform = null;
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualTransformComputed = false;
+                paintExtras._hasTransform = null;
+            }
         }
 
-        internal void InvalidatePerspective() => _actualPerspective = double.NaN;
+        internal void InvalidatePerspective()
+        {
+            if (_paint is { } paintExtras)
+            {
+                paintExtras._actualPerspective = double.NaN;
+            }
+        }
 
         private bool _actualOpacityComputed;
         private double _actualOpacity;
@@ -821,8 +936,11 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateOpacity() => _actualOpacityComputed = false;
 
+        // Nearly every box has no filter: one shared empty list instead of two per box.
+        private static readonly List<FilterGrammar.FilterFunction> NoFilterFunctions = [];
+
         private bool _filterFunctionsComputed;
-        private List<FilterGrammar.FilterFunction> _filterFunctions = [];
+        private List<FilterGrammar.FilterFunction>? _filterFunctions;
 
         /// <summary>
         /// Lazily parses the used value of the <c>filter</c> property (Filter Effects Level 1 §3) into its
@@ -842,18 +960,18 @@ namespace PeachPDF.Html.Core.Dom
                     using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.Filter))
                     {
                         List<Token> tokens = pooledTokens;
-                        _filterFunctions = FilterGrammar.TryParse(tokens) ?? [];
+                        _filterFunctions = FilterGrammar.TryParse(tokens);
                     }
                     _filterFunctionsComputed = true;
                 }
-                return _filterFunctions;
+                return _filterFunctions ?? NoFilterFunctions;
             }
         }
 
         internal void InvalidateFilter() => _filterFunctionsComputed = false;
 
         private bool _backdropFilterFunctionsComputed;
-        private List<FilterGrammar.FilterFunction> _backdropFilterFunctions = [];
+        private List<FilterGrammar.FilterFunction>? _backdropFilterFunctions;
 
         /// <summary>
         /// Lazily parses the used value of <c>backdrop-filter</c> (Filter Effects Level 2 §3.1) into its ordered function list -
@@ -868,13 +986,13 @@ namespace PeachPDF.Html.Core.Dom
                     using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.BackdropFilter))
                     {
                         List<Token> tokens = pooledTokens;
-                        _backdropFilterFunctions = FilterGrammar.TryParse(tokens) ?? [];
+                        _backdropFilterFunctions = FilterGrammar.TryParse(tokens);
                     }
 
                     _backdropFilterFunctionsComputed = true;
                 }
 
-                return _backdropFilterFunctions;
+                return _backdropFilterFunctions ?? NoFilterFunctions;
             }
         }
 
@@ -1153,8 +1271,6 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Font palette
 
-        private FontPalette? _actualFontPalette;
-        private bool _actualFontPaletteResolved;
 
         /// <summary>
         /// The resolved <c>font-palette</c> selection for this box's used font (CSS Fonts 4), or null for
@@ -1164,23 +1280,25 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (!_actualFontPaletteResolved)
+                if (!Shaping._actualFontPaletteResolved)
                 {
-                    _actualFontPalette = FontPaletteResolver.Resolve(Style.Font.FontPalette, ActualFont, Style.Font.FontFamily, Owner.FontPaletteValuesRegistry);
-                    _actualFontPaletteResolved = true;
+                    Shaping._actualFontPalette = FontPaletteResolver.Resolve(Style.Font.FontPalette, ActualFont, Style.Font.FontFamily, Owner.FontPaletteValuesRegistry);
+                    Shaping._actualFontPaletteResolved = true;
                 }
 
-                return _actualFontPalette;
+                return Shaping._actualFontPalette;
             }
         }
 
         internal void InvalidateFontPalette()
         {
-            _actualFontPaletteResolved = false;
-            _actualFontPalette = null;
+            if (_shaping is { } shapingExtras)
+            {
+                shapingExtras._actualFontPaletteResolved = false;
+                shapingExtras._actualFontPalette = null;
+            }
         }
 
-        private LigatureSet? _actualFontVariantLigatures;
 
         /// <summary>
         /// The resolved GSUB ligature features (see <see cref="LigatureSet"/>) for this box's
@@ -1194,10 +1312,9 @@ namespace PeachPDF.Html.Core.Dom
         /// axis is resolved independently rather than as one all-or-nothing default.
         /// </summary>
         public LigatureSet ActualFontVariantLigatures =>
-            _actualFontVariantLigatures ??= TextShapingFeatureResolver.ResolveLigatures(
+            Shaping._actualFontVariantLigatures ??= TextShapingFeatureResolver.ResolveLigatures(
                 TextShapingFeatureResolver.ApplyTextRendering(Style.Font.FontVariantLigatures, Style.Font.TextRendering.Value));
 
-        private CapsMode? _actualFontVariantCaps;
 
         /// <summary>
         /// The caps feature that should actually be requested from the shaping layer for this box's
@@ -1210,7 +1327,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualFontVariantCaps is { } cached) return cached;
+                if (Shaping._actualFontVariantCaps is { } cached) return cached;
 
                 var requested = TextShapingFeatureResolver.ResolveCapsRequested(Style.Font.FontVariantCaps.Value);
 
@@ -1218,13 +1335,11 @@ namespace PeachPDF.Html.Core.Dom
                     ? requested
                     : CapsMode.None;
 
-                _actualFontVariantCaps = resolved;
+                Shaping._actualFontVariantCaps = resolved;
                 return resolved;
             }
         }
 
-        private SubSuperMode? _requestedFontVariantPosition;
-        private SubSuperMode? _actualFontVariantPosition;
 
         /// <summary>
         /// The <c>font-variant-position</c> keyword this box's style asks for, before any capability
@@ -1233,7 +1348,7 @@ namespace PeachPDF.Html.Core.Dom
         /// has real <c>subs</c>/<c>sups</c> glyphs or the effect has to be synthesized.
         /// </summary>
         public SubSuperMode RequestedFontVariantPosition =>
-            _requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition.Value);
+            Shaping._requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition.Value);
 
         /// <summary>
         /// The position feature that should actually be requested from the shaping layer:
@@ -1248,7 +1363,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualFontVariantPosition is { } cached) return cached;
+                if (Shaping._actualFontVariantPosition is { } cached) return cached;
 
                 var requested = RequestedFontVariantPosition;
 
@@ -1256,27 +1371,24 @@ namespace PeachPDF.Html.Core.Dom
                     ? requested
                     : SubSuperMode.None;
 
-                _actualFontVariantPosition = resolved;
+                Shaping._actualFontVariantPosition = resolved;
                 return resolved;
             }
         }
 
-        private NumeralSet? _actualFontVariantNumeric;
 
         /// <summary>The resolved GSUB numeric features (CSS <c>font-variant-numeric</c>) for this box's
         /// text - no capability gating (unlike caps): a tag the resolved font lacks simply activates no
         /// lookup and is silently inert.</summary>
         public NumeralSet ActualFontVariantNumeric =>
-            _actualFontVariantNumeric ??= TextShapingFeatureResolver.ResolveNumeric(Style.Font.FontVariantNumeric);
+            Shaping._actualFontVariantNumeric ??= TextShapingFeatureResolver.ResolveNumeric(Style.Font.FontVariantNumeric);
 
-        private EastAsianSet? _actualFontVariantEastAsian;
 
         /// <summary>The resolved GSUB east-asian features (CSS <c>font-variant-east-asian</c>) for this
         /// box's text - no capability gating, same rationale as <see cref="ActualFontVariantNumeric"/>.</summary>
         public EastAsianSet ActualFontVariantEastAsian =>
-            _actualFontVariantEastAsian ??= TextShapingFeatureResolver.ResolveEastAsian(Style.Font.FontVariantEastAsian);
+            Shaping._actualFontVariantEastAsian ??= TextShapingFeatureResolver.ResolveEastAsian(Style.Font.FontVariantEastAsian);
 
-        private IReadOnlyList<(string Tag, int Value)>? _actualFontFeatureSettings;
 
         /// <summary>
         /// The resolved explicit OpenType feature tags (CSS <c>font-feature-settings</c>) for this
@@ -1285,7 +1397,7 @@ namespace PeachPDF.Html.Core.Dom
         /// to 1. <c>normal</c> resolves to an empty list.
         /// </summary>
         public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings =>
-            _actualFontFeatureSettings ??= TextShapingFeatureResolver.ResolveFeatureSettings(Style.Font.FontFeatureSettings);
+            Shaping._actualFontFeatureSettings ??= TextShapingFeatureResolver.ResolveFeatureSettings(Style.Font.FontFeatureSettings);
 
         private string? _actualFontVariationSettings;
         private bool _actualFontVariationSettingsResolved;
@@ -1308,7 +1420,6 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private IReadOnlyList<(string Tag, int Value)>? _actualFontVariantAlternates;
 
         /// <summary>
         /// The resolved OpenType feature tags (CSS <c>font-variant-alternates</c>) for this box's text -
@@ -1317,10 +1428,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="FontVariantAlternatesResolver"/>). An unmatched name is inert.
         /// </summary>
         public IReadOnlyList<(string Tag, int Value)> ActualFontVariantAlternates =>
-            _actualFontVariantAlternates ??= FontVariantAlternatesResolver.Resolve(
+            Shaping._actualFontVariantAlternates ??= FontVariantAlternatesResolver.Resolve(
                 Style.Font.FontVariantAlternates, Style.Font.FontFamily, Owner.FontFeatureValuesRegistry);
 
-        private bool? _actualFontKerning;
 
         /// <summary>
         /// The resolved CSS <c>font-kerning</c> value: <c>false</c> only for <c>none</c> - both
@@ -1332,10 +1442,9 @@ namespace PeachPDF.Html.Core.Dom
         /// stylistic opt-out the way kerning is.
         /// </summary>
         public bool ActualFontKerning =>
-            _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(
+            Shaping._actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(
                 TextShapingFeatureResolver.ApplyTextRendering(Style.Font.FontKerning.Value, Style.Font.TextRendering.Value));
 
-        private ShapeSettings? _actualTextShapingFeatures;
 
         /// <summary>
         /// The single combined GSUB feature request for this box's text - ligatures, caps, numeric,
@@ -1347,7 +1456,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualTextShapingFeatures is { } cached) return cached;
+                if (Shaping._actualTextShapingFeatures is { } cached) return cached;
 
                 var resolved = new ShapeSettings(
                     ActualFontVariantLigatures,
@@ -1361,7 +1470,7 @@ namespace PeachPDF.Html.Core.Dom
                     EmojiMode: ActualFontVariantEmoji.ToEmojiMode(),
                     LanguageSystemTag: FontLanguageOverrideGrammar.Resolve(Style.Font.FontLanguageOverride));
 
-                _actualTextShapingFeatures = resolved;
+                Shaping._actualTextShapingFeatures = resolved;
                 return resolved;
             }
         }
@@ -1651,7 +1760,6 @@ namespace PeachPDF.Html.Core.Dom
             return st;
         }
 
-        private Font? _smallCapsFont;
 
         /// <summary>
         /// A cached font derived from <see cref="ActualFont"/> at a reduced size (same family/style), used
@@ -1663,19 +1771,17 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_smallCapsFont != null) return _smallCapsFont;
+                if (Shaping._smallCapsFont != null) return Shaping._smallCapsFont;
 
                 var font = ActualFont;
-                _smallCapsFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
+                Shaping._smallCapsFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
                                  ?? font;
-                return _smallCapsFont;
+                return Shaping._smallCapsFont;
             }
         }
 
         // Two fields, not one Nullable: "no synthesis needed" is itself a resolved answer worth
         // caching, and a nullable can't distinguish it from "not computed yet".
-        private bool _subSuperscriptSynthesisResolved;
-        private (double SizeScale, double BaselineShift)? _subSuperscriptSynthesis;
 
         /// <summary>
         /// The geometry for a *synthesized* sub/superscript on this box - the face scale, and the
@@ -1694,7 +1800,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_subSuperscriptSynthesisResolved) return _subSuperscriptSynthesis;
+                if (Shaping._subSuperscriptSynthesisResolved) return Shaping._subSuperscriptSynthesis;
 
                 var requested = RequestedFontVariantPosition;
                 (double SizeScale, double BaselineShift)? resolved = null;
@@ -1716,13 +1822,12 @@ namespace PeachPDF.Html.Core.Dom
                     resolved = (sizeScale, (isSuper ? -1 : 1) * shiftEm * font.Size);
                 }
 
-                _subSuperscriptSynthesis = resolved;
-                _subSuperscriptSynthesisResolved = true;
+                Shaping._subSuperscriptSynthesis = resolved;
+                Shaping._subSuperscriptSynthesisResolved = true;
                 return resolved;
             }
         }
 
-        private Font? _subSuperscriptFont;
 
         /// <summary>
         /// A cached font derived from <see cref="ActualFont"/> at <see cref="SubSuperscriptSynthesis"/>'s
@@ -1734,23 +1839,22 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_subSuperscriptFont != null) return _subSuperscriptFont;
+                if (Shaping._subSuperscriptFont != null) return Shaping._subSuperscriptFont;
 
                 var font = ActualFont;
 
                 if (SubSuperscriptSynthesis is not { } synthesis)
                 {
-                    _subSuperscriptFont = font;
+                    Shaping._subSuperscriptFont = font;
                     return font;
                 }
 
-                _subSuperscriptFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * synthesis.SizeScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
+                Shaping._subSuperscriptFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * synthesis.SizeScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
                                       ?? font;
-                return _subSuperscriptFont;
+                return Shaping._subSuperscriptFont;
             }
         }
 
-        private Dictionary<(int Codepoint, double Scale, EmojiPresentation Presentation), Font>? _codepointFontCache;
 
         /// <summary>This box's <c>font-variant-emoji</c> keyword.</summary>
         public FontVariantEmojiMode ActualFontVariantEmoji => Style.Font.FontVariantEmoji.Value;
@@ -1768,7 +1872,7 @@ namespace PeachPDF.Html.Core.Dom
         public Font ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)
         {
             var cacheKey = (codepoint.Value, sizeScale, presentation);
-            if (_codepointFontCache is not null && _codepointFontCache.TryGetValue(cacheKey, out var cached))
+            if (Shaping._codepointFontCache is not null && Shaping._codepointFontCache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
             // Fallback faces start from the unadjusted size: font-size-adjust is applied per face below, not inherited
@@ -1794,7 +1898,7 @@ namespace PeachPDF.Html.Core.Dom
 
             font ??= sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
 
-            (_codepointFontCache ??= [])[cacheKey] = font;
+            (Shaping._codepointFontCache ??= [])[cacheKey] = font;
             return font;
         }
 
@@ -1841,7 +1945,6 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Font-relative units (ex/ch/cap/ic/lh and their root-element counterparts)
 
-        private double?[]? _fontRatioCache;
 
         /// <summary>Set while this box's own <c>line-height</c> is being resolved - see <see cref="ActualLineHeight"/>.</summary>
         private bool _resolvingLineHeight;
@@ -1894,7 +1997,7 @@ namespace PeachPDF.Html.Core.Dom
                 return LineHeightRatio(pixelsPerPoint);
 
             // Measured once per box, like ActualFont itself: the font it reads never changes after the first read.
-            var cache = _fontRatioCache ??= new double?[4];
+            var cache = Shaping._fontRatioCache ??= new double?[4];
             if (cache[(int)metric] is { } cached) return cached;
 
             // ic is the advance of the ideograph in the font that actually renders it - the primary face

@@ -3764,9 +3764,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private bool SharesAnOversizedLine(CssBox box)
         {
-            if (box.Rectangles.Count == 0) return false;
+            if (box.RectangleCount == 0) return false;
 
-            foreach (var line in box.Rectangles.Keys)
+            foreach (var line in box.RectangleKeys)
             {
                 double top = double.MaxValue, bottom = double.MinValue;
 
@@ -4500,7 +4500,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;
 
         private static IReadOnlyDictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
-            snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.Rectangles;
+            snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.RectanglesView;
 
         /// <summary>
         /// Whether a word that lies in no column's extent that holds its box is this column's: <paramref name="own"/> is

@@ -920,7 +920,7 @@ namespace PeachPDF.Html.Core.Dom
 
             while (box != null)
             {
-                if (box.NamedStrings.TryGetValue(name, out var namedString))
+                if (box.TryGetNamedString(name, out var namedString))
                 {
                     nearestAssignment ??= namedString;
                     farthestAssignment = namedString;

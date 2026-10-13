@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Whether this box computed to <c>display: contents</c>. Set by <c>DomParser.CascadeApplyStyles</c>
         /// when it records the box, before its children are spliced into its parent.
         /// </summary>
-        internal bool IsDisplayContentsShell { get; set; }
+        internal bool IsDisplayContentsShell { get => _rare is null ? default(bool) : _rare.IsDisplayContentsShell; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsDisplayContentsShell = value; } }
 
         /// <summary>
         /// The children this shell handed to its parent, at the moment they were spliced - non-null exactly
@@ -27,21 +27,21 @@ namespace PeachPDF.Html.Core.Dom
         /// an anonymous box, so a reader must tolerate an entry whose <see cref="ParentBox"/> is now null
         /// (no longer in the tree) and follow the rest as usual.
         /// </summary>
-        internal List<CssBox>? DisplayContentsLiftedChildren { get; private set; }
+        internal List<CssBox>? DisplayContentsLiftedChildren { get => _rare is null ? default(List<CssBox>?) : _rare.DisplayContentsLiftedChildren; private set { if (_rare is null) { if (EqualityComparer<List<CssBox>?>.Default.Equals(value, default(List<CssBox>?))) return; _rare = new BoxRareState(); } _rare.DisplayContentsLiftedChildren = value; } }
 
         /// <summary>
         /// The <c>display: contents</c> elements this box was lifted out of, outermost first. Null for a box
         /// that never was. Consulted by the tagged-PDF builder, which re-opens each ancestor's structure
         /// element around the box's own.
         /// </summary>
-        internal List<CssBox>? DisplayContentsAncestors { get; private set; }
+        internal List<CssBox>? DisplayContentsAncestors { get => _rare is null ? default(List<CssBox>?) : _rare.DisplayContentsAncestors; private set { if (_rare is null) { if (EqualityComparer<List<CssBox>?>.Default.Equals(value, default(List<CssBox>?))) return; _rare = new BoxRareState(); } _rare.DisplayContentsAncestors = value; } }
 
         /// <summary>
         /// The element a lifted <c>::before</c>/<c>::after</c> was generated for, once its
         /// <see cref="ParentBox"/> is no longer that element. Null everywhere else - see
         /// <see cref="OriginatingElement"/>.
         /// </summary>
-        internal CssBox? OriginatingBox { get; private set; }
+        internal CssBox? OriginatingBox { get => _rare is null ? default(CssBox?) : _rare.OriginatingBox; private set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.OriginatingBox = value; } }
 
         /// <summary>
         /// The element this box's <c>attr()</c>, <c>content()</c> and counter context belongs to: the

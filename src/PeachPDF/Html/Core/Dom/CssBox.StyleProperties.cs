@@ -168,8 +168,8 @@ namespace PeachPDF.Html.Core.Dom
             set
             {
                 var area = _computedStyle.DisplayPositioning;
-                var newArea = area.SetPropertyValue(area.RunningElementName, value, static (a, v) => a with { RunningElementName = v });
-                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                var newArea = area.SetPropertyValueShared(HtmlContainer?.StyleTransitions, area.RunningElementName, value, static (a, v) => a with { RunningElementName = v });
+                _computedStyle = _computedStyle.AdoptAreaShared(HtmlContainer?.StyleTransitions, area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -192,8 +192,8 @@ namespace PeachPDF.Html.Core.Dom
             set
             {
                 var area = _computedStyle.Text;
-                var newArea = area.SetPropertyValue(area.TextUnderlineSide, value, static (a, v) => a with { TextUnderlineSide = v });
-                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+                var newArea = area.SetPropertyValueShared(HtmlContainer?.StyleTransitions, area.TextUnderlineSide, value, static (a, v) => a with { TextUnderlineSide = v });
+                _computedStyle = _computedStyle.AdoptAreaShared(HtmlContainer?.StyleTransitions, area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -243,8 +243,8 @@ namespace PeachPDF.Html.Core.Dom
             set
             {
                 var area = _computedStyle.Font;
-                var newArea = area.SetPropertyValue(area.FontFamilyList, value, static (a, v) => a with { FontFamilyList = v });
-                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+                var newArea = area.SetPropertyValueShared(HtmlContainer?.StyleTransitions, area.FontFamilyList, value, static (a, v) => a with { FontFamilyList = v });
+                _computedStyle = _computedStyle.AdoptAreaShared(HtmlContainer?.StyleTransitions, area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -315,7 +315,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Transient parent→child conduit set by <see cref="CssLayoutEngineGrid"/> immediately before
         /// it lays out a <c>subgrid</c> grid item, so the child adopts the parent's spanned tracks (CSS Grid
         /// Level 2 §9). Layout-only - not a cascaded property, cleared by the parent after the child lays out.</summary>
-        internal GridSubgridContext? SubgridContext { get; set; }
+        internal GridSubgridContext? SubgridContext { get => _rare is null ? default(GridSubgridContext?) : _rare.SubgridContext; set { if (_rare is null) { if (EqualityComparer<GridSubgridContext?>.Default.Equals(value, default(GridSubgridContext?))) return; _rare = new BoxRareState(); } _rare.SubgridContext = value; } }
 
         #endregion
 
@@ -888,10 +888,10 @@ namespace PeachPDF.Html.Core.Dom
         /// the layout of anything around it, so in-flow consumers - a following sibling's static
         /// position, the parent's content-driven height/width - must back these out.
         /// </summary>
-        internal double RelativeOffsetX { get; set; }
+        internal double RelativeOffsetX { get => _rare is null ? default(double) : _rare.RelativeOffsetX; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetX = value; } }
 
         /// <inheritdoc cref="RelativeOffsetX"/>
-        internal double RelativeOffsetY { get; set; }
+        internal double RelativeOffsetY { get => _rare is null ? default(double) : _rare.RelativeOffsetY; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetY = value; } }
 
         /// <summary>
         /// The bottom edge of the box at its static (un-offset) position - what in-flow layout of
@@ -956,6 +956,7 @@ namespace PeachPDF.Html.Core.Dom
             if (p == null) return;
 
             var parentStyle = p.ComputedStyle;
+            var cache = HtmlContainer?.StyleTransitions;
 
             // Custom properties are inherited by default. Cloned (not shared) so a child's local override
             // never mutates the parent's or a sibling's dictionary. A property registered via @property with
@@ -995,12 +996,12 @@ namespace PeachPDF.Html.Core.Dom
             // object. When this box's own area already equals the parent's (the common case), this is a
             // total no-op at both levels - no clone, no new reference even assigned.
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CustomProperties, customProperties, static (s, v) => s with { CustomProperties = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
             var unicodeBidiBeforeInherit = _computedStyle.Text.UnicodeBidi;
             var verticalAlignBeforeInherit = _computedStyle.Text.VerticalAlign;
             var textOverflowBeforeInherit = _computedStyle.Text.TextOverflow;
             var lineClampBeforeInherit = _computedStyle.Text.LineClamp;
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
             if (!everything)
             {
                 // unicode-bidi, vertical-align, text-overflow and line-clamp are the properties in this
@@ -1021,15 +1022,15 @@ namespace PeachPDF.Html.Core.Dom
                 // total no-op, preserving the "whole unchanged subtree shares one Text instance" guarantee.
                 var textArea = _computedStyle.Text;
                 var restoredTextArea = textArea
-                    .SetPropertyValue(textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v })
-                    .SetPropertyValue(textArea.VerticalAlign, verticalAlignBeforeInherit, static (a, v) => a with { VerticalAlign = v })
-                    .SetPropertyValue(textArea.TextOverflow, textOverflowBeforeInherit, static (a, v) => a with { TextOverflow = v })
-                    .SetPropertyValue(textArea.LineClamp, lineClampBeforeInherit, static (a, v) => a with { LineClamp = v });
-                _computedStyle = _computedStyle.AdoptArea(textArea, restoredTextArea, static (s, a) => s with { Text = a });
+                    .SetPropertyValueShared(cache, textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v })
+                    .SetPropertyValueShared(cache, textArea.VerticalAlign, verticalAlignBeforeInherit, static (a, v) => a with { VerticalAlign = v })
+                    .SetPropertyValueShared(cache, textArea.TextOverflow, textOverflowBeforeInherit, static (a, v) => a with { TextOverflow = v })
+                    .SetPropertyValueShared(cache, textArea.LineClamp, lineClampBeforeInherit, static (a, v) => a with { LineClamp = v });
+                _computedStyle = _computedStyle.AdoptAreaShared(cache, textArea, restoredTextArea, static (s, a) => s with { Text = a });
             }
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });
 
             // `quotes` (CSS 2.1 §12.3.1) is the one Inherited: true property in GeneratedContentArea -
             // every sibling there (content, counter-reset/-increment/-set, string-set, bookmark-*, the
@@ -1040,15 +1041,15 @@ namespace PeachPDF.Html.Core.Dom
             // pseudo-element synthesis) - the only place open-quote/close-quote's `quotes` value is ever
             // actually consulted - would never see an ancestor's non-default `quotes` declaration.
             var inheritedGeneratedContent = _computedStyle.GeneratedContent;
-            inheritedGeneratedContent = inheritedGeneratedContent.SetPropertyValue(inheritedGeneratedContent.Quotes, parentStyle.GeneratedContent.Quotes, static (a, v) => a with { Quotes = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.GeneratedContent, inheritedGeneratedContent, static (s, a) => s with { GeneratedContent = a });
+            inheritedGeneratedContent = inheritedGeneratedContent.SetPropertyValueShared(cache, inheritedGeneratedContent.Quotes, parentStyle.GeneratedContent.Quotes, static (a, v) => a with { Quotes = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.GeneratedContent, inheritedGeneratedContent, static (s, a) => s with { GeneratedContent = a });
 
             // `image-rendering` and `image-orientation` are the Inherited: true properties in BackgroundArea (the rest are box-local), so, like
             // `quotes` above, it is copied on its own rather than by adopting the whole area.
             var inheritedBackground = _computedStyle.Background;
-            inheritedBackground = inheritedBackground.SetPropertyValue(inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
-            inheritedBackground = inheritedBackground.SetPropertyValue(inheritedBackground.ImageOrientation, parentStyle.Background.ImageOrientation, static (a, v) => a with { ImageOrientation = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
+            inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
+            inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageOrientation, parentStyle.Background.ImageOrientation, static (a, v) => a with { ImageOrientation = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
             // are intentionally skipped here - every value copied above either has no such cache, or (for
@@ -1064,84 +1065,84 @@ namespace PeachPDF.Html.Core.Dom
             // still routed through its owning area's own two-level copy-on-write, just individually.
             var background = _computedStyle.Background;
             background = background
-                .SetPropertyValue(background.BackgroundColor, parentStyle.Background.BackgroundColor, static (a, v) => a with { BackgroundColor = v })
-                .SetPropertyValue(background.BackgroundImages, parentStyle.Background.BackgroundImages, static (a, v) => a with { BackgroundImages = v })
-                .SetPropertyValue(background.BackgroundPosition, parentStyle.Background.BackgroundPosition, static (a, v) => a with { BackgroundPosition = v })
-                .SetPropertyValue(background.BackgroundRepeat, parentStyle.Background.BackgroundRepeat, static (a, v) => a with { BackgroundRepeat = v })
-                .SetPropertyValue(background.BackgroundOrigin, parentStyle.Background.BackgroundOrigin, static (a, v) => a with { BackgroundOrigin = v })
-                .SetPropertyValue(background.BackgroundClip, parentStyle.Background.BackgroundClip, static (a, v) => a with { BackgroundClip = v })
-                .SetPropertyValue(background.BackgroundAttachment, parentStyle.Background.BackgroundAttachment, static (a, v) => a with { BackgroundAttachment = v })
-                .SetPropertyValue(background.ObjectFit, parentStyle.Background.ObjectFit, static (a, v) => a with { ObjectFit = v })
-                .SetPropertyValue(background.ObjectPosition, parentStyle.Background.ObjectPosition, static (a, v) => a with { ObjectPosition = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, background, static (s, a) => s with { Background = a });
+                .SetPropertyValueShared(cache, background.BackgroundColor, parentStyle.Background.BackgroundColor, static (a, v) => a with { BackgroundColor = v })
+                .SetPropertyValueShared(cache, background.BackgroundImages, parentStyle.Background.BackgroundImages, static (a, v) => a with { BackgroundImages = v })
+                .SetPropertyValueShared(cache, background.BackgroundPosition, parentStyle.Background.BackgroundPosition, static (a, v) => a with { BackgroundPosition = v })
+                .SetPropertyValueShared(cache, background.BackgroundRepeat, parentStyle.Background.BackgroundRepeat, static (a, v) => a with { BackgroundRepeat = v })
+                .SetPropertyValueShared(cache, background.BackgroundOrigin, parentStyle.Background.BackgroundOrigin, static (a, v) => a with { BackgroundOrigin = v })
+                .SetPropertyValueShared(cache, background.BackgroundClip, parentStyle.Background.BackgroundClip, static (a, v) => a with { BackgroundClip = v })
+                .SetPropertyValueShared(cache, background.BackgroundAttachment, parentStyle.Background.BackgroundAttachment, static (a, v) => a with { BackgroundAttachment = v })
+                .SetPropertyValueShared(cache, background.ObjectFit, parentStyle.Background.ObjectFit, static (a, v) => a with { ObjectFit = v })
+                .SetPropertyValueShared(cache, background.ObjectPosition, parentStyle.Background.ObjectPosition, static (a, v) => a with { ObjectPosition = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Background, background, static (s, a) => s with { Background = a });
 
             var border = _computedStyle.Border;
             border = border
-                .SetPropertyValue(border.BorderTopWidth, parentStyle.Border.BorderTopWidth, static (a, v) => a with { BorderTopWidth = v })
-                .SetPropertyValue(border.BorderRightWidth, parentStyle.Border.BorderRightWidth, static (a, v) => a with { BorderRightWidth = v })
-                .SetPropertyValue(border.BorderBottomWidth, parentStyle.Border.BorderBottomWidth, static (a, v) => a with { BorderBottomWidth = v })
-                .SetPropertyValue(border.BorderLeftWidth, parentStyle.Border.BorderLeftWidth, static (a, v) => a with { BorderLeftWidth = v })
-                .SetPropertyValue(border.BorderTopColor, parentStyle.Border.BorderTopColor, static (a, v) => a with { BorderTopColor = v })
-                .SetPropertyValue(border.BorderRightColor, parentStyle.Border.BorderRightColor, static (a, v) => a with { BorderRightColor = v })
-                .SetPropertyValue(border.BorderBottomColor, parentStyle.Border.BorderBottomColor, static (a, v) => a with { BorderBottomColor = v })
-                .SetPropertyValue(border.BorderLeftColor, parentStyle.Border.BorderLeftColor, static (a, v) => a with { BorderLeftColor = v })
-                .SetPropertyValue(border.BorderTopStyle, parentStyle.Border.BorderTopStyle, static (a, v) => a with { BorderTopStyle = v })
-                .SetPropertyValue(border.BorderRightStyle, parentStyle.Border.BorderRightStyle, static (a, v) => a with { BorderRightStyle = v })
-                .SetPropertyValue(border.BorderBottomStyle, parentStyle.Border.BorderBottomStyle, static (a, v) => a with { BorderBottomStyle = v })
-                .SetPropertyValue(border.BorderLeftStyle, parentStyle.Border.BorderLeftStyle, static (a, v) => a with { BorderLeftStyle = v })
-                .SetPropertyValue(border.BorderTopLeftRadius, parentStyle.Border.BorderTopLeftRadius, static (a, v) => a with { BorderTopLeftRadius = v })
-                .SetPropertyValue(border.BorderTopRightRadius, parentStyle.Border.BorderTopRightRadius, static (a, v) => a with { BorderTopRightRadius = v })
-                .SetPropertyValue(border.BorderBottomRightRadius, parentStyle.Border.BorderBottomRightRadius, static (a, v) => a with { BorderBottomRightRadius = v })
-                .SetPropertyValue(border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v })
+                .SetPropertyValueShared(cache, border.BorderTopWidth, parentStyle.Border.BorderTopWidth, static (a, v) => a with { BorderTopWidth = v })
+                .SetPropertyValueShared(cache, border.BorderRightWidth, parentStyle.Border.BorderRightWidth, static (a, v) => a with { BorderRightWidth = v })
+                .SetPropertyValueShared(cache, border.BorderBottomWidth, parentStyle.Border.BorderBottomWidth, static (a, v) => a with { BorderBottomWidth = v })
+                .SetPropertyValueShared(cache, border.BorderLeftWidth, parentStyle.Border.BorderLeftWidth, static (a, v) => a with { BorderLeftWidth = v })
+                .SetPropertyValueShared(cache, border.BorderTopColor, parentStyle.Border.BorderTopColor, static (a, v) => a with { BorderTopColor = v })
+                .SetPropertyValueShared(cache, border.BorderRightColor, parentStyle.Border.BorderRightColor, static (a, v) => a with { BorderRightColor = v })
+                .SetPropertyValueShared(cache, border.BorderBottomColor, parentStyle.Border.BorderBottomColor, static (a, v) => a with { BorderBottomColor = v })
+                .SetPropertyValueShared(cache, border.BorderLeftColor, parentStyle.Border.BorderLeftColor, static (a, v) => a with { BorderLeftColor = v })
+                .SetPropertyValueShared(cache, border.BorderTopStyle, parentStyle.Border.BorderTopStyle, static (a, v) => a with { BorderTopStyle = v })
+                .SetPropertyValueShared(cache, border.BorderRightStyle, parentStyle.Border.BorderRightStyle, static (a, v) => a with { BorderRightStyle = v })
+                .SetPropertyValueShared(cache, border.BorderBottomStyle, parentStyle.Border.BorderBottomStyle, static (a, v) => a with { BorderBottomStyle = v })
+                .SetPropertyValueShared(cache, border.BorderLeftStyle, parentStyle.Border.BorderLeftStyle, static (a, v) => a with { BorderLeftStyle = v })
+                .SetPropertyValueShared(cache, border.BorderTopLeftRadius, parentStyle.Border.BorderTopLeftRadius, static (a, v) => a with { BorderTopLeftRadius = v })
+                .SetPropertyValueShared(cache, border.BorderTopRightRadius, parentStyle.Border.BorderTopRightRadius, static (a, v) => a with { BorderTopRightRadius = v })
+                .SetPropertyValueShared(cache, border.BorderBottomRightRadius, parentStyle.Border.BorderBottomRightRadius, static (a, v) => a with { BorderBottomRightRadius = v })
+                .SetPropertyValueShared(cache, border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v })
                 // The outline is the element's too (CSS UI 4 §3 draws it around every fragment of the
                 // element), so a split piece or a repeated header clone has to carry it. Without these a
                 // <span> split around a block child drew no outline on either half.
-                .SetPropertyValue(border.OutlineColor, parentStyle.Border.OutlineColor, static (a, v) => a with { OutlineColor = v })
-                .SetPropertyValue(border.OutlineStyle, parentStyle.Border.OutlineStyle, static (a, v) => a with { OutlineStyle = v })
-                .SetPropertyValue(border.OutlineWidth, parentStyle.Border.OutlineWidth, static (a, v) => a with { OutlineWidth = v })
-                .SetPropertyValue(border.OutlineOffset, parentStyle.Border.OutlineOffset, static (a, v) => a with { OutlineOffset = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Border, border, static (s, a) => s with { Border = a });
+                .SetPropertyValueShared(cache, border.OutlineColor, parentStyle.Border.OutlineColor, static (a, v) => a with { OutlineColor = v })
+                .SetPropertyValueShared(cache, border.OutlineStyle, parentStyle.Border.OutlineStyle, static (a, v) => a with { OutlineStyle = v })
+                .SetPropertyValueShared(cache, border.OutlineWidth, parentStyle.Border.OutlineWidth, static (a, v) => a with { OutlineWidth = v })
+                .SetPropertyValueShared(cache, border.OutlineOffset, parentStyle.Border.OutlineOffset, static (a, v) => a with { OutlineOffset = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Border, border, static (s, a) => s with { Border = a });
 
             var visualEffects = _computedStyle.VisualEffects;
             visualEffects = visualEffects
-                .SetPropertyValue(visualEffects.Transform, parentStyle.VisualEffects.Transform, static (a, v) => a with { Transform = v })
-                .SetPropertyValue(visualEffects.TransformOrigin, parentStyle.VisualEffects.TransformOrigin, static (a, v) => a with { TransformOrigin = v })
-                .SetPropertyValue(visualEffects.Opacity, parentStyle.VisualEffects.Opacity, static (a, v) => a with { Opacity = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.VisualEffects, visualEffects, static (s, a) => s with { VisualEffects = a });
+                .SetPropertyValueShared(cache, visualEffects.Transform, parentStyle.VisualEffects.Transform, static (a, v) => a with { Transform = v })
+                .SetPropertyValueShared(cache, visualEffects.TransformOrigin, parentStyle.VisualEffects.TransformOrigin, static (a, v) => a with { TransformOrigin = v })
+                .SetPropertyValueShared(cache, visualEffects.Opacity, parentStyle.VisualEffects.Opacity, static (a, v) => a with { Opacity = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.VisualEffects, visualEffects, static (s, a) => s with { VisualEffects = a });
 
             var displayPositioning = _computedStyle.DisplayPositioning;
             displayPositioning = displayPositioning
-                .SetPropertyValue(displayPositioning.Display, parentStyle.DisplayPositioning.Display, static (a, v) => a with { Display = v })
-                .SetPropertyValue(displayPositioning.Float, parentStyle.DisplayPositioning.Float, static (a, v) => a with { Float = v })
-                .SetPropertyValue(displayPositioning.OverflowX, parentStyle.DisplayPositioning.OverflowX, static (a, v) => a with { OverflowX = v })
-                .SetPropertyValue(displayPositioning.OverflowY, parentStyle.DisplayPositioning.OverflowY, static (a, v) => a with { OverflowY = v })
-                .SetPropertyValue(displayPositioning.Position, parentStyle.DisplayPositioning.Position, static (a, v) => a with { Position = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.DisplayPositioning, displayPositioning, static (s, a) => s with { DisplayPositioning = a });
+                .SetPropertyValueShared(cache, displayPositioning.Display, parentStyle.DisplayPositioning.Display, static (a, v) => a with { Display = v })
+                .SetPropertyValueShared(cache, displayPositioning.Float, parentStyle.DisplayPositioning.Float, static (a, v) => a with { Float = v })
+                .SetPropertyValueShared(cache, displayPositioning.OverflowX, parentStyle.DisplayPositioning.OverflowX, static (a, v) => a with { OverflowX = v })
+                .SetPropertyValueShared(cache, displayPositioning.OverflowY, parentStyle.DisplayPositioning.OverflowY, static (a, v) => a with { OverflowY = v })
+                .SetPropertyValueShared(cache, displayPositioning.Position, parentStyle.DisplayPositioning.Position, static (a, v) => a with { Position = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.DisplayPositioning, displayPositioning, static (s, a) => s with { DisplayPositioning = a });
 
             var boxModel = _computedStyle.BoxModel;
             boxModel = boxModel
-                .SetPropertyValue(boxModel.Height, parentStyle.BoxModel.Height, static (a, v) => a with { Height = v })
-                .SetPropertyValue(boxModel.MaxHeight, parentStyle.BoxModel.MaxHeight, static (a, v) => a with { MaxHeight = v })
-                .SetPropertyValue(boxModel.MarginBottom, parentStyle.BoxModel.MarginBottom, static (a, v) => a with { MarginBottom = v })
-                .SetPropertyValue(boxModel.MarginLeft, parentStyle.BoxModel.MarginLeft, static (a, v) => a with { MarginLeft = v })
-                .SetPropertyValue(boxModel.MarginRight, parentStyle.BoxModel.MarginRight, static (a, v) => a with { MarginRight = v })
-                .SetPropertyValue(boxModel.MarginTop, parentStyle.BoxModel.MarginTop, static (a, v) => a with { MarginTop = v })
-                .SetPropertyValue(boxModel.Left, parentStyle.BoxModel.Left, static (a, v) => a with { Left = v })
-                .SetPropertyValue(boxModel.PaddingLeft, parentStyle.BoxModel.PaddingLeft, static (a, v) => a with { PaddingLeft = v })
-                .SetPropertyValue(boxModel.PaddingBottom, parentStyle.BoxModel.PaddingBottom, static (a, v) => a with { PaddingBottom = v })
-                .SetPropertyValue(boxModel.PaddingRight, parentStyle.BoxModel.PaddingRight, static (a, v) => a with { PaddingRight = v })
-                .SetPropertyValue(boxModel.PaddingTop, parentStyle.BoxModel.PaddingTop, static (a, v) => a with { PaddingTop = v })
-                .SetPropertyValue(boxModel.Top, parentStyle.BoxModel.Top, static (a, v) => a with { Top = v })
-                .SetPropertyValue(boxModel.Width, parentStyle.BoxModel.Width, static (a, v) => a with { Width = v })
-                .SetPropertyValue(boxModel.MaxWidth, parentStyle.BoxModel.MaxWidth, static (a, v) => a with { MaxWidth = v })
-                .SetPropertyValue(boxModel.MinWidth, parentStyle.BoxModel.MinWidth, static (a, v) => a with { MinWidth = v })
+                .SetPropertyValueShared(cache, boxModel.Height, parentStyle.BoxModel.Height, static (a, v) => a with { Height = v })
+                .SetPropertyValueShared(cache, boxModel.MaxHeight, parentStyle.BoxModel.MaxHeight, static (a, v) => a with { MaxHeight = v })
+                .SetPropertyValueShared(cache, boxModel.MarginBottom, parentStyle.BoxModel.MarginBottom, static (a, v) => a with { MarginBottom = v })
+                .SetPropertyValueShared(cache, boxModel.MarginLeft, parentStyle.BoxModel.MarginLeft, static (a, v) => a with { MarginLeft = v })
+                .SetPropertyValueShared(cache, boxModel.MarginRight, parentStyle.BoxModel.MarginRight, static (a, v) => a with { MarginRight = v })
+                .SetPropertyValueShared(cache, boxModel.MarginTop, parentStyle.BoxModel.MarginTop, static (a, v) => a with { MarginTop = v })
+                .SetPropertyValueShared(cache, boxModel.Left, parentStyle.BoxModel.Left, static (a, v) => a with { Left = v })
+                .SetPropertyValueShared(cache, boxModel.PaddingLeft, parentStyle.BoxModel.PaddingLeft, static (a, v) => a with { PaddingLeft = v })
+                .SetPropertyValueShared(cache, boxModel.PaddingBottom, parentStyle.BoxModel.PaddingBottom, static (a, v) => a with { PaddingBottom = v })
+                .SetPropertyValueShared(cache, boxModel.PaddingRight, parentStyle.BoxModel.PaddingRight, static (a, v) => a with { PaddingRight = v })
+                .SetPropertyValueShared(cache, boxModel.PaddingTop, parentStyle.BoxModel.PaddingTop, static (a, v) => a with { PaddingTop = v })
+                .SetPropertyValueShared(cache, boxModel.Top, parentStyle.BoxModel.Top, static (a, v) => a with { Top = v })
+                .SetPropertyValueShared(cache, boxModel.Width, parentStyle.BoxModel.Width, static (a, v) => a with { Width = v })
+                .SetPropertyValueShared(cache, boxModel.MaxWidth, parentStyle.BoxModel.MaxWidth, static (a, v) => a with { MaxWidth = v })
+                .SetPropertyValueShared(cache, boxModel.MinWidth, parentStyle.BoxModel.MinWidth, static (a, v) => a with { MinWidth = v })
                 // box-sizing moved out of the "always" section (it no longer inherits, per the
                 // spec-compliance fix above) - but same reasoning as BoxDecorationBreak/the break
                 // properties/PdfTagType below: a structural duplicate is a fragment of the SAME
                 // element, so its own resolved box-sizing must still carry over, or CssProxyBox's
                 // repeated header/footer and DomParser's inline/block split would silently revert to
                 // content-box regardless of what the source element actually declared.
-                .SetPropertyValue(boxModel.BoxSizing, parentStyle.BoxModel.BoxSizing, static (a, v) => a with { BoxSizing = v });
+                .SetPropertyValueShared(cache, boxModel.BoxSizing, parentStyle.BoxModel.BoxSizing, static (a, v) => a with { BoxSizing = v });
             // Bottom/Right: the pre-split CssBoxProperties had a private _bottom/_right field pair that
             // this branch copied, but Bottom/Right's real getters/setters never read or wrote those fields
             // (they were independent auto-properties) - so a structural duplicate's Bottom/Right silently
@@ -1151,32 +1152,32 @@ namespace PeachPDF.Html.Core.Dom
             // PdfTagType/the break properties below). Unifying storage onto ComputedStyle.BoxModel.Bottom/.Right
             // fixes this for real - see ComputedStyleTests.InheritStyle_Everything_CopiesBottomAndRight.
             boxModel = boxModel
-                .SetPropertyValue(boxModel.Bottom, parentStyle.BoxModel.Bottom, static (a, v) => a with { Bottom = v })
-                .SetPropertyValue(boxModel.Right, parentStyle.BoxModel.Right, static (a, v) => a with { Right = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.BoxModel, boxModel, static (s, a) => s with { BoxModel = a });
+                .SetPropertyValueShared(cache, boxModel.Bottom, parentStyle.BoxModel.Bottom, static (a, v) => a with { Bottom = v })
+                .SetPropertyValueShared(cache, boxModel.Right, parentStyle.BoxModel.Right, static (a, v) => a with { Right = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.BoxModel, boxModel, static (s, a) => s with { BoxModel = a });
 
             var textDecoration = _computedStyle.TextDecoration;
             textDecoration = textDecoration
-                .SetPropertyValue(textDecoration.TextDecorationLine, parentStyle.TextDecoration.TextDecorationLine, static (a, v) => a with { TextDecorationLine = v })
-                .SetPropertyValue(textDecoration.TextDecorationStyle, parentStyle.TextDecoration.TextDecorationStyle, static (a, v) => a with { TextDecorationStyle = v })
-                .SetPropertyValue(textDecoration.TextDecorationColor, parentStyle.TextDecoration.TextDecorationColor, static (a, v) => a with { TextDecorationColor = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.TextDecoration, textDecoration, static (s, a) => s with { TextDecoration = a });
+                .SetPropertyValueShared(cache, textDecoration.TextDecorationLine, parentStyle.TextDecoration.TextDecorationLine, static (a, v) => a with { TextDecorationLine = v })
+                .SetPropertyValueShared(cache, textDecoration.TextDecorationStyle, parentStyle.TextDecoration.TextDecorationStyle, static (a, v) => a with { TextDecorationStyle = v })
+                .SetPropertyValueShared(cache, textDecoration.TextDecorationColor, parentStyle.TextDecoration.TextDecorationColor, static (a, v) => a with { TextDecorationColor = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.TextDecoration, textDecoration, static (s, a) => s with { TextDecoration = a });
 
             // Same reasoning as PdfTagType below: not inherited, but a structural duplicate of the same
             // element's box has to carry the element's own resolved value.
             var breakArea = _computedStyle.Break;
             breakArea = breakArea
-                .SetPropertyValue(breakArea.BoxDecorationBreak, parentStyle.Break.BoxDecorationBreak, static (a, v) => a with { BoxDecorationBreak = v })
+                .SetPropertyValueShared(cache, breakArea.BoxDecorationBreak, parentStyle.Break.BoxDecorationBreak, static (a, v) => a with { BoxDecorationBreak = v })
                 // The break properties are not inherited either (css-break-3 §3.1/§3.2), so they are
                 // rightly absent from the "always" section above - but a structural duplicate is a
                 // fragment of the same element, and §3 attaches these values to the element, not to one of
                 // its boxes. Without this a split block loses its own break-inside: avoid and a repeated
                 // <thead> loses its break-after: avoid, silently, since the initial value is the
                 // permissive "auto".
-                .SetPropertyValue(breakArea.BreakBefore, parentStyle.Break.BreakBefore, static (a, v) => a with { BreakBefore = v })
-                .SetPropertyValue(breakArea.BreakAfter, parentStyle.Break.BreakAfter, static (a, v) => a with { BreakAfter = v })
-                .SetPropertyValue(breakArea.BreakInside, parentStyle.Break.BreakInside, static (a, v) => a with { BreakInside = v });
-            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Break, breakArea, static (s, a) => s with { Break = a });
+                .SetPropertyValueShared(cache, breakArea.BreakBefore, parentStyle.Break.BreakBefore, static (a, v) => a with { BreakBefore = v })
+                .SetPropertyValueShared(cache, breakArea.BreakAfter, parentStyle.Break.BreakAfter, static (a, v) => a with { BreakAfter = v })
+                .SetPropertyValueShared(cache, breakArea.BreakInside, parentStyle.Break.BreakInside, static (a, v) => a with { BreakInside = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Break, breakArea, static (s, a) => s with { Break = a });
 
             // Not a real inherited property (never copied in the "always" section above, so
             // ordinary parent->child cascade seeding never touches it) - but every "everything"
@@ -1202,12 +1203,12 @@ namespace PeachPDF.Html.Core.Dom
             // "auto"/"none".
             var generatedContent = _computedStyle.GeneratedContent;
             var newGeneratedContent = generatedContent
-                .SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v })
-                .SetPropertyValue(generatedContent.PdfFormField, parentStyle.GeneratedContent.PdfFormField, static (a, v) => a with { PdfFormField = v })
-                .SetPropertyValue(generatedContent.PdfFormFieldAutoFontSize, parentStyle.GeneratedContent.PdfFormFieldAutoFontSize, static (a, v) => a with { PdfFormFieldAutoFontSize = v })
-                .SetPropertyValue(generatedContent.PdfFormFieldComb, parentStyle.GeneratedContent.PdfFormFieldComb, static (a, v) => a with { PdfFormFieldComb = v })
-                .SetPropertyValue(generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v });
-            _computedStyle = _computedStyle.AdoptArea(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
+                .SetPropertyValueShared(cache, generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfFormField, parentStyle.GeneratedContent.PdfFormField, static (a, v) => a with { PdfFormField = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfFormFieldAutoFontSize, parentStyle.GeneratedContent.PdfFormFieldAutoFontSize, static (a, v) => a with { PdfFormFieldAutoFontSize = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfFormFieldComb, parentStyle.GeneratedContent.PdfFormFieldComb, static (a, v) => a with { PdfFormFieldComb = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v });
+            _computedStyle = _computedStyle.AdoptAreaShared(cache, generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }
 }

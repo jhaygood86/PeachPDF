@@ -32,7 +32,10 @@ namespace PeachPDF.Html.Core.Dom
 
             Name = name;
             IsSingle = isSingle;
-            Attributes = attributes?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+            // The parser hands over a dictionary it built in the form kept here; copy only a caller's own.
+            Attributes = attributes is null || ReferenceEquals(attributes.Comparer, StringComparer.OrdinalIgnoreCase)
+                ? attributes
+                : attributes.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>

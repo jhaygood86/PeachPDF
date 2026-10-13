@@ -44,6 +44,23 @@ namespace PeachPDF.Html.Core.Dom
         internal static TSelf AdoptArea<TSelf, TArea>(this TSelf self, TArea currentArea, TArea newArea, Func<TSelf, TArea, TSelf> apply)
             where TArea : class =>
             ReferenceEquals(currentArea, newArea) ? self : apply(self, newArea);
+
+        /// <summary>
+        /// <see cref="SetPropertyValue{TSelf,TValue}"/>, handing back the instance an earlier box got from the same change to the same
+        /// record when <paramref name="cache"/> remembers one (see <see cref="StyleTransitionCache"/>).
+        /// </summary>
+        internal static TSelf SetPropertyValueShared<TSelf, TValue>(this TSelf self, StyleTransitionCache? cache, TValue currentValue, TValue newValue, Func<TSelf, TValue, TSelf> apply)
+            where TSelf : class =>
+            cache is null ? self.SetPropertyValue(currentValue, newValue, apply) : cache.Set(self, currentValue, newValue, apply);
+
+        /// <summary>
+        /// <see cref="AdoptArea{TSelf,TArea}"/>, handing back the instance an earlier box got from putting the same area in the same
+        /// style when <paramref name="cache"/> remembers one.
+        /// </summary>
+        internal static TSelf AdoptAreaShared<TSelf, TArea>(this TSelf self, StyleTransitionCache? cache, TArea currentArea, TArea newArea, Func<TSelf, TArea, TSelf> apply)
+            where TSelf : class
+            where TArea : class =>
+            cache is null ? self.AdoptArea(currentArea, newArea, apply) : cache.Adopt(self, currentArea, newArea, apply);
     }
 
     /// <summary>

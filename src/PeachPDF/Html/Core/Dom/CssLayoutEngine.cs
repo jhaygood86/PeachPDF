@@ -678,7 +678,7 @@ namespace PeachPDF.Html.Core.Dom
             var line = setAside.Line;
 
             // An atomic inline is let through: DomUtils.InlineContainingBlockOf never reads this off one.
-            if (!ancestor.IsInline || ancestor.Rectangles.Count > 0) return null;
+            if (!ancestor.IsInline || ancestor.RectangleCount > 0) return null;
 
             // Only an inline in this flow is known to be empty. One outside it - the box sits in a float or
             // inline-block inside that inline - merely has not got its fragments yet, since its own line is
@@ -3487,9 +3487,9 @@ namespace PeachPDF.Html.Core.Dom
                 // re-layout, or a column-fill retry all re-run this) - so without unregistering first, a
                 // stale entry from an earlier pass survives as an orphan, still eligible to match some
                 // page's Y window in MarginBoxRenderer.ResolveNamedString.
-                if (box.NamedStrings.Count > 0)
+                if (box.HasNamedStrings)
                 {
-                    box.HtmlContainer?.UnregisterNamedStrings(box.NamedStrings.Values);
+                    box.HtmlContainer?.UnregisterNamedStrings(box.NamedStringValues);
                     box.NamedStrings.Clear();
                 }
 
@@ -3505,7 +3505,7 @@ namespace PeachPDF.Html.Core.Dom
                 // an in-progress ancestor's own FlowBox call returns before reaching its exit bookkeeping
                 // whenever a break occurs anywhere in its recursion - #341) can skip forever, leaving this
                 // the only assignment a straddling box is guaranteed to get.
-                foreach (var namedString in box.NamedStrings.Values)
+                foreach (var namedString in box.NamedStringValues)
                 {
                     namedString.Y = coordinates.CurrentY;
                 }
@@ -3803,9 +3803,9 @@ namespace PeachPDF.Html.Core.Dom
             // (see .claude/recent-fixes/2026-08-02-inline-string-set-and-named-page-corruption-across-reflow.md,
             // whose unregister-before-register/opensHere fixes protected this dead-end registration
             // along with the still-needed NamedStrings one above).
-            if (opensHere && box != blockBox && box.NamedStrings.Count > 0)
+            if (opensHere && box != blockBox && box.HasNamedStrings)
             {
-                foreach (var namedString in box.NamedStrings.Values)
+                foreach (var namedString in box.NamedStringValues)
                 {
                     namedString.Y = coordinates.CurrentY;
                 }
@@ -3907,14 +3907,14 @@ namespace PeachPDF.Html.Core.Dom
             // so `page` doesn't apply to it per css-page-3 §7.2.
             if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != Keywords.None)
             {
-                if (b.NamedStrings.Count > 0)
+                if (b.HasNamedStrings)
                 {
-                    b.HtmlContainer?.UnregisterNamedStrings(b.NamedStrings.Values);
+                    b.HtmlContainer?.UnregisterNamedStrings(b.NamedStringValues);
                     b.NamedStrings.Clear();
                 }
 
                 CssNamedStringEngine.ApplyStringSet(b);
-                foreach (var namedString in b.NamedStrings.Values)
+                foreach (var namedString in b.NamedStringValues)
                 {
                     namedString.Y = b.Location.Y;
                 }
@@ -4149,14 +4149,14 @@ namespace PeachPDF.Html.Core.Dom
             // an inline-level box never creates a class-A break point.
             if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != Keywords.None)
             {
-                if (b.NamedStrings.Count > 0)
+                if (b.HasNamedStrings)
                 {
-                    b.HtmlContainer?.UnregisterNamedStrings(b.NamedStrings.Values);
+                    b.HtmlContainer?.UnregisterNamedStrings(b.NamedStringValues);
                     b.NamedStrings.Clear();
                 }
 
                 CssNamedStringEngine.ApplyStringSet(b);
-                foreach (var namedString in b.NamedStrings.Values)
+                foreach (var namedString in b.NamedStringValues)
                 {
                     namedString.Y = b.Location.Y;
                 }
@@ -4171,7 +4171,7 @@ namespace PeachPDF.Html.Core.Dom
             // below. Leaving the per-line ones behind paints its border once per internal line, as a
             // short box around each of them on top of the real one. Nothing else reads them - the box's
             // own lines address their content through their own rectangles, not through the box's.
-            b.Rectangles.Clear();
+            b.ClearRectangles();
 
             // Advance to content-right so that the outer rightSpacing addition lands correctly.
             coordinates.CurrentX = b.ClientRight;
@@ -5828,7 +5828,7 @@ namespace PeachPDF.Html.Core.Dom
                                     // (#341) for a string-set ancestor whose recorded Y was seeded before
                                     // this wrap was known about - a page attribution this ancestor's
                                     // opening line, not the seed line PrepareFlowBoxEntry stamped it with.
-                                    foreach (var namedString in ancestor.NamedStrings.Values)
+                                    foreach (var namedString in ancestor.NamedStringValues)
                                     {
                                         namedString.Y = coordinates.CurrentY;
                                     }

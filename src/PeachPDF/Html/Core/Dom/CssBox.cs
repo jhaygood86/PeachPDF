@@ -97,6 +97,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// the root container for the hierarchy
         /// </summary>
+        /// <summary>
+        /// The state only an unusual box has (see <see cref="BoxRareState"/>), null for the rest. The members it holds are the
+        /// properties below that read and write through it; the private ones keep their old field names so call sites did not move.
+        /// </summary>
+        private BoxRareState? _rare;
+
+        /// <summary>Whether this box has allocated its <see cref="BoxRareState"/>.</summary>
+        internal bool HasRareState => _rare is not null;
+
         protected HtmlContainerInt? _htmlContainer;
 
         /// <summary>
@@ -110,10 +119,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// Flag that indicates that CssTable algorithm already made fixes on it.
         /// </remarks>
-        internal bool _tableFixed;
+        internal bool _tableFixed { get => _rare is null ? default(bool) : _rare._tableFixed; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._tableFixed = value; } }
 
         protected bool _wordsSizeMeasured;
-        public CssImage? ContentImage { get; internal set; }
+        public CssImage? ContentImage { get => _rare is null ? default(CssImage?) : _rare.ContentImage; internal set { if (_rare is null) { if (EqualityComparer<CssImage?>.Default.Equals(value, default(CssImage?))) return; _rare = new BoxRareState(); } _rare.ContentImage = value; } }
 
         /// <summary>
         /// Set by <c>CssContentEngine.AppendTargetCounter</c> when this box's <c>Content</c>
@@ -123,7 +132,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="HtmlContainerInt"/>'s target-page convergence loop, which revisits every box this
         /// is set on once a real page map exists.
         /// </summary>
-        internal bool HasPendingTargetPageContent { get; set; }
+        internal bool HasPendingTargetPageContent { get => _rare is null ? default(bool) : _rare.HasPendingTargetPageContent; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.HasPendingTargetPageContent = value; } }
 
 
         #endregion
@@ -222,7 +231,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ParentBox"/> is never null while that reparenting is in effect, so this is never
         /// consulted for it. See <see href="https://github.com/jhaygood86/PeachPDF/issues/787">#787</see>.
         /// </summary>
-        internal CssBox? DomParentBox { get; set; }
+        internal CssBox? DomParentBox { get => _rare is null ? default(CssBox?) : _rare.DomParentBox; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.DomParentBox = value; } }
 
         /// <summary>
         /// <see cref="ParentBox"/> when this box has a live layout-tree parent, falling back to
@@ -269,7 +278,19 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public List<CssBox> Boxes { get; } = [];
 
-        public Dictionary<string, CssCounter> Counters { get; } = [];
+        private Dictionary<string, CssCounter>? _counters;
+
+        /// <summary>The counters this box scopes; allocated on first write - read through <see cref="TryGetCounter"/> or <see cref="GetCounterOrNull"/> to look without allocating.</summary>
+        public Dictionary<string, CssCounter> Counters => _counters ??= [];
+
+        internal bool TryGetCounter(string name, out CssCounter counter)
+        {
+            if (_counters is not null) return _counters.TryGetValue(name, out counter!);
+            counter = default!;
+            return false;
+        }
+
+        internal CssCounter? GetCounterOrNull(string name) => _counters?.GetValueOrDefault(name);
 
         /// <summary>
         /// Names of counters for which <see cref="CssCounterEngine"/> has already applied this box's
@@ -281,7 +302,9 @@ namespace PeachPDF.Html.Core.Dom
         /// inheritance - and without this guard the second visit would silently re-apply (e.g.
         /// double-increment) an already-finalized counter.
         /// </summary>
-        internal HashSet<string> FinalizedCounterNames { get; } = [];
+        private HashSet<string>? _finalizedCounterNames;
+
+        internal HashSet<string> FinalizedCounterNames => _finalizedCounterNames ??= [];
 
         /// <summary>
         /// CSS 2.1 §12.2 quote nesting depth (open-quote/no-open-quote minus close-quote/
@@ -318,14 +341,28 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal int? QuoteSubtreeLocalMin { get; set; }
 
-        public Dictionary<string, NamedString> NamedStrings { get; } = [];
+        private Dictionary<string, NamedString>? _namedStrings;
+
+        /// <summary>The named strings (<c>string-set</c>) this box defines; allocated on first write.</summary>
+        public Dictionary<string, NamedString> NamedStrings => _namedStrings ??= [];
+
+        internal bool HasNamedStrings => _namedStrings is { Count: > 0 };
+
+        internal IEnumerable<NamedString> NamedStringValues => _namedStrings is null ? [] : _namedStrings.Values;
+
+        internal bool TryGetNamedString(string name, out NamedString namedString)
+        {
+            if (_namedStrings is not null) return _namedStrings.TryGetValue(name, out namedString!);
+            namedString = default!;
+            return false;
+        }
 
         /// <summary>
         /// The <c>page:</c>-selector tracking entry this box registered with <see cref="HtmlContainerInt"/>
         /// (if any), retained so a later ancestor reposition (<see cref="OffsetTop(double)"/>) can keep it in sync -
         /// mirrors <see cref="NamedStrings"/>'s same purpose for string-set.
         /// </summary>
-        internal NamedPageElement? RegisteredNamedPageElement { get; set; }
+        internal NamedPageElement? RegisteredNamedPageElement { get => _rare is null ? default(NamedPageElement?) : _rare.RegisteredNamedPageElement; set { if (_rare is null) { if (EqualityComparer<NamedPageElement?>.Default.Equals(value, default(NamedPageElement?))) return; _rare = new BoxRareState(); } _rare.RegisteredNamedPageElement = value; } }
 
         /// <summary>
         /// The css-gcpm-3 <c>running()</c> tracking entry this box registered with
@@ -333,18 +370,18 @@ namespace PeachPDF.Html.Core.Dom
         /// same withdraw-before-register purpose, for the same reflow-corruption reason. See
         /// <see cref="RegisterAsRunningElement"/>.
         /// </summary>
-        internal RunningElement? RegisteredRunningElement { get; set; }
+        internal RunningElement? RegisteredRunningElement { get => _rare is null ? default(RunningElement?) : _rare.RegisteredRunningElement; set { if (_rare is null) { if (EqualityComparer<RunningElement?>.Default.Equals(value, default(RunningElement?))) return; _rare = new BoxRareState(); } _rare.RegisteredRunningElement = value; } }
 
         // The used auto block-start margin currently translated into this positioned box's geometry.
         // A content-sized containing block can revise the provisional answer after its own height settles.
-        private double _appliedPositionedAutoMarginTop;
+        private double _appliedPositionedAutoMarginTop { get => _rare is null ? default(double) : _rare._appliedPositionedAutoMarginTop; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare._appliedPositionedAutoMarginTop = value; } }
 
         /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
         public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.OrdinalIgnoreCase);
 
-        public bool IsRoot { get; set; }
+        public bool IsRoot { get => _rare is null ? default(bool) : _rare.IsRoot; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsRoot = value; } }
 
         public bool IsBeforePseudoElement { get; set; }
 
@@ -356,7 +393,7 @@ namespace PeachPDF.Html.Core.Dom
         /// text belongs only in an interactive field's replaceable PDF appearance stream, not in
         /// normal HTML layout.
         /// </summary>
-        internal bool IsPlaceholderPseudoElement { get; set; }
+        internal bool IsPlaceholderPseudoElement { get => _rare is null ? default(bool) : _rare.IsPlaceholderPseudoElement; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsPlaceholderPseudoElement = value; } }
 
         /// <summary>
         /// Is this box a synthesized <c>::marker</c> pseudo-element (see <see cref="CssData"/>'s
@@ -366,7 +403,7 @@ namespace PeachPDF.Html.Core.Dom
         /// painting - a real, cascaded box, the same as <see cref="IsBeforePseudoElement"/>/
         /// <see cref="IsAfterPseudoElement"/> boxes.
         /// </summary>
-        public bool IsMarkerPseudoElement { get; set; }
+        public bool IsMarkerPseudoElement { get => _rare is null ? default(bool) : _rare.IsMarkerPseudoElement; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsMarkerPseudoElement = value; } }
 
         /// <summary>
         /// Is this box a synthesized <c>::footnote-call</c> pseudo-element - the numbered in-flow
@@ -376,7 +413,7 @@ namespace PeachPDF.Html.Core.Dom
         /// never excluded from its owner's ordinary inline flow - it *is* the owner's in-flow content,
         /// standing in for the detached footnote body.
         /// </summary>
-        public bool IsFootnoteCallPseudoElement { get; set; }
+        public bool IsFootnoteCallPseudoElement { get => _rare is null ? default(bool) : _rare.IsFootnoteCallPseudoElement; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsFootnoteCallPseudoElement = value; } }
 
         /// <summary>
         /// Is this box a synthesized <c>::footnote-marker</c> pseudo-element - the leading number
@@ -385,7 +422,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssBoxFootnoteMarker"/>, inserted as the detached footnote body's first child so
         /// it flows ahead of the body's own content like an <c>inside</c> list marker.
         /// </summary>
-        public bool IsFootnoteMarkerPseudoElement { get; set; }
+        public bool IsFootnoteMarkerPseudoElement { get => _rare is null ? default(bool) : _rare.IsFootnoteMarkerPseudoElement; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsFootnoteMarkerPseudoElement = value; } }
 
         /// <summary>
         /// For an <see cref="IsFootnoteCallPseudoElement"/> or <see cref="IsFootnoteMarkerPseudoElement"/>
@@ -399,7 +436,7 @@ namespace PeachPDF.Html.Core.Dom
         /// container, not <c>E</c> - <c>E</c> itself is fully detached from the tree once
         /// <c>DomParser.DetachFootnoteBodies</c> runs.
         /// </summary>
-        public CssBox? FootnoteSourceBox { get; set; }
+        public CssBox? FootnoteSourceBox { get => _rare is null ? default(CssBox?) : _rare.FootnoteSourceBox; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.FootnoteSourceBox = value; } }
 
         /// <summary>
         /// Is this box a synthesized <c>::first-letter</c> pseudo-element - unlike
@@ -410,7 +447,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="FirstLetterOriginatingBox"/>) - see <c>CssData.DoesSelectorMatch</c>'s
         /// <c>PseudoElementNames.FirstLetter</c> case for the split logic.
         /// </summary>
-        public bool IsFirstLetterPseudoElement { get; set; }
+        public bool IsFirstLetterPseudoElement { get => _rare is null ? default(bool) : _rare.IsFirstLetterPseudoElement; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsFirstLetterPseudoElement = value; } }
 
         /// <summary>
         /// For a synthesized <see cref="IsFirstLetterPseudoElement"/> box, the real element <c>E</c>
@@ -422,14 +459,14 @@ namespace PeachPDF.Html.Core.Dom
         /// itself deliberately stays the real structural parent so ordinary style inheritance (e.g.
         /// that nested <c>&lt;b&gt;</c>'s bold weight) still applies correctly to this box.
         /// </summary>
-        public CssBox? FirstLetterOriginatingBox { get; set; }
+        public CssBox? FirstLetterOriginatingBox { get => _rare is null ? default(CssBox?) : _rare.FirstLetterOriginatingBox; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.FirstLetterOriginatingBox = value; } }
 
         /// <summary>
         /// Idempotency guard set on the real matched element <c>E</c> (not the split box, since the
         /// split point may be several levels below <c>E</c> and isn't necessarily among its direct
         /// children) once <c>::first-letter</c> synthesis has been attempted for it.
         /// </summary>
-        public bool FirstLetterProcessed { get; set; }
+        public bool FirstLetterProcessed { get => _rare is null ? default(bool) : _rare.FirstLetterProcessed; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.FirstLetterProcessed = value; } }
 
         /// <summary>
         /// Set during <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, ICssDomNode?)"/> when some
@@ -442,7 +479,7 @@ namespace PeachPDF.Html.Core.Dom
         /// of this box's descendants until their own cascade pass has run (this box's own cascade
         /// pass, where selector matching happens, completes *before* recursing into children).
         /// </summary>
-        internal bool MatchesFirstLetterSelector { get; set; }
+        internal bool MatchesFirstLetterSelector { get => _rare is null ? default(bool) : _rare.MatchesFirstLetterSelector; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.MatchesFirstLetterSelector = value; } }
 
         /// <summary>
         /// When non-null, this box establishes an inline formatting context (e.g. a <c>&lt;p&gt;</c>)
@@ -457,14 +494,14 @@ namespace PeachPDF.Html.Core.Dom
         /// once, in <c>DomParser.CascadeApplyStyles</c>, right after this box's own normal cascade
         /// completes (its own properties are needed as this shadow box's inherited baseline).
         /// </summary>
-        internal CssBox? ResolvedFirstLineStyle { get; set; }
+        internal CssBox? ResolvedFirstLineStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedFirstLineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedFirstLineStyle = value; } }
 
         /// <summary>
         /// The computed style of this form control's <c>::placeholder</c>, resolved through the normal
         /// cascade into a detached pseudo-element box. Null unless the control is showing a
         /// placeholder at PDF-generation time.
         /// </summary>
-        internal CssBox? ResolvedPlaceholderStyle { get; set; }
+        internal CssBox? ResolvedPlaceholderStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedPlaceholderStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedPlaceholderStyle = value; } }
 
         /// <summary>Idempotency guard for <see cref="ResolvedPlaceholderStyle"/> resolution.</summary>
         internal bool PlaceholderStyleProcessed { get; set; }
@@ -484,7 +521,7 @@ namespace PeachPDF.Html.Core.Dom
         /// pass must no-op instead of painting the same background a second time at its own (possibly
         /// much smaller than the page) laid-out rect.
         /// </summary>
-        internal bool SuppressOwnBackgroundPaint { get; set; }
+        internal bool SuppressOwnBackgroundPaint { get => _rare is null ? default(bool) : _rare.SuppressOwnBackgroundPaint; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.SuppressOwnBackgroundPaint = value; } }
 
         /// <summary>
         /// Set on a <c>&lt;table&gt;</c> box that has a caption, alongside <see cref="SuppressOwnBackgroundPaint"/>:
@@ -493,7 +530,7 @@ namespace PeachPDF.Html.Core.Dom
         /// span - see <see cref="TableGridDecorationBox"/>, which paints the border this box no longer
         /// does, at the grid's own rect. Issue #721.
         /// </summary>
-        internal bool SuppressOwnBorderPaint { get; set; }
+        internal bool SuppressOwnBorderPaint { get => _rare is null ? default(bool) : _rare.SuppressOwnBorderPaint; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.SuppressOwnBorderPaint = value; } }
 
         /// <summary>
         /// On a <c>&lt;table&gt;</c> box with a caption, the anonymous leaf <see cref="CssLayoutEngineTable"/>
@@ -503,7 +540,7 @@ namespace PeachPDF.Html.Core.Dom
         /// exclude - see .claude/recent-fixes/2026-08-13-table-caption-grid-only-border-background.md /
         /// issue #721).
         /// </summary>
-        internal CssBox? TableGridDecorationBox { get; set; }
+        internal CssBox? TableGridDecorationBox { get => _rare is null ? default(CssBox?) : _rare.TableGridDecorationBox; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.TableGridDecorationBox = value; } }
 
         /// <summary>
         /// True on the box <see cref="TableGridDecorationBox"/> points to (never set anywhere else) - a
@@ -515,7 +552,7 @@ namespace PeachPDF.Html.Core.Dom
         /// margin-collapse lookahead - each of which must see whatever the table's own first *real* child
         /// (its caption) sees, not this box. Issue #721.
         /// </summary>
-        internal bool IsTableGridDecorationBox { get; set; }
+        internal bool IsTableGridDecorationBox { get => _rare is null ? default(bool) : _rare.IsTableGridDecorationBox; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsTableGridDecorationBox = value; } }
 
         /// <summary>
         /// True on the anonymous block box <c>DomParser.CorrectInlineBoxesParent</c> generates around a
@@ -531,7 +568,7 @@ namespace PeachPDF.Html.Core.Dom
         /// sibling, and measured the two as competing lines (issue #1033).
         /// </para>
         /// </summary>
-        internal bool IsInlineRunWrapper { get; set; }
+        internal bool IsInlineRunWrapper { get => _rare is null ? default(bool) : _rare.IsInlineRunWrapper; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsInlineRunWrapper = value; } }
 
         /// <summary>
         /// True for the anonymous block <see cref="DomParser.CorrectReplacedElementBoxes"/> builds
@@ -543,14 +580,14 @@ namespace PeachPDF.Html.Core.Dom
         /// reads this to skip the CSS 2.1 §10.8 strut it would otherwise reserve under the image - the
         /// exact gap <c>display: block</c> is meant to opt an image out of (issue #1127).
         /// </summary>
-        internal bool IsReplacedBlockWrapper { get; set; }
+        internal bool IsReplacedBlockWrapper { get => _rare is null ? default(bool) : _rare.IsReplacedBlockWrapper; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsReplacedBlockWrapper = value; } }
 
         /// <summary>
         /// Whether this was a <c>display: inline</c> box that <c>DomParser.CorrectBlockInsideInline</c> rewrote to
         /// <c>block</c> because it holds a block-level child. The rewrite is how this engine lays the split out; to
         /// the author it is still an inline box, which is what <see cref="DerivedStyle.IsTransformable"/> asks.
         /// </summary>
-        internal bool IsInlineBoxSplitByBlock { get; set; }
+        internal bool IsInlineBoxSplitByBlock { get => _rare is null ? default(bool) : _rare.IsInlineBoxSplitByBlock; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsInlineBoxSplitByBlock = value; } }
 
         /// <summary>
         /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
@@ -785,7 +822,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Maps page number → last row bottom Y on that page. Set by CssLayoutEngineTable when rows break across pages.
         /// Used during paint to clip the table box border to the actual content height on each page.
         /// </summary>
-        internal Dictionary<int, double>? PageBreakBottoms { get; set; }
+        internal Dictionary<int, double>? PageBreakBottoms { get => _rare is null ? default(Dictionary<int, double>?) : _rare.PageBreakBottoms; set { if (_rare is null) { if (EqualityComparer<Dictionary<int, double>?>.Default.Equals(value, default(Dictionary<int, double>?))) return; _rare = new BoxRareState(); } _rare.PageBreakBottoms = value; } }
 
         /// <summary>
         /// A <c>border-collapse: collapse</c> table's own logical row×column grid. Set on the table box by
@@ -793,10 +830,10 @@ namespace PeachPDF.Html.Core.Dom
         /// unlike <see cref="TableSetup"/> - never needs carrying across a resumed pass); null for a
         /// <c>separate</c> table, which builds neither this nor <see cref="CollapsedBorders"/>.
         /// </summary>
-        internal TableGrid? CollapsedBorderGrid { get; set; }
+        internal TableGrid? CollapsedBorderGrid { get => _rare is null ? default(TableGrid?) : _rare.CollapsedBorderGrid; set { if (_rare is null) { if (EqualityComparer<TableGrid?>.Default.Equals(value, default(TableGrid?))) return; _rare = new BoxRareState(); } _rare.CollapsedBorderGrid = value; } }
 
         /// <summary>CSS 2.1 §17.6.2's resolution of <see cref="CollapsedBorderGrid"/> - see its own remarks.</summary>
-        internal CollapsedBorderModel? CollapsedBorders { get; set; }
+        internal CollapsedBorderModel? CollapsedBorders { get => _rare is null ? default(CollapsedBorderModel?) : _rare.CollapsedBorders; set { if (_rare is null) { if (EqualityComparer<CollapsedBorderModel?>.Default.Equals(value, default(CollapsedBorderModel?))) return; _rare = new BoxRareState(); } _rare.CollapsedBorders = value; } }
 
         /// <summary>The edges of this box's own border stroke that <c>FragmentPainter</c> must not paint - see <see cref="BorderEdges"/>.</summary>
         internal BorderEdges SuppressedBorderEdges { get; set; }
@@ -807,7 +844,7 @@ namespace PeachPDF.Html.Core.Dom
         /// rather than derivable from one box's own geometry - one entry per resolved grid-line run, see
         /// <see cref="CollapsedBorderSegment"/>.
         /// </summary>
-        internal List<CollapsedBorderSegment>? CollapsedBorderSegments { get; set; }
+        internal List<CollapsedBorderSegment>? CollapsedBorderSegments { get => _rare is null ? default(List<CollapsedBorderSegment>?) : _rare.CollapsedBorderSegments; set { if (_rare is null) { if (EqualityComparer<List<CollapsedBorderSegment>?>.Default.Equals(value, default(List<CollapsedBorderSegment>?))) return; _rare = new BoxRareState(); } _rare.CollapsedBorderSegments = value; } }
 
         /// <summary>
         /// Where this table's row loop stopped, or null when it reached the end of its body rows. Null on
@@ -835,7 +872,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which is the only form of the answer anything after layout can ask for.
         /// </para>
         /// </remarks>
-        internal TableBreakToken? TableContinuation { get; set; }
+        internal TableBreakToken? TableContinuation { get => _rare is null ? default(TableBreakToken?) : _rare.TableContinuation; set { if (_rare is null) { if (EqualityComparer<TableBreakToken?>.Default.Equals(value, default(TableBreakToken?))) return; _rare = new BoxRareState(); } _rare.TableContinuation = value; } }
 
         /// <summary>
         /// What <c>CssLayoutEngineTable</c> settled once for this table, kept here because the engine is
@@ -850,7 +887,7 @@ namespace PeachPDF.Html.Core.Dom
         /// destroyed by. See <see cref="Fragmentation.TableSetup"/> for what a resumed pass inherits from it
         /// and why each of those things is destructive when done twice.
         /// </remarks>
-        internal TableSetup? TableSetup { get; set; }
+        internal TableSetup? TableSetup { get => _rare is null ? default(TableSetup?) : _rare.TableSetup; set { if (_rare is null) { if (EqualityComparer<TableSetup?>.Default.Equals(value, default(TableSetup?))) return; _rare = new BoxRareState(); } _rare.TableSetup = value; } }
 
         /// <summary>
         /// Per-row minimum row-axis extents a measurement pass computed for this table, because its own
@@ -862,7 +899,7 @@ namespace PeachPDF.Html.Core.Dom
         /// redistribution is in progress - which is every table without an explicit height/min-height,
         /// and every pass of one that has.
         /// </summary>
-        internal IReadOnlyDictionary<CssBox, double>? RowHeightRedistribution { get; set; }
+        internal IReadOnlyDictionary<CssBox, double>? RowHeightRedistribution { get => _rare is null ? default(IReadOnlyDictionary<CssBox, double>?) : _rare.RowHeightRedistribution; set { if (_rare is null) { if (EqualityComparer<IReadOnlyDictionary<CssBox, double>?>.Default.Equals(value, default(IReadOnlyDictionary<CssBox, double>?))) return; _rare = new BoxRareState(); } _rare.RowHeightRedistribution = value; } }
 
         /// <summary>
         /// Accumulates, across a table whose row loop must continue into a separate, later top-level
@@ -888,14 +925,14 @@ namespace PeachPDF.Html.Core.Dom
         /// null</c>), never on the redistribution-redo call that same invocation may make internally - the
         /// redo needs to inherit whatever this invocation is in the middle of accumulating, not restart it.
         /// </remarks>
-        internal double? NaturalRowAxisExtentCarry { get; set; }
+        internal double? NaturalRowAxisExtentCarry { get => _rare is null ? default(double?) : _rare.NaturalRowAxisExtentCarry; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new BoxRareState(); } _rare.NaturalRowAxisExtentCarry = value; } }
 
         /// <summary>
         /// The vertical line segments (in absolute document coordinates) to draw between adjacent
         /// columns of a multi-column container — one segment per gap per page-row actually used.
         /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="FragmentPainter"/>.
         /// </summary>
-        internal List<(double X, double Top, double Bottom)>? ColumnRuleSegments { get; set; }
+        internal List<(double X, double Top, double Bottom)>? ColumnRuleSegments { get => _rare is null ? default(List<(double X, double Top, double Bottom)>?) : _rare.ColumnRuleSegments; set { if (_rare is null) { if (EqualityComparer<List<(double X, double Top, double Bottom)>?>.Default.Equals(value, default(List<(double X, double Top, double Bottom)>?))) return; _rare = new BoxRareState(); } _rare.ColumnRuleSegments = value; } }
 
         public virtual bool IsTableCell => DerivedStyle.ActualDisplay is Keywords.TableCell;
 
@@ -1167,7 +1204,7 @@ namespace PeachPDF.Html.Core.Dom
         /// not a regression this field introduces.
         /// </para>
         /// </remarks>
-        public double? AlgorithmicDefiniteHeight { get; set; }
+        public double? AlgorithmicDefiniteHeight { get => _rare is null ? default(double?) : _rare.AlgorithmicDefiniteHeight; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new BoxRareState(); } _rare.AlgorithmicDefiniteHeight = value; } }
 
         /// <summary>
         /// Gets the actual top's Margin
@@ -1224,7 +1261,7 @@ namespace PeachPDF.Html.Core.Dom
         /// non-<c>!important</c> rule cannot silently override a value the caller explicitly set (the same
         /// precedence an inline <c>style=""</c> attribute would have over an author stylesheet).
         /// </summary>
-        internal HashSet<string>? BuilderSetProperties { get; set; }
+        internal HashSet<string>? BuilderSetProperties { get => _rare is null ? default(HashSet<string>?) : _rare.BuilderSetProperties; set { if (_rare is null) { if (EqualityComparer<HashSet<string>?>.Default.Equals(value, default(HashSet<string>?))) return; _rare = new BoxRareState(); } _rare.BuilderSetProperties = value; } }
 
         /// <summary>
         /// True on every box that was styled by a real, specificity-ordered HTML cascade at
@@ -1237,7 +1274,7 @@ namespace PeachPDF.Html.Core.Dom
         /// since a &lt;slot&gt; filled with ordinary declarative content is never flagged and must still
         /// participate normally.
         /// </summary>
-        internal bool IsFragmentStyled { get; set; }
+        internal bool IsFragmentStyled { get => _rare is null ? default(bool) : _rare.IsFragmentStyled; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsFragmentStyled = value; } }
 
         /// <summary>
         /// This element's resolved language: its own `lang` attribute if non-empty, else the nearest
@@ -1365,7 +1402,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ResolveWordShapingFeatures"/> ever sees it - never read this field directly to
         /// decide whether to request USE shaping.
         /// </summary>
-        internal UseCategory[]? UseCategories { get; set; }
+        internal UseCategory[]? UseCategories { get => _rare is null ? default(UseCategory[]?) : _rare.UseCategories; set { if (_rare is null) { if (EqualityComparer<UseCategory[]?>.Default.Equals(value, default(UseCategory[]?))) return; _rare = new BoxRareState(); } _rare.UseCategories = value; } }
 
         /// <summary>
         /// One resolved <see cref="KhmerCategory"/> per character of <see cref="Text"/>, set alongside
@@ -1378,7 +1415,7 @@ namespace PeachPDF.Html.Core.Dom
         /// inert sentinel. <c>ToRuneIndexedKhmerCategories</c> is what narrows this back down to "does
         /// *this specific word* need Khmer shaping" - never read this field directly.
         /// </summary>
-        internal KhmerCategory[]? KhmerCategories { get; set; }
+        internal KhmerCategory[]? KhmerCategories { get => _rare is null ? default(KhmerCategory[]?) : _rare.KhmerCategories; set { if (_rare is null) { if (EqualityComparer<KhmerCategory[]?>.Default.Equals(value, default(KhmerCategory[]?))) return; _rare = new BoxRareState(); } _rare.KhmerCategories = value; } }
 
         /// <summary>
         /// Gets the line-boxes of this box (if block box)
@@ -1397,7 +1434,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssLayoutEngine.RestoreLineClampMutations"/>, called wherever
         /// <see cref="CssLayoutEngine.RestoreOverflowWrapSplits"/> is.
         /// </summary>
-        internal List<(CssBox Owner, int Index, CssRect Word)>? LineClampPoppedWords { get; set; }
+        internal List<(CssBox Owner, int Index, CssRect Word)>? LineClampPoppedWords { get => _rare is null ? default(List<(CssBox Owner, int Index, CssRect Word)>?) : _rare.LineClampPoppedWords; set { if (_rare is null) { if (EqualityComparer<List<(CssBox Owner, int Index, CssRect Word)>?>.Default.Equals(value, default(List<(CssBox Owner, int Index, CssRect Word)>?))) return; _rare = new BoxRareState(); } _rare.LineClampPoppedWords = value; } }
 
         /// <summary>
         /// The generated ellipsis word <see cref="CssLayoutEngine.TryApplyLineClamp"/> appended to some
@@ -1407,7 +1444,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssLayoutEngine.RestoreLineClampMutations"/> for the same reason
         /// <see cref="LineClampPoppedWords"/> is.
         /// </summary>
-        internal (CssBox Owner, CssRect Word)? LineClampEllipsisWord { get; set; }
+        internal (CssBox Owner, CssRect Word)? LineClampEllipsisWord { get => _rare is null ? default((CssBox Owner, CssRect Word)?) : _rare.LineClampEllipsisWord; set { if (_rare is null) { if (EqualityComparer<(CssBox Owner, CssRect Word)?>.Default.Equals(value, default((CssBox Owner, CssRect Word)?))) return; _rare = new BoxRareState(); } _rare.LineClampEllipsisWord = value; } }
 
         /// <summary>
         /// True when this box's <c>direction</c> was set to <see cref="PeachPDF.Layout.PdfTextDirection.Auto"/>
@@ -1423,7 +1460,7 @@ namespace PeachPDF.Html.Core.Dom
         /// and clears the flag, mirroring how <see cref="Parse.DomParser"/> resolves the HTML path's own
         /// <c>dir="auto"</c> once over a whole freshly-parsed document.
         /// </summary>
-        internal bool PendingAutoDirection { get; set; }
+        internal bool PendingAutoDirection { get => _rare is null ? default(bool) : _rare.PendingAutoDirection; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.PendingAutoDirection = value; } }
 
         /// <summary>
         /// Non-null when this box is a declarative API <c>PageNumberWithinSection</c>/
@@ -1436,14 +1473,14 @@ namespace PeachPDF.Html.Core.Dom
         /// marker's page), which a CSS <c>content</c> value has no way to express - see
         /// <see cref="RunningElementLayout.RefreshPageCounterContent"/>'s own resolution of this field.
         /// </summary>
-        internal string? SectionPageCounterSectionId { get; set; }
+        internal string? SectionPageCounterSectionId { get => _rare is null ? default(string?) : _rare.SectionPageCounterSectionId; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.SectionPageCounterSectionId = value; } }
 
         /// <summary>
         /// See <see cref="SectionPageCounterSectionId"/>. False resolves to the current page's own number
         /// within the section (<c>PageNumberWithinSection</c>); true resolves to the section's total page
         /// count (<c>TotalPagesWithinSection</c>).
         /// </summary>
-        internal bool SectionPageCounterIsTotal { get; set; }
+        internal bool SectionPageCounterIsTotal { get => _rare is null ? default(bool) : _rare.SectionPageCounterIsTotal; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.SectionPageCounterIsTotal = value; } }
 
         /// <summary>
         /// Non-null when the declarative API's <c>IContainer.BeginPageNumberOfSection(sectionId)</c> was
@@ -1461,15 +1498,37 @@ namespace PeachPDF.Html.Core.Dom
         /// need to be able to coexist on the very same box (a section ending exactly where the next one
         /// begins), which a single HTML <c>id</c> attribute can't express.
         /// </summary>
-        internal string? SectionBeginId { get; set; }
+        internal string? SectionBeginId { get => _rare is null ? default(string?) : _rare.SectionBeginId; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.SectionBeginId = value; } }
 
         /// <summary>Non-null when <c>IContainer.EndPageNumberOfSection(sectionId)</c> was called on this box - see <see cref="SectionBeginId"/>.</summary>
-        internal string? SectionEndId { get; set; }
+        internal string? SectionEndId { get => _rare is null ? default(string?) : _rare.SectionEndId; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.SectionEndId = value; } }
 
         /// <summary>
         /// Gets the rectangles where this box should be painted
         /// </summary>
-        internal Dictionary<CssLineBox, Rect> Rectangles { get; } = [];
+        internal Dictionary<CssLineBox, Rect> Rectangles => _rectangles ??= [];
+
+        private Dictionary<CssLineBox, Rect>? _rectangles;
+
+        // Most boxes (every block, every box with no inline content of its own) have no per-line rectangles. The readers every box
+        // goes through use these, which look without creating the dictionary; Rectangles above creates it for a writer.
+        private static readonly IReadOnlyDictionary<CssLineBox, Rect> NoRectangles = new Dictionary<CssLineBox, Rect>();
+
+        /// <summary>A read-only view of <see cref="Rectangles"/> that does not create the dictionary for a box that has none.</summary>
+        internal IReadOnlyDictionary<CssLineBox, Rect> RectanglesView => _rectangles ?? NoRectangles;
+
+        internal int RectangleCount => _rectangles?.Count ?? 0;
+
+        internal IEnumerable<CssLineBox> RectangleKeys => _rectangles is null ? [] : _rectangles.Keys;
+
+        internal IEnumerable<Rect> RectangleValues => _rectangles is null ? [] : _rectangles.Values;
+
+        internal void RemoveRectangle(CssLineBox line) => _rectangles?.Remove(line);
+
+        internal void ClearRectangles() => _rectangles?.Clear();
+
+        /// <summary>Whether this box has allocated its per-line rectangles.</summary>
+        internal bool HasRectanglesDictionary => _rectangles is not null;
 
         /// <summary>
         /// Gets the BoxWords of text in the box
@@ -1487,7 +1546,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
         /// <see cref="DomUtils.InlineContainingBlockOf"/>).
         /// </summary>
-        internal Rect? EmptyInlineContainingBlock { get; set; }
+        internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>
         /// Gets or sets the first linebox where content of this box appear
@@ -2501,7 +2560,7 @@ namespace PeachPDF.Html.Core.Dom
         /// separate methods — and, once a box can be laid out across several fragmentainer passes, in
         /// separate passes: the prologue runs only on the pass that first enters the box.
         /// </summary>
-        private bool _isForcedBreak;
+        private bool _isForcedBreak { get => _rare is null ? default(bool) : _rare._isForcedBreak; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._isForcedBreak = value; } }
 
         /// <summary>
         /// Set externally by <see cref="HtmlContainerInt.ResolveFootnotesForThisAttempt"/> when
@@ -2515,7 +2574,7 @@ namespace PeachPDF.Html.Core.Dom
         /// owns clearing it before re-deciding each pass, the same way it owns every other piece of
         /// footnote-policy state.
         /// </summary>
-        internal bool FootnotePolicyForcedBreakBefore { get; set; }
+        internal bool FootnotePolicyForcedBreakBefore { get => _rare is null ? default(bool) : _rare.FootnotePolicyForcedBreakBefore; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.FootnotePolicyForcedBreakBefore = value; } }
 
         /// <summary>
         /// Whether the break point before this box carries a forced break value at all, whether or not
@@ -2526,7 +2585,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see href="https://www.w3.org/TR/css-break-3/#break-margins">§5.2</see>'s truncation of margins
         /// adjoining an <i>unforced</i> break still must not reach this box's margin.
         /// </summary>
-        private bool _adjoinsForcedBreakPoint;
+        private bool _adjoinsForcedBreakPoint { get => _rare is null ? default(bool) : _rare._adjoinsForcedBreakPoint; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._adjoinsForcedBreakPoint = value; } }
 
         /// <summary>
         /// Whether this box registers a named-page entry, resolved by
@@ -2538,7 +2597,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>UsedPageName != ActivePageName</c> comparison would read false for an already-registered
         /// box and silently skip its Y-drift re-sync.
         /// </remarks>
-        private bool _shouldRegisterPage;
+        private bool _shouldRegisterPage { get => _rare is null ? default(bool) : _rare._shouldRegisterPage; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._shouldRegisterPage = value; } }
 
         /// <summary>
         /// The side css-break-3 §3.1 requires the page after this box's forced break to fall on, or
@@ -2550,7 +2609,7 @@ namespace PeachPDF.Html.Core.Dom
         /// and by nothing that can move underneath it, which is why it stays latched in the prologue while
         /// the break's <i>target</i> does not (<see cref="ForcedBreakTopFor"/>).
         /// </remarks>
-        private PageSide _forcedBreakSide;
+        private PageSide _forcedBreakSide { get => _rare is null ? default(PageSide) : _rare._forcedBreakSide; set { if (_rare is null) { if (EqualityComparer<PageSide>.Default.Equals(value, default(PageSide))) return; _rare = new BoxRareState(); } _rare._forcedBreakSide = value; } }
 
         /// <summary>
         /// Whether this box's position was set by a forced break (css-break-3 §3.1) — and so, equally,
@@ -2573,26 +2632,26 @@ namespace PeachPDF.Html.Core.Dom
         /// Those two facts are the same fact, which is why there is one field for them rather than two.
         /// </para>
         /// </remarks>
-        internal bool PlacedByForcedBreak { get; private set; }
+        internal bool PlacedByForcedBreak { get => _rare is null ? default(bool) : _rare.PlacedByForcedBreak; private set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.PlacedByForcedBreak = value; } }
 
         /// <summary>
         /// For a multi-column container laid out beside a float, the left edge and width its columns were narrowed to
         /// so as to clear it (CSS 2.1 §9.5); null when it was not narrowed. Kept on the box because the pages it
         /// continues onto must use the same extent as the first, and the float is not beside it there.
         /// </summary>
-        internal (double Left, double Width)? ColumnsBesideFloats { get; set; }
+        internal (double Left, double Width)? ColumnsBesideFloats { get => _rare is null ? default((double Left, double Width)?) : _rare.ColumnsBesideFloats; set { if (_rare is null) { if (EqualityComparer<(double Left, double Width)?>.Default.Equals(value, default((double Left, double Width)?))) return; _rare = new BoxRareState(); } _rare.ColumnsBesideFloats = value; } }
 
         /// <summary>
         /// The floats placed while building the line this box's inline flow discarded at its last break. The resumed
         /// pass places them again, so the fragmentainer the flow stopped in must not claim them.
         /// </summary>
-        internal List<CssBox>? FloatsOfTheDiscardedLine { get; set; }
+        internal List<CssBox>? FloatsOfTheDiscardedLine { get => _rare is null ? default(List<CssBox>?) : _rare.FloatsOfTheDiscardedLine; set { if (_rare is null) { if (EqualityComparer<List<CssBox>?>.Default.Equals(value, default(List<CssBox>?))) return; _rare = new BoxRareState(); } _rare.FloatsOfTheDiscardedLine = value; } }
 
         /// <summary>
         /// The floats the flow's last kept line holds when it stopped, kept for the pass that resumes it: a float after that line's
         /// last word has the ordinal of the next word, and would be placed again by a resumed flow that took it for the next line's.
         /// </summary>
-        internal List<CssBox>? FloatsKeptAtTheStop { get; set; }
+        internal List<CssBox>? FloatsKeptAtTheStop { get => _rare is null ? default(List<CssBox>?) : _rare.FloatsKeptAtTheStop; set { if (_rare is null) { if (EqualityComparer<List<CssBox>?>.Default.Equals(value, default(List<CssBox>?))) return; _rare = new BoxRareState(); } _rare.FloatsKeptAtTheStop = value; } }
 
         /// <summary>
         /// Whether <c>clear</c> moved this box below a float it would otherwise have sat beside (CSS 2.1 §9.5.2
@@ -2601,7 +2660,7 @@ namespace PeachPDF.Html.Core.Dom
         /// empty clearing <c>div</c> (the clearfix) was treated as if it were not there, and the next sibling was
         /// placed against the box before it, beside the float the div had just cleared.
         /// </summary>
-        internal bool HasClearance { get; set; }
+        internal bool HasClearance { get => _rare is null ? default(bool) : _rare.HasClearance; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.HasClearance = value; } }
 
         /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
@@ -2767,7 +2826,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var hosted in line.Rectangles.Keys)
                 {
-                    hosted.Rectangles.Remove(line);
+                    hosted.RemoveRectangle(line);
                 }
 
                 foreach (var word in line.Words)
@@ -2861,7 +2920,7 @@ namespace PeachPDF.Html.Core.Dom
         /// was being filled, and so is not that fragmentainer's to satisfy
         /// (<see cref="BlockBreakToken.EscapesNestedFragmentainer"/>).
         /// </summary>
-        internal bool RequestedBreakEscapesNestedFragmentainer { get; private set; }
+        internal bool RequestedBreakEscapesNestedFragmentainer { get => _rare is null ? default(bool) : _rare.RequestedBreakEscapesNestedFragmentainer; private set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.RequestedBreakEscapesNestedFragmentainer = value; } }
 
         /// <summary>
         /// What an escaping forced break settled on the pass that raised it, waiting for the pass that
@@ -2894,13 +2953,13 @@ namespace PeachPDF.Html.Core.Dom
         /// field's.
         /// </para>
         /// </remarks>
-        private bool _escapedForcedBreakPending;
+        private bool _escapedForcedBreakPending { get => _rare is null ? default(bool) : _rare._escapedForcedBreakPending; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._escapedForcedBreakPending = value; } }
 
         /// <summary>
         /// The slot a directional escaping break reserved to land on the side it names, or null when the
         /// break named no side or already landed on one.
         /// </summary>
-        private int? _escapedForcedBreakBlankSlot;
+        private int? _escapedForcedBreakBlankSlot { get => _rare is null ? default(int?) : _rare._escapedForcedBreakBlankSlot; set { if (_rare is null) { if (EqualityComparer<int?>.Default.Equals(value, default(int?))) return; _rare = new BoxRareState(); } _rare._escapedForcedBreakBlankSlot = value; } }
 
         /// <summary>
         /// How this box resumes on the current pass, or null when it is being laid out from the start.
@@ -2936,7 +2995,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/> at all" (a table/flex/grid box sizes itself through its
         /// own engine instead), for which the guard this field feeds is simply inapplicable.
         /// </summary>
-        private double _measureResolvedAgainst = double.NaN;
+        private double _measureResolvedAgainst { get => _rare is null ? double.NaN : _rare._measureResolvedAgainst; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, double.NaN)) return; _rare = new BoxRareState(); } _rare._measureResolvedAgainst = value; } }
 
         /// <summary>
         /// Whether <see cref="ResetForRefill"/> has already brought this box into the state a pass
@@ -2959,7 +3018,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Where <see cref="PerformLayoutImp"/> is to re-place this box, set when an
         /// <see cref="EarlyBreak"/> is taken by re-laying the box out rather than by moving it.
         /// </summary>
-        private double? _earlyBreakRetryTop;
+        private double? _earlyBreakRetryTop { get => _rare is null ? default(double?) : _rare._earlyBreakRetryTop; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new BoxRareState(); } _rare._earlyBreakRetryTop = value; } }
 
         /// <summary>
         /// Where this box's own first in-flow child actually landed, when <see cref="TryRestartAt"/>
@@ -2976,7 +3035,7 @@ namespace PeachPDF.Html.Core.Dom
         /// restarting leaves a real predecessor still sitting where this box's own top says content
         /// begins, so no correction is needed there, and none is applied.
         /// </remarks>
-        private double? _firstChildRestartedTop;
+        private double? _firstChildRestartedTop { get => _rare is null ? default(double?) : _rare._firstChildRestartedTop; set { if (_rare is null) { if (EqualityComparer<double?>.Default.Equals(value, default(double?))) return; _rare = new BoxRareState(); } _rare._firstChildRestartedTop = value; } }
 
         /// <summary>
         /// The restarted float <see cref="TryRestartAt"/> stepped the pass's fragmentainer cursor for, and the
@@ -2989,7 +3048,7 @@ namespace PeachPDF.Html.Core.Dom
         /// question for them against the band of the page the float went to, and a line crossing the foot of
         /// the page they really sit on is never broken.
         /// </remarks>
-        private (CssBox Float, int Slot)? _cursorToRestoreAfterFloat;
+        private (CssBox Float, int Slot)? _cursorToRestoreAfterFloat { get => _rare is null ? default((CssBox Float, int Slot)?) : _rare._cursorToRestoreAfterFloat; set { if (_rare is null) { if (EqualityComparer<(CssBox Float, int Slot)?>.Default.Equals(value, default((CssBox Float, int Slot)?))) return; _rare = new BoxRareState(); } _rare._cursorToRestoreAfterFloat = value; } }
 
         /// <summary>
         /// A <c>direction: rtl</c> vertical box's own block-level children, set by
@@ -3005,14 +3064,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>max-height</c> box's real final bottom differs from its own content-driven or explicit-
         /// <c>height</c> extent.
         /// </remarks>
-        private List<CssBox>? _pendingCrossAxisRtlReflection;
+        private List<CssBox>? _pendingCrossAxisRtlReflection { get => _rare is null ? default(List<CssBox>?) : _rare._pendingCrossAxisRtlReflection; set { if (_rare is null) { if (EqualityComparer<List<CssBox>?>.Default.Equals(value, default(List<CssBox>?))) return; _rare = new BoxRareState(); } _rare._pendingCrossAxisRtlReflection = value; } }
 
         /// <summary>
         /// The floats <see cref="LayoutVerticalBlockChildren"/> pinned to this box's physical bottom edge (the
         /// line-right side), each with how far from that edge it sits. The bottom edge is only final once
         /// <see cref="CssLayoutEngine.ApplyHeight"/> has run in the epilogue, so they are moved there.
         /// </summary>
-        private List<(CssBox Box, double InlineFromBottom)>? _pendingBottomFloats;
+        private List<(CssBox Box, double InlineFromBottom)>? _pendingBottomFloats { get => _rare is null ? default(List<(CssBox Box, double InlineFromBottom)>?) : _rare._pendingBottomFloats; set { if (_rare is null) { if (EqualityComparer<List<(CssBox Box, double InlineFromBottom)>?>.Default.Equals(value, default(List<(CssBox Box, double InlineFromBottom)>?))) return; _rare = new BoxRareState(); } _rare._pendingBottomFloats = value; } }
 
         /// <summary>Hands <see cref="PerformLayoutEpilogue"/> the floats a vertical inline flow pinned to the bottom edge.</summary>
         internal void SetPendingBottomFloats(List<(CssBox Box, double InlineFromBottom)>? floats) =>
@@ -3025,7 +3084,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Set on a float that a vertical writing-mode block placed (<see cref="LayoutVerticalBlockChildren"/>):
         /// how far along the inline axis it reaches, and from which edge of the box that placed it.
         /// </summary>
-        internal VerticalFloatReach? VerticalFloatOccupancy { get; private set; }
+        internal VerticalFloatReach? VerticalFloatOccupancy { get => _rare is null ? default(VerticalFloatReach?) : _rare.VerticalFloatOccupancy; private set { if (_rare is null) { if (EqualityComparer<VerticalFloatReach?>.Default.Equals(value, default(VerticalFloatReach?))) return; _rare = new BoxRareState(); } _rare.VerticalFloatOccupancy = value; } }
 
         /// <summary>
         /// What a vertical-mode float takes of the inline axis, in terms of the box that placed it: whether it is
@@ -3076,7 +3135,7 @@ namespace PeachPDF.Html.Core.Dom
         /// live instance state at consumption time - nothing needs to be captured ahead of time the way
         /// "which children to reflect" does for the block-children case.
         /// </remarks>
-        internal bool _pendingVerticalInlineFinalize;
+        internal bool _pendingVerticalInlineFinalize { get => _rare is null ? default(bool) : _rare._pendingVerticalInlineFinalize; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._pendingVerticalInlineFinalize = value; } }
 
         /// <summary>
         /// Whether this box has already taken an <see cref="EarlyBreak"/> on this fragmentainer pass.
@@ -3096,7 +3155,7 @@ namespace PeachPDF.Html.Core.Dom
         /// because the box completes on a later pass than the one that relaxed it, and that pass's epilogue would otherwise ask
         /// the same question of the same geometry and move it again.
         /// </summary>
-        private bool _avoidRelaxed;
+        private bool _avoidRelaxed { get => _rare is null ? default(bool) : _rare._avoidRelaxed; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare._avoidRelaxed = value; } }
 
         /// <summary>
         /// Whether the break before this box has already been moved once for <c>orphans</c> in this layout.
@@ -4076,7 +4135,7 @@ namespace PeachPDF.Html.Core.Dom
         /// child then cannot be the container's own break point (css-break-3 �3.1): the container has content in
         /// the fragmentainer it is leaving, and moving it whole would re-lay the float from the later one.
         /// </summary>
-        internal bool FragmentedAcrossFloatPasses { get; set; }
+        internal bool FragmentedAcrossFloatPasses { get => _rare is null ? default(bool) : _rare.FragmentedAcrossFloatPasses; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.FragmentedAcrossFloatPasses = value; } }
 
         /// <summary>
         /// Whether this box, or anything in its subtree, is a float that ran as several fragmentainer passes.
@@ -4125,7 +4184,7 @@ namespace PeachPDF.Html.Core.Dom
         /// the offsets are measured from its start), so it reads this instead; read from <see cref="Location"/> it was
         /// anchored at the last column, which can be off the page.
         /// </summary>
-        internal PaintPoint? FirstColumnFragmentOrigin { get; set; }
+        internal PaintPoint? FirstColumnFragmentOrigin { get => _rare is null ? default(PaintPoint?) : _rare.FirstColumnFragmentOrigin; set { if (_rare is null) { if (EqualityComparer<PaintPoint?>.Default.Equals(value, default(PaintPoint?))) return; _rare = new BoxRareState(); } _rare.FirstColumnFragmentOrigin = value; } }
 
         /// <summary>
         /// Whether an engine has already decided this box's final <see cref="CssBox.Location"/>
@@ -4177,7 +4236,7 @@ namespace PeachPDF.Html.Core.Dom
         /// concluding a box is behind the frontier while content it will keep growing has not finished
         /// fragmenting.
         /// </remarks>
-        internal bool ItemContentSizeEverPinned { get; set; }
+        internal bool ItemContentSizeEverPinned { get => _rare is null ? default(bool) : _rare.ItemContentSizeEverPinned; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.ItemContentSizeEverPinned = value; } }
 
         /// <summary>
         /// What <see cref="Width"/>/<see cref="Height"/> held before
@@ -4185,10 +4244,10 @@ namespace PeachPDF.Html.Core.Dom
         /// layout generation can measure this item against what the author wrote rather than against the
         /// previous generation's result - see <see cref="Fragmentation.ItemContentCommit.UnpinIfPinned"/>.
         /// </summary>
-        internal string? WidthBeforeItemPin { get; set; }
+        internal string? WidthBeforeItemPin { get => _rare is null ? default(string?) : _rare.WidthBeforeItemPin; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.WidthBeforeItemPin = value; } }
 
         /// <inheritdoc cref="WidthBeforeItemPin"/>
-        internal string? HeightBeforeItemPin { get; set; }
+        internal string? HeightBeforeItemPin { get => _rare is null ? default(string?) : _rare.HeightBeforeItemPin; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.HeightBeforeItemPin = value; } }
 
         /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
@@ -8223,9 +8282,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         internal static double GetMaximumBottom(CssBox startBox, double currentMaxBottom)
         {
-            foreach (var line in startBox.Rectangles.Keys)
+            if (startBox._rectangles is { } rectangles)
             {
-                currentMaxBottom = Math.Max(currentMaxBottom, startBox.Rectangles[line].Bottom);
+                foreach (var (_, rect) in rectangles)
+                    currentMaxBottom = Math.Max(currentMaxBottom, rect.Bottom);
             }
 
             foreach (var b in startBox.Boxes)
@@ -8258,9 +8318,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         internal static double GetMaximumRight(CssBox startBox, double currentMaxRight)
         {
-            foreach (var line in startBox.Rectangles.Keys)
+            if (startBox._rectangles is { } rectangles)
             {
-                currentMaxRight = Math.Max(currentMaxRight, startBox.Rectangles[line].Right);
+                foreach (var (_, rect) in rectangles)
+                    currentMaxRight = Math.Max(currentMaxRight, rect.Right);
             }
 
             foreach (var b in startBox.Boxes)
@@ -9807,7 +9868,7 @@ namespace PeachPDF.Html.Core.Dom
             NotifyGeometryChanged(OwnGeometryTop(), amount);
 
             List<CssLineBox> lines = [];
-            foreach (var line in Rectangles.Keys)
+            foreach (var line in RectangleKeys)
                 lines.Add(line);
 
             foreach (var line in lines)
@@ -10055,7 +10116,7 @@ namespace PeachPDF.Html.Core.Dom
         private void ShiftOwnLineGeometryLeft(double amount)
         {
             List<CssLineBox> lines = [];
-            foreach (var line in Rectangles.Keys)
+            foreach (var line in RectangleKeys)
                 lines.Add(line);
 
             foreach (var line in lines)
@@ -10077,9 +10138,11 @@ namespace PeachPDF.Html.Core.Dom
         {
             // Discarding the rectangles is how a re-layout of this box begins, so anything already emitted
             // from them describes geometry that is about to be replaced.
-            if (Rectangles.Count > 0) NotifyGeometryChanged(OwnGeometryTop(), 0);
+            if (_rectangles is null) return;
 
-            Rectangles.Clear();
+            if (_rectangles.Count > 0) NotifyGeometryChanged(OwnGeometryTop(), 0);
+
+            _rectangles.Clear();
         }
 
         /// <summary>
@@ -10110,11 +10173,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal double OwnGeometryTop()
         {
-            if (Rectangles.Count == 0 && Words.Count == 0) return Location.Y;
+            if (RectangleCount == 0 && Words.Count == 0) return Location.Y;
 
             var top = double.MaxValue;
 
-            foreach (var rect in Rectangles.Values) top = Math.Min(top, rect.Top);
+            foreach (var rect in RectangleValues) top = Math.Min(top, rect.Top);
 
             // A word awaiting the next fragmentainer is deliberately not parked at a coordinate (see
             // CssRect.AwaitsTheNextFragmentainer), so its Top is whatever it held before - 0 for a word that
@@ -10129,7 +10192,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // Nothing placed at all (every word still awaits): no better answer than the one every word gave.
-            if (!placedWord && Rectangles.Count == 0)
+            if (!placedWord && RectangleCount == 0)
             {
                 foreach (var word in Words) top = Math.Min(top, word.Top);
             }
@@ -10146,11 +10209,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal double OwnGeometryLeft()
         {
-            if (Rectangles.Count == 0 && Words.Count == 0) return double.NaN;
+            if (RectangleCount == 0 && Words.Count == 0) return double.NaN;
 
             var left = double.MaxValue;
 
-            foreach (var rect in Rectangles.Values) left = Math.Min(left, rect.Left);
+            foreach (var rect in RectangleValues) left = Math.Min(left, rect.Left);
             foreach (var word in Words) left = Math.Min(left, word.Left);
 
             return left;

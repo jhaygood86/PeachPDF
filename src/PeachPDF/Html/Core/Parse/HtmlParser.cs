@@ -343,9 +343,15 @@ namespace PeachPDF.Html.Core.Parse
                 // attribute, not for a value). Storing the null instead made every boolean
                 // attribute invisible to `[disabled]`, `[hidden]`, `hr[noshade]` and friends,
                 // while the same attribute written as `noshade=""` matched.
-                attributes = token.Attributes
-                    .GroupBy(x => x.Name)
-                    .ToDictionary(x => x.Key, x => x.First().Value ?? string.Empty);
+                // Built once, directly in the case-insensitive form HtmlTag keeps, first occurrence winning (HTML §13.2.5.33:
+                // a duplicate attribute is a parse error and is dropped). No dictionary for an element with no attributes.
+                var tokenAttributes = token.Attributes;
+                if (tokenAttributes.Count > 0)
+                {
+                    attributes = new Dictionary<string, string>(tokenAttributes.Count, StringComparer.OrdinalIgnoreCase);
+                    foreach (var attribute in tokenAttributes)
+                        attributes.TryAdd(attribute.Name, attribute.Value ?? string.Empty);
+                }
             }
 
             return isClosing;

@@ -1414,13 +1414,13 @@ namespace PeachPDF.Html.Core.Parse
         /// the line gave it.
         /// </summary>
         private static double ReferenceWidth(CssBox box) =>
-            box.IsInline && box.Rectangles.Count > 0 ? ReferenceBox(box).Width : box.ActualWidth;
+            box.IsInline && box.RectangleCount > 0 ? ReferenceBox(box).Width : box.ActualWidth;
 
         private static double ReferenceHeight(CssBox box) =>
-            box.IsInline && box.Rectangles.Count > 0 ? ReferenceBox(box).Height : box.ActualHeight;
+            box.IsInline && box.RectangleCount > 0 ? ReferenceBox(box).Height : box.ActualHeight;
 
         private static Rect ReferenceBox(CssBox box) =>
-            RenderUtils.ClipSourceBoundsOf(box.Bounds, isInline: true, box.Rectangles);
+            RenderUtils.ClipSourceBoundsOf(box.Bounds, isInline: true, box.RectanglesView);
 
         /// <summary>
         /// Parses transform-origin: 1-3 values (X, Y, optional Z). X/Y accept length/percentage/keywords

@@ -67,7 +67,7 @@ namespace PeachPDF.SourceGenerators.Emit
         /// </summary>
         private static string BuildCssOmGrammarClause(DataTypeSpec dt)
         {
-            var call = $"global::{dt.Converter}(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(value, inValueContext: true, preserveWhitespace: true)) is not null";
+            var call = $"global::PeachPDF.Html.Core.Utils.GrammarMemo.Accepts(value, static v => global::{dt.Converter}(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(v, inValueContext: true, preserveWhitespace: true)) is not null)";
             return dt.AcceptsNoneLiteral
                 ? $"value.Equals(\"none\", global::System.StringComparison.OrdinalIgnoreCase) || {call}"
                 : call;
