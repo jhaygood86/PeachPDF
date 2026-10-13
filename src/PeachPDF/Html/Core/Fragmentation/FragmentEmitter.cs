@@ -2866,7 +2866,13 @@ namespace PeachPDF.Html.Core.Fragmentation
                         claims = ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed);
                     }
 
-                    claims |= !isFixed && capture is { } holder && IsOverflowNoColumnClaims(box, i, holder, slot.Index);
+                    // Asked only of a word nothing has claimed: it is a pure query, and `|=` ran it for every word of every captured
+                    // box - its row scan copies a list of these (large) records per holder, which was a fifth of a multi-column
+                    // document's allocation.
+                    if (!claims && !isFixed && capture is { } holder && IsOverflowNoColumnClaims(box, i, holder, slot.Index))
+                    {
+                        claims = true;
+                    }
 
                     if (claims && !region.YieldsToEarlierColumn(box, Displaced(shiftedRect, shift))
                         && !(capture is { } own && StartsInAnotherInstance(box, i, own, slot.Index))

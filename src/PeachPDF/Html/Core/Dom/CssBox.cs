@@ -2356,9 +2356,9 @@ namespace PeachPDF.Html.Core.Dom
 
             var renderContext = HtmlContainer.RenderContext;
 
-            foreach (var family in (FontFamilyList ?? FontFamily ?? string.Empty).Split(','))
+            // Asked for every word, of a list that is the same string for nearly every box: the names are split and trimmed once.
+            foreach (var name in HtmlContainer.FamilyNamesOf(FontFamilyList ?? FontFamily ?? string.Empty))
             {
-                var name = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
                 if (renderContext.FamilyHasExplicitUnicodeRanges(name))
                     return true;
             }

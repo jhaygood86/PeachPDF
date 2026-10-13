@@ -187,19 +187,16 @@ internal sealed partial class PdfGraphicsRenderer
             bool hasGposDeltas = false;
             shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
             RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
-            StringBuilder sb = new StringBuilder();
             for (var glyphIndex = 0; glyphIndex < shapedGlyphs.Count; glyphIndex++)
             {
                 var glyph = shapedGlyphs[glyphIndex];
-                sb.Append((char)glyph.GlyphIndex);
                 if (glyph.XAdvanceDelta != 0 || glyph.YAdvanceDelta != 0 || glyph.XOffset != 0 || glyph.YOffset != 0)
                     hasGposDeltas = true;
             }
-            s = sb.ToString();
 
-            byte[] bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(s);
-            bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-            text = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
+            // The glyph ids as the hex string literal of a CID-keyed font, written once: this used to go through a StringBuilder,
+            // a string, two byte arrays and a Latin-1 decode for every run, about a tenth of the document's allocation.
+            text = PdfEncoders.FormatGlyphIdsAsHexLiteral(shapedGlyphs);
 
             // Map absolute position to PDF world space.
             PaintPoint pos = new PaintPoint(x, y);

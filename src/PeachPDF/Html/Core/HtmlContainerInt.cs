@@ -293,6 +293,28 @@ namespace PeachPDF.Html.Core
             PageGeometry = new PageGeometryTable(this);
         }
 
+        private readonly Dictionary<string, string[]> _familyNames = [];
+
+        /// <summary>
+        /// The family names of a <c>font-family</c> list - split on commas, trimmed, quotes removed - kept per list text, since
+        /// the lookups that need them run once per word and the list is nearly always one of a handful of strings.
+        /// </summary>
+        internal string[] FamilyNamesOf(string familyList)
+        {
+            if (_familyNames.TryGetValue(familyList, out var names)) return names;
+
+            var parts = familyList.Split(',');
+            names = new string[parts.Length];
+
+            for (var i = 0; i < parts.Length; i++)
+                names[i] = parts[i].Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
+
+            // Bounded: a document that varies the list per box is not worth remembering.
+            if (_familyNames.Count < 1024) _familyNames[familyList] = names;
+
+            return names;
+        }
+
         /// <summary>Remembers the style changes the cascade has made, so boxes that make the same one share the result.</summary>
         internal StyleTransitionCache StyleTransitions { get; } = new();
 
