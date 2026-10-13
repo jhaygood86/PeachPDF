@@ -1000,6 +1000,18 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Self-check for the inherited-only style cache, for tests: while a counter is set, a cache hit runs the cascade anyway,
+        /// throws if the style it makes is not the cached one, and counts the hit.
+        /// </summary>
+        internal static readonly System.Threading.AsyncLocal<SharedStyleCheck?> VerifySharedStyles = new();
+
+        /// <summary>What a verifying cascade found: how many cached styles it compared.</summary>
+        internal sealed class SharedStyleCheck
+        {
+            internal int Verified;
+        }
+
+        /// <summary>
         /// Applies style to all boxes in the tree.<br/>
         /// If the html tag has style defined for each apply that style to the css box of the tag.<br/>
         /// If the html tag has "class" attribute and the class name has style defined apply that style on the tag css box.<br/>
@@ -1016,6 +1028,27 @@ namespace PeachPDF.Html.Core.Parse
         /// spliced - <see cref="ResolveDisplayContents"/> computes such a box's <c>contents</c> to <c>inline</c>.</param>
         private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null, List<CssBox>? displayContentsShells = null)
         {
+            // A text or anonymous box is not an element: no rule or attribute reaches it (CSS Cascade 4 §1.1/§7.2: it only inherits),
+            // so what the steps below make of it is a function of the style it comes in with and its parent's. Every text box under
+            // a parent of one style gets the same result, which the cascade of a long table was recomputing for each of them. A
+            // parent with custom properties is left out (each child takes its own copy of the dictionary), as is a document being
+            // animated (the sampled values are applied per box).
+            var inheritedOnly = box.HtmlTag is null && !box.IsPseudoElement
+                && box.ParentBox is { } styleParent && styleParent.ComputedStyle.CustomProperties is not { Count: > 0 }
+                && box.HtmlContainer?.AnimationProgress is null;
+            var inheritedOnlyKey = inheritedOnly ? (box.ComputedStyle, box.ParentBox!.ComputedStyle) : default;
+            var verifyingInheritedOnly = false;
+            ComputedStyle? sharedStyle = null;
+            if (inheritedOnly && valueParser.InheritedOnlyStyles.TryGetValue(inheritedOnlyKey, out sharedStyle))
+            {
+                if (VerifySharedStyles.Value is not null) verifyingInheritedOnly = true;
+                else
+                {
+                    box.AdoptComputedStyle(sharedStyle);
+                    goto styleSettled;
+                }
+            }
+
             // 1. Defaulting (CSS Cascade & Inheritance 4 §2.1): every property starts at its initial value,
             //    drawn from the single initial-value store. The cascade phases below then override, and the
             //    inherited properties are overwritten from the parent in step 2 — matching the spec's
@@ -1254,6 +1287,18 @@ namespace PeachPDF.Html.Core.Parse
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
+            if (verifyingInheritedOnly)
+            {
+                if (!Equals(sharedStyle, box.ComputedStyle))
+                    throw new InvalidOperationException("A shared inherited-only style differs from the one the cascade made.");
+                VerifySharedStyles.Value!.Verified++;
+            }
+            else if (inheritedOnly)
+            {
+                valueParser.InheritedOnlyStyles[inheritedOnlyKey] = box.ComputedStyle;
+            }
+
+        styleSettled:
             if (!box.PlaceholderStyleProcessed)
             {
                 box.PlaceholderStyleProcessed = true;
