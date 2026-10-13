@@ -1098,7 +1098,7 @@ namespace PeachPDF.Html.Core.Parse
             // Matched rules are already sorted by CssData (specificity ascending, then true source
             // order) - materialize each origin once so both the normal and important passes below
             // reuse the same matched/sorted list instead of re-querying CssData twice per origin.
-            var uaRules = cssData.GetUserAgentStyleRules(media, box, containerSizes).ToList();
+            var uaRules = cssData.GetUserAgentStyleRules(media, box, containerSizes);
             // Author rules come in BOTH the normal-declaration order and the reversed !important layer
             // order (CSS Cascade 5 §6.4.2), matched once; each rule carries its @layer rank so the
             // author passes below can band rules by layer for revert-layer.
@@ -2133,8 +2133,20 @@ namespace PeachPDF.Html.Core.Parse
             return false;
         }
 
-        private static bool RulesUseRevertKeyword(IEnumerable<CssData.LayeredStyleRule> rules) =>
-            RulesUseRevertKeyword(rules.Select(r => r.Rule));
+        private static bool RulesUseRevertKeyword(List<CssData.LayeredStyleRule> rules)
+        {
+            // Indexed, not rules.Select(r => r.Rule): this runs for every box, and the iterator it allocated is per call.
+            for (var i = 0; i < rules.Count; i++)
+            {
+                foreach (var prop in rules[i].Rule.Style)
+                {
+                    if (prop.Value is Keywords.Revert or Keywords.RevertLayer)
+                        return true;
+                }
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Checks whether any declaration literally uses <c>revert-layer</c> specifically (not plain
@@ -2892,9 +2904,21 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectTextBoxes(CssBox box)
         {
-            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            var children = box.Boxes;
+
+            // Boxes this pass drops are only marked: List.RemoveAt shifts the whole tail each time, which for a parent with
+            // thousands of whitespace-only text children (a large <math>, a pretty-printed table) was the cost of the pass. The
+            // loop runs from the end, so a removal is always above the box being decided and the live list below it is the
+            // original one; `nextLive` is the nearest live box above (the one the old code reached as Boxes[i + 1]) and
+            // `liveCount` what Boxes.Count was after the removals so far. The marked boxes are compacted out once at the end.
+            bool[]? removed = null;
+            var removedCount = 0;
+            var nextLive = -1;
+
+            for (var i = children.Count - 1; i >= 0; i--)
             {
-                var childBox = box.Boxes[i];
+                var childBox = children[i];
+                var liveCount = children.Count - removedCount;
 
                 // A display:none subtree (e.g. <style>/<script>/<head> under the UA stylesheet) is
                 // never laid out or painted, so generating its pseudo-content and word-splitting its
@@ -2902,7 +2926,11 @@ namespace PeachPDF.Html.Core.Parse
                 // it is the dominant cost of parsing the document at all. Leave the subtree exactly as
                 // HTML parsing produced it; nothing downstream reads it (layout/paint already skip
                 // display:none via this same check in a dozen places across CssBox.cs).
-                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None)
+                {
+                    nextLive = i;
+                    continue;
+                }
 
                 CssContentEngine.ApplyContent(childBox);
 
@@ -2932,7 +2960,8 @@ namespace PeachPDF.Html.Core.Parse
                     && childBox.Content is Keywords.None or Keywords.Normal
                     && childBox.ContentImage is null)
                 {
-                    box.Boxes.RemoveAt(i);
+                    (removed ??= new bool[children.Count])[i] = true;
+                    removedCount++;
                     continue;
                 }
 
@@ -2961,13 +2990,13 @@ namespace PeachPDF.Html.Core.Parse
                     keepBox = keepBox || childBox.WhiteSpace.Value == Whitespace.Pre || childBox.WhiteSpace.Value == Whitespace.PreWrap;
 
                     // is the box is only one in the parent
-                    keepBox = keepBox || box.Boxes.Count == 1;
+                    keepBox = keepBox || liveCount == 1;
 
                     // is it a whitespace between two inline boxes
-                    keepBox = keepBox || (i > 0 && i < box.Boxes.Count - 1 && box.Boxes[i - 1].IsInline && box.Boxes[i + 1].IsInline);
+                    keepBox = keepBox || (i > 0 && nextLive >= 0 && children[i - 1].IsInline && children[nextLive].IsInline);
 
                     // is first/last box where is in inline box and it's next/previous box is inline
-                    keepBox = keepBox || (i == 0 && box.Boxes.Count > 1 && box.Boxes[1].IsInline && box.IsInline) || (i == box.Boxes.Count - 1 && box.Boxes.Count > 1 && box.Boxes[i - 1].IsInline && box.IsInline);
+                    keepBox = keepBox || (i == 0 && liveCount > 1 && children[nextLive].IsInline && box.IsInline) || (nextLive < 0 && liveCount > 1 && children[i - 1].IsInline && box.IsInline);
 
                     if (keepBox)
                     {
@@ -2977,7 +3006,9 @@ namespace PeachPDF.Html.Core.Parse
                     else
                     {
                         // remove text box that has no 
-                        childBox.ParentBox!.Boxes.RemoveAt(i);
+                        (removed ??= new bool[children.Count])[i] = true;
+                        removedCount++;
+                        continue;
                     }
                 }
                 else
@@ -2985,7 +3016,19 @@ namespace PeachPDF.Html.Core.Parse
                     // recursive
                     CorrectTextBoxes(childBox);
                 }
+
+                nextLive = i;
             }
+
+            if (removed is null) return;
+
+            var write = 0;
+            for (var read = 0; read < children.Count; read++)
+            {
+                if (!removed[read]) children[write++] = children[read];
+            }
+
+            children.RemoveRange(write, children.Count - write);
         }
 
         /// <summary>
