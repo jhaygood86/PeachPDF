@@ -354,20 +354,20 @@ namespace PeachPDF.Html.Core
             {
                 if (shell.StringSet is not { Length: > 0 } stringSet || stringSet == Keywords.None) continue;
 
-                if (shell.NamedStrings.Count > 0)
+                if (shell.HasNamedStrings)
                 {
-                    UnregisterNamedStrings(shell.NamedStrings.Values);
+                    UnregisterNamedStrings(shell.NamedStringValues);
                     shell.NamedStrings.Clear();
                 }
 
                 // Evaluates and registers (appending); taken back out to be placed by position instead.
                 CssNamedStringEngine.ApplyStringSet(shell);
-                UnregisterNamedStrings(shell.NamedStrings.Values);
+                UnregisterNamedStrings(shell.NamedStringValues);
 
                 var geometryBox = DomUtils.ResolveGeometryBox(shell);
                 var top = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds).Top;
 
-                foreach (var namedString in shell.NamedStrings.Values)
+                foreach (var namedString in shell.NamedStringValues)
                 {
                     namedString.Y = top;
 

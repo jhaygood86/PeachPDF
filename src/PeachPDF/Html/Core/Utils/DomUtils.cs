@@ -38,7 +38,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>true - location inside the box, false - otherwise</returns>
         public static bool IsInBox(CssBox box, PaintPoint location)
         {
-            foreach (var line in box.Rectangles)
+            foreach (var line in box.RectanglesView)
             {
                 if (line.Value.Contains(location))
                     return true;
@@ -368,7 +368,7 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                if (CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds).Contains(location))
+                if ((box.RectangleCount > 0 ? box.RectangleValues.First() : box.Bounds).Contains(location))
                 {
                     return GetCssBox(childBox, location) ?? childBox;
                 }
@@ -705,7 +705,7 @@ namespace PeachPDF.Html.Core.Utils
                 // A lifted child a later pass dropped (a whitespace-only text box) has no parent any more.
                 if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
-                if (child.Rectangles.Count > 0 || child.Bounds.Width > 0 || child.Bounds.Height > 0)
+                if (child.RectangleCount > 0 || child.Bounds.Width > 0 || child.Bounds.Height > 0)
                     return child;
 
                 if (FirstLaidOut(child.Boxes) is { } nested) return nested;
@@ -966,9 +966,9 @@ namespace PeachPDF.Html.Core.Utils
 
             // An inline with no fragment - one holding only absolutely positioned boxes - is given a
             // zero-width one at their place on the line while they are laid out.
-            if (ancestor.Rectangles.Count == 0) return ancestor.EmptyInlineContainingBlock;
+            if (ancestor.RectangleCount == 0) return ancestor.EmptyInlineContainingBlock;
 
-            var rectangles = ancestor.Rectangles;
+            var rectangles = ancestor.RectanglesView;
             var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
                 ? f
                 : rectangles.Values.MinBy(r => r.Top);

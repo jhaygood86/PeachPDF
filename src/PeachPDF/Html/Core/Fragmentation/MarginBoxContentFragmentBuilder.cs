@@ -57,7 +57,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 OriginY: 0,
                 // An inline-flowed box has no Location of its own, so its whole border box (the `transform` pivot, the
                 // `clip-path` reference box) is its line rectangle - as in the page emitter's FragmentEmitter.ExtentOf.
-                WholeBoxRect: RenderUtils.ClipSourceBoundsOf(box.Bounds, box.IsInline, box.Rectangles),
+                WholeBoxRect: RenderUtils.ClipSourceBoundsOf(box.Bounds, box.IsInline, box.RectanglesView),
                 IsFixed: false,
                 IsFirstFragment: true,
                 IsLastFragment: true,
@@ -81,7 +81,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             internal static ClipSource Of(CssBox box)
             {
-                var borderBox = RenderUtils.ClipSourceBoundsOf(box.Bounds, box.IsInline, box.Rectangles);
+                var borderBox = RenderUtils.ClipSourceBoundsOf(box.Bounds, box.IsInline, box.RectanglesView);
                 var (clipRect, radii, axisOpen) = RenderUtils.OverflowClipGeometryOf(box, borderBox);
 
                 return new ClipSource(
@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private static List<LineFragment> BuildLines(CssBox box)
         {
-            if (box.Rectangles.Count == 0)
+            if (box.RectangleCount == 0)
             {
                 // Mirrors LineFragment's own documented fallback for a block-level box with no line
                 // boxes of its own: one LineFragment covering the border box, with a null Line.

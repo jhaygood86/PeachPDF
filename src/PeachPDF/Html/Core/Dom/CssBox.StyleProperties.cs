@@ -315,7 +315,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Transient parent→child conduit set by <see cref="CssLayoutEngineGrid"/> immediately before
         /// it lays out a <c>subgrid</c> grid item, so the child adopts the parent's spanned tracks (CSS Grid
         /// Level 2 §9). Layout-only - not a cascaded property, cleared by the parent after the child lays out.</summary>
-        internal GridSubgridContext? SubgridContext { get; set; }
+        internal GridSubgridContext? SubgridContext { get => _rare is null ? default(GridSubgridContext?) : _rare.SubgridContext; set { if (_rare is null) { if (EqualityComparer<GridSubgridContext?>.Default.Equals(value, default(GridSubgridContext?))) return; _rare = new BoxRareState(); } _rare.SubgridContext = value; } }
 
         #endregion
 
@@ -888,10 +888,10 @@ namespace PeachPDF.Html.Core.Dom
         /// the layout of anything around it, so in-flow consumers - a following sibling's static
         /// position, the parent's content-driven height/width - must back these out.
         /// </summary>
-        internal double RelativeOffsetX { get; set; }
+        internal double RelativeOffsetX { get => _rare is null ? default(double) : _rare.RelativeOffsetX; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetX = value; } }
 
         /// <inheritdoc cref="RelativeOffsetX"/>
-        internal double RelativeOffsetY { get; set; }
+        internal double RelativeOffsetY { get => _rare is null ? default(double) : _rare.RelativeOffsetY; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetY = value; } }
 
         /// <summary>
         /// The bottom edge of the box at its static (un-offset) position - what in-flow layout of
