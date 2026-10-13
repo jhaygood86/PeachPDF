@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
     public class StalledPaginationTests
     {
         private const string StallingDocument =
-            "<style>.ib { display: inline-block; width: 40pt }</style>" +
+            "<style>body { font: 12pt Pinned } .ib { display: inline-block; width: 40pt }</style>" +
             "<span class='ib'><blockquote> \u00A0 beta alpha rho alpha\tkappa\nrho theta gamma xi theta delta \u00A0 pi\nmu theta sigma tau delta mu</blockquote>" +
             "pi gamma kappa pialpha kappa \u00A0 epsilon beta kappa omicron omicron\u00A0theta beta epsilon theta mu\u00A0</a>\n" +
             "kappa omicron theta epsilon rho\tdelta lambda epsilon gamma xi theta\nmu\txi mu sigmaxi alpha alpha\nomicron iota sigma sigma epsilon\n</span>  <br>";
@@ -22,7 +22,8 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [Fact]
         public async Task ARunThatStopsMakingProgress_IsRecoveredFromWithinAFewPasses()
         {
-            var (root, container) = await LayoutHarness.LayoutAsync(StallingDocument);
+            // The stall depends on how the words measure against the 40pt box, so the font is a bundled one rather than whatever the host resolves (the first version of this test stalled on Windows and not on Linux or macOS).
+            var (root, container) = await LayoutHarness.LayoutAsync(StallingDocument, configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Pinned"));
 
             Assert.True(container.FragmentainerPasses < 100, $"{container.FragmentainerPasses} passes");
             Assert.Equal(1, container.LastResortRelayouts);
