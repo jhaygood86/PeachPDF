@@ -12,10 +12,33 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   run). Only an animation with no run (zero duration / iteration count) consults the fill mode.
 - **`transition` never runs.** A transition starts from a style *change*; a freshly loaded document has none. Nothing to
   render, so nothing was built. The properties are still parsed.
-- **Interpolation is structural, on text.** Two `transform` lists with different functions or a different number of them
-  are not mixed through matrix decomposition (CSS Transforms 1 §9.3 mismatched case); they flip at 50%.
-  Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation space), and only the colour syntaxes
-  `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
+- **Interpolation is structural, on text.** Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation
+  space), and only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
+- **The matrix part of a `transform` mix cannot run before layout for some inputs.** Lists are paired function by function
+  (CSS Transforms 1 §11-12) and what is left is mixed as matrices (§13, `TransformMatrixInterpolator`). That last step
+  flips at 50% (tracked in #1753) for:
+  - a `%` argument or a container query unit (`cqw`, `cqi`, ...) in the matrix part (they resolve against a size no layout has
+    given yet);
+  - `perspective()` against another function, or a `matrix3d()` with perspective terms (the decomposition has no
+    perspective part);
+  - a collapsed dimension (a zero scale, a `matrix()` with a zero determinant - the spec makes a non-invertible matrix
+    discrete).
+
+  A list with a `calc()` argument is not read as plain numbers, so it is not paired at all: when the two do not
+  match function for function, each is composed whole and mixed as a matrix, which loses a rotation of a full turn or more.
+- **Two `perspective()` functions mix their lengths, not their reciprocals** (#1753). CSS Transforms 2 mixes `1/d`, so
+  `perspective(100px)` against `perspective(200px)` is `perspective(133.3px)` there and `perspective(150px)` here; equal
+  arguments (the usual spinning card) are unaffected.
+- **The matrix mix differs from the spec's algorithm in the corners** (#1753). The 2D decomposition is the 3D one's
+  Gram-Schmidt form (a skew ratio and an orthogonal remainder) where §13.2 interpolates the four entries of the
+  de-rotated 2x2 matrix, so a pair with a skew on a side mixes the same ends and slightly different middles; a rotation
+  exactly 180 degrees from the other takes the positive way where the spec sets the angle to 0-360 first; the three skews
+  recompose as one matrix, not three elementary ones; the quaternion takes the short arc (`Quaternion.Slerp` negates a
+  negative dot product) where the spec's formula would go the long way, which was not checked against a browser.
+- **Font-relative lengths in a matrix-mixed transform are resolved when the animation is applied** (#1753). `em`, `ex`, `ch` and
+  `rem` in the matrix part of a `transform` mix resolve against the box's font at the animation step, before the
+  `!important` phase and before a `font-size` the same animation sets later; a pair mixed per function keeps the text
+  and resolves at paint. They differ only when the font size changes after the animation step.
 - **Not animated:** custom properties registered with `@property`, `animation-composition` (`add`/`accumulate`),
   `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
   document-building API (its cascade is a different entry point and does not call the applier).
@@ -35,8 +58,6 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   function's space.
 - **`currentcolor` is not mixed.** A keyframe colour of `currentcolor` against a colour flips half way instead of mixing with
   the box's `color`. Resolving it at sample time is wrong when `color` is itself animated in the same animation.
-- **Transform functions with a different number of arguments are not mixed.** `scale(1)` against `scale(2, .5)` and
-  `translate(10px)` against `translate(10px, 50px)` flip half way; the documented case is two lists of different functions.
 - **CSS animations on the elements of an inline `<svg>` are not applied.** `rect { animation: ... }` (fill, opacity,
   transform, stroke-width, `stroke-dashoffset`, `r`, a `<g>`'s transform) is parsed and ignored; the SVG tree builder has its
   own cascade entry point that does not call the animation step. Only HTML boxes (and their pseudo-elements) are animated.
