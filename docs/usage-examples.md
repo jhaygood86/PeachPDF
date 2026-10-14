@@ -1012,6 +1012,19 @@ var config = new PdfGenerateConfig
 
 A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.
 
+### Portable color filters
+
+CSS `brightness()`, `contrast()` and `invert()` are written by default as a PDF transfer function, which is exact for any content but which some readers ignore: MuPDF (and the viewers and libraries built on it) shows the element unfiltered, and PDFium applies it to solid fills and text but not to a gradient. `PortableColorFilters` writes them as blend-mode layers instead, so every reader that supports PDF transparency shows the filter:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PortableColorFilters = true,   // false (the default) writes a transfer function
+};
+```
+
+The output is still vector content, not a bitmap. On opaque content it matches the CSS formulas to within a few of 255 levels in both PDFium and MuPDF. Where the content is partly transparent (an `rgba()` colour, an antialiased edge) a blend mode lets some of the layer's own colour through, so the colour there is slightly off. Like the default, it needs PDF transparency, so it is rejected under PDF/A-1 and PDF/X-1a/X-3, as the transfer-function form is. `grayscale()`, `sepia()`, `saturate()` and `hue-rotate()` are bitmaps either way and are not affected.
+
 ### Turning off smoothing: `RasterAntiAliasing`
 
 Every bitmap PeachPDF renders itself — a `filter:`-triggered region, a region flattened under [`TransparencyPolicy.Flatten`](#flattening-transparency-for-pdfa-1-and-pdfx), and any glyph fill drawn while `TextHinting` routes it through the raster path — is anti-aliased by default: an edge that only partly covers a pixel gets a proportional (fractional) alpha instead of being rounded to fully in or fully out. `RasterAntiAliasing` turns that off:

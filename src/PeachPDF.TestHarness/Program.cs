@@ -98,6 +98,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     RasterizationDpi = source.RasterizationDpi,
     TextHinting = source.TextHinting,
     TextStemDarkening = source.TextStemDarkening,
+    PortableColorFilters = source.PortableColorFilters,
     MaxRasterPixels = source.MaxRasterPixels,
     AnimationProgress = source.AnimationProgress,
     MarginTop = source.MarginTop,
@@ -13604,6 +13605,43 @@ var cssFilterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><body>" 
 await SaveShowcaseAsync("css_filter", "Graphics & Effects", "CSS Filter",
     "filter: opacity(), brightness(), contrast(), and invert() - genuinely native PDF color math via ExtGState /TR, composed into a single transfer function per element.",
     cssFilterHtml, pdfConfig);
+
+// --- CSS filter showcase (PortableColorFilters: the same functions as blend-mode layers, for readers that ignore /TR) ---
+
+var cssFilterPortableHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><body>" +
+
+    "<h1>CSS filter: Portable Color Filters</h1>" +
+    "<p class=\"intro\">With PdfGenerateConfig.PortableColorFilters on, brightness(), contrast(), and invert() are written as blend-mode layers (Multiply, ColorDodge, ColorBurn, Screen, Difference) instead of an ExtGState /TR transfer function, so a reader that ignores /TR - MuPDF, and the viewers built on it - still shows the filter. Still vector, not a bitmap. (docs/html-css-support.md#filters-and-blend-modes)</p>" +
+
+    "<h2>1 — Individual functions</h2>" +
+    Row(
+        FilterSwatch("baseline (no filter)", "none"),
+        FilterSwatch("brightness", "brightness(1.6)"),
+        FilterSwatch("contrast", "contrast(1.8)"),
+        FilterSwatch("invert", "invert(1)")
+    ) +
+
+    "<h2>2 — Darkening and partial strength</h2>" +
+    Row(
+        FilterSwatch("brightness below 1", "brightness(0.5)"),
+        FilterSwatch("contrast below 1", "contrast(0.5)"),
+        FilterSwatch("partial invert", "invert(0.4)"),
+        FilterSwatch("brightness + contrast", "brightness(1.3) contrast(1.4)")
+    ) +
+
+    "</body></html>";
+
+pdfConfig.PortableColorFilters = true;
+try
+{
+    await SaveShowcaseAsync("css_filter_portable", "Graphics & Effects", "CSS Filter (Portable)",
+        "filter: brightness(), contrast(), and invert() written as blend-mode layers instead of a transfer function, so readers that ignore /TR still show them.",
+        cssFilterPortableHtml, pdfConfig);
+}
+finally
+{
+    pdfConfig.PortableColorFilters = false;
+}
 
 // --- CSS filter showcase (rendered through the raster backend: blur/grayscale/sepia/saturate/hue-rotate) ---
 

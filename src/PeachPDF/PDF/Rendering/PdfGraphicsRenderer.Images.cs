@@ -308,6 +308,12 @@ internal sealed partial class PdfGraphicsRenderer
                 "drop-in replacement for compositing an already-rendered vector tile.");
         }
 
+        if (Owner.Options.PortableColorFilters)
+        {
+            DrawImageWithBlendLayers(image, destRect, PdfColorMatrixBlendLayers.Build(matrix));
+            return;
+        }
+
         const string format = PdfNumberFormats.FourDecimals;
 
         double x = destRect.X;
@@ -343,6 +349,99 @@ internal sealed partial class PdfGraphicsRenderer
 
         AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
             x, y + height, cx, cy, name);
+    }
+
+    /// <summary>
+    /// The <see cref="PdfGenerateConfig.PortableColorFilters"/> form of <see cref="DrawImageWithColorMatrix"/>:
+    /// the same colour math written as blend-mode fills instead of an ExtGState <c>/TR</c>, which MuPDF-based
+    /// readers ignore. See <see cref="PdfColorMatrixBlendLayers"/> for how a matrix becomes layers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A wrapper form (an isolated group) holds the content followed by one opaque full-tile fill per layer, and is
+    /// placed through an <c>/Alpha</c> soft mask whose <c>/G</c> is the content form. The mask is what restores the
+    /// content's shape - the fills cover the whole tile. Every fill is opaque on purpose: a fill with its own alpha
+    /// would make the group's alpha, and so the mask applied on top of it, count the content's alpha twice. A fill
+    /// that is not itself masked would otherwise be the one that fattens an antialiased edge (the union of two
+    /// partial coverages is larger than either).
+    /// </para>
+    /// <para>
+    /// Exact where the content is opaque, which the dual-renderer check against PDFium and MuPDF confirmed. Where it
+    /// is only partly opaque (an <c>rgba()</c> fill, an antialiased edge) a blend mode's backdrop is not opaque, and the
+    /// PDF blend formula lets the fill colour in with weight <c>1 - alpha</c>: the colour is off there, and the group
+    /// cannot un-premultiply it. That is why this is opt-in rather than the default, which stays the
+    /// alpha-independent <c>/TR</c>.
+    /// </para>
+    /// </remarks>
+    private void DrawImageWithBlendLayers(PdfForm image, Rect destRect, IReadOnlyList<PdfBlendLayer> layers)
+    {
+        BeginPage();
+
+        // Checked before any form/mask/ExtGState object is built, so a PDF/A-1 rejection never leaves
+        // partially-built objects registered in the document. Checked for a matrix that changes nothing too,
+        // so the option rejects exactly the documents the transfer-function form does.
+        PdfATransparencyGuard.RequireAllowed(Owner, _page, "CSS/SVG color-matrix filter");
+
+        if (layers.Count == 0)
+        {
+            DrawImage(image, destRect.X, destRect.Y, destRect.Width, destRect.Height);
+            return;
+        }
+
+        const string format = PdfNumberFormats.FourDecimals;
+
+        double width = image.PointWidth;
+        double height = image.PointHeight;
+
+        image.Finish();
+
+        var wrapper = new PdfForm(Owner, new Size(width, height));
+        var wrapperGraphics = PdfGraphics.FromForm(wrapper);
+        wrapperGraphics.DrawImage(image, 0, 0, width, height);
+        foreach (var layer in layers)
+        {
+            var state = wrapperGraphics.Save();
+            wrapperGraphics.SetBlendMode(layer.BlendMode);
+            wrapperGraphics.DrawRectangle(new SolidBrush(PaintColor.FromArgb(ToByte(layer.R), ToByte(layer.G), ToByte(layer.B))), 0, 0, width, height);
+            wrapperGraphics.Restore(state);
+        }
+
+        // Finish() disposes the form's graphics, which writes its content stream.
+        wrapper.Finish();
+
+        // Both forms must be transparency groups or PDFium ignores the active SMask (see DrawImageMasked).
+        wrapper.FormXObject.Elements["/Group"] = NewIsolatedGroup();
+        image.FormXObject.Elements["/Group"] = NewIsolatedGroup();
+
+        var softMask = new PdfSoftMask(Owner);
+        softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Alpha");
+        softMask.Elements.SetReference(PdfSoftMask.Keys.G, image.FormXObject);
+
+        var extGState = new PdfExtGState(Owner);
+        extGState.Elements["/SMask"] = softMask;
+        var gsName = Resources.AddExtGState(extGState);
+
+        string name = Realize(wrapper, destRect.Width, destRect.Height);
+
+        double cx = destRect.Width / wrapper.PointWidth;
+        double cy = destRect.Height / wrapper.PointHeight;
+
+        if (cx == 0 || cy == 0)
+            return;
+
+        AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+            destRect.X, destRect.Y + destRect.Height, cx, cy, name);
+    }
+
+    private static int ToByte(double component) => (int)Math.Round(Math.Clamp(component, 0, 1) * 255);
+
+    private static PdfDictionary NewIsolatedGroup()
+    {
+        var group = new PdfDictionary();
+        group.Elements["/S"] = new PdfName("/Transparency");
+        group.Elements["/CS"] = new PdfName("/DeviceRGB");
+        group.Elements["/I"] = new PdfBoolean(true);
+        return group;
     }
 
     /// <summary>
