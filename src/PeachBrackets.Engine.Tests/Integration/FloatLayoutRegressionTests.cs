@@ -732,13 +732,13 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(floatBox.Location.Y <= lineTop + 0.001,
                 $"the float belongs on the shared line (top {lineTop}), was at Y={floatBox.Location.Y}");
 
-            // "more" starts right after the float's right edge - on the same line as "XY", not back at
-            // the container's left edge on a line of its own.
+            // "more" follows "XY" after one space, beside the float. The bound is measured from "XY" because the gap from the
+            // float is three monospace advances, which depend on the host's monospace face (Consolas, DejaVu Sans Mono, Menlo).
             var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
             Assert.True(more.Rectangle.Left >= floatRightEdge - 0.5,
                 $"'more' (X={more.Rectangle.Left}) should start at or after the float's right edge ({floatRightEdge})");
-            Assert.True(more.Rectangle.Left < floatRightEdge + 20,
-                $"'more' (X={more.Rectangle.Left}) should start immediately after the float, not further along the line");
+            Assert.True(more.Rectangle.Left - xy.Rectangle.Right < 12,
+                $"'more' (X={more.Rectangle.Left}) should follow 'XY' after one space, not further along the line");
         }
 
         [Fact]
