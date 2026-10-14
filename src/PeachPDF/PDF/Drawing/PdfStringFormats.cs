@@ -8,6 +8,12 @@ namespace PeachPDF.PDF.Drawing;
 internal static class PdfStringFormats
 {
     /// <summary>
+    /// The base line, left aligned format shared by every call that only needs to read one (drawing and measuring a
+    /// run of text with no format of its own). It is never changed: use <see cref="Default"/> for a format to modify.
+    /// </summary>
+    public static PdfStringFormat SharedDefault { get; } = BaseLineLeft;
+
+    /// <summary>
     /// Gets a new PdfStringFormat object that aligns the text left on the base line.
     /// This is the same as BaseLineLeft.
     /// </summary>

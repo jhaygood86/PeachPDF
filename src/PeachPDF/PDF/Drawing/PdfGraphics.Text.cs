@@ -19,7 +19,7 @@ internal sealed partial class PdfGraphics : IDisposable
 {
     public void DrawString(string s, TypefaceFont font, Brush brush, PaintPoint point)
     {
-        DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), PdfStringFormats.Default);
+        DrawString(s, font, brush, new Rect(point.X, point.Y, 0, 0), PdfStringFormats.SharedDefault);
     }
 
     /// <summary>
@@ -35,7 +35,7 @@ internal sealed partial class PdfGraphics : IDisposable
     /// </summary>
     public void DrawString(string s, TypefaceFont font, Brush brush, double x, double y)
     {
-        DrawString(s, font, brush, new Rect(x, y, 0, 0), PdfStringFormats.Default);
+        DrawString(s, font, brush, new Rect(x, y, 0, 0), PdfStringFormats.SharedDefault);
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ internal sealed partial class PdfGraphics : IDisposable
     /// </summary>
     public void DrawString(string s, TypefaceFont font, Brush brush, Rect layoutRectangle)
     {
-        DrawString(s, font, brush, layoutRectangle, PdfStringFormats.Default);
+        DrawString(s, font, brush, layoutRectangle, PdfStringFormats.SharedDefault);
     }
 
     /// <summary>
@@ -73,7 +73,7 @@ internal sealed partial class PdfGraphics : IDisposable
             return;
 
         if (format is null)
-            format = PdfStringFormats.Default;
+            format = PdfStringFormats.SharedDefault;
 
         if (_renderer is not null)
             _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
@@ -104,7 +104,7 @@ internal sealed partial class PdfGraphics : IDisposable
         ArgumentNullException.ThrowIfNull(font);
         ArgumentNullException.ThrowIfNull(stringFormat);
 
-        Size size = FontHelper.MeasureString(text, font, PdfStringFormats.Default, features ?? ShapeSettings.Default);
+        Size size = FontHelper.MeasureString(text, font, PdfStringFormats.SharedDefault, features ?? ShapeSettings.Default);
         return size;
     }
 
@@ -113,6 +113,6 @@ internal sealed partial class PdfGraphics : IDisposable
     /// </summary>
     public Size MeasureString(string text, TypefaceFont font, ShapeSettings? features = null)
     {
-        return MeasureString(text, font, PdfStringFormats.Default, features);
+        return MeasureString(text, font, PdfStringFormats.SharedDefault, features);
     }
 }

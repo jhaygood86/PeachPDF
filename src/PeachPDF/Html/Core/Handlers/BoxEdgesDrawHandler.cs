@@ -106,11 +106,7 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (group.Count > 1)
                     {
-                        PatternedStrokeOpacity.Paint(g, outerRect, edge.PaintColor, (target, opaque) =>
-                        {
-                            foreach (var member in group)
-                                DrawGeneralPatternedSide(target, member, outerRect, edges, opaque);
-                        });
+                        DrawGroupedPatternedSides(g, outerRect, edge.PaintColor, group, edges);
                         continue;
                     }
                 }
@@ -118,6 +114,15 @@ namespace PeachPDF.Html.Core.Handlers
                 DrawGeneralSide(g, side, outerRect, edges);
             }
         }
+
+        // Its own method so the closure over the parameters is allocated only for the rare dotted or dashed translucent group, not on
+        // entry to every call of DrawBoxEdges.
+        private static void DrawGroupedPatternedSides(Canvas g, Rect outerRect, PaintColor color, List<Border> group, EdgeSet edges) =>
+            PatternedStrokeOpacity.Paint(g, outerRect, color, (target, opaque) =>
+            {
+                foreach (var member in group)
+                    DrawGeneralPatternedSide(target, member, outerRect, edges, opaque);
+            });
 
         /// <summary>
         /// Paints the equal-shade side pairs of a complete rectangular bevel as connected paths.

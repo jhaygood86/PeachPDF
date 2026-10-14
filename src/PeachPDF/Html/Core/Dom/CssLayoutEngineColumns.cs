@@ -630,10 +630,21 @@ namespace PeachPDF.Html.Core.Dom
             var balances = columnsBox.ColumnFill.Value != ColumnFillMode.Auto;
             // The container's own floats, and those of an anonymous block wrapping its bare text: what makes a column
             // taller than an even share of the content.
-            var floats = columnsBox.Boxes
-                .SelectMany(b => b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None ? [b]
-                    : b.HtmlTag is null ? b.Boxes.Where(c => c.IsFloated) : [])
-                .ToList();
+            var floats = new List<CssBox>();
+            foreach (var b in columnsBox.Boxes)
+            {
+                if (b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None)
+                {
+                    floats.Add(b);
+                }
+                else if (b.HtmlTag is null)
+                {
+                    foreach (var c in b.Boxes)
+                    {
+                        if (c.IsFloated) floats.Add(c);
+                    }
+                }
+            }
 
             var target = balances && resume is null
                 ? EstimateBalancedColumnHeight(children, 0, columnCount, pageBudget)

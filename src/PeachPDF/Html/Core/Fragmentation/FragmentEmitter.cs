@@ -4690,6 +4690,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         private static Dictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.RectanglesView;
 
+        private readonly List<CapturedInstance> _overflowRowScratch = [];
+
         /// <summary>
         /// Whether a word that lies in no column's extent that holds its box is this column's: <paramref name="own"/> is
         /// the first column of its row to hold the box.
@@ -4723,10 +4725,25 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                 first ??= instance;
 
-                var row = all.FindAll(i => ReferenceEquals(i.ParentContext, instance.ParentContext)
-                                           && i.DetachedSourceRoot is null && i.Region.Top == instance.Region.Top);
+                // The instance's row: those under the same parent context that start at the same height. The list is only read until
+                // the call below returns, so one is kept for every walk.
+                var row = _overflowRowScratch;
+                row.Clear();
+                var selfIndex = -1;
 
-                var effective = OpenAtTheRightIfLastInItsRow(row, row.FindIndex(i => ReferenceEquals(i.Self, instance.Self)));
+                foreach (var candidate in all)
+                {
+                    if (!ReferenceEquals(candidate.ParentContext, instance.ParentContext)
+                        || candidate.DetachedSourceRoot is not null || candidate.Region.Top != instance.Region.Top)
+                    {
+                        continue;
+                    }
+
+                    if (selfIndex < 0 && ReferenceEquals(candidate.Self, instance.Self)) selfIndex = row.Count;
+                    row.Add(candidate);
+                }
+
+                var effective = OpenAtTheRightIfLastInItsRow(row, selfIndex);
 
                 // The verdicts the walk applies after the claim, so a holder whose claim they would withdraw is not counted.
                 if (ClaimsWordIn(box, wordIndex, instance, effective.Region, slotIndex)
