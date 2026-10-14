@@ -244,6 +244,18 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ProgressOne_OfAnInfiniteAnimation_IsTheEndOfItsFirstIteration()
+        {
+            // "End" of an infinite animation is the end of its first iteration, and that interval's easing applies there.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { animation: k 1s linear(0, 1, 0) infinite }</style><div id="a">x</div>
+                """, 1);
+
+            Assert.Equal(0.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
         public async Task ProgressOne_WithTwoKeyframesAtTheEnd_TakesTheLastOne()
         {
             var root = await BuildAsync("""
@@ -255,14 +267,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ProgressOne_WithTheLastKeyframeBeforeTheEnd_HoldsItsValue()
+        public async Task ProgressOne_WithTheLastKeyframeBeforeTheEnd_ArrivesAtTheUnderlyingValue()
         {
             var root = await BuildAsync("""
                 <style>@keyframes k { from { opacity: 0 } 50% { opacity: .4 } }
                 #a { animation: k 1s linear }</style><div id="a">x</div>
                 """, 1);
 
-            // No 100% keyframe: the box's own value (1) is the implicit end, and linear arrives there.
+            // No 100% keyframe: the box's own value (1) is filled in as the implicit end, and linear arrives there.
             Assert.Equal(1.0, Opacity(Find(root, "a")), 3);
         }
 
