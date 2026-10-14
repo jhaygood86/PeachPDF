@@ -49,11 +49,10 @@ function Invoke-PackageReference {
 }
 
 # The version of PeachImage PeachPDF is built with, and the DefaultDocumentation the rest of the reference is built with.
-$peachPdfProject = Get-Content -Raw (Join-Path $src 'PeachPDF/PeachPDF.csproj')
-if ($peachPdfProject -notmatch 'Include="PeachImage"\s+Version="([^"]+)"') { throw 'PeachPDF.csproj has no PeachImage PackageReference.' }
+$centralPackages = Get-Content -Raw (Join-Path $src 'Directory.Packages.props')
+if ($centralPackages -notmatch 'Include="PeachImage"\s+Version="([^"]+)"') { throw 'Directory.Packages.props has no PeachImage PackageVersion.' }
 $peachImageVersion = $Matches[1]
-$apiProps = Get-Content -Raw (Join-Path $src 'ApiReference.props')
-if ($apiProps -notmatch 'Include="DefaultDocumentation"\s+Version="([^"]+)"') { throw 'ApiReference.props has no DefaultDocumentation PackageReference.' }
+if ($centralPackages -notmatch 'Include="DefaultDocumentation"\s+Version="([^"]+)"') { throw 'Directory.Packages.props has no DefaultDocumentation PackageVersion.' }
 $defaultDocumentationVersion = $Matches[1]
 
 # The guide page names the version, from the same place the reference's version comes from.

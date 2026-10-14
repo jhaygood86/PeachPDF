@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Integration
         [Fact(Timeout = 60000)]
         public async Task TallInlineSvgInABodyCell_WithARepeatingFooter_LaysOutAndDrawsItsText()
         {
-            var (_, container) = await Task.Run(() => LayoutHarness.LayoutAsync(Markup));
+            var (_, container) = await Task.Run(() => LayoutHarness.LayoutAsync(Markup), TestContext.Current.CancellationToken);
 
             var g = new TestRecordingGraphics();
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Integration
         {
             // The control that says the footer is what the document above needs, not just the tall svg.
             var (_, container) = await Task.Run(() => LayoutHarness.LayoutAsync(
-                "<table><tbody><tr><td><svg width=\"10pt\" height=\"732pt\"><rect width=\"1\" height=\"1\"/></svg>text</td></tr></tbody></table><p>after</p>"));
+                "<table><tbody><tr><td><svg width=\"10pt\" height=\"732pt\"><rect width=\"1\" height=\"1\"/></svg>text</td></tr></tbody></table><p>after</p>"), TestContext.Current.CancellationToken);
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count >= 1);
         }

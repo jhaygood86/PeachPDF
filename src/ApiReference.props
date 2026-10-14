@@ -14,6 +14,6 @@
 	</PropertyGroup>
 	<Import Project="ApiReferenceLinks.props" />
 	<ItemGroup>
-		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
+		<PackageReference Include="DefaultDocumentation" PrivateAssets="all" IncludeAssets="build" />
 	</ItemGroup>
 </Project>

@@ -1,0 +1,30 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Lets a PackageVersion below also pin a transitive dependency (e.g. System.Security.Cryptography.Pkcs via MimeKit). -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageVersion Include="coverlet.MTP" Version="10.1.0" />
+    <!-- 1.2.6 mangles the page name of a member with a tuple parameter (RasterSurfaceFactory.Create), breaking the API reference link check. -->
+    <PackageVersion Include="DefaultDocumentation" Version="1.2.5" />
+    <PackageVersion Include="HtmlAgilityPack" Version="1.13.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
+    <PackageVersion Include="MimeKit" Version="4.18.1" />
+    <PackageVersion Include="PeachImage" Version="0.5.2" />
+    <PackageVersion Include="ScottPlot" Version="5.1.59" />
+    <PackageVersion Include="System.IO.Pipelines" Version="10.0.13" />
+    <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.13" />
+    <PackageVersion Include="xunit.analyzers" Version="2.2.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="ZUGFeRD-csharp" Version="18.0.1" />
+  </ItemGroup>
+</Project>

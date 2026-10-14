@@ -6,15 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <PackageReference Include="HtmlAgilityPack" />
     <!-- Showcase-only dependency (for the declarative_api showcase's ScottPlot examples) - never
          referenced by the shipping PeachPDF library or its tests. -->
-    <PackageReference Include="ScottPlot" Version="5.1.59" />
+    <PackageReference Include="ScottPlot" />
     <!-- Showcase-only dependency (for the zugferd_* showcases, which generate their Cross Industry Invoice
          XML with an open-source e-invoicing library rather than hand-writing it) - never referenced by
          the shipping PeachPDF library, its tests or the CLI. Apache-2.0. Pinned exactly: the library's API
          changes between major versions, and the showcase source is published on the docs site. -->
-    <PackageReference Include="ZUGFeRD-csharp" Version="18.0.0" />
+    <PackageReference Include="ZUGFeRD-csharp" />
   </ItemGroup>
 
   <ItemGroup>

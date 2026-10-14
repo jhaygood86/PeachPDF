@@ -9,10 +9,10 @@ Thanks for your interest in contributing. This document covers how to build, tes
 
 ## Building and testing
 
-Run the test suite with a single target framework:
+The test projects use xunit.v3 4.x on Microsoft.Testing.Platform (opted into by `global.json`), so `dotnet test` takes the project as `--project <csproj>`. Run the test suite with a single target framework:
 
 ```
-dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
 ```
 
 `PeachPDF.Tests` multi-targets net8.0 and net10.0 by default (net11.0 joins the list only when you're building with an SDK that supports it — see below). A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per resolved target framework in one invocation, which roughly doubles (or triples, with net11.0 active) local build/test time — always pass `--framework net8.0` for routine local runs. Only add an explicit net10.0 or net11.0 run if you suspect an issue specific to that target.
@@ -22,7 +22,7 @@ dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
 The repo's tracked `global.json` pins a `10.0.100` floor with `rollForward: "latestMajor"` and `allowPrerelease: true`, and `src/Directory.Build.props` only adds `net11.0` to the multi-targeted projects' `TargetFrameworks` when the SDK actually in use is 11.0.100 or newer. Combined, this means no configuration is needed either way: with only the .NET 10 SDK installed, `dotnet` resolves to it and net11.0 is quietly not offered; install the [.NET 11 RC SDK](https://dotnet.microsoft.com/download/dotnet/11.0) alongside it and `dotnet` automatically promotes to the RC SDK, bringing net11.0 into the list — no `global.json` edits, local or committed.
 
 ```
-dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
 ```
 
 (That command only works once the RC SDK is actually installed — see above.)
@@ -30,29 +30,29 @@ dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
 The `peachpdf` command-line tool has its own test project, `PeachPDF.Cli.Tests` (net10.0-only, since the CLI is net10.0-only):
 
 ```
-dotnet test PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
+dotnet test --project PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
 ```
 
 The font and text engine has its own test project too, `PeachDrawing.Text.Tests` (the font parsers and tables, shaping, bidi, script itemization, hyphenation, and the public API of `PeachDrawing.Text`; it must not reference PeachPDF):
 
 ```
-dotnet test PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net8.0
+dotnet test --project PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net8.0
 ```
 
 To run a subset of tests:
 
 ```
-dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter "FullyQualifiedName~Svg"
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter-class "*Svg*"
 ```
 
 ## Code coverage
 
-CI enforces **90% diff coverage** on pull requests — the coverage of lines you actually changed, not the whole codebase — via `diff-cover` against the PR base branch (see `.github/workflows/test.yml` and `src/PeachPDF.Tests/coverlet.runsettings`, Cobertura format).
+CI enforces **90% diff coverage** on pull requests — the coverage of lines you actually changed, not the whole codebase — via `diff-cover` against the PR base branch (see `.github/workflows/test.yml`; coverlet's Microsoft.Testing.Platform integration writes Cobertura format).
 
 Reproduce this locally before opening or updating a PR:
 
 ```
-dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --results-directory coverage
 ```
 
 If your changed lines fall short of 90%, add tests to close the gap rather than relying on CI to catch it — a red diff-coverage check is one of the more common reasons a PR stalls in review.
@@ -106,7 +106,7 @@ Report findings only.
 ## Ground rules
 - Read CLAUDE.md at the repo root first and apply all of it. Key rules: the whole solution must build with 0
   warnings (`dotnet build PeachPDF.slnx -t:Rebuild` from `src/`); run tests with
-  `dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` and never bare `dotnet test`; spec claims
+  `dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` and never bare `dotnet test`; spec claims
   are checked against real spec text fetched from w3.org/whatwg.org, not recalled; paint-affecting changes are
   rasterized through BOTH PDFium (pypdfium2) and MuPDF (PyMuPDF) and viewed; diff coverage must be >= 90%;
   no AI attribution in commits or PR text (a grep for "claude" false-positives on `.claude/` paths, so check
@@ -228,7 +228,7 @@ deviates from the spec and which the change follows. Check computed-value vs use
 - Recording a gap/fix/note should add exactly one new file and edit nothing else (no index files).
 
 ## 10. Coverage, merge check and CI
-- Diff coverage: run coverage on net8.0 with `src/PeachPDF.Tests/coverlet.runsettings`, `git add -A` new files in
+- Diff coverage: run coverage on net8.0 with `--coverlet --coverlet-output-format cobertura`, `git add -A` new files in
   your worktree so they are counted, and compute coverage of the changed lines (diff-cover, or Cobertura plus
   `git diff -U0`). Require >= 90%.
 - Trial-merge current `origin/main` in a scratch worktree (`git merge --no-commit --no-ff`); confirm no
