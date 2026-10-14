@@ -293,6 +293,30 @@ namespace PeachPDF.Tests.Integration
         [InlineData("transform", "rotate(0deg)", "rotate(90deg)", 0.5, "rotate(45deg)")]
         [InlineData("transform", "rotate(0deg)", "rotate(0.5turn)", 0.5, "rotate(90deg)")]  // angles meet in degrees
         [InlineData("transform", "translateX(0) scale(1)", "translateX(10px) scale(2)", 0.5, "translateX(5px) scale(1.5)")]
+        // CSS Transforms 1 §11-12: the shorter list continues with identity functions, a short argument list with its defaults.
+        [InlineData("transform", "rotate(0deg)", "rotate(360deg) scale(1.2)", 0.5, "rotate(180deg) scale(1.1)")]   // keeps a full turn
+        [InlineData("transform", "rotate(0deg)", "rotate(540deg) scale(2)", 0.5, "rotate(270deg) scale(1.5)")]
+        [InlineData("transform", "translate(10px)", "translate(10px, 50px)", 0.5, "translate(10px, 25px)")]
+        [InlineData("transform", "scale(1)", "scale(2, .5)", 0.5, "scale(1.5, 0.75)")]
+        [InlineData("transform", "skew(40deg, 10deg)", "skew(20deg)", 0.5, "skew(30deg, 5deg)")]
+        // Functions that share a primitive pair up whatever they are called (CSS Transforms 1 §12).
+        [InlineData("transform", "rotate(0deg)", "rotateZ(270deg)", 0.5, "rotate(135deg)")]            // not the short way round: it is not a matrix
+        [InlineData("transform", "translateX(10px)", "translate(30px, 20px)", 0.5, "translate(20px, 10px)")]
+        [InlineData("transform", "skewX(0deg)", "skew(80deg)", 0.5, "skew(40deg, 0)")]               // the angle, not its tangent
+        [InlineData("transform", "translateZ(10px)", "translateX(20px)", 0.5, "translate3d(10px, 0, 5px)")]
+        [InlineData("transform", "rotateX(0deg)", "rotateX(90deg) scale(2)", 0.5, "rotateX(45deg) scale(1.5)")]
+        [InlineData("transform", "translateX(0) rotate(0deg) scaleX(1)", "translateX(10px) rotate(360deg) scale(3, 1)", 0.5, "translateX(5px) rotate(180deg) scale(2, 1)")]
+        [InlineData("transform", "translateY(0)", "translate(10px, 40px)", 0.5, "translate(5px, 20px)")]
+        [InlineData("transform", "translate3d(0, 0, 0)", "translate(10px, 40px)", 0.5, "translate3d(5px, 20px, 0)")]
+        [InlineData("transform", "scaleY(1)", "scale(3)", 0.5, "scale(2, 2)")]
+        [InlineData("transform", "scaleZ(1)", "scale3d(3, 3, 3)", 0.5, "scale3d(2, 2, 2)")]
+        [InlineData("transform", "skewY(0deg)", "skew(20deg, 40deg)", 0.5, "skew(10deg, 20deg)")]
+        [InlineData("transform", "rotate(0deg)", "rotate3d(0, 0, 1, 90deg)", 0.5, "rotate3d(0, 0, 1, 45deg)")]
+        [InlineData("transform", "rotateX(0deg)", "rotate3d(2, 0, 0, 90deg)", 0.5, "rotate3d(1.5, 0, 0, 45deg)")]   // the same axis direction
+        [InlineData("transform", "none", "rotate3d(1, 1, 0, 90deg)", 0.5, "rotate3d(1, 1, 0, 45deg)")]       // the identity keeps the axis
+        [InlineData("transform", "perspective(400px) rotateY(0deg)", "perspective(400px) rotateY(180deg)", 0.5, "perspective(400px) rotateY(90deg)")]   // the spinning card
+        [InlineData("transform", "perspective(400px)", "perspective(400px) rotateY(180deg)", 0.5, "perspective(400px) rotateY(90deg)")]
+        [InlineData("transform", "rotate3d(1, 0)", "rotate3d(0, 1)", 0.5, "rotate3d(0.5, 0.5)")]   // not a rotate3d(): mixed as written, never indexed as one
         [InlineData("filter", "blur(0px)", "blur(8px)", 0.5, "blur(4px)")]
         [InlineData("z-index", "0", "5", 0.5, "3")]                     // integers stay integers
         public void Interpolate_MixesNumbersLengthsAndFunctionArguments(string property, string from, string to, double t, string expected) =>
@@ -332,7 +356,14 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("display", "block", "inline", 0.49, "block")]
         [InlineData("display", "block", "inline", 0.5, "inline")]
-        [InlineData("transform", "rotate(10deg)", "translateX(10px)", 0.4, "rotate(10deg)")]   // different functions: discrete
+        [InlineData("transform", "rotate(10deg)", "translateX(10px)", 0.4, "rotate(10deg)")]   // no box to resolve lengths against: discrete
+        [InlineData("transform", "rotate(0deg) scale(2)", "scale(1)", 0.4, "rotate(0deg) scale(2)")]  // the first functions differ: not a prefix
+        [InlineData("transform", "rotate(0deg)", "rotate(90deg) perspective(100px)", 0.4, "rotate(0deg)")]  // no identity for perspective() known here
+        [InlineData("transform", "perspective(5px)", "translateX(1px)", 0.4, "perspective(5px)")]   // no primitive in common
+        [InlineData("transform", "rotate3d(0, 0, 0, 0deg)", "rotate3d(0, 0, 0, 90deg) scale(2)", 0.4, "rotate3d(0, 0, 0, 0deg)")]   // a zero axis has no direction
+        [InlineData("transform", "rotate3d(1, 2, 3)", "rotate3d(1, 2, 3) scale(2)", 0.4, "rotate3d(1, 2, 3)")]   // not a rotate3d(), cannot pad
+        [InlineData("transform", "rotateX(0deg)", "rotateY(90deg)", 0.4, "rotateX(0deg)")]            // two axes: a matrix mix, which needs a box
+        [InlineData("transform", "matrix(1, 0, 0, 1, 0, 0)", "matrix(0, 1, -1, 0, 0, 0)", 0.4, "matrix(1, 0, 0, 1, 0, 0)")]   // matrices are always mixed as matrices
         [InlineData("width", "auto", "100px", 0.9, "100px")]
         public void Interpolate_WhatDoesNotMatch_FlipsHalfWay(string property, string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix(property, from, to, t));
@@ -1274,6 +1305,177 @@ namespace PeachPDF.Tests.Integration
             // An empty document returns before anything else in AddPdfPages; the progress is checked ahead of that.
             await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
                 generator.AddPdfPages(document, "", new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 2 }));
+        }
+
+        // ─── Mismatched transform lists: mixed through matrix decomposition (CSS Transforms 1 §13) ───
+
+        private static async Task<System.Numerics.Matrix3x2> TransformAtAsync(string from, string to, double progress, string width = "200pt")
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ transform: {from} }} to {{ transform: {to} }} }}
+                #a {{ width: {width}; height: 100pt; transform-origin: 0 0; animation: k 1s linear }}</style><div id=""a""></div>", progress);
+
+            return Find(root, "a").ActualTransformMatrix;
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_MixTheirDecompositions()
+        {
+            // rotate against translate + scale: the parts mix on their own (translation 50, scale 1.5, no rotation), where a
+            // flip would show either rotate(0deg) or the whole second list.
+            var m = await TransformAtAsync("rotate(0deg)", "translateX(100pt) scale(2)", 0.5);
+
+            Assert.Equal(1.5, m.M11, 3);
+            Assert.Equal(1.5, m.M22, 3);
+            Assert.Equal(0.0, m.M12, 3);
+            Assert.Equal(50.0, m.M31, 2);
+            Assert.Equal(0.0, m.M32, 2);
+        }
+
+        [Fact]
+        public async Task TransformLists_MixPairwiseUntilTheFirstMismatch_ThenAsMatrices()
+        {
+            // translateX and rotate pair up (the full turn is kept: rotate(180deg) half way); scale(1) against skewX(10deg)
+            // share no primitive, so only that tail is mixed as matrices (a skew of half the angle's tangent).
+            var m = await TransformAtAsync("translateX(0) rotate(0deg) scale(1)", "translateX(10pt) rotate(360deg) skewX(10deg)", 0.5);
+
+            var halfSkew = Math.Tan(10 * Math.PI / 180) / 2;
+            Assert.Equal(-1.0, m.M11, 3);
+            Assert.Equal(0.0, m.M12, 3);
+            Assert.Equal(-halfSkew, m.M21, 3);
+            Assert.Equal(-1.0, m.M22, 3);
+            Assert.Equal(5.0, m.M31, 2);
+        }
+
+        [Fact]
+        public async Task TransformLists_WithAnUninvertibleTail_FlipAsAWhole()
+        {
+            // The rotate pair mixes, but scale(0) has no decomposition: the matrix tail refuses and the pair stays discrete.
+            var before = await TransformAtAsync("rotate(0deg) scale(0)", "rotate(90deg) skewX(10deg)", 0.4);
+            Assert.Equal(0.0, before.M11, 3);
+            Assert.Equal(0.0, before.M12, 3);
+
+            var after = await TransformAtAsync("rotate(0deg) scale(0)", "rotate(90deg) skewX(10deg)", 0.6);
+            Assert.Equal(1.0, after.M12, 3);
+        }
+
+        [Fact]
+        public async Task TransformLists_WithACalcArgument_AreMixedAsWholeMatrices()
+        {
+            // A calc() that mixes units survives the cascade as text and is not a plain number, so the lists are not paired; each is
+            // composed whole (1em of 10pt + 10pt = 20pt, half of it at the midpoint).
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { transform: translateX(calc(1em + 10pt)) } to { transform: rotate(90deg) } }
+                #a { font-size: 10pt; height: 10pt; transform-origin: 0 0; animation: k 1s linear }</style><div id="a"></div>
+                """, 0.5);
+
+            var m = Find(root, "a").ActualTransformMatrix;
+
+            var cos = Math.Cos(Math.PI / 4);
+            Assert.Equal(cos, m.M11, 3);
+            Assert.Equal(cos, m.M12, 3);
+            Assert.Equal(10.0, m.M31, 2);
+        }
+
+        [Fact]
+        public async Task MatrixFunctions_AreMixedAsMatrices_NotEntryByEntry()
+        {
+            // Entry by entry, half way to a quarter turn is a matrix of 0.5s (a shrunk box); as matrices it is an eighth of a turn.
+            var m = await TransformAtAsync("matrix(1, 0, 0, 1, 0, 0)", "matrix(0, 1, -1, 0, 0, 0)", 0.5);
+
+            var cos = Math.Cos(Math.PI / 4);
+            Assert.Equal(cos, m.M11, 3);
+            Assert.Equal(cos, m.M12, 3);
+            Assert.Equal(-cos, m.M21, 3);
+            Assert.Equal(cos, m.M22, 3);
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_OfDifferentAxes_MixAsSpatialMatrices()
+        {
+            // rotateY(0) against rotateX(90deg): half way is rotateX(45deg), whose projection on the box's plane squashes y by cos 45.
+            var m = await TransformAtAsync("rotateY(0deg)", "rotateX(90deg)", 0.5);
+
+            Assert.Equal(1.0, m.M11, 3);
+            Assert.Equal(Math.Cos(Math.PI / 4), m.M22, 3);
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_OfDifferentLengths_MixTheirDecompositions()
+        {
+            // Two functions against one: translation 5pt and a 45 degree turn, half way to scale(1).
+            var m = await TransformAtAsync("translateX(10pt) rotate(90deg)", "scale(1)", 0.5);
+
+            var cos = Math.Cos(Math.PI / 4);
+            Assert.Equal(cos, m.M11, 3);
+            Assert.Equal(cos, m.M12, 3);
+            Assert.Equal(-cos, m.M21, 3);
+            Assert.Equal(cos, m.M22, 3);
+            Assert.Equal(5.0, m.M31, 2);
+            Assert.Equal(0.0, m.M32, 2);
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_TakeTheShortWayRound()
+        {
+            // 10deg against rotate(350deg) written as a matrix: the lists differ in function, so this is a mismatched pair;
+            // half way is 0 degrees (20 degrees the other way), not 180.
+            var matrix350 = $"matrix({Math.Cos(350 * Math.PI / 180).ToString(CultureInfo.InvariantCulture)}, {Math.Sin(350 * Math.PI / 180).ToString(CultureInfo.InvariantCulture)}, {(-Math.Sin(350 * Math.PI / 180)).ToString(CultureInfo.InvariantCulture)}, {Math.Cos(350 * Math.PI / 180).ToString(CultureInfo.InvariantCulture)}, 0, 0)";
+            var m = await TransformAtAsync("rotate(10deg)", matrix350, 0.5);
+
+            Assert.Equal(1.0, m.M11, 3);
+            Assert.Equal(0.0, m.M12, 3);
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_AgainstNone_AreMixedEvenForAMatrixList()
+        {
+            // `none` has no identity list to borrow from matrix(), so this used to flip.
+            var m = await TransformAtAsync("none", "matrix(1, 0, 0, 1, 0, 40)", 0.5);
+
+            Assert.Equal(1.0, m.M11, 3);
+            Assert.Equal(0.0, m.M31, 2);
+            Assert.Equal(15.0, m.M32, 2);   // 20px is 15pt
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_WithAPercentage_StillFlip()
+        {
+            // A percentage resolves against the box's size, which layout has not given at the point the lists are mixed.
+            var before = await TransformAtAsync("translateX(50%)", "rotate(90deg)", 0.4);
+            Assert.Equal(1.0, before.M11, 3);
+            Assert.Equal(100.0, before.M31, 2);
+
+            var after = await TransformAtAsync("translateX(50%)", "rotate(90deg)", 0.6);
+            Assert.Equal(0.0, after.M11, 3);
+            Assert.Equal(1.0, after.M12, 3);
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_WithAContainerUnit_StillFlip()
+        {
+            // 10cqw is 40pt in a 400pt container; before layout the container has no size, so a matrix would hold a silent 0.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { transform: rotate(0deg) } to { transform: translateX(10cqw) } }
+                #c { container-type: inline-size; width: 400pt }
+                #a { height: 10pt; transform-origin: 0 0; animation: k 1s linear }</style><div id="c"><div id="a"></div></div>
+                """, 0.6);
+
+            var m = Find(root, "a").ActualTransformMatrix;
+            Assert.Equal(1.0, m.M11, 3);
+            Assert.Equal(40.0, m.M31, 1);
+        }
+
+        [Fact]
+        public async Task MismatchedTransformLists_WithACollapsedDimension_StillFlip()
+        {
+            // scale(0) has no decomposition (a zero scale), so the pair stays discrete.
+            var before = await TransformAtAsync("scale(0)", "rotate(90deg)", 0.4);
+            Assert.Equal(0.0, before.M11, 3);
+            Assert.Equal(0.0, before.M12, 3);
+
+            var after = await TransformAtAsync("scale(0)", "rotate(90deg)", 0.6);
+            Assert.Equal(1.0, after.M12, 3);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

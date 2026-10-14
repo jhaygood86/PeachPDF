@@ -14314,11 +14314,13 @@ code { font-size: 7.5pt; color: #444 }
 @keyframes spin    { from { transform: rotate(0deg) scale(1) } to { transform: rotate(90deg) scale(1.4) } }
 @keyframes glow    { from { box-shadow: 0 0 0 0 #1d4ed8 } to { box-shadow: 0 6px 18px 2px #e63946 } }
 @keyframes stairs  { from { margin-left: 0 } to { margin-left: 240px } }
+@keyframes shuffle { from { transform: rotate(0deg) } to { transform: translateX(240px) rotate(90deg) scale(1.6) } }
 .row { margin: 4px 0; padding: 6px 8px; background: #eef1f5 }
 .bar  { height: 16px; background: #1d4ed8; animation: grow 4s linear }
 .chip { display: inline-block; padding: 6px 12px; border-radius: 4px; animation: recolor 4s linear }
 .tile { width: 46px; height: 46px; margin: 18px 18px 18px 60px; background: #2a9d8f; animation: spin 4s ease-in-out, glow 4s linear }
 .step { width: 60px; height: 16px; background: #2a9d8f; animation: stairs 4s steps(4, end) }
+.shuffle { width: 30px; height: 30px; margin: 20px 0 20px 60px; background: #6a4c93; animation: shuffle 4s linear }
 .spring { width: 60px; height: 16px; background: #e76f51; animation: stairs 4s linear(0, 1.25 40%, 0.9 70%, 1) }
 </style></head><body>
 <h1>CSS animations as a still frame</h1>
@@ -14339,11 +14341,13 @@ code { font-size: 7.5pt; color: #444 }
 <p class="note"><code>margin-left: 0 → 240px</code> with <code>steps(4, end)</code>: the box jumps a quarter of the way at a time.</p>
 <div class="row"><div class="spring"></div></div>
 <p class="note"><code>margin-left: 0 → 240px</code> with <code>linear(0, 1.25 40%, 0.9 70%, 1)</code>: the box overshoots the end, falls back past it and settles on it; the midpoint page shows it beyond the 240px it ends at.</p>
+<div class="row"><div class="shuffle"></div></div>
+<p class="note"><code>transform: rotate(0deg) → translateX(240px) rotate(90deg) scale(1.6)</code>: the two lists differ in their functions, so they are mixed through matrix decomposition (CSS Transforms 1 §13) - the box slides, turns and grows together instead of jumping from the first value to the second half way through.</p>
 </body></html>
 """;
 
 await SaveStatesShowcaseAsync("css_animation", "Graphics & Effects", "CSS Animations: Start, Midpoint and End",
-    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow, a stepped box and a box on a linear() spring curve move between the states. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
+    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow, a stepped box, a box on a linear() spring curve and a box whose two transform lists differ in their functions (mixed through matrix decomposition) move between the states. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
     AnimationHtml,
     ("start (AnimationProgress = 0)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0 }),
     ("midpoint (AnimationProgress = 0.5)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0.5 }),

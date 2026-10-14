@@ -257,7 +257,7 @@ namespace PeachPDF.Html.Core.Animation
             if (eased == 0) return from.Value;
             if (eased == 1) return to.Value;
 
-            return CssValueInterpolator.Interpolate(valueParser, property, from.Value, to.Value, eased);
+            return CssValueInterpolator.Interpolate(valueParser, property, from.Value, to.Value, eased, box);
         }
 
         /// <summary>Substitutes <c>var()</c> in a keyframe value against the box's custom properties; null when it cannot be resolved.</summary>

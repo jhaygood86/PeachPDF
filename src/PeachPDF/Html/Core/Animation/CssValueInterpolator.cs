@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Numerics;
 using System.Text;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core.Animation
@@ -63,9 +66,10 @@ namespace PeachPDF.Html.Core.Animation
 
         /// <summary>
         /// Mixes <paramref name="from"/> and <paramref name="to"/> at <paramref name="t"/> (0 = from, 1 = to; may
-        /// leave 0 to 1 for an easing that overshoots).
+        /// leave 0 to 1 for an easing that overshoots). <paramref name="box"/> is what a length in a <c>transform</c> list
+        /// resolves against when two lists have to be mixed as matrices; without one they flip.
         /// </summary>
-        public static string Interpolate(CssValueParser valueParser, string property, string from, string to, double t)
+        public static string Interpolate(CssValueParser valueParser, string property, string from, string to, double t, CssBox? box = null)
         {
             from = from.Trim();
             to = to.Trim();
@@ -90,17 +94,283 @@ namespace PeachPDF.Html.Core.Animation
             var a = Scan(valueParser, from);
             var b = Scan(valueParser, to);
 
-            if (!SameShape(a, b))
+            var isTransform = property.Equals("transform", StringComparison.OrdinalIgnoreCase);
+
+            // CSS Transforms 1 §11-13: lists are paired function by function, then what is left is mixed as matrices.
+            if (isTransform && TryMixTransformLists(valueParser, a, b, t, box, out var transformed)) return transformed;
+
+            // matrix() and matrix3d() are mixed only as matrices (§12); entry by entry would shrink a turning box.
+            var mixesEntryByEntry = !(isTransform && (HasMatrixFunction(a) || HasMatrixFunction(b)));
+
+            if (mixesEntryByEntry && !SameShape(a, b))
             {
-                // CSS Transforms 1 §9 / Filter Effects 1 §9: `none` is the empty list, i.e. every function of the
+                // CSS Transforms 1 §11 / Filter Effects 1 §9: `none` is the empty list, i.e. every function of the
                 // other value at its identity argument.
                 if (IsNone(a) && TryIdentity(property, b) is { } identityA) a = identityA;
                 else if (IsNone(b) && TryIdentity(property, a) is { } identityB) b = identityB;
             }
 
-            if (SameShape(a, b) && TryMix(property, a, b, t, out var mixed)) return mixed;
+            if (mixesEntryByEntry && SameShape(a, b) && TryMix(property, a, b, t, out var mixed)) return mixed;
+
+            if (box is not null && isTransform && TryMixTransformMatrices(from, to, t, box, out var matrix))
+                return matrix;
 
             return t < 0.5 ? from : to;
+        }
+
+        /// <summary>
+        /// CSS Transforms 1 §13: two lists that cannot be paired function by function are composed to a matrix each and mixed
+        /// through their decompositions. False when that is not possible here - a percentage or a container query unit (they resolve
+        /// against a size which no layout has given yet), a matrix without a decomposition (see <see cref="TransformMatrixInterpolator"/>) -
+        /// and the pair flips. A list with no function this renderer implements composes to the identity, as it paints.
+        /// </summary>
+        private static bool TryMixTransformMatrices(string from, string to, double t, CssBox box, out string result)
+        {
+            result = string.Empty;
+
+            // A function argument is the only place a percentage can sit in a transform list; a container query unit
+            // (cqw, cqh, cqi, cqb, cqmin, cqmax) waits for a container size just the same.
+            if (DependsOnLayout(from) || DependsOnLayout(to)) return false;
+
+            var a = CssValueParser.ComposeTransformFunctions(from, box) ?? Matrix4x4.Identity;
+            var b = CssValueParser.ComposeTransformFunctions(to, box) ?? Matrix4x4.Identity;
+
+            return TransformMatrixInterpolator.TryMix(a, b, t, out result);
+        }
+
+        private static bool DependsOnLayout(string transform) =>
+            transform.Contains('%') || transform.Contains("cq", StringComparison.OrdinalIgnoreCase);
+
+        private readonly record struct TransformCall(string Name, List<string> Arguments);
+
+        /// <summary>
+        /// CSS Transforms 1 §11: the shorter list is padded with identity functions, and the lists are walked in step for as long
+        /// as the two functions at a position share a primitive (<c>translateX</c> with <c>translate</c>, <c>rotate</c> with
+        /// <c>rotateZ</c>, <c>scale(1)</c> with <c>scale(2, .5)</c>); each pair is mixed on its own, which keeps the angle of a
+        /// rotation as written (<c>rotate(0deg)</c> to <c>rotate(360deg) skewX(10deg)</c> turns a full time). At the first position
+        /// with no common primitive, what is left of each list is composed to one matrix and the two matrices are mixed (§13).
+        /// False when the lists do not parse into plain numbers in plain functions, or the matrix mix is not possible; the
+        /// generic mix and the whole-list matrix mix are then tried.
+        /// </summary>
+        private static bool TryMixTransformLists(CssValueParser valueParser, List<Token> a, List<Token> b, double t, CssBox? box, out string result)
+        {
+            result = string.Empty;
+            if (TransformCalls(a) is not { } source || TransformCalls(b) is not { } target) return false;
+
+            List<TransformCall> pairedSource = [], pairedTarget = [];
+            var position = 0;
+
+            for (var count = Math.Max(source.Count, target.Count); position < count; position++)
+            {
+                TransformCall? x = position < source.Count ? source[position] : null;
+                TransformCall? y = position < target.Count ? target[position] : null;
+
+                if (!TryPairTransformCalls(x, y, out var pairX, out var pairY)) break;
+
+                pairedSource.Add(pairX);
+                pairedTarget.Add(pairY);
+            }
+
+            var sb = new StringBuilder();
+
+            if (pairedSource.Count > 0)
+            {
+                var mixedA = Scan(valueParser, TransformText(pairedSource));
+                var mixedB = Scan(valueParser, TransformText(pairedTarget));
+
+                if (!SameShape(mixedA, mixedB) || !TryMix("transform", mixedA, mixedB, t, out var pairs)) return false;
+
+                sb.Append(pairs);
+            }
+
+            var remainderSource = source.Skip(position).ToList();
+            var remainderTarget = target.Skip(position).ToList();
+
+            if (remainderSource.Count > 0 || remainderTarget.Count > 0)
+            {
+                if (box is null) return false;
+
+                if (!TryMixTransformMatrices(TransformText(remainderSource), TransformText(remainderTarget), t, box, out var matrix)) return false;
+
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(matrix);
+            }
+
+            result = sb.ToString();
+            return true;
+        }
+
+        /// <summary>The functions of a transform list, each with its numbers as written; null for anything but plain numbers in plain functions (<c>none</c> is the empty list).</summary>
+        private static List<TransformCall>? TransformCalls(List<Token> tokens)
+        {
+            var calls = new List<TransformCall>();
+            if (IsNone(tokens)) return calls;
+
+            List<string>? arguments = null;
+            var name = string.Empty;
+
+            foreach (var token in tokens)
+            {
+                switch (token.Kind)
+                {
+                    case TokenKind.Open when arguments is null:
+                        name = token.Raw[..^1];
+                        arguments = [];
+                        break;
+                    case TokenKind.Number when arguments is not null:
+                        arguments.Add(token.Raw);
+                        break;
+                    case TokenKind.Close when arguments is not null:
+                        calls.Add(new TransformCall(name, arguments));
+                        arguments = null;
+                        break;
+                    case TokenKind.Space:
+                    case TokenKind.Punct when arguments is not null && token.Raw == ",":
+                        break;
+                    default:
+                        return null;
+                }
+            }
+
+            return arguments is null && calls.Count > 0 ? calls : null;
+        }
+
+        private static string TransformText(List<TransformCall> calls) =>
+            calls.Count == 0 ? "none" : string.Join(" ", calls.Select(call => $"{call.Name}({string.Join(", ", call.Arguments)})"));
+
+        /// <summary>
+        /// The two functions at one position of the lists, brought to a common shape when they share a primitive. Either may be
+        /// missing (a shorter list), standing for the identity of the other. False at the first position with no common
+        /// primitive, and for the functions that are always mixed as matrices (CSS Transforms 1 §12). Two <c>perspective()</c>
+        /// calls pair and mix their lengths, which is not the spec's reciprocal mix but is what a spinning card's constant
+        /// <c>perspective(600px)</c> needs.
+        /// </summary>
+        private static bool TryPairTransformCalls(TransformCall? x, TransformCall? y, out TransformCall pairedX, out TransformCall pairedY)
+        {
+            pairedX = pairedY = default;
+
+            if (x is not { } first || y is not { } second)
+            {
+                if ((x ?? y) is not { } present || !TryIdentityCall(present, out var identity)) return false;
+
+                (pairedX, pairedY) = x is null ? (identity, present) : (present, identity);
+                return true;
+            }
+
+            if (IsMatrixFunction(first.Name) || IsMatrixFunction(second.Name)) return false;
+
+            if (!first.Name.Equals(second.Name, StringComparison.OrdinalIgnoreCase) || first.Arguments.Count != second.Arguments.Count)
+            {
+                if (CommonPrimitive(first) is not { } primitiveX || CommonPrimitive(second) is not { } primitiveY
+                    || !TryUnifyPrimitives(ref primitiveX, ref primitiveY)) return false;
+
+                (first, second) = (primitiveX, primitiveY);
+            }
+
+            // Two axes in different directions are not an angle apart: matrices (§12).
+            if (first.Name.Equals("rotate3d", StringComparison.OrdinalIgnoreCase) && (first.Arguments.Count != 4 || !SameAxis(first, second))) return false;
+
+            (pairedX, pairedY) = (first, second);
+            return true;
+        }
+
+        private static bool HasMatrixFunction(List<Token> tokens) =>
+            tokens.Any(token => token.Kind == TokenKind.Open && IsMatrixFunction(token.Raw[..^1]));
+
+        private static bool IsMatrixFunction(string name) =>
+            name.Equals("matrix", StringComparison.OrdinalIgnoreCase) || name.Equals("matrix3d", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The identity of <paramref name="call"/>: the same function with every argument at its neutral value (a rotation keeps its axis).</summary>
+        private static bool TryIdentityCall(TransformCall call, out TransformCall identity)
+        {
+            identity = default;
+            var name = call.Name.ToLowerInvariant();
+
+            if (name == "rotate3d")
+            {
+                if (call.Arguments.Count != 4) return false;
+
+                identity = new TransformCall(call.Name, [call.Arguments[0], call.Arguments[1], call.Arguments[2], "0"]);
+                return true;
+            }
+
+            if (IdentityArgument(isTransform: true, name) is not { } neutral) return false;
+
+            identity = new TransformCall(call.Name, [.. call.Arguments.Select(_ => Format(neutral))]);
+            return true;
+        }
+
+        /// <summary>
+        /// The primitive a function is a form of (CSS Transforms 1 §12): <c>translate</c>, <c>translate3d</c>, <c>scale</c>,
+        /// <c>scale3d</c>, <c>rotate</c>, <c>rotate3d</c> or <c>skew</c>, written with all of its arguments; null for a function
+        /// without one or one written with the wrong number of arguments.
+        /// </summary>
+        private static TransformCall? CommonPrimitive(TransformCall call)
+        {
+            var args = call.Arguments;
+
+            return (call.Name.ToLowerInvariant(), args.Count) switch
+            {
+                ("translate", 1) or ("translatex", 1) => new TransformCall("translate", [args[0], "0"]),
+                ("translate", 2) => new TransformCall("translate", args),
+                ("translatey", 1) => new TransformCall("translate", ["0", args[0]]),
+                ("translatez", 1) => new TransformCall("translate3d", ["0", "0", args[0]]),
+                ("translate3d", 3) => new TransformCall("translate3d", args),
+                ("scale", 1) => new TransformCall("scale", [args[0], args[0]]),
+                ("scale", 2) => new TransformCall("scale", args),
+                ("scalex", 1) => new TransformCall("scale", [args[0], "1"]),
+                ("scaley", 1) => new TransformCall("scale", ["1", args[0]]),
+                ("scalez", 1) => new TransformCall("scale3d", ["1", "1", args[0]]),
+                ("scale3d", 3) => new TransformCall("scale3d", args),
+                ("rotate", 1) or ("rotatez", 1) => new TransformCall("rotate", args),
+                ("rotatex", 1) => new TransformCall("rotate3d", ["1", "0", "0", args[0]]),
+                ("rotatey", 1) => new TransformCall("rotate3d", ["0", "1", "0", args[0]]),
+                ("rotate3d", 4) => new TransformCall("rotate3d", args),
+                ("skew", 1) or ("skewx", 1) => new TransformCall("skew", [args[0], "0"]),
+                ("skew", 2) => new TransformCall("skew", args),
+                ("skewy", 1) => new TransformCall("skew", ["0", args[0]]),
+                _ => null
+            };
+        }
+
+        /// <summary>A two-dimensional primitive meeting its three-dimensional form is converted to it; false when the primitives differ.</summary>
+        private static bool TryUnifyPrimitives(ref TransformCall x, ref TransformCall y)
+        {
+            if (x.Name == y.Name) return true;
+
+            static TransformCall? Spatial(TransformCall call) => call.Name switch
+            {
+                "translate" => new TransformCall("translate3d", [call.Arguments[0], call.Arguments[1], "0"]),
+                "scale" => new TransformCall("scale3d", [call.Arguments[0], call.Arguments[1], "1"]),
+                "rotate" => new TransformCall("rotate3d", ["0", "0", "1", call.Arguments[0]]),
+                _ => null
+            };
+
+            if (Spatial(x) is { } spatialX && spatialX.Name == y.Name) x = spatialX;
+            else if (Spatial(y) is { } spatialY && spatialY.Name == x.Name) y = spatialY;
+            else return false;
+
+            return true;
+        }
+
+        private static bool SameAxis(TransformCall x, TransformCall y)
+        {
+            static bool TryAxis(TransformCall call, out (double X, double Y, double Z) axis)
+            {
+                axis = default;
+                if (!double.TryParse(call.Arguments[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var ax)
+                    || !double.TryParse(call.Arguments[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var ay)
+                    || !double.TryParse(call.Arguments[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var az)) return false;
+
+                var length = Math.Sqrt(ax * ax + ay * ay + az * az);
+                if (!(length > 0) || !double.IsFinite(length)) return false;
+
+                axis = (ax / length, ay / length, az / length);
+                return true;
+            }
+
+            return TryAxis(x, out var u) && TryAxis(y, out var v)
+                && Math.Abs(u.X - v.X) < 1e-6 && Math.Abs(u.Y - v.Y) < 1e-6 && Math.Abs(u.Z - v.Z) < 1e-6;
         }
 
         private static bool IsNone(List<Token> tokens) =>
@@ -233,7 +503,7 @@ namespace PeachPDF.Html.Core.Animation
                 : $"rgba({channels[0]}, {channels[1]}, {channels[2]}, {Format(alpha)})";
         }
 
-        private static string Format(double value)
+        internal static string Format(double value)
         {
             var text = value.ToString("0.######", CultureInfo.InvariantCulture);
             return text is "-0" ? "0" : text;

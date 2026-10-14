@@ -1056,6 +1056,31 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static Final4Result? BuildFinal4(string transformValue, string transformOriginValue, CssBox box)
         {
+            if (ComposeTransformFunctions(transformValue, box) is not { } combined)
+                return null;
+
+            // Origin is resolved relative to the box's own top-left corner treated as local (0, 0).
+            // This matrix is cached and computed once (see CssBox.ActualTransformMatrix),
+            // so it must stay position-independent - the box's actual page position can vary across
+            // repeated paint passes (e.g. pagination) and is re-applied at paint time instead, via
+            // Matrix3x2Extensions.RebaseOrigin.
+            var (ox, oy, oz) = ParseTransformOrigin(transformOriginValue, box);
+
+            var final4 =
+                Matrix4x4.CreateTranslation((float)-ox, (float)-oy, (float)-oz) *
+                combined *
+                Matrix4x4.CreateTranslation((float)ox, (float)oy, (float)oz);
+
+            return new Final4Result(final4, ox, oy);
+        }
+
+        /// <summary>
+        /// The single 4x4 matrix a <c>transform</c> value composes to (no origin applied), in the layout unit; null for
+        /// "none"/empty/unparsable input or a list with no function this renderer implements. A percentage argument resolves
+        /// against the box's size, so a caller that runs before layout must not pass one.
+        /// </summary>
+        internal static Matrix4x4? ComposeTransformFunctions(string transformValue, CssBox box)
+        {
             if (string.IsNullOrWhiteSpace(transformValue) ||
                 string.Equals(transformValue.Trim(), Keywords.None, StringComparison.OrdinalIgnoreCase))
             {
@@ -1103,22 +1128,7 @@ namespace PeachPDF.Html.Core.Parse
                 hasAny = true;
             }
 
-            if (!hasAny)
-                return null;
-
-            // Origin is resolved relative to the box's own top-left corner treated as local (0, 0).
-            // This matrix is cached and computed once (see CssBox.ActualTransformMatrix),
-            // so it must stay position-independent - the box's actual page position can vary across
-            // repeated paint passes (e.g. pagination) and is re-applied at paint time instead, via
-            // Matrix3x2Extensions.RebaseOrigin.
-            var (ox, oy, oz) = ParseTransformOrigin(transformOriginValue, box);
-
-            var final4 =
-                Matrix4x4.CreateTranslation((float)-ox, (float)-oy, (float)-oz) *
-                combined *
-                Matrix4x4.CreateTranslation((float)ox, (float)oy, (float)oz);
-
-            return new Final4Result(final4, ox, oy);
+            return hasAny ? combined : null;
         }
 
         /// <summary>
