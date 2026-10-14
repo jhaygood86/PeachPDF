@@ -5235,6 +5235,18 @@ namespace PeachPDF.Html.Core.Dom
                                 continue;
                             }
 
+                            // A column has no lower coordinate to pull the run to, so the break is stated before
+                            // the run's head instead, and whoever resumes lays the run out with the content: the
+                            // next column, or the next page when this was the last column. The child kept too few
+                            // lines to measure, so there is no fit test; the destination begins empty.
+                            if (HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } orphanColumn
+                                && RunHeadAfter(childBox, start) is { } orphanHead)
+                            {
+                                PendingBreakToken = new BlockBreakToken(
+                                    this, orphanColumn.SlotIndex, orphanHead, null, IsBreakBefore: true, null);
+                                return true;
+                            }
+
                             PendingBreakToken = new BlockBreakToken(
                                 this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, orphanTarget);
                             return true;
