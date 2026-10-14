@@ -1852,9 +1852,12 @@ namespace PeachPDF.Tests.Integration
                 w.Top < f.ActualBottom && w.Bottom > f.Location.Y && w.Left >= f.ActualRight - 1);
             var floatLeft = f.Location.X - f.ActualMarginLeft;
             var floatRight = f.ActualRight + f.ActualMarginRight;
+            // Word boxes overhang their line box by half the leading each way (Arial at 11pt: a 12.64pt box on a 12.00pt
+            // line), so a float placed at a line top sits about 0.3pt inside a neighbouring line's box. The 1pt slack
+            // ignores that overhang and still catches a word box that overlaps the float by more than 1pt.
             Assert.DoesNotContain(words, w =>
                 w.Left < floatRight - 0.5 && w.Right > floatLeft + 0.5
-                && w.Top < f.ActualBottom && w.Bottom > f.Location.Y);
+                && w.Top < f.ActualBottom - 1 && w.Bottom > f.Location.Y + 1);
         }
 
         // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float
