@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
@@ -94,12 +95,56 @@ namespace PeachPDF.Html.Core.Animation
                     }
                 }
 
+                // currentcolor in another property's keyframe stands for this animation's `color` at the same moment (CSS Color 4,
+                // Color Interpolation), so `color` is sampled and written first.
+                // The box's `color` may itself still be waiting on var(): it is what currentcolor resolves to, so settle it for the
+                // sampling when a property being animated can name currentcolor (when `color` is animated, the overlap rule above
+                // already has). Only for the sampling: the declaration goes back to the pending set, so the cascade's last var() pass
+                // still gives the box's own color the !important custom property it may refer to, as it does without an animation.
+                if (pendingVarProperties.Count > 0 && ReferencesCurrentColor(box, stops, animated))
+                {
+                    var colorDeclarations = pendingVarProperties.Where(pair => pair.Key.Equals("color", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    DomParser.ResolveDeferredVarProperties(valueParser, box, pendingVarProperties, name => name.Equals("color", StringComparison.OrdinalIgnoreCase));
+
+                    foreach (var (name, value) in colorDeclarations) pendingVarProperties[name] = value;
+                }
+
+                var colorIndex = animated.FindIndex(property => property.Equals("color", StringComparison.OrdinalIgnoreCase));
+                if (colorIndex > 0)
+                {
+                    animated.RemoveAt(colorIndex);
+                    animated.Insert(0, "color");
+                }
+
                 foreach (var property in animated)
                 {
                     var value = Sample(valueParser, box, stops, property, directed, easing);
                     if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
                 }
             }
+        }
+
+        /// <summary>
+        /// Whether a property other than <c>color</c> that these keyframes animate can be <c>currentcolor</c>: a keyframe says so,
+        /// or the value the property has without the animation (the implicit 0% or 100% keyframe) does.
+        /// </summary>
+        private static bool ReferencesCurrentColor(CssBox box, List<ResolvedStop> stops, List<string> animated)
+        {
+            static bool IsCurrentColor(string? value) => value?.Contains("currentcolor", StringComparison.OrdinalIgnoreCase) == true;
+
+            foreach (var property in animated)
+            {
+                if (property.Equals("color", StringComparison.OrdinalIgnoreCase)) continue;
+                if (IsCurrentColor(CssUtils.GetPropertyValue(box, property))) return true;
+
+                foreach (var stop in stops)
+                {
+                    if (stop.Values.TryGetValue(property, out var value) && IsCurrentColor(value)) return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
