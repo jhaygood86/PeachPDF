@@ -402,6 +402,35 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottom > top, "fixture must actually span more than one page");
         }
 
+        // The same claim for the other half of the shape. Monolithic content does not fragment across
+        // pages (css-break-3 §4.1), and whether its own content is columnized has nothing to do with
+        // it: a multi-column scroll container lays its columns out inside itself, and is still one box
+        // a page boundary cannot cut. The suppression used to be switched off for any box reaching the
+        // columns engine, which let exactly this shape break.
+        //
+        // The height is definite because that is what makes the box monolithic at all:
+        // MonolithicContent.IsMonolithic asks for a scroll container with a constrained logical height
+        // (or one no engine of its own can continue).
+        [Fact]
+        public async Task ScrollContainerEstablishingColumnsWithBlockChildren_IsAlsoSuppressed()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div id='card' style='overflow:hidden;height:660pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
+                string.Join("", Enumerable.Range(0, 30).Select(i => $"<div>Line{i}</div>")) +
+                "</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            Assert.True(card.EstablishesMultiColumnContext, "fixture must establish a multi-column context");
+
+            Assert.Equal(1, container.FragmentainerPasses);
+
+            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+            Assert.True(bottom > top, "fixture must actually span more than one page");
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
 
         /// <summary>

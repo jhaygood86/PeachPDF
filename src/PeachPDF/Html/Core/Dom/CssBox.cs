@@ -4558,11 +4558,9 @@ namespace PeachPDF.Html.Core.Dom
                     // the epilogue's own relocate-whole-box mover still moves an unbroken,
                     // too-tall-for-here-but-fits-on-the-next-page box exactly as before.
                     //
-                    // Excludes a box that will actually dispatch to the multi-column engine below (not
-                    // every EstablishesMultiColumnContext box - one holding only inline content takes the
-                    // ContainsInlinesOnly branch above instead, same as any other inlines-only box, and
-                    // must still be suppressed): a column is a real fragmentainer in its own right and
-                    // drives its own (nested) fragmentation regardless of this box's own monolithic status.
+                    // Columns do not exempt a box. A multi-column container is still one box a page boundary cannot
+                    // cut (css-break-3 §4.1), and laying its columns out is internal to it, so the suppression
+                    // applies whether its content takes the columns engine or the inline branch.
                     //
                     // Excludes table-cell/table-caption, and by display rather than by overflow value:
                     // a cell that declares overflow: hidden itself would otherwise read as "monolithic"
@@ -4586,7 +4584,6 @@ namespace PeachPDF.Html.Core.Dom
                                 && Boxes.All(b => b.IsExcludedFromFlow || b.DerivedStyle.ActualDisplay == Keywords.None
                                                   || b is { HtmlTag: null, IsSpaceOrEmpty: true })));
                     var suppressMonolithicBreaking = MonolithicContent.IsMonolithic(this)
-                        && !dispatchesToColumnsEngine
                         && DerivedStyle.ActualDisplay is not (Keywords.TableCell or Keywords.TableCaption);
                     var suppressingContainer = suppressMonolithicBreaking ? HtmlContainer : null;
                     var suppressedFragmentainer = suppressingContainer?.DetachFragmentainer();

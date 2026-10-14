@@ -1747,14 +1747,12 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(mc.ClientRight - mc.ClientLeft, abs.ActualRight - abs.Location.X, 1);
         }
 
-        // A known boundary, pre-existing and characterized here rather than left silent. CssBox's own
-        // content dispatch tests ContainsInlinesOnly *before* EstablishesMultiColumnContext, and
-        // ContainsInlinesOnly is "every child is inline" - vacuously true of a box whose children are all
-        // text. So a multi-column container holding nothing but text takes the inline branch and never
-        // reaches this engine at all. Columnizing it needs its inline content wrapped in an anonymous
-        // block first, which is a box-generation question rather than a fragmentation one.
+        // css-multicol-1 §3: a container fragments its content across the column boxes, text included.
+        // The run needs an anonymous block around it first (DomParser.CorrectInlineBoxesParent), since
+        // CssBox's content dispatch tests ContainsInlinesOnly before EstablishesMultiColumnContext, and
+        // the inline branch it picks knows nothing of columns.
         [Fact]
-        public async Task InlineOnlyContent_DoesNotColumnize_KnownBoundary()
+        public async Task InlineOnlyContent_Columnizes()
         {
             var html = Wrap("<div id='mc' style='columns:2; column-gap:0; width:200px'>"
                             + "Plain text with no block child of its own, long enough that two columns "
@@ -1762,14 +1760,44 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html, pageHeight: 400);
 
             var mc = FindById(root, "mc")!;
-            var xs = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
-                .Select(w => System.Math.Round(w.Left)).DefaultIfEmpty(0).ToList();
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
 
-            // The text uses the container's whole width rather than a column's - two columns of a 150pt
-            // container would each be ~75pt wide. And no rule is drawn, because no column was made.
-            Assert.True(xs.Max() - xs.Min() > 100,
-                $"expected the text to span the whole container rather than one column, got X {xs.Min()}..{xs.Max()}");
-            Assert.Null(mc.ColumnRuleSegments);
+            // Every word is laid out once: the columns engine must not drop any of them.
+            Assert.Equal(20, words.Count);
+
+            // 200px of container is 150pt, so with no gap each column is 75pt.
+            var left = words.Min(w => w.Left);
+            var boundary = left + 75;
+
+            Assert.Contains(words, w => w.Left >= boundary - 1);
+            Assert.All(
+                words.Where(w => w.Left < boundary - 1),
+                w => Assert.True(w.Right <= boundary + 1,
+                    $"a first-column word ran past the column at {boundary}, to {w.Right}"));
+        }
+
+        // The vertical-writing-mode exclusion in DomParser.CorrectInlineBoxesParent: this box keeps its
+        // CreateVerticalLineBoxes path, where its text stays inside the box. Through the columns engine
+        // the same text would leave the box entirely.
+        [Fact]
+        public async Task InlineOnlyContentUnderVerticalWritingMode_StaysInsideTheBox()
+        {
+            var html = Wrap("<div id='mc' style='writing-mode:vertical-rl; columns:2; column-gap:0; width:225pt; height:90pt'>"
+                            + "Plain text with no block child of its own, long enough that two columns "
+                            + "would be visibly different from one.</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.NotEmpty(words);
+            Assert.All(words, w =>
+            {
+                Assert.True(w.Left >= mc.Location.X - 1 && w.Right <= mc.ActualRight + 1,
+                    $"word spans X {w.Left}..{w.Right}, outside the box {mc.Location.X}..{mc.ActualRight}");
+                Assert.True(w.Top >= mc.Location.Y - 1 && w.Bottom <= mc.ActualBottom + 1,
+                    $"word spans Y {w.Top}..{w.Bottom}, outside the box {mc.Location.Y}..{mc.ActualBottom}");
+            });
         }
 
         // ─── Break values in the column context (css-break-3 §3.1 `column`, §3.2 `avoid-column`) ──────
