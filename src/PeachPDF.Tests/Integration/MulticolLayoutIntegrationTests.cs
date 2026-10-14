@@ -2304,6 +2304,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A heading chained by <c>break-after: avoid</c> to a paragraph that starts the next page is not left at the foot
+        /// of the last column: the break that leaves the container falls before the heading (css-break-3 §3.1). Without
+        /// the chain the same fixture leaves the heading where it is, which is what makes this about the run.
+        /// </summary>
+        [Theory]
+        [InlineData("break-after:avoid", true)]
+        [InlineData("", false)]
+        public async Task AKeepWithNextHeading_AtTheFootOfTheLastColumn_TravelsWithItsParagraphToTheNextPage(
+            string onHead, bool travels)
+        {
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:400pt; column-fill:auto'>
+                    <div id='fill' style='height:100pt; margin:0'>Fill</div>
+                    <div id='a' style='height:30pt; margin:0'>A</div>
+                    <div id='head' style='height:50pt; margin:0; {onHead}'>Heading</div>
+                    <p id='para' style='margin:0; font-size:10pt; line-height:20pt'>L1<br>L2<br>L3<br>L4</p>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            var head = FindById(root, "head")!;
+
+            Assert.Equal(travels, head.Location.Y >= 100);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        /// <summary>
         /// §5.2's forced-break governance survives the escape. The break is settled on the pass that
         /// declines to place the box and applied on the one that does, and in between the columns engine
         /// re-opens the box's prologue, which retracts it — so a collapse-through marker read as an
