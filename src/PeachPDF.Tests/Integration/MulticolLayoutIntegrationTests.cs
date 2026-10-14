@@ -1800,6 +1800,38 @@ namespace PeachPDF.Tests.Integration
             });
         }
 
+        // A float beside the text is kept out of the wrapped run (DomParser.CorrectInlineBoxesParent). It
+        // stays a child of the container, the columns engine lays it out in its own column, and the lines
+        // beside it start past its right edge.
+        [Fact]
+        public async Task InlineTextBesideAFloat_Columnizes()
+        {
+            var html = Wrap("<div id='mc' style='columns:2; column-gap:0; width:200px'>"
+                            + "<div id='f' style='float:left; width:40px; height:20px'></div>"
+                            + "Plain text with no block child of its own, long enough that two columns "
+                            + "would be visibly different from one.</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var f = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.Equal(20, words.Count);
+
+            // 200px of container is 150pt, so with no gap each column is 75pt.
+            var boundary = words.Min(w => w.Left) + 75;
+            Assert.Contains(words, w => w.Left >= boundary - 1);
+            Assert.All(
+                words.Where(w => w.Left < boundary - 1),
+                w => Assert.True(w.Right <= boundary + 1,
+                    $"a first-column word ran past the column at {boundary}, to {w.Right}"));
+
+            Assert.All(
+                words.Where(w => w.Top < f.ActualBottom && w.Bottom > f.Location.Y && w.Left < boundary - 1),
+                w => Assert.True(w.Left >= f.ActualRight - 1,
+                    $"a word beside the float starts at {w.Left}, inside the float's right edge {f.ActualRight}"));
+        }
+
         // ─── Break values in the column context (css-break-3 §3.1 `column`, §3.2 `avoid-column`) ──────
 
         /// <summary>
