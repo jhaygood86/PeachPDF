@@ -4517,13 +4517,43 @@ namespace PeachPDF.Html.Core.Dom
         /// onto the next page; that is float fragmentation proper (issue #317).
         /// </para>
         /// </remarks>
-        private static async ValueTask FlowFloatChild(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
+        private static async ValueTask FlowFloatChild(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates,
+            double lineSpacing, double lineStartX, bool isRtl)
         {
             // A speculative wrap may have rejected this box earlier in the same layout generation -
             // reaching real placement is the authoritative point at which it becomes fragment-visible,
             // exactly as for FlowAtomicBlockContentChild's identical call.
             b.AllowFragmentEmissionForCurrentLayout();
 
+            await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+
+            // The words already on this line are moved beside a float placed after them, as a browser lays the
+            // line out again around it. Where they would no longer fit, the float starts the next line instead.
+            if (coordinates.Line.Words.Count > 0 && FloatOverlapsLineWords(b, coordinates.Line))
+            {
+                if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
+                {
+                    foreach (var word in coordinates.Line.Words)
+                    {
+                        word.Left += shift;
+                    }
+
+                    coordinates.CurrentX += shift;
+                }
+                else
+                {
+                    coordinates.InlineFloats?.Remove(b);
+                    OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
+                        followsForcedBreak: false, isRtl);
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                }
+            }
+
+            await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
+        }
+
+        private static async ValueTask PlaceFloatAtLineTop(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
+        {
             b.Location = new PaintPoint(
                 blockBox.ClientLeft + b.ActualMarginLeft, coordinates.Line.FlowTop ?? coordinates.CurrentY);
             b.ActualBottom = b.Location.Y;
@@ -4537,8 +4567,38 @@ namespace PeachPDF.Html.Core.Dom
             FloatBox(b);
 
             (coordinates.InlineFloats ??= []).Add(b);
+        }
 
-            await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
+        private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
+        {
+            var left = floated.Location.X - floated.ActualMarginLeft;
+            var right = floated.ActualRight + floated.ActualMarginRight;
+
+            return line.Words.Any(w => w.Left < right && w.Right > left);
+        }
+
+        // The horizontal move that clears the words on the line from a float placed at its top, or null when the
+        // moved words would leave the line's space.
+        private static double? ShiftLineBesideFloat(CssBox blockBox, CssBox floated, CssLineBoxCoordinates coordinates)
+        {
+            var line = coordinates.Line;
+            var firstLeft = line.Words.Min(w => w.Left);
+            var lastRight = line.Words.Max(w => w.Right);
+
+            if (floated.EffectiveFloatSide == Floating.Right)
+            {
+                var move = floated.Location.X - floated.ActualMarginLeft - lastRight;
+                var leftFloat = LeftFloatAt(coordinates, blockBox);
+                var leftLimit = leftFloat is null ? line.ContentLeft : leftFloat.ActualRight + leftFloat.ActualMarginRight;
+
+                return firstLeft + move >= leftLimit - LineFitTolerance ? move : null;
+            }
+
+            var shift = floated.ActualRight + floated.ActualMarginRight - firstLeft;
+            var rightFloat = RightFloatAt(coordinates, blockBox);
+            var rightLimit = rightFloat is null ? line.ContentRight : rightFloat.Location.X - rightFloat.ActualMarginLeft;
+
+            return lastRight + shift <= rightLimit + LineFitTolerance ? shift : null;
         }
 
         /// <summary>
@@ -5587,7 +5647,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else
                     {
-                        await FlowFloatChild(g, blockBox, b, coordinates);
+                        await FlowFloatChild(g, blockBox, b, coordinates, lineSpacing, lineStartX, isRtl);
                         (coordinates.FloatsPlacedOnThisLine ??= []).Add(b);
                     }
 

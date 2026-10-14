@@ -536,11 +536,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AFloatBesideInlineContent_HasRoomReservedForItByTheLine()
         {
-            // The consequence the measurement has, asserted on geometry: the shrink-to-fit box has to
-            // be wide enough to hold the text AND the float beside it. Sized to the wider of the two
-            // instead of their sum it is not, and the two can only overlap. Where layout then PUTS
-            // the float is a separate question this fixture deliberately does not ask — see
-            // .claude/accepted-gaps/a-float-after-inline-content-is-placed-on-the-next-line.md.
+            // The consequence the measurement has, asserted on geometry: the shrink-to-fit box has to be wide
+            // enough to hold the text beside the float, and the text is laid out beside it rather than under it.
+            // Sized to the wider of the two instead of their sum, the text would have to overlap the float.
             var html = LayoutHarness.Wrap(@"
                 <div style='font:16px monospace'>
                     <div id='float' style='float:left'>XY <span id='inner' style='float:left'>ZZZZ</span></div>
@@ -551,12 +549,18 @@ namespace PeachPDF.Tests.Integration
             var inner = LayoutHarness.FindById(root, "inner")!;
 
             var innerBoxes = LayoutHarness.Descendants(inner).ToHashSet();
-            var textWidth = LayoutHarness.Descendants(outer).Where(b => !innerBoxes.Contains(b))
-                .SelectMany(b => b.Words).Select(w => w.Right - outer.Location.X).DefaultIfEmpty(0).Max();
+            var text = LayoutHarness.Descendants(outer).Where(b => !innerBoxes.Contains(b))
+                .SelectMany(b => b.Words).ToList();
+            var textRight = text.Select(w => w.Right - outer.Location.X).DefaultIfEmpty(0).Max();
 
-            Assert.True(outer.ActualWidth >= textWidth + inner.ActualWidth - 0.5,
-                $"the box holds the text ({textWidth}) and the float ({inner.ActualWidth}) side by side, "
-                + $"so it must be at least their sum wide, not {outer.ActualWidth}");
+            Assert.True(outer.ActualWidth >= textRight - 0.5,
+                $"the box holds the text beside the float, which reaches {textRight}, but is only {outer.ActualWidth} wide");
+
+            var floatLeft = inner.Location.X - inner.ActualMarginLeft;
+            var floatRight = inner.ActualRight + inner.ActualMarginRight;
+            Assert.DoesNotContain(text, w =>
+                w.Left < floatRight - 0.5 && w.Right > floatLeft + 0.5
+                && w.Top < inner.ActualBottom && w.Bottom > inner.Location.Y);
         }
 
         [Fact]
