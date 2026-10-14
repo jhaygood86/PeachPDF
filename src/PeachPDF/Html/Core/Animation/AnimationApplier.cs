@@ -231,17 +231,21 @@ namespace PeachPDF.Html.Core.Animation
                 if (frames[^1].Offset < 1) frames.Add((1, underlying, null));
             }
 
-            // Before the first keyframe and from the last one on, the nearest value holds. Exactly *at* the first
+            // Before the first keyframe and past the last one, the nearest value holds. Exactly *at* the first
             // keyframe is the start of its interval, which its easing still shapes: step-start shows its first step
-            // there, not the 0% value.
+            // there, not the 0% value. Exactly at the last is the end of the last interval, which its easing still
+            // shapes too: every older easing maps 1 to 1, but linear(0, 1, 0) comes back to its start.
             if (progress < frames[0].Offset || frames.Count == 1) return frames[0].Value;
-            if (progress >= frames[^1].Offset) return frames[^1].Value;
+            if (progress > frames[^1].Offset) return frames[^1].Value;
 
             var index = 0;
             while (index < frames.Count - 2 && progress >= frames[index + 1].Offset) index++;
 
             var from = frames[index];
             var to = frames[index + 1];
+
+            // Two keyframes at the same offset leave no interval to shape (the last one wins, as it always did).
+            if (to.Offset <= from.Offset) return frames[^1].Value;
 
             var local = (progress - from.Offset) / (to.Offset - from.Offset);
             var interval = from.Easing is not null && EasingFunction.TryParse(from.Easing, out var own) ? own : animationEasing;
