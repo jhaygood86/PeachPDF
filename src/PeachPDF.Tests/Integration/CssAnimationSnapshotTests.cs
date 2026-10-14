@@ -1,4 +1,5 @@
 using PeachDrawing.Core;
+using PeachPDF.CSS;
 using PeachPDF.PdfBackend;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Animation;
@@ -114,12 +115,48 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, function.Evaluate(input), 4);
         }
 
-        [Fact]
-        public void Easing_LinearWithStops_IsReadAsLinear()
+        [Theory]
+        [InlineData("linear(0, 0.25 40%, 1)", 0.3, 0.1875)]                  // between the first stop and the 40% one
+        [InlineData("linear(0, 0.25 40%, 1)", 0.4, 0.25)]
+        [InlineData("linear(0, 0.25 40%, 1)", 0.7, 0.625)]
+        [InlineData("linear(0, 1)", 0.3, 0.3)]
+        [InlineData("linear(0, 0.5, 1)", 0.25, 0.25)]                        // the middle stop is spread to 50%
+        [InlineData("linear(0, 0.9, 0.9, 1)", 0.5, 0.9)]                     // two unplaced stops sit at 1/3 and 2/3
+        [InlineData("linear(0, 1 25% 75%, 0)", 0.5, 1)]                      // two percentages: a plateau
+        [InlineData("linear(0, 1 25% 75%, 0)", 0.875, 0.5)]
+        [InlineData("linear(0 0%, 25% 1, 1 100%)", 0.125, 0.5)]              // the percentage may come first
+        [InlineData("linear(0, 1 60%, 0.5 40%, 1)", 0.6, 0.5)]               // 40% is raised to 60%: a jump back at 60%
+        [InlineData("linear(0, 1 60%, 0.5 40%, 1)", 0.8, 0.75)]
+        [InlineData("linear(0, 1 50% 50%)", 0.25, 0.5)]                      // a jump at the last point: nothing is left to continue,
+        [InlineData("linear(0, 1 50% 50%)", 0.75, 1)]                        // so the next point's output is held (css-easing-2 §2.1.4 step 6)
+        [InlineData("linear(0, 0.5 50%)", 0.75, 0.75)]                       // past the last input the line is continued
+        [InlineData("linear(0.2 25%, 1 75%)", 0.0, -0.2)]                    // ...and before the first
+        public void Easing_LinearWithStops_FollowsTheStops(string easing, double input, double expected)
         {
-            Assert.True(EasingFunction.TryParse("linear(0, 0.25 40%, 1)", out var function));
-            Assert.Equal(0.3, function.Evaluate(0.3), 9);
+            Assert.True(EasingFunction.TryParse(easing, out var function));
+            Assert.Equal(expected, function.Evaluate(input), 4);
         }
+
+        [Fact]
+        public void Easing_LinearWhoseSegmentOverflows_StaysFinite()
+        {
+            Assert.True(EasingFunction.TryParse("linear(1e308 0%, -1e308 50%, 0)", out var function));
+
+            foreach (var input in new[] { 0.0, 0.25, 0.5, 0.75, 1.0 })
+                Assert.True(double.IsFinite(function.Evaluate(input)), $"input {input}");
+        }
+
+        [Theory]
+        [InlineData("linear(0)")]
+        [InlineData("linear(0, 1,)")]
+        [InlineData("linear(a, b)")]
+        [InlineData("linear(0 10% 20% 30%, 1)")]
+        [InlineData("linear(0 1, 1)")]
+        [InlineData("linear(0, NaN)")]
+        [InlineData("linear(0, Infinity 50%, 1)")]
+        [InlineData("linear(0, 1e999)")]
+        [InlineData("linear(0, 1 NaN%)")]
+        public void Easing_LinearWithMalformedStops_IsRejected(string text) => Assert.False(EasingFunction.TryParse(text, out _));
 
         [Fact]
         public void Easing_EaseIn_StartsSlowAndEaseOut_EndsSlow()
@@ -137,6 +174,39 @@ namespace PeachPDF.Tests.Integration
         [InlineData("steps(1, jump-none)")]
         [InlineData("steps(2, sideways)")]
         public void Easing_RejectsWhatIsNotOne(string text) => Assert.False(EasingFunction.TryParse(text, out _));
+
+        [Fact]
+        public void LinearEasingGrammar_ReadsOutputsAndPositionsInEitherOrder()
+        {
+            using var pooled = CssValueParser.GetCssTokensPooled("0, 25% 0.5, 0.75 50% 60%, 1");
+            List<Token> tokens = pooled;
+
+            var stops = LinearEasingGrammar.TryParse(tokens);
+
+            Assert.NotNull(stops);
+            Assert.Equal(4, stops.Count);
+            Assert.Null(stops[0].FirstPosition);
+            Assert.Equal(0.5, stops[1].Output);
+            Assert.Equal(0.25, stops[1].FirstPosition);
+            Assert.Null(stops[1].SecondPosition);
+            Assert.Equal(0.5, stops[2].FirstPosition);
+            Assert.Equal(0.6, stops[2].SecondPosition);
+        }
+
+        [Theory]
+        [InlineData("0")]
+        [InlineData("0, 1,")]
+        [InlineData("0, , 1")]
+        [InlineData("a, b")]
+        [InlineData("0 NaN%, 1")]
+        [InlineData("0, 1 10% 20% 30%")]
+        public void LinearEasingGrammar_RejectsWhatIsNotAStopList(string arguments)
+        {
+            using var pooled = CssValueParser.GetCssTokensPooled(arguments);
+            List<Token> tokens = pooled;
+
+            Assert.Null(LinearEasingGrammar.TryParse(tokens));
+        }
 
         // ─── Interpolation ───────────────────────────────────────────────────────
 
@@ -1012,7 +1082,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("animation: k 1s steps(4, jump-both)", 0.6)]          // 3 of 5 jumps
         [InlineData("animation: k 1s steps(4, start)", 0.75)]
         [InlineData("animation: k 1s steps(4, end)", 0.5)]
-        [InlineData("animation: k 1s linear(0, 0.25 25%, 1)", 0.5)]       // read as plain linear
+        [InlineData("animation: k 1s linear(0, 0.8 25%, 1)", 0.8 + 0.2 / 3)]
         [InlineData("animation: k 1s linear(0, 1)", 0.5)]
         [InlineData("animation: \"k\" 1s linear", 0.5)]                   // a string names the animation too
         [InlineData("animation: 1s linear 'k'", 0.5)]
@@ -1028,7 +1098,7 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("animation-timing-function: steps(4, jump-start)", 0.75)]
         [InlineData("animation-timing-function: steps(4, jump-both)", 0.6)]
-        [InlineData("animation-timing-function: linear(0, 0.25 25%, 1)", 0.5)]
+        [InlineData("animation-timing-function: linear(0, 0.8 25%, 1)", 0.8 + 0.2 / 3)]
         public async Task AnimationTimingFunctionLonghand_WithAnEasingForm_Applies(string declaration, double expected)
         {
             var root = await BuildAsync($@"
@@ -1094,6 +1164,9 @@ namespace PeachPDF.Tests.Integration
         [InlineData("linear(0)")]                       // a single stop is not a curve
         [InlineData("linear(0, 1,)")]
         [InlineData("linear(a, b)")]
+        [InlineData("linear(0, 1e999)")]                // an overflowing number is not one a curve can use
+        [InlineData("linear(0 10% 20% 30%, 1)")]        // three positions
+        [InlineData("linear(0 1, 1)")]                  // two numbers in one stop
         public async Task InvalidEasing_IsDroppedSoAnEarlierValidOneStillApplies(string invalid)
         {
             // step-end shows the 0% value until the very end; the invalid declaration must not replace it (nor become ease).
