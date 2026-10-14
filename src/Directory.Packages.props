@@ -7,7 +7,8 @@
   <ItemGroup>
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="coverlet.MTP" Version="10.1.0" />
-    <PackageVersion Include="DefaultDocumentation" Version="1.2.6" />
+    <!-- 1.2.6 mangles the page name of a member with a tuple parameter (RasterSurfaceFactory.Create), breaking the API reference link check. -->
+    <PackageVersion Include="DefaultDocumentation" Version="1.2.5" />
     <PackageVersion Include="HtmlAgilityPack" Version="1.13.1" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.13" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.13" />
