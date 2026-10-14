@@ -2276,6 +2276,34 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A box whose top margin pushes it past a column's foot asks for a break before it, and the heading it is chained
+        /// to by <c>break-after: avoid</c> is not left to the page-grid pull: that translated the heading to the next page's
+        /// top, which a column has no such place for. Its recorded geometry kept it where it was laid out, so two
+        /// fragmentainers claimed it (issue #1719).
+        /// </summary>
+        [Fact]
+        public async Task AKeepWithNextHeading_IsClaimedByOneFragmentainer_WhenTheNextBoxIsPushedPastTheColumn()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:400pt; column-fill:auto'>
+                    <div id='a' style='height:10pt; margin:0'>A</div>
+                    <div id='head' style='height:40pt; margin:0; break-after:avoid'>Heading</div>
+                    <div id='para' style='height:10pt; margin:60pt 0 0 0'>Para</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(3, claimed.Count);
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+            Assert.True(FindById(root, "head")!.Location.Y < 50, "the heading stays in the page it was laid out in");
+        }
+
+        /// <summary>
         /// §5.2's forced-break governance survives the escape. The break is settled on the pass that
         /// declines to place the box and applied on the one that does, and in between the columns engine
         /// re-opens the box's prologue, which retracts it — so a collapse-through marker read as an
