@@ -1800,9 +1800,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             });
         }
 
-        // A float beside the text is kept out of the wrapped run (DomParser.CorrectInlineBoxesParent). It
-        // stays a child of the container, the columns engine lays it out in its own column, and the lines
-        // beside it start past its right edge.
+        // A float beside the text joins the wrapped run (DomParser.CorrectInlineBoxesParent). The text is still
+        // divided into columns, and the lines beside the float start past its right edge.
         [Fact]
         public async Task InlineTextBesideAFloat_Columnizes()
         {
@@ -1832,9 +1831,9 @@ namespace PeachBrackets.Engine.Tests.Integration
                     $"a word beside the float starts at {w.Left}, inside the float's right edge {f.ActualRight}"));
         }
 
-        // A float in the middle of the text sits in its column, and the lines beside it start past its right
-        // edge. The float is kept out of the wrapped run (DomParser.CorrectInlineBoxesParent), so this holds only
-        // because the columns engine narrows those lines.
+        // A float in the middle of the text joins the wrapped run (DomParser.CorrectInlineBoxesParent). The words
+        // already on its line move beside it, the lines after it start past its right edge, and no word is drawn
+        // over it.
         [Fact]
         public async Task InlineTextBesideAMiddleFloat_StartsPastIt()
         {
@@ -1849,9 +1848,13 @@ namespace PeachBrackets.Engine.Tests.Integration
             var f = FindById(root, "f")!;
             var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
 
-            Assert.Same(mc, f.ParentBox);
             Assert.Contains(words, w =>
                 w.Top < f.ActualBottom && w.Bottom > f.Location.Y && w.Left >= f.ActualRight - 1);
+            var floatLeft = f.Location.X - f.ActualMarginLeft;
+            var floatRight = f.ActualRight + f.ActualMarginRight;
+            Assert.DoesNotContain(words, w =>
+                w.Left < floatRight - 0.5 && w.Right > floatLeft + 0.5
+                && w.Top < f.ActualBottom && w.Bottom > f.Location.Y);
         }
 
         // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float
