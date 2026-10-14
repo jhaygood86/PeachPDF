@@ -128,6 +128,12 @@ internal sealed class PdfDocumentOptions
     /// </summary>
     internal bool FlattenTransparency { get; set; }
 
+    /// <summary>
+    /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PortableColorFilters"/>. Read by
+    /// <c>PdfGraphicsRenderer.DrawImageWithColorMatrix</c>.
+    /// </summary>
+    internal bool PortableColorFilters { get; set; }
+
     public bool DownscaleImages
     {
         get => _downscaleImages;

@@ -374,6 +374,7 @@ namespace PeachPDF
             document.PdfDocument.Options.ColorMode = PdfColorMode.Undefined;
             document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
             document.PdfDocument.Options.FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten;
+            document.PdfDocument.Options.PortableColorFilters = config.PortableColorFilters;
             document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
             document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
             document.PdfDocument.Options.ImageCompression = config.ImageCompression;

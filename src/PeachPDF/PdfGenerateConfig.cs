@@ -511,6 +511,21 @@ namespace PeachPDF
         public bool TextStemDarkening { get; set; }
 
         /// <summary>
+        /// Whether CSS <c>brightness()</c>, <c>contrast()</c> and <c>invert()</c> (and an SVG <c>feColorMatrix</c>/<c>feComponentTransfer</c>
+        /// that acts on each channel alone) are written as blend-mode layers every PDF reader composites itself, instead of as a PDF transfer
+        /// function. Defaults to <see langword="false"/>.
+        /// </summary>
+        /// <remarks>
+        /// The default is a transfer function (an ExtGState <c>/TR</c>), which is exact for any content but which some readers ignore:
+        /// MuPDF, and so the viewers and libraries built on it, draw the element unfiltered. With this on the element is filtered in
+        /// every reader, but the result is exact only where the content is opaque. Where it is partly transparent (an <c>rgba()</c> colour,
+        /// an antialiased edge) the colour is slightly off, because a blend mode over a partly transparent backdrop lets some of the
+        /// layer's own colour through. The output is still vector, and needs a reader that supports PDF transparency (so it is rejected
+        /// under PDF/A-1 and PDF/X-1a/X-3, like the default is).
+        /// </remarks>
+        public bool PortableColorFilters { get; set; }
+
+        /// <summary>
         /// What happens when a document that targets PDF/A-1 or PDF/X-1a/X-3 (all of which forbid transparency) uses something that needs it.
         /// <see cref="TransparencyPolicy.Reject"/> (the default) fails generation with an error naming the construct;
         /// <see cref="TransparencyPolicy.Flatten"/> renders the affected region into an opaque bitmap at <see cref="RasterizationDpi"/> instead

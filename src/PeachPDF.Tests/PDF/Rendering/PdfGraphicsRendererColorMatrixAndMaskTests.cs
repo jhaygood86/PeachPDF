@@ -213,6 +213,120 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
                 gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150));
         }
 
+        private static (PdfDocument Document, PdfGraphics Gfx) NewPortablePage()
+        {
+            var (document, gfx) = NewPage();
+            document.Options.PortableColorFilters = true;
+            return (document, gfx);
+        }
+
+        [Fact]
+        public void PortableColorFilters_WriteBlendLayersThroughAnAlphaMask_NotATransferFunction()
+        {
+            var (document, gfx) = NewPortablePage();
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150);
+            gfx.Dispose();
+
+            var text = Serialize(document);
+            Assert.DoesNotContain("/TR", text);
+            Assert.DoesNotContain("/FunctionType 4", text);
+            Assert.Contains("/BM /ColorDodge", text);
+            Assert.Contains("/S /Alpha", text);
+            // The soft mask and the wrapper it applies to are placed by one cm/gs/Do, like every other tile composite.
+            Assert.Matches(new Regex(@"cm /GS\d+ gs /Fm\d+ Do"), text);
+        }
+
+        [Fact]
+        public void PortableColorFilters_PaintTheContentBeforeTheFillsThatBlendWithIt()
+        {
+            var (document, gfx) = NewPortablePage();
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            // contrast(2): ColorDodge then ColorBurn, in that order.
+            var contrast = new ColorMatrix(new Matrix4x4(
+                2, 0, 0, 0,
+                0, 2, 0, 0,
+                0, 0, 2, 0,
+                0, 0, 0, 1), new Vector4(-0.5f, -0.5f, -0.5f, 0));
+            gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), contrast);
+            gfx.Dispose();
+
+            var text = Serialize(document);
+            Assert.Contains("/BM /ColorDodge", text);
+            Assert.Contains("/BM /ColorBurn", text);
+
+            // The wrapper's own content stream: the tile first, then a gs and a full-tile fill for each layer.
+            Assert.Matches(new Regex(@"/Fm\d+ Do\s+Q[\s\S]*?/GS\d+ gs[\s\S]*?re[\s\S]*?f[\s\S]*?/GS\d+ gs[\s\S]*?re[\s\S]*?f"), text);
+        }
+
+        [Fact]
+        public void PortableColorFilters_BothTheWrapperAndTheMaskedContentAreTransparencyGroups()
+        {
+            var (document, gfx) = NewPortablePage();
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150);
+            gfx.Dispose();
+
+            // PDFium ignores an active SMask unless the masked form (the wrapper) and the /G form are groups.
+            Assert.True(Regex.Matches(Serialize(document), @"/S /Transparency").Count >= 2);
+        }
+
+        [Fact]
+        public void PortableColorFilters_AMatrixThatChangesNothing_DrawsTheTilePlainly()
+        {
+            var (document, gfx) = NewPortablePage();
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), ColorMatrix.Identity);
+            gfx.Dispose();
+
+            var text = Serialize(document);
+            Assert.DoesNotContain("/BM /", text);
+            Assert.DoesNotContain("/SMask", text);
+            Assert.DoesNotContain("/TR", text);
+        }
+
+        [Fact]
+        public void PortableColorFilters_CrossChannelMatrix_StillThrows()
+        {
+            var (document, gfx) = NewPortablePage();
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            Assert.Throws<NotSupportedException>(() =>
+                gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Grayscale));
+        }
+
+        [Fact]
+        public void PortableColorFilters_RejectedUnderPdfA1()
+        {
+            var document = new PdfDocument();
+            document.Options.PdfAConformance = PdfAConformance.PdfA1B;
+            document.Options.PortableColorFilters = true;
+            var page = document.AddPage();
+            using var gfx = PdfGraphics.FromPdfPage(page);
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            Assert.Throws<PdfAConformanceException>(() =>
+                gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), Brightness150));
+        }
+
+        [Fact]
+        public void PortableColorFilters_AMatrixThatChangesNothing_IsStillRejectedUnderPdfA1()
+        {
+            var document = new PdfDocument();
+            document.Options.PdfAConformance = PdfAConformance.PdfA1B;
+            document.Options.PortableColorFilters = true;
+            var page = document.AddPage();
+            using var gfx = PdfGraphics.FromPdfPage(page);
+            var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
+
+            Assert.Throws<PdfAConformanceException>(() =>
+                gfx.DrawImageWithColorMatrix(form, new Rect(10, 10, 50, 50), ColorMatrix.Identity));
+        }
+
         [Fact]
         public void DrawImageAlphaMasked_RejectedUnderPdfA1()
         {
