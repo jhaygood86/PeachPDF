@@ -244,8 +244,9 @@ namespace PeachPDF.Html.Core.Animation
             var from = frames[index];
             var to = frames[index + 1];
 
-            // Two keyframes at the same offset leave no interval to shape (the last one wins, as it always did).
-            if (to.Offset <= from.Offset) return frames[^1].Value;
+            // Two keyframes at the same offset leave no interval to shape. The loop above only stops on such a pair at the
+            // end of the list, where the later one wins, as it always did.
+            if (to.Offset <= from.Offset) return to.Value;
 
             var local = (progress - from.Offset) / (to.Offset - from.Offset);
             var interval = from.Easing is not null && EasingFunction.TryParse(from.Easing, out var own) ? own : animationEasing;

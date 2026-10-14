@@ -232,7 +232,8 @@ namespace PeachPDF.Html.Core.Animation
 
             if (a == inputs.Length - 1) a--;
 
-            // At a point's own input the curve is that point's output exactly (the formula below can be a rounding off it).
+            // At the last point's own input (a is stepped back to its segment above) the curve is that output exactly; the
+            // formula below can be a rounding off it. Inside the list the formula already gives a point's output exactly.
             if (progress == inputs[a + 1]) return outputs[a + 1];
 
             var range = inputs[a + 1] - inputs[a];
