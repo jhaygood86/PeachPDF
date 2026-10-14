@@ -123,7 +123,7 @@ namespace PeachPDF.CSS
                     .Or(Keywords.JumpNone, false).Or(Keywords.JumpBoth, true)
                     .Option(false)));
 
-        // linear(<stops>) (css-easing-2 §2.2); the stops are checked for shape only.
+        // linear(<stops>) (css-easing-2 §2.1); the grammar is LinearEasingGrammar, shared with EasingFunction, which evaluates the stops.
         public static readonly IValueConverter LinearEasingConverter = new FunctionValueConverter(
             FunctionNames.Linear, new LinearStopsValueConverter());
 

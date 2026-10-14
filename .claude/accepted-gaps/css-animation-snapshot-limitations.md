@@ -13,9 +13,9 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
 - **`transition` never runs.** A transition starts from a style *change*; a freshly loaded document has none. Nothing to
   render, so nothing was built. The properties are still parsed.
 - **Interpolation is structural, on text.** Two `transform` lists with different functions or a different number of them
-  are not mixed through matrix decomposition (CSS Transforms 1 §9.3 mismatched case); they flip at 50%. `linear()` with
-  stops is read as plain `linear`. Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation space), and
-  only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
+  are not mixed through matrix decomposition (CSS Transforms 1 §9.3 mismatched case); they flip at 50%.
+  Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation space), and only the colour syntaxes
+  `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
 - **Not animated:** custom properties registered with `@property`, `animation-composition` (`add`/`accumulate`),
   `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
   document-building API (its cascade is a different entry point and does not call the applier).

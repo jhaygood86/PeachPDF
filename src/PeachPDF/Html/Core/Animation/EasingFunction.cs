@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using PeachPDF.CSS;
+using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core.Animation
 {
@@ -10,7 +13,7 @@ namespace PeachPDF.Html.Core.Animation
     /// </summary>
     internal readonly struct EasingFunction
     {
-        private enum Kind { Linear, CubicBezier, Steps }
+        private enum Kind { Linear, CubicBezier, Steps, Points }
 
         private enum Jump { Start, End, None, Both }
 
@@ -18,8 +21,10 @@ namespace PeachPDF.Html.Core.Animation
         private readonly double _x1, _y1, _x2, _y2;
         private readonly int _stepCount;
         private readonly Jump _jump;
+        private readonly double[]? _pointInputs, _pointOutputs;
 
-        private EasingFunction(Kind kind, double x1, double y1, double x2, double y2, int stepCount, Jump jump)
+        private EasingFunction(Kind kind, double x1, double y1, double x2, double y2, int stepCount, Jump jump,
+            double[]? pointInputs = null, double[]? pointOutputs = null)
         {
             _kind = kind;
             _x1 = x1;
@@ -28,6 +33,8 @@ namespace PeachPDF.Html.Core.Animation
             _y2 = y2;
             _stepCount = stepCount;
             _jump = jump;
+            _pointInputs = pointInputs;
+            _pointOutputs = pointOutputs;
         }
 
         public static readonly EasingFunction Linear = new(Kind.Linear, 0, 0, 1, 1, 0, Jump.End);
@@ -63,6 +70,11 @@ namespace PeachPDF.Html.Core.Animation
             if (open < 0 || !text.EndsWith(')')) return false;
 
             var name = text[..open].Trim().ToLowerInvariant();
+
+            // linear(<stops>) (css-easing-2 §2.1): a piecewise-linear curve through its stops.
+            if (name == "linear")
+                return TryParseLinearStops(text[(open + 1)..^1], out easing);
+
             var args = text[(open + 1)..^1].Split(',', StringSplitOptions.TrimEntries);
 
             if (name == "cubic-bezier" && args.Length == 4
@@ -71,14 +83,6 @@ namespace PeachPDF.Html.Core.Animation
                 && x1 >= 0 && x1 <= 1 && x2 >= 0 && x2 <= 1)   // css-easing-1 §2.1: outside 0 to 1 the curve is not a function of x
             {
                 easing = Bezier(x1, y1, x2, y2);
-                return true;
-            }
-
-            // linear(<stops>) (css-easing-2) is a piecewise-linear curve through its stops. Its stops are not modelled, so
-            // it is read as plain linear - the same endpoints, and exact for the common case of stops that sit on that line.
-            if (name == "linear")
-            {
-                easing = Linear;
                 return true;
             }
 
@@ -104,6 +108,70 @@ namespace PeachPDF.Html.Core.Animation
             return false;
         }
 
+        /// <summary>
+        /// css-easing-2 §2.1.2: each stop is an output number with up to two input percentages (two make two points of the
+        /// same output); the first input defaults to 0 and the last to the greater of 1 and the largest before it, inputs
+        /// never decrease, and a run of stops without an input is spread evenly between its neighbours. The grammar
+        /// (<see cref="LinearEasingGrammar"/>) is the one the CSS-OM validates with.
+        /// </summary>
+        private static bool TryParseLinearStops(string arguments, out EasingFunction easing)
+        {
+            easing = Linear;
+
+            using var pooled = CssValueParser.GetCssTokensPooled(arguments);
+            List<Token> tokens = pooled;
+            if (LinearEasingGrammar.TryParse(tokens) is not { } stops) return false;
+
+            var inputs = new List<double?>();
+            var outputs = new List<double>();
+            var largest = double.NegativeInfinity;
+
+            for (var i = 0; i < stops.Count; i++)
+            {
+                var stop = stops[i];
+
+                if (stop.FirstPosition is not { } start)
+                {
+                    outputs.Add(stop.Output);
+                    if (i == 0) { inputs.Add(0); largest = 0; }
+                    else if (i == stops.Count - 1) inputs.Add(Math.Max(1, largest));
+                    else inputs.Add(null);
+                    continue;
+                }
+
+                largest = Math.Max(start, largest);
+                inputs.Add(largest);
+                outputs.Add(stop.Output);
+
+                if (stop.SecondPosition is { } end)
+                {
+                    largest = Math.Max(end, largest);
+                    inputs.Add(largest);
+                    outputs.Add(stop.Output);
+                }
+            }
+
+            // A run of points with no input takes evenly spaced values between the points on either side of it.
+            var resolved = new double[inputs.Count];
+            for (var i = 0; i < inputs.Count; i++)
+            {
+                if (inputs[i] is { } known) { resolved[i] = known; continue; }
+
+                var runStart = i - 1;
+                var runEnd = i;
+                while (inputs[runEnd] is null) runEnd++;
+
+                var from = resolved[runStart];
+                var to = inputs[runEnd]!.Value;
+                for (var k = i; k < runEnd; k++)
+                    resolved[k] = from + (to - from) * (k - runStart) / (runEnd - runStart);
+                i = runEnd - 1;
+            }
+
+            easing = new EasingFunction(Kind.Points, 0, 0, 1, 1, 0, Jump.End, resolved, outputs.ToArray());
+            return true;
+        }
+
         private static bool TryNumber(string text, out double value) =>
             double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 
@@ -116,6 +184,8 @@ namespace PeachPDF.Html.Core.Animation
                     return EvaluateBezier(progress);
                 case Kind.Steps:
                     return EvaluateSteps(progress);
+                case Kind.Points:
+                    return EvaluatePoints(progress);
                 default:
                     return progress;
             }
@@ -147,6 +217,27 @@ namespace PeachPDF.Html.Core.Animation
         {
             var u = 1 - t;
             return 3 * u * u * t * c1 + 3 * u * t * t * c2 + t * t * t;
+        }
+
+        /// <summary>css-easing-2 §2.1.4: read the segment starting at the last point at or before the input, extending the
+        /// nearest two points' line outside the range.</summary>
+        private double EvaluatePoints(double progress)
+        {
+            var inputs = _pointInputs!;
+            var outputs = _pointOutputs!;
+
+            var a = 0;
+            for (var i = 0; i < inputs.Length && inputs[i] <= progress; i++)
+                a = i;
+
+            if (a == inputs.Length - 1) a--;
+
+            var range = inputs[a + 1] - inputs[a];
+            if (range == 0) return outputs[a + 1];
+
+            // Stops are finite, but their span can still overflow (1e308 against -1e308): fall back to the segment's end.
+            var value = outputs[a] + (progress - inputs[a]) / range * (outputs[a + 1] - outputs[a]);
+            return double.IsFinite(value) ? value : outputs[a + 1];
         }
 
         private double EvaluateSteps(double progress)
