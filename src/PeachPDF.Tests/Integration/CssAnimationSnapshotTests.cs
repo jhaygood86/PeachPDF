@@ -129,6 +129,11 @@ namespace PeachPDF.Tests.Integration
         [InlineData("linear(0, 1 60%, 0.5 40%, 1)", 0.8, 0.75)]
         [InlineData("linear(0, 1 50% 50%)", 0.25, 0.5)]                      // a jump at the last point: nothing is left to continue,
         [InlineData("linear(0, 1 50% 50%)", 0.75, 1)]                        // so the next point's output is held (css-easing-2 §2.1.4 step 6)
+        [InlineData("linear(0, 1 -10%, 0.5 50%, 1)", 0.25, 0.75)]            // a negative first position is raised to the largest so far (0)
+        [InlineData("linear(0, 0.5 150%, 1)", 0.75, 0.25)]                   // the last input is max(1, largest): here 150%
+        [InlineData("linear(0, 1 50% 30%, 0.5 40%, 0)", 0.5, 0.5)]           // the second position, and the next stop, are raised to 50%
+        [InlineData("linear(0, 1 50% 30%, 0.5 40%, 0)", 0.75, 0.25)]
+        [InlineData("linear(0 50%, 1 50%)", 0.25, 1)]                        // equal inputs with different outputs: the later one
         [InlineData("linear(0, 0.5 50%)", 0.75, 0.75)]                       // past the last input the line is continued
         [InlineData("linear(0.2 25%, 1 75%)", 0.0, -0.2)]                    // ...and before the first
         public void Easing_LinearWithStops_FollowsTheStops(string easing, double input, double expected)
@@ -206,6 +211,71 @@ namespace PeachPDF.Tests.Integration
             List<Token> tokens = pooled;
 
             Assert.Null(LinearEasingGrammar.TryParse(tokens));
+        }
+
+        // ─── Progress exactly 1 goes through the last interval's easing ───
+
+        [Theory]
+        [InlineData("linear(0, 1, 0)", 0.0)]      // comes back to its start
+        [InlineData("linear(1, 0)", 0.0)]
+        [InlineData("linear(0, 1)", 1.0)]
+        [InlineData("ease-in-out", 1.0)]          // every other easing maps 1 to 1
+        [InlineData("steps(3, jump-none)", 1.0)]
+        public async Task ProgressOne_AppliesTheLastIntervalsEasing(string easing, double expected)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: 0 }} to {{ opacity: 1 }} }}
+                #a {{ animation: k 1s {easing} }}</style><div id=""a"">x</div>", 1);
+
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task ProgressOne_WithACurveThatEndsPastTheEnd_IsMixedBeyondIt()
+        {
+            // linear(0, 1 50%) continues its line past 50%: 2 at the end of the interval, so 100pt -> 300pt.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { width: 100pt } to { width: 200pt } }
+                #a { height: 10pt; animation: k 1s linear(0, 1 50%) }</style><div id="a"></div>
+                """, 1);
+
+            var a = Find(root, "a");
+            Assert.Equal(300, a.ActualRight - a.Location.X, 1);
+        }
+
+        [Fact]
+        public async Task ProgressOne_OfAnInfiniteAnimation_IsTheEndOfItsFirstIteration()
+        {
+            // "End" of an infinite animation is the end of its first iteration, and that interval's easing applies there.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { animation: k 1s linear(0, 1, 0) infinite }</style><div id="a">x</div>
+                """, 1);
+
+            Assert.Equal(0.0, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task ProgressOne_WithTwoKeyframesAtTheEnd_TakesTheLastOne()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } 100% { opacity: .3 } 100% { opacity: .9 } }
+                #a { animation: k 1s linear }</style><div id="a">x</div>
+                """, 1);
+
+            Assert.Equal(0.9, Opacity(Find(root, "a")), 3);
+        }
+
+        [Fact]
+        public async Task ProgressOne_WithTheLastKeyframeBeforeTheEnd_ArrivesAtTheUnderlyingValue()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } 50% { opacity: .4 } }
+                #a { animation: k 1s linear }</style><div id="a">x</div>
+                """, 1);
+
+            // No 100% keyframe: the box's own value (1) is filled in as the implicit end, and linear arrives there.
+            Assert.Equal(1.0, Opacity(Find(root, "a")), 3);
         }
 
         // ─── Interpolation ───────────────────────────────────────────────────────
