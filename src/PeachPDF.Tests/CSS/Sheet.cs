@@ -994,7 +994,7 @@ p.info span::after {
             @media print {
                 h3 {color: black; }
                 }
-            "));
+            "), TestContext.Current.CancellationToken);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Style, sheet.Rules[0].Type);
         }
@@ -1009,7 +1009,7 @@ p.info span::after {
     --layout-horizontal: {
         @apply (--layout);
     }
-}"));
+}"), TestContext.Current.CancellationToken);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Style, sheet.Rules[0].Type);
         }
@@ -1029,7 +1029,7 @@ p.info span::after {
     body {
         background: #FFF;
     }
-}"));
+}"), TestContext.Current.CancellationToken);
             // The stray ';' inside the first @media block is an empty statement (a no-op) - it must
             // not swallow the second, independently valid @media rule that follows.
             Assert.Equal(2, sheet.Rules.Length);

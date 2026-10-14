@@ -73,18 +73,18 @@ If a new or changed feature gives PeachPDF a new visible capability, add a new s
 **Always pass `--framework net8.0`.** The test project multi-targets net8.0 and net10.0 (plus net11.0 when the resolved SDK supports it — see the net11.0 note above); a bare `dotnet test` builds and runs the ~3000+ test suite once per resolved target framework in one invocation. Repeated bare invocations across a long session have crashed the user's Windows machine from cumulative build/test load. Single-target coverage is sufficient for regressions; only run net10.0 or net11.0 explicitly if an issue specific to that target is actually suspected.
 
 ```
-dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
-dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter "FullyQualifiedName~Svg"
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter-class "*Svg*"
 ```
 
 Batch verification — run the full suite once after a meaningful chunk of related changes, not after every individual file edit.
 
 ### Coverage
 
-CI enforces 90% diff coverage on PRs (`diff-cover` against the PR base, via `.github/workflows/test.yml` + `src/PeachPDF.Tests/coverlet.runsettings`, Cobertura format). To reproduce locally:
+CI enforces 90% diff coverage on PRs (`diff-cover` against the PR base, via `.github/workflows/test.yml`, with coverlet's Microsoft.Testing.Platform integration writing Cobertura format). To reproduce locally:
 
 ```
-dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --results-directory coverage
 ```
 
 Before considering any non-trivial code change complete, run the command above and check diff coverage on the lines you changed. If new/changed code falls short of the 90% diff-coverage threshold CI enforces, add tests to close the gap before finishing — don't leave it for CI to catch.

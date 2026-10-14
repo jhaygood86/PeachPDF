@@ -34,5 +34,5 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
-        key: nuget-${{ runner.os }}-${{ hashFiles('src/**/*.csproj', 'src/Directory.Build.props', 'src/Version.props') }}
+        key: nuget-${{ runner.os }}-${{ hashFiles('src/**/*.csproj', 'src/Directory.Build.props', 'src/Directory.Packages.props', 'src/Version.props') }}
         restore-keys: nuget-${{ runner.os }}-

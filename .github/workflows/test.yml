@@ -122,15 +122,15 @@ jobs:
 
     - name: Test (net8.0)
       if: matrix.suite == 'main'
-      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net8.0 --logger "trx;LogFileName=test-results-net8.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename test-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net8.0 --results-directory coverage
 
     - name: Test (net10.0)
       if: matrix.suite == 'main'
-      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net10.0 --logger "trx;LogFileName=test-results-net10.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename test-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net10.0 --results-directory coverage
 
     - name: Test (net11.0)
       if: matrix.suite == 'main' && matrix.os != 'macos-latest'
-      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net11.0 --logger "trx;LogFileName=test-results-net11.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net11.0 --report-trx --report-trx-filename test-results-net11.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net11.0 --results-directory coverage
 
     # ---- engine -----------------------------------------------------------------------------
 
@@ -140,15 +140,15 @@ jobs:
 
     - name: Test engine (net10.0)
       if: matrix.suite == 'engine'
-      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net10.0 --logger "trx;LogFileName=engine-test-results-net10.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename engine-test-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-test-results-net10.0 --results-directory coverage
 
     - name: Test engine (net8.0)
       if: matrix.suite == 'engine' && runner.os == 'Linux'
-      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net8.0 --logger "trx;LogFileName=engine-test-results-net8.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename engine-test-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-test-results-net8.0 --results-directory coverage
 
     - name: Test engine (net11.0)
       if: matrix.suite == 'engine' && runner.os == 'Linux'
-      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net11.0 --logger "trx;LogFileName=engine-test-results-net11.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net11.0 --report-trx --report-trx-filename engine-test-results-net11.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-test-results-net11.0 --results-directory coverage
 
     # ---- small ------------------------------------------------------------------------------
 
@@ -165,27 +165,27 @@ jobs:
 
     - name: Test CLI
       if: matrix.suite == 'small'
-      run: dotnet test src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=cli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename cli-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix cli-test-results --results-directory coverage
 
     - name: Test abstraction (PeachDrawing.Core)
       if: matrix.suite == 'small'
-      run: dotnet test src/PeachDrawing.Core.Tests/PeachDrawing.Core.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachDrawing.Core.Tests/PeachDrawing.Core.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename abstractions-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix abstractions-test-results --results-directory coverage
 
     - name: Test raster backend (PeachDrawing)
       if: matrix.suite == 'small'
-      run: dotnet test src/PeachDrawing.Tests/PeachDrawing.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=raster-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachDrawing.Tests/PeachDrawing.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename raster-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix raster-test-results --results-directory coverage
 
     # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator's
     # tests (JSON reader, PPGxxx diagnostics, generated-output shape).
     - name: Test source generators
       if: matrix.suite == 'small'
-      run: dotnet test src/PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=source-generators-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename source-generators-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix source-generators-test-results --results-directory coverage
 
     # The managed Brotli decoder and encoder (PeachDrawing.Text.Brotli): the encoder's output is decoded by both the BCL and
     # the managed decoder, so a bitstream error in either shows up here.
     - name: Test managed Brotli
       if: matrix.suite == 'small'
-      run: dotnet test src/PeachDrawing.Text.Brotli.Tests/PeachDrawing.Text.Brotli.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=brotli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test --project src/PeachDrawing.Text.Brotli.Tests/PeachDrawing.Text.Brotli.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename brotli-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix brotli-test-results --results-directory coverage
 
     # ---- artifacts --------------------------------------------------------------------------
 
@@ -205,7 +205,7 @@ jobs:
       if: always()
       with:
         name: coverage-raw-${{ matrix.os }}-${{ matrix.suite }}
-        path: coverage/**/coverage.cobertura.xml
+        path: coverage/**/*.coverage.cobertura.*.xml
         if-no-files-found: ignore
 
   # Merges one OS's legs' coverage into the HTML report and enforces the diff-coverage gate for
@@ -251,13 +251,13 @@ jobs:
         merge-multiple: true
 
     - name: Generate HTML coverage report
-      run: reportgenerator -reports:coverage/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
+      run: reportgenerator -reports:coverage/**/*.coverage.cobertura.*.xml -targetdir:coverage-report -reporttypes:Html
 
     - name: Diff coverage gate (PRs only)
       if: github.event_name == 'pull_request'
       run: |
         git fetch origin ${{ github.base_ref }}
-        $coverageFiles = (Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | ForEach-Object FullName)
+        $coverageFiles = (Get-ChildItem -Path coverage -Filter "*.coverage.cobertura.*.xml" -Recurse | ForEach-Object FullName)
         diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --format html:diff-cover-report.html
 
     - name: Upload coverage reports
@@ -266,7 +266,7 @@ jobs:
       with:
         name: coverage-reports-${{ matrix.os }}
         path: |
-          coverage/**/coverage.cobertura.xml
+          coverage/**/*.coverage.cobertura.*.xml
           coverage-report/**
           diff-cover-report.html
         if-no-files-found: ignore

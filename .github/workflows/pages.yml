@@ -44,7 +44,7 @@ jobs:
           # Ask dotnet test to enumerate the suite (discovery only — no execution, theories expanded) and
           # count the discovered cases, mirroring the version step above: the number is written to
           # docs/_data/tests.yml and consumed via {{ site.data.tests.total }} on the testing page.
-          COUNT=$(dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --list-tests \
+          COUNT=$(dotnet test --project src/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --list-tests \
             | grep -cE '^[[:space:]]+PeachPDF\.Tests\.')
           if [ "$COUNT" -lt 1000 ]; then echo "Unexpected test count: $COUNT" >&2; exit 1; fi
           FORMATTED=$(echo "$COUNT" | sed ':a;s/\B[0-9]\{3\}\>/,&/;ta')

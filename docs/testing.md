@@ -23,7 +23,7 @@ A documentation-only change shouldn't pay for the full build/test cycle, but the
 
 ## Coverage gate
 
-Pull requests must meet **90% diff coverage** — the coverage of the lines the change actually touches, not the whole codebase. This is enforced by [diff-cover](https://github.com/Bachmann1234/diff_cover) comparing the change against its base branch, using [coverlet](https://github.com/coverlet-coverage/coverlet) output in Cobertura format (configured in `src/PeachPDF.Tests/coverlet.runsettings`). The HTML coverage report and the diff-coverage report are uploaded as build artifacts on every run, so a shortfall is easy to inspect.
+Pull requests must meet **90% diff coverage** — the coverage of the lines the change actually touches, not the whole codebase. This is enforced by [diff-cover](https://github.com/Bachmann1234/diff_cover) comparing the change against its base branch, using [coverlet](https://github.com/coverlet-coverage/coverlet) output in Cobertura format (collected through its Microsoft.Testing.Platform integration). The HTML coverage report and the diff-coverage report are uploaded as build artifacts on every run, so a shortfall is easy to inspect.
 
 The intent is simple: new and changed code arrives with tests, rather than leaving CI to discover the gap after merge.
 

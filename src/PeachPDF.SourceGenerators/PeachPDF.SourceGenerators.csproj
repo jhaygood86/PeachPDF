@@ -51,8 +51,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" VersionOverride="3.11.0" PrivateAssets="all" />
     <!--
       Pinned to net8.0's own inbox version (this repo's minimum supported TFM, src/Directory.Build.props)
       DELIBERATELY LOW, not latest: whatever Roslyn host loads this analyzer (dotnet build's bundled
@@ -65,7 +65,7 @@
       8.0.0 is the safe floor for this repo; do not bump this without re-verifying generator load against
       every host TFM this repo builds under (net8.0 and net10.0 today).
     -->
-    <PackageReference Include="System.Text.Json" Version="8.0.5" PrivateAssets="all" />
+    <PackageReference Include="System.Text.Json" VersionOverride="8.0.5" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
