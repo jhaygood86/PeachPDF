@@ -7537,17 +7537,20 @@ namespace PeachPDF.Html.Core.Dom
             if (box.Words.Count > 0)
             {
                 double x = float.MaxValue, y = float.MaxValue, r = float.MinValue, b = float.MinValue;
-                var words = line.WordsOf(box);
+                var any = false;
 
-                if (words.Count <= 0) return;
-
-                foreach (var word in words)
+                foreach (var word in line.Words)
                 {
+                    if (!word.OwnerBox.Equals(box)) continue;
+
+                    any = true;
                     x = Math.Min(x, word.Left);
                     r = Math.Max(r, word.Right);
                     y = Math.Min(y, word.Top);
                     b = Math.Max(b, word.Bottom);
                 }
+
+                if (!any) return;
 
                 line.UpdateRectangle(box, x, y, r, b);
             }
@@ -7741,6 +7744,22 @@ namespace PeachPDF.Html.Core.Dom
         private static void ApplyBidiReordering(CssLineBox lineBox)
         {
             if (lineBox.Words.Count == 0) return;
+
+            // A line of left-to-right text in a left-to-right block (nearly every line) has nothing to reorder: one level-0 run.
+            if (lineBox.OwnerBox.Direction.Value != DirectionMode.Rtl)
+            {
+                var allLevelZero = true;
+                foreach (var word in lineBox.Words)
+                {
+                    if (word.BidiLevel != 0)
+                    {
+                        allLevelZero = false;
+                        break;
+                    }
+                }
+
+                if (allLevelZero) return;
+            }
 
             var levels = new byte[lineBox.Words.Count];
             var slots = new double[lineBox.Words.Count];
@@ -8723,9 +8742,10 @@ namespace PeachPDF.Html.Core.Dom
             // with everything else here. Previously excluded, which made `vertical-align: top/bottom/
             // middle` a complete no-op for inline replaced elements (e.g. an <object>/<img>): the word
             // kept its original flow-assigned Top forever, regardless of the declared alignment.
-            foreach (var word in lineBox.WordsOf(box))
+            foreach (var word in lineBox.Words)
             {
-                word.Top += delta;
+                if (word.OwnerBox.Equals(box))
+                    word.Top += delta;
             }
         }
 
