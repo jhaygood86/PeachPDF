@@ -6101,6 +6101,23 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The index of the earliest member of the keep-with-next run chained to <paramref name="childBox"/> that
+        /// lies after <paramref name="start"/>, or null when none does.
+        /// </summary>
+        private int? RunHeadAfter(CssBox childBox, int start)
+        {
+            int? head = null;
+
+            foreach (var member in DomUtils.GetPrecedingKeepWithNextRun(childBox, FragmentationContext.Column))
+            {
+                var index = Boxes.IndexOf(member);
+                if (index > start && (head is null || index < head)) head = index;
+            }
+
+            return head;
+        }
+
+        /// <summary>
         /// The child a break at this column boundary really falls before: <paramref name="childIndex"/>,
         /// unless a run of preceding siblings is chained to that child by break avoidance
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>), in which case the
@@ -6136,6 +6153,14 @@ namespace PeachPDF.Html.Core.Dom
             var run = DomUtils.GetPrecedingKeepWithNextRun(childBox, FragmentationContext.Column);
 
             if (run.Count == 0) return childIndex;
+
+            // A child that asked for a break before it was never placed, so its Location and ActualBottom are
+            // whatever an earlier attempt left, and the fit test below would read them as fact. The next column
+            // begins empty at the same band top, so what the run has to fit is that column, not a measured gap.
+            if (childBox.RequestedBreakBeforeTop is not null && RunHeadAfter(childBox, start) is { } askedHead)
+            {
+                return askedHead;
+            }
 
             // A box that has not finished cannot be measured, so the fit test below cannot be asked about
             // it: a pending record *is* the statement that its epilogue has not run, and its ActualBottom
@@ -6987,7 +7012,13 @@ namespace PeachPDF.Html.Core.Dom
                             // own afterward (a table re-applies its per-row break logic, an ordinary
                             // block just keeps flowing) - only the run needs a page to itself.
                             var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(child, FragmentationContext.Page);
-                            if (keepWithNextRun.Count > 0)
+                            // Not in a column: every column of a container shares one band, so there is no lower
+                            // coordinate to translate the run to. The break the column loop raises for this child
+                            // moves the run by stating itself before its head instead (ColumnBreakFallsBefore) - and a
+                            // run translated here as well stays in the column it was laid out in, while its recorded
+                            // geometry says it is on the page after.
+                            if (keepWithNextRun.Count > 0
+                                && child.HtmlContainer!.CurrentFragmentainer is not { HasOwnBand: true })
                             {
                                 var runTop = keepWithNextRun[0].Location.Y;
                                 var extraAbove = top - runTop;

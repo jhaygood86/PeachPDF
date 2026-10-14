@@ -13,8 +13,8 @@ namespace PeachPDF.Tests.Integration;
 /// document - and recurse into each, so a long container cost the whole document once per page. A child that begins past
 /// the top of the next page shows nothing on this one and is no longer visited. The children that do have to be visited
 /// anyway are the interesting ones: a paragraph split across two pages reports where its remainder resumes, and a heading
-/// moved to the next page by <c>break-after: avoid</c> after the previous page's columns were recorded is held by that
-/// stale record and drawn only by the live read.
+/// chained to the paragraph that starts the next column by <c>break-after: avoid</c> travels with it rather than being
+/// left at the foot of the column that was left.
 /// </summary>
 public class MulticolUnheldChildrenTests
 {
@@ -90,9 +90,10 @@ public class MulticolUnheldChildrenTests
 
         foreach (var fragmentainer in container.FragmentTree.Fragmentainers) Count(fragmentainer.Root);
 
-        // No word may be lost. Not asserted: that each is claimed exactly once - a heading carried to the next page by
-        // break-after: avoid is currently claimed by both pages (issue #1719), with or without the skip under test.
+        // No word may be lost, and none may be claimed twice: a heading chained to a paragraph by break-after: avoid
+        // used to be translated to the next page while its column kept it, so two fragmentainers claimed it (issue #1719).
         Assert.Equal(authored, claims.Count);
+        Assert.Empty(claims.Where(c => c.Value != 1).Select(c => c.Key.Text));
     }
 
     [Fact]
