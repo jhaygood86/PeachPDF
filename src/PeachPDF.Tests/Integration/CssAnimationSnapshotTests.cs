@@ -307,6 +307,13 @@ namespace PeachPDF.Tests.Integration
         [InlineData("transform", "rotateX(0deg)", "rotateX(90deg) scale(2)", 0.5, "rotateX(45deg) scale(1.5)")]
         [InlineData("transform", "translateX(0) rotate(0deg) scaleX(1)", "translateX(10px) rotate(360deg) scale(3, 1)", 0.5, "translateX(5px) rotate(180deg) scale(2, 1)")]
         [InlineData("transform", "translateY(0)", "translate(10px, 40px)", 0.5, "translate(5px, 20px)")]
+        // Non-zero arguments, so that a swapped axis (x for y) shows. translateY(10px) is translate(0, 10px), and so on.
+        [InlineData("transform", "translateY(10px)", "translate(30px, 20px)", 0.5, "translate(15px, 15px)")]
+        [InlineData("transform", "scaleY(2)", "scale(4, 6)", 0.5, "scale(2.5, 4)")]
+        [InlineData("transform", "scaleX(2)", "scale(4, 6)", 0.5, "scale(3, 3.5)")]
+        [InlineData("transform", "skewY(10deg)", "skew(30deg, 50deg)", 0.5, "skew(15deg, 30deg)")]
+        [InlineData("transform", "skewX(10deg)", "skew(30deg, 50deg)", 0.5, "skew(20deg, 25deg)")]
+        [InlineData("transform", "translateZ(10px)", "translate3d(10px, 20px, 30px)", 0.5, "translate3d(5px, 10px, 20px)")]
         [InlineData("transform", "translate3d(0, 0, 0)", "translate(10px, 40px)", 0.5, "translate3d(5px, 20px, 0)")]
         [InlineData("transform", "scaleY(1)", "scale(3)", 0.5, "scale(2, 2)")]
         [InlineData("transform", "scaleZ(1)", "scale3d(3, 3, 3)", 0.5, "scale3d(2, 2, 2)")]
@@ -360,6 +367,9 @@ namespace PeachPDF.Tests.Integration
         [InlineData("transform", "rotate(0deg) scale(2)", "scale(1)", 0.4, "rotate(0deg) scale(2)")]  // the first functions differ: not a prefix
         [InlineData("transform", "rotate(0deg)", "rotate(90deg) perspective(100px)", 0.4, "rotate(0deg)")]  // no identity for perspective() known here
         [InlineData("transform", "perspective(5px)", "translateX(1px)", 0.4, "perspective(5px)")]   // no primitive in common
+        // matrix3d() is a matrix function like matrix(): never mixed entry by entry, so without a box it flips.
+        [InlineData("transform", "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)", "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1)", 0.4,
+            "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)")]
         [InlineData("transform", "rotate3d(0, 0, 0, 0deg)", "rotate3d(0, 0, 0, 90deg) scale(2)", 0.4, "rotate3d(0, 0, 0, 0deg)")]   // a zero axis has no direction
         [InlineData("transform", "rotate3d(1, 2, 3)", "rotate3d(1, 2, 3) scale(2)", 0.4, "rotate3d(1, 2, 3)")]   // not a rotate3d(), cannot pad
         [InlineData("transform", "rotateX(0deg)", "rotateY(90deg)", 0.4, "rotateX(0deg)")]            // two axes: a matrix mix, which needs a box

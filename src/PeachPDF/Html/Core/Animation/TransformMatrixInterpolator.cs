@@ -50,7 +50,7 @@ namespace PeachPDF.Html.Core.Animation
             }
 
             var mixed = Mix(a, b, t);
-            result = Format(Recompose(mixed), mixed.IsFlat);
+            result = Format(Recompose(mixed), mixed);
             return true;
         }
 
@@ -231,7 +231,11 @@ namespace PeachPDF.Html.Core.Animation
 
         private static Quaternion ToQuaternion(Decomposed d) => d.IsFlat ? Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (float)d.Angle) : d.Rotation;
 
-        private static string Format(Matrix4x4 m, bool flat)
+        /// <summary>
+        /// The text of the recomposed matrix <paramref name="m"/>. The translation is written from <paramref name="parts"/>, which
+        /// holds it in doubles, rather than from <paramref name="m"/>, whose float entries run out of digits for a large one.
+        /// </summary>
+        private static string Format(Matrix4x4 m, Decomposed parts)
         {
             // The matrix lengths are points; a CSS matrix()'s are pixels (the same factor BuildFunctionMatrix undoes).
             const double pointsPerPx = Length.PointsPerPx;
@@ -240,12 +244,12 @@ namespace PeachPDF.Html.Core.Animation
 
             var sb = new StringBuilder();
 
-            if (flat)
+            if (parts.IsFlat)
             {
                 return sb.Append("matrix(")
                     .Append(N(m.M11)).Append(", ").Append(N(m.M12)).Append(", ")
                     .Append(N(m.M21)).Append(", ").Append(N(m.M22)).Append(", ")
-                    .Append(N(m.M41 / pointsPerPx)).Append(", ").Append(N(m.M42 / pointsPerPx)).Append(')')
+                    .Append(N(parts.Tx / pointsPerPx)).Append(", ").Append(N(parts.Ty / pointsPerPx)).Append(')')
                     .ToString();
             }
 
@@ -254,7 +258,7 @@ namespace PeachPDF.Html.Core.Animation
                 .Append(N(m.M11)).Append(", ").Append(N(m.M12)).Append(", ").Append(N(m.M13)).Append(", ").Append(N(m.M14)).Append(", ")
                 .Append(N(m.M21)).Append(", ").Append(N(m.M22)).Append(", ").Append(N(m.M23)).Append(", ").Append(N(m.M24)).Append(", ")
                 .Append(N(m.M31)).Append(", ").Append(N(m.M32)).Append(", ").Append(N(m.M33)).Append(", ").Append(N(m.M34)).Append(", ")
-                .Append(N(m.M41 / pointsPerPx)).Append(", ").Append(N(m.M42 / pointsPerPx)).Append(", ").Append(N(m.M43 / pointsPerPx)).Append(", ").Append(N(m.M44))
+                .Append(N(parts.Tx / pointsPerPx)).Append(", ").Append(N(parts.Ty / pointsPerPx)).Append(", ").Append(N(parts.Tz / pointsPerPx)).Append(", ").Append(N(m.M44))
                 .Append(')').ToString();
         }
 

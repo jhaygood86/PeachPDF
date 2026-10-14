@@ -1,5 +1,7 @@
 using PeachPDF.Html.Core.Animation;
 using System;
+using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using Xunit;
 
@@ -309,6 +311,74 @@ namespace PeachPDF.Tests.Integration
             AssertMatrix(Matrix4x4.Identity, TransformMatrixInterpolator.Recompose(parts));
 
             Assert.False(TransformMatrixInterpolator.TryDecompose(new Matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0), out _));
+        }
+
+        /// <summary>The numbers of a <c>matrix3d()</c> text as the row-major matrix it names, its translation in points.</summary>
+        private static Matrix4x4 ParseMatrix3d(string text)
+        {
+            Assert.StartsWith("matrix3d(", text);
+            var v = text["matrix3d(".Length..^1].Split(',').Select(n => float.Parse(n, CultureInfo.InvariantCulture)).ToArray();
+            Assert.Equal(16, v.Length);
+
+            return new Matrix4x4(
+                v[0], v[1], v[2], v[3],
+                v[4], v[5], v[6], v[7],
+                v[8], v[9], v[10], v[11],
+                v[12] * 0.75f, v[13] * 0.75f, v[14] * 0.75f, v[15]);
+        }
+
+        [Theory]
+        [InlineData("rotate-z-then-x")]
+        [InlineData("skewed-3d")]
+        [InlineData("everything-3d")]
+        public void TryMix_Spatial_WritesTheMatrixEntriesInCssOrder(string name)
+        {
+            // The end of the mix is the matrix itself, so every entry must land where CSS lists it (column-major text, the
+            // row-major matrix read straight through); a transposed pair of entries (M12 and M21, say) shows in these.
+            var matrix = name switch
+            {
+                "rotate-z-then-x" => Matrix4x4.CreateRotationZ(0.5f) * Matrix4x4.CreateRotationX(0.3f) * Matrix4x4.CreateTranslation(3, 6, 9),
+                "skewed-3d" => Skewed(0.4f, -0.3f, 0.2f) * Matrix4x4.CreateRotationY(0.6f) * Matrix4x4.CreateTranslation(-3, 6, -9),
+                _ => Build("everything-3d")
+            };
+
+            Assert.True(TransformMatrixInterpolator.TryMix(Matrix4x4.Identity, matrix, 1, out var text));
+
+            AssertMatrix(matrix, ParseMatrix3d(text), 1e-3f);
+        }
+
+        [Fact]
+        public void TryMix_AFlatMirrorAgainstASpatialMatrix_MixesThemAsSpatialMatrices()
+        {
+            var flat = Matrix4x4.CreateScale(1, -1, 1) * Matrix4x4.CreateTranslation(6, 0, 0);
+            var spatial = Matrix4x4.CreateRotationX(MathF.PI / 4) * Matrix4x4.CreateTranslation(0, 0, 3);
+            const double t = 0.25;
+
+            Assert.True(TransformMatrixInterpolator.TryDecompose(flat, out var flatParts));
+            Assert.True(TransformMatrixInterpolator.TryDecompose(flat, out var flatAsSpatial, allowFlat: false));
+            Assert.True(TransformMatrixInterpolator.TryDecompose(spatial, out var spatialParts));
+
+            var asSpatial = TransformMatrixInterpolator.Recompose(TransformMatrixInterpolator.Mix(flatAsSpatial, spatialParts, t));
+            var asFlat = TransformMatrixInterpolator.Recompose(TransformMatrixInterpolator.Mix(flatParts, spatialParts, t));
+
+            // The two decompositions of the mirror really do differ half way (so the next assertion can tell them apart).
+            Assert.True(Math.Abs(asSpatial.M11 - asFlat.M11) + Math.Abs(asSpatial.M22 - asFlat.M22) + Math.Abs(asSpatial.M33 - asFlat.M33) > 0.1f);
+
+            Assert.True(TransformMatrixInterpolator.TryMix(flat, spatial, t, out var text));
+            AssertMatrix(asSpatial, ParseMatrix3d(text), 1e-3f);
+        }
+
+        [Fact]
+        public void TryMix_ALargeTranslation_KeepsItsDigits()
+        {
+            // 500000.3pt: a float entry rounds that to the nearest 1/16 and the text would end ...067.0833.
+            var to = Matrix4x4.CreateTranslation(1_000_000, 0, 0);
+            const double t = 0.5000003;
+
+            Assert.True(TransformMatrixInterpolator.TryMix(Matrix4x4.Identity, to, t, out var text));
+
+            var expectedPx = (1_000_000d * t / 0.75).ToString("0.######", CultureInfo.InvariantCulture);
+            Assert.Equal($"matrix(1, 0, 0, 1, {expectedPx}, 0)", text);
         }
 
         [Fact]
