@@ -1832,6 +1832,66 @@ namespace PeachPDF.Tests.Integration
                     $"a word beside the float starts at {w.Left}, inside the float's right edge {f.ActualRight}"));
         }
 
+        // A float in the middle of the text sits in its column, and the lines beside it start past its right
+        // edge. The float is kept out of the wrapped run (DomParser.CorrectInlineBoxesParent), so this holds only
+        // because the columns engine narrows those lines.
+        [Fact]
+        public async Task InlineTextBesideAMiddleFloat_StartsPastIt()
+        {
+            var first = string.Join(" ", Enumerable.Range(1, 60).Select(i => $"a{i:D3}"));
+            var rest = string.Join(" ", Enumerable.Range(1, 120).Select(i => $"b{i:D3}"));
+            var html = Wrap("<div id='mc' style='columns:2; column-gap:20px; width:600px'>"
+                            + first + " <div id='f' style='float:left; width:120px; height:80px; margin-right:8px'></div> "
+                            + rest + "</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var f = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.Same(mc, f.ParentBox);
+            Assert.Contains(words, w =>
+                w.Top < f.ActualBottom && w.Bottom > f.Location.Y && w.Left >= f.ActualRight - 1);
+        }
+
+        // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float
+        // disjunct), so the parser must leave its floats as direct children of the container.
+        [Fact]
+        public async Task FloatsOnlyMulticolContainer_IsNotWrapped()
+        {
+            var html = Wrap("<div id='mc' style='columns:2; width:200px'>"
+                            + "<div id='f1' style='float:left; width:40px; height:20px'></div>"
+                            + "<div id='f2' style='float:left; width:40px; height:20px'></div></div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+
+            Assert.All(mc.Boxes, b => Assert.False(b.IsInlineRunWrapper));
+            Assert.Equal(2, mc.Boxes.Count(b => b.IsFloated));
+        }
+
+        // A multi-column container whose children are block-level content (here, a fixed-height scroll
+        // container) must lay its content out across its columns. Each column's words are checked, not just
+        // the page count, so a container whose columns collapse into one fails here.
+        [Fact]
+        public async Task ScrollContainerWithBlockChildren_DistributesWordsAcrossItsColumns()
+        {
+            var paragraphs = string.Concat(Enumerable.Range(0, 6).Select(p =>
+                "<p>" + string.Join(" ", Enumerable.Range(0, 10).Select(i => $"x{p}{i:D2}")) + "</p>"));
+            var html = Wrap("<div id='mc' style='width:500px; height:200px; overflow:hidden; columns:2'>"
+                            + paragraphs + "</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.Equal(60, words.Count);
+
+            var boundary = mc.Location.X + (mc.ActualRight - mc.Location.X) / 2;
+            Assert.Contains(words, w => w.Left < boundary - 1);
+            Assert.Contains(words, w => w.Left >= boundary - 1);
+        }
+
         // ─── Break values in the column context (css-break-3 §3.1 `column`, §3.2 `avoid-column`) ──────
 
         /// <summary>
