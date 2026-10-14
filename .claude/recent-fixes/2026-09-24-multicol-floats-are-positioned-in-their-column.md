@@ -40,8 +40,8 @@ anonymous block in a multi-column parent, and the columns engine takes its child
 content: the float was laid out and the text vanished. The widening now applies only when nothing else is in
 flow; bare text next to a float goes through the inline flow it always took. Bare text in a multi-column
 container was not divided into columns at all, with or without a float. The no-float case was closed by
-[2026-10-14](2026-10-14-inline-only-multicol-columnizes.md); the float case is
-[still a gap](../accepted-gaps/bare-text-beside-a-float-in-a-multicol-container-is-not-divided-into-columns.md).
+[2026-10-14](2026-10-14-inline-only-multicol-columnizes.md); the float case was
+closed by the same change.
 
 ## Not done
 

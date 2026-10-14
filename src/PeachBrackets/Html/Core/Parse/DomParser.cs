@@ -3575,8 +3575,9 @@ namespace PeachBrackets.Html.Parse
             // columns engine fragments block-level content, and handed a box of bare inline content it
             // drops words outright. The wrapper gives it the shape it needs.
             //
-            // Not applied to a box holding floats, which already reaches the columns engine on its own
-            // (see CssBox's float disjunct), so a wrapper would only add a box level. Nor under a vertical
+            // A float is kept out of the wrapped run and stays a child of the container, which the columns
+            // engine lays out in its own column. A box holding only floats is not wrapped: it already
+            // reaches the engine (see CssBox's float disjunct). Nor under a vertical
             // writing mode: measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run
             // of text, CreateVerticalLineBoxes keeps the content inside the box (72pt x 58pt), while the
             // columns engine stacks it into a single 511pt run that leaves the box entirely.
@@ -3584,8 +3585,10 @@ namespace PeachBrackets.Html.Parse
                 box.EstablishesMultiColumnContext
                 && box.Boxes.Count > 0
                 && DomUtils.ContainsInlinesOnly(box)
-                && !box.Boxes.Any(b => b.IsFloated)
+                && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
                 && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr);
+
+            bool JoinsRunMember(CssBox child) => JoinsTheInlineRun(child) && !(wrapsInlineRunForColumns && child.IsFloated);
 
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
             // anonymous block box — a *block container* rule — must not be created inside one. Each child
@@ -3606,11 +3609,11 @@ namespace PeachBrackets.Html.Parse
             {
                 for (int i = 0; i < box.Boxes.Count; i++)
                 {
-                    if (JoinsTheInlineRun(box.Boxes[i]))
+                    if (JoinsRunMember(box.Boxes[i]))
                     {
                         var newbox = CssBox.CreateBlock(box, null, box.Boxes[i++]);
                         newbox.IsInlineRunWrapper = true;
-                        while (i < box.Boxes.Count && JoinsTheInlineRun(box.Boxes[i]))
+                        while (i < box.Boxes.Count && JoinsRunMember(box.Boxes[i]))
                         {
                             box.Boxes[i].ParentBox = newbox;
                         }
