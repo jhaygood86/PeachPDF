@@ -4558,9 +4558,11 @@ namespace PeachBrackets.Html.Dom
                     // the epilogue's own relocate-whole-box mover still moves an unbroken,
                     // too-tall-for-here-but-fits-on-the-next-page box exactly as before.
                     //
-                    // Columns do not exempt a box. A multi-column container is still one box a page boundary cannot
-                    // cut (css-break-3 §4.1), and laying its columns out is internal to it, so the suppression
-                    // applies whether its content takes the columns engine or the inline branch.
+                    // Excludes a box that will actually dispatch to the multi-column engine below (not
+                    // every EstablishesMultiColumnContext box - a multi-column box holding only inline content is
+                    // wrapped by the parser, DomParser.CorrectInlineBoxesParent, so it dispatches here too): a
+                    // column is a real fragmentainer in its own right and drives its own (nested) fragmentation
+                    // regardless of this box's own monolithic status.
                     //
                     // Excludes table-cell/table-caption, and by display rather than by overflow value:
                     // a cell that declares overflow: hidden itself would otherwise read as "monolithic"
@@ -4576,14 +4578,16 @@ namespace PeachBrackets.Html.Dom
                     // ContainsInlinesOnly/CreateLineBoxes branch below instead of the columns engine, which
                     // is what lays those floats out (issue #1203). Only when nothing else is in flow: the
                     // columns engine takes its children as block-level column content, so text sitting
-                    // directly beside a float (which has no anonymous block around it in a multi-column
-                    // parent) is left to the inline flow it always took, instead of being dropped.
+                    // directly beside a float is left to the inline flow it always took, instead of being dropped.
+                    // The parser wraps such text in an anonymous block (DomParser.CorrectInlineBoxesParent) except
+                    // under a vertical writing mode, which keeps that flow.
                     var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0
                         && (!DomUtils.ContainsInlinesOnly(this)
                             || (Boxes.Any(b => b.IsFloated)
                                 && Boxes.All(b => b.IsExcludedFromFlow || b.DerivedStyle.ActualDisplay == Keywords.None
                                                   || b is { HtmlTag: null, IsSpaceOrEmpty: true })));
                     var suppressMonolithicBreaking = MonolithicContent.IsMonolithic(this)
+                        && !dispatchesToColumnsEngine
                         && DerivedStyle.ActualDisplay is not (Keywords.TableCell or Keywords.TableCaption);
                     var suppressingContainer = suppressMonolithicBreaking ? HtmlContainer : null;
                     var suppressedFragmentainer = suppressingContainer?.DetachFragmentainer();
