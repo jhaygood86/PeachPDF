@@ -1860,6 +1860,37 @@ namespace PeachBrackets.Engine.Tests.Integration
                 && w.Top < f.ActualBottom - 1 && w.Bottom > f.Location.Y + 1);
         }
 
+        // Right floats taller than the column, one beyond the other's reach, each moved the search's right edge to a
+        // place the other moved back, so placing the third never ended. Only a bounded layout is asserted: the float
+        // goes below the blockers.
+        [Fact]
+        public async Task RightFloatsTallerThanTheColumn_DoNotStallFloatPlacement()
+        {
+            var floats = new[]
+            {
+                (55, "right", 190, 1383, 9, ""), (66, "left", 189, 1580, 10, ""), (134, "left", 263, 1157, 11, ""),
+                (150, "right", 243, 1225, 9, "clear:both;"), (156, "right", 346, 1200, 6, ""),
+                (214, "right", 48, 1494, 4, "clear:left;"), (247, "left", 66, 1112, 4, "")
+            };
+            var text = new System.Text.StringBuilder();
+            for (var i = 0; i < 249; i++)
+            {
+                foreach (var f in floats.Where(f => f.Item1 == i))
+                {
+                    text.Append($"<div style='float:{f.Item2}; width:{f.Item3}px; height:{f.Item4}px; margin:{f.Item5}px; {f.Item6}'></div>");
+                }
+
+                text.Append($"w{i:D3} ");
+            }
+
+            var html = Wrap("<div id='mc' style='width:700px; columns:2; column-fill:auto; height:300px'>" + text + "</div>");
+
+            // Off the test thread: the stalled search is a synchronous loop, which would otherwise hang the run.
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30))));
+        }
+
         // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float
         // disjunct), so the parser must leave its floats as direct children of the container.
         [Fact]
