@@ -12,8 +12,10 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   run). Only an animation with no run (zero duration / iteration count) consults the fill mode.
 - **`transition` never runs.** A transition starts from a style *change*; a freshly loaded document has none. Nothing to
   render, so nothing was built. The properties are still parsed.
-- **Interpolation is structural, on text.** Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation
-  space), and only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
+- **Interpolation is structural, on text.** Colours mix in premultiplied sRGB when both are legacy and in Oklab otherwise
+  (`CssValueInterpolator.MixColors`), but only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other
+  (`color()`, relative colour syntax, `rgb(none ...)`) is not read at all, static or animated, so its keyframe is dropped. `color-mix(in hsl)` and `in hwb`
+  are read but resolve to black, static too (#1769).
 - **The matrix part of a `transform` mix cannot run before layout for some inputs.** Lists are paired function by function
   (CSS Transforms 1 §11-12) and what is left is mixed as matrices (§13, `TransformMatrixInterpolator`). That last step
   flips at 50% (tracked in #1753) for:
@@ -47,9 +49,13 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
   `CssValueInterpolator`). A negative argument inside a function (`blur(-5px)`) or in a `calc()` written for lengths of
   different units is not clamped.
-- **Other colour functions are mixed in sRGB, not in their own space.** `hwb()`, `lab()`, `oklch()`, `color-mix()` and the
-  like resolve to sRGB first (a colour the parser cannot resolve flips half way), where CSS Color 4 §12 mixes in the
-  function's space.
+- **A mixed colour's endpoints are the parser's 8-bit sRGB values** (#1768). A `lab()`, `oklab()` or `oklch()` outside the sRGB gamut is mapped
+  back into it when it is read, before it is converted to Oklab, where a browser mixes the unclamped values. For a vivid pair that is far off
+  mid-animation: up to about 50 of 255 per channel (`oklch(.6 .2 100)` to `oklch(.6 .2 300)` is 52 a quarter of the way in; the endpoints themselves are right), and a
+  few such pairs are worse than the old sRGB mix was. Fixing it means keeping the unclamped Oklab components of a modern colour in the token, which
+  needs the colour functions' own grammar (the parser keeps only `Color`'s 8-bit channels); a PDF holds sRGB, so the result is clipped at paint anyway.
+- **`hsl(none ...)`/`hwb(none ...)` count as legacy colours,** where a browser mixes a colour with a `none` component in Oklab (#1768);
+  `rgb(none ...)` is not read at all, and `lab(none ...)` is read with `none` as 0.
 - **`currentcolor` mixes as the box's `color` at the animation step.** That `color` is the one the box holds then, including an
   `!important` one (the cascade puts it on the box ahead of the step), one set by `!important` custom properties, and one a later
   animation in the list sets. A bevelled border side (`inset`, `outset`, `groove`, `ridge`) shows the fixed bevel base at progress 0

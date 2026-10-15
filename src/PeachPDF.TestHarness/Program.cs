@@ -14316,6 +14316,7 @@ code { font-size: 7.5pt; color: #444 }
 @keyframes stairs  { from { margin-left: 0 } to { margin-left: 240px } }
 @keyframes tint    { from { border-color: #e63946 } to { border-color: currentcolor } }
 @keyframes sweep   { from { background-image: linear-gradient(90deg, currentcolor, #e63946) } to { background-image: linear-gradient(90deg, #ffffff, currentcolor) } }
+@keyframes palette { from { background-color: oklch(0.75 0.17 50) } to { background-color: oklch(0.5 0.22 290) } }
 @keyframes shuffle { from { transform: rotate(0deg) } to { transform: translateX(240px) rotate(90deg) scale(1.6) } }
 .row { margin: 4px 0; padding: 6px 8px; background: #eef1f5 }
 .bar  { height: 16px; background: #1d4ed8; animation: grow 4s linear }
@@ -14324,6 +14325,7 @@ code { font-size: 7.5pt; color: #444 }
 .step { width: 60px; height: 16px; background: #2a9d8f; animation: stairs 4s steps(4, end) }
 .tint { display: inline-block; padding: 6px 16px; border: 5px solid; border-radius: 4px; color: #1d4ed8; font-weight: bold; animation: tint 4s linear }
 .sweep { height: 22px; color: #1d4ed8; border-radius: 4px; animation: sweep 4s linear }
+.palette { height: 22px; border-radius: 4px; animation: palette 4s linear }
 .shuffle { width: 30px; height: 30px; margin: 20px 0 20px 60px; background: #6a4c93; animation: shuffle 4s linear }
 .spring { width: 60px; height: 16px; background: #e76f51; animation: stairs 4s linear(0, 1.25 40%, 0.9 70%, 1) }
 </style></head><body>
@@ -14349,13 +14351,15 @@ code { font-size: 7.5pt; color: #444 }
 <p class="note"><code>border-color: #e63946 → currentcolor</code> on blue text: currentcolor mixes as the box's own <code>color</code>, so the midpoint border is a purple half way between the red and the blue instead of a jump from one to the other.</p>
 <div class="row"><div class="sweep"></div></div>
 <p class="note"><code>background-image: linear-gradient(90deg, currentcolor, #e63946) → linear-gradient(90deg, #ffffff, currentcolor)</code> on blue text: <code>currentcolor</code> is a gradient stop (the box's own <code>color</code>), and each stop mixes toward its counterpart.</p>
+<div class="row"><div class="palette"></div></div>
+<p class="note"><code>background-color: oklch(0.75 0.17 50) → oklch(0.5 0.22 290)</code>: a pair with a non-legacy color is mixed in Oklab (premultiplied), as a browser does, so the middle is the color a browser shows, not the sRGB average of the two.</p>
 <div class="row"><div class="shuffle"></div></div>
 <p class="note"><code>transform: rotate(0deg) → translateX(240px) rotate(90deg) scale(1.6)</code>: the two lists differ in their functions, so they are mixed through matrix decomposition (CSS Transforms 1 §13) - the box slides, turns and grows together instead of jumping from the first value to the second half way through.</p>
 </body></html>
 """;
 
 await SaveStatesShowcaseAsync("css_animation", "Graphics & Effects", "CSS Animations: Start, Midpoint and End",
-    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow, a stepped box, a box on a linear() spring curve, a border that mixes toward currentcolor, a gradient whose stops mix with currentcolor and a box whose two transform lists differ in their functions (mixed through matrix decomposition) move between the states. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
+    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow, a stepped box, a box on a linear() spring curve, a border that mixes toward currentcolor, a gradient whose stops mix with currentcolor, an oklch() color mixed in Oklab and a box whose two transform lists differ in their functions (mixed through matrix decomposition) move between the states. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
     AnimationHtml,
     ("start (AnimationProgress = 0)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0 }),
     ("midpoint (AnimationProgress = 0.5)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0.5 }),

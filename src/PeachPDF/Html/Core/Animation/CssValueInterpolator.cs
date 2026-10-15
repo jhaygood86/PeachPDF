@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Text;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -30,7 +31,7 @@ namespace PeachPDF.Html.Core.Animation
     {
         private enum TokenKind { Number, Word, Color, Open, Close, Space, Punct, Text }
 
-        private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null);
+        private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false);
 
         private static readonly HashSet<string> LengthUnits = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -399,8 +400,11 @@ namespace PeachPDF.Html.Core.Animation
         {
             if (CssUtils.GetPropertyValue(box, "color") is not { } text) return null;
 
+            // CSS Color 4 interpolates the used value of currentcolor, which would make a lab() text colour take the pair into Oklab. Chrome
+            // does not (white to currentcolor on a `color: lab(...)` box is an sRGB mix), and this follows Chrome: the keyword counts as a
+            // legacy colour whatever it resolves to, and only the other side can take the mix into Oklab.
             var token = ColorOrWord(valueParser, text);
-            return token.Kind == TokenKind.Color ? token : null;
+            return token.Kind == TokenKind.Color ? token with { InOklab = false } : null;
         }
 
         private static List<Token> SubstituteCurrentColor(List<Token> tokens, Token color) =>
@@ -449,7 +453,7 @@ namespace PeachPDF.Html.Core.Animation
                         if (!TryMixNumbers(property, x, y, t, sb, a.Count == 1)) return false;
                         break;
                     case TokenKind.Color:
-                        sb.Append(MixColors(x.Rgba!, y.Rgba!, t));
+                        sb.Append(MixColors(x.Rgba!, y.Rgba!, t, x.InOklab || y.InOklab));
                         break;
                     default:
                         sb.Append(x.Raw);
@@ -516,13 +520,19 @@ namespace PeachPDF.Html.Core.Animation
             }
         }
 
-        /// <summary>Premultiplied mix in sRGB, the interpolation space of legacy colour syntaxes (CSS Color 4 §13).</summary>
-        private static string MixColors(double[] from, double[] to, double t)
+        /// <summary>
+        /// Premultiplied mix of two colours given as sRGB channels (0 to 255) and alpha (0 to 1): in gamma-encoded sRGB when both are legacy
+        /// sRGB color formats, in Oklab as soon as one is not (CSS Color 4 §13.2, Color Space for Interpolation: Oklab is the default where
+        /// the host syntax names none, which an animation does not).
+        /// </summary>
+        private static string MixColors(double[] from, double[] to, double t, bool inOklab)
         {
             var alpha = from[3] + (to[3] - from[3]) * t;
             alpha = Math.Clamp(alpha, 0, 1);
 
             if (alpha <= 0) return "rgba(0, 0, 0, 0)";
+
+            if (inOklab) return MixInOklab(from, to, t, alpha);
 
             var channels = new int[3];
             for (var i = 0; i < 3; i++)
@@ -534,6 +544,27 @@ namespace PeachPDF.Html.Core.Animation
             return alpha >= 0.9995
                 ? $"rgb({channels[0]}, {channels[1]}, {channels[2]})"
                 : $"rgba({channels[0]}, {channels[1]}, {channels[2]}, {Format(alpha)})";
+        }
+
+        /// <summary>
+        /// The Oklab mix, premultiplied by alpha like the sRGB one, written as an <c>oklab()</c> colour for the property setter to parse
+        /// (and gamut-map, as it does a static <c>oklab()</c>). The endpoints arrive as 8-bit sRGB, which is all the colour parser keeps.
+        /// </summary>
+        private static string MixInOklab(double[] from, double[] to, double t, double alpha)
+        {
+            var a = ColorSpaceMath.ToSpace(from[0] / 255, from[1] / 255, from[2] / 255, ColorSpaceMath.Space.Oklab);
+            var b = ColorSpaceMath.ToSpace(to[0] / 255, to[1] / 255, to[2] / 255, ColorSpaceMath.Space.Oklab);
+
+            var channels = new double[3];
+            for (var i = 0; i < 3; i++)
+                channels[i] = (a[i] * from[3] * (1 - t) + b[i] * to[3] * t) / alpha;
+
+            // An easing that overshoots can take the lightness past the ends of its range; a browser holds it there (and keeps a and b), where
+            // the colour parser would take the value as it comes and wash out to white or black.
+            channels[0] = Math.Clamp(channels[0], 0, 1);
+
+            var text = $"oklab({Format(channels[0])} {Format(channels[1])} {Format(channels[2])}";
+            return alpha >= 0.9995 ? text + ")" : $"{text} / {Format(alpha)})";
         }
 
         internal static string Format(double value)
@@ -696,9 +727,31 @@ namespace PeachPDF.Html.Core.Animation
         private static Token ColorOrWord(CssValueParser valueParser, string text)
         {
             if (valueParser.TryGetColor(text, 0, text.Length, out var color))
-                return new Token(TokenKind.Color, text, Rgba: [color.R, color.G, color.B, color.A / 255d]);
+                return new Token(TokenKind.Color, text, Rgba: [color.R, color.G, color.B, color.A / 255d], InOklab: TakesAMixIntoOklab(text));
 
             return new Token(TokenKind.Word, text);
+        }
+
+        /// <summary>
+        /// Whether a colour takes a mix out of sRGB: anything but the legacy sRGB color formats CSS Color 4 §13.2 lists (hex, named colours,
+        /// <c>rgb()</c>, <c>hsl()</c>, <c>hwb()</c>, and <c>transparent</c>, which the spec's own gradient example counts as legacy). That is
+        /// <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c>, <c>color()</c>, <c>color-mix()</c> (whatever its space) and relative colour
+        /// syntax (<c>rgb(from ...)</c>), as Chrome mixes them; the last two (<c>color()</c> and relative colour syntax) are not read by the colour
+        /// parser yet, so they never get here.
+        /// </summary>
+        private static bool TakesAMixIntoOklab(string text)
+        {
+            var open = text.IndexOf('(');
+            if (open <= 0) return false;
+
+            var name = text.AsSpan(0, open).Trim();
+            if (name.Equals("lab", StringComparison.OrdinalIgnoreCase) || name.Equals("lch", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("oklab", StringComparison.OrdinalIgnoreCase) || name.Equals("oklch", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("color", StringComparison.OrdinalIgnoreCase) || name.Equals("color-mix", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var inside = text.AsSpan(open + 1).TrimStart();
+            return inside.Length > 4 && inside.StartsWith("from", StringComparison.OrdinalIgnoreCase) && char.IsWhiteSpace(inside[4]);
         }
 
         private static bool StartsNumber(string text, int i)

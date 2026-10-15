@@ -1249,15 +1249,24 @@ namespace PeachPDF.Tests.Integration
             // hwb() resolves to sRGB like hsl() does, so red to lime passes through olive, not through averaged hue numbers.
             Assert.Equal("rgb(128, 128, 0)", Mix("color", "hwb(0 0% 0%)", "hwb(120 0% 0%)", 0.5));
 
-            // A colour function the parser cannot resolve is not mixed component by component: it flips half way.
+            // A color-mix() colour is mixed as a colour, in Oklab (it is not a legacy colour), never component by component through its text.
             var from = "color-mix(in oklab, red 30%, blue)";
             var to = "color-mix(in oklab, lime 30%, blue)";
             var early = Mix("color", from, to, 0.4);
             var late = Mix("color", from, to, 0.6);
-            Assert.True(early == from || early.StartsWith("rgb"), early);
-            Assert.True(late == to || late.StartsWith("rgb"), late);
-            Assert.DoesNotContain("color-mix(in oklab, red 12", early);
+            Assert.StartsWith("oklab(", early);
+            Assert.StartsWith("oklab(", late);
         }
+
+        [Theory]
+        [InlineData("color", "oklch(0.6 0.15 30)", "#0000ff", "oklab(")]
+        [InlineData("border-top-color", "lab(50 40 20)", "#0000ff", "oklab(")]
+        [InlineData("box-shadow", "0 0 4px lab(50 40 20)", "0 0 8px #0000ff", "0 0 6px oklab(")]            // a colour inside a list is mixed like any other
+        [InlineData("text-shadow", "1px 1px 2px #ff0000", "1px 1px 2px oklch(0.5 0.15 260)", "1px 1px 2px oklab(")]
+        [InlineData("background-image", "linear-gradient(lab(50 40 20), #fff)", "linear-gradient(#0000ff, #fff)", "linear-gradient(oklab(")]
+        [InlineData("border-top-color", "#ff0000", "#0000ff", "rgb(")]                                       // legacy pairs stay in sRGB
+        public void Interpolate_AColourInAnyPropertyTakesTheOklabPathWhenOneSideIsNotLegacy(string property, string from, string to, string expectedStart) =>
+            Assert.StartsWith(expectedStart, Mix(property, from, to, 0.5));
 
         [Fact]
         public void SplitList_KeepsCommasAndParenthesesInsideAQuotedName()
