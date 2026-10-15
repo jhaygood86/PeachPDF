@@ -123,6 +123,9 @@ namespace PeachPDF.Tests.Integration
             ["G8_important_color_unset"] = (
                 """@keyframes k { from { background-color: currentcolor } to { background-color: #fff } } #p { color: #f80 } #a { color: #00f; width: 20px; height: 20px; animation: k 1s linear both; } #a { color: unset !important }""",
                 """<div id="p"><div id="a"></div></div>"""),
+            ["D5_color_pass_applies_width_once"] = (
+                """@keyframes kw { from { width: 50px; color: #0f0 } } @keyframes kc { from { color: #f00 } to { color: #00f } } #a { width: 100px; height: 10px; animation: kw 1s linear both, kc 1s linear both; animation-delay: -0s, -0s }""",
+                """<div id="a"></div>"""),
             ["Z1_plain_currentcolor"] = (
                 """@keyframes k { from { background-color: currentcolor } to { background-color: #fff } } #a { color: #00f; width: 20px; height: 20px; animation: k 1s linear both; }""",
                 """<div id="a"></div>"""),
@@ -195,6 +198,8 @@ namespace PeachPDF.Tests.Integration
             { "G5_important_custom_inherit", 0.5, 175.0, null, null },
             { "G8_important_color_unset", 0.1, null, new[] { 255, 136, 0 }, new[] { 255, 148, 26 } },
             { "G8_important_color_unset", 0.5, null, new[] { 255, 136, 0 }, new[] { 255, 196, 128 } },
+            { "D5_color_pass_applies_width_once", 0.1, 55.0, new[] { 230, 0, 26 }, null },
+            { "D5_color_pass_applies_width_once", 0.5, 75.0, new[] { 128, 0, 128 }, null },
             { "Z1_plain_currentcolor", 0.1, null, new[] { 0, 0, 255 }, new[] { 26, 26, 255 } },
             { "Z1_plain_currentcolor", 0.5, null, new[] { 0, 0, 255 }, new[] { 128, 128, 255 } },
             { "Z2_plain_var", 0.1, 55.0, null, null },

@@ -39,7 +39,8 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   `rem` in the matrix part of a `transform` mix resolve against the box's font at the animation step, before the
   `!important` phase and before a `font-size` the same animation sets later; a pair mixed per function keeps the text
   and resolves at paint. They differ only when the font size changes after the animation step.
-- **Not animated:** custom properties (registered with `@property` or not; the keyframes drop every `--*` declaration), `animation-composition` (`add`/`accumulate`),
+- **Not animated:** custom properties (registered with `@property` or not; the keyframes drop every `--*` declaration; Chrome flips an
+  unregistered one at 50% and mixes a registered one by its syntax, #1765), `animation-composition` (`add`/`accumulate`),
   `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
   document-building API (its cascade is a different entry point and does not call the applier).
 - **Overshoot is clamped only for a whole-value, non-negative property.** An easing that overshoots is followed past the end
