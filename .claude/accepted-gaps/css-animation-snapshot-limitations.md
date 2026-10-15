@@ -61,6 +61,14 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   one set by a *later* animation in the `animation-name` list, or by an `!important` declaration (an `!important` custom property that the colour's `var()` names counts), is not seen. A bevelled border
   side (`inset`, `outset`, `groove`, `ridge`) shows the fixed bevel base at progress 0 and 1, where the keyword is kept, and a
   literal mixed colour in between.
+  Near the start of the run that stale colour can be farther from a browser's result than the old flip was (`color: red !important`
+  with `background-color: currentcolor` to white at progress 0.1: the browser gives 255,26,26, this gives 26,26,26, the flip gave
+  255,0,0), from half way on it is no worse.
+- **`currentcolor` as a gradient stop is not parsed at all** (#1759), even without an animation, so such a gradient neither draws nor
+  animates; the mixer itself would handle it.
+- **Some shadow colours still flip.** A shadow that omits its colour (`0 0 4px` against `0 0 8px red`, where the omitted colour means
+  `currentcolor`), shadow lists of different length, and `none` against a shadow flip where a browser mixes; `hwb()` is not mixed
+  (it flips), and `#rrggbbaa` inside a shadow list does not mix even without `currentcolor`.
 - **CSS animations on the elements of an inline `<svg>` are not applied.** `rect { animation: ... }` (fill, opacity,
   transform, stroke-width, `stroke-dashoffset`, `r`, a `<g>`'s transform) is parsed and ignored; the SVG tree builder has its
   own cascade entry point that does not call the animation step. Only HTML boxes (and their pseudo-elements) are animated.
