@@ -116,7 +116,7 @@ namespace PeachPDF.Html.Core.Animation
         /// <summary>
         /// Whether a declaration in a keyframe can animate at all. The <c>animation-*</c> and <c>transition-*</c>
         /// properties are excluded by name (§4.2: they are ignored in a keyframe, bar the timing function handled
-        /// separately), and so is a custom property, which only animates once registered with a syntax.
+        /// separately), and so is a custom property: none animates here, whether or not it is registered with a syntax.
         /// </summary>
         private static bool IsAnimatable(string name) =>
             !name.StartsWith("--", StringComparison.Ordinal)

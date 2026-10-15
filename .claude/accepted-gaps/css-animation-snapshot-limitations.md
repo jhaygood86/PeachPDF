@@ -39,16 +39,9 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   `rem` in the matrix part of a `transform` mix resolve against the box's font at the animation step, before the
   `!important` phase and before a `font-size` the same animation sets later; a pair mixed per function keeps the text
   and resolves at paint. They differ only when the font size changes after the animation step.
-- **Not animated:** custom properties registered with `@property`, `animation-composition` (`add`/`accumulate`),
+- **Not animated:** custom properties (registered with `@property` or not; the keyframes drop every `--*` declaration), `animation-composition` (`add`/`accumulate`),
   `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
   document-building API (its cascade is a different entry point and does not call the applier).
-- **`!important` custom properties are not seen by `var()` in an animated property.** The animation step sits before the
-  author-`!important` phase, so for a property the animation owns - or an `animation-*` property - `var(--x)` resolves
-  against the custom properties as the normal phases left them. `#a { --w: 100pt; width: var(--w) }` plus
-  `#a { --w: 300pt !important }` therefore gives the implicit keyframe 100pt, not 300pt. Properties the animation does not
-  touch resolve at the very end of the cascade and are unaffected - except that a shorthand holding `var()` is settled as a
-  whole when any one of its longhands is animated (`margin: var(--m)` with only `margin-left` animated settles all four
-  margins early). Fixing it means resolving custom properties' important declarations ahead of the animation step.
 - **Overshoot is clamped only for a whole-value, non-negative property.** An easing that overshoots is followed past the end
   value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
   `CssValueInterpolator`). A negative argument inside a function (`blur(-5px)`) or in a `calc()` written for lengths of
@@ -56,14 +49,10 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
 - **Other colour functions are mixed in sRGB, not in their own space.** `hwb()`, `lab()`, `oklch()`, `color-mix()` and the
   like resolve to sRGB first (a colour the parser cannot resolve flips half way), where CSS Color 4 §12 mixes in the
   function's space.
-- **`currentcolor` mixes as the box's `color` at the animation step, and only then** (#1757). The mix substitutes the box's `color` as
-  the box holds it when the animation is applied: a `color` animated in the same keyframes is sampled first and followed, but
-  one set by a *later* animation in the `animation-name` list, or by an `!important` declaration (an `!important` custom property that the colour's `var()` names counts), is not seen. A bevelled border
-  side (`inset`, `outset`, `groove`, `ridge`) shows the fixed bevel base at progress 0 and 1, where the keyword is kept, and a
-  literal mixed colour in between.
-  Near the start of the run that stale colour can be farther from a browser's result than the old flip was (`color: red !important`
-  with `background-color: currentcolor` to white at progress 0.1: the browser gives 255,26,26, this gives 26,26,26, the flip gave
-  255,0,0), from half way on it is no worse.
+- **`currentcolor` mixes as the box's `color` at the animation step.** That `color` is the one the box holds then, including an
+  `!important` one (the cascade puts it on the box ahead of the step), one set by `!important` custom properties, and one a later
+  animation in the list sets. A bevelled border side (`inset`, `outset`, `groove`, `ridge`) shows the fixed bevel base at progress 0
+  and 1, where the keyword is kept, and a literal mixed colour in between.
 - **Some shadow colours still flip.** A shadow that omits its colour (`0 0 4px` against `0 0 8px red`, where the omitted colour means
   `currentcolor`), shadow lists of different length, and `none` against a shadow flip where a browser mixes; `hwb()` is not mixed
   (it flips), and `#rrggbbaa` inside a shadow list does not mix even without `currentcolor`.

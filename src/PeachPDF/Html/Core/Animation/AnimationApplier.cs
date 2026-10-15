@@ -29,7 +29,10 @@ namespace PeachPDF.Html.Core.Animation
         /// animated property are resolved and removed here, so the animated value is not overwritten later.</param>
         /// <param name="uaSnapshot">The box's properties as the UA stylesheet left them, which a keyframe's
         /// <c>revert</c> rolls back to; null when no keyframe uses <c>revert</c>.</param>
-        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot)
+        /// <param name="colorIsImportant">Whether an <c>!important</c> declaration sets the box's <c>color</c>. It outranks the
+        /// animation origin (CSS Cascade 4 §6.1), so the cascade has already put it on the box and an animation of <c>color</c>
+        /// is left unapplied: every <c>currentcolor</c> the animation mixes then stands for the colour the box really has.</param>
+        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot, bool colorIsImportant)
         {
             // Nearly every box names no animation; settle that before allocating anything.
             if (box.HtmlContainer?.Keyframes is not { Count: > 0 } keyframes) return;
@@ -52,13 +55,19 @@ namespace PeachPDF.Html.Core.Animation
             var fillModes = SplitList(box.AnimationFillMode);
             var timingFunctions = SplitList(box.AnimationTimingFunction);
 
+            // currentcolor in one animation's keyframes stands for the `color` the box has at that moment, and that `color` may come
+            // from another animation in the list, a later one included. When several animations are in play and some of them animate
+            // `color`, it is therefore applied for all of them first, and everything else after; otherwise one pass does it all.
+            var colorPasses = !colorIsImportant && names.Count > 1 && AnimatesColor(names, keyframes);
+
             // A later animation in the list wins over an earlier one for a property they both animate (§3.1), and
             // sees the earlier one's result as the value an implicit keyframe stands for - so applying them in
             // order, straight onto the box, is exactly the composition the spec describes.
-            for (var i = 0; i < names.Count; i++)
+            foreach (var (i, pass) in Passes(names.Count, colorPasses))
             {
                 if (names[i].Equals("none", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!keyframes.TryGetValue(Unquote(names[i]), out var set)) continue;
+                if (pass == ColorPass.ColorOnly && !set.DeclaredNames.Contains("color")) continue;
 
                 // The lists are repeated or truncated to the length of animation-name (§3.1).
                 var fill = Cycle(fillModes, i);
@@ -95,6 +104,12 @@ namespace PeachPDF.Html.Core.Animation
                     }
                 }
 
+                // An important `color` is already on the box and cannot be animated; the passes split `color` from the rest.
+                if (colorIsImportant || pass == ColorPass.WithoutColor)
+                    animated.RemoveAll(property => property.Equals("color", StringComparison.OrdinalIgnoreCase));
+                else if (pass == ColorPass.ColorOnly)
+                    animated.RemoveAll(property => !property.Equals("color", StringComparison.OrdinalIgnoreCase));
+
                 // currentcolor in another property's keyframe stands for this animation's `color` at the same moment (CSS Color 4,
                 // Color Interpolation), so `color` is sampled and written first.
                 // The box's `color` may itself still be waiting on var(): it is what currentcolor resolves to, so settle it for the
@@ -123,6 +138,31 @@ namespace PeachPDF.Html.Core.Animation
                     if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
                 }
             }
+        }
+
+        /// <summary>Which of the box's animated properties a pass of <see cref="Apply"/> samples.</summary>
+        private enum ColorPass { Single, ColorOnly, WithoutColor }
+
+        private static readonly ColorPass[] OnePass = [ColorPass.Single];
+        private static readonly ColorPass[] TwoPasses = [ColorPass.ColorOnly, ColorPass.WithoutColor];
+
+        /// <summary>Every animation of the list in order, once per pass: a single pass, or the <c>color</c> pass then the rest.</summary>
+        private static IEnumerable<(int Index, ColorPass Pass)> Passes(int count, bool colorPasses)
+        {
+            foreach (var pass in colorPasses ? TwoPasses : OnePass)
+            {
+                for (var i = 0; i < count; i++) yield return (i, pass);
+            }
+        }
+
+        private static bool AnimatesColor(List<string> names, IReadOnlyDictionary<string, KeyframeSet> keyframes)
+        {
+            foreach (var name in names)
+            {
+                if (keyframes.TryGetValue(Unquote(name), out var set) && set.DeclaredNames.Contains("color")) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
