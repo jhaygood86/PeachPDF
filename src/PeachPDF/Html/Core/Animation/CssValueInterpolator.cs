@@ -6,6 +6,7 @@ using System.Numerics;
 using System.Text;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Animation
 {
@@ -67,7 +68,8 @@ namespace PeachPDF.Html.Core.Animation
         /// <summary>
         /// Mixes <paramref name="from"/> and <paramref name="to"/> at <paramref name="t"/> (0 = from, 1 = to; may
         /// leave 0 to 1 for an easing that overshoots). <paramref name="box"/> is what a length in a <c>transform</c> list
-        /// resolves against when two lists have to be mixed as matrices; without one they flip.
+        /// resolves against when two lists have to be mixed as matrices, and where <c>currentcolor</c> takes its colour from;
+        /// without one those pairs flip.
         /// </summary>
         public static string Interpolate(CssValueParser valueParser, string property, string from, string to, double t, CssBox? box = null)
         {
@@ -95,6 +97,16 @@ namespace PeachPDF.Html.Core.Animation
             var b = Scan(valueParser, to);
 
             var isTransform = property.Equals("transform", StringComparison.OrdinalIgnoreCase);
+
+            // CSS Color 4 (Color Interpolation): interpolating to or from currentcolor uses its used value, the box's own `color`.
+            // `color` itself is left alone: there currentcolor means inherit, which the keyframe's global-keyword step settles.
+            if (box is not null && (HasCurrentColor(a) || HasCurrentColor(b))
+                && !property.Equals("color", StringComparison.OrdinalIgnoreCase) && !SameShape(a, b)
+                && CurrentColorToken(valueParser, box) is { } currentColor)
+            {
+                a = SubstituteCurrentColor(a, currentColor);
+                b = SubstituteCurrentColor(b, currentColor);
+            }
 
             // CSS Transforms 1 §11-13: lists are paired function by function, then what is left is mixed as matrices.
             if (isTransform && TryMixTransformLists(valueParser, a, b, t, box, out var transformed)) return transformed;
@@ -372,6 +384,27 @@ namespace PeachPDF.Html.Core.Animation
             return TryAxis(x, out var u) && TryAxis(y, out var v)
                 && Math.Abs(u.X - v.X) < 1e-6 && Math.Abs(u.Y - v.Y) < 1e-6 && Math.Abs(u.Z - v.Z) < 1e-6;
         }
+
+        private static bool IsCurrentColor(Token token) =>
+            token.Kind == TokenKind.Word && token.Raw.Equals("currentcolor", StringComparison.OrdinalIgnoreCase);
+
+        private static bool HasCurrentColor(List<Token> tokens) => tokens.Exists(IsCurrentColor);
+
+        /// <summary>
+        /// The box's <c>color</c> as a colour token, or null when it is not one the mixer can read: the colour as the cascade
+        /// has it at the animation step, including a <c>color</c> animated in the same keyframes (<see cref="AnimationApplier"/>
+        /// samples <c>color</c> first), but not one a later animation or an <c>!important</c> declaration sets.
+        /// </summary>
+        private static Token? CurrentColorToken(CssValueParser valueParser, CssBox box)
+        {
+            if (CssUtils.GetPropertyValue(box, "color") is not { } text) return null;
+
+            var token = ColorOrWord(valueParser, text);
+            return token.Kind == TokenKind.Color ? token : null;
+        }
+
+        private static List<Token> SubstituteCurrentColor(List<Token> tokens, Token color) =>
+            tokens.ConvertAll(token => IsCurrentColor(token) ? color : token);
 
         private static bool IsNone(List<Token> tokens) =>
             tokens is [{ Kind: TokenKind.Word } word] && word.Raw.Equals("none", StringComparison.OrdinalIgnoreCase);

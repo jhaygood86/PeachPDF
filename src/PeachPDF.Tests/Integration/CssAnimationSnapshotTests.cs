@@ -5,6 +5,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
@@ -361,6 +362,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, Mix(property, from, to, t));
 
         [Theory]
+        [InlineData("background-color", "currentcolor", "rgb(0, 0, 255)", 0.4, "currentcolor")]   // no box to take the color from
         [InlineData("display", "block", "inline", 0.49, "block")]
         [InlineData("display", "block", "inline", 0.5, "inline")]
         [InlineData("transform", "rotate(10deg)", "translateX(10px)", 0.4, "rotate(10deg)")]   // no box to resolve lengths against: discrete
@@ -1315,6 +1317,215 @@ namespace PeachPDF.Tests.Integration
             // An empty document returns before anything else in AddPdfPages; the progress is checked ahead of that.
             await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
                 generator.AddPdfPages(document, "", new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 2 }));
+        }
+
+        // ─── currentcolor mixes as the box's own color (CSS Color 4, Color Interpolation) ───
+
+        private static void AssertRgb(PeachDrawing.Core.PaintColor color, int r, int g, int b)
+        {
+            Assert.InRange(color.R, r - 1, r + 1);
+            Assert.InRange(color.G, g - 1, g + 1);
+            Assert.InRange(color.B, b - 1, b + 1);
+        }
+
+        [Theory]
+        [InlineData("#ff0000", "currentcolor")]
+        [InlineData("currentcolor", "#ff0000")]
+        public async Task CurrentColor_MixesWithTheBoxsColor(string from, string to)
+        {
+            // red against the blue text colour: purple half way, where a flip would show one of the two.
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ background-color: {from} }} to {{ background-color: {to} }} }}
+                #a {{ color: rgb(0, 0, 255); width: 20pt; height: 20pt; animation: k 1s linear }}</style><div id=""a""></div>", 0.5);
+
+            AssertRgb(Find(root, "a").ActualBackgroundColor, 128, 0, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColor_InABorderColor_MixesWithTheBoxsColor()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { border-top-color: #ff0000 } to { border-top-color: currentcolor } }
+                #a { color: rgb(0, 0, 255); border: 4pt solid; animation: k 1s linear }</style><div id="a"></div>
+                """, 0.5);
+
+            AssertRgb(Find(root, "a").ActualBorderTopColor, 128, 0, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColor_AsTheUnderlyingValue_MixesWithTheBoxsColor()
+        {
+            // No 100% keyframe: the box's own background-color, currentcolor, is the implicit end.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { background-color: #ff0000 } }
+                #a { color: rgb(0, 0, 255); background-color: currentcolor; width: 20pt; height: 20pt; animation: k 1s linear }</style><div id="a"></div>
+                """, 0.5);
+
+            AssertRgb(Find(root, "a").ActualBackgroundColor, 128, 0, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColor_UsesAnInheritedColor()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { background-color: #ff0000 } to { background-color: currentcolor } }
+                #p { color: rgb(0, 0, 255) }
+                #a { width: 20pt; height: 20pt; animation: k 1s linear }</style><div id="p"><div id="a"></div></div>
+                """, 0.5);
+
+            AssertRgb(Find(root, "a").ActualBackgroundColor, 128, 0, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColor_UsesAColorThatIsStillWaitingOnVar()
+        {
+            // The box's color is var(--c), deferred to the end of the cascade; currentcolor still means blue, not the parent's green.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { background-color: #ff0000 } to { background-color: currentcolor } }
+                #p { color: rgb(0, 255, 0) }
+                #a { --c: rgb(0, 0, 255); color: var(--c); width: 20pt; height: 20pt; animation: k 1s linear }</style><div id="p"><div id="a"></div></div>
+                """, 0.5);
+
+            AssertRgb(Find(root, "a").ActualBackgroundColor, 128, 0, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColor_AsAColorKeyframe_ResolvesAgainstTheInheritedColor()
+        {
+            // `color: currentcolor` means inherit, which the keyframe's global-keyword step settles before the mix.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { color: #ff0000 } to { color: currentcolor } }
+                #p { color: rgb(0, 0, 255) }
+                #a { animation: k 1s linear }</style><div id="p"><div id="a">x</div></div>
+                """, 0.5);
+
+            var color = CssUtils.GetPropertyValue(Find(root, "a"), "color");
+            Assert.NotNull(color);
+            Assert.Equal("rgb(128, 0, 128)", color);
+        }
+
+        [Fact]
+        public async Task CurrentColor_FollowsAColorAnimatedInTheSameKeyframes()
+        {
+            // At the midpoint the text colour is purple, so currentcolor is purple there, and the background is purple
+            // mixed half way to white. background-color is written first in the keyframe, but color is sampled before it.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { background-color: currentcolor; color: #ff0000 } to { background-color: #ffffff; color: #0000ff } }
+                #a { width: 20pt; height: 20pt; animation: k 1s linear }</style><div id="a"></div>
+                """, 0.5);
+
+            AssertRgb(Find(root, "a").ActualBackgroundColor, 191, 128, 191);
+        }
+
+        [Fact]
+        public async Task CurrentColor_OnBothSides_StaysTheKeywordWhileTheRestMixes()
+        {
+            // The shadows have the same shape, so only the blur mixes and the colour stays currentcolor (which would
+            // follow the box's color, were it to change).
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { box-shadow: 0 0 2pt currentcolor } to { box-shadow: 0 0 10pt currentcolor } }
+                #a { color: rgb(0, 0, 255); width: 20pt; height: 20pt; animation: k 1s linear }</style><div id="a"></div>
+                """, 0.5);
+
+            var shadow = CssUtils.GetPropertyValue(Find(root, "a"), "box-shadow");
+            Assert.NotNull(shadow);
+            Assert.Contains("currentcolor", shadow, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("6pt", shadow);
+        }
+
+        [Theory]
+        [InlineData("#ff0000", "currentcolor", 1)]
+        [InlineData("currentcolor", "#ff0000", 0)]
+        public async Task CurrentColor_AtTheEnds_KeepsTheKeyword(string from, string to, double progress)
+        {
+            // An inset border side keeps the literal currentcolor until paint and shows the fixed bevel base for it (#eeeeee);
+            // a keyword that had been replaced by the box's blue would show a shaded blue instead.
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ border-top-color: {from} }} to {{ border-top-color: {to} }} }}
+                #a {{ color: rgb(0, 0, 255); border: 4pt inset; animation: k 1s linear }}</style><div id=""a""></div>", progress);
+
+            AssertRgb(Find(root, "a").ActualBorderTopColor, 238, 238, 238);
+        }
+
+        [Theory]
+        [InlineData("outline-color", "#ff0000", "currentcolor")]
+        [InlineData("column-rule-color", "currentcolor", "#ff0000")]
+        [InlineData("text-shadow", "0 0 2pt currentcolor", "0 0 10pt #ff0000")]
+        [InlineData("box-shadow", "0 0 2pt #ff0000", "0 0 10pt currentcolor")]
+        public async Task CurrentColor_InOtherColorBearingProperties_MixesWithTheBoxsColor(string property, string from, string to)
+        {
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ {property}: {from} }} to {{ {property}: {to} }} }}
+                #a {{ color: rgb(0, 0, 255); width: 20pt; height: 20pt; animation: k 1s linear }}</style><div id=""a"">x</div>", 0.5);
+
+            var value = CssUtils.GetPropertyValue(Find(root, "a"), property);
+            Assert.NotNull(value);
+            Assert.Contains("rgb(128, 0, 128)", value);
+        }
+
+        [Fact]
+        public async Task CurrentColor_NamedByTheAnimation_StillLeavesTheBoxsOwnColorToTheImportantCustomProperty()
+        {
+            // The keyframes name currentcolor, so color is settled to be mixed against - but only for that: the text colour itself
+            // is still the one the !important custom property gives it in the cascade's last pass (blue), as without an animation.
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { background-color: currentcolor } to { background-color: #ffffff } }
+                #a { --c: rgb(255, 0, 0); color: var(--c); width: 20pt; height: 20pt; animation: k 1s linear }
+                #a { --c: rgb(0, 0, 255) !important }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal("rgb(0, 0, 255)", CssUtils.GetPropertyValue(Find(root, "a"), "color"));
+        }
+
+        [Fact]
+        public async Task CurrentColor_FromTheUnderlyingValue_UsesAColorStillWaitingOnVar()
+        {
+            // No keyframe names currentcolor: the box's own background-color does (the implicit end), and its color is var(--c).
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { background-color: #ff0000 } }
+                #p { color: rgb(0, 255, 0) }
+                #a { --c: rgb(0, 0, 255); color: var(--c); background-color: currentcolor; width: 20pt; height: 20pt; animation: k 1s linear }</style><div id="p"><div id="a"></div></div>
+                """, 0.5);
+
+            AssertRgb(Find(root, "a").ActualBackgroundColor, 128, 0, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColor_RepeatedInOneValue_IsSubstitutedEverywhere()
+        {
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { text-shadow: 1pt 1pt 2pt currentcolor, -1pt -1pt 2pt currentcolor } to { text-shadow: 1pt 1pt 2pt #ff0000, -1pt -1pt 2pt #ff0000 } }
+                #a { color: rgb(0, 0, 255); animation: k 1s linear }</style><div id="a">x</div>
+                """, 0.5);
+
+            var shadow = CssUtils.GetPropertyValue(Find(root, "a"), "text-shadow");
+            Assert.NotNull(shadow);
+            Assert.DoesNotContain("currentcolor", shadow, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(2, shadow.Split("rgb(128, 0, 128)").Length - 1);
+        }
+
+        [Fact]
+        public async Task CurrentColor_NotNamedByTheAnimation_LeavesAnImportantCustomPropertyColorAlone()
+        {
+            // Only opacity is animated and nothing names currentcolor, so the color var() is not settled early: it still sees the
+            // !important custom property (blue), not the normal one (red).
+            var root = await BuildAsync("""
+                <style>@keyframes k { from { opacity: 0 } to { opacity: 1 } }
+                #a { --c: rgb(255, 0, 0); color: var(--c); animation: k 1s linear }
+                #a { --c: rgb(0, 0, 255) !important }</style><div id="a">x</div>
+                """, 0.5);
+
+            Assert.Equal("rgb(0, 0, 255)", CssUtils.GetPropertyValue(Find(root, "a"), "color"));
+        }
+
+        [Fact]
+        public async Task CurrentColor_ForTheColorPropertyItself_IsNotSubstituted()
+        {
+            // color: currentcolor is inherit, never the box's own color; the direct call has to flip rather than mix.
+            var root = await BuildAsync("""<div id="a" style="color: rgb(0, 0, 255)">x</div>""", null);
+
+            var parser = new CssValueParser(new PdfRenderContext());
+            Assert.Equal("currentcolor", CssValueInterpolator.Interpolate(parser, "color", "currentcolor", "#ff0000", 0.4, Find(root, "a")));
         }
 
         // ─── Mismatched transform lists: mixed through matrix decomposition (CSS Transforms 1 §13) ───
