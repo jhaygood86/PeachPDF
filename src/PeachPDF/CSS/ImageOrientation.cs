@@ -93,10 +93,22 @@ namespace PeachPDF.CSS
                 else if (!haveAngle && token.Type == TokenType.Dimension
                     && Angle.GetUnit(token.Unit.ToLowerInvariant()) is var unit && unit != Angle.Unit.None)
                 {
-                    var quarters = Math.Floor(new Angle(token.Value, unit).ToTurns() * 4.0 + 0.5);
-                    if (double.IsNaN(quarters) || double.IsInfinity(quarters)) return null;
+                    if (ToQuarterTurns(new Angle(token.Value, unit).ToTurns()) is not { } quarterTurns) return null;
 
-                    turns = (int)(((quarters % 4) + 4) % 4);
+                    turns = quarterTurns;
+                    haveAngle = true;
+                }
+                else if (!haveAngle && token.Type == TokenType.Function && CalcParser.IsCalcFamily(token.Data))
+                {
+                    // An <angle> accepts a math function (CSS Values 4 §10); an angle needs no layout context,
+                    // so it folds to radians right here.
+                    var node = CalcParser.Parse(token);
+                    if (node is null || CalcTypeChecker.Check(node) != CalcCategory.Angle) return null;
+
+                    var radians = CalcEvaluator.Evaluate(node, new CalcContext(1, 0, 0));
+                    if (radians is null || ToQuarterTurns(radians.Value / (2 * Math.PI)) is not { } quarterTurns) return null;
+
+                    turns = quarterTurns;
                     haveAngle = true;
                 }
                 else
@@ -106,6 +118,15 @@ namespace PeachPDF.CSS
             }
 
             return new ImageOrientation(false, turns, flip);
+        }
+
+        /// <summary>Rounds an angle in turns to the nearest clockwise quarter turn, 0 to 3; null for NaN/infinity.</summary>
+        private static int? ToQuarterTurns(double turns)
+        {
+            var quarters = Math.Floor(turns * 4.0 + 0.5);
+            if (double.IsNaN(quarters) || double.IsInfinity(quarters)) return null;
+
+            return (int)(((quarters % 4) + 4) % 4);
         }
     }
 }

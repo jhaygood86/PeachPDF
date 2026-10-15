@@ -50,6 +50,12 @@ namespace PeachPDF.Tests.Integration
         [InlineData("flip 90deg", false, 1, true)]
         [InlineData("0deg flip", false, 0, true)]
         [InlineData("  FLIP   270DEG ", false, 3, true)]
+        [InlineData("calc(90deg)", false, 1, false)]
+        [InlineData("calc(45deg + 45deg)", false, 1, false)]
+        [InlineData("calc(90deg * 3)", false, 3, false)]
+        [InlineData("calc(1turn / 4) flip", false, 1, true)]
+        [InlineData("flip calc(0.5turn)", false, 2, true)]
+        [InlineData("calc(-90deg)", false, 3, false)]
         public void Grammar_AcceptsEveryValidForm(string text, bool fromImage, int turns, bool flip)
         {
             Assert.Equal(new ImageOrientation(fromImage, turns, flip), ImageOrientation.TryParse(text));
@@ -67,7 +73,11 @@ namespace PeachPDF.Tests.Integration
         [InlineData("none flip")]
         [InlineData("from-image flip")]
         [InlineData("90deg, flip")]
-        [InlineData("calc(90deg)")]
+        [InlineData("calc(1px + 2px)")]
+        [InlineData("calc(1 + 2)")]
+        [InlineData("calc(45deg + 45deg) 90deg")]
+        [InlineData("calc(45deg + 45deg) calc(90deg)")]
+        [InlineData("calc(45deg + 1px)")]
         public void Grammar_RejectsEverythingElse(string text)
         {
             Assert.Null(ImageOrientation.TryParse(text));
@@ -245,6 +255,13 @@ namespace PeachPDF.Tests.Integration
 
             var (fw, fh) = await ImgSizeAsync(Jpeg(6), "image-orientation:flip");
             Assert.Equal((24 * 0.75, 16 * 0.75), (fw, fh));
+        }
+
+        [Fact]
+        public async Task Sizing_CalcAngle_RotatesLikeTheEquivalentPlainAngle()
+        {
+            var (w, h) = await ImgSizeAsync(Jpeg(1), "image-orientation:calc(45deg + 45deg)");
+            Assert.Equal((16 * 0.75, 24 * 0.75), (w, h));
         }
 
         [Fact]
