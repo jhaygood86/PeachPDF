@@ -3379,6 +3379,9 @@ namespace PeachPDF.Html.Core.Dom
                 ReferenceWidth = box.ActualBoxSizingWidth
             };
 
+            // See FloatBoxRight: a position visited twice is a search that cannot end.
+            HashSet<(double Left, double Right, double Top)> triedPositions = [];
+
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
@@ -3400,8 +3403,10 @@ namespace PeachPDF.Html.Core.Dom
                     coordinates.MaxBottom = intersectingFloat.ActualBottom;
                 }
 
-                if (coordinates.Left + box.ActualWidth > coordinates.Right)
+                if (coordinates.Left + box.ActualWidth > coordinates.Right
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
+                    triedPositions.Clear();
                     coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
                     coordinates.Left = startX + box.ActualMarginLeft;
 
@@ -3445,6 +3450,12 @@ namespace PeachPDF.Html.Core.Dom
                 ReferenceWidth = box.ActualBoxSizingWidth
             };
 
+            // Blockers on both sides that each move the right edge to a place the other then moves back (two right
+            // floats past the containing block's edge, in a column too narrow for either to clear) leave the search
+            // in a state it has already been in; the same state finds the same blockers, so it would never end. The
+            // float goes below them instead, as it does when it no longer fits beside them.
+            HashSet<(double Left, double Right, double Top)> triedPositions = [];
+
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
@@ -3474,8 +3485,11 @@ namespace PeachPDF.Html.Core.Dom
                     coordinates.MaxBottom = blockerBottom;
                 }
 
-                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft)
+                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
+                    triedPositions.Clear();
+
                     coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
 
                     // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
