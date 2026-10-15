@@ -1881,7 +1881,7 @@
     },
     {
       "name": "image-orientation",
-      "comment": "CSS Images 4 5.2. Inherited. from-image applies the raster's own Exif orientation, none ignores it, and [ <angle> || flip ] replaces it with a rotation (rounded to a quarter turn) and optional horizontal flip. Stored as the declaration text and read at use with the same ImageOrientation.TryParse grammar the CSS-OM converter validates with (no second parser); the angle accepts no calc().",
+      "comment": "CSS Images 4 5.2. Inherited. from-image applies the raster's own Exif orientation, none ignores it, and [ <angle> || flip ] replaces it with a rotation (rounded to a quarter turn) and optional horizontal flip. Stored as the declaration text and read at use with the same ImageOrientation.TryParse grammar the CSS-OM converter validates with (no second parser); the angle accepts calc(), folded to a quarter turn by the same grammar.",
       "inherited": true,
       "initialValue": "from-image",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.ImageOrientationConverter.Convert" },
