@@ -1554,6 +1554,9 @@ namespace PeachPDF.Html.Core.Parse
             return new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, (float)offsetX, (float)offsetY);
         }
 
+        private static bool IsCurrentColorText(string colorText) =>
+            colorText.Trim().Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase);
+
         private ParsedLinearGradient? ParseLinearGradient(string value)
         {
             Token? funcToken;
@@ -1617,6 +1620,7 @@ namespace PeachPDF.Html.Core.Parse
                 return null;
 
             var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
+            var currentColorStops = new List<int>();
 
             foreach (var group in stopGroups)
             {
@@ -1661,10 +1665,17 @@ namespace PeachPDF.Html.Core.Parse
                 if (string.IsNullOrWhiteSpace(colorText))
                     continue;
 
-                var color = GetActualColor(colorText);
+                // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
+                // takes that color there (CssImagePainter.ResolveCurrentColorStops).
+                var isCurrentColor = IsCurrentColorText(colorText);
+                var color = isCurrentColor ? default : GetActualColor(colorText);
+                if (isCurrentColor) currentColorStops.Add(stops.Count);
                 stops.Add((color, position1, IsHint: false));
                 if (position2.HasValue)
+                {
+                    if (isCurrentColor) currentColorStops.Add(stops.Count);
                     stops.Add((color, position2, IsHint: false));
+                }
             }
 
             if (stops.Count(s => !s.IsHint) < 2)
@@ -1674,6 +1685,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 AngleRad = angleRad,
                 Stops = stops.ToArray(),
+                CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
                 IsRepeating = isRepeating,
                 ColorSpace = linearColorSpace,
                 HueMethod = linearHueMethod,
@@ -1842,6 +1854,7 @@ namespace PeachPDF.Html.Core.Parse
                 return null;
 
             var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
+            var currentColorStops = new List<int>();
 
             foreach (var group in stopGroups)
             {
@@ -1885,10 +1898,17 @@ namespace PeachPDF.Html.Core.Parse
                 if (string.IsNullOrWhiteSpace(colorText))
                     continue;
 
-                var color = GetActualColor(colorText);
+                // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
+                // takes that color there (CssImagePainter.ResolveCurrentColorStops).
+                var isCurrentColor = IsCurrentColorText(colorText);
+                var color = isCurrentColor ? default : GetActualColor(colorText);
+                if (isCurrentColor) currentColorStops.Add(stops.Count);
                 stops.Add((color, position1, IsHint: false));
                 if (position2.HasValue)
+                {
+                    if (isCurrentColor) currentColorStops.Add(stops.Count);
                     stops.Add((color, position2, IsHint: false));
+                }
             }
 
             if (stops.Count(s => !s.IsHint) < 2)
@@ -1903,6 +1923,7 @@ namespace PeachPDF.Html.Core.Parse
                 ExplicitRadiusX = explicitRadiusX,
                 ExplicitRadiusY = explicitRadiusY,
                 Stops = stops.ToArray(),
+                CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
                 IsRepeating = isRepeating,
                 ColorSpace = radialColorSpace,
                 HueMethod = radialHueMethod,
@@ -1997,6 +2018,7 @@ namespace PeachPDF.Html.Core.Parse
                 return null;
 
             var stops = new List<(PaintColor? PaintColor, double? PositionRad, bool IsHint)>();
+            var currentColorStops = new List<int>();
 
             foreach (var group in stopGroups)
             {
@@ -2037,10 +2059,17 @@ namespace PeachPDF.Html.Core.Parse
                 var colorText = BuildColorText(items.Take(colorItemCount));
                 if (string.IsNullOrWhiteSpace(colorText)) continue;
 
-                var color = GetActualColor(colorText);
+                // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
+                // takes that color there (CssImagePainter.ResolveCurrentColorStops).
+                var isCurrentColor = IsCurrentColorText(colorText);
+                var color = isCurrentColor ? default : GetActualColor(colorText);
+                if (isCurrentColor) currentColorStops.Add(stops.Count);
                 stops.Add((color, position1, IsHint: false));
                 if (position2.HasValue)
+                {
+                    if (isCurrentColor) currentColorStops.Add(stops.Count);
                     stops.Add((color, position2, IsHint: false));
+                }
             }
 
             if (stops.Count(s => !s.IsHint) < 2)
@@ -2052,6 +2081,7 @@ namespace PeachPDF.Html.Core.Parse
                 CenterX = centerX,
                 CenterY = centerY,
                 Stops = stops.ToArray(),
+                CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
                 IsRepeating = isRepeating,
                 ColorSpace = conicColorSpace,
                 HueMethod = conicHueMethod,

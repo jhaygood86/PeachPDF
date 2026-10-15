@@ -62,7 +62,8 @@ namespace PeachPDF.Html.Core.Handlers
             Rect viewportRect,
             CssBox box,
             Action<Brush> drawBrush,
-            double? gradientEmSizePt = null)
+            double? gradientEmSizePt = null,
+            PaintColor? currentColor = null)
         {
             var attachmentValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(attachmentList), layerIndex);
             var positioningRect = attachmentValue == Keywords.Fixed ? viewportRect : originRect;
@@ -85,15 +86,15 @@ namespace PeachPDF.Html.Core.Handlers
                     break;
                 case CssImage.LinearGradient lg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect, box, gradientEmSizePt), drawBrush);
+                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect, box, gradientEmSizePt, currentColor), drawBrush);
                     break;
                 case CssImage.RadialGradient rg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect, box, gradientEmSizePt), drawBrush);
+                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect, box, gradientEmSizePt, currentColor), drawBrush);
                     break;
                 case CssImage.ConicGradient cg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetConicGradientBrush(brushGraphics, cg.Gradient, rect), drawBrush);
+                        (brushGraphics, rect) => GetConicGradientBrush(brushGraphics, cg.Gradient, rect, box, currentColor), drawBrush);
                     break;
             }
         }
@@ -208,18 +209,18 @@ namespace PeachPDF.Html.Core.Handlers
         /// into its own tile the same way a <c>background-image</c> gradient layer's tile is built above,
         /// without a second, independently-derived copy of this gradient-line/stop-normalization math.
         /// </summary>
-        internal static Brush GetLinearGradientBrush(Canvas g, ParsedLinearGradient gradient, Rect originRect, CssBox box, double? emSizePt)
+        internal static Brush GetLinearGradientBrush(Canvas g, ParsedLinearGradient gradient, Rect originRect, CssBox box, double? emSizePt, PaintColor? currentColor = null)
         {
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
             double gradientLength = Math.Sqrt(gdx * gdx + gdy * gdy);
-            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, box, g.PixelsPerPoint, emSizePt, gradient.ColorSpace, gradient.HueMethod);
+            var stops = NormalizeGradientStops(ResolveCurrentColorStops(gradient.Stops, gradient.CurrentColorStops, box, currentColor), gradientLength, box, g.PixelsPerPoint, emSizePt, gradient.ColorSpace, gradient.HueMethod);
             if (gradient.IsRepeating) stops = ExpandRepeatingStops(stops);
             return g.GetLinearGradientBrush(p1, p2, stops, gradient.IsRepeating);
         }
 
         /// <summary>See <see cref="GetLinearGradientBrush"/>'s own doc comment - same reason, radial gradients.</summary>
-        internal static Brush GetRadialGradientBrush(Canvas g, ParsedRadialGradient radialGradient, Rect originRect, CssBox box, double? emSizePt)
+        internal static Brush GetRadialGradientBrush(Canvas g, ParsedRadialGradient radialGradient, Rect originRect, CssBox box, double? emSizePt, PaintColor? currentColor = null)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
             var center = new PaintPoint(
@@ -294,14 +295,17 @@ namespace PeachPDF.Html.Core.Handlers
                 }
             }
 
-            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, box, pixelsPerPoint, emSizePt, radialGradient.ColorSpace, radialGradient.HueMethod);
+            var radialStops = NormalizeGradientStops(ResolveCurrentColorStops(radialGradient.Stops, radialGradient.CurrentColorStops, box, currentColor), radiusX, box, pixelsPerPoint, emSizePt, radialGradient.ColorSpace, radialGradient.HueMethod);
             if (radialGradient.IsRepeating) radialStops = ExpandRepeatingStops(radialStops);
             return g.GetRadialGradientBrush(center, radiusX, radiusY, radialStops, radialGradient.IsRepeating);
         }
 
         /// <summary>See <see cref="GetLinearGradientBrush"/>'s own doc comment - same reason, conic gradients.</summary>
-        internal static Brush GetConicGradientBrush(Canvas g, ParsedConicGradient conicGradient, Rect originRect)
+        internal static Brush GetConicGradientBrush(Canvas g, ParsedConicGradient conicGradient, Rect originRect, CssBox? box = null, PaintColor? currentColor = null)
         {
+            if (conicGradient.CurrentColorStops is not null)
+                conicGradient = conicGradient.WithStops(ResolveCurrentColorStops(conicGradient.Stops, conicGradient.CurrentColorStops, box, currentColor));
+
             double cx = originRect.X + conicGradient.CenterX * originRect.Width;
             double cy = originRect.Y + conicGradient.CenterY * originRect.Height;
             var conicCenter = new PaintPoint(cx, cy);
@@ -314,6 +318,25 @@ namespace PeachPDF.Html.Core.Handlers
 
             var (conicColors, conicAngles) = NormalizeConicStops(conicGradient);
             return g.GetConicGradientBrush(conicCenter, outerRadius, conicColors, conicAngles);
+        }
+
+        /// <summary>
+        /// The stops with the ones written <c>currentcolor</c> given <paramref name="currentColor"/> when the caller has one (a page or
+        /// page-margin box, whose <c>color</c> is its own declaration and not the root box's), else the painting <paramref name="box"/>'s own
+        /// color, else black. The color is only final at paint time, which is why the parser records those stops instead of resolving them.
+        /// </summary>
+        private static (PaintColor? PaintColor, TPosition Position, bool IsHint)[] ResolveCurrentColorStops<TPosition>(
+            (PaintColor? PaintColor, TPosition Position, bool IsHint)[] stops, IReadOnlyList<int>? currentColorStops, CssBox? box, PaintColor? currentColor)
+        {
+            if (currentColorStops is null) return stops;
+
+            var color = currentColor ?? box?.ActualColor ?? PaintColor.Black;
+            var resolved = stops.ToArray();
+
+            foreach (var index in currentColorStops)
+                resolved[index] = (color, resolved[index].Position, resolved[index].IsHint);
+
+            return resolved;
         }
 
         private static (PaintPoint p1, PaintPoint p2) ComputeGradientLine(Rect rect, double angleRad)

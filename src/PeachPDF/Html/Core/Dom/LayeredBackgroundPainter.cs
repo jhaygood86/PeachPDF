@@ -32,6 +32,13 @@ namespace PeachPDF.Html.Core.Dom
     internal static class LayeredBackgroundPainter
     {
         /// <summary>
+        /// What <c>currentcolor</c> means in a page or page-margin box's gradient: that box's own <c>color</c>, black without one, as its
+        /// text is. These boxes paint with the root box as their geometry stand-in, so the root's <c>color</c> is not theirs.
+        /// </summary>
+        internal static PaintColor OwnColor(StyleDeclaration style, RenderContext renderContext) =>
+            string.IsNullOrEmpty(style.Color) ? PaintColor.Black : new CssValueParser(renderContext).GetActualColor(style.Color);
+
+        /// <summary>
         /// Paints <paramref name="style"/>'s <c>background-color</c> then <c>background-image</c> layers
         /// (back-to-front, so the first-declared layer ends up on top - matching
         /// <see cref="Paint.FragmentPainter.PaintBackground"/>'s own ordering) into whatever rectangle
@@ -105,6 +112,8 @@ namespace PeachPDF.Html.Core.Dom
                 imageValue.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return;
 
+            var currentColor = OwnColor(style, renderContext);
+
             if (!imageCache.TryGetValue(imageValue, out var images))
             {
                 images = new CssValueParser(renderContext).ParseImages(imageValue);
@@ -145,7 +154,7 @@ namespace PeachPDF.Html.Core.Dom
                         g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
                         brush.Dispose();
                     },
-                    gradientEmSizePt: gradientEmSizePt);
+                    gradientEmSizePt: gradientEmSizePt, currentColor: currentColor);
             }
         }
     }
