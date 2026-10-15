@@ -4993,7 +4993,12 @@ namespace PeachPDF.Html.Core.Dom
                 ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
                 : HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight);
 
-            var extent = blockBox.IsReplacedBlockWrapper ? default : ExtentOf(strutStyle);
+            // A replaced flex/grid item is its own block container (the cascade blockifies it and
+            // CorrectReplacedElementBoxes leaves it unwrapped), so it holds only its own atomic word and
+            // no text a strut could serve: the same bookkeeping-only line as the wrapper's.
+            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg
+                ? default
+                : ExtentOf(strutStyle);
 
             // A replaced element's own line-height does not contribute; its margin box is added by
             // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
