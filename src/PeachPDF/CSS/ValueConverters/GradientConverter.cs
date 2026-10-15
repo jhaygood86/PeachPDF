@@ -29,6 +29,12 @@ namespace PeachPDF.CSS
         /// </summary>
         protected virtual IValueConverter StopPositionConverter => LengthOrPercentConverter;
 
+        /// <summary>
+        /// A colour stop's colour: any <c>&lt;color&gt;</c>, which includes <c>currentcolor</c> (CSS Color 4). The render layer reads
+        /// that stop as the painting box's own color (<c>CssImagePainter.ResolveCurrentColorStops</c>).
+        /// </summary>
+        private static readonly IValueConverter StopColorConverter = ColorConverter.WithCurrentColor();
+
         private IPropertyValue[] ToGradientStops(List<List<Token>> values, int offset)
         {
             var stops = new IPropertyValue[values.Count - offset];
@@ -78,7 +84,7 @@ namespace PeachPDF.CSS
 
             if (items.Count != 0)
             {
-                color = ColorConverter.Convert(items[items.Count - 1]);
+                color = StopColorConverter.Convert(items[items.Count - 1]);
 
                 if (color != null) items.RemoveAt(items.Count - 1);
             }

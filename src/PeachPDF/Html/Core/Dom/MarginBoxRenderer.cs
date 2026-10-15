@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Dom
                     var emSizePt = image is CssImage.LinearGradient or CssImage.RadialGradient
                         ? ResolveFontSizePt(marginRule.Style, pageStyle)
                         : (double?)null;
-                    PaintImage(g, image, rect, position, renderContext, htmlContainer, emSizePt);
+                    PaintImage(g, image, rect, position, renderContext, htmlContainer, emSizePt, marginRule.Style);
                     continue;
                 }
 
@@ -611,7 +611,7 @@ namespace PeachPDF.Html.Core.Dom
         /// already correctly is.
         /// </summary>
         private static void PaintImage(PdfGraphics g, CssImage image, Rect rect, string positionList, RenderContext renderContext,
-            HtmlContainerInt htmlContainer, double? emSizePt)
+            HtmlContainerInt htmlContainer, double? emSizePt, StyleDeclaration style)
         {
             // Root is only ever null before the document's initial layout, which has already run by
             // the time page rendering (and so margin-box painting) begins - null here would mean
@@ -632,7 +632,10 @@ namespace PeachPDF.Html.Core.Dom
                     pdfCanvas.DrawRectangle(brush, paintRect.X, paintRect.Y, paintRect.Width, paintRect.Height);
                     brush.Dispose();
                 },
-                gradientEmSizePt: emSizePt);
+                gradientEmSizePt: emSizePt,
+                // The margin box's own text colour, as BuildBrush gives its text (black without one): the root box passed above is only
+                // the geometry stand-in.
+                currentColor: LayeredBackgroundPainter.OwnColor(style, renderContext));
         }
 
         /// <summary>

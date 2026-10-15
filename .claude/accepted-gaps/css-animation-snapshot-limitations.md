@@ -64,8 +64,6 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   Near the start of the run that stale colour can be farther from a browser's result than the old flip was (`color: red !important`
   with `background-color: currentcolor` to white at progress 0.1: the browser gives 255,26,26, this gives 26,26,26, the flip gave
   255,0,0), from half way on it is no worse.
-- **`currentcolor` as a gradient stop is not parsed at all** (#1759), even without an animation, so such a gradient neither draws nor
-  animates; the mixer itself would handle it.
 - **Some shadow colours still flip.** A shadow that omits its colour (`0 0 4px` against `0 0 8px red`, where the omitted colour means
   `currentcolor`), shadow lists of different length, and `none` against a shadow flip where a browser mixes; `hwb()` is not mixed
   (it flips), and `#rrggbbaa` inside a shadow list does not mix even without `currentcolor`.

@@ -1,5 +1,6 @@
 namespace PeachPDF.Tests.CSS
 {
+    using System;
     using PeachPDF.CSS;
     using Xunit;
 
@@ -20,6 +21,39 @@ namespace PeachPDF.Tests.CSS
             var source = "radial-gradient(ellipse farthest-corner at 45px 45px , #00FFFF, rgba(0, 0, 255, 0) 50%, #0000FF 95%)";
             var value = ParseValue(source);
             Assert.Equal("radial-gradient", value[0].Data);
+        }
+
+        [Theory]
+        [InlineData("background-image: linear-gradient(to right, currentcolor, red)")]
+        [InlineData("background-image: linear-gradient(red, CURRENTCOLOR 40%, blue)")]
+        [InlineData("background-image: linear-gradient(currentcolor 0 50%, blue)")]
+        [InlineData("background-image: repeating-linear-gradient(currentcolor, red 20px)")]
+        [InlineData("background-image: radial-gradient(circle, currentcolor, red)")]
+        [InlineData("background-image: conic-gradient(from 90deg, currentcolor, red)")]
+        [InlineData("background-image: linear-gradient(red, blue), linear-gradient(currentcolor, red)")]
+        public void BackgroundImageGradient_AcceptsCurrentColorAsAStopColor(string source)
+        {
+            var property = ParseDeclaration(source);
+
+            Assert.IsType<BackgroundImageProperty>(property);
+            Assert.True(((BackgroundImageProperty)property).HasValue);
+            Assert.Contains("currentcolor", property.Value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_AcceptsACurrentColorGradientStop()
+        {
+            var property = ParseDeclaration("background: linear-gradient(to right, currentcolor, red)");
+
+            Assert.True(property.HasValue);
+        }
+
+        [Fact]
+        public void BorderImageSource_AcceptsACurrentColorGradientStop()
+        {
+            var property = ParseDeclaration("border-image-source: linear-gradient(currentcolor, red)");
+
+            Assert.True(property.HasValue);
         }
 
         [Fact]

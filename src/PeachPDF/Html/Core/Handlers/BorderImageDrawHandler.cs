@@ -188,7 +188,7 @@ namespace PeachPDF.Html.Core.Handlers
                         t.Graphics.DrawRectangle(brush, 0, 0, tileWidth, tileHeight);
                     break;
                 case CssImage.ConicGradient cg:
-                    using (var brush = CssImagePainter.GetConicGradientBrush(t.Graphics, cg.Gradient, tileRect))
+                    using (var brush = CssImagePainter.GetConicGradientBrush(t.Graphics, cg.Gradient, tileRect, box))
                         t.Graphics.DrawRectangle(brush, 0, 0, tileWidth, tileHeight);
                     break;
                 default:
