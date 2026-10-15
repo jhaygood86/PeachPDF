@@ -34,7 +34,7 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
 
 ## Not done
 
-- `color()`, relative colour syntax and `rgb(none ...)` are not read by the colour parser at all (static or animated), so a keyframe holding one is
+- `color()`, relative colour syntax and `rgb(none ...)` are not read by the colour parser at all (static or animated; #1772), so a keyframe holding one is
   dropped; the colour-space part is ready for them once the parser reads them (their rows were measured and left out of the tests, and
   `TakesAMixIntoOklab`'s `color` and `from` cases are dead code until then). `color-mix(in hsl)` and `in hwb` are read but resolve to black, static too (#1769).
 - The endpoints are the parser's 8-bit sRGB, so a `lab()`/`oklab()`/`oklch()` outside the sRGB gamut is mapped into it before the mix. For a vivid

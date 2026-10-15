@@ -14,7 +14,7 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   render, so nothing was built. The properties are still parsed.
 - **Interpolation is structural, on text.** Colours mix in premultiplied sRGB when both are legacy and in Oklab otherwise
   (`CssValueInterpolator.MixColors`), but only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other
-  (`color()`, relative colour syntax, `rgb(none ...)`) is not read at all, static or animated, so its keyframe is dropped. `color-mix(in hsl)` and `in hwb`
+  (`color()`, relative colour syntax, `rgb(none ...)`; #1772) is not read at all, static or animated, so its keyframe is dropped. `color-mix(in hsl)` and `in hwb`
   are read but resolve to black, static too (#1769).
 - **The matrix part of a `transform` mix cannot run before layout for some inputs.** Lists are paired function by function
   (CSS Transforms 1 §11-12) and what is left is mixed as matrices (§13, `TransformMatrixInterpolator`). That last step
