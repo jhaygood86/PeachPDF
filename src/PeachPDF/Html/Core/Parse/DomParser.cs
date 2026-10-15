@@ -1350,10 +1350,11 @@ namespace PeachPDF.Html.Core.Parse
             // !important phases below. Skipped outright, and at no cost, unless a snapshot was asked for.
             if (box.HtmlContainer?.AnimationProgress is { } animationProgress)
             {
+                var colorIsImportant = false;
                 if (box.HtmlContainer.Keyframes.Count > 0)
-                    ApplyImportantAnimationProperties(valueParser, box, authorImportant, inlineRule, pendingVarProperties);
+                    colorIsImportant = PreApplyImportantForAnimation(valueParser, box, authorImportant, inlineRule, pendingVarProperties);
 
-                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot);
+                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot, colorIsImportant);
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to
@@ -2259,37 +2260,64 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Puts the author's and the inline style's <c>!important</c> <c>animation-*</c> declarations on the box ahead
-        /// of the animation step. The step sits before the important phases (the animation origin outranks normal
-        /// declarations only), but the animation-* properties decide <em>which</em> animations exist, so
-        /// <c>animation: none !important</c> must already have taken effect when they are read, and
-        /// <c>animation: fade 1s !important</c> must already be there. Phase 6 applies the same declarations again,
-        /// to the same result. <c>revert</c> and <c>revert-layer</c> are left to that phase.
+        /// Puts the author's and the inline style's <c>!important</c> declarations that the animation step reads on the box ahead
+        /// of it: the <c>animation-*</c> properties, the custom properties and <c>color</c>. The step sits before the important
+        /// phases (the animation origin outranks normal declarations only), but
+        /// <list type="bullet">
+        /// <item>the animation-* properties decide <em>which</em> animations exist, so <c>animation: none !important</c> must
+        /// already have taken effect when they are read, and <c>animation: fade 1s !important</c> must already be there;</item>
+        /// <item>a <c>var()</c> in an animated property (or in a keyframe) resolves against the custom properties as they stand, so
+        /// an <c>!important</c> custom property has to be there for it to be seen;</item>
+        /// <item><c>currentcolor</c> in a keyframe stands for the box's <c>color</c>, which an <c>!important</c> declaration
+        /// outranks the animation to set.</item>
+        /// </list>
+        /// Phase 6 applies the same declarations again, to the same result. <c>revert</c> and <c>revert-layer</c> are left to that
+        /// phase. Returns whether an <c>!important</c> <c>color</c> was put on the box, which the animation then leaves alone.
         /// </summary>
-        private static void ApplyImportantAnimationProperties(
+        private static bool PreApplyImportantForAnimation(
             CssValueParser valueParser,
             CssBox box,
             IReadOnlyList<CssData.LayeredStyleRule> authorImportant,
             IStyleRule? inlineRule,
             Dictionary<string, string> pendingVarProperties)
         {
+            var colorIsImportant = false;
+
             foreach (var layered in authorImportant)
-                ApplyImportantAnimationDeclarations(valueParser, box, layered.Rule, pendingVarProperties);
+                colorIsImportant |= PreApplyImportantDeclarations(valueParser, box, layered.Rule, pendingVarProperties);
 
             if (inlineRule is not null)
-                ApplyImportantAnimationDeclarations(valueParser, box, inlineRule, pendingVarProperties);
+                colorIsImportant |= PreApplyImportantDeclarations(valueParser, box, inlineRule, pendingVarProperties);
+
+            return colorIsImportant;
         }
 
-        private static void ApplyImportantAnimationDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties)
+        private static bool PreApplyImportantDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties)
         {
+            var colorIsImportant = false;
+
             foreach (var prop in rule.Style)
             {
-                if (!prop.IsImportant || !prop.Name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!prop.IsImportant) continue;
 
-                // The animation properties are not inherited, so unset is initial and inherit copies the parent's.
+                if (PropertyFactory.IsCustomPropertyName(prop.Name))
+                {
+                    // A custom property is only stored here; var() against it resolves at the end (or when the animation settles a
+                    // property it owns), so the store alone is what the step needs.
+                    if (prop.Value is not (Keywords.Revert or Keywords.RevertLayer))
+                        AssignCustomPropertyDeclaration(box, prop, null, null);
+                    continue;
+                }
+
+                var isColor = prop.Name.Equals("color", StringComparison.OrdinalIgnoreCase);
+                if (!isColor && !prop.Name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)) continue;
+
+                // As the cascade proper reads the global keywords: unset is inherit for an inherited property (color) and initial
+                // for the rest (the animation properties).
                 var value = prop.Value switch
                 {
                     Keywords.Inherit when box.ParentBox != null => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
+                    Keywords.Unset when CssDefaults.InheritedProperties.Contains(prop.Name) && box.ParentBox != null => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
                     Keywords.Inherit or Keywords.Initial or Keywords.Unset => CssDefaults.GetInitialValue(prop.Name),
                     Keywords.Revert or Keywords.RevertLayer => null,
                     _ => prop.Value
@@ -2298,10 +2326,21 @@ namespace PeachPDF.Html.Core.Parse
                 if (value is null) continue;
 
                 if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                {
                     pendingVarProperties[prop.Name] = value;
+                }
                 else
+                {
+                    // A plain value supersedes an earlier deferred var() one for the same property, as in the cascade proper; left in
+                    // place, the animation would settle it over this value.
+                    pendingVarProperties.Remove(prop.Name);
                     CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+                }
+
+                colorIsImportant |= isColor;
             }
+
+            return colorIsImportant;
         }
 
         /// <summary>
