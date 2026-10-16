@@ -352,7 +352,8 @@ namespace PeachPDF.CSS
         /// <see href="https://www.w3.org/TR/css-color-5/#color-mix">CSS Color 5 <c>color-mix()</c></see>:
         /// premultiplied-alpha interpolation in <paramref name="cs"/> with weight <paramref name="t"/>
         /// toward <paramref name="c2"/>, the result alpha then scaled by <paramref name="alphaMultiplier"/>
-        /// (below 1 only when the two percentages summed to under 100%).
+        /// (below 1 only when the two percentages summed to under 100%). <paramref name="oklab1"/> and <paramref name="oklab2"/> are an operand's Oklab
+        /// coordinates when it lies outside the sRGB gamut its <see cref="Color"/> is clipped to; the mix is then made from them.
         /// </summary>
         public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier, double[] oklab1 = null, double[] oklab2 = null)
         {

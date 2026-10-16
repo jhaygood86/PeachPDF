@@ -31,6 +31,12 @@ namespace PeachPDF.Html.Core.Animation
     {
         private enum TokenKind { Number, Word, Color, Open, Close, Space, Punct, Text }
 
+        /// <summary>
+        /// One lexical piece of a value. A colour token has <c>Rgba</c> (the colour clipped to 8-bit sRGB, alpha 0 to 1; outside 0..255 for a <c>currentcolor</c>
+        /// whose <c>color</c> is outside the gamut, see <see cref="CurrentColorToken"/>), <c>InOklab</c> (it takes a mix out of sRGB) and, for a <c>lab()</c>, <c>lch()</c>,
+        /// <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c>, <c>Oklab</c> (the coordinates it was written with, which can lie outside the sRGB gamut);
+        /// <c>Oklab</c> being set does not imply <c>InOklab</c>.
+        /// </summary>
         private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false, double[]? Oklab = null);
 
         private static readonly HashSet<string> LengthUnits = new(StringComparer.OrdinalIgnoreCase)
