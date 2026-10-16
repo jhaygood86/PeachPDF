@@ -619,6 +619,18 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter PaintConverter = UrlConverter.Or(CurrentColorConverter.OrNone())
             .Or(Keywords.ContextFill).Or(Keywords.ContextStroke);
 
+        /// <summary>
+        /// The <c>&lt;length-percentage&gt; | &lt;number&gt;</c> of SVG 2's <c>stroke-width</c> and <c>stroke-dashoffset</c>: a bare number is a length in
+        /// user units (<c>stroke-width: 6</c>), which an HTML length grammar would refuse.
+        /// </summary>
+        public static readonly IValueConverter LengthOrPercentOrNumberConverter = LengthOrPercentConverter.Or(NumberConverter);
+
+        /// <summary><see cref="LengthOrPercentOrNumberConverter"/> that is not negative, for <c>stroke-width</c>.</summary>
+        public static readonly IValueConverter NonNegativeLengthOrPercentOrNumberConverter =
+            new StructValueConverter<Length>(ValueExtensions.ToNonNegativeDistance)
+                .Or(new StructValueConverter<float>(ValueExtensions.ToNaturalSingle))
+                .Or(new CalcValueConverter(CalcCategory.LengthPercentage | CalcCategory.Number));
+
         public static readonly IValueConverter StrokeDasharrayConverter =
             LengthOrPercentConverter.Or(NumberConverter).Many().OrNone();
 

@@ -5490,6 +5490,36 @@ await SaveShowcaseAsync("svg_display", "Graphics & Effects", "SVG: display",
     "display on SVG elements: none removes an element and its subtree from rendering, and contents strips a group, use or text content child while keeping its content and what it inherits.",
     svgDisplayHtml, pdfConfig);
 
+// --- SVG elements styled from a stylesheet ---
+
+// What a rule in the document's own stylesheet can say about an SVG element: a gradient stop's stop-color and stop-opacity,
+// the bare-number stroke-width and stroke-dashoffset that SVG allows (user units), and the CSS transform syntax (units, the single-axis functions).
+const string svgStylesheetHtml = """
+    <!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      body { margin: 16px; font: 12px Arial, sans-serif; color: #333 }
+      svg { display: block; margin-bottom: 14px; border: 1px solid #ccc }
+      stop.from { stop-color: #1b6ca8 }
+      stop.to { stop-color: #e8590c; stop-opacity: .8 }
+      .dashed { fill: none; stroke: #2b8a3e; stroke-width: 6; stroke-dasharray: 20 12; stroke-dashoffset: 10 }
+      .dashed.shifted { stroke-dashoffset: 26 }
+      .tile.a { fill: #862e9c; transform: translateX(40px) rotate(0.125turn) }
+      .tile.b { fill: #c92a2a; transform: translateX(110px) scaleX(1.5) skew(10deg, 0deg) }
+      .tile.c { fill: #1864ab; transform: translate(230px, 10px) rotate(100grad) }
+    </style></head><body>
+    <p>Gradient stops coloured by <code>stop { stop-color }</code> rules:</p>
+    <svg width="320" height="40"><defs><linearGradient id="sky"><stop class="from" offset="0" stop-color="#ff0000"/><stop class="to" offset="1" stop-color="#00ff00"/></linearGradient></defs>
+      <rect fill="url(#sky)" width="320" height="40"/></svg>
+    <p>Unitless <code>stroke-width: 6</code> and <code>stroke-dashoffset</code> (10, then 26):</p>
+    <svg width="320" height="40"><line class="dashed" x1="10" y1="12" x2="310" y2="12"/><line class="dashed shifted" x1="10" y1="28" x2="310" y2="28"/></svg>
+    <p>CSS transforms with units on SVG elements:</p>
+    <svg width="320" height="70"><rect class="tile a" x="0" y="10" width="30" height="30"/><rect class="tile b" x="0" y="10" width="30" height="30"/><rect class="tile c" x="0" y="10" width="30" height="30"/></svg>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("svg_stylesheet_properties", "Graphics & Effects", "SVG: styled from a stylesheet",
+    "Rules in the document's stylesheet reach a gradient stop's stop-color and stop-opacity, unitless stroke-width and stroke-dashoffset work as SVG allows, and a CSS transform with units (turn, grad, translateX, skew) is read on SVG elements.",
+    svgStylesheetHtml, pdfConfig);
+
 // --- SVG Form XObject reuse showcase ---
 
 // Three pieces of SVG artwork: a `position: fixed` logo and a border-image repeated on every one of
