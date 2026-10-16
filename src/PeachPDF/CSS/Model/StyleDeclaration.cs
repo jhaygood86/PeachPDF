@@ -1540,6 +1540,18 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.Stroke, value);
         }
 
+        public string StopColor
+        {
+            get => GetPropertyValue(PropertyNames.StopColor);
+            set => SetPropertyValue(PropertyNames.StopColor, value);
+        }
+
+        public string StopOpacity
+        {
+            get => GetPropertyValue(PropertyNames.StopOpacity);
+            set => SetPropertyValue(PropertyNames.StopOpacity, value);
+        }
+
         public string StrokeDasharray
         {
             get => GetPropertyValue(PropertyNames.StrokeDasharray);
