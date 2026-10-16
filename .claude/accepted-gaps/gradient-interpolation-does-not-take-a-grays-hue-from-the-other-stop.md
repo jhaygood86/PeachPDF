@@ -10,5 +10,4 @@ in `Color.MixComponents`); gradients were left alone, because Chrome itself is n
 - `#6c757d` to `#adb5bd` in `oklch` (two grays) matches Chrome to a few steps, as their noise hues are close.
 
 So applying the missing-hue rule to gradients would fix `lch` and break the `oklch` match with Chrome's own quirk; doing it per space needs a measured rule for Chrome's gradient path that was not found. The
-gap is the difference between gradient and `color-mix()` for the same gray, and the up-to-90 error of a gray-to-colour `oklch` gradient. Not tracked as an issue yet: it is a difference from a browser's
-behaviour rather than one from the specification text (which asks for the missing hue), and Chrome does not follow the text itself for `oklch`.
+gap is the difference between gradient and `color-mix()` for the same gray, and the up-to-90 error of a gray-to-colour `oklch` gradient. Tracked in #1773.
