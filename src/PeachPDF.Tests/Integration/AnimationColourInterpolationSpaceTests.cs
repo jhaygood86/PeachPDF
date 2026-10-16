@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Integration
     /// canvas and read back (8-bit sRGB, alpha unpremultiplied). Tolerance 2 per channel. Rows that also pass on an sRGB mix are controls: the <c>L*</c> rows (legacy pairs), the <c>currentcolor</c> rows M20 and M21, M15 (<c>lab()</c> to <c>transparent</c>),
     /// O5 (an overshooting legacy pair) and the milder overshoot rows; the other <c>M*</c> rows and the <c>O1</c> to <c>O4</c> overshoot rows are the ones a mix in the wrong
     /// space gets wrong (43 of the first 75 fail on that mix). Left out: <c>color()</c>, relative colour syntax and
-    /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe stands for the value the property has without the animation; <c>color-mix(in hsl)</c> is read but resolves to black, a separate gap).
+    /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe stands for the value the property has without the animation; <c>color-mix(in hsl)</c> is read but is wrong for many operand pairs, a separate gap).
     /// The <c>G*</c> rows are colours outside the sRGB gamut (<c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c>, <c>color-mix()</c> in lch or oklch), which a browser mixes
     /// from the coordinates they were written with and clips once, at the end; mixed from their clipped sRGB value the <c>G*</c> rows are up to 93 of 255 off. The <c>N*</c> rows
     /// are a <c>color-mix()</c> with an out-of-gamut operand of high weight (the operand must reach the mix unclipped too, in any mix space; up to 94 off otherwise). The <c>K*</c> rows are a <c>currentcolor</c> mixed with a legacy colour on a box whose own <c>color</c> is outside the gamut (Chrome mixes it unclipped in sRGB; up to 64 off otherwise).

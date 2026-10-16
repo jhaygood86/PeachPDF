@@ -377,13 +377,7 @@ namespace PeachPDF.CSS
 
             // A gray has no hue of its own: the other colour's stands in for it (CSS Color 4, interpolating with a missing hue), instead of whatever angle the
             // conversion leaves behind.
-            if (hueIndex >= 0)
-            {
-                var powerless1 = ColorSpaceMath.IsHuePowerless(v1, cs);
-                var powerless2 = ColorSpaceMath.IsHuePowerless(v2, cs);
-                if (powerless1 && !powerless2) v1[hueIndex] = v2[hueIndex];
-                else if (powerless2 && !powerless1) v2[hueIndex] = v1[hueIndex];
-            }
+            ColorSpaceMath.ResolveMissingHues(v1, v2, cs);
 
             for (var i = 0; i < 3; i++)
             {

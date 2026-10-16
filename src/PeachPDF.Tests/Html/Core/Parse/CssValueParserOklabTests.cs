@@ -181,6 +181,10 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [InlineData("color-mix(in oklch, lch(55 2 300), #f00)", 201, 100, 86)]
         [InlineData("color-mix(in lch, #f8f9fa, #0a7)", 136, 211, 218)]
         [InlineData("color-mix(in lch, oklab(0.6 0 0), red)", 200, 97, 71)]
+        // Two grays: both hues are missing, and Chrome mixes them at hue 0.
+        [InlineData("color-mix(in oklch, #6c757d, #6c757d)", 125, 112, 115)]
+        [InlineData("color-mix(in oklch, #6c757d, #adb5bd)", 156, 143, 147)]
+        [InlineData("color-mix(in oklch, #6c757d, #f8f9fa)", 185, 178, 180)]
         // `longer hue` between two equal hues goes half way round (CSS Color 4: -180 < difference <= 0 adds a turn), which a gray's substituted hue always is.
         [InlineData("color-mix(in oklch longer hue, #888, red)", 0, 156, 178)]
         [InlineData("color-mix(in oklch longer hue, red, red)", 0, 169, 219)]

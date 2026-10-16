@@ -62,7 +62,7 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
 
 - `color()`, relative colour syntax and `rgb(none ...)` are not read by the colour parser at all (static or animated; #1772), so a keyframe holding one is
   dropped; the colour-space part is ready for them once the parser reads them (their rows were measured and left out of the tests, and
-  `TakesAMixIntoOklab`'s `color` and `from` cases are dead code until then). `color-mix(in hsl)` and `in hwb` are read but resolve to black, static too (#1769).
+  `TakesAMixIntoOklab`'s `color` and `from` cases are dead code until then). `color-mix(in hsl)` and `in hwb` are read but give a wrong colour for many operand pairs (black for `red` and `blue`), static too (#1769).
 - **A `color-mix()` operand outside the sRGB gamut reaches the mix unclipped too** (`ParseMixOperand` returns its Oklab beside the `Color`, `Color.MixComponents` takes
   it through `ColorSpaceMath.ToSpaceFromOklab`, which converts via XYZ and uses an odd-symmetric sRGB transfer function; `Linearize`/`Delinearize` clamp, so `ToSpace` could not
   hold it). The first version resolved operands to 8-bit `Color`s first: a first review measured 460 more points (a heavy-weight operand, 50 to 95%, in every mix space, both

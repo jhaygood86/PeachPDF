@@ -41,6 +41,22 @@ namespace PeachPDF.CSS
             _ => false
         };
 
+        /// <summary>
+        /// Gives a gray its missing hue before two colours in lch or oklch are mixed in a color-mix() (see <see cref="IsHuePowerless"/>): the other colour's hue
+        /// stands in for it, and where both are gray the hue is 0, as in Chrome. Does nothing in any other space.
+        /// </summary>
+        public static void ResolveMissingHues(double[] v1, double[] v2, Space cs)
+        {
+            var hueIndex = HueIndex(cs);
+            if (hueIndex < 0) return;
+
+            var powerless1 = IsHuePowerless(v1, cs);
+            var powerless2 = IsHuePowerless(v2, cs);
+            if (powerless1 && powerless2) v1[hueIndex] = v2[hueIndex] = 0;
+            else if (powerless1) v1[hueIndex] = v2[hueIndex];
+            else if (powerless2) v2[hueIndex] = v1[hueIndex];
+        }
+
         public static double NormalizeHue(double h) => ((h % 360) + 360) % 360;
 
         public static double InterpolateHue(double h1, double h2, double t, HueMethod hue)
