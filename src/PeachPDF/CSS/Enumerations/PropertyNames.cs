@@ -294,6 +294,8 @@
         public static readonly string ScrollbarHighlightColor = "scrollbar-highlight-color";
         public static readonly string ScrollbarShadowColor = "scrollbar-shadow-color";
         public static readonly string ScrollbarTrackColor = "scrollbar-track-color";
+        public static readonly string StopColor = "stop-color";
+        public static readonly string StopOpacity = "stop-opacity";
         public static readonly string Stroke = "stroke";
         public static readonly string StrokeDasharray = "stroke-dasharray";
         public static readonly string StrokeDashoffset = "stroke-dashoffset";

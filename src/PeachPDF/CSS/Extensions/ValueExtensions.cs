@@ -99,6 +99,13 @@ namespace PeachPDF.CSS
                 : value.ToLength();
         }
 
+        /// <summary>A <c>&lt;length-percentage&gt;</c> that is not negative.</summary>
+        public static Length? ToNonNegativeDistance(this IReadOnlyList<Token> value)
+        {
+            var distance = value.ToDistance();
+            return distance is { Value: >= 0 } ? distance : null;
+        }
+
         public static Length ToLength(this FontSize fontSize)
         {
             switch (fontSize)

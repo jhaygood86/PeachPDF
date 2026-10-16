@@ -3596,12 +3596,17 @@ namespace PeachPDF.Svg
                 var offsetAttr = child.GetAttribute("offset");
                 var offset = string.IsNullOrWhiteSpace(offsetAttr) ? 0.0 : SvgValueParsers.ParseOpacity(offsetAttr);
 
+                // Through ResolveStyledAttr, so a stylesheet rule (`stop { stop-color: ... }`) reaches a stop as it does any other element:
+                // inline style="" beats a matching rule beats the presentation attribute.
                 var color = SvgValueParsers.ParseStopColor(
-                    child.GetAttribute("stop-color"),
-                    child.GetAttribute("stop-opacity"),
-                    child.GetAttribute("style"),
+                    ResolveStyledAttr(child, "stop-color"),
+                    ResolveStyledAttr(child, "stop-opacity"),
+                    null,
                     _renderContext,
-                    ResolveIcc);
+                    // currentColor is the colour of the host (see _contextColor), as it is for flood-color.
+                    value => value is not null && value.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                        ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"rgba({_contextColor.R}, {_contextColor.G}, {_contextColor.B}, {_contextColor.A / 255d})")
+                        : ResolveIcc(value));
 
                 stops.Add(new SvgGradientStop { Offset = offset, PaintColor = color });
             }
