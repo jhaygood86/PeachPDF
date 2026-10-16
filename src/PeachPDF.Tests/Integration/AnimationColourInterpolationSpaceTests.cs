@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Integration
     /// canvas and read back (8-bit sRGB, alpha unpremultiplied). Tolerance 2 per channel. Rows that also pass on an sRGB mix are controls: the <c>L*</c> rows (legacy pairs), the <c>currentcolor</c> rows M20 and M21, M15 (<c>lab()</c> to <c>transparent</c>),
     /// O5 (an overshooting legacy pair) and the milder overshoot rows; the other <c>M*</c> rows and the <c>O1</c> to <c>O4</c> overshoot rows are the ones a mix in the wrong
     /// space gets wrong (43 of the 75 fail on that mix). Left out: <c>color()</c>, relative colour syntax and
-    /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe is dropped; <c>color-mix(in hsl)</c> is read but resolves to black, a separate gap), and a <c>lab()</c> outside the sRGB gamut
+    /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe stands for the value the property has without the animation; <c>color-mix(in hsl)</c> is read but resolves to black, a separate gap), and a <c>lab()</c> outside the sRGB gamut
     /// (Chrome and PeachPDF map it back into the gamut differently, by 4 per channel).
     /// </para>
     /// </summary>

@@ -38,8 +38,9 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
   dropped; the colour-space part is ready for them once the parser reads them (their rows were measured and left out of the tests, and
   `TakesAMixIntoOklab`'s `color` and `from` cases are dead code until then). `color-mix(in hsl)` and `in hwb` are read but resolve to black, static too (#1769).
 - The endpoints are the parser's 8-bit sRGB, so a `lab()`/`oklab()`/`oklch()` outside the sRGB gamut is mapped into it before the mix. For a vivid
-  pair that is up to about 50 of 255 off Chrome mid-animation (a review measured `oklch(.6 .2 100)` to `oklch(.6 .2 300)` at 52 a quarter of the way in, which is *worse*
-  than the old sRGB mix, 14, for that pair); row M19 was left out for the same reason, and the overshoot rows use in-gamut ends. Fixing it needs
+  pair that is up to about 97 of 255 off Chrome (two fifths of the range), most near the two ends of the run - the maintainer's review measured 3,350
+  points over 670 series at 0.1, 0.25, 0.5, 0.75 and 0.9 and found `lch()` and `color-mix(in lch|oklch)` among the worst, `oklch(0.7 0.3 150)` to
+  `rgba(230,60,70,.6)` at 97 a quarter of the way in against `main`'s 33; my own first measure (0.25, 0.5, 0.75 only) had seen 52; row M19 was left out for the same reason, and the overshoot rows use in-gamut ends. Fixing it needs
   the unclamped components in the token.
 - **The lightness is clamped to 0..1** (`MixInOklab`): with an easing that overshoots, Chrome holds L at the end of its range and keeps a and b, where
   the colour parser takes `oklab(1.2 ...)` as it comes and washes out to white (or black). The O* rows pin it (10 fail without it).

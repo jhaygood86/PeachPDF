@@ -14,7 +14,7 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   render, so nothing was built. The properties are still parsed.
 - **Interpolation is structural, on text.** Colours mix in premultiplied sRGB when both are legacy and in Oklab otherwise
   (`CssValueInterpolator.MixColors`), but only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other
-  (`color()`, relative colour syntax, `rgb(none ...)`; #1772) is not read at all, static or animated, so its keyframe is dropped. `color-mix(in hsl)` and `in hwb`
+  (`color()`, relative colour syntax, `rgb(none ...)`; #1772) is not read at all, static or animated, so its keyframe stands for the value the property has without the animation. `color-mix(in hsl)` and `in hwb`
   are read but resolve to black, static too (#1769).
 - **The matrix part of a `transform` mix cannot run before layout for some inputs.** Lists are paired function by function
   (CSS Transforms 1 §11-12) and what is left is mixed as matrices (§13, `TransformMatrixInterpolator`). That last step
@@ -49,10 +49,12 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
   `CssValueInterpolator`). A negative argument inside a function (`blur(-5px)`) or in a `calc()` written for lengths of
   different units is not clamped.
-- **A mixed colour's endpoints are the parser's 8-bit sRGB values** (#1768). A `lab()`, `oklab()` or `oklch()` outside the sRGB gamut is mapped
-  back into it when it is read, before it is converted to Oklab, where a browser mixes the unclamped values. For a vivid pair that is far off
-  mid-animation: up to about 50 of 255 per channel (`oklch(.6 .2 100)` to `oklch(.6 .2 300)` is 52 a quarter of the way in; the endpoints themselves are right), and a
-  few such pairs are worse than the old sRGB mix was. Fixing it means keeping the unclamped Oklab components of a modern colour in the token, which
+- **A mixed colour's endpoints are the parser's 8-bit sRGB values** (#1768). A `lab()`, `lch()`, `oklab()` or `oklch()` outside the sRGB gamut, and a
+  `color-mix()` of them, is mapped back into it when it is read, before it is converted to Oklab, where a browser mixes the unclamped values. For a
+  vivid pair that is far off mid-animation: up to about 97 of 255 per channel (about two fifths of the range), largest near the two ends of the run
+  (a review measured `oklch(0.7 0.3 150)` to `rgba(230,60,70,.6)` at 97 a quarter of the way in, `lab(60 90 60)` to `oklch(0.7 0.3 150)` at 93 nine tenths
+  of the way in); the endpoints themselves are right. `lch()` and `color-mix(in lch|oklch, ...)` are among the worst, and of 3,350 measured points 267 were worse than the old
+  sRGB mix by more than 3 and 76 by more than 30. Fixing it means keeping the unclamped Oklab components of a modern colour in the token, which
   needs the colour functions' own grammar (the parser keeps only `Color`'s 8-bit channels); a PDF holds sRGB, so the result is clipped at paint anyway.
 - **`hsl(none ...)`/`hwb(none ...)` count as legacy colours,** where a browser mixes a colour with a `none` component in Oklab (#1768);
   `rgb(none ...)` is not read at all, and `lab(none ...)` is read with `none` as 0.
