@@ -29,6 +29,34 @@ namespace PeachPDF.CSS
             _ => -1
         };
 
+        /// <summary>
+        /// Whether the hue of a colour in lch or oklch means nothing because its chroma is (all but) zero, as it is for a gray: CSS Color 4 takes
+        /// such a hue as missing when colours are interpolated (Interpolating with Missing Components), and a mix then uses the other colour's.
+        /// The limit is Chrome's, found by bisection: a chroma of 0.02 or less (in lab for lch, in oklab for oklch) is powerless, 0.021 is not
+        /// (the specification's own epsilons are smaller, 0.0015 and 0.000004). It sits above the noise converting a gray leaves behind (8-bit gray: 3e-5 lch, 9e-5 oklch).
+        /// </summary>
+        public static bool IsHuePowerless(double[] v, Space cs) => cs switch
+        {
+            Space.Lch or Space.Oklch => v[1] <= 0.02,
+            _ => false
+        };
+
+        /// <summary>
+        /// Gives a gray its missing hue before two colours in lch or oklch are mixed in a color-mix() (see <see cref="IsHuePowerless"/>): the other colour's hue
+        /// stands in for it, and where both are gray the hue is 0, as in Chrome. Does nothing in any other space.
+        /// </summary>
+        public static void ResolveMissingHues(double[] v1, double[] v2, Space cs)
+        {
+            var hueIndex = HueIndex(cs);
+            if (hueIndex < 0) return;
+
+            var powerless1 = IsHuePowerless(v1, cs);
+            var powerless2 = IsHuePowerless(v2, cs);
+            if (powerless1 && powerless2) v1[hueIndex] = v2[hueIndex] = 0;
+            else if (powerless1) v1[hueIndex] = v2[hueIndex];
+            else if (powerless2) v2[hueIndex] = v1[hueIndex];
+        }
+
         public static double NormalizeHue(double h) => ((h % 360) + 360) % 360;
 
         public static double InterpolateHue(double h1, double h2, double t, HueMethod hue)
@@ -40,7 +68,7 @@ namespace PeachPDF.CSS
             {
                 case HueMethod.Longer:
                     if (diff > 0 && diff < 180) diff -= 360;
-                    else if (diff < 0 && diff > -180) diff += 360;
+                    else if (diff <= 0 && diff > -180) diff += 360;
                     break;
                 case HueMethod.Increasing:
                     if (diff < 0) diff += 360;
@@ -304,6 +332,152 @@ namespace PeachPDF.CSS
                 default: // Srgb
                     return [r, g, b];
             }
+        }
+
+        // ── Color-space coordinates → Oklab, without going through sRGB ──────
+        //
+        // The Lab and Oklab families can name colours outside the sRGB gamut; ToSpace(FromSpace(v)) would clip
+        // them first. This converts straight through XYZ, so an out-of-gamut colour keeps the Oklab coordinates
+        // it was written with (a mix of two colours, CSS Color 4 §13, is made on those). So do the spaces a mix result
+        // can leave the sRGB gamut in (sRGB, linear sRGB, Display P3, XYZ); hsl and hwb, which hold no such colour, go
+        // through the clipped sRGB.
+
+        public static double[] ToOklab(double[] v, Space cs)
+        {
+            switch (cs)
+            {
+                case Space.Oklab:
+                    return [v[0], v[1], v[2]];
+
+                case Space.Oklch:
+                {
+                    var (L, a, b) = PolarToRect(v[0], v[1], v[2]);
+                    return [L, a, b];
+                }
+
+                case Space.Lab:
+                case Space.Lch:
+                {
+                    var (L, a, b) = cs == Space.Lch ? PolarToRect(v[0], v[1], v[2]) : (v[0], v[1], v[2]);
+                    var (x50, y50, z50) = LabToXyzD50(L, a, b);
+                    var (x, y, z) = XyzD50ToXyzD65(x50, y50, z50);
+                    var (ol, oa, ob) = XyzD65ToOkLab(x, y, z);
+                    return [ol, oa, ob];
+                }
+
+                case Space.Srgb:
+                case Space.SrgbLinear:
+                case Space.DisplayP3:
+                {
+                    var (xs, ys, zs) = cs switch
+                    {
+                        Space.Srgb => LinSrgbToXyzD65(LinearizeExtended(v[0]), LinearizeExtended(v[1]), LinearizeExtended(v[2])),
+                        Space.SrgbLinear => LinSrgbToXyzD65(v[0], v[1], v[2]),
+                        _ => LinP3ToXyzD65(LinearizeExtended(v[0]), LinearizeExtended(v[1]), LinearizeExtended(v[2])),
+                    };
+                    var (ol, oa, ob) = XyzD65ToOkLab(xs, ys, zs);
+                    return [ol, oa, ob];
+                }
+
+                case Space.XyzD65:
+                case Space.XyzD50:
+                {
+                    var (xs, ys, zs) = cs == Space.XyzD65 ? (v[0], v[1], v[2]) : XyzD50ToXyzD65(v[0], v[1], v[2]);
+                    var (ol, oa, ob) = XyzD65ToOkLab(xs, ys, zs);
+                    return [ol, oa, ob];
+                }
+
+                default:
+                {
+                    var (r, g, b) = FromSpace(v, cs);
+                    return ToSpace(r, g, b, Space.Oklab);
+                }
+            }
+        }
+
+        // ── Oklab → color-space coordinates, without a clip to the sRGB gamut ──
+        //
+        // The inverse of ToOklab for a colour that may lie outside the sRGB gamut (a color-mix() operand written
+        // as a wide lab()/oklch()): the coordinates in cs keep their out-of-range values, so the mix is made on
+        // them and the clip comes once, at the end. hsl and hwb get the clipped colour (a gamut-mapped one has no
+        // meaning there, and color-mix() in those spaces does not resolve yet).
+
+        public static double[] ToSpaceFromOklab(double[] oklab, Space cs)
+        {
+            switch (cs)
+            {
+                case Space.Oklab:
+                    return [oklab[0], oklab[1], oklab[2]];
+
+                case Space.Oklch:
+                {
+                    var (L, c, h) = RectToPolar(oklab[0], oklab[1], oklab[2]);
+                    return [L, c, h];
+                }
+
+                case Space.Lab:
+                case Space.Lch:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (x50, y50, z50) = XyzD65ToXyzD50(x, y, z);
+                    var (L, a, b) = XyzD50ToLab(x50, y50, z50);
+
+                    // The Oklab matrices do not quite share lab's white, so an exact Oklab gray comes out of lab with a chroma of up to 0.033: it stays a gray.
+                    if (Math.Sqrt(oklab[1] * oklab[1] + oklab[2] * oklab[2]) < 5e-5) a = b = 0;
+                    if (cs == Space.Lab) return [L, a, b];
+                    var (pl, pc, ph) = RectToPolar(L, a, b);
+                    return [pl, pc, ph];
+                }
+
+                case Space.XyzD65:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    return [x, y, z];
+                }
+
+                case Space.XyzD50:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (x50, y50, z50) = XyzD65ToXyzD50(x, y, z);
+                    return [x50, y50, z50];
+                }
+
+                case Space.Srgb:
+                case Space.SrgbLinear:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (rl, gl, bl) = XyzD65ToLinSrgb(x, y, z);
+                    return cs == Space.SrgbLinear ? [rl, gl, bl] : [DelinearizeExtended(rl), DelinearizeExtended(gl), DelinearizeExtended(bl)];
+                }
+
+                case Space.DisplayP3:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (pr, pg, pb) = XyzD65ToLinP3(x, y, z);
+                    return [DelinearizeExtended(pr), DelinearizeExtended(pg), DelinearizeExtended(pb)];
+                }
+
+                default:
+                {
+                    var (r, g, b) = FromSpace(oklab, Space.Oklab);
+                    return ToSpace(r, g, b, cs);
+                }
+            }
+        }
+
+        private static double LinearizeExtended(double c)
+        {
+            var magnitude = Math.Abs(c);
+            var linear = magnitude <= 0.04045 ? magnitude / 12.92 : Math.Pow((magnitude + 0.055) / 1.055, 2.4);
+            return c < 0 ? -linear : linear;
+        }
+
+        // The sRGB transfer function extended past 0..1 by odd symmetry, as CSS Color 4 §10.2 does.
+        private static double DelinearizeExtended(double c)
+        {
+            var magnitude = Math.Abs(c);
+            var encoded = magnitude <= 0.0031308 ? magnitude * 12.92 : 1.055 * Math.Pow(magnitude, 1.0 / 2.4) - 0.055;
+            return c < 0 ? -encoded : encoded;
         }
 
         // ── Reverse: color-space coordinates → gamut-mapped sRGB (0..1) ──────

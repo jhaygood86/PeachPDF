@@ -352,16 +352,33 @@ namespace PeachPDF.CSS
         /// <see href="https://www.w3.org/TR/css-color-5/#color-mix">CSS Color 5 <c>color-mix()</c></see>:
         /// premultiplied-alpha interpolation in <paramref name="cs"/> with weight <paramref name="t"/>
         /// toward <paramref name="c2"/>, the result alpha then scaled by <paramref name="alphaMultiplier"/>
-        /// (below 1 only when the two percentages summed to under 100%).
+        /// (below 1 only when the two percentages summed to under 100%). <paramref name="oklab1"/> and <paramref name="oklab2"/> are an operand's Oklab
+        /// coordinates when it lies outside the sRGB gamut its <see cref="Color"/> is clipped to; the mix is then made from them.
         /// </summary>
-        public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier)
+        public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier, double[] oklab1 = null, double[] oklab2 = null)
+        {
+            var v = MixComponents(c1, c2, t, cs, hue, out var mixedAlpha, oklab1, oklab2);
+            var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
+            var outAlpha = (byte)Math.Round(Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1) * 255);
+            return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
+        }
+
+        /// <summary>
+        /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
+        /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> clips them.
+        /// </summary>
+        internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha, double[] oklab1 = null, double[] oklab2 = null)
         {
             t = Math.Clamp(t, 0.0, 1.0);
             double a1 = c1.A / 255.0, a2 = c2.A / 255.0;
 
-            var v1 = ColorSpaceMath.ToSpace(c1.R / 255.0, c1.G / 255.0, c1.B / 255.0, cs);
-            var v2 = ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, cs);
+            var v1 = oklab1 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab1, cs) : ColorSpaceMath.ToSpace(c1.R / 255.0, c1.G / 255.0, c1.B / 255.0, cs);
+            var v2 = oklab2 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab2, cs) : ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, cs);
             var hueIndex = ColorSpaceMath.HueIndex(cs);
+
+            // A gray has no hue of its own: the other colour's stands in for it (CSS Color 4, interpolating with a missing hue), instead of whatever angle the
+            // conversion leaves behind.
+            ColorSpaceMath.ResolveMissingHues(v1, v2, cs);
 
             for (var i = 0; i < 3; i++)
             {
@@ -370,7 +387,7 @@ namespace PeachPDF.CSS
                 v2[i] *= a2;
             }
 
-            var mixedAlpha = a1 + t * (a2 - a1);
+            mixedAlpha = a1 + t * (a2 - a1);
             var v = new double[3];
             for (var i = 0; i < 3; i++)
             {
@@ -384,9 +401,7 @@ namespace PeachPDF.CSS
                 v[i] = mixedAlpha > 1e-10 ? mixed / mixedAlpha : 0;
             }
 
-            var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
-            var outAlpha = (byte)Math.Round(Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1) * 255);
-            return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
+            return v;
         }
 
         /// <summary>

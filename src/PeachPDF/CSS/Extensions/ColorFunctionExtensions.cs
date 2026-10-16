@@ -23,8 +23,12 @@ namespace PeachPDF.CSS
         /// cascade uses and which deliberately preserves a function's specified form for serialization),
         /// this is the render-layer resolver: it always computes the sRGB value.
         /// </summary>
-        public static Color? ToResolvedColor(this IReadOnlyList<Token> value)
+        public static Color? ToResolvedColor(this IReadOnlyList<Token> value) => ResolveColor(value, wantOklab: false, out _);
+
+        // The one resolver behind ToResolvedColor and TryResolveOklab, so a nested color-mix() is read once per level, not once per question asked of it.
+        private static Color? ResolveColor(IReadOnlyList<Token> value, bool wantOklab, out double[] oklab)
         {
+            oklab = null;
             var basic = value.ToColor();
             if (basic.HasValue) return basic;
 
@@ -34,11 +38,14 @@ namespace PeachPDF.CSS
             // token rather than a Color-typed one, so ToColor misses it - resolve it here.
             if (element is { Type: TokenType.Hash } hash) return Color.FromHex(hash.Data.ToString());
 
-            return element is { Type: TokenType.Function } function ? ParseColorFunction(function) : null;
+            return element is { Type: TokenType.Function } function ? ParseColorFunction(function, wantOklab, out oklab) : null;
         }
 
-        public static Color? ParseColorFunction(Token function)
+        // oklab: for lab(), lch(), oklab(), oklch() and color-mix() (when wantOklab), the Oklab coordinates the colour was written with, which are outside
+        // the sRGB gamut where the returned Color is clipped to it; null for every other colour.
+        private static Color? ParseColorFunction(Token function, bool wantOklab, out double[] oklab)
         {
+            oklab = null;
             var name = function.Data;
             var args = function.ArgumentTokens;
 
@@ -57,16 +64,16 @@ namespace PeachPDF.CSS
                 return ParseGray(args);
 
             if (name.Equals(FunctionNames.Lab, StringComparison.OrdinalIgnoreCase))
-                return ParseRect(args, Color.FromLab, abReference: 125.0, lReference: 100.0);
+                return ParseRect(args, Color.FromLab, abReference: 125.0, lReference: 100.0, ColorSpaceMath.Space.Lab, wantOklab, out oklab);
             if (name.Equals(FunctionNames.Oklab, StringComparison.OrdinalIgnoreCase))
-                return ParseRect(args, Color.FromOklab, abReference: 0.4, lReference: 1.0);
+                return ParseRect(args, Color.FromOklab, abReference: 0.4, lReference: 1.0, ColorSpaceMath.Space.Oklab, wantOklab, out oklab);
             if (name.Equals(FunctionNames.Lch, StringComparison.OrdinalIgnoreCase))
-                return ParsePolar(args, Color.FromLch, chromaReference: 150.0, lReference: 100.0);
+                return ParsePolar(args, Color.FromLch, chromaReference: 150.0, lReference: 100.0, ColorSpaceMath.Space.Lch, wantOklab, out oklab);
             if (name.Equals(FunctionNames.Oklch, StringComparison.OrdinalIgnoreCase))
-                return ParsePolar(args, Color.FromOklch, chromaReference: 0.4, lReference: 1.0);
+                return ParsePolar(args, Color.FromOklch, chromaReference: 0.4, lReference: 1.0, ColorSpaceMath.Space.Oklch, wantOklab, out oklab);
 
             if (name.Equals(FunctionNames.ColorMix, StringComparison.OrdinalIgnoreCase))
-                return ParseColorMix(args);
+                return ParseColorMix(args, wantOklab, out oklab);
 
             if (name.Equals(FunctionNames.DeviceCmyk, StringComparison.OrdinalIgnoreCase))
                 return ParseDeviceCmyk(args);
@@ -146,54 +153,59 @@ namespace PeachPDF.CSS
         }
 
         // ── lab()/oklab(): L + a + b + optional alpha ────────────────────────────
-        private static Color? ParseRect(IEnumerable<Token> args, Func<double, double, double, float, Color> build, double abReference, double lReference)
+        private static Color? ParseRect(IEnumerable<Token> args, Func<double, double, double, float, Color> build, double abReference, double lReference, ColorSpaceMath.Space space, bool wantOklab, out double[] oklab)
         {
-            if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
+            oklab = null;
+            if (!TryRectComponents(args, abReference, lReference, out var v, out var alpha)) return null;
+            if (wantOklab) oklab = ColorSpaceMath.ToOklab(v, space);
+            return build(v[0], v[1], v[2], alpha);
+        }
+
+        private static bool TryRectComponents(IEnumerable<Token> args, double abReference, double lReference, out double[] v, out float alpha)
+        {
+            v = [];
+            alpha = 1f;
+            if (!Extract(args, 3, out var comps, out var alphaTok)) return false;
             var l = Component(comps[0], lReference);
             var a = Component(comps[1], abReference);
             var b = Component(comps[2], abReference);
-            if (l is null || a is null || b is null) return null;
-            var alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
-            return build(l.Value, a.Value, b.Value, alpha);
+            if (l is null || a is null || b is null) return false;
+            alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            // CSS Color 4 section 9: the lightness is clamped to its range when the colour is parsed (the reference is 100% of it), before any mix.
+            v = [Math.Clamp(l.Value, 0, lReference), a.Value, b.Value];
+            return true;
         }
 
         // ── lch()/oklch(): L + C + hue angle + optional alpha ────────────────────
-        private static Color? ParsePolar(IEnumerable<Token> args, Func<double, double, double, float, Color> build, double chromaReference, double lReference)
+        private static Color? ParsePolar(IEnumerable<Token> args, Func<double, double, double, float, Color> build, double chromaReference, double lReference, ColorSpaceMath.Space space, bool wantOklab, out double[] oklab)
         {
-            if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
+            oklab = null;
+            if (!TryPolarComponents(args, chromaReference, lReference, out var v, out var alpha)) return null;
+            if (wantOklab) oklab = ColorSpaceMath.ToOklab(v, space);
+            return build(v[0], v[1], v[2], alpha);
+        }
+
+        private static bool TryPolarComponents(IEnumerable<Token> args, double chromaReference, double lReference, out double[] v, out float alpha)
+        {
+            v = [];
+            alpha = 1f;
+            if (!Extract(args, 3, out var comps, out var alphaTok)) return false;
             var l = Component(comps[0], lReference);
             var c = Component(comps[1], chromaReference);
             var h = HueDegrees(comps[2]);
-            if (l is null || c is null || h is null) return null;
-            var alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
-            return build(l.Value, c.Value, h.Value, alpha);
+            if (l is null || c is null || h is null) return false;
+            alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            // CSS Color 4 section 9: the lightness is clamped to its range and a negative chroma to 0 when the colour is parsed.
+            v = [Math.Clamp(l.Value, 0, lReference), Math.Max(c.Value, 0), h.Value];
+            return true;
         }
 
         // ── color-mix(in <space> [<hue-method>], c1 [p1], c2 [p2]) ───────────────
-        private static Color? ParseColorMix(IEnumerable<Token> args)
+        private static Color? ParseColorMix(IEnumerable<Token> args, bool wantOklab, out double[] oklab)
         {
-            var segments = SplitByComma(args);
-            if (segments.Count != 3) return null;
-
-            var config = segments[0].Where(t => t.Type is not TokenType.Whitespace)
-                .Select(t => t.Data.ToLowerInvariantString()).ToList();
-            if (config.Count < 2 || config[0] != "in") return null;
-            var space = MapSpace(config[1]);
-            var hue = MapHue(config, 2);
-
-            if (!ParseMixOperand(segments[1], out var c1, out var p1)) return null;
-            if (!ParseMixOperand(segments[2], out var c2, out var p2)) return null;
-
-            // CSS Color 5 §3 normalization: a missing percentage is 100% minus the other; percentages
-            // scale to sum 1, and a pre-normalization sum below 100% scales the result alpha down.
-            if (p1 is null && p2 is null) { p1 = 0.5; p2 = 0.5; }
-            else if (p1 is null) p1 = Math.Max(0, 1.0 - p2.Value);
-            else if (p2 is null) p2 = Math.Max(0, 1.0 - p1.Value);
-
-            var sum = p1.Value + p2.Value;
-            if (sum <= 0) return null;
-            var alphaMultiplier = sum < 1.0 ? sum : 1.0;
-            var t = p2.Value / sum;
+            oklab = null;
+            if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out var space, out var hue, out var alphaMultiplier, out var oklab1, out var oklab2))
+                return null;
 
             // Neither operand CMYK: the normal rectangular-space mix. Both CMYK: a project-specific
             // extension mixing directly in C/M/Y/K space (see Color.MixCmyk's remarks) - the declared
@@ -203,12 +215,63 @@ namespace PeachPDF.CSS
             if (c1.IsDeviceCmyk != c2.IsDeviceCmyk) return null;
             if (c1.IsDeviceCmyk) return Color.MixCmyk(c1, c2, t, alphaMultiplier);
 
-            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier);
+            if (wantOklab) oklab = ColorSpaceMath.ToOklab(Color.MixComponents(c1, c2, t, space, hue, out _, oklab1, oklab2), space);
+            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier, oklab1, oklab2);
         }
 
-        private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent)
+        /// <summary>
+        /// Reads a <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c> colour as the Oklab coordinates it names,
+        /// without the clip to the sRGB gamut that <see cref="ToResolvedColor"/> applies: an out-of-gamut colour keeps its out-of-range
+        /// coordinates, which is what a browser mixes two colours from (CSS Color 4 §13). False for any other colour (the clipped sRGB value
+        /// is the colour then), including a <c>color-mix()</c> of <c>device-cmyk()</c> colours.
+        /// </summary>
+        public static bool TryResolveOklab(this IReadOnlyList<Token> value, out double[] oklab)
+        {
+            var color = ResolveColor(value, wantOklab: true, out oklab);
+            if (color.HasValue && oklab is not null) return true;
+
+            oklab = [];
+            return false;
+        }
+
+        // The operands, weight and space of a color-mix(), after the CSS Color 5 §3 percentage normalization.
+        private static bool TryColorMixOperands(IEnumerable<Token> args, out Color c1, out Color c2, out double t, out ColorSpaceMath.Space space, out ColorSpaceMath.HueMethod hue, out double alphaMultiplier, out double[] oklab1, out double[] oklab2)
+        {
+            c1 = c2 = default;
+            oklab1 = oklab2 = null;
+            t = alphaMultiplier = 0;
+            space = default;
+            hue = default;
+
+            var segments = SplitByComma(args);
+            if (segments.Count != 3) return false;
+
+            var config = segments[0].Where(x => x.Type is not TokenType.Whitespace)
+                .Select(x => x.Data.ToLowerInvariantString()).ToList();
+            if (config.Count < 2 || config[0] != "in") return false;
+            space = MapSpace(config[1]);
+            hue = MapHue(config, 2);
+
+            if (!ParseMixOperand(segments[1], out c1, out var p1, out oklab1)) return false;
+            if (!ParseMixOperand(segments[2], out c2, out var p2, out oklab2)) return false;
+
+            // CSS Color 5 §3 normalization: a missing percentage is 100% minus the other; percentages
+            // scale to sum 1, and a pre-normalization sum below 100% scales the result alpha down.
+            if (p1 is null && p2 is null) { p1 = 0.5; p2 = 0.5; }
+            else if (p1 is null) p1 = Math.Max(0, 1.0 - p2.Value);
+            else if (p2 is null) p2 = Math.Max(0, 1.0 - p1.Value);
+
+            var sum = p1.Value + p2.Value;
+            if (sum <= 0) return false;
+            alphaMultiplier = sum < 1.0 ? sum : 1.0;
+            t = p2.Value / sum;
+            return true;
+        }
+
+        private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent, out double[] oklab)
         {
             color = default;
+            oklab = null;
             percent = null;
 
             var tokens = new List<Token>();
@@ -237,7 +300,8 @@ namespace PeachPDF.CSS
             // (ParseColorMix) decides what to do with it: mix in CMYK space when both operands are CMYK
             // -tagged, or reject when only one is (no naive CMYK<->RGB approximation is computed anywhere
             // in this pipeline, so a mixed CMYK/non-CMYK pair still has no defined result).
-            var resolved = tokens.ToResolvedColor();
+            // The operand comes back with the coordinates it was written with too, when it is one that can lie outside the gamut the Color is clipped to.
+            var resolved = ResolveColor(tokens, wantOklab: true, out oklab);
             if (resolved is null) return false;
             color = resolved.Value;
             return true;

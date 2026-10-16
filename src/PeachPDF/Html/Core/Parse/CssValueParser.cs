@@ -792,6 +792,20 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// The Oklab coordinates (L, a, b) of a <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c> colour as written,
+        /// without the clip to the sRGB gamut <see cref="TryGetColor"/> applies. False for any other colour, where the sRGB value is the colour.
+        /// </summary>
+        internal bool TryGetOklab(string str, out double[] oklab)
+        {
+            oklab = [];
+            if (string.IsNullOrEmpty(str) || str.IndexOf('(') < 0) return false;
+
+            using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            return tokens.TryResolveOklab(out oklab);
+        }
+
+        /// <summary>
         /// Parses a border value in CSS style; e.g. 1px, 1, thin, thick, medium
         /// </summary>
         /// <param name="borderValue"></param>

@@ -12,8 +12,10 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   run). Only an animation with no run (zero duration / iteration count) consults the fill mode.
 - **`transition` never runs.** A transition starts from a style *change*; a freshly loaded document has none. Nothing to
   render, so nothing was built. The properties are still parsed.
-- **Interpolation is structural, on text.** Colours mix in premultiplied sRGB only (no `color-mix`/oklab interpolation
-  space), and only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other flips at 50%.
+- **Interpolation is structural, on text.** Colours mix in premultiplied sRGB when both are legacy and in Oklab otherwise
+  (`CssValueInterpolator.MixColors`), but only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other
+  (`color()`, relative colour syntax, `rgb(none ...)`; #1772) is not read at all, static or animated, so its keyframe stands for the value the property has without the animation. `color-mix(in hsl)` and `in hwb`
+  are read but give a wrong colour for many operand pairs (black for `red` and `blue`, wrong but not black for others), static too (#1769).
 - **The matrix part of a `transform` mix cannot run before layout for some inputs.** Lists are paired function by function
   (CSS Transforms 1 §11-12) and what is left is mixed as matrices (§13, `TransformMatrixInterpolator`). That last step
   flips at 50% (tracked in #1753) for:
@@ -47,9 +49,15 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
   `CssValueInterpolator`). A negative argument inside a function (`blur(-5px)`) or in a `calc()` written for lengths of
   different units is not clamped.
-- **Other colour functions are mixed in sRGB, not in their own space.** `hwb()`, `lab()`, `oklch()`, `color-mix()` and the
-  like resolve to sRGB first (a colour the parser cannot resolve flips half way), where CSS Color 4 §12 mixes in the
-  function's space.
+- **A gray's written hue is not kept** (#1775). A `lab()`, `lch()`, `oklab()` or `oklch()` colour with no chroma is mixed from Oklab coordinates, which hold no
+  hue; in an `lch` or `oklch` `color-mix()` a gray operand (any, including a hex or named one) takes the other operand's hue (`ColorSpaceMath.IsHuePowerless`), as a gray
+  from another space does in a browser (CSS Color 4, interpolating with a missing hue). Chrome calls a hue missing at a chroma of 0.02 or less (bisected: lab chroma
+  for lch, oklab chroma for oklch), and so does `IsHuePowerless`. A browser keeps the hue a gray was written with in the same space:
+  `color-mix(in oklch, oklch(0.5 0 120), oklch(0.6 0.2 240))` is 50 of 255 off Chrome (hue 240 here, the average of 120 and 240 there), and a near-gray
+  written in oklab and mixed in lch (`oklab(.6 .001 0)`) keeps its own hue there, where this substitutes the other operand's. Also: an alpha of `none`
+  (`lab(50 40 20 / none)`) is read as opaque, where it is transparent in a browser.
+- **`hsl(none ...)`/`hwb(none ...)` count as legacy colours,** where a browser mixes a colour with a `none` component in Oklab (#1774);
+  `rgb(none ...)` is not read at all, and `lab(none ...)` is read with `none` as 0.
 - **`currentcolor` mixes as the box's `color` at the animation step.** That `color` is the one the box holds then, including an
   `!important` one (the cascade puts it on the box ahead of the step), one set by `!important` custom properties, and one a later
   animation in the list sets. A bevelled border side (`inset`, `outset`, `groove`, `ridge`) shows the fixed bevel base at progress 0
