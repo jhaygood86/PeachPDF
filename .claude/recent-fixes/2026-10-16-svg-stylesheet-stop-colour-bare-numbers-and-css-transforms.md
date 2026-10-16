@@ -13,7 +13,7 @@ closes the ones the animation will use; the next steps are the builder-side samp
   through `ResolveStyledAttr` (style > matched rule > attribute), which is also where the animation tier will sit.
 - `SvgTransformParser` read every function through the attribute grammar: numbers only, a trailing unit skipped. `rotate(0.25turn)` was 0.25 degrees; `translateX()` produced no matrix. CSS keyframes and the
   interpolator's own output (`translateX(40px)`, `rotate(1.5rad)`) are in the CSS syntax, so it had to read it. It is one parser for the `transform` attribute, `gradientTransform` and `patternTransform` too, so the CSS forms
-  are now accepted there (a superset of a browser's attribute grammar; the review's differential of about 240 strings found no valid attribute string whose result changed).
+  are now accepted there (a superset of a browser's attribute grammar; the review's differential of about 240 strings found no valid attribute string whose result changed beyond float noise: a quarter turn is now exactly 0 and 1).
 - A review found, and the commit then fixed: a function name could not carry a digit, so `translate3d(...)` ended the whole list (everything after it was lost, before this change too); an argument that is not a number
   (`calc()`, a nested function) is now skipped to its closing parenthesis and the function does nothing, the rest still applying; a unit on a `matrix()` entry or a rotation centre makes the function unresolvable;
   a quarter turn is exact; `stop-opacity` takes a percentage as Chrome does; `ParseStopColor` lost its `style` parameter, which `ResolveStyledAttr` now settles.

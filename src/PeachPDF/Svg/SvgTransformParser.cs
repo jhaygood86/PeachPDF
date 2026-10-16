@@ -116,8 +116,9 @@ namespace PeachPDF.Svg
 
         private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args)
         {
-            // Set when an argument has a unit this parser cannot resolve here: the function then does nothing.
-            var resolvable = true;
+            // Set when an argument has a unit this parser cannot resolve here: the function then does nothing. An argument that was not a
+            // number at all (calc(), a nested function) counts, wherever it stands in the list, even where the function reads fewer arguments.
+            var resolvable = args.TrueForAll(arg => arg.Unit != "?");
 
             // A plain <number>: matrix() entries and the centre of rotate(a cx cy) take no unit.
             float Arg(int i)

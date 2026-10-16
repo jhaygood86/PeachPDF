@@ -152,6 +152,8 @@ namespace PeachPDF.Tests.Svg
         [InlineData("skewX(1em)")]
         [InlineData("rotate(90deg 5em 5em)")]
         [InlineData("matrix(1deg, 0, 0, 1, 5, 6)")]
+        [InlineData("rotate(90 calc(1))")]
+        [InlineData("translateX(10px calc(1px))")]
         public void AFunctionWithAnArgumentThatCannotBeResolvedHere_DoesNothing(string transform)
         {
             Assert.Null(Rect(string.Empty, $"transform=\"{transform}\"").Transform);
