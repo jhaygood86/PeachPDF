@@ -25,7 +25,16 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
 - **An `InOklab` flag on the token, set by function name** (`TakesAMixIntoOklab`): `lab`, `lch`, `oklab`, `oklch`, `color`, `color-mix`, and a function
   whose first argument is `from` (relative colour). The mix is Oklab when either token has it. The flag is the whole classification; there is no
   need to keep the original colour space, because Oklab is the only non-sRGB space an animation uses.
-- **`MixInOklab` converts the 8-bit sRGB endpoints with `ColorSpaceMath.ToSpace(..., Space.Oklab)`, premultiplies each channel by its alpha, mixes,
+- **An endpoint written as `lab()`, `lch()`, `oklab()`, `oklch()` or `color-mix()` is mixed from the Oklab coordinates it was written with, not from its
+  clipped 8-bit value** (token field `Oklab`, from `CssValueParser.TryGetOklab` over `ColorFunctionExtensions.TryResolveOklab`). The first version converted
+  the parser's 8-bit sRGB, which for a colour outside the sRGB gamut is the clipped colour: against Chrome over 640 points (0.1 to 0.9, 128 series with eight legacy
+  partners and out-of-gamut colours both ways) that was up to 118 of 255 off with 440 points more than 3 off, and worse than `main`'s sRGB mix for 147 of
+  them; reading the coordinates leaves 5 points more than 3 off (max 41, all one nested `color-mix()` operand, see the accepted gap) and none worse than `main`.
+  The grammar is not repeated: `ParseRect`/`ParsePolar`/`ParseColorMix` were split into component readers (`TryRectComponents`, `TryPolarComponents`,
+  `TryColorMixOperands`) that the colour parse and the Oklab read share, and `Color.Mix` into `Color.MixComponents` (the mix before the sRGB clip) plus the clip.
+  `ColorSpaceMath.ToOklab` converts through XYZ for the Lab family, so the out-of-range coordinates survive. The in-gamut cases improve too: they no longer go
+  through 8-bit rounding.
+- **`MixInOklab` converts any other endpoint's 8-bit sRGB with `ColorSpaceMath.ToSpace(..., Space.Oklab)`, premultiplies each channel by its alpha, mixes,
   divides by the mixed alpha, and writes `oklab(L a b / alpha)`.** Writing `oklab()` text rather than `rgb()` lets the property setter map an
   out-of-gamut result back into sRGB the way it does a static `oklab()`. It does not reuse `ColorSpaceConverter.Interpolate`: that one works
   on 8-bit `PaintColor`s and does not premultiply (it is the gradient code).
@@ -37,11 +46,10 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
 - `color()`, relative colour syntax and `rgb(none ...)` are not read by the colour parser at all (static or animated; #1772), so a keyframe holding one is
   dropped; the colour-space part is ready for them once the parser reads them (their rows were measured and left out of the tests, and
   `TakesAMixIntoOklab`'s `color` and `from` cases are dead code until then). `color-mix(in hsl)` and `in hwb` are read but resolve to black, static too (#1769).
-- The endpoints are the parser's 8-bit sRGB, so a `lab()`/`oklab()`/`oklch()` outside the sRGB gamut is mapped into it before the mix. For a vivid
-  pair that is up to about 97 of 255 off Chrome (two fifths of the range), most near the two ends of the run - the maintainer's review measured 3,350
-  points over 670 series at 0.1, 0.25, 0.5, 0.75 and 0.9 and found `lch()` and `color-mix(in lch|oklch)` among the worst, `oklch(0.7 0.3 150)` to
-  `rgba(230,60,70,.6)` at 97 a quarter of the way in against `main`'s 33; my own first measure (0.25, 0.5, 0.75 only) had seen 52; row M19 was left out for the same reason, and the overshoot rows use in-gamut ends. Fixing it needs
-  the unclamped components in the token.
+- A `color-mix()` whose own operand is outside the sRGB gamut is still mixed from that operand's clipped 8-bit value (#1768; accepted gap): the operands are
+  resolved to `Color`s before the mix. 41 of 255 off Chrome at the worst point measured. The maintainer's review found the general case (up to 97 of 255
+  off, 3,350 points over 670 series at 0.1, 0.25, 0.5, 0.75 and 0.9, `oklch(0.7 0.3 150)` to `rgba(230,60,70,.6)` at 97 a quarter of the way in against
+  `main`'s 33); my own first measure (0.25, 0.5, 0.75 only) had seen 52, which is why a measure at the ends of the run matters. The `G*` rows pin the fix.
 - **The lightness is clamped to 0..1** (`MixInOklab`): with an easing that overshoots, Chrome holds L at the end of its range and keeps a and b, where
   the colour parser takes `oklab(1.2 ...)` as it comes and washes out to white (or black). The O* rows pin it (10 fail without it).
 - A gradient `background-image` is not interpolated by Chrome at all (it flips at 50%); PeachPDF mixes the stops, as before this change.

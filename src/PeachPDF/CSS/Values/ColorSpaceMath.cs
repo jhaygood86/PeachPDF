@@ -306,6 +306,44 @@ namespace PeachPDF.CSS
             }
         }
 
+        // ── Color-space coordinates → Oklab, without going through sRGB ──────
+        //
+        // The Lab and Oklab families can name colours outside the sRGB gamut; ToSpace(FromSpace(v)) would clip
+        // them first. This converts straight through XYZ, so an out-of-gamut colour keeps the Oklab coordinates
+        // it was written with (a mix of two colours, CSS Color 4 §13, is made on those). Any other space is
+        // converted through sRGB, which holds every colour of those spaces the mix can produce in range.
+
+        public static double[] ToOklab(double[] v, Space cs)
+        {
+            switch (cs)
+            {
+                case Space.Oklab:
+                    return [v[0], v[1], v[2]];
+
+                case Space.Oklch:
+                {
+                    var (L, a, b) = PolarToRect(v[0], v[1], v[2]);
+                    return [L, a, b];
+                }
+
+                case Space.Lab:
+                case Space.Lch:
+                {
+                    var (L, a, b) = cs == Space.Lch ? PolarToRect(v[0], v[1], v[2]) : (v[0], v[1], v[2]);
+                    var (x50, y50, z50) = LabToXyzD50(L, a, b);
+                    var (x, y, z) = XyzD50ToXyzD65(x50, y50, z50);
+                    var (ol, oa, ob) = XyzD65ToOkLab(x, y, z);
+                    return [ol, oa, ob];
+                }
+
+                default:
+                {
+                    var (r, g, b) = FromSpace(v, cs);
+                    return ToSpace(r, g, b, Space.Oklab);
+                }
+            }
+        }
+
         // ── Reverse: color-space coordinates → gamut-mapped sRGB (0..1) ──────
 
         public static (double R, double G, double B) FromSpace(double[] v, Space cs)

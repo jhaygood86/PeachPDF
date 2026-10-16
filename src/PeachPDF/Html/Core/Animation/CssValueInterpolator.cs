@@ -31,7 +31,7 @@ namespace PeachPDF.Html.Core.Animation
     {
         private enum TokenKind { Number, Word, Color, Open, Close, Space, Punct, Text }
 
-        private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false);
+        private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false, double[]? Oklab = null);
 
         private static readonly HashSet<string> LengthUnits = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -453,7 +453,7 @@ namespace PeachPDF.Html.Core.Animation
                         if (!TryMixNumbers(property, x, y, t, sb, a.Count == 1)) return false;
                         break;
                     case TokenKind.Color:
-                        sb.Append(MixColors(x.Rgba!, y.Rgba!, t, x.InOklab || y.InOklab));
+                        sb.Append(MixColors(x, y, t));
                         break;
                     default:
                         sb.Append(x.Raw);
@@ -525,14 +525,16 @@ namespace PeachPDF.Html.Core.Animation
         /// sRGB color formats, in Oklab as soon as one is not (CSS Color 4 §13.2, Color Space for Interpolation: Oklab is the default where
         /// the host syntax names none, which an animation does not).
         /// </summary>
-        private static string MixColors(double[] from, double[] to, double t, bool inOklab)
+        private static string MixColors(Token x, Token y, double t)
         {
+            var from = x.Rgba!;
+            var to = y.Rgba!;
             var alpha = from[3] + (to[3] - from[3]) * t;
             alpha = Math.Clamp(alpha, 0, 1);
 
             if (alpha <= 0) return "rgba(0, 0, 0, 0)";
 
-            if (inOklab) return MixInOklab(from, to, t, alpha);
+            if (x.InOklab || y.InOklab) return MixInOklab(x, y, t, alpha);
 
             var channels = new int[3];
             for (var i = 0; i < 3; i++)
@@ -548,12 +550,16 @@ namespace PeachPDF.Html.Core.Animation
 
         /// <summary>
         /// The Oklab mix, premultiplied by alpha like the sRGB one, written as an <c>oklab()</c> colour for the property setter to parse
-        /// (and gamut-map, as it does a static <c>oklab()</c>). The endpoints arrive as 8-bit sRGB, which is all the colour parser keeps.
+        /// (and gamut-map, as it does a static <c>oklab()</c>). An endpoint is mixed from the Oklab coordinates it was written with when it is a
+        /// <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c> colour (which can lie outside the sRGB gamut), and from its
+        /// 8-bit sRGB value otherwise.
         /// </summary>
-        private static string MixInOklab(double[] from, double[] to, double t, double alpha)
+        private static string MixInOklab(Token x, Token y, double t, double alpha)
         {
-            var a = ColorSpaceMath.ToSpace(from[0] / 255, from[1] / 255, from[2] / 255, ColorSpaceMath.Space.Oklab);
-            var b = ColorSpaceMath.ToSpace(to[0] / 255, to[1] / 255, to[2] / 255, ColorSpaceMath.Space.Oklab);
+            var from = x.Rgba!;
+            var to = y.Rgba!;
+            var a = x.Oklab ?? ColorSpaceMath.ToSpace(from[0] / 255, from[1] / 255, from[2] / 255, ColorSpaceMath.Space.Oklab);
+            var b = y.Oklab ?? ColorSpaceMath.ToSpace(to[0] / 255, to[1] / 255, to[2] / 255, ColorSpaceMath.Space.Oklab);
 
             var channels = new double[3];
             for (var i = 0; i < 3; i++)
@@ -727,7 +733,11 @@ namespace PeachPDF.Html.Core.Animation
         private static Token ColorOrWord(CssValueParser valueParser, string text)
         {
             if (valueParser.TryGetColor(text, 0, text.Length, out var color))
-                return new Token(TokenKind.Color, text, Rgba: [color.R, color.G, color.B, color.A / 255d], InOklab: TakesAMixIntoOklab(text));
+            {
+                var inOklab = TakesAMixIntoOklab(text);
+                return new Token(TokenKind.Color, text, Rgba: [color.R, color.G, color.B, color.A / 255d], InOklab: inOklab,
+                    Oklab: inOklab && valueParser.TryGetOklab(text, out var oklab) ? oklab : null);
+            }
 
             return new Token(TokenKind.Word, text);
         }

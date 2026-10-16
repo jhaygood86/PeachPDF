@@ -356,6 +356,18 @@ namespace PeachPDF.CSS
         /// </summary>
         public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier)
         {
+            var v = MixComponents(c1, c2, t, cs, hue, out var mixedAlpha);
+            var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
+            var outAlpha = (byte)Math.Round(Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1) * 255);
+            return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
+        }
+
+        /// <summary>
+        /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double)"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
+        /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double)"/> clips them.
+        /// </summary>
+        internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha)
+        {
             t = Math.Clamp(t, 0.0, 1.0);
             double a1 = c1.A / 255.0, a2 = c2.A / 255.0;
 
@@ -370,7 +382,7 @@ namespace PeachPDF.CSS
                 v2[i] *= a2;
             }
 
-            var mixedAlpha = a1 + t * (a2 - a1);
+            mixedAlpha = a1 + t * (a2 - a1);
             var v = new double[3];
             for (var i = 0; i < 3; i++)
             {
@@ -384,9 +396,7 @@ namespace PeachPDF.CSS
                 v[i] = mixedAlpha > 1e-10 ? mixed / mixedAlpha : 0;
             }
 
-            var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
-            var outAlpha = (byte)Math.Round(Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1) * 255);
-            return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
+            return v;
         }
 
         /// <summary>

@@ -19,8 +19,9 @@ namespace PeachPDF.Tests.Integration
     /// canvas and read back (8-bit sRGB, alpha unpremultiplied). Tolerance 2 per channel. Rows that also pass on an sRGB mix are controls: the <c>L*</c> rows (legacy pairs), the <c>currentcolor</c> rows M20 and M21, M15 (<c>lab()</c> to <c>transparent</c>),
     /// O5 (an overshooting legacy pair) and the milder overshoot rows; the other <c>M*</c> rows and the <c>O1</c> to <c>O4</c> overshoot rows are the ones a mix in the wrong
     /// space gets wrong (43 of the 75 fail on that mix). Left out: <c>color()</c>, relative colour syntax and
-    /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe stands for the value the property has without the animation; <c>color-mix(in hsl)</c> is read but resolves to black, a separate gap), and a <c>lab()</c> outside the sRGB gamut
-    /// (Chrome and PeachPDF map it back into the gamut differently, by 4 per channel).
+    /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe stands for the value the property has without the animation; <c>color-mix(in hsl)</c> is read but resolves to black, a separate gap).
+    /// The <c>G*</c> rows are colours outside the sRGB gamut (<c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c>, <c>color-mix()</c> in lch or oklch), which a browser mixes
+    /// from the coordinates they were written with and clips once, at the end; mixed from their clipped sRGB value they are up to 109 of 255 off.
     /// </para>
     /// </summary>
     public class AnimationColourInterpolationSpaceTests
@@ -52,7 +53,14 @@ namespace PeachPDF.Tests.Integration
             ["O4_undershoot_hex_lab"] = ("#220000", "lab(90 -20 80)", "animation-timing-function: cubic-bezier(.2, -1.5, .8, -1.5);"),
             ["O5_overshoot_legacy"] = ("#336699", "#cc9933", "animation-timing-function: cubic-bezier(.3, 1.8, .7, 1.4);"),
             ["M21_hex_currentcolor_hex_text"] = ("#ffffff", "currentcolor", "color: #0000ff;"),
-        };
+            ["G1_oklch_oog_rgba"] = ("oklch(0.7 0.3 150)", "rgba(230,60,70,.6)", ""),
+            ["G2_lab_oog_oklch_oog"] = ("lab(60 90 60)", "oklch(0.7 0.3 150)", ""),
+            ["G3_lch_oog_hex"] = ("lch(50 60 200)", "#ff0000", ""),
+            ["G4_colormix_lch_hex"] = ("color-mix(in lch, red, blue)", "#00ff00", ""),
+            ["G5_colormix_oklch_white"] = ("color-mix(in oklch, red, blue)", "#ffffff", ""),
+            ["G6_lch_chroma_hex"] = ("lch(55 120 40)", "#0000ff", ""),
+            ["G7_oklab_oog_hsl"] = ("oklab(0.8 0.2 0.1)", "hsl(200 80% 40%)", ""),
+            ["G8_oklch_oog_oklch_oog"] = ("oklch(.6 .2 100)", "oklch(.6 .2 300)", ""),        };
 
         public static TheoryData<string, double, int[]> ChromeColours => new()
         {
@@ -131,7 +139,30 @@ namespace PeachPDF.Tests.Integration
             { "M21_hex_currentcolor_hex_text", 0.25, new[] { 191, 191, 255, 255 } },
             { "M21_hex_currentcolor_hex_text", 0.5, new[] { 128, 128, 255, 255 } },
             { "M21_hex_currentcolor_hex_text", 0.75, new[] { 64, 64, 255, 255 } },
-        };
+            { "G1_oklch_oog_rgba", 0.1, new[] { 0, 197, 0, 245 } },
+            { "G1_oklch_oog_rgba", 0.25, new[] { 0, 186, 19, 230 } },
+            { "G1_oklch_oog_rgba", 0.9, new[] { 210, 99, 66, 163 } },
+            { "G2_lab_oog_oklch_oog", 0.1, new[] { 255, 67, 44, 255 } },
+            { "G2_lab_oog_oklch_oog", 0.5, new[] { 187, 151, 28, 255 } },
+            { "G2_lab_oog_oklch_oog", 0.9, new[] { 0, 195, 0, 255 } },
+            { "G3_lch_oog_hex", 0.1, new[] { 0, 140, 143, 255 } },
+            { "G3_lch_oog_hex", 0.25, new[] { 63, 134, 128, 255 } },
+            { "G3_lch_oog_hex", 0.9, new[] { 235, 60, 41, 255 } },
+            { "G4_colormix_lch_hex", 0.1, new[] { 242, 0, 132, 255 } },
+            { "G4_colormix_lch_hex", 0.5, new[] { 212, 139, 113, 255 } },
+            { "G4_colormix_lch_hex", 0.9, new[] { 114, 234, 58, 255 } },
+            { "G5_colormix_oklch_white", 0.1, new[] { 195, 29, 201, 255 } },
+            { "G5_colormix_oklch_white", 0.25, new[] { 208, 85, 212, 255 } },
+            { "G5_colormix_oklch_white", 0.9, new[] { 251, 234, 250, 255 } },
+            { "G6_lch_chroma_hex", 0.1, new[] { 247, 13, 64, 255 } },
+            { "G6_lch_chroma_hex", 0.5, new[] { 149, 79, 162, 255 } },
+            { "G6_lch_chroma_hex", 0.9, new[] { 44, 48, 237, 255 } },
+            { "G7_oklab_oog_hsl", 0.1, new[] { 255, 125, 119, 255 } },
+            { "G7_oklab_oog_hsl", 0.5, new[] { 190, 137, 154, 255 } },
+            { "G7_oklab_oog_hsl", 0.9, new[] { 78, 132, 178, 255 } },
+            { "G8_oklch_oog_oklch_oog", 0.1, new[] { 155, 126, 0, 255 } },
+            { "G8_oklch_oog_oklch_oog", 0.25, new[] { 152, 125, 43, 255 } },
+            { "G8_oklch_oog_oklch_oog", 0.9, new[] { 148, 100, 207, 255 } },        };
 
         [Theory]
         [MemberData(nameof(ChromeColours))]
