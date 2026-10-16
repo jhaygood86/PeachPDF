@@ -42,9 +42,13 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
     430 ms, 0 before). `ResolveColor` returns both in one pass; `ToResolvedColor` and `TryResolveOklab` are views of it, and the Oklab is only built when asked for.
   - **`ToOklab` and `ToSpaceFromOklab` hold an out-of-range colour in every space a mix result can leave the gamut in** (sRGB, linear sRGB, Display P3, XYZ; hsl and hwb get the clipped colour).
     `Linearize`/`Delinearize` clamp, so these use an odd-symmetric transfer function (CSS Color 4 section 10.2). A nested `color-mix(in xyz, <wide>, blue)` had been 23 of 255 off and a `color-mix(in srgb, <wide>, ...)` 5.
-  - **A gray's hue is missing in an `lch`/`oklch` mix** (`ColorSpaceMath.IsHuePowerless`, used by `Color.MixComponents`): the other operand's hue stands in, as in a browser for a gray from another space. The limits sit above
-    the conversion noise, which was measured (8-bit gray 3e-5 lch and 9e-5 oklch; an Oklab gray read in lch is 0.033, since the Oklab matrices do not quite share lab's white). A gray written in the same space
-    keeps its written hue in a browser; that stays a gap.
+  - **A gray's hue is missing in an `lch`/`oklch` mix** (`ColorSpaceMath.IsHuePowerless`, used by `Color.MixComponents`): the other operand's hue stands in, as in a browser for a gray from another space. The limit is
+    Chrome's, which a third review bisected: a chroma of 0.02 or less is missing (in lab for lch, in oklab for oklch), 0.021 is not, where the specification's own epsilons are 0.0015 and 0.000004. My first limits (0.05 and
+    0.0004) were set from the conversion noise alone, and left every Bootstrap-style near-gray (`#f8f9fa`, `#6c757d`) with a noise hue, 30 to 105 of 255 off in an oklch mix with red. The noise was measured (8-bit gray
+    3e-5 lch and 9e-5 oklch; an Oklab gray read in lch 0.033, since the Oklab matrices do not quite share lab's white), so an Oklab chroma under 5e-5 is snapped to a lab gray in `ToSpaceFromOklab`.
+    A gray written in the same space keeps its written hue in a browser; that stays a gap.
+  - **`longer hue` between equal hues goes half way round** (`InterpolateHue`: the difference range is `-180 < d <= 0`, which adds a turn, not `< 0`). It had been wrong for `color-mix(in oklch longer hue, red, red)`
+    all along, and a gray's substituted hue is always equal to the other's, so every gray with `longer hue` hit it.
   - **`currentcolor` from a `color` outside the gamut mixes unclipped against a legacy colour.** The token's `Rgba` holds the unclipped sRGB (a channel below 0 or above 255; `MixColors` clips the result), as
     Chrome does: `color: lch(50 60 200)`, `red` to `currentcolor` was 64 of 255 off, now 0 to 1 (K rows, 18 series).
 - **`MixInOklab` converts any other endpoint's 8-bit sRGB with `ColorSpaceMath.ToSpace(..., Space.Oklab)`, premultiplies each channel by its alpha, mixes,

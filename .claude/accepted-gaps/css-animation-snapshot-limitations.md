@@ -51,8 +51,11 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   different units is not clamped.
 - **A gray's written hue is not kept** (#1768). A `lab()`, `lch()`, `oklab()` or `oklch()` colour with no chroma is mixed from Oklab coordinates, which hold no
   hue; in an `lch` or `oklch` `color-mix()` a gray operand (any, including a hex or named one) takes the other operand's hue (`ColorSpaceMath.IsHuePowerless`), as a gray
-  from another space does in a browser (CSS Color 4 section 12.2, a missing hue). A browser keeps the hue a gray was written with in the same space:
-  `color-mix(in oklch, oklch(0.5 0 120), oklch(0.6 0.2 240))` is 50 of 255 off Chrome (hue 240 here, the average of 120 and 240 there).
+  from another space does in a browser (CSS Color 4, interpolating with a missing hue). Chrome calls a hue missing at a chroma of 0.02 or less (bisected: lab chroma
+  for lch, oklab chroma for oklch), and so does `IsHuePowerless`. A browser keeps the hue a gray was written with in the same space:
+  `color-mix(in oklch, oklch(0.5 0 120), oklch(0.6 0.2 240))` is 50 of 255 off Chrome (hue 240 here, the average of 120 and 240 there), and a near-gray
+  written in oklab and mixed in lch (`oklab(.6 .001 0)`) keeps its own hue there, where this substitutes the other operand's. Also: an alpha of `none`
+  (`lab(50 40 20 / none)`) is read as opaque, where it is transparent in a browser.
 - **`hsl(none ...)`/`hwb(none ...)` count as legacy colours,** where a browser mixes a colour with a `none` component in Oklab (#1768);
   `rgb(none ...)` is not read at all, and `lab(none ...)` is read with `none` as 0.
 - **`currentcolor` mixes as the box's `color` at the animation step.** That `color` is the one the box holds then, including an

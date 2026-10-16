@@ -30,13 +30,14 @@ namespace PeachPDF.CSS
         };
 
         /// <summary>
-        /// Whether the hue of a colour in lch or oklch means nothing because its chroma is (all but) zero, as it is for a gray: CSS Color 4 §12.2 takes
-        /// such a hue as missing, and a mix then uses the other colour's. The limits sit above the noise converting a gray leaves behind (8-bit gray: 3e-5 lch, 9e-5 oklch; an Oklab gray in lch: 0.033, the Oklab matrices not quite sharing lab's white).
+        /// Whether the hue of a colour in lch or oklch means nothing because its chroma is (all but) zero, as it is for a gray: CSS Color 4 takes
+        /// such a hue as missing when colours are interpolated (Interpolating with Missing Components), and a mix then uses the other colour's.
+        /// The limit is Chrome's, found by bisection: a chroma of 0.02 or less (in lab for lch, in oklab for oklch) is powerless, 0.021 is not
+        /// (the specification's own epsilons are smaller, 0.0015 and 0.000004). It sits above the noise converting a gray leaves behind (8-bit gray: 3e-5 lch, 9e-5 oklch).
         /// </summary>
         public static bool IsHuePowerless(double[] v, Space cs) => cs switch
         {
-            Space.Lch => v[1] < 0.05,
-            Space.Oklch => v[1] < 0.0004,
+            Space.Lch or Space.Oklch => v[1] <= 0.02,
             _ => false
         };
 
@@ -51,7 +52,7 @@ namespace PeachPDF.CSS
             {
                 case HueMethod.Longer:
                     if (diff > 0 && diff < 180) diff -= 360;
-                    else if (diff < 0 && diff > -180) diff += 360;
+                    else if (diff <= 0 && diff > -180) diff += 360;
                     break;
                 case HueMethod.Increasing:
                     if (diff < 0) diff += 360;
@@ -404,6 +405,9 @@ namespace PeachPDF.CSS
                     var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
                     var (x50, y50, z50) = XyzD65ToXyzD50(x, y, z);
                     var (L, a, b) = XyzD50ToLab(x50, y50, z50);
+
+                    // The Oklab matrices do not quite share lab's white, so an exact Oklab gray comes out of lab with a chroma of up to 0.033: it stays a gray.
+                    if (Math.Sqrt(oklab[1] * oklab[1] + oklab[2] * oklab[2]) < 5e-5) a = b = 0;
                     if (cs == Space.Lab) return [L, a, b];
                     var (pl, pc, ph) = RectToPolar(L, a, b);
                     return [pl, pc, ph];
