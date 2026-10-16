@@ -2,7 +2,7 @@
 
 [PeachImage](https://github.com/jhaygood86/PeachImage) is the pure .NET image codec library PeachPDF decodes every raster image
 with, and that [PeachDrawing](peachdrawing.md) encodes the bitmaps it saves with. It reads and writes the formats the web uses
-(JPEG, PNG, GIF, WebP, AVIF, BMP, plus TIFF and JPEG XL for reading) as managed code only: no native library, no P/Invoke, no platform
+(JPEG, PNG, GIF, WebP, AVIF, BMP and JPEG XL, plus TIFF for reading) as managed code only: no native library, no P/Invoke, no platform
 imaging API, so the same code runs on Windows, Linux, macOS, Android and in the browser. It targets .NET 8 and .NET 10.
 
 PeachImage is a project of its own, released under the MIT license, and it is not versioned with PeachPDF. This page describes the
@@ -28,7 +28,7 @@ your own code loads, converts or resizes images, as in the examples below.
 | AVIF | yes | yes | Still images; lossy and lossless encode. Animated AVIF is not supported. |
 | BMP | yes | yes | Every common header variant and bit depth, RLE, bit-field masks. |
 | TIFF | yes | no | Uncompressed, LZW and PackBits; RGB, grayscale, palette and CMYK. |
-| JPEG XL | yes | no | Lossy (VarDCT) and lossless (Modular), alpha, animation, 16-bit and floating-point samples, HDR (PQ/HLG) and wide-gamut color, ICC profiles, CMYK. Files made by recompressing a JPEG can be turned back into that exact JPEG. See [JPEG XL](#jpeg-xl). |
+| JPEG XL | yes | yes | Lossy (VarDCT) and lossless (Modular) on decode and encode; alpha, 16-bit and floating-point samples and ICC profiles both ways. Decode also covers animation, HDR (PQ/HLG), wide-gamut color and CMYK; encode is stills only. Files made by recompressing a JPEG can be turned back into that exact JPEG. See [JPEG XL](#jpeg-xl). |
 
 The format is detected from the file's contents, so nothing needs registering, and a file with the wrong extension still loads.
 A feature a codec does not implement throws a descriptive exception instead of producing a wrong image. Ask the library what it
@@ -54,7 +54,7 @@ image.Save(output, "jpeg", new JpegEncoderOptions { Quality = 85 });
 
 Each format has its own encoder options type under `PeachImage.Formats.<Format>`: `JpegEncoderOptions` (quality, chroma subsampling, progressive),
 `PngEncoderOptions` (compression level, color mode, palette size, dithering, interlacing), `GifEncoderOptions`, `WebpEncoderOptions` (lossless or lossy, quality),
-`AvifEncoderOptions` and `BmpEncoderOptions`. `SaveAsync` and `LoadAsync` exist for async I/O paths; the encode and decode
+`AvifEncoderOptions`, `BmpEncoderOptions` and `JxlEncoderOptions` (lossless or lossy, quality, effort). `SaveAsync` and `LoadAsync` exist for async I/O paths; the encode and decode
 themselves are CPU-bound, so only the stream read or write is awaited.
 
 To learn what a file is without decoding it, use `Image.Identify`, which reads only the header:
@@ -101,8 +101,8 @@ converted to a format you ask for in the same pass.
 
 `Image.ConvertTo` converts between the gray, RGB and RGBA formats at 8-bit, 16-bit and floating-point depth, for example an HDR
 `RgbaF32` decode down to `Rgb24` before encoding it. Integer targets round and clamp, color to gray uses BT.601 luma, and a target
-without alpha discards the alpha channel. Values are converted as stored, with no tone mapping. The encoders reject the floating-point
-formats, so convert first. CMYK images go through `ConvertToSrgb`, which applies the image's embedded profile, instead.
+without alpha discards the alpha channel. Values are converted as stored, with no tone mapping. Every encoder except JPEG XL's rejects the
+floating-point formats, so convert first. CMYK images go through `ConvertToSrgb`, which applies the image's embedded profile, instead.
 
 ```csharp
 using PeachImage;
@@ -170,13 +170,32 @@ using var image = Image.Load("large-progressive.jpg", options);
 
 ## JPEG XL
 
-JPEG XL is decode-only. The decoder is written in managed code and covers both coding modes (VarDCT and Modular), alpha, premultiplied
+The decoder is written in managed code and covers both coding modes (VarDCT and Modular), alpha, premultiplied
 alpha, extra channels (spot colors, CMYK), patches, splines, noise, upsampling, animation with full frame blending, PQ and HLG transfer
 functions, wide-gamut color and embedded ICC profiles. Samples above 8 bits decode to the 16-bit formats, and floating-point or deeper
-samples to `GrayF32`, `RgbF32` and `RgbaF32`; 32-bit integer samples are not supported (the reference decoder rejects them too), and
-encoding is not available. A multi-frame file loads as an `AnimatedImage`; EXIF, XMP and the ICC profile are exposed through
+samples to `GrayF32`, `RgbF32` and `RgbaF32`; 32-bit integer samples are not supported (the reference decoder rejects them too). A multi-frame file loads as an `AnimatedImage`; EXIF, XMP and the ICC profile are exposed through
 `Image.Metadata`. Like every decoder here, it reports the stored orientation through `ImageInfo.Orientation` rather than rotating the
 pixels.
+
+The encoder writes still images only; animation encoding is not available. Set `Lossless` for the Modular coder, which reproduces every
+sample exactly (float samples are stored bit for bit, though lossless compression of float data is poor), or leave it off for lossy
+VarDCT, where `Quality` (0 to 100, default 75) sets the fidelity and `Effort` (1 to 9, default 5) trades encode time for file size.
+`AdaptiveQuantization` is off by default because it made files larger at the same perceptual score on photographs. Sources can be 8-bit,
+16-bit or 32-bit float gray, RGB or RGBA (a fully opaque RGBA image is stored without an alpha channel), and the image's ICC profile,
+EXIF and XMP are stored when `IncludeMetadata` is set. Tuned against SSIMULACRA2, lossy output is roughly level with libjxl at effort 7.
+
+```csharp
+using PeachImage;
+using PeachImage.Formats.Jxl;
+
+using var image = Image.Load("photo.png");
+
+using var lossy = File.Create("photo.jxl");
+image.Save(lossy, "jxl", new JxlEncoderOptions { Quality = 85, Effort = 7 });
+
+using var lossless = File.Create("photo-lossless.jxl");
+image.Save(lossless, "jxl", new JxlEncoderOptions { Lossless = true });
+```
 
 A JPEG XL file made by losslessly recompressing a JPEG (what `cjxl` does with JPEG input) carries enough information to rebuild that
 exact JPEG file, including its progressive scans, restart intervals, Huffman tables, ICC profile, EXIF and XMP.
