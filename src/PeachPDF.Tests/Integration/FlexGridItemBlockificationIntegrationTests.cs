@@ -287,6 +287,47 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(img.Location.X + 100, z.Location.X, 1.0);
         }
 
+        [Theory]
+        [InlineData("display:flex", "", "img")]
+        [InlineData("display:flex", "display:block;", "img")]
+        [InlineData("display:grid; grid-template-columns:100pt 100pt", "", "img")]
+        [InlineData("display:grid; grid-template-columns:100pt 100pt", "display:block;", "img")]
+        [InlineData("display:flex; align-items:center", "", "img")]
+        public async Task ReplacedItem_DoesNotGrowItsRowByTheLineHeightStrut(
+            string containerStyle, string imgStyle, string id)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='c' style='{containerStyle}; width:300pt'>" +
+                $"<img id='{id}' style='{imgStyle}' src=\"{RedSvg}\" /><span id='z'>zz</span></div>"));
+
+            var c = LayoutHarness.FindById(root, "c")!;
+            var img = LayoutHarness.FindById(root, id)!;
+
+            Assert.Equal(36, img.ActualHeight, 0.1);   // 96x48px at 0.75pt per px: 72x36pt
+            Assert.Equal(36, c.ActualHeight, 0.1);
+        }
+
+        [Fact]
+        public async Task ReplacedSvgItem_DoesNotGrowItsRowByTheLineHeightStrut()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='c' style='display:flex; width:300pt'>" +
+                "<svg id='s' width='96' height='48'><rect width='96' height='48' fill='red'/></svg><span>zz</span></div>"));
+
+            Assert.Equal(36, LayoutHarness.FindById(root, "s")!.ActualHeight, 0.1);
+            Assert.Equal(36, LayoutHarness.FindById(root, "c")!.ActualHeight, 0.1);
+        }
+
+        [Fact]
+        public async Task ReplacedItem_StrutIsStillReservedForAnImageInsideATextItem()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='c' style='display:flex; width:300pt'>" +
+                $"<div id='t'><img src=\"{RedSvg}\" /> text</div></div>"));
+
+            Assert.True(LayoutHarness.FindById(root, "t")!.ActualHeight > 36.5);
+        }
+
         // A grid with two 100pt tracks: a 96x48px (72x36pt) image in the first, a tall sibling in the
         // same row so the block axis has room to align in.
         private static string GridWithImage(string containerStyle, string itemTag) =>
@@ -401,14 +442,14 @@ namespace PeachPDF.Tests.Integration
             Assert.True(img.ActualHeight < 60, $"natural height, not the 80pt row's: {img.ActualHeight}");
             Assert.Equal(expectedX, img.Location.X - c.Location.X, 1.0);
 
-            // block axis: the image is ~36pt tall (plus the known strut quirk), in an 80pt row
+            // block axis: the image is 36pt tall, in an 80pt row
             var free = 80 - img.ActualHeight;
             var expected = expectedY switch { 0 => 0.0, 22 => free / 2, _ => free };
             Assert.Equal(expected, img.Location.Y - c.Location.Y, 1.5);
         }
 
         // The height of an auto row is measured with the item at its natural width. Pinned to the track
-        // instead, a 2:1 image is scaled up to ~52.8pt tall and the whole row grows with it.
+        // instead, a 2:1 image is scaled up to 50pt tall and the whole row grows with it.
         [Theory]
         [InlineData("", "", true)]
         [InlineData("justify-items:center", "", true)]
@@ -429,9 +470,9 @@ namespace PeachPDF.Tests.Integration
             var firstRow = next.Location.Y - c.Location.Y;
 
             if (naturalHeight)
-                Assert.True(firstRow < 45, $"first row is the natural ~38.8pt, not the scaled ~52.8pt: {firstRow}");
+                Assert.True(firstRow < 40, $"first row is the natural 36pt, not the scaled 50pt: {firstRow}");
             else
-                Assert.True(firstRow > 50, $"first row grew to the scaled image: {firstRow}");
+                Assert.True(firstRow > 45, $"first row grew to the scaled image: {firstRow}");
         }
 
         // An svg with only one of width/height has a natural size in that axis alone (and no ratio to derive
