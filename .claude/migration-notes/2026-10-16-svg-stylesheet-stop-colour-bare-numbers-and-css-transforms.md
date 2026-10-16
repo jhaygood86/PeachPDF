@@ -5,7 +5,7 @@ What a rule in a stylesheet (or a `@keyframes` block; an inline `style=""` alrea
 Chrome's computed style (Chrome 155, a `rect` in a 200 x 100 `svg`):
 
 - **`stop-color` and `stop-opacity` from a rule.** `stop { stop-color: #0000ff; stop-opacity: .5 }` was ignored (a stop read only its attributes and its own `style=""`); it now beats the presentation
-  attribute, `style=""` beats it, `var()` and `currentcolor` (the colour of the host element) work. A plain `stop-color="currentColor"` attribute, with no rule, was black and is now the host colour
+  attribute, `style=""` beats it, `var()` and `currentcolor` (the colour of the host element) work. `stop-color: inherit` and `stop-opacity: inherit` take the gradient's value (black and 1 before). A plain `stop-color="currentColor"` attribute, with no rule, was black and is now the host colour
   too (Chrome: the stop's `color`, which is the host's unless a `color` is set inside the SVG; that case is still black here). A gradient that relied on the attribute being the only thing that counted, with a rule that happened to
   match its stops, changes colour. A `stop-color` rule marked `!important` still loses to an inline `style=""` on the same stop (the existing precedence of inline `style=""` over rules).
 - **A bare number for `stroke-width` and `stroke-dashoffset`.** `stroke-width: 6` and `stroke-dashoffset: 7` (user units, SVG 2) were refused by the CSS-OM, so only `6px` worked and the

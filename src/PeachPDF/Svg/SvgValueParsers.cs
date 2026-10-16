@@ -530,14 +530,16 @@ namespace PeachPDF.Svg
         /// <c>stop-opacity</c> values: inline <c>style=""</c>, a matching rule and the presentation attribute are settled by
         /// the caller (<see cref="SvgTreeBuilder"/>'s <c>ResolveStyledAttr</c>).
         /// </summary>
-        public static PaintColor ParseStopColor(string? colorValue, string? opacityValue, RenderContext renderContext, Func<string?, string?>? resolveColor = null)
+        public static PaintColor ParseStopColor(string? colorValue, string? opacityValue, RenderContext renderContext, Func<string?, string?>? resolveColor = null, PaintColor? currentColor = null)
         {
             if (resolveColor is not null)
                 colorValue = resolveColor(colorValue);
 
             var color = string.IsNullOrWhiteSpace(colorValue)
                 ? PaintColor.Black
-                : new CssValueParser(renderContext).GetActualColor(colorValue);
+                : currentColor is { } host && colorValue.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                    ? host
+                    : new CssValueParser(renderContext).GetActualColor(colorValue);
 
             var opacity = ParseOpacity(opacityValue);
 

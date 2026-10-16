@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public async Task AStopColorOfCurrentcolor_IsTheColourOfTheHost()
         {
-            // Chrome: `stop { stop-color: currentcolor }` is the stop's `color`, inherited from the svg (here the body's red).
+            // Chrome: `stop { stop-color: currentcolor }` is the stop's `color`, inherited from the svg (here the body's blue-grey).
             var document = await BuildAsync("body { color: #336699 } stop { stop-color: currentcolor; stop-opacity: .5 }",
                 "<defs><linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"#0000ff\"/></linearGradient></defs>");
 

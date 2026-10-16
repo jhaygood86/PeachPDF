@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -3598,14 +3598,15 @@ namespace PeachPDF.Svg
 
                 // Through ResolveStyledAttr, so a stylesheet rule (`stop { stop-color: ... }`) reaches a stop as it does any other element:
                 // inline style="" beats a matching rule beats the presentation attribute.
-                var color = SvgValueParsers.ParseStopColor(
-                    ResolveStyledAttr(child, "stop-color"),
-                    ResolveStyledAttr(child, "stop-opacity"),
-                    _renderContext,
-                    // currentColor is the colour of the host (see _contextColor), as it is for flood-color.
-                    value => value is not null && value.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
-                        ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"rgba({_contextColor.R}, {_contextColor.G}, {_contextColor.B}, {_contextColor.A / 255d})")
-                        : ResolveIcc(value));
+                // stop-color and stop-opacity are not inherited, so `inherit` takes the gradient's own value (CSS Cascade 4, section 7.3.1).
+                string? Styled(string name)
+                {
+                    var value = ResolveStyledAttr(child, name);
+                    return value is not null && value.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase) ? ResolveStyledAttr(node, name) : value;
+                }
+
+                // currentColor is the colour of the host (see _contextColor), as it is for flood-color.
+                var color = SvgValueParsers.ParseStopColor(Styled("stop-color"), Styled("stop-opacity"), _renderContext, ResolveIcc, _contextColor);
 
                 stops.Add(new SvgGradientStop { Offset = offset, PaintColor = color });
             }

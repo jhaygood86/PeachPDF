@@ -251,10 +251,10 @@ namespace PeachPDF.Svg
         // Sine and cosine of an angle in degrees, exact at the quarter turns a rotation most often is (rotate(0.25turn) is a clean 0 and 1, not 1.7e-7).
         private static (float Sin, float Cos) SinCos(float degrees)
         {
-            var turns = degrees % 360f;
-            if (turns < 0) turns += 360f;
+            var normalised = degrees % 360f;
+            if (normalised < 0) normalised += 360f;
 
-            return turns switch
+            return normalised switch
             {
                 0f => (0f, 1f),
                 90f => (1f, 0f),

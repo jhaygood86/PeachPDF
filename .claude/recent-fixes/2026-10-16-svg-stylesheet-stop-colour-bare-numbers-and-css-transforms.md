@@ -24,7 +24,13 @@ closes the ones the animation will use; the next steps are the builder-side samp
 `flood-color` does; units on the arguments of `SvgTransformParser` and the single-axis, `skew()` and `rotateZ()` functions. Tests are Chrome's computed values (`SvgStylesheetPropertyTests`, one inline-SVG class,
 `StopPropertyTests`); the `svg_stylesheet_properties` showcase renders the same in MuPDF, PDFium and Chrome.
 
+A third review also had `stop-color: inherit` and `stop-opacity: inherit` take the gradient's own value (neither is inherited by default, so `inherit` means the parent's), where they had resolved to black and 1.
+
 ## Not done
+
+Tracked: #1777 (the other SVG-only properties dropped from stylesheets, and `@supports` for them), #1780 (the geometry properties, which is what an animation of `r` needs), #1778 (`transform-origin`, `transform-box`, `em`/percentage
+lengths, 3D functions, the CSS-OM refusing `q` and `scale(50%)`), #1779 (an `!important` rule against inline `style=""`, an invalid inline declaration winning, `currentColor` inside the SVG), #1776 (a gradient fill set from CSS).
+Listed here too:
 
 - `r`, `cx`, `cy`, `rx`, `ry`, `x`, `y`, `width`, `height`, `d` as CSS properties: the builder reads them from attributes in many places (the geometry step).
 - `flood-color`, `flood-opacity`, `lighting-color`, `paint-order`, `mask`, `marker-*`, `clip-rule`, `transform-box` from a stylesheet; `transform-origin`; `em`/percentage lengths, `calc()` and 3D functions in an SVG

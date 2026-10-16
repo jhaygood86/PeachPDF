@@ -78,6 +78,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("rotate(90deg) translate(10px)", 0, 1, -1, 0, 0, 10)]
         [InlineData("matrix(1, 0, 0, 1, 5, 6)", 1, 0, 0, 1, 5, 6)]
         [InlineData("skewX(0.1turn)", 1, 0, 0.726543f, 1, 0, 0)]
+        [InlineData("skew(10deg)", 1, 0, 0.176327f, 1, 0, 0)]
         [InlineData("translate(1in, 0)", 1, 0, 0, 1, 96, 0)]
         [InlineData("scaleY(2)", 1, 0, 0, 2, 0, 0)]
         [InlineData("rotateZ(90deg)", 0, 1, -1, 0, 0, 0)]
@@ -88,13 +89,6 @@ namespace PeachPDF.Tests.Svg
         [InlineData("scale(2, 3)", 2, 0, 0, 3, 0, 0)]
         [InlineData("translate(5px)", 1, 0, 0, 1, 5, 0)]
         public void ACssTransform_IsReadAsChromeReadsIt(string transform, float a, float b, float c, float d, float e, float f)
-        {
-            AssertMatrix(Rect($"transform: {transform}").Transform, a, b, c, d, e, f);
-        }
-
-        [Theory]
-        [InlineData("skew(10deg)", 1, 0, 0.176327f, 1, 0, 0)]
-        public void ACssTransform_WithASingleSkewArgument_IsReadAsChromeReadsIt(string transform, float a, float b, float c, float d, float e, float f)
         {
             AssertMatrix(Rect($"transform: {transform}").Transform, a, b, c, d, e, f);
         }
@@ -224,6 +218,18 @@ namespace PeachPDF.Tests.Svg
             var stops = Stops("stop { stop-color: currentcolor }", "<stop offset=\"0\"/>");
 
             Assert.Equal(PaintColor.FromArgb(255, 0, 0, 0), stops[0].PaintColor);
+        }
+
+        // Chrome: `inherit` on a stop takes the gradient's own stop-color / stop-opacity (neither is inherited by default).
+        [Fact]
+        public void AStopThatInherits_TakesTheGradientsValue()
+        {
+            var markup = "<defs><linearGradient id=\"g\" stop-color=\"#ff0000\" stop-opacity=\"0.5\"><stop offset=\"0\" stop-color=\"inherit\" stop-opacity=\"inherit\"/></linearGradient></defs>";
+            var stops = Build("stop { stop-color: inherit; stop-opacity: inherit }", markup).Gradients["g"].Stops;
+
+            Assert.Equal(255, stops[0].PaintColor.R);
+            Assert.Equal(0, stops[0].PaintColor.B);
+            Assert.InRange(stops[0].PaintColor.A, 127, 128);
         }
 
         [Fact]
