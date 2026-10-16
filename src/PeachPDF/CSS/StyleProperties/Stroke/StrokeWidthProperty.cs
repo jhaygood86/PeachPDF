@@ -2,7 +2,7 @@
 {
     internal sealed class StrokeWidthProperty : Property
     {
-        private static readonly IValueConverter StyleConverter = (Converters.NonNegativeLengthOrPercentOrNumberConverter).OrGlobalValue();
+        private static readonly IValueConverter StyleConverter = Converters.NonNegativeLengthOrPercentOrNumberConverter.OrGlobalValue();
 
         internal StrokeWidthProperty()
             : base(PropertyNames.StrokeWidth, PropertyFlags.Animatable)

@@ -20,11 +20,13 @@ namespace PeachPDF.Svg
     /// <summary>
     /// Parses the SVG <c>transform</c>/<c>gradientTransform</c> attribute grammar: a whitespace
     /// separated list of <c>matrix()</c>/<c>translate()</c>/<c>scale()</c>/<c>rotate()</c>/
-    /// <c>skewX()</c>/<c>skewY()</c> functions, and the CSS <c>transform</c> syntax of the same property when it
-    /// comes from a stylesheet or a keyframe (CSS Transforms 1 section 13): angles with a unit (<c>90deg</c>, <c>0.25turn</c>,
-    /// <c>1.5rad</c>, <c>100grad</c>), lengths in <c>px</c> and the other absolute units, the single-axis
-    /// <c>translateX()</c>/<c>translateY()</c>/<c>scaleX()</c>/<c>scaleY()</c>, <c>skew()</c> and <c>rotateZ()</c>. A function with a unit
-    /// that cannot be resolved here (<c>em</c>, a percentage of a length) contributes nothing.
+    /// <c>skewX()</c>/<c>skewY()</c> functions, and the CSS <c>transform</c> syntax (CSS Transforms 1 section 13) a stylesheet or a keyframe uses:
+    /// angles with a unit (<c>90deg</c>, <c>0.25turn</c>, <c>1.5rad</c>, <c>100grad</c>), lengths in <c>px</c>, <c>pt</c>, <c>pc</c>, <c>in</c>,
+    /// <c>cm</c> and <c>mm</c>, the single-axis <c>translateX()</c>/<c>translateY()</c>/<c>scaleX()</c>/<c>scaleY()</c>, <c>skew()</c> and
+    /// <c>rotateZ()</c>. It is one parser for the <c>transform</c> attribute, <c>gradientTransform</c> and <c>patternTransform</c> too, so those
+    /// accept the CSS forms as well (a superset of what a browser takes there). A function that has an argument this parser cannot resolve - a unit it
+    /// does not know (<c>em</c>, a percentage of a length), a <c>calc()</c> or another function - or that is a 3D function, contributes nothing, and
+    /// the functions after it still apply.
     /// </summary>
     internal static class SvgTransformParser
     {
@@ -64,7 +66,7 @@ namespace PeachPDF.Svg
 
             var nameStart = pos;
 
-            while (pos < s.Length && (char.IsAsciiLetter(s[pos]) || s[pos] == '-'))
+            while (pos < s.Length && (char.IsAsciiLetter(s[pos]) || s[pos] == '-' || (pos > nameStart && char.IsAsciiDigit(s[pos]))))
                 pos++;
 
             if (pos == nameStart)
@@ -91,6 +93,21 @@ namespace PeachPDF.Svg
 
             SvgNumberScanner.SkipSeparators(s, ref pos);
 
+            if (pos < s.Length && s[pos] != ')')
+            {
+                // Something that is not a number (calc(), var(), a nested function): the arguments are not all known here. Skip to the closing
+                // parenthesis, nested ones included, and let the function do nothing, so the functions after it still read.
+                var depth = 0;
+                while (pos < s.Length && !(s[pos] == ')' && depth == 0))
+                {
+                    if (s[pos] == '(') depth++;
+                    else if (s[pos] == ')') depth--;
+                    pos++;
+                }
+
+                args.Add((double.NaN, "?"));
+            }
+
             if (pos < s.Length && s[pos] == ')')
                 pos++;
 
@@ -102,7 +119,15 @@ namespace PeachPDF.Svg
             // Set when an argument has a unit this parser cannot resolve here: the function then does nothing.
             var resolvable = true;
 
-            float Arg(int i) => i < args.Count ? (float)args[i].Value : 0f;
+            // A plain <number>: matrix() entries and the centre of rotate(a cx cy) take no unit.
+            float Arg(int i)
+            {
+                if (i >= args.Count) return 0f;
+
+                var (value, unit) = args[i];
+                if (unit.Length != 0) resolvable = false;
+                return (float)value;
+            }
 
             // Degrees. A bare number is degrees too: that is the attribute grammar (`rotate(10)`).
             float Angle(int i)
@@ -138,18 +163,6 @@ namespace PeachPDF.Svg
                 }
             }
 
-            // A <number>.
-            float Factor(int i)
-            {
-                if (i >= args.Count) return 0f;
-
-                var (value, unit) = args[i];
-                switch (unit)
-                {
-                    case "": return (float)value;
-                    default: resolvable = false; return 0f;
-                }
-            }
 
             var lowerName = name.ToLowerInvariant();
             Matrix4x4? matrix;
@@ -181,24 +194,22 @@ namespace PeachPDF.Svg
 
                 case "scale" when args.Count >= 1:
                 {
-                    var sx = Factor(0);
-                    matrix = Scaling(sx, args.Count >= 2 ? Factor(1) : sx);
+                    var sx = Arg(0);
+                    matrix = Scaling(sx, args.Count >= 2 ? Arg(1) : sx);
                     break;
                 }
 
                 case "scalex" when args.Count >= 1:
-                    matrix = Scaling(Factor(0), 1f);
+                    matrix = Scaling(Arg(0), 1f);
                     break;
 
                 case "scaley" when args.Count >= 1:
-                    matrix = Scaling(1f, Factor(0));
+                    matrix = Scaling(1f, Arg(0));
                     break;
 
                 case "rotate" or "rotatez" when args.Count >= 1:
                 {
-                    var angle = Angle(0) * (MathF.PI / 180f);
-                    var cos = MathF.Cos(angle);
-                    var sin = MathF.Sin(angle);
+                    var (sin, cos) = SinCos(Angle(0));
 
                     // With an optional center (cx, cy): equivalent to translate(cx,cy) rotate(angle)
                     // translate(-cx,-cy), expressed here as the single closed-form combined matrix
@@ -234,6 +245,22 @@ namespace PeachPDF.Svg
             }
 
             return resolvable ? matrix : null;
+        }
+
+        // Sine and cosine of an angle in degrees, exact at the quarter turns a rotation most often is (rotate(0.25turn) is a clean 0 and 1, not 1.7e-7).
+        private static (float Sin, float Cos) SinCos(float degrees)
+        {
+            var turns = degrees % 360f;
+            if (turns < 0) turns += 360f;
+
+            return turns switch
+            {
+                0f => (0f, 1f),
+                90f => (1f, 0f),
+                180f => (0f, -1f),
+                270f => (-1f, 0f),
+                _ => (MathF.Sin(degrees * (MathF.PI / 180f)), MathF.Cos(degrees * (MathF.PI / 180f))),
+            };
         }
 
         private static Matrix4x4 Translation(float tx, float ty) => new(

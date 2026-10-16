@@ -3601,7 +3601,6 @@ namespace PeachPDF.Svg
                 var color = SvgValueParsers.ParseStopColor(
                     ResolveStyledAttr(child, "stop-color"),
                     ResolveStyledAttr(child, "stop-opacity"),
-                    null,
                     _renderContext,
                     // currentColor is the colour of the host (see _contextColor), as it is for flood-color.
                     value => value is not null && value.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)

@@ -8,7 +8,7 @@ using System.Xml.Linq;
 namespace PeachPDF.Tests.Svg
 {
     /// <summary>
-    /// What a stylesheet rule (or a keyframe) can say about an SVG element, against Chrome (155.0.8059.40, computed style of a <c>rect</c> in a 200 x 100
+    /// What a stylesheet rule (or a keyframe) can say about an SVG element, against Chrome 155 (computed style of a <c>rect</c> in a 200 x 100
     /// <c>svg</c> with <c>font-size: 10px</c>): the unitless numbers of <c>stroke-width</c> and <c>stroke-dashoffset</c>, the CSS syntax of <c>transform</c>
     /// (units, the single-axis functions, <c>skew()</c>), and <c>stop-color</c>/<c>stop-opacity</c> on a gradient stop.
     /// </summary>
@@ -92,13 +92,51 @@ namespace PeachPDF.Tests.Svg
             AssertMatrix(Rect($"transform: {transform}").Transform, a, b, c, d, e, f);
         }
 
+        [Theory]
+        [InlineData("skew(10deg)", 1, 0, 0.176327f, 1, 0, 0)]
+        public void ACssTransform_WithASingleSkewArgument_IsReadAsChromeReadsIt(string transform, float a, float b, float c, float d, float e, float f)
+        {
+            AssertMatrix(Rect($"transform: {transform}").Transform, a, b, c, d, e, f);
+        }
+
+        // A quarter turn is exact: Chrome's computed matrix is 0 and 1, not 1.7e-7 and 1.
+        [Theory]
+        [InlineData("rotate(0.25turn)")]
+        [InlineData("rotate(90deg)")]
+        [InlineData("rotate(100grad)")]
+        [InlineData("rotate(-270deg)")]
+        public void AQuarterTurn_IsExact(string transform)
+        {
+            var matrix = Rect($"transform: {transform}").Transform!.Value;
+            Assert.Equal(0f, matrix.M11);
+            Assert.Equal(1f, matrix.M12);
+            Assert.Equal(-1f, matrix.M21);
+            Assert.Equal(0f, matrix.M22);
+        }
+
+        [Theory]
+        [InlineData("rotate(180deg)", -1, 0, 0, -1)]
+        [InlineData("rotate(0.75turn)", 0, -1, 1, 0)]
+        [InlineData("rotate(360deg)", 1, 0, 0, 1)]
+        [InlineData("rotate(0deg)", 1, 0, 0, 1)]
+        [InlineData("rotate(-90deg)", 0, -1, 1, 0)]
+        public void TheOtherQuarterTurns_AreExact(string transform, float a, float b, float c, float d)
+        {
+            var matrix = Rect($"transform: {transform}").Transform!.Value;
+            Assert.Equal(a, matrix.M11);
+            Assert.Equal(b, matrix.M12);
+            Assert.Equal(c, matrix.M21);
+            Assert.Equal(d, matrix.M22);
+        }
+
         // The attribute grammar stays: bare numbers, a rotation about a point, a space between the arguments.
         [Theory]
         [InlineData("translate(10 20)", 1, 0, 0, 1, 10, 20)]
+        [InlineData("translate(10,20)", 1, 0, 0, 1, 10, 20)]
         [InlineData("rotate(90)", 0, 1, -1, 0, 0, 0)]
         [InlineData("rotate(90 5 5)", 0, 1, -1, 0, 10, 0)]
         [InlineData("scale(2) translate(3)", 2, 0, 0, 2, 6, 0)]
-        public void ATransformAttribute_KeepsItsOwnGrammar(string transform, float a, float b, float c, float d, float e, float f)
+        public void ATransformAttribute_StillReadsItsOwnGrammar(string transform, float a, float b, float c, float d, float e, float f)
         {
             var document = Build(string.Empty, $"<rect width=\"10\" height=\"10\" transform=\"{transform}\"/>");
             AssertMatrix(document.Children.Single().Transform, a, b, c, d, e, f);
@@ -106,11 +144,29 @@ namespace PeachPDF.Tests.Svg
 
         [Theory]
         [InlineData("translate(1em, 2px)")]
+        [InlineData("translate(10px, 1em)")]
         [InlineData("translate(10%, 5%)")]
+        [InlineData("translateX(1em)")]
         [InlineData("scale(2em)")]
-        public void AFunctionWithAUnitThatCannotBeResolvedHere_DoesNothing(string transform)
+        [InlineData("rotate(1em)")]
+        [InlineData("skewX(1em)")]
+        [InlineData("rotate(90deg 5em 5em)")]
+        [InlineData("matrix(1deg, 0, 0, 1, 5, 6)")]
+        public void AFunctionWithAnArgumentThatCannotBeResolvedHere_DoesNothing(string transform)
         {
-            Assert.Null(Rect($"transform: {transform}").Transform);
+            Assert.Null(Rect(string.Empty, $"transform=\"{transform}\"").Transform);
+        }
+
+        // calc() and the 3D functions are not read here (a rule folds calc() first, so these reach the parser from style="" or an attribute); the functions after them still apply.
+        [Theory]
+        [InlineData("translate(10px, calc(1px + 2px)) scale(2)", 2, 0, 0, 2, 0, 0)]
+        [InlineData("scale(2, calc(3)) translate(5)", 1, 0, 0, 1, 5, 0)]
+        [InlineData("translate(1em) scale(2)", 2, 0, 0, 2, 0, 0)]
+        [InlineData("scale(2) translate3d(1px, 2px, 3px) translate(5px)", 2, 0, 0, 2, 10, 0)]
+        [InlineData("perspective(100px) translate(5px)", 1, 0, 0, 1, 5, 0)]
+        public void AFunctionItCannotResolve_DoesNotStopTheOnesAfterIt(string transform, float a, float b, float c, float d, float e, float f)
+        {
+            AssertMatrix(Rect(string.Empty, $"transform=\"{transform}\"").Transform, a, b, c, d, e, f);
         }
 
         private static SvgGradientStop[] Stops(string rule, string stops) =>
@@ -149,6 +205,23 @@ namespace PeachPDF.Tests.Svg
             var stops = Stops(":root { --c: #123456 } stop { stop-color: var(--c) }", "<stop offset=\"0\" stop-color=\"#ff0000\"/>");
 
             Assert.Equal(PaintColor.FromArgb(255, 0x12, 0x34, 0x56), stops[0].PaintColor);
+        }
+
+        [Fact]
+        public void AStopOpacityPercentage_IsReadAsChromeReadsIt()
+        {
+            var stops = Stops("stop { stop-opacity: 50% }", "<stop offset=\"0\" stop-color=\"#ff0000\"/>");
+
+            Assert.InRange(stops[0].PaintColor.A, 127, 128);
+        }
+
+        [Fact]
+        public void AStopColorOfCurrentcolor_InAStandaloneSvg_IsBlack()
+        {
+            // A standalone SVG has no host to take a colour from.
+            var stops = Stops("stop { stop-color: currentcolor }", "<stop offset=\"0\"/>");
+
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0, 0), stops[0].PaintColor);
         }
 
         [Fact]

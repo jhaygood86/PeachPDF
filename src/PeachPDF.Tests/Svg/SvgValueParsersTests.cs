@@ -147,21 +147,14 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ParseStopColor_PlainAttribute_ReturnsColor()
         {
-            var color = SvgValueParsers.ParseStopColor("#A07335", null, null, RenderContext);
+            var color = SvgValueParsers.ParseStopColor("#A07335", null, RenderContext);
             Assert.Equal(PaintColor.FromArgb(0xA0, 0x73, 0x35), color);
-        }
-
-        [Fact]
-        public void ParseStopColor_StyleAttributeOverridesPlainAttribute()
-        {
-            var color = SvgValueParsers.ParseStopColor("#000000", null, "stop-color:#FFFFFF", RenderContext);
-            Assert.Equal(PaintColor.White, color);
         }
 
         [Fact]
         public void ParseStopColor_WithOpacity_BakesAlphaIntoColor()
         {
-            var color = SvgValueParsers.ParseStopColor("#FFFFFF", "0.5", null, RenderContext);
+            var color = SvgValueParsers.ParseStopColor("#FFFFFF", "0.5", RenderContext);
             Assert.Equal(128, color.A);
         }
 

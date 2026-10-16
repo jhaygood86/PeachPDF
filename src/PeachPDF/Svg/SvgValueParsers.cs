@@ -526,16 +526,12 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Resolves a <c>&lt;stop&gt;</c> element's color, reading <c>stop-color</c>/<c>stop-opacity</c>
-        /// either as plain attributes or from a <c>style="stop-color:...; stop-opacity:..."</c> attribute
-        /// (the latter overrides the former, matching CSS precedence over presentation attributes).
+        /// Resolves a <c>&lt;stop&gt;</c> element's color from its already-cascaded <c>stop-color</c> and
+        /// <c>stop-opacity</c> values: inline <c>style=""</c>, a matching rule and the presentation attribute are settled by
+        /// the caller (<see cref="SvgTreeBuilder"/>'s <c>ResolveStyledAttr</c>).
         /// </summary>
-        public static PaintColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RenderContext renderContext, Func<string?, string?>? resolveColor = null)
+        public static PaintColor ParseStopColor(string? colorValue, string? opacityValue, RenderContext renderContext, Func<string?, string?>? resolveColor = null)
         {
-            var declarations = ParseStyleDeclarations(style);
-            var colorValue = declarations.TryGetValue("stop-color", out var colorFromStyle) ? colorFromStyle : stopColorAttr;
-            var opacityValue = declarations.TryGetValue("stop-opacity", out var opacityFromStyle) ? opacityFromStyle : stopOpacityAttr;
-
             if (resolveColor is not null)
                 colorValue = resolveColor(colorValue);
 

@@ -68,13 +68,14 @@ namespace PeachPDF.Tests.Svg
         public async Task AStopColorOfCurrentcolor_IsTheColourOfTheHost()
         {
             // Chrome: `stop { stop-color: currentcolor }` is the stop's `color`, inherited from the svg (here the body's red).
-            var document = await BuildAsync("body { color: #ff0000 } stop { stop-color: currentcolor; stop-opacity: .5 }",
+            var document = await BuildAsync("body { color: #336699 } stop { stop-color: currentcolor; stop-opacity: .5 }",
                 "<defs><linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"#0000ff\"/></linearGradient></defs>");
 
             var color = document.Gradients["g"].Stops[0].PaintColor;
 
-            Assert.Equal(255, color.R);
-            Assert.Equal(0, color.B);
+            Assert.Equal(0x33, color.R);
+            Assert.Equal(0x66, color.G);
+            Assert.Equal(0x99, color.B);
             Assert.InRange(color.A, 127, 128);
         }
 
@@ -85,10 +86,13 @@ namespace PeachPDF.Tests.Svg
 
             var transform = document.Children.Single().Transform!.Value;
 
-            Assert.Equal(30, transform.M31, 3);
-            Assert.Equal(0, transform.M32, 3);
+            // translateX(30px) rotate(0.25turn): Chrome's matrix(0, 1, -1, 0, 30, 0).
             Assert.Equal(0, transform.M11, 3);
             Assert.Equal(1, transform.M12, 3);
+            Assert.Equal(-1, transform.M21, 3);
+            Assert.Equal(0, transform.M22, 3);
+            Assert.Equal(30, transform.M31, 3);
+            Assert.Equal(0, transform.M32, 3);
         }
     }
 }
