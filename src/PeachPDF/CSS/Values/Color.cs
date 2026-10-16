@@ -375,6 +375,16 @@ namespace PeachPDF.CSS
             var v2 = oklab2 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab2, cs) : ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, cs);
             var hueIndex = ColorSpaceMath.HueIndex(cs);
 
+            // A gray has no hue of its own: the other colour's stands in for it (CSS Color 4 §12.2, a missing hue), instead of whatever angle the
+            // conversion leaves behind.
+            if (hueIndex >= 0)
+            {
+                var powerless1 = ColorSpaceMath.IsHuePowerless(v1, cs);
+                var powerless2 = ColorSpaceMath.IsHuePowerless(v2, cs);
+                if (powerless1 && !powerless2) v1[hueIndex] = v2[hueIndex];
+                else if (powerless2 && !powerless1) v2[hueIndex] = v1[hueIndex];
+            }
+
             for (var i = 0; i < 3; i++)
             {
                 if (i == hueIndex) continue;

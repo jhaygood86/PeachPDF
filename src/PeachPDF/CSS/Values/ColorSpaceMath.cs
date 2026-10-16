@@ -29,6 +29,17 @@ namespace PeachPDF.CSS
             _ => -1
         };
 
+        /// <summary>
+        /// Whether the hue of a colour in lch or oklch means nothing because its chroma is (all but) zero, as it is for a gray: CSS Color 4 §12.2 takes
+        /// such a hue as missing, and a mix then uses the other colour's. The limits sit above the noise converting a gray leaves behind (8-bit gray: 3e-5 lch, 9e-5 oklch; an Oklab gray in lch: 0.033, the Oklab matrices not quite sharing lab's white).
+        /// </summary>
+        public static bool IsHuePowerless(double[] v, Space cs) => cs switch
+        {
+            Space.Lch => v[1] < 0.05,
+            Space.Oklch => v[1] < 0.0004,
+            _ => false
+        };
+
         public static double NormalizeHue(double h) => ((h % 360) + 360) % 360;
 
         public static double InterpolateHue(double h1, double h2, double t, HueMethod hue)
@@ -310,8 +321,9 @@ namespace PeachPDF.CSS
         //
         // The Lab and Oklab families can name colours outside the sRGB gamut; ToSpace(FromSpace(v)) would clip
         // them first. This converts straight through XYZ, so an out-of-gamut colour keeps the Oklab coordinates
-        // it was written with (a mix of two colours, CSS Color 4 §13, is made on those). Any other space is
-        // converted through sRGB, which holds every colour of those spaces the mix can produce in range.
+        // it was written with (a mix of two colours, CSS Color 4 §13, is made on those). So do the spaces a mix result
+        // can leave the sRGB gamut in (sRGB, linear sRGB, Display P3, XYZ); hsl and hwb, which hold no such colour, go
+        // through the clipped sRGB.
 
         public static double[] ToOklab(double[] v, Space cs)
         {
@@ -336,6 +348,28 @@ namespace PeachPDF.CSS
                     return [ol, oa, ob];
                 }
 
+                case Space.Srgb:
+                case Space.SrgbLinear:
+                case Space.DisplayP3:
+                {
+                    var (xs, ys, zs) = cs switch
+                    {
+                        Space.Srgb => LinSrgbToXyzD65(LinearizeExtended(v[0]), LinearizeExtended(v[1]), LinearizeExtended(v[2])),
+                        Space.SrgbLinear => LinSrgbToXyzD65(v[0], v[1], v[2]),
+                        _ => LinP3ToXyzD65(LinearizeExtended(v[0]), LinearizeExtended(v[1]), LinearizeExtended(v[2])),
+                    };
+                    var (ol, oa, ob) = XyzD65ToOkLab(xs, ys, zs);
+                    return [ol, oa, ob];
+                }
+
+                case Space.XyzD65:
+                case Space.XyzD50:
+                {
+                    var (xs, ys, zs) = cs == Space.XyzD65 ? (v[0], v[1], v[2]) : XyzD50ToXyzD65(v[0], v[1], v[2]);
+                    var (ol, oa, ob) = XyzD65ToOkLab(xs, ys, zs);
+                    return [ol, oa, ob];
+                }
+
                 default:
                 {
                     var (r, g, b) = FromSpace(v, cs);
@@ -348,7 +382,8 @@ namespace PeachPDF.CSS
         //
         // The inverse of ToOklab for a colour that may lie outside the sRGB gamut (a color-mix() operand written
         // as a wide lab()/oklch()): the coordinates in cs keep their out-of-range values, so the mix is made on
-        // them and the clip comes once, at the end. Spaces that cannot hold such a value (hsl, hwb) get the clipped one.
+        // them and the clip comes once, at the end. hsl and hwb get the clipped colour (a gamut-mapped one has no
+        // meaning there, and color-mix() in those spaces does not resolve yet).
 
         public static double[] ToSpaceFromOklab(double[] oklab, Space cs)
         {
@@ -395,12 +430,26 @@ namespace PeachPDF.CSS
                     return cs == Space.SrgbLinear ? [rl, gl, bl] : [DelinearizeExtended(rl), DelinearizeExtended(gl), DelinearizeExtended(bl)];
                 }
 
+                case Space.DisplayP3:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (pr, pg, pb) = XyzD65ToLinP3(x, y, z);
+                    return [DelinearizeExtended(pr), DelinearizeExtended(pg), DelinearizeExtended(pb)];
+                }
+
                 default:
                 {
                     var (r, g, b) = FromSpace(oklab, Space.Oklab);
                     return ToSpace(r, g, b, cs);
                 }
             }
+        }
+
+        private static double LinearizeExtended(double c)
+        {
+            var magnitude = Math.Abs(c);
+            var linear = magnitude <= 0.04045 ? magnitude / 12.92 : Math.Pow((magnitude + 0.055) / 1.055, 2.4);
+            return c < 0 ? -linear : linear;
         }
 
         // The sRGB transfer function extended past 0..1 by odd symmetry, as CSS Color 4 §10.2 does.

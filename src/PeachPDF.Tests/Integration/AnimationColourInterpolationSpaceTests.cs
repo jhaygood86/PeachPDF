@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     /// <c>rgb(none ...)</c> (not read by the colour parser, so the keyframe stands for the value the property has without the animation; <c>color-mix(in hsl)</c> is read but resolves to black, a separate gap).
     /// The <c>G*</c> rows are colours outside the sRGB gamut (<c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c>, <c>color-mix()</c> in lch or oklch), which a browser mixes
     /// from the coordinates they were written with and clips once, at the end; mixed from their clipped sRGB value the <c>G*</c> rows are up to 93 of 255 off. The <c>N*</c> rows
-    /// are a <c>color-mix()</c> with an out-of-gamut operand of high weight (the operand must reach the mix unclipped too, in any mix space; up to 94 off otherwise).
+    /// are a <c>color-mix()</c> with an out-of-gamut operand of high weight (the operand must reach the mix unclipped too, in any mix space; up to 94 off otherwise). The <c>K*</c> rows are a <c>currentcolor</c> mixed with a legacy colour on a box whose own <c>color</c> is outside the gamut (Chrome mixes it unclipped in sRGB; up to 64 off otherwise).
     /// </para>
     /// </summary>
     public class AnimationColourInterpolationSpaceTests
@@ -67,6 +67,9 @@ namespace PeachPDF.Tests.Integration
             ["N3_mix_lch_80_oog"] = ("color-mix(in lch, oklch(0.7 0.3 150) 80%, red)", "#0000ff", ""),
             ["N4_mix_oklab_80_oog"] = ("color-mix(in oklab, oklch(0.7 0.3 150) 80%, red)", "#0000ff", ""),
             ["N5_mix_srgb_70_oog_last"] = ("#00ff00", "color-mix(in srgb, red, oklch(0.7 0.3 150) 70%)", ""),
+            ["K1_red_to_currentcolor_wide_lch"] = ("#ff0000", "currentcolor", "color: lch(50 60 200);"),
+            ["K2_currentcolor_to_red_wide_oklch"] = ("currentcolor", "#ff0000", "color: oklch(0.7 0.3 150);"),
+            ["K3_alpha_to_currentcolor_wide_lab"] = ("rgb(10 200 30 / 0.5)", "currentcolor", "color: lab(60 90 60);"),
         };
 
         public static TheoryData<string, double, int[]> ChromeColours => new()
@@ -180,6 +183,13 @@ namespace PeachPDF.Tests.Integration
             { "N4_mix_oklab_80_oog", 0.5, new[] { 0, 135, 171, 255 } },
             { "N5_mix_srgb_70_oog_last", 0.25, new[] { 0, 226, 0, 255 } },
             { "N5_mix_srgb_70_oog_last", 0.75, new[] { 0, 169, 0, 255 } },
+            { "K1_red_to_currentcolor_wide_lch", 0.25, new[] { 166, 36, 38, 255 } },
+            { "K1_red_to_currentcolor_wide_lch", 0.5, new[] { 76, 71, 76, 255 } },
+            { "K1_red_to_currentcolor_wide_lch", 0.75, new[] { 0, 107, 114, 255 } },
+            { "K2_currentcolor_to_red_wide_oklch", 0.25, new[] { 0, 152, 0, 255 } },
+            { "K2_currentcolor_to_red_wide_oklch", 0.75, new[] { 162, 51, 0, 255 } },
+            { "K3_alpha_to_currentcolor_wide_lab", 0.25, new[] { 120, 111, 37, 159 } },
+            { "K3_alpha_to_currentcolor_wide_lab", 0.75, new[] { 246, 7, 43, 223 } },
         };
 
         [Theory]

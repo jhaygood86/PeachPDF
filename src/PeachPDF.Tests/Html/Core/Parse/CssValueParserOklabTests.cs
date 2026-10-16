@@ -103,6 +103,34 @@ namespace PeachPDF.Tests.Html.Core.Parse
         }
 
         [Theory]
+        [InlineData("lab(150 0 0)", 1, 0, 0)]
+        [InlineData("lab(-30 0 0)", 0, 0, 0)]
+        [InlineData("oklab(1.4 0 0)", 1, 0, 0)]
+        [InlineData("oklch(0.5 -0.2 100)", 0.5, 0, 0)]
+        [InlineData("oklch(1.5 0.3 150)", 1, 0.3 * -0.8660254, 0.3 * 0.5)]
+        public void AnOutOfRangeLightnessOrChroma_IsClampedWhenTheColourIsRead(string text, double l, double a, double b)
+        {
+            Assert.True(TryGet(text, out var v));
+            Assert.Equal(l, v[0], 3);
+            Assert.Equal(a, v[1], 3);
+            Assert.Equal(b, v[2], 3);
+        }
+
+        [Fact]
+        public void ANestedColorMix_IsReadOnceAtEachLevel()
+        {
+            // Every level used to be read twice (once for the colour, once for its Oklab), so the work doubled with each level.
+            var text = "blue";
+            for (var i = 0; i < 20; i++) text = $"color-mix(in oklab, {text}, red)";
+
+            var parser = new CssValueParser(new PdfRenderContext());
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Assert.True(parser.TryGetColor(text, 0, text.Length, out _));
+            Assert.True(parser.TryGetOklab(text, out _));
+            Assert.True(watch.Elapsed < System.TimeSpan.FromSeconds(5), $"took {watch.Elapsed}");
+        }
+
+        [Theory]
         [InlineData("lab(50% 20% 10%)")]
         [InlineData("lch(60% 20% 120)")]
         [InlineData("oklab(60% 25% -10%)")]
@@ -129,6 +157,19 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [InlineData("color-mix(in oklch, red, lab(60 90 60) 90%)", 255, 0, 43)]
         [InlineData("color-mix(in srgb, red, blue)", 128, 0, 128)]
         [InlineData("color-mix(in lab, lab(50 40 20), lab(70 -30 30))", 165, 141, 101)]
+        [InlineData("color-mix(in display-p3, oklch(0.7 0.3 150), white)", 0, 231, 146)]
+        [InlineData("color-mix(in oklab, color-mix(in xyz, oklch(0.7 0.3 150), blue), white)", 130, 203, 222)]
+        // A lightness out of its range is clamped, and a negative chroma is 0, when the colour is read, before any mix (CSS Color 4 section 9).
+        [InlineData("color-mix(in oklab, lab(150 0 0), black)", 99, 99, 99)]
+        [InlineData("color-mix(in srgb, lab(150 0 0), black)", 127, 128, 128)]
+        [InlineData("color-mix(in oklab, lab(-30 0 0), white)", 99, 99, 99)]
+        [InlineData("color-mix(in oklab, oklab(1.4 0 0), black)", 99, 99, 99)]
+        [InlineData("color-mix(in oklab, oklch(0.5 -0.2 100), white)", 174, 174, 174)]
+        [InlineData("color-mix(in lab, lab(120 20 20), lab(20 -20 -20))", 145, 145, 145)]
+        [InlineData("color-mix(in oklab, oklch(1.5 0.3 150), red)", 219, 194, 75)]
+        // A gray has no hue of its own, so the other operand's stands in for it in lch.
+        [InlineData("color-mix(in lch, oklch(0.5 0 120), oklch(0.6 0.2 240))", 68, 117, 164)]
+        [InlineData("color-mix(in lch, lab(50 0 0), lch(60 40 240))", 97, 138, 161)]
         public void AColorMix_WithAnOperandOutsideTheGamut_IsMixedBeforeTheClip(string text, int r, int g, int b)
         {
             // Chrome's values (canvas readback). The operand that is outside sRGB is mixed from the coordinates it was written with, not clipped first.
@@ -157,6 +198,21 @@ namespace PeachPDF.Tests.Html.Core.Parse
             var expected = ColorSpaceMath.ToSpace(0.8, 0.4, 0.2, space);
             var actual = ColorSpaceMath.ToSpaceFromOklab(oklab, space);
             for (var i = 0; i < 3; i++) Assert.Equal(expected[i], actual[i], 3);
+
+            // and ToOklab undoes it
+            var back = ColorSpaceMath.ToOklab(expected, space);
+            for (var i = 0; i < 3; i++) Assert.Equal(oklab[i], back[i], 3);
+        }
+
+        [Fact]
+        public void OnlyLchAndOklch_HaveAHueThatCanBePowerless()
+        {
+            Assert.False(ColorSpaceMath.IsHuePowerless([50, 0, 0], ColorSpaceMath.Space.Hsl));
+            Assert.False(ColorSpaceMath.IsHuePowerless([0.5, 0, 0], ColorSpaceMath.Space.Oklab));
+            Assert.True(ColorSpaceMath.IsHuePowerless([0.5, 0, 0], ColorSpaceMath.Space.Oklch));
+            Assert.False(ColorSpaceMath.IsHuePowerless([0.5, 0.1, 0], ColorSpaceMath.Space.Oklch));
+            Assert.True(ColorSpaceMath.IsHuePowerless([50, 0.03, 0], ColorSpaceMath.Space.Lch));
+            Assert.False(ColorSpaceMath.IsHuePowerless([50, 5, 0], ColorSpaceMath.Space.Lch));
         }
 
         [Fact]

@@ -406,7 +406,17 @@ namespace PeachPDF.Html.Core.Animation
             // token: when the other side does take the mix there, Chrome mixes an out-of-gamut `color` from them too (measured: `lab(60 90 60)`
             // text colour against `lab(50 40 20)`, 0 to 1 off).
             var token = ColorOrWord(valueParser, text);
-            return token.Kind == TokenKind.Color ? token with { InOklab = false } : null;
+            if (token.Kind != TokenKind.Color) return null;
+
+            // Against a legacy colour the mix is in sRGB, and Chrome makes it from the unclipped sRGB value of a `color` outside the gamut (a
+            // channel below 0 or above 255) and clips the result once: `color: lch(50 60 200)` to red is 64 of 255 off from the clipped colour.
+            if (token.Oklab is { } wide)
+            {
+                var srgb = ColorSpaceMath.ToSpaceFromOklab(wide, ColorSpaceMath.Space.Srgb);
+                return token with { InOklab = false, Rgba = [srgb[0] * 255, srgb[1] * 255, srgb[2] * 255, token.Rgba![3]] };
+            }
+
+            return token with { InOklab = false };
         }
 
         private static List<Token> SubstituteCurrentColor(List<Token> tokens, Token color) =>
