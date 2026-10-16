@@ -402,7 +402,9 @@ namespace PeachPDF.Html.Core.Animation
 
             // CSS Color 4 interpolates the used value of currentcolor, which would make a lab() text colour take the pair into Oklab. Chrome
             // does not (white to currentcolor on a `color: lab(...)` box is an sRGB mix), and this follows Chrome: the keyword counts as a
-            // legacy colour whatever it resolves to, and only the other side can take the mix into Oklab.
+            // legacy colour whatever it resolves to, and only the other side can take the mix into Oklab. The Oklab coordinates stay on the
+            // token: when the other side does take the mix there, Chrome mixes an out-of-gamut `color` from them too (measured: `lab(60 90 60)`
+            // text colour against `lab(50 40 20)`, 0 to 1 off).
             var token = ColorOrWord(valueParser, text);
             return token.Kind == TokenKind.Color ? token with { InOklab = false } : null;
         }
@@ -521,7 +523,7 @@ namespace PeachPDF.Html.Core.Animation
         }
 
         /// <summary>
-        /// Premultiplied mix of two colours given as sRGB channels (0 to 255) and alpha (0 to 1): in gamma-encoded sRGB when both are legacy
+        /// Premultiplied mix of two colour tokens (sRGB channels 0 to 255 and alpha 0 to 1): in gamma-encoded sRGB when both are legacy
         /// sRGB color formats, in Oklab as soon as one is not (CSS Color 4 §13.2, Color Space for Interpolation: Oklab is the default where
         /// the host syntax names none, which an animation does not).
         /// </summary>

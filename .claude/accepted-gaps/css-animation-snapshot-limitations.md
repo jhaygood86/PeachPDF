@@ -49,11 +49,13 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
   `CssValueInterpolator`). A negative argument inside a function (`blur(-5px)`) or in a `calc()` written for lengths of
   different units is not clamped.
-- **A `color-mix()` operand outside the sRGB gamut is mixed clipped** (#1768). A `lab()`, `lch()`, `oklab()`, `oklch()` or `color-mix()` colour is mixed
-  from its unclamped Oklab coordinates (`ColorFunctionExtensions.TryResolveOklab`, kept on the token as `Oklab`), but the operands of a `color-mix()` are
-  resolved to 8-bit `Color`s before that mix is made, so `color-mix(in oklch, oklch(0.7 0.3 150), red)` mixes from the clipped `oklch(0.7 0.3 150)`: 41 of 255
-  off Chrome at the worst of five points (to `#0000ff`, a quarter of the way in), 10 or less at the others. Fixing it means carrying a wide operand through
-  `Color.MixComponents` (converting its Oklab coordinates into the mix space), which nothing else needs yet.
+- **A box's own `color` outside the sRGB gamut is `currentcolor` clipped, against a legacy colour** (#1768). A `lab()`, `lch()`, `oklab()`, `oklch()` or
+  `color-mix()` colour is mixed from its unclamped Oklab coordinates (`ColorFunctionExtensions.TryResolveOklab`, kept on the token as `Oklab`, and carried
+  through a `color-mix()` operand into `Color.MixComponents`), but `CssBox.Color` holds the clipped colour. With `color: lab(60 90 60)`,
+  `currentcolor` to `#0000ff` is 25 of 255 off Chrome at the worst of five points (a tenth of the way in), 7 at three quarters; `currentcolor` against another
+  wide colour is right (0 to 1 off), because that mix is in Oklab and the token keeps its coordinates. Chrome mixes the legacy pair from the unclipped
+  colour in sRGB (negative channels), which this pipeline cannot hold. A `color-mix(in srgb, ...)` with a wide operand is up to 5 off at the first
+  point of five (not explained; the other mix spaces are within 1).
 - **`hsl(none ...)`/`hwb(none ...)` count as legacy colours,** where a browser mixes a colour with a `none` component in Oklab (#1768);
   `rgb(none ...)` is not read at all, and `lab(none ...)` is read with `none` as 0.
 - **`currentcolor` mixes as the box's `color` at the animation step.** That `color` is the one the box holds then, including an

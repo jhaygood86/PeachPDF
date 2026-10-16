@@ -190,7 +190,7 @@ namespace PeachPDF.CSS
         // ── color-mix(in <space> [<hue-method>], c1 [p1], c2 [p2]) ───────────────
         private static Color? ParseColorMix(IEnumerable<Token> args)
         {
-            if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out var space, out var hue, out var alphaMultiplier))
+            if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out var space, out var hue, out var alphaMultiplier, out var oklab1, out var oklab2))
                 return null;
 
             // Neither operand CMYK: the normal rectangular-space mix. Both CMYK: a project-specific
@@ -201,7 +201,7 @@ namespace PeachPDF.CSS
             if (c1.IsDeviceCmyk != c2.IsDeviceCmyk) return null;
             if (c1.IsDeviceCmyk) return Color.MixCmyk(c1, c2, t, alphaMultiplier);
 
-            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier);
+            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier, oklab1, oklab2);
         }
 
         /// <summary>
@@ -242,9 +242,9 @@ namespace PeachPDF.CSS
             }
             else if (name.Equals(FunctionNames.ColorMix, StringComparison.OrdinalIgnoreCase))
             {
-                if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out space, out var hue, out _) || c1.IsDeviceCmyk || c2.IsDeviceCmyk)
+                if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out space, out var hue, out _, out var oklab1, out var oklab2) || c1.IsDeviceCmyk || c2.IsDeviceCmyk)
                     return false;
-                v = Color.MixComponents(c1, c2, t, space, hue, out _);
+                v = Color.MixComponents(c1, c2, t, space, hue, out _, oklab1, oklab2);
             }
             else
             {
@@ -256,9 +256,10 @@ namespace PeachPDF.CSS
         }
 
         // The operands, weight and space of a color-mix(), after the CSS Color 5 §3 percentage normalization.
-        private static bool TryColorMixOperands(IEnumerable<Token> args, out Color c1, out Color c2, out double t, out ColorSpaceMath.Space space, out ColorSpaceMath.HueMethod hue, out double alphaMultiplier)
+        private static bool TryColorMixOperands(IEnumerable<Token> args, out Color c1, out Color c2, out double t, out ColorSpaceMath.Space space, out ColorSpaceMath.HueMethod hue, out double alphaMultiplier, out double[] oklab1, out double[] oklab2)
         {
             c1 = c2 = default;
+            oklab1 = oklab2 = null;
             t = alphaMultiplier = 0;
             space = default;
             hue = default;
@@ -272,8 +273,8 @@ namespace PeachPDF.CSS
             space = MapSpace(config[1]);
             hue = MapHue(config, 2);
 
-            if (!ParseMixOperand(segments[1], out c1, out var p1)) return false;
-            if (!ParseMixOperand(segments[2], out c2, out var p2)) return false;
+            if (!ParseMixOperand(segments[1], out c1, out var p1, out oklab1)) return false;
+            if (!ParseMixOperand(segments[2], out c2, out var p2, out oklab2)) return false;
 
             // CSS Color 5 §3 normalization: a missing percentage is 100% minus the other; percentages
             // scale to sum 1, and a pre-normalization sum below 100% scales the result alpha down.
@@ -288,9 +289,10 @@ namespace PeachPDF.CSS
             return true;
         }
 
-        private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent)
+        private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent, out double[] oklab)
         {
             color = default;
+            oklab = null;
             percent = null;
 
             var tokens = new List<Token>();
@@ -322,6 +324,8 @@ namespace PeachPDF.CSS
             var resolved = tokens.ToResolvedColor();
             if (resolved is null) return false;
             color = resolved.Value;
+            // The operand as written, when it lies outside the gamut the Color above is clipped to (null for any other colour).
+            if (tokens.TryResolveOklab(out var wide)) oklab = wide;
             return true;
         }
 

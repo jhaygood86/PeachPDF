@@ -354,25 +354,25 @@ namespace PeachPDF.CSS
         /// toward <paramref name="c2"/>, the result alpha then scaled by <paramref name="alphaMultiplier"/>
         /// (below 1 only when the two percentages summed to under 100%).
         /// </summary>
-        public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier)
+        public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier, double[] oklab1 = null, double[] oklab2 = null)
         {
-            var v = MixComponents(c1, c2, t, cs, hue, out var mixedAlpha);
+            var v = MixComponents(c1, c2, t, cs, hue, out var mixedAlpha, oklab1, oklab2);
             var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
             var outAlpha = (byte)Math.Round(Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1) * 255);
             return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
         }
 
         /// <summary>
-        /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double)"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
-        /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double)"/> clips them.
+        /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
+        /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> clips them.
         /// </summary>
-        internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha)
+        internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha, double[] oklab1 = null, double[] oklab2 = null)
         {
             t = Math.Clamp(t, 0.0, 1.0);
             double a1 = c1.A / 255.0, a2 = c2.A / 255.0;
 
-            var v1 = ColorSpaceMath.ToSpace(c1.R / 255.0, c1.G / 255.0, c1.B / 255.0, cs);
-            var v2 = ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, cs);
+            var v1 = oklab1 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab1, cs) : ColorSpaceMath.ToSpace(c1.R / 255.0, c1.G / 255.0, c1.B / 255.0, cs);
+            var v2 = oklab2 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab2, cs) : ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, cs);
             var hueIndex = ColorSpaceMath.HueIndex(cs);
 
             for (var i = 0; i < 3; i++)

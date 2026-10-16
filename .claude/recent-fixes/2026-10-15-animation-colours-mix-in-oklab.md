@@ -29,7 +29,7 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
   clipped 8-bit value** (token field `Oklab`, from `CssValueParser.TryGetOklab` over `ColorFunctionExtensions.TryResolveOklab`). The first version converted
   the parser's 8-bit sRGB, which for a colour outside the sRGB gamut is the clipped colour: against Chrome over 640 points (0.1 to 0.9, 128 series with eight legacy
   partners and out-of-gamut colours both ways) that was up to 118 of 255 off with 440 points more than 3 off, and worse than `main`'s sRGB mix for 147 of
-  them; reading the coordinates leaves 5 points more than 3 off (max 41, all one nested `color-mix()` operand, see the accepted gap) and none worse than `main`.
+  them; reading the coordinates leaves 5 points more than 3 off (max 41, all one pair whose `color-mix()` operand was itself out of gamut: see the next point) and none worse than `main`.
   The grammar is not repeated: `ParseRect`/`ParsePolar`/`ParseColorMix` were split into component readers (`TryRectComponents`, `TryPolarComponents`,
   `TryColorMixOperands`) that the colour parse and the Oklab read share, and `Color.Mix` into `Color.MixComponents` (the mix before the sRGB clip) plus the clip.
   `ColorSpaceMath.ToOklab` converts through XYZ for the Lab family, so the out-of-range coordinates survive. The in-gamut cases improve too: they no longer go
@@ -46,8 +46,12 @@ rows fail on `main`'s sRGB mix (15 cases; the largest misses are an overshoot ro
 - `color()`, relative colour syntax and `rgb(none ...)` are not read by the colour parser at all (static or animated; #1772), so a keyframe holding one is
   dropped; the colour-space part is ready for them once the parser reads them (their rows were measured and left out of the tests, and
   `TakesAMixIntoOklab`'s `color` and `from` cases are dead code until then). `color-mix(in hsl)` and `in hwb` are read but resolve to black, static too (#1769).
-- A `color-mix()` whose own operand is outside the sRGB gamut is still mixed from that operand's clipped 8-bit value (#1768; accepted gap): the operands are
-  resolved to `Color`s before the mix. 41 of 255 off Chrome at the worst point measured. The maintainer's review found the general case (up to 97 of 255
+- **A `color-mix()` operand outside the sRGB gamut reaches the mix unclipped too** (`ParseMixOperand` returns its Oklab beside the `Color`, `Color.MixComponents` takes
+  it through `ColorSpaceMath.ToSpaceFromOklab`, which converts via XYZ and uses an odd-symmetric sRGB transfer function; `Linearize`/`Delinearize` clamp, so `ToSpace` could not
+  hold it). The first version resolved operands to 8-bit `Color`s first: a first review measured 460 more points (a heavy-weight operand, 50 to 95%, in every mix space, both
+  orders) and it was up to 100 of 255 off (273 of 400 points over 3), against 5 (6 points over 3) now; of the ten `N*` rows in the tests, seven were more than 50 off before (1, 7 and 19 at the mild points). It also changes the static `color-mix()` of
+  an out-of-gamut operand (Chrome's own values are in `CssValueParserOklabTests`), and an in-gamut `lab()` operand is no longer rounded to 8 bits before the mix. Left: a box's own wide `color` against a legacy colour
+  (accepted gap). The maintainer's review found the general case (up to 97 of 255
   off, 3,350 points over 670 series at 0.1, 0.25, 0.5, 0.75 and 0.9, `oklch(0.7 0.3 150)` to `rgba(230,60,70,.6)` at 97 a quarter of the way in against
   `main`'s 33); my own first measure (0.25, 0.5, 0.75 only) had seen 52, which is why a measure at the ends of the run matters. The `G*` rows pin the fix.
 - **The lightness is clamped to 0..1** (`MixInOklab`): with an easing that overshoots, Chrome holds L at the end of its range and keeps a and b, where

@@ -344,6 +344,73 @@ namespace PeachPDF.CSS
             }
         }
 
+        // ── Oklab → color-space coordinates, without a clip to the sRGB gamut ──
+        //
+        // The inverse of ToOklab for a colour that may lie outside the sRGB gamut (a color-mix() operand written
+        // as a wide lab()/oklch()): the coordinates in cs keep their out-of-range values, so the mix is made on
+        // them and the clip comes once, at the end. Spaces that cannot hold such a value (hsl, hwb) get the clipped one.
+
+        public static double[] ToSpaceFromOklab(double[] oklab, Space cs)
+        {
+            switch (cs)
+            {
+                case Space.Oklab:
+                    return [oklab[0], oklab[1], oklab[2]];
+
+                case Space.Oklch:
+                {
+                    var (L, c, h) = RectToPolar(oklab[0], oklab[1], oklab[2]);
+                    return [L, c, h];
+                }
+
+                case Space.Lab:
+                case Space.Lch:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (x50, y50, z50) = XyzD65ToXyzD50(x, y, z);
+                    var (L, a, b) = XyzD50ToLab(x50, y50, z50);
+                    if (cs == Space.Lab) return [L, a, b];
+                    var (pl, pc, ph) = RectToPolar(L, a, b);
+                    return [pl, pc, ph];
+                }
+
+                case Space.XyzD65:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    return [x, y, z];
+                }
+
+                case Space.XyzD50:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (x50, y50, z50) = XyzD65ToXyzD50(x, y, z);
+                    return [x50, y50, z50];
+                }
+
+                case Space.Srgb:
+                case Space.SrgbLinear:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    var (rl, gl, bl) = XyzD65ToLinSrgb(x, y, z);
+                    return cs == Space.SrgbLinear ? [rl, gl, bl] : [DelinearizeExtended(rl), DelinearizeExtended(gl), DelinearizeExtended(bl)];
+                }
+
+                default:
+                {
+                    var (r, g, b) = FromSpace(oklab, Space.Oklab);
+                    return ToSpace(r, g, b, cs);
+                }
+            }
+        }
+
+        // The sRGB transfer function extended past 0..1 by odd symmetry, as CSS Color 4 §10.2 does.
+        private static double DelinearizeExtended(double c)
+        {
+            var magnitude = Math.Abs(c);
+            var encoded = magnitude <= 0.0031308 ? magnitude * 12.92 : 1.055 * Math.Pow(magnitude, 1.0 / 2.4) - 0.055;
+            return c < 0 ? -encoded : encoded;
+        }
+
         // ── Reverse: color-space coordinates → gamut-mapped sRGB (0..1) ──────
 
         public static (double R, double G, double B) FromSpace(double[] v, Space cs)
