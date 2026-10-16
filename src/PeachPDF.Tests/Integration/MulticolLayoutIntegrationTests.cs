@@ -1888,7 +1888,43 @@ namespace PeachPDF.Tests.Integration
             // Off the test thread: the stalled search is a synchronous loop, which would otherwise hang the run.
             var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
 
-            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30))));
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+        }
+
+        [Fact]
+        public async Task RightFloatWithNegativeMarginTop_DropsBelowWiderLeftFloat()
+        {
+            var html = Wrap(
+                "<div id='c' style='width:200pt'>" +
+                "<div id='a' style='float:left; width:150pt; height:100pt'>A</div>" +
+                "<div id='b' style='float:right; width:100pt; height:50pt; margin-top:-5pt'>B</div>" +
+                "text</div>");
+
+            // Off the test thread: a stalled search is a synchronous loop, which would otherwise hang the run.
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // B cannot sit beside A (150 + 100 > 200), so it goes below A's margin edge; its border box
+            // starts 5pt above that edge because of the negative margin-top.
+            Assert.Equal(a.Location.Y + 100 - 5, b.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task RightFloatWithNegativeMarginTop_InMulticolInlineContent_DoesNotStallFloatPlacement()
+        {
+            var html = Wrap(
+                "<div style='width:700px; columns:3'>" +
+                "<div style='float:right; width:42px; height:67px'>F1</div>" +
+                "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10" +
+                "<div style='float:right; width:274px; height:20px; margin-top:-5px'>F4</div></div>");
+
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
         }
 
         // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float

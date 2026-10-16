@@ -3379,9 +3379,6 @@ namespace PeachPDF.Html.Core.Dom
                 ReferenceWidth = box.ActualBoxSizingWidth
             };
 
-            // See FloatBoxRight: a position visited twice is a search that cannot end.
-            HashSet<(double Left, double Right, double Top)> triedPositions = [];
-
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
@@ -3403,10 +3400,8 @@ namespace PeachPDF.Html.Core.Dom
                     coordinates.MaxBottom = intersectingFloat.ActualBottom;
                 }
 
-                if (coordinates.Left + box.ActualWidth > coordinates.Right
-                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
+                if (coordinates.Left + box.ActualWidth > coordinates.Right)
                 {
-                    triedPositions.Clear();
                     coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
                     coordinates.Left = startX + box.ActualMarginLeft;
 
@@ -3445,6 +3440,7 @@ namespace PeachPDF.Html.Core.Dom
                 MulticolRight = EnclosingMulticolRight(containingBox),
                 Top = startY,
                 MaxBottom = startY,
+                MarginTop = box.ActualMarginTop,
                 MarginLeft = box.ActualMarginLeft,
                 MarginRight = box.ActualMarginRight,
                 ReferenceWidth = box.ActualBoxSizingWidth
