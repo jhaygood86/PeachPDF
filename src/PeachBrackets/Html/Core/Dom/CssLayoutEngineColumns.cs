@@ -629,9 +629,13 @@ namespace PeachBrackets.Html.Dom
             // tall everything is) and a continuation starts from the full budget and is re-balanced below
             // once the fill has shown that the remainder ends here.
             var balances = columnsBox.ColumnFill.Value != ColumnFillMode.Auto;
-            // The container's own floats, and those of an anonymous block wrapping its bare text: what makes a column
-            // taller than an even share of the content.
+            // What makes a column taller than an even share of the content: the container's own floats, and those of an
+            // anonymous block wrapping its bare text. They are kept apart because only the first kind has a position
+            // worth reading: a float among text sits wherever the pass that last laid it out put it, which after a
+            // measurement pass is far down a single column of all the text, and the text divides, so only the float's
+            // own height needs room.
             var floats = new List<CssBox>();
+            var floatsAmongText = new List<CssBox>();
             foreach (var b in columnsBox.Boxes)
             {
                 if (b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None)
@@ -642,7 +646,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     foreach (var c in b.Boxes)
                     {
-                        if (c.IsFloated) floats.Add(c);
+                        if (c.IsFloated) floatsAmongText.Add(c);
                     }
                 }
             }
@@ -718,7 +722,9 @@ namespace PeachBrackets.Html.Dom
                     // ran out of attempts first, deferring the container from page to page for ever. Only for a container
                     // that holds a float itself: any other content divides, and its trials are the estimate's to grow.
                     target = Math.Min(pageBudget, Math.Max(target * TargetGrowthPerAttempt + 1,
-                        floats.Count > 0 ? Math.Max(contentBottom, FloatReach(floats)) - boxTop : 0));
+                        Math.Max(
+                            floats.Count > 0 ? Math.Max(contentBottom, FloatReach(floats)) - boxTop : 0,
+                            TallestOuterHeight(floatsAmongText))));
                 }
                 // Only a fill that used the whole budget - it was not balanced, so this is the fragment
                 // that holds the end of the flow and now knows its real height. A fill made at the
@@ -1018,6 +1024,15 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static double FloatReach(List<CssBox> floats) =>
             floats.Count == 0 ? double.MinValue : floats.Max(f => f.ActualBottom + f.ActualMarginBottom);
+
+        /// <summary>
+        /// The depth of the tallest of <paramref name="floats"/>, margins included, wherever it was last placed: the
+        /// room a column needs to hold it, for a float that sits among text.
+        /// </summary>
+        private static double TallestOuterHeight(List<CssBox> floats) =>
+            floats.Count == 0
+                ? 0
+                : floats.Max(f => f.ActualBottom - f.Location.Y + Math.Max(0, f.ActualMarginTop) + Math.Max(0, f.ActualMarginBottom));
 
 
         /// <summary>

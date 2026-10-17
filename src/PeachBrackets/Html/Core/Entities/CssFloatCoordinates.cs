@@ -15,8 +15,32 @@ namespace PeachBrackets.Html.Entities
         /// <summary>The floating box's own top margin. Only a negative one matters: it puts the border-box <see cref="Top"/> above the margin edge the float has to clear.</summary>
         public double MarginTop { get; init; }
 
-        /// <summary>The margin-edge top the vertical-conflict test reads (CSS 2.1 §9.5.1 rule 5 compares outer tops).</summary>
-        public double OuterTop => Top + Math.Max(0, -MarginTop);
+        private double? _outerTop;
+
+        /// <summary>
+        /// The margin-edge top the vertical-conflict test reads (CSS 2.1 §9.5.1 rule 5 compares outer tops). Unless
+        /// the caller states it, it is the border-box <see cref="Top"/> with a negative <see cref="MarginTop"/> taken
+        /// back out. Once the float has been moved by <see cref="DropTo"/> it is the edge the drop cleared.
+        /// </summary>
+        public double OuterTop
+        {
+            get => _outerTop ?? Top + Math.Max(0, -MarginTop);
+            init => _outerTop = value;
+        }
+
+        /// <summary>
+        /// Moves the float below <paramref name="clearEdge"/>, the lowest margin edge it has to clear. The border box
+        /// starts <see cref="MarginTop"/> past it, so a negative margin-top leaves the border box above the edge while
+        /// the margin box starts at it. <see cref="OuterTop"/> is what the conflict test reads, and it is never above
+        /// <paramref name="clearEdge"/> afterwards, so a blocker the float has been moved below cannot be found again.
+        /// A search that drops the float repeatedly therefore always moves further down the page, whatever the margins
+        /// of the floats involved, and ends.
+        /// </summary>
+        public void DropTo(double clearEdge)
+        {
+            Top = clearEdge + MarginTop;
+            _outerTop = Top + Math.Max(0, -MarginTop);
+        }
 
         /// <summary>The right edge of the float's containing block (the column, in a multi-column container).</summary>
         public double ContainingRight { get; init; } = double.PositiveInfinity;

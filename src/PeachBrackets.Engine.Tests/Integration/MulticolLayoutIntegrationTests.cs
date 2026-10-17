@@ -1927,6 +1927,141 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
         }
 
+        // A blocker with a negative margin-bottom has a margin edge above its border box. The search tests for conflicts
+        // against the border box, so dropping the float to the margin edge put it back inside the blocker, and the same
+        // blocker was found again for ever.
+        [Theory]
+        [InlineData("width:600px; columns:2")]
+        [InlineData("width:300px")]
+        public async Task BlockerWithNegativeMarginBottom_DoesNotStallFloatPlacement(string containerStyle)
+        {
+            var html = Wrap(
+                $"<div style='{containerStyle}'>" +
+                "<div id='a' style='float:left; width:200px; height:50px; margin-bottom:-45px'>A</div>" +
+                "<div id='b' style='float:right; width:200px; height:30px; margin-top:-10px'>B</div>" +
+                "w1 w2 w3 w4 w5 w6 w7 w8</div>");
+
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // B cannot sit beside A in a column that cannot hold both, so its margin edge is at or below A's border box.
+            Assert.True(b.Location.Y - b.ActualMarginTop >= a.ActualBottom - 0.01,
+                $"B's margin edge at {b.Location.Y - b.ActualMarginTop} is inside A, which ends at {a.ActualBottom}");
+        }
+
+        // The first float's top is the position the layout gave it, with no margin taken out of it, so a second float
+        // with a larger negative margin-top read as starting below the first's bottom and was placed over it.
+        [Fact]
+        public async Task SecondRightFloatWithNegativeMarginTop_SitsBesideTheFirst()
+        {
+            var html = Wrap(
+                "<div style='width:600px'>" +
+                "<div id='f1' style='float:right; width:75px; height:29px; margin-top:-20px'>F1</div>" +
+                "<div id='f2' style='float:right; width:64px; height:33px; margin-top:-40px'>F2</div></div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var f1 = FindById(root, "f1")!;
+            var f2 = FindById(root, "f2")!;
+
+            Assert.True(f2.ActualRight + f2.ActualMarginRight <= f1.Location.X - f1.ActualMarginLeft + 0.01,
+                $"F2 ends at {f2.ActualRight}, over F1, which starts at {f1.Location.X}");
+        }
+
+        // A float after the text, in a container with a fixed height: the column balance read the float's position from
+        // the measurement pass, which put it after all the text laid out in one column, and sized every column to hold
+        // that. The text then ran down a single column and the scroll container clipped most of it.
+        [Theory]
+        [InlineData("overflow:hidden; height:400px")]
+        [InlineData("overflow:hidden; height:200px")]
+        [InlineData("height:400px")]
+        [InlineData("")]
+        public async Task FloatAfterTheText_DoesNotCollapseTheColumns(string containerStyle)
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 31).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:300px; columns:3; {containerStyle}'>" + text +
+                            "<div style='float:left; width:50px; height:36px'>F</div></div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc)
+                .SelectMany(b => b.Words).Where(w => w.Text is { } text && text.StartsWith('w')).ToList();
+
+            Assert.Equal(31, words.Count);
+
+            // Which third of the container a word starts in; the words per line depend on the font, the thirds do not.
+            var third = (mc.ActualRight - mc.Location.X) / 3;
+            var columns = words.GroupBy(w => (int)((w.Left - mc.Location.X) / third)).ToList();
+            Assert.Equal(3, columns.Count);
+
+            // An even share is about 11 words a column; a column holding half the text again is not balanced.
+            Assert.All(columns, c => Assert.InRange(c.Count(), 1, 16));
+        }
+
+        // Placing a float must end however the floats before it are sized, spaced and cleared. The shape of a hang is
+        // a set of floats and margins, so a seeded sweep of them (both sides, margins of either sign on all four edges,
+        // clear on some, floats taller than the column) catches the next stall that a hand-built case does not.
+        [Theory]
+        [InlineData("width:600px")]
+        [InlineData("width:600px; columns:2")]
+        [InlineData("width:600px; columns:3; overflow:hidden; height:300px")]
+        public async Task FloatsOfAnySizeAndMargin_DoNotStallFloatPlacement(string containerStyle)
+        {
+            var random = new Random(1743);
+
+            for (var document = 0; document < 25; document++)
+            {
+                var body = new System.Text.StringBuilder();
+                var floatCount = random.Next(2, 7);
+                var floatAt = Enumerable.Range(0, floatCount).Select(_ => random.Next(0, 60)).ToList();
+
+                for (var word = 0; word < 60; word++)
+                {
+                    for (var i = 0; i < floatCount; i++)
+                    {
+                        if (floatAt[i] != word) continue;
+
+                        var side = random.Next(2) == 0 ? "left" : "right";
+                        var clear = new[] { "", "", "left", "right", "both" }[random.Next(5)];
+                        int Margin() => random.Next(3) == 0 ? random.Next(-40, 41) : 0;
+
+                        body.Append($"<div style='float:{side}; width:{random.Next(20, 350)}px; height:{random.Next(20, 1200)}px; " +
+                                    $"margin:{Margin()}px {Margin()}px {Margin()}px {Margin()}px; clear:{(clear == "" ? "none" : clear)}'>F{i}</div>");
+                    }
+
+                    body.Append($"w{word:D3} ");
+                }
+
+                var html = Wrap($"<div style='{containerStyle}'>{body}</div>");
+                var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+                Assert.True(
+                    ReferenceEquals(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken))),
+                    $"floats stalled the layout of document {document}: {html}");
+            }
+        }
+
+        // A left float whose negative margin-left puts its margin edge left of the container, beside a right float too
+        // wide to leave it room: the right blocker was found again with nothing changed, and the arithmetic that sends
+        // a float below its blockers still read the float as fitting, so the search never ended.
+        [Theory]
+        [InlineData("width:268px; height:77px; margin:0px 14px 0px 19px", "width:10px; height:38px; margin:15px 0px 0px -86px; clear:none")]
+        [InlineData("width:311px; height:47px; margin:10px 0px -9px 0px", "width:10px; height:53px; margin:0px 4px 0px -128px")]
+        public async Task LeftFloatWithNegativeMarginLeft_BesideAWideRightFloat_DoesNotStallFloatPlacement(string rightStyle, string leftStyle)
+        {
+            var html = Wrap(
+                "<div style='width:300px'>" +
+                $"<div style='float:right; clear:both; {rightStyle}'>F0</div>" +
+                $"<div style='float:left; clear:both; {leftStyle}'>F4</div>text</div>");
+
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+        }
+
         // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float
         // disjunct), so the parser must leave its floats as direct children of the container.
         [Fact]
