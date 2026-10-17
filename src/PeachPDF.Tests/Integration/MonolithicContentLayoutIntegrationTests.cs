@@ -374,32 +374,27 @@ namespace PeachPDF.Tests.Integration
                 $"a cell straddling pages must still resume across real passes, got {container.FragmentainerPasses}");
         }
 
-        // A monolithic box holding only inline content dispatches to CreateLineBoxes (ContainsInlinesOnly
-        // is checked before EstablishesMultiColumnContext in CssBox.LayoutContents), never reaching
-        // CssLayoutEngineColumns at all - so excluding every multi-column box from suppression, rather
-        // than only one that will actually dispatch to that engine, wrongly left this shape unsuppressed.
+        // A monolithic multi-column box whose content dispatches to CssLayoutEngineColumns is not suppressed:
+        // the columns engine needs the fragmentainer that suppression detaches. Inline-only content dispatches
+        // there too, since DomParser wraps its run in an anonymous block, so its columns are laid out.
         [Fact]
-        public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsStillSuppressed()
+        public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_DistributesItsColumns()
         {
             var html = LayoutHarness.Wrap(
                 "<div id='card' style='overflow:scroll;height:660pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, 30).Select(i => $"Line{i}")) +
                 "</div>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
 
             var card = LayoutHarness.FindById(root, "card")!;
             Assert.True(card.EstablishesMultiColumnContext, "fixture must establish a multi-column context");
 
-            // A single, unbroken pass - the same signature genuinely monolithic content gets - rather than
-            // the several real per-fragmentainer passes ordinary (suppressed-or-not) inline content would
-            // otherwise resume across.
-            Assert.Equal(1, container.FragmentainerPasses);
-            Assert.Equal(card.Location.Y + 30 * 22, card.ActualBottom, 2);
+            var words = LayoutHarness.Descendants(card).SelectMany(b => b.Words).ToList();
 
-            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
-            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
-            Assert.True(bottom > top, "fixture must actually span more than one page");
+            var boundary = card.Location.X + (card.ActualRight - card.Location.X) / 2;
+            Assert.Contains(words, w => w.Left < boundary - 1);
+            Assert.Contains(words, w => w.Left >= boundary - 1);
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

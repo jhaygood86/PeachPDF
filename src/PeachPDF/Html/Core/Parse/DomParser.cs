@@ -3571,6 +3571,27 @@ namespace PeachPDF.Html.Core.Parse
             // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
             if (box is CssBoxSvg or CssBoxMath) return;
 
+            // A multi-column container holding nothing but inline content gets the wrapper an inline run
+            // gets elsewhere, though its own children do not vary: CssBox.LayoutContents would otherwise
+            // read the box as inlines-only and send it to CreateLineBoxes, which knows nothing of columns,
+            // so the text runs as one column across the full measure instead of being fragmented across
+            // the column boxes (css-multicol-1 §3). Widening that dispatch instead does not work: the
+            // columns engine fragments block-level content, and handed a box of bare inline content it
+            // drops words outright. The wrapper gives it the shape it needs.
+            //
+            // A float joins the wrapped run, as it does in any block (CSS 2.1 §9.2.1.1), so it is placed beside the
+            // text in the same inline flow. A box holding only floats is not wrapped: it already reaches the engine
+            // (see CssBox's float disjunct). Nor under a vertical
+            // writing mode: measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run
+            // of text, CreateVerticalLineBoxes keeps the content inside the box (72pt x 58pt), while the
+            // columns engine stacks it into a single 511pt run that leaves the box entirely.
+            var wrapsInlineRunForColumns =
+                box.EstablishesMultiColumnContext
+                && box.Boxes.Count > 0
+                && DomUtils.ContainsInlinesOnly(box)
+                && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
+                && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr);
+
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
             // anonymous block box — a *block container* rule — must not be created inside one. Each child
             // becomes an item instead (css-flexbox-1 §4 / css-grid-2 §6), and only a contiguous run of
@@ -3586,7 +3607,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 WrapFlexOrGridTextSequences(box);
             }
-            else if (ContainsVariantBoxes(box))
+            else if (ContainsVariantBoxes(box) || wrapsInlineRunForColumns)
             {
                 for (int i = 0; i < box.Boxes.Count; i++)
                 {
