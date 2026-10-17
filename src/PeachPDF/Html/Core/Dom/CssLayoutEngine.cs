@@ -3379,6 +3379,11 @@ namespace PeachPDF.Html.Core.Dom
                 ReferenceWidth = box.ActualBoxSizingWidth
             };
 
+            // A negative margin-left can leave a right blocker found again with nothing changed and the float still
+            // fitting by the arithmetic below, so the same state would be searched for ever. As in FloatBoxRight, a
+            // repeated state sends the float below its blockers.
+            HashSet<(double Left, double Right, double Top)> triedPositions = [];
+
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
@@ -3400,9 +3405,12 @@ namespace PeachPDF.Html.Core.Dom
                     coordinates.MaxBottom = intersectingFloat.ActualBottom;
                 }
 
-                if (coordinates.Left + box.ActualWidth > coordinates.Right)
+                if (coordinates.Left + box.ActualWidth > coordinates.Right
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
-                    coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
+                    triedPositions.Clear();
+
+                    coordinates.DropTo(coordinates.MaxBottom);
                     coordinates.Left = startX + box.ActualMarginLeft;
 
                     // css-break-3 §5.1: this drop may have carried the float onto a fragmentainer of a
@@ -3441,6 +3449,9 @@ namespace PeachPDF.Html.Core.Dom
                 Top = startY,
                 MaxBottom = startY,
                 MarginTop = box.ActualMarginTop,
+                // The position handed over is read as the margin edge, as it always was for a right float: taking a
+                // negative margin-top back out of it puts a second float with a larger one over the first.
+                OuterTop = startY,
                 MarginLeft = box.ActualMarginLeft,
                 MarginRight = box.ActualMarginRight,
                 ReferenceWidth = box.ActualBoxSizingWidth
@@ -3474,8 +3485,11 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 // The next float goes below the blocker's margin box (CSS 2.1 §9.5.1 rule 8 puts it as high as
-                // possible, which is the margin edge, not the border edge).
-                var blockerBottom = intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom;
+                // possible, which is the margin edge, not the border edge). Never above its border box, though: that is
+                // the edge the conflict test reads, so a negative margin-bottom would put the drop back inside the
+                // blocker and the same blocker would be found again.
+                var blockerBottom = Math.Max(intersectingFloat.ActualBottom,
+                    intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom);
                 if (blockerBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = blockerBottom;
@@ -3486,7 +3500,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     triedPositions.Clear();
 
-                    coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
+                    coordinates.DropTo(coordinates.MaxBottom);
 
                     // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
                     limitRight = ContentRightOf(containingBox, coordinates.Top);
