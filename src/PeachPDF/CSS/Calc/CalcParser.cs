@@ -240,7 +240,7 @@ namespace PeachPDF.CSS
                 Length.Unit.Cap or Length.Unit.Ic or Length.Unit.Lh or
                 Length.Unit.Rex or Length.Unit.Rch or Length.Unit.Rcap or Length.Unit.Ric or Length.Unit.Rlh or
                 Length.Unit.Px or Length.Unit.Mm or Length.Unit.Cm or Length.Unit.In or Length.Unit.Pt or
-                Length.Unit.Pc or
+                Length.Unit.Pc or Length.Unit.Q or
                 Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
                 Length.Unit.Cqmin or Length.Unit.Cqmax or
                 Length.Unit.Vw or Length.Unit.Vh or Length.Unit.Vi or Length.Unit.Vb or

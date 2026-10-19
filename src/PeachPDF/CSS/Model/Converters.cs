@@ -286,13 +286,15 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter ScaleTransformConverter = Construct(() =>
         {
-            var number = NumberConverter.Required();
-            var option = NumberConverter.Option(float.NaN);
+            // CSS Transforms 2: a percentage in a scale function is equivalent to a number.
+            var factor = NumberConverter.Or(PercentConverter);
+            var number = factor.Required();
+            var option = factor.Option(float.NaN);
             return new FunctionValueConverter(FunctionNames.Scale, WithArgs(number, option)).Or(
                 new FunctionValueConverter(FunctionNames.Scale3d, WithArgs(number, option, option))).Or(
-                new FunctionValueConverter(FunctionNames.ScaleX, WithArgs(NumberConverter))).Or(
-                new FunctionValueConverter(FunctionNames.ScaleY, WithArgs(NumberConverter))).Or(
-                new FunctionValueConverter(FunctionNames.ScaleZ, WithArgs(NumberConverter)));
+                new FunctionValueConverter(FunctionNames.ScaleX, WithArgs(factor))).Or(
+                new FunctionValueConverter(FunctionNames.ScaleY, WithArgs(factor))).Or(
+                new FunctionValueConverter(FunctionNames.ScaleZ, WithArgs(factor)));
         });
 
         public static readonly IValueConverter RotateTransformConverter = Construct(() =>

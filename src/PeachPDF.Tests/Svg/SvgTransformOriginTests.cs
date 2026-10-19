@@ -34,6 +34,22 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(f, m.M32, 3);
         }
 
+        [Theory]
+        [InlineData("scale(50%)", 0.5, 0.5)]
+        [InlineData("scale(200%, 50%)", 2, 0.5)]
+        [InlineData("scaleX(25%)", 0.25, 1)]
+        public void AScalePercentage_IsTheSameNumber(string function, float sx, float sy)
+        {
+            AssertMatrix(Build($"transform: {function}; transform-origin: 0 0").Transform, sx, 0, 0, sy, 0, 0);
+        }
+
+        [Fact]
+        public void TheQUnit_IsAQuarterMillimetre()
+        {
+            // 40Q = 10mm = 37.795px
+            AssertMatrix(Build("transform: translate(40Q, 40q); transform-origin: 0 0").Transform, 1, 0, 0, 1, 37.795f, 37.795f);
+        }
+
         // rotate(90deg) about (50, 0): translate(50,0) rotate translate(-50,0) is matrix(0, 1, -1, 0, 50, -50).
         [Theory]
         [InlineData("transform: rotate(90deg); transform-origin: 50px 0px", 0, 1, -1, 0, 50, -50)]
