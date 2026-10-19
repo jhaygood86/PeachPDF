@@ -8,7 +8,7 @@ Each package is documented with DefaultDocumentation, which writes a links file 
 reads the links files of the packages built before it (see src/ApiReferenceLinks.props). So the packages are built in the
 order of the references between them:
 
-  PeachDrawing.Text -> PeachDrawing.Core -> PeachImage -> PeachDrawing -> PeachDrawing.PDF -> PeachPDF
+  PeachDrawing.Text -> PeachDrawing.Core -> PeachImage -> PeachDrawing -> PeachDrawing.PDF -> PeachBrackets -> PeachPDF
 
 PeachImage is not part of this repository. Its documentation is generated from the tag of the version PeachPDF's
 PackageReference names, cloned into artifacts/, so the reference describes the PeachImage PeachPDF was actually built with.
@@ -100,6 +100,7 @@ Invoke-PackageReference 'PeachDrawing.Core'
 Invoke-PeachImageReference
 Invoke-PackageReference 'PeachDrawing'
 Invoke-PackageReference 'PeachDrawing.PDF'
+Invoke-PackageReference 'PeachBrackets'
 Invoke-PackageReference 'PeachPDF'
 
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Text')
@@ -108,6 +109,7 @@ Invoke-PackageReference 'PeachPDF'
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachImage') -UnlinkLearnPrefix 'PeachImage'
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.PDF')
+& $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachBrackets')
 & $fixLinks -ApiDocsPath $apiRoot
 
 if (-not $SkipLinkCheck) { & (Join-Path $PSScriptRoot 'Test-ApiDocLinks.ps1') -ApiDocsPath $apiRoot }

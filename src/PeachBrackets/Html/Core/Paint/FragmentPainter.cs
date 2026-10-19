@@ -1,3 +1,4 @@
+using PeachBrackets.Tagging;
 using PeachPDF;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
@@ -752,7 +753,7 @@ namespace PeachBrackets.Html.Paint
                 var classification = StructureTagMapper.Classify(ancestor);
                 if (classification.Kind != StructureTagKind.Grouping) continue;
 
-                (ancestors ??= []).Add(new PhantomAncestor(ancestor, classification.StructureType!));
+                (ancestors ??= []).Add(new PhantomAncestor(StructureNode.Of(ancestor), classification.StructureType!));
             }
 
             return ancestors is null ? null : builder.OpenPhantomAncestors(ancestors);
@@ -786,12 +787,12 @@ namespace PeachBrackets.Html.Paint
                     break;
 
                 case StructureTagKind.Grouping:
-                    using (builder.OpenGroupingElement(box, classification.StructureType!))
+                    using (builder.OpenGroupingElement(StructureNode.Of(box), classification.StructureType!))
                         PaintContent(g, fragment);
                     break;
 
                 case StructureTagKind.Content:
-                    using (builder.OpenContentElement(g, box, classification.StructureType!, classification.AltText))
+                    using (builder.OpenContentElement(g, StructureNode.Of(box), classification.StructureType!, classification.AltText))
                     {
                         // Attach the original MathML source as a PDF 2.0 Associated File on this
                         // formula's own structure element - see StructureTagBuilder.AttachMathMlSource
@@ -803,7 +804,7 @@ namespace PeachBrackets.Html.Paint
                         // Formula still gets the source attached to whatever element they chose - the
                         // source is still accurate supplementary content for it either way.
                         if (box is CssBoxMath mathBox && mathBox.SerializedSource is { } mathMl)
-                            builder.AttachMathMlSource(box, mathMl);
+                            builder.AttachMathMlSource(StructureNode.Of(box), mathMl);
 
                         PaintContent(g, fragment);
                     }
@@ -829,7 +830,7 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         private void PaintListItem(Canvas g, BoxFragment fragment, IStructureTagSink builder)
         {
-            using (builder.OpenGroupingElement(fragment.Box, Keywords.Li))
+            using (builder.OpenGroupingElement(StructureNode.Of(fragment.Box), Keywords.Li))
             {
                 var markerFragment = FindMarkerFragment(fragment);
                 if (markerFragment is not null)
@@ -842,12 +843,12 @@ namespace PeachBrackets.Html.Paint
                     }
                     else
                     {
-                        using (builder.OpenContentElement(g, markerBox, markerClassification.StructureType ?? Keywords.Lbl))
+                        using (builder.OpenContentElement(g, StructureNode.Of(markerBox), markerClassification.StructureType ?? Keywords.Lbl))
                             PaintContent(g, markerFragment);
                     }
                 }
 
-                using (builder.OpenListItemBodyElement(fragment.Box))
+                using (builder.OpenListItemBodyElement(StructureNode.Of(fragment.Box)))
                     PaintBoxContent(g, fragment, paintMarkers: false);
             }
         }

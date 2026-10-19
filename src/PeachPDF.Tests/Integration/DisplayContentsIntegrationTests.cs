@@ -1,3 +1,4 @@
+using PeachBrackets.Annotations;
 using PeachPDF.Rendering;
 using PeachBrackets.Css;
 using PeachBrackets.Html;
