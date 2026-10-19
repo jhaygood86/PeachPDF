@@ -1,16 +1,17 @@
 ﻿using PeachDrawing.Core;
 using PeachPDF.Html.Core.Annotations;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachPDF.PdfFeatures
 {
     /// <summary>
     /// Builds a PDF outline (bookmark sidebar) from the document's collected bookmarks
     /// (<see cref="DocumentAnnotationCollector"/>, from every box whose <c>bookmark-level</c> resolved to something other than
     /// <c>none</c> - CSS Generated Content Module Level 3 §2). Unlike <see cref="StructureTagBuilder"/>, this never hooks into
-    /// <see cref="Paint.FragmentPainter"/>'s paint walk - a PDF outline (<see cref="PdfOutline"/>/<see cref="PdfOutlineCollection"/>)
+    /// <see cref="Html.Core.Paint.FragmentPainter"/>'s paint walk - a PDF outline (<see cref="PdfOutline"/>/<see cref="PdfOutlineCollection"/>)
     /// is a free-standing dictionary tree independent of the content stream. Unconditional - no <see cref="PdfGenerateConfig"/> gate,
     /// since the UA default stylesheet's own <c>bookmark-level: none</c> default is itself the "no bookmarks" state for a document
     /// with no headings.

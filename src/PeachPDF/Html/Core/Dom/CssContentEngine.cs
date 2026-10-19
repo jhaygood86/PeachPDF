@@ -345,7 +345,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Resolves <c>target-counter()</c>/<c>target-text()</c>'s shared <c>&lt;target&gt;</c> argument
         /// (<c>&lt;string&gt; | url(&lt;url&gt;) | attr(&lt;ident&gt;)</c> - the same shape
         /// <c>-peachpdf-bookmark-target</c> already established, see
-        /// <see cref="BookmarkOutlineBuilder"/>) to the element it names, via
+        /// <see cref="PeachPDF.PdfFeatures.BookmarkOutlineBuilder"/>) to the element it names, via
         /// <see cref="HtmlContainerInt.GetBoxById(CssBox, string)"/>. A <c>url()</c>/<c>attr()</c> value carries a
         /// leading <c>#</c> the same way an <c>&lt;a href="#id"&gt;</c> anchor does; a bare
         /// <c>&lt;string&gt;</c> target names the id directly. Never throws on an unresolved id - the

@@ -1,3 +1,4 @@
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -9,11 +10,11 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachPDF.PdfFeatures
 {
     /// <summary>
     /// Orchestrates tagged-PDF structure-tree/MCID/ParentTree bookkeeping, driven live from the
-    /// fragment paint walk (see <see cref="Paint.FragmentPainter"/>) rather than an event-interception
+    /// fragment paint walk (see <see cref="Html.Core.Paint.FragmentPainter"/>) rather than an event-interception
     /// layer around raw drawing calls - PeachPDF already fully controls its own paint walk, unlike
     /// upstream PDFsharp's PdfGraphics-event-driven UAManager/StructureBuilder this reimplements the
     /// same underlying algorithm (AddMarkedContentToStructureElement/AddToParentTree) for.

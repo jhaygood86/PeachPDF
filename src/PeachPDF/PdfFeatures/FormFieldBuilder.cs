@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Annotations;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.PdfBackend;
 using System;
 using PeachPDF.PDF.Drawing;
@@ -10,7 +11,7 @@ using PeachPDF.PDF;
 using PeachPDF.PDF.AcroForms;
 using PeachPDF.PDF.Annotations;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachPDF.PdfFeatures
 {
     /// <summary>
     /// Makes AcroForm fields and widgets from the form controls a laid-out document collected (<see cref="PageFormField"/>), for one

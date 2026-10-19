@@ -20,6 +20,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.PdfFeatures;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using System;

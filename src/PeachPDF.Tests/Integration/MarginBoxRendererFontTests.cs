@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
-            Assert.True(font.Typeface.IsBold);
+            Assert.True(font.Typeface!.IsBold);
         }
 
         [Fact]
@@ -92,7 +92,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
-            Assert.True(font.Typeface.IsBold);
+            Assert.True(font.Typeface!.IsBold);
         }
 
         [Fact]
@@ -103,7 +103,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
 
-            Assert.True(font.Typeface.IsItalic);
+            Assert.True(font.Typeface!.IsItalic);
         }
 
         [Fact]

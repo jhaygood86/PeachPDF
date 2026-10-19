@@ -3,6 +3,7 @@ using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.PdfFeatures;
 using PeachPDF.PDF;
 using System.Collections.Generic;
 using System.Linq;

@@ -1,6 +1,5 @@
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
 using System.Numerics;
 using System;
 
@@ -120,6 +119,9 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>The divisor at or below which <see cref="Homography.ProjectRectangle"/> cuts a corner off (its default <c>epsilon</c>).</summary>
         private const double ProjectionEpsilon = 1e-4;
 
+        private static Matrix3x2 Matrix(double m11, double m12, double m21, double m22, double dx, double dy) =>
+            new((float)m11, (float)m12, (float)m21, (float)m22, (float)dx, (float)dy);
+
         /// <summary>The area of the polygon <paramref name="points"/>, whichever way it winds.</summary>
         private static double ShoelaceArea(PaintPoint[] points)
         {
@@ -157,7 +159,7 @@ namespace PeachPDF.Html.Core.Handlers
             // so an untransformed control maps to the identity here too.
             if (!yUp)
             {
-                return PdfMatrix.Create(
+                return Matrix(
                     (topRightPdf.X - topLeftPdf.X) / widthPt, (topRightPdf.Y - topLeftPdf.Y) / widthPt,
                     (bottomLeftPdf.X - topLeftPdf.X) / heightPt, (bottomLeftPdf.Y - topLeftPdf.Y) / heightPt,
                     0, 0);
@@ -166,7 +168,7 @@ namespace PeachPDF.Html.Core.Handlers
             // The appearance's x runs along the top edge, from the top-left corner to the top-right one; its y runs up the left edge,
             // from the bottom-left corner to the top-left one. There is no translation: the reader fits the transformed box to /Rect, so one
             // would only be cancelled, and a plain move is then the identity, which is left out of the stream altogether.
-            return PdfMatrix.Create(
+            return Matrix(
                 (topRightPdf.X - topLeftPdf.X) / widthPt, (topRightPdf.Y - topLeftPdf.Y) / widthPt,
                 (topLeftPdf.X - bottomLeftPdf.X) / heightPt, (topLeftPdf.Y - bottomLeftPdf.Y) / heightPt,
                 0, 0);

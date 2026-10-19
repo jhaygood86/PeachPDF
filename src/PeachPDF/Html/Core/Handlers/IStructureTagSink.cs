@@ -8,7 +8,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// <summary>
     /// What the fragment painter needs from a structure (tagged-PDF) recorder while it walks the page: open the structure element a
     /// box maps to, around the marked content it paints. The painter knows nothing about how the structure is stored or written;
-    /// <see cref="StructureTagBuilder"/> is the implementation that builds a PDF structure tree. Each <c>Open*</c> call returns a
+    /// <see cref="PeachPDF.PdfFeatures.StructureTagBuilder"/> is the implementation that builds a PDF structure tree. Each <c>Open*</c> call returns a
     /// scope whose disposal closes what it opened.
     /// </summary>
     internal interface IStructureTagSink
