@@ -97,8 +97,88 @@ namespace PeachPDF.Html.Core.Annotations
             CollectRunningElementLinks(container, ppp, fragmentainers, ResolveAnchorTarget, links);
 
             var bookmarks = CollectBookmarks(container, ppp, fragmentainers, slotToPage, maxMappedSlot, bookmarkBoxes);
+            var formFields = CollectFormFields(container, ppp, fragmentainers, slotToPage);
 
-            return new DocumentAnnotations { Links = links, Bookmarks = bookmarks };
+            return new DocumentAnnotations { Links = links, Bookmarks = bookmarks, FormFields = formFields };
+        }
+
+        /// <summary>
+        /// Places every classified <c>&lt;input&gt;</c>/<c>&lt;select&gt;</c> box on its page. Mirrors the link pass's own rectangle-to-page
+        /// resolution (the same math, against the same slot geometry) rather than its multi-slot loop, which exists only because a link's box
+        /// can span a page break - a form-control box never can (see <c>MonolithicContent.IsReplaced</c>'s <c>CssBoxFormField</c> arm), so
+        /// each field resolves to exactly one page and one rectangle.
+        /// </summary>
+        private static List<PageFormField> CollectFormFields(
+            HtmlContainerInt container, double ppp, IReadOnlyList<FragmentainerFragment> fragmentainers, IReadOnlyDictionary<int, int> slotToPage)
+        {
+            var fields = new List<PageFormField>();
+            if (!container.InteractiveForms)
+                return fields;
+
+            var fieldBoxes = new List<CssBox>();
+            DomUtils.GetAllFormFieldBoxes(container.Root, fieldBoxes);
+
+            foreach (var box in fieldBoxes)
+            {
+                var classification = FormFieldMapper.Classify(box);
+                if (classification.Kind == FormFieldKind.None)
+                    continue;
+
+                var pixelRect = CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+
+                var slot = Math.Max(container.PageIndexOf(pixelRect.Top), 0);
+                if (!slotToPage.TryGetValue(slot, out var pageIndex))
+                    continue;
+
+                // Read off the fragmentainer itself (already corrected against this page's materialized number) rather than re-derived from
+                // the geometry table. ContentTopPt/ContentLeftPt include the page box's own border and padding.
+                var geometry = fragmentainers[pageIndex].Geometry;
+                var topPt = geometry.ContentTopPt + (pixelRect.Top - container.PageTopOf(slot)) / ppp;
+                var leftPt = geometry.ContentLeftPt + (pixelRect.Left - container.MarginLeft) / ppp;
+                var widthPt = pixelRect.Width / ppp;
+                var heightPt = pixelRect.Height / ppp;
+
+                if (widthPt <= 0 || heightPt <= 0)
+                    continue;
+
+                var size = new Size(widthPt, heightPt);
+                var appearance = new FormFieldAppearance(box, ppp);
+                var bounds = new Rect(leftPt, topPt, widthPt, heightPt);
+                System.Numerics.Matrix3x2? transform = null;
+
+                // A control a transform moved sits where it was drawn: the bounds are those of the drawn shape, and the appearance (still
+                // built upright, at the control's own size) is carried onto it by the map's linear part.
+                if ((box.HtmlContainer ?? container).Placements.TryGet(box, slot, out var placement))
+                {
+                    var frame = new PageFrame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp, geometry.SheetHeightPt);
+                    var local = new Rect(pixelRect.Left, pixelRect.Top - fragmentainers[pageIndex].LocalOriginY, pixelRect.Width, pixelRect.Height);
+
+                    // A control that was not drawn on this page (a projected plane outside the clip, or wholly behind the viewer) keeps its
+                    // field, though: it still holds a value and belongs to its form (a radio group would lose a member). The widget is
+                    // then an empty rectangle, so there is nothing to see or click.
+                    if (placement.Hidden || !AnnotationPlacement.TryMap(placement.Map, local, frame, out var placed, yUp: false))
+                    {
+                        bounds = new Rect(leftPt, topPt + heightPt, 0, 0);
+                    }
+                    else
+                    {
+                        bounds = placed.Bounds;
+                        transform = placed.AppearanceMatrix;
+                    }
+                }
+
+                fields.Add(new PageFormField
+                {
+                    PageIndex = pageIndex,
+                    Bounds = bounds,
+                    ContentSize = size,
+                    AppearanceTransform = transform,
+                    Classification = classification,
+                    Appearance = appearance,
+                });
+            }
+
+            return fields;
         }
 
         /// <summary>

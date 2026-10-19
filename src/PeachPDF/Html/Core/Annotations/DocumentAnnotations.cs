@@ -1,6 +1,8 @@
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Handlers;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Html.Core.Annotations
 {
@@ -72,6 +74,46 @@ namespace PeachPDF.Html.Core.Annotations
     }
 
     /// <summary>
+    /// A form control (<c>&lt;input&gt;</c>, <c>&lt;select&gt;</c>) that landed on a page and can be made interactive, with everything needed to
+    /// do that: what it is, where it is, and how to draw each state of it.
+    /// </summary>
+    /// <remarks>
+    /// Geometry follows the same convention as <see cref="PageLink"/>: points from the page's top-left corner, y down.
+    /// </remarks>
+    internal sealed class PageFormField
+    {
+        /// <summary>The zero-based index of the page the control is on.</summary>
+        public required int PageIndex { get; init; }
+
+        /// <summary>
+        /// Where the control sits: its box, or the bounding box of the drawn shape when a <c>transform</c> moved it. A control that was not
+        /// drawn on its page (a projected plane outside the clip, wholly behind the viewer) keeps its field - it still holds a value and
+        /// belongs to its form, and a radio group would lose a member - so this is then an empty rectangle at its bottom-left corner,
+        /// with nothing to see or click.
+        /// </summary>
+        public required Rect Bounds { get; init; }
+
+        /// <summary>
+        /// The size, in points, the control's appearance is drawn at. It is still drawn upright at its own size when a transform moved
+        /// it; <see cref="AppearanceTransform"/> carries the drawing to where it landed.
+        /// </summary>
+        public required Size ContentSize { get; init; }
+
+        /// <summary>
+        /// The linear part of the transform that carries the upright appearance to where the control was drawn (translation left out, since
+        /// the consumer fits the transformed appearance to <see cref="Bounds"/>), in the same y-down convention as <see cref="Bounds"/>;
+        /// null when the control was not transformed or the transform is not affine (it is then drawn as its upright bounding box).
+        /// </summary>
+        public Matrix3x2? AppearanceTransform { get; init; }
+
+        /// <summary>What the control is: its kind, name, value, options and attributes.</summary>
+        public required FormFieldClassification Classification { get; init; }
+
+        /// <summary>Draws each state of the control.</summary>
+        public required FormFieldAppearance Appearance { get; init; }
+    }
+
+    /// <summary>
     /// What a reader of a paged rendering can click or navigate: the hyperlinks of each page and the document's outline.
     /// </summary>
     internal sealed class DocumentAnnotations
@@ -81,5 +123,8 @@ namespace PeachPDF.Html.Core.Annotations
 
         /// <summary>The outline entries in document order.</summary>
         public required IReadOnlyList<Bookmark> Bookmarks { get; init; }
+
+        /// <summary>The form controls that landed on a page, in document order; empty unless interactive forms were asked for.</summary>
+        public required IReadOnlyList<PageFormField> FormFields { get; init; }
     }
 }

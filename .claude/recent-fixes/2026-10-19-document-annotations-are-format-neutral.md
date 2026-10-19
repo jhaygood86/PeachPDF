@@ -11,7 +11,13 @@ works out the links and bookmarks of a laid-out document - page, rectangle, quad
 - **`AnnotationPlacement.TryMap` has a `yUp` flag**: form widgets still need y-up geometry and the appearance matrix (`LinearPart`);
   links use `TryPlaceLink`, top-down. `PageFrame.ToPdf` is `ToPage` plus the flip, built from the same expression so untransformed
   results are bit-identical.
-- Not done yet: `FormFieldBuilder` and `StructureTagBuilder` still read `CssBox` and write the PDF document directly. They need a
-  public element handle (tag, attributes, text) before they can move out of the HTML core.
+- **Form controls follow the same split.** `DocumentAnnotations.FormFields` holds `PageFormField`s (page, bounds, upright content size,
+  affine appearance transform, `FormFieldClassification`, and a `FormFieldAppearance` that paints each state onto any `Canvas`).
+  `FormFieldAppearance` is the old `FormFieldAppearanceBuilder` minus its PDF form creation; `FormFieldBuilder` now only makes the AcroForm
+  objects and appearance streams (`CreateForm` + `PdfCanvas`). The appearance transform is y-down in the model; the PDF consumer mirrors
+  it (`m12`, `m21` negated). `HtmlContainerInt.FormFieldBuilder` became the `InteractiveForms` flag - the painter only ever tested it for null.
+- Not done yet: `StructureTagBuilder` still reads `CssBox` and writes the PDF structure tree directly; `FormFieldClassification` is
+  still built from `CssBox` by `FormFieldMapper` inside the collector (fine, it runs in the HTML core). Tags need a public element
+  handle (tag, attributes, text) before `StructureTagBuilder` can move out.
 - Evidence: full `PeachPDF.Tests` net8.0 run unchanged (18249 passed), including the link pagination, transform, running-element and
   bookmark outline suites.

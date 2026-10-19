@@ -1285,7 +1285,7 @@ namespace PeachPDF.Html.Core
         /// interactive forms are disabled and both the form-field content painter and
         /// <c>PdfGenerator.HandleFormFields</c> are no-ops.
         /// </summary>
-        internal Handlers.FormFieldBuilder? FormFieldBuilder { get; set; }
+        internal bool InteractiveForms { get; set; }
 
         /// <summary>
         /// Init with optional document and stylesheet.

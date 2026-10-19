@@ -2,7 +2,9 @@ using System.Numerics;
 using System.Collections.Generic;
 using System.Globalization;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Annotations;
+using PeachPDF.PdfBackend;
+using System;
 using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF;
 using PeachPDF.PDF.AcroForms;
@@ -11,7 +13,8 @@ using PeachPDF.PDF.Annotations;
 namespace PeachPDF.Html.Core.Handlers
 {
     /// <summary>
-    /// Orchestrates AcroForm field/widget bookkeeping for one <c>PdfGenerator.GeneratePdf</c> call.
+    /// Makes AcroForm fields and widgets from the form controls a laid-out document collected (<see cref="PageFormField"/>), for one
+    /// <c>PdfGenerator.GeneratePdf</c> call.
     /// Constructed only when <see cref="PdfGenerateConfig.EnableInteractivePdfForms"/> is set (see
     /// <c>PdfGenerator.GeneratePdf</c>'s single gate point) - unlike <see cref="StructureTagBuilder"/>,
     /// this has no paint-time hook of its own; it is consumed entirely by
@@ -22,15 +25,6 @@ namespace PeachPDF.Html.Core.Handlers
     {
         internal PdfDocument Document { get; } = document;
         internal RenderContext RenderContext { get; } = renderContext;
-
-        /// <summary>
-        /// The container's real device-pixel-to-point scale, read fresh on every use (not captured at
-        /// construction) - <c>PdfGenerator.GeneratePdf</c> constructs this builder before the
-        /// <c>ShrinkToFit</c>/<c>ScaleToPageSize</c> rescale pass may still adjust
-        /// <see cref="RenderContext.LayoutUnitsPerPoint"/>, and <c>PdfGenerator.HandleFormFields</c> only
-        /// runs once that has settled - mirrors <c>HtmlContainer.PixelsPerPoint</c>'s own idiom.
-        /// </summary>
-        double PixelsPerPoint => RenderContext.LayoutUnitsPerPoint;
 
         PdfDictionary? _helveticaFontResource;
         bool _acroFormInitialized;
@@ -48,7 +42,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (!_acroFormInitialized)
             {
                 _acroFormInitialized = true;
-                var helvetica = FormFieldAppearanceBuilder.GetOrCreateHelveticaFontResource(Document, ref _helveticaFontResource);
+                var helvetica = GetOrCreateHelveticaFontResource(Document, ref _helveticaFontResource);
                 var fontsDict = new PdfDictionary(Document);
                 fontsDict.Elements.SetReference("/Helv", helvetica);
                 acroForm.DefaultResources.Elements.SetObject("/Font", fontsDict);
@@ -105,39 +99,34 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         /// <param name="page">the page the widget goes on</param>
         /// <param name="rect">the widget's <c>/Rect</c></param>
-        /// <param name="box">the form-control box</param>
-        /// <param name="classification">what kind of field it is</param>
-        /// <param name="contentSize">
-        /// the size, in points, the appearance is drawn at, when that is not <paramref name="rect"/>'s: a control a <c>transform</c> moved is
-        /// still drawn upright at its own size, and <paramref name="appearanceMatrix"/> carries it to where it landed. Defaults to
-        /// <paramref name="rect"/>'s size.
-        /// </param>
+        /// <param name="field">the collected form control: what kind of field it is, and how to draw it</param>
         /// <param name="appearanceMatrix">the <c>/Matrix</c> to give each appearance stream, or null for none</param>
-        internal void AddField(PdfPage page, PdfRectangle rect, CssBox box, FormFieldClassification classification,
-            Size? contentSize = null, Matrix3x2? appearanceMatrix = null)
+        internal void AddField(PdfPage page, PdfRectangle rect, PageFormField field, Matrix3x2? appearanceMatrix = null)
         {
             var acroForm = EnsureAcroForm();
-            var content = contentSize ?? new Size(rect.Width, rect.Height);
+            var content = field.ContentSize;
             var matrix = appearanceMatrix;
+            var look = field.Appearance;
+            var classification = field.Classification;
 
             switch (classification.Kind)
             {
                 case FormFieldKind.Text:
-                    AddTextField(acroForm, page, rect, content, matrix, box, classification);
+                    AddTextField(acroForm, page, rect, content, matrix, look, classification);
                     break;
                 case FormFieldKind.Checkbox:
-                    AddCheckboxField(acroForm, page, rect, content, matrix, box, classification);
+                    AddCheckboxField(acroForm, page, rect, content, matrix, look, classification);
                     break;
                 case FormFieldKind.Radio:
-                    AddRadioButton(acroForm, page, rect, content, matrix, box, classification);
+                    AddRadioButton(acroForm, page, rect, content, matrix, look, classification);
                     break;
                 case FormFieldKind.Select:
-                    AddSelectField(acroForm, page, rect, content, matrix, box, classification);
+                    AddSelectField(acroForm, page, rect, content, matrix, look, classification);
                     break;
             }
         }
 
-        void AddTextField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
+        void AddTextField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, FormFieldAppearance look, FormFieldClassification c)
         {
             var field = new PdfTextField(Document)
             {
@@ -166,9 +155,8 @@ namespace PeachPDF.Html.Core.Handlers
             ApplyAlternateName(field, c.Attributes);
 
             var (drawnText, isPlaceholder) = DrawnText(c);
-            var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height,
-                drawnText, c.AutoFontSize, c.Comb, isPlaceholder, out var fontSizePt);
+            var fontSizePt = look.TextFontSizePt(content, c.AutoFontSize, isPlaceholder);
+            var appearance = CreateForm(look, content, g => look.PaintText(g, content, drawnText, c.AutoFontSize, c.Comb, isPlaceholder));
 
             // "/DA" (as opposed to the baked "/AP /N" appearance above) is what a reader uses to
             // regenerate this field's appearance once the user actually edits it - "0 Tf" is PDF's
@@ -214,7 +202,7 @@ namespace PeachPDF.Html.Core.Handlers
             return (c.Attributes.Password ? new string('*', value.Length) : value, false);
         }
 
-        void AddCheckboxField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
+        void AddCheckboxField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, FormFieldAppearance look, FormFieldClassification c)
         {
             var onValue = ResolveOnValue(c.Value);
 
@@ -229,15 +217,15 @@ namespace PeachPDF.Html.Core.Handlers
 
             ApplyAlternateName(field, c.Attributes);
 
-            var onAppearance = FormFieldAppearanceBuilder.BuildCheckboxOnAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
-            var offAppearance = FormFieldAppearanceBuilder.BuildCheckboxOffAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
+            var onAppearance = CreateForm(look, content, g => look.PaintCheckbox(g, content, isChecked: true));
+            var offAppearance = CreateForm(look, content, g => look.PaintCheckbox(g, content, isChecked: false));
             SetTwoStateAppearance(field, onValue, onAppearance, offAppearance, matrix);
 
             page.Annotations.Add(field);
             acroForm.AddField(field);
         }
 
-        void AddRadioButton(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
+        void AddRadioButton(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, FormFieldAppearance look, FormFieldClassification c)
         {
             var groupKey = string.IsNullOrEmpty(c.Name) ? $"__unnamed_radio_{++_unnamedRadioGroupCounter}__" : c.Name;
             var onValue = ResolveOnValue(c.Value);
@@ -268,8 +256,8 @@ namespace PeachPDF.Html.Core.Handlers
                 AppearanceState = c.Checked ? "/" + onValue : "/Off",
             };
 
-            var onAppearance = FormFieldAppearanceBuilder.BuildRadioOnAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
-            var offAppearance = FormFieldAppearanceBuilder.BuildRadioOffAppearance(Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height);
+            var onAppearance = CreateForm(look, content, g => look.PaintRadio(g, content, isSelected: true));
+            var offAppearance = CreateForm(look, content, g => look.PaintRadio(g, content, isSelected: false));
             SetTwoStateAppearance(widget, onValue, onAppearance, offAppearance, matrix);
 
             group.AddKid(widget);
@@ -279,7 +267,7 @@ namespace PeachPDF.Html.Core.Handlers
             page.Annotations.Add(widget);
         }
 
-        void AddSelectField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, CssBox box, FormFieldClassification c)
+        void AddSelectField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, FormFieldAppearance look, FormFieldClassification c)
         {
             var selected = c.Options.Count > 0 ? System.Linq.Enumerable.FirstOrDefault(c.Options, o => o.Selected) : default;
             var selectedLabel = c.Options.Count == 0 ? string.Empty : (selected.Label ?? c.Options[0].Label);
@@ -300,13 +288,51 @@ namespace PeachPDF.Html.Core.Handlers
                 options.Add((option.Value, option.Label));
             field.SetOptions(options);
 
-            var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, RenderContext, PixelsPerPoint, box, content.Width, content.Height, selectedLabel,
-                autoFontSize: false, combCells: null, isPlaceholder: false, out _);
+            var appearance = CreateForm(look, content, g => look.PaintText(g, content, selectedLabel, autoFontSize: false, combCells: null, isPlaceholder: false));
             SetNormalAppearance(field, appearance, matrix);
 
             page.Annotations.Add(field);
             acroForm.AddField(field);
+        }
+
+        /// <summary>
+        /// Makes an appearance stream (a <see cref="PeachPDF.PDF.Advanced.PdfFormXObject"/>) by painting onto a fresh <see cref="PdfForm"/>
+        /// through a <see cref="PdfCanvas"/> - the recipe <c>PdfCanvas.CreateTile</c> already uses for SVG mask and pattern tiles - at the
+        /// pixels-per-point the control was laid out with, so its real CSS border, padding and font stay consistently sized.
+        /// </summary>
+        PeachPDF.PDF.Advanced.PdfFormXObject CreateForm(FormFieldAppearance look, Size sizePt, Action<Canvas> draw)
+        {
+            var form = new PdfForm(Document, sizePt);
+            var formGraphics = PdfGraphics.FromForm(form);
+            using (var g = new PdfCanvas(RenderContext, formGraphics, look.PixelsPerPoint, releaseGraphics: true))
+            {
+                draw(g);
+            }
+            return form.FormXObject;
+        }
+
+        /// <summary>
+        /// Creates the shared "/Helv" Type1 Helvetica font resource dictionary. Not used by any appearance stream (those use the field's
+        /// own real, possibly embedded font) - only by each field's "/DA" default appearance string, which governs how a reader
+        /// regenerates the field's look once a user actually edits it. "/DA" deliberately keeps using a PDF standard font rather than
+        /// the field's own real one: PeachPDF (like most PDF generators) subsets an embedded font down to only the glyphs the document
+        /// actually drew, so a user typing a character that never appeared in the baked appearance would have no glyph to render with the
+        /// real font, whereas Helvetica's WinAnsi coverage is complete and needs no embedding at all.
+        /// </summary>
+        static PdfDictionary GetOrCreateHelveticaFontResource(PdfDocument document, ref PdfDictionary? cache)
+        {
+            if (cache != null)
+                return cache;
+
+            var font = new PdfDictionary(document);
+            font.Elements.SetName("/Type", "/Font");
+            font.Elements.SetName("/Subtype", "/Type1");
+            font.Elements.SetName("/BaseFont", "/Helvetica");
+            font.Elements.SetName("/Encoding", "/WinAnsiEncoding");
+            document.Internals.AddObject(font);
+
+            cache = font;
+            return font;
         }
 
         /// <summary>

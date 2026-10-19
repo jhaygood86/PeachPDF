@@ -86,7 +86,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (points.Length == 4 && AllInFront(map, local) && Math.Abs(ShoelaceArea(points) - bounds.Width * bounds.Height) > Tolerance * Math.Max(1, bounds.Width * bounds.Height))
                 quad = [points[0], points[1], points[3], points[2]];
 
-            placement = new AnnotationPlacement(bounds, quad, map.IsAffine ? LinearPart(map, local, frame) : null);
+            placement = new AnnotationPlacement(bounds, quad, map.IsAffine ? LinearPart(map, local, frame, yUp) : null);
             return true;
         }
 
@@ -135,10 +135,11 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// The matrix that takes an appearance stream drawn upright in <c>(0, 0)</c> to <c>(width, height)</c> points, y up, to where the
-        /// rectangle it belongs to was drawn: the images of the rectangle's own axes, which is the map's linear part.
+        /// The matrix that takes an appearance drawn upright in <c>(0, 0)</c> to <c>(width, height)</c> points (y up, or y down when
+        /// <paramref name="yUp"/> is false) to where the rectangle it belongs to was drawn: the images of the rectangle's own axes, which is
+        /// the map's linear part.
         /// </summary>
-        private static Matrix3x2? LinearPart(in Homography map, Rect local, in PageFrame frame)
+        private static Matrix3x2? LinearPart(in Homography map, Rect local, in PageFrame frame, bool yUp)
         {
             if (!(local.Width > 0) || !(local.Height > 0) ||
                 map.Apply(local.Left, local.Top) is not { } topLeft ||
@@ -146,11 +147,21 @@ namespace PeachPDF.Html.Core.Handlers
                 map.Apply(local.Left, local.Bottom) is not { } bottomLeft)
                 return null;
 
-            var bottomLeftPdf = frame.ToPdf(bottomLeft.X, bottomLeft.Y);
-            var topRightPdf = frame.ToPdf(topRight.X, topRight.Y);
-            var topLeftPdf = frame.ToPdf(topLeft.X, topLeft.Y);
+            var bottomLeftPdf = frame.To(bottomLeft.X, bottomLeft.Y, yUp);
+            var topRightPdf = frame.To(topRight.X, topRight.Y, yUp);
+            var topLeftPdf = frame.To(topLeft.X, topLeft.Y, yUp);
             var widthPt = local.Width / frame.PixelsPerPoint;
             var heightPt = local.Height / frame.PixelsPerPoint;
+
+            // Measured down from the page top, the appearance's y runs down the left edge from the top-left corner to the bottom-left one,
+            // so an untransformed control maps to the identity here too.
+            if (!yUp)
+            {
+                return PdfMatrix.Create(
+                    (topRightPdf.X - topLeftPdf.X) / widthPt, (topRightPdf.Y - topLeftPdf.Y) / widthPt,
+                    (bottomLeftPdf.X - topLeftPdf.X) / heightPt, (bottomLeftPdf.Y - topLeftPdf.Y) / heightPt,
+                    0, 0);
+            }
 
             // The appearance's x runs along the top edge, from the top-left corner to the top-right one; its y runs up the left edge,
             // from the bottom-left corner to the top-left one. There is no translation: the reader fits the transformed box to /Rect, so one

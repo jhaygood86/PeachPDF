@@ -33,6 +33,7 @@ using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Annotations;
 using System.Collections.Generic;
+using System.Numerics;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -977,7 +978,7 @@ namespace PeachPDF
             // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
             // it's not set, so this is the single point that gates the whole feature off by default.
             var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.RenderContext) : null;
-            container.HtmlContainerInt.FormFieldBuilder = formFieldBuilder;
+            container.HtmlContainerInt.InteractiveForms = formFieldBuilder != null;
 
             // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
             // declares one, else html's. Resolved during layout, since the fragment tree's own
@@ -1278,7 +1279,7 @@ namespace PeachPDF
 
             if (formFieldBuilder != null)
             {
-                HandleFormFields(document.PdfDocument, container, fragmentainers, formFieldBuilder);
+                HandleFormFields(document.PdfDocument, annotations, formFieldBuilder);
             }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
@@ -1624,74 +1625,25 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Creates AcroForm fields/widgets for every classified &lt;input&gt;/&lt;select&gt; box, one
-        /// per page. Mirrors <see cref="HandleLinks"/>'s own per-box rect-to-page resolution (matching
-        /// its exact math, since both convert a post-layout box rect to page-space PDF points against
-        /// the same slot geometry) rather than <see cref="HandleLinks"/>'s multi-slot loop, which
-        /// exists only because a link's box can span a page break - a form-control box never can
-        /// (see <c>MonolithicContent.IsReplaced</c>'s <c>CssBoxFormField</c> arm), so each
-        /// field resolves to exactly one page and one rect.
+        /// Creates AcroForm fields/widgets for the collected form controls, one per page.
         /// </summary>
-        private static void HandleFormFields(PdfDocument document, HtmlContainer container, IReadOnlyList<FragmentainerFragment> fragmentainers, FormFieldBuilder formFieldBuilder)
+        private static void HandleFormFields(PdfDocument document, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
         {
-            var inner = container.HtmlContainerInt;
-            var ppp = container.PixelsPerPoint;
-            var (slotToPage, _) = PageAnchorResolver.BuildSlotToPageMap(fragmentainers);
-
-            var fieldBoxes = new List<CssBox>();
-            DomUtils.GetAllFormFieldBoxes(inner.Root, fieldBoxes);
-
-            foreach (var box in fieldBoxes)
+            foreach (var field in annotations.FormFields)
             {
-                var classification = FormFieldMapper.Classify(box);
-                if (classification.Kind == FormFieldKind.None)
+                if (field.PageIndex >= document.Pages.Count)
                     continue;
 
-                var pixelRect = CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+                var page = document.Pages[field.PageIndex];
 
-                var slot = Math.Max(inner.PageIndexOf(pixelRect.Top), 0);
-                if (!slotToPage.TryGetValue(slot, out var pageIndex) || pageIndex >= document.Pages.Count)
-                    continue;
+                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
+                var bounds = field.Bounds;
+                var rect = new Rect(bounds.X, page.Height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height);
 
-                // Read off the fragmentainer itself (already corrected against this page's
-                // materialized number - see HtmlContainerInt.LayoutMarginBoxes and issue #148) rather
-                // than re-deriving from the geometry table directly, matching HandleLinks' own fix.
-                var slotGeom = fragmentainers[pageIndex].Geometry;
-                // ContentTopPt/ContentLeftPt (margin + the page box's own border/padding, issue #1147) -
-                // matching HandleLinks' own fix.
-                var topPt = slotGeom.ContentTopPt + (pixelRect.Top - inner.PageTopOf(slot)) / ppp;
-                var leftPt = slotGeom.ContentLeftPt + (pixelRect.Left - inner.MarginLeft) / ppp;
-                var widthPt = pixelRect.Width / ppp;
-                var heightPt = pixelRect.Height / ppp;
+                // The appearance stream's own space is y up too, so the y-down map is mirrored across the x axis.
+                Matrix3x2? appearanceMatrix = field.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
 
-                if (widthPt <= 0 || heightPt <= 0)
-                    continue;
-
-                var xRect = new Rect(leftPt, document.Pages[pageIndex].Height - (topPt + heightPt), widthPt, heightPt);
-
-                // A control a transform moved sits where it was drawn: /Rect is the bounding box of the drawn shape, and the appearance
-                // (still built upright, at the control's own size) is carried onto it by the map's linear part (see AnnotationPlacement).
-                if ((box.HtmlContainer ?? inner).Placements.TryGet(box, slot, out var placement))
-                {
-                    var page = document.Pages[pageIndex];
-                    var frame = new PageFrame(slotGeom.ContentLeftPt, slotGeom.ContentTopPt, inner.MarginLeft, inner.MarginTop, ppp, page.Height);
-                    var local = new Rect(pixelRect.Left, pixelRect.Top - fragmentainers[pageIndex].LocalOriginY, pixelRect.Width, pixelRect.Height);
-
-                    // A control that was not drawn on this page (a projected plane outside the clip, or wholly behind the viewer) or was moved off
-                    // it keeps its field, though: it still holds a value and belongs to its form (a radio group would lose a member). The
-                    // widget is then an empty rectangle, so there is nothing to see or click (the /Hidden flag would fail PDF/A), or - moved
-                    // off the page - the /Rect it was drawn at, which is legal outside the page box.
-                    if (placement.Hidden || !AnnotationPlacement.TryMap(placement.Map, local, frame, out var placed))
-                    {
-                        formFieldBuilder.AddField(page, new PdfRectangle(new Rect(xRect.X, xRect.Y, 0, 0)), box, classification, new Size(widthPt, heightPt));
-                        continue;
-                    }
-
-                    formFieldBuilder.AddField(page, new PdfRectangle(placed.Bounds), box, classification, new Size(widthPt, heightPt), placed.AppearanceMatrix);
-                    continue;
-                }
-
-                formFieldBuilder.AddField(document.Pages[pageIndex], new PdfRectangle(xRect), box, classification);
+                formFieldBuilder.AddField(page, new PdfRectangle(rect), field, appearanceMatrix);
             }
         }
 
