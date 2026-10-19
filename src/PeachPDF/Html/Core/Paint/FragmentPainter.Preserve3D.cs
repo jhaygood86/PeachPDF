@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Plane = PeachPDF.Html.Core.Paint.ProjectivePlane<PeachPDF.Html.Core.Fragments.BoxFragment>;
 
 namespace PeachPDF.Html.Core.Paint
 {
@@ -36,56 +37,13 @@ namespace PeachPDF.Html.Core.Paint
     /// to front by their centre's depth first, which is what makes translucent pixels blend in the right order. The destination is drawn once.
     /// </para>
     /// <para>
-    /// <b>No depth to resolve.</b> When every plane stays parallel to the view plane at the same depth (<see cref="HasDepthToResolve"/> says
+    /// <b>No depth to resolve.</b> When every plane stays parallel to the view plane at the same depth (<see cref="ProjectiveRaster.HasDepthToResolve{T}"/> says
     /// otherwise) there is nothing a depth test could change, and the context is painted exactly as it was before it was modelled, in
     /// vector form.
     /// </para>
     /// </remarks>
     internal sealed partial class FragmentPainter
     {
-        /// <summary>Below this, a matrix entry that would tilt a plane out of the view plane, or move it in depth, counts as zero.</summary>
-        private const double FlatTolerance = 1e-6;
-
-        /// <summary>One member of a 3D rendering context. Mutable, and kept in a reused list, so a context allocates nothing per plane.</summary>
-        private struct Plane
-        {
-            public BoxFragment Fragment;
-
-            /// <summary>The plane's whole transform in page coordinates.</summary>
-            public Matrix4x4 Accumulated;
-
-            public Homography Map;
-            public DepthPlane Depth;
-
-            /// <summary>What the plane paints, in its own untransformed page coordinates; only meaningful when <see cref="HasSource"/>.</summary>
-            public Rect Source;
-
-            /// <summary>Whether there is anything of this plane to draw: it is not turned away, has content and is at least partly in front of the viewer.</summary>
-            public bool HasSource;
-
-            /// <summary><c>backface-visibility: hidden</c> and turned away from the viewer.</summary>
-            public bool Hidden;
-
-            /// <summary>The index of the plane this one's box is a child of (-1 for the root).</summary>
-            public int Parent;
-
-            /// <summary>Where the plane sorts in depth: its centre's, but never behind its parent's, so a child is never painted before what it sits on.</summary>
-            public double SortDepth;
-        }
-
-        /// <summary>A plane's place in the back-to-front order: its centre's depth, then its position in the tree (so a parent is under its coplanar children).</summary>
-        private struct DepthKey
-        {
-            public double Depth;
-            public int Plane;
-        }
-
-        private static readonly Comparison<DepthKey> BackToFront = static (a, b) =>
-        {
-            var byDepth = a.Depth.CompareTo(b.Depth);
-            return byDepth != 0 ? byDepth : a.Plane.CompareTo(b.Plane);
-        };
-
         /// <summary>The planes of the context being painted, and of any context enclosing it: <see cref="PaintFragment"/> leaves them to the context.</summary>
         private HashSet<BoxFragment>? _contextMembers;
 
@@ -122,11 +80,11 @@ namespace PeachPDF.Html.Core.Paint
             try
             {
                 CollectPlanes(root, RootPerspective(root), planes, -1);
-                if (planes.Count < 2 || !HasDepthToResolve(CollectionsMarshal.AsSpan(planes)))
+                if (planes.Count < 2 || !ProjectiveRaster.HasDepthToResolve<BoxFragment>(CollectionsMarshal.AsSpan(planes)))
                     return false;
 
                 for (var i = 0; i < planes.Count; i++)
-                    members.Add(planes[i].Fragment);
+                    members.Add(planes[i].Subject);
 
                 if (!ComposeContext(g, CollectionsMarshal.AsSpan(planes)))
                     return false;
@@ -137,7 +95,7 @@ namespace PeachPDF.Html.Core.Paint
             finally
             {
                 for (var i = 0; i < planes.Count; i++)
-                    members.Remove(planes[i].Fragment);
+                    members.Remove(planes[i].Subject);
 
                 planes.Clear();
                 _planeScratch = planes;
@@ -164,7 +122,7 @@ namespace PeachPDF.Html.Core.Paint
             var accumulated = own * tail;
 
             var index = planes.Count;
-            planes.Add(new Plane { Fragment = fragment, Accumulated = accumulated, Hidden = box.IsBackfaceHidden && FacesAway(accumulated), Parent = parent });
+            planes.Add(new Plane { Subject = fragment, Accumulated = accumulated, Hidden = box.IsBackfaceHidden && ProjectiveRaster.FacesAway(accumulated), Parent = parent });
 
             if (!DomUtils.EstablishesPreserve3d(box))
                 return;
@@ -201,9 +159,7 @@ namespace PeachPDF.Html.Core.Paint
             var (ox, oy) = fragment.Box.ActualPerspectiveOrigin;
             var x = (float)(fragment.WholeBoxRect.X + ox);
             var y = (float)(fragment.WholeBoxRect.Y + oy);
-            var perspective = Matrix4x4.Identity;
-            perspective.M34 = (float)(-1.0 / distance);
-            return Matrix4x4.CreateTranslation(-x, -y, 0) * perspective * Matrix4x4.CreateTranslation(x, y, 0);
+            return ProjectiveRaster.Perspective(distance, x, y);
         }
 
         /// <summary>The perspective the context's root is viewed through: the one its parent gives it, or the identity.</summary>
@@ -211,25 +167,6 @@ namespace PeachPDF.Html.Core.Paint
             root.Box.ParentBox is { ActualPerspective: > 0 } parent && _pageRoot is not null && FindFragment(_pageRoot, parent) is { } parentFragment
                 ? PerspectiveOf(parentFragment)
                 : Matrix4x4.Identity;
-
-        /// <summary>
-        /// Whether a depth test could change anything: false only when every plane faces the viewer and stays parallel to the view plane, at
-        /// the same depth as all the others, with no perspective divisor - then painting them in tree order is already right.
-        /// </summary>
-        private static bool HasDepthToResolve(ReadOnlySpan<Plane> planes)
-        {
-            foreach (ref readonly var plane in planes)
-            {
-                ref readonly var m = ref plane.Accumulated;
-                if (plane.Hidden ||
-                    Math.Abs(m.M13) > FlatTolerance || Math.Abs(m.M23) > FlatTolerance ||
-                    Math.Abs(m.M14) > FlatTolerance || Math.Abs(m.M24) > FlatTolerance ||
-                    Math.Abs(m.M43) > FlatTolerance || Math.Abs(m.M44 - 1) > FlatTolerance)
-                    return true;
-            }
-
-            return false;
-        }
 
         /// <summary>
         /// Records the boxes of the planes <paramref name="culled"/> marks as not drawn, so the links and fields in them are not written.
@@ -252,7 +189,7 @@ namespace PeachPDF.Html.Core.Paint
                     hasLiveChild[planes[i].Parent] = true;
 
                 if (culled[i] && !hasLiveChild[i])
-                    NoteNotRendered(planes[i].Fragment.Box);
+                    NoteNotRendered(planes[i].Subject.Box);
             }
         }
 
@@ -265,8 +202,6 @@ namespace PeachPDF.Html.Core.Paint
             // Where every plane lands, and what part of the picture that is.
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
             var any = false;
-            Span<DepthKey> keys = planes.Length <= StackPlanes ? stackalloc DepthKey[StackPlanes] : new DepthKey[planes.Length];
-            var ordered = 0;
             Span<bool> culled = planes.Length <= StackPlanes ? stackalloc bool[StackPlanes] : new bool[planes.Length];
             culled = culled[..planes.Length];
             culled.Clear();
@@ -274,16 +209,7 @@ namespace PeachPDF.Html.Core.Paint
             for (var i = 0; i < planes.Length; i++)
             {
                 ref var plane = ref planes[i];
-                plane.Map = Homography.FromMatrix4(plane.Accumulated);
-                plane.Depth = DepthPlane.FromMatrix4(plane.Accumulated);
-
-                // Where the plane sorts: its centre's depth, and never behind its parent's, so a child is drawn after what it sits on however the
-                // context is tilted. A centre behind the viewer has no depth: such a plane is drawn first, whatever part of it is in front.
-                var centre = plane.Fragment.WholeBoxRect;
-                var depth = plane.Depth.At(centre.X + centre.Width / 2, centre.Y + centre.Height / 2);
-                plane.SortDepth = double.IsNaN(depth) ? double.NegativeInfinity : depth;
-                if (plane.Parent >= 0)
-                    plane.SortDepth = Math.Max(plane.SortDepth, planes[plane.Parent].SortDepth);
+                ProjectiveRaster.Locate(planes, i, plane.Subject.WholeBoxRect);
 
                 if (plane.Hidden)
                 {
@@ -291,21 +217,16 @@ namespace PeachPDF.Html.Core.Paint
                     continue;
                 }
 
-                if (SubtreeExtent(plane.Fragment, _contextMembers) is not { } extent)
+                if (SubtreeExtent(plane.Subject, _contextMembers) is not { } extent)
                     continue;
 
-                plane.Source = Inflate(extent, SubtreeBleed(plane.Fragment, _contextMembers));
-                if (!plane.Map.TryProjectRectangleBounds(plane.Source.Left, plane.Source.Top, plane.Source.Right, plane.Source.Bottom,
-                        out var left, out var top, out var right, out var bottom))
-                {
-                    culled[i] = true;
-                    continue; // wholly behind the viewer
-                }
+                plane.Source = Inflate(extent, SubtreeBleed(plane.Subject, _contextMembers));
 
-                if (ProjectsToSliver(plane.Map, plane.Source))
+                // Wholly behind the viewer, or edge-on (a hairline at most): not drawn.
+                if (ProjectiveRaster.Project(plane, plane.Source, MinVisibleThickness, out var left, out var top, out var right, out var bottom) != PlaneProjection.Visible)
                 {
                     culled[i] = true;
-                    continue; // edge-on: a hairline at most
+                    continue;
                 }
 
                 plane.HasSource = true;
@@ -314,7 +235,6 @@ namespace PeachPDF.Html.Core.Paint
                 minY = Math.Min(minY, top);
                 maxX = Math.Max(maxX, right);
                 maxY = Math.Max(maxY, bottom);
-                keys[ordered++] = new DepthKey { Depth = plane.SortDepth, Plane = i };
             }
 
             NoteCulledPlanes(planes, culled);
@@ -329,60 +249,55 @@ namespace PeachPDF.Html.Core.Paint
                 for (var i = 0; i < planes.Length; i++)
                 {
                     if (planes[i].HasSource)
-                        RecordHiddenSubtree(planes[i].Fragment);
+                        RecordHiddenSubtree(planes[i].Subject);
                 }
 
                 return true;
             }
 
-            using var destinationScope = g.BeginRasterSurface(destination);
-            if (destinationScope is null)
-                return false;
+            Span<int> order = planes.Length <= StackPlanes ? stackalloc int[StackPlanes] : new int[planes.Length];
+            var ordered = ProjectiveRaster.OrderBackToFront<BoxFragment>(planes, order);
 
-            keys[..ordered].Sort(BackToFront);
-            using var depthBuffer = new DepthBuffer(destinationScope.Surface.Width, destinationScope.Surface.Height);
+            // Planes that are only tilted (no perspective) and do not pierce one another need no depth test: drawn back to front, each under its own
+            // affine map, they stay vector artwork.
+            if (ProjectiveRaster.TryResolveOrder<BoxFragment>(planes, order[..ordered]))
+            {
+                for (var k = 0; k < ordered; k++)
+                    PaintUnderMap(g, planes[order[k]].Subject, ProjectiveRaster.AffineOf(planes[order[k]].Map));
+
+                return true;
+            }
 
             var wasSuppressed = _taggingSuppressed;
             _taggingSuppressed = true;
+            bool composed;
             try
             {
-                for (var k = 0; k < ordered; k++)
-                {
-                    ref var plane = ref planes[keys[k].Plane];
-
-                    // A plane brought closer than its flat size is drawn larger than its bitmap: give it as many more pixels as the warp
-                    // enlarges it by, so it does not blur.
-                    var dpi = container.RenderContext.RasterizationDpi * Magnification(plane.Map, plane.Source);
-                    using var sourceScope = g.BeginRasterSurface(plane.Source, dpi);
-                    if (sourceScope is null)
+                var rootBox = planes[0].Subject.Box;
+                composed = ProjectiveRaster.Compose(g, planes, order[..ordered], destination,
+                    paintPlane: (ref ProjectivePlane<BoxFragment> plane, Canvas sourceGraphics) =>
                     {
-                        plane.HasSource = false;
-                        RecordHiddenSubtree(plane.Fragment); // not drawn, so nothing to click
-                        continue;
-                    }
-
-                    var enclosingMap = EnterMap(plane.Map);
-                    try
-                    {
-                        RecordPlacement(plane.Fragment);
-                        PaintClippedWithEffects(sourceScope.Graphics, plane.Fragment);
-                    }
-                    finally
-                    {
-                        LeaveMap(enclosingMap);
-                    }
-
-                    Warp.Composite(sourceScope.Surface, destinationScope.Surface, plane.Map, plane.Depth, depthBuffer);
-                }
+                        var enclosingMap = EnterMap(plane.Map);
+                        try
+                        {
+                            RecordPlacement(plane.Subject);
+                            PaintClippedWithEffects(sourceGraphics, plane.Subject);
+                        }
+                        finally
+                        {
+                            LeaveMap(enclosingMap);
+                        }
+                    },
+                    planeFailed: (ref ProjectivePlane<BoxFragment> plane, Canvas _) => RecordHiddenSubtree(plane.Subject), // not drawn, so nothing to click
+                    openArtifact: () => wasSuppressed ? null : rootBox.HtmlContainer?.StructureTagBuilder?.OpenArtifact(g));
             }
             finally
             {
                 _taggingSuppressed = wasSuppressed;
             }
 
-            var builder = _taggingSuppressed ? null : planes[0].Fragment.Box.HtmlContainer?.StructureTagBuilder;
-            using (builder?.OpenArtifact(g))
-                g.DrawRaster(destinationScope.Surface);
+            if (!composed)
+                return false;
 
             // The text drawn into the bitmaps is supplied again, invisibly, in document order (not depth order): each plane's text at
             // the position its transform's linearisation gives it, which is exact at the plane's centre and approximate away from it.
@@ -390,7 +305,7 @@ namespace PeachPDF.Html.Core.Paint
             {
                 ref var plane = ref planes[i];
                 if (plane.HasSource)
-                    SupplyWarpedText(g, plane.Fragment, plane.Map);
+                    SupplyWarpedText(g, plane.Subject, plane.Map);
             }
 
             return true;

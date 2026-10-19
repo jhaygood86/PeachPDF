@@ -88,9 +88,37 @@ internal static partial class PixelKernels
 
     /// <summary>
     /// Writes the average of <paramref name="divisor"/> accumulated samples (each the output of <see cref="BilinearTexels"/>) to the four
-    /// bytes at <paramref name="destination"/>, rounding to nearest.
+    /// bytes at <paramref name="destination"/>, rounding to nearest. The divisors a warp uses are 1, 4, 9 and 16 (the square of the
+    /// samples per axis); any other falls back to the scalar reference.
     /// </summary>
     public static void StoreAveraged(Vector128<int> sum, int divisor, Span<byte> destination)
+    {
+        if (!Vector128.IsHardwareAccelerated || destination.Length < 4 || divisor is not (1 or 4 or 9 or 16))
+        {
+            StoreAveragedScalar(sum, divisor, destination);
+            return;
+        }
+
+        // The sums are at most 255 * 16, so a divide by a constant is a shift (4, 16) or the multiply-shift below, which is exact up to 4095:
+        // floor(x / 9) == (x * 7282) >> 16 because 7282 / 65536 exceeds 1/9 by less than the 1/9 gap between one quotient and the next.
+        var rounded = sum + Vector128.Create(divisor / 2);
+        var averaged = divisor switch
+        {
+            1 => sum,
+            4 => Vector128.ShiftRightArithmetic(rounded, 2),
+            9 => Vector128.ShiftRightArithmetic(rounded * 7282, 16),
+            _ => Vector128.ShiftRightArithmetic(rounded, 4),
+        };
+
+        averaged = Vector128.Min(Vector128.Max(averaged, Vector128<int>.Zero), Vector128.Create(255));
+
+        // Four lanes of 0 to 255: narrow to bytes and write them as one 32-bit store.
+        var narrowed = Vector128.Narrow(Vector128.Narrow(averaged.AsUInt32(), averaged.AsUInt32()), Vector128.Narrow(averaged.AsUInt32(), averaged.AsUInt32()));
+        Unsafe.WriteUnaligned(ref MemoryMarshal.GetReference(destination), narrowed.AsUInt32().ToScalar());
+    }
+
+    /// <summary>The scalar reference for <see cref="StoreAveraged"/>.</summary>
+    internal static void StoreAveragedScalar(Vector128<int> sum, int divisor, Span<byte> destination)
     {
         if (divisor == 1)
         {

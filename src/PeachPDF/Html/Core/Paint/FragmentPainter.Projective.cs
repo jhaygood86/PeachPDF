@@ -39,9 +39,6 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         private readonly record struct ProjectiveWarp(Homography Map, bool Hidden, Matrix3x2? Affine = null);
 
-        /// <summary>The most a bitmap is enlarged for a receding plane that comes closer than its flat size.</summary>
-        private const double MaxProjectiveMagnification = 4.0;
-
         /// <summary>The homography this box is painted through, or null when its transform is affine (or there is none) and the vector path applies.</summary>
         private ProjectiveWarp? ResolveProjective(BoxFragment fragment)
         {
@@ -61,10 +58,7 @@ namespace PeachPDF.Html.Core.Paint
                 var originX = parentFragment.WholeBoxRect.X + ox - position.X;
                 var originY = parentFragment.WholeBoxRect.Y + oy - position.Y;
 
-                var d = parent.ActualPerspective;
-                var persp = Matrix4x4.Identity;
-                persp.M34 = (float)(-1.0 / d);
-                perspective = Matrix4x4.CreateTranslation((float)-originX, (float)-originY, 0) * persp * Matrix4x4.CreateTranslation((float)originX, (float)originY, 0);
+                perspective = ProjectiveRaster.Perspective(parent.ActualPerspective, originX, originY);
                 hasPerspective = true;
             }
 
@@ -74,7 +68,7 @@ namespace PeachPDF.Html.Core.Paint
             // Local (border-box-origin) coordinates to page coordinates.
             map = Homography.Then(Homography.Then(Homography.Translation(-position.X, -position.Y), map), Homography.Translation(position.X, position.Y));
             // A turned-away box with backface-visibility: hidden is not painted, whether or not its map is affine (rotateY(180deg) is).
-            var showsBack = box.IsBackfaceHidden && FacesAway(combined);
+            var showsBack = box.IsBackfaceHidden && ProjectiveRaster.FacesAway(combined);
 
             var centre = map.ApplyHomogeneous(fragment.WholeBoxRect.X + fragment.WholeBoxRect.Width / 2, fragment.WholeBoxRect.Y + fragment.WholeBoxRect.Height / 2);
             if (map.IsAffine)
@@ -97,53 +91,21 @@ namespace PeachPDF.Html.Core.Paint
             // The sign of w is meaningful (positive is in front of the eye): ProjectRectangle clips at w > 0, so a box wholly behind the eye
             // projects to nothing and a straddling one paints only its visible part. Negating a map whose centre is behind the eye would
             // reflect that region through the origin and paint it.
-            return new ProjectiveWarp(map, showsBack);
-        }
+            // A weak perspective on a small plane stays within a fraction of a device pixel of an affine map: that is carried as a plain `cm`, with the
+            // content kept as vector artwork, rather than as a bitmap.
+            if (!showsBack && SubtreeExtent(fragment) is { } extent &&
+                ProjectiveRaster.TryFitAffine(map, Inflate(extent, SubtreeBleed(fragment)), ProjectiveRaster.NearAffineTolerance(container.RenderContext.RasterizationDpi, 1.0), out var fit))
+                return new ProjectiveWarp(map, Hidden: false, fit);
 
-        /// <summary>
-        /// Whether the plane's front now points away from the viewer: the sign of the z component of the transformed normal, which is the
-        /// determinant of the upper-left 2x2 over that of the upper-left 3x3. <c>rotateY(180deg)</c> shows its back; <c>scaleX(-1)</c>, a
-        /// mirror in the plane, does not.
-        /// </summary>
-        private static bool FacesAway(in Matrix4x4 m)
-        {
-            var det2 = (double)m.M11 * m.M22 - (double)m.M12 * m.M21;
-            var det3 =
-                (double)m.M11 * ((double)m.M22 * m.M33 - (double)m.M23 * m.M32) -
-                (double)m.M12 * ((double)m.M21 * m.M33 - (double)m.M23 * m.M31) +
-                (double)m.M13 * ((double)m.M21 * m.M32 - (double)m.M22 * m.M31);
-            return det3 != 0 && det2 / det3 < 0;
+            return new ProjectiveWarp(map, showsBack);
         }
 
         /// <summary>
         /// Whether <paramref name="source"/>, mapped through <paramref name="map"/>, lands as a sliver thinner than
         /// <see cref="MinVisibleThickness"/> - a plane turned edge-on to the viewer, whose image a renderer would still stroke as a hairline.
-        /// The projective counterpart of <see cref="HasVisibleThickness"/>: the thickness is the image's area over its longest extent (its
-        /// diameter), measured on the part of it in front of the eye. An image wholly behind the viewer has no polygon and is not a sliver
-        /// (the caller already drops it).
+        /// The projective counterpart of <see cref="HasVisibleThickness"/> (see <see cref="ProjectiveRaster.ProjectsToSliver"/>).
         /// </summary>
-        internal static bool ProjectsToSliver(in Homography map, Rect source)
-        {
-            var polygon = map.ProjectRectangle(source.Left, source.Top, source.Right, source.Bottom);
-            if (polygon.Count < 3)
-                return false;
-
-            double twiceArea = 0, diameterSquared = 0;
-            for (var i = 0; i < polygon.Count; i++)
-            {
-                var (x, y) = polygon[i];
-                var (nextX, nextY) = polygon[(i + 1) % polygon.Count];
-                twiceArea += x * nextY - nextX * y;
-
-                for (var j = i + 1; j < polygon.Count; j++)
-                {
-                    var (otherX, otherY) = polygon[j];
-                    diameterSquared = Math.Max(diameterSquared, (x - otherX) * (x - otherX) + (y - otherY) * (y - otherY));
-                }
-            }
-
-            return diameterSquared <= 0 || Math.Abs(twiceArea) / 2 / Math.Sqrt(diameterSquared) < MinVisibleThickness;
-        }
+        internal static bool ProjectsToSliver(in Homography map, Rect source) => ProjectiveRaster.ProjectsToSliver(map, source, MinVisibleThickness);
 
         private bool PaintProjective(Canvas g, BoxFragment fragment, ProjectiveWarp warp)
         {
@@ -158,62 +120,46 @@ namespace PeachPDF.Html.Core.Paint
                 return true;
 
             var source = Inflate(extent, SubtreeBleed(fragment));
-            if (!warp.Map.TryProjectRectangleBounds(source.Left, source.Top, source.Right, source.Bottom, out var minX, out var minY, out var maxX, out var maxY))
+            var map = warp.Map;
+
+            var outcome = ProjectiveRaster.Paint(g, map, source, MinVisibleThickness,
+                paintSource: sourceGraphics =>
+                {
+                    var wasSuppressed = _taggingSuppressed;
+                    _taggingSuppressed = true;
+                    var enclosingMap = EnterMap(map);
+                    try
+                    {
+                        RecordPlacement(fragment);
+                        PaintClippedWithEffects(sourceGraphics, fragment);
+                    }
+                    finally
+                    {
+                        LeaveMap(enclosingMap);
+                        _taggingSuppressed = wasSuppressed;
+                    }
+                },
+                openArtifact: () => _taggingSuppressed ? null : box.HtmlContainer?.StructureTagBuilder?.OpenArtifact(g));
+
+            switch (outcome)
             {
-                NoteNotRendered(box);
-                return true; // wholly behind the viewer
+                case ProjectiveOutcome.NotRendered:
+                    NoteNotRendered(box); // wholly behind the viewer, or edge-on: nothing worth a bitmap, and no text layer to supply
+                    return true;
+
+                case ProjectiveOutcome.ClippedOut:
+                    // Nothing of it lands in the clip, so nothing under it is drawn on this page: the annotation pass must not read "not recorded"
+                    // as "not moved" for the box or anything inside it.
+                    RecordHiddenSubtree(fragment);
+                    return true;
+
+                case ProjectiveOutcome.NoRaster:
+                    return false;
+
+                default:
+                    SupplyWarpedText(g, fragment, map);
+                    return true;
             }
-
-            // Edge-on: nothing worth a bitmap, and no text layer to supply over one that is not there.
-            if (ProjectsToSliver(warp.Map, source))
-            {
-                NoteNotRendered(box);
-                return true;
-            }
-
-            var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
-            if (destination.Width <= 0 || destination.Height <= 0)
-            {
-                // Nothing of it lands in the clip, so nothing under it is drawn on this page: the annotation pass must not read "not recorded"
-                // as "not moved" for the box or anything inside it.
-                RecordHiddenSubtree(fragment);
-                return true;
-            }
-
-            // A plane brought closer than its flat size is drawn larger than its bitmap: render the source with as many more pixels as the
-            // warp enlarges it by, at most a few times over, so it does not blur.
-            var dpi = container.RenderContext.RasterizationDpi * Magnification(warp.Map, source);
-
-            using var sourceScope = g.BeginRasterSurface(source, dpi);
-            if (sourceScope is null)
-                return false;
-
-            using var destinationScope = g.BeginRasterSurface(destination);
-            if (destinationScope is null)
-                return false;
-
-            var wasSuppressed = _taggingSuppressed;
-            _taggingSuppressed = true;
-            var enclosingMap = EnterMap(warp.Map);
-            try
-            {
-                RecordPlacement(fragment);
-                PaintClippedWithEffects(sourceScope.Graphics, fragment);
-            }
-            finally
-            {
-                LeaveMap(enclosingMap);
-                _taggingSuppressed = wasSuppressed;
-            }
-
-            Warp.Apply(sourceScope.Surface, destinationScope.Surface, warp.Map);
-
-            var builder = _taggingSuppressed ? null : box.HtmlContainer?.StructureTagBuilder;
-            using (builder?.OpenArtifact(g))
-                g.DrawRaster(destinationScope.Surface);
-
-            SupplyWarpedText(g, fragment, warp.Map);
-            return true;
         }
 
         /// <summary>
@@ -236,41 +182,7 @@ namespace PeachPDF.Html.Core.Paint
             }
         }
 
-        /// <summary>How much larger than its flat size the warp draws <paramref name="source"/> at its most magnified corner or its centre, at least 1.</summary>
-        private static double Magnification(Homography map, Rect source)
-        {
-            double Scale(double x, double y)
-            {
-                const double step = 1.0;
-                if (map.Apply(x, y) is not { } origin || map.Apply(x + step, y) is not { } right || map.Apply(x, y + step) is not { } below)
-                    return 1.0;
-
-                var sx = Math.Sqrt((right.X - origin.X) * (right.X - origin.X) + (right.Y - origin.Y) * (right.Y - origin.Y)) / step;
-                var sy = Math.Sqrt((below.X - origin.X) * (below.X - origin.X) + (below.Y - origin.Y) * (below.Y - origin.Y)) / step;
-                return Math.Max(sx, sy);
-            }
-
-            var most = Math.Max(
-                Math.Max(Scale(source.Left, source.Top), Scale(source.Right, source.Top)),
-                Math.Max(Math.Max(Scale(source.Left, source.Bottom), Scale(source.Right, source.Bottom)), Scale(source.Left + source.Width / 2, source.Top + source.Height / 2)));
-            return Math.Clamp(most, 1.0, MaxProjectiveMagnification);
-        }
-
         /// <summary>The affine map that agrees with <paramref name="map"/> at the centre of <paramref name="box"/> in value and in slope.</summary>
-        private static Matrix3x2 Linearise(Homography map, Rect box)
-        {
-            var cx = box.X + box.Width / 2;
-            var cy = box.Y + box.Height / 2;
-            var step = Math.Max(1.0, Math.Min(box.Width, box.Height) / 4);
-
-            if (map.Apply(cx, cy) is not { } centre || map.Apply(cx + step, cy) is not { } right || map.Apply(cx, cy + step) is not { } below)
-                return Matrix3x2.Identity;
-
-            var m11 = (right.X - centre.X) / step;
-            var m12 = (right.Y - centre.Y) / step;
-            var m21 = (below.X - centre.X) / step;
-            var m22 = (below.Y - centre.Y) / step;
-            return new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, (float)(centre.X - (cx * m11 + cy * m21)), (float)(centre.Y - (cx * m12 + cy * m22)));
-        }
+        private static Matrix3x2 Linearise(Homography map, Rect box) => ProjectiveRaster.Linearise(map, box);
     }
 }

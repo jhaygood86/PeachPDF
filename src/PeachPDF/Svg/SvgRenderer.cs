@@ -118,6 +118,8 @@ namespace PeachPDF.Svg
             var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
 
             var frame = g.CurrentTransform;
+            var previousViewportClip = s_viewportClip;
+            s_viewportClip = (viewportRect, frame);
             g.PushClip(viewportRect);
             g.PushTransform(matrix);
 
@@ -137,12 +139,18 @@ namespace PeachPDF.Svg
 
             try
             {
-                foreach (var element in document.Children)
-                    RenderElement(g, document, element, 1.0, viewport);
+                if (document.RootProjection is { } projection)
+                    RenderElement(g, document, projection, 1.0, viewport);
+                else
+                {
+                    foreach (var element in document.Children)
+                        RenderElement(g, document, element, 1.0, viewport);
+                }
             }
             finally
             {
                 SvgBackdropSlot.Set(g, previousBackdrop);
+                s_viewportClip = previousViewportClip;
             }
 
             g.PopTransform();
@@ -319,7 +327,8 @@ namespace PeachPDF.Svg
         /// map a gradient/pattern context paint that reaches into <paramref name="children"/> out of the (pre-mapping)
         /// frame <see cref="SvgGeometryBounds.GetUseTargetBoundingBox"/> reports its box in.
         /// </param>
-        private static void RenderViewport(Canvas g, SvgDocument document, double x, double y, double width, double height, Rect? viewBox, SvgPreserveAspectRatio par, IReadOnlyList<SvgElement> children, double opacity, SvgElement? contextElement = null)
+        /// <param name="perspectiveOwner">The element whose <c>perspective</c> the children are seen through (the nested <c>&lt;svg&gt;</c> or the <c>&lt;use&gt;</c>), or null for none.</param>
+        private static void RenderViewport(Canvas g, SvgDocument document, double x, double y, double width, double height, Rect? viewBox, SvgPreserveAspectRatio par, IReadOnlyList<SvgElement> children, double opacity, SvgElement? contextElement = null, SvgElement? perspectiveOwner = null)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -353,9 +362,7 @@ namespace PeachPDF.Svg
                 g.PushTransform(matrix);
                 pushedTransform = true;
 
-                var nestedViewport = (viewBoxWidth, viewBoxHeight);
-                foreach (var child in children)
-                    RenderElement(g, document, child, opacity, nestedViewport);
+                RenderChildren(g, document, perspectiveOwner, children, opacity, (viewBoxWidth, viewBoxHeight));
             }
             finally
             {
@@ -2766,15 +2773,35 @@ namespace PeachPDF.Svg
             if (SvgBackdropSlot.Get(g) is { } backdrop && backdrop.ShouldSkip(element))
                 return;
 
-            var opacity = inheritedOpacity * element.Opacity;
-            var pushedTransform = false;
-            var pushedClip = false;
+            // The perspective the container gives this child is for this child alone: what it holds is governed by its own.
+            var parentPerspective = s_childPerspective;
+            s_childPerspective = null;
 
+            // Another plane of the 3D rendering context being composed: the context paints it, this plane's own painting must not.
+            if (s_contextMembers is { } contextMembers && contextMembers.Contains(element))
+                return;
+
+            // A 3D transform (or a preserve-3d context) is carried by a bitmap warped through the projective map, or a plain matrix when it comes to that.
+            if ((element.Transform3D is not null || element.PreserveThreeD) && TryRenderProjective(g, document, element, inheritedOpacity, viewport, parentPerspective))
+                return;
+
+            var pushedTransform = false;
             if (element.Transform is { } transform)
             {
                 g.PushTransform(transform);
                 pushedTransform = true;
             }
+
+            RenderElementContent(g, document, element, inheritedOpacity, viewport);
+
+            if (pushedTransform) g.PopTransform();
+        }
+
+        /// <summary>Paints <paramref name="element"/> in the coordinates it is already in: its clip, filter, mask, opacity and content, but not its own <c>transform</c>.</summary>
+        private static void RenderElementContent(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
+        {
+            var opacity = inheritedOpacity * element.Opacity;
+            var pushedClip = false;
 
             GraphicsPath? clipPath = null;
 
@@ -2824,7 +2851,6 @@ namespace PeachPDF.Svg
 
             if (pushedClip) g.PopClip();
             clipPath?.Dispose();
-            if (pushedTransform) g.PopTransform();
         }
 
         /// <summary>
@@ -3352,8 +3378,7 @@ namespace PeachPDF.Svg
             switch (element)
             {
                 case SvgGroupElement group:
-                    foreach (var child in group.Children)
-                        RenderElement(g, document, child, opacity, viewport);
+                    RenderChildren(g, document, group, group.Children, opacity, viewport);
                     break;
 
                 case SvgPathElement path:
@@ -3408,7 +3433,7 @@ namespace PeachPDF.Svg
                 }
 
                 case SvgNestedSvgElement nestedSvg:
-                    RenderViewport(g, document, nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height, nestedSvg.ViewBox, nestedSvg.PreserveAspectRatio, nestedSvg.Children, opacity);
+                    RenderViewport(g, document, nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height, nestedSvg.ViewBox, nestedSvg.PreserveAspectRatio, nestedSvg.Children, opacity, perspectiveOwner: nestedSvg);
                     break;
 
                 case SvgImageElement image:
@@ -3439,13 +3464,13 @@ namespace PeachPDF.Svg
                         // below - see RenderViewport's contextElement doc and
                         // SvgGeometryBounds.GetUseTargetBoundingBox for the matching (pre-mapping) box.
                         case SvgSymbolElement symbol:
-                            RenderViewport(g, document, 0, 0, use.Width ?? viewport.Width, use.Height ?? viewport.Height, symbol.ViewBox, symbol.PreserveAspectRatio, symbol.Children, opacity, use);
+                            RenderViewport(g, document, 0, 0, use.Width ?? viewport.Width, use.Height ?? viewport.Height, symbol.ViewBox, symbol.PreserveAspectRatio, symbol.Children, opacity, use, perspectiveOwner: use);
                             break;
 
                         // A nested <svg> target already has its own resolved size; <use>'s width/height
                         // only override it when actually specified.
                         case SvgNestedSvgElement nestedTarget:
-                            RenderViewport(g, document, 0, 0, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height, nestedTarget.ViewBox, nestedTarget.PreserveAspectRatio, nestedTarget.Children, opacity, use);
+                            RenderViewport(g, document, 0, 0, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height, nestedTarget.ViewBox, nestedTarget.PreserveAspectRatio, nestedTarget.Children, opacity, use, perspectiveOwner: use);
                             break;
 
                         default:

@@ -1284,7 +1284,7 @@ namespace PeachPDF.Html.Core.Parse
                     return null;
 
                 var perspective = Matrix4x4.Identity;
-                perspective.M34 = (float)(-1.0 / distance);
+                perspective.M34 = (float)(-1.0 / Math.Max(distance, Length.PointsPerPx)); // under one pixel is one pixel (section 12.2)
                 return perspective;
             }
 

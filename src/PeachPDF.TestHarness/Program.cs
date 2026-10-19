@@ -14229,6 +14229,52 @@ await SaveShowcaseAsync("perspective_3d_transforms", "Graphics & Effects", "Pers
     "CSS perspective on a parent and perspective() in a transform: rotateX/rotateY cards foreshortened in real perspective, translateZ scaling, backface-visibility, and a perspective card with opacity - warped from a bitmap of the element at the raster resolution.",
     perspectiveHtml, pdfConfig);
 
+// --- 3D transforms on SVG elements showcase ---
+
+const string svg3dHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; background: #eef; }
+.row { display: flex; gap: 24px; padding: 18px; }
+.row > div { flex: none; }
+svg { width: 230px; height: 190px; background: #dde; display: block; }
+.cap { font-size: 11px; text-align: center; margin-top: 4px; width: 230px; }
+.card { transform-box: fill-box; transform-origin: center; }
+</style></head><body>
+<div class="row">
+  <div><svg viewBox="0 0 230 190"><g style="perspective:420px;perspective-origin:115px 95px">
+    <rect class="card" x="55" y="45" width="120" height="100" fill="#e66" stroke="#222" stroke-width="3" style="transform:rotateY(48deg)"/>
+    <text x="70" y="100" font-size="18" font-weight="bold" fill="#111" style="transform-box:fill-box;transform-origin:center;transform:rotateY(48deg)">rotateY</text></g></svg>
+    <div class="cap">container perspective, rotateY(48deg): the near edge is taller</div></div>
+  <div><svg viewBox="0 0 230 190">
+    <rect class="card" x="55" y="45" width="120" height="100" fill="#6cf" stroke="#222" stroke-width="3" style="transform:perspective(300px) rotateX(40deg)"/></svg>
+    <div class="cap">perspective(300px) rotateX(40deg) in the transform list</div></div>
+  <div><svg viewBox="0 0 230 190"><g style="perspective:420px;perspective-origin:115px 95px">
+    <rect class="card" x="55" y="45" width="120" height="100" fill="#fd5" stroke="#222" stroke-width="3" style="transform:rotateY(180deg);backface-visibility:hidden"/>
+    <rect class="card" x="75" y="65" width="80" height="60" fill="#6d6" stroke="#222" stroke-width="3" style="transform:translateZ(80px)"/></g></svg>
+    <div class="cap">backface-visibility: hidden hides the first; translateZ(80px) brings the second closer</div></div>
+</div>
+<div class="row">
+  <div><svg viewBox="0 0 230 190"><g style="transform-style:preserve-3d;perspective:520px;perspective-origin:115px 95px">
+    <rect class="card" x="55" y="45" width="120" height="100" fill="#e66" stroke="#222" stroke-width="3" style="transform:rotateY(40deg)"/>
+    <rect class="card" x="55" y="45" width="120" height="100" fill="#6cf" stroke="#222" stroke-width="3" style="transform:rotateY(-40deg)"/></g></svg>
+    <div class="cap">preserve-3d: two planes cross where they meet</div></div>
+  <div><svg viewBox="0 0 230 190"><g style="perspective:420px;perspective-origin:115px 95px">
+    <g class="card" style="transform:rotateX(-25deg) rotateY(35deg)"><rect x="55" y="45" width="120" height="100" fill="#fa5" stroke="#222" stroke-width="3"/>
+      <circle cx="115" cy="95" r="30" fill="#fff" stroke="#222" stroke-width="3"/></g></g></svg>
+    <div class="cap">a group carries its children through the same 3D transform</div></div>
+  <div><svg viewBox="0 0 230 190">
+    <defs><filter id="blur"><feGaussianBlur stdDeviation="3"/></filter></defs>
+    <rect class="card" x="55" y="45" width="120" height="100" fill="#c9f" stroke="#222" stroke-width="3" style="transform:perspective(380px) rotateY(-35deg);filter:url(#blur)"/></svg>
+    <div class="cap">a filtered element is warped with its filter</div></div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("svg_3d_transforms", "Graphics & Effects", "3D Transforms on SVG Elements",
+    "The 3D transform functions on SVG elements: rotateX/rotateY, translateZ and perspective() in a transform, a container's perspective and perspective-origin, backface-visibility, transform-style: preserve-3d with intersecting planes, a group carrying its children, and a filtered element warped with its filter.",
+    svg3dHtml, pdfConfig);
+
 // --- transform-style: preserve-3d showcase ---
 
 const string preserve3dHtml = """

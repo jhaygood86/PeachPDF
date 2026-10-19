@@ -1,0 +1,5 @@
+# `Canvas.GetClip()` is in the space the clip was pushed in, not the current user space
+
+A `PushClip(rect)` records `rect` as it was given, and `PushTransform` does not rewrite the clip stack. The SVG renderer pushes its viewport clip *before* the viewBox-to-viewport transform, so inside an SVG `GetClip()` is in the space *outside* the viewBox transform while everything else (element geometry, `BeginRasterSurface`'s bounds) is in user space. The clip stack is "only used for culling" (see `PdfCanvas.PushClip(GraphicsPath)`), which tolerates being wrong by a scale.
+
+Measured symptom: a warped SVG element cropped as a rectangle at the page's size in layout points, read in user units - a 230-unit-wide svg drawn at 0.75 scale was cut off at 172 units on the right and at the equivalent on the bottom. Anything in the SVG renderer that needs the visible region (a raster destination limit) takes it from `SvgRenderer.VisibleRegion`, which maps the root viewport rectangle through the entry transform recorded in `RenderInto` and the inverse of `CurrentTransform`. HTML painting is in layout space with an identity transform, where `GetClip()` is right.

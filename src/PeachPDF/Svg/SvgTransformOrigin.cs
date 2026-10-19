@@ -28,13 +28,15 @@ namespace PeachPDF.Svg
     {
         private readonly SvgOriginComponent _x;
         private readonly SvgOriginComponent _y;
+        private readonly double _z;
         private readonly SvgTransformBox _box;
         private readonly Rect _viewBox;
 
-        private SvgTransformOrigin(SvgOriginComponent x, SvgOriginComponent y, SvgTransformBox box, Rect viewBox)
+        private SvgTransformOrigin(SvgOriginComponent x, SvgOriginComponent y, double z, SvgTransformBox box, Rect viewBox)
         {
             _x = x;
             _y = y;
+            _z = z;
             _box = box;
             _viewBox = viewBox;
         }
@@ -48,7 +50,7 @@ namespace PeachPDF.Svg
         };
 
         /// <summary>
-        /// Reads a <c>transform-origin</c> value (one to three of <c>left</c>/<c>center</c>/<c>right</c>/<c>top</c>/<c>bottom</c>/a length/a percentage; the third, a z offset, is ignored). Null
+        /// Reads a <c>transform-origin</c> value (one to three of <c>left</c>/<c>center</c>/<c>right</c>/<c>top</c>/<c>bottom</c>/a length/a percentage; the third is a z offset, a length only). Null
         /// when the value is absent or not one: the element keeps the user-space origin.
         /// </summary>
         public static SvgTransformOrigin? Parse(string? value, SvgTransformBox box, Rect viewBox, ISvgLengthBasis? basis)
@@ -70,7 +72,17 @@ namespace PeachPDF.Svg
             if (!TryComponent(first, horizontal: true, basis, out var x) || !TryComponent(second, horizontal: false, basis, out var y))
                 return null;
 
-            return new SvgTransformOrigin(x, y, box, viewBox);
+            // The z offset is a length: a keyword or a percentage there makes the whole value invalid.
+            var z = 0.0;
+            if (tokens.Length == 3)
+            {
+                if (tokens[2].EndsWith('%') || SvgValueParsers.ParseLength(tokens[2], null, basis) is not { } depth)
+                    return null;
+
+                z = depth;
+            }
+
+            return new SvgTransformOrigin(x, y, z, box, viewBox);
         }
 
         private static bool TryComponent(string token, bool horizontal, ISvgLengthBasis? basis, out SvgOriginComponent component)
@@ -112,6 +124,24 @@ namespace PeachPDF.Svg
             return Matrix3x2.CreateTranslation(-ox, -oy) * matrix * Matrix3x2.CreateTranslation(ox, oy);
         }
 
+        /// <summary>The origin point in <paramref name="element"/>'s user space: the point its transform (or, for <c>perspective-origin</c>, its vanishing point) is about.</summary>
+        public (double X, double Y, double Z) Resolve(SvgElement element)
+        {
+            var box = ReferenceBox(element, _box, _viewBox);
+            return (box.X + (_x.IsPercent ? _x.Value / 100 * box.Width : _x.Value), box.Y + (_y.IsPercent ? _y.Value / 100 * box.Height : _y.Value), _z);
+        }
+
+        /// <summary><paramref name="matrix"/> turned about this origin on <paramref name="element"/>, the z offset included.</summary>
+        public Matrix4x4 Apply(Matrix4x4 matrix, SvgElement element)
+        {
+            var box = ReferenceBox(element, _box, _viewBox);
+
+            var ox = (float)(box.X + (_x.IsPercent ? _x.Value / 100 * box.Width : _x.Value));
+            var oy = (float)(box.Y + (_y.IsPercent ? _y.Value / 100 * box.Height : _y.Value));
+
+            return Matrix4x4.CreateTranslation(-ox, -oy, -(float)_z) * matrix * Matrix4x4.CreateTranslation(ox, oy, (float)_z);
+        }
+
         /// <summary>The rectangle a percentage in a transform or its origin is of: the view box, the element's object bounding box, or that grown by half the stroke width.</summary>
         internal static Rect ReferenceBox(SvgElement element, SvgTransformBox box, Rect viewBox) => box switch
         {
@@ -137,10 +167,10 @@ namespace PeachPDF.Svg
     /// <summary>A CSS <c>transform</c> with a percentage that is of a <c>fill-box</c> or <c>stroke-box</c>: parsed again against the element's geometry when it is read.</summary>
     internal sealed class SvgDeferredTransform(string text, SvgTransformContext context, SvgTransformBox box, bool allowCalc)
     {
-        public Matrix3x2? Resolve(SvgElement element)
+        public SvgParsedTransform? Resolve(SvgElement element)
         {
             var reference = SvgTransformOrigin.ReferenceBox(element, box, default);
-            return SvgTransformParser.Parse(text, context with { ReferenceWidth = reference.Width, ReferenceHeight = reference.Height }, allowCalc: allowCalc);
+            return SvgTransformParser.ParseFull(text, context with { ReferenceWidth = reference.Width, ReferenceHeight = reference.Height }, allowCalc: allowCalc);
         }
     }
 }
