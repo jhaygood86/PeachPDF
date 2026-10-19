@@ -5500,6 +5500,7 @@ const string svgStylesheetHtml = """
       svg { display: block; margin-bottom: 14px; border: 1px solid #ccc }
       stop.from { stop-color: #1b6ca8 }
       stop.to { stop-color: #e8590c; stop-opacity: .8 }
+      .band { fill: url(#sky) }
       .dashed { fill: none; stroke: #2b8a3e; stroke-width: 6; stroke-dasharray: 20 12; stroke-dashoffset: 10 }
       .dashed.shifted { stroke-dashoffset: 26 }
       .tile.a { fill: #862e9c; transform: translateX(40px) rotate(0.125turn) }
@@ -5508,7 +5509,7 @@ const string svgStylesheetHtml = """
     </style></head><body>
     <p>Gradient stops coloured by <code>stop { stop-color }</code> rules:</p>
     <svg width="320" height="40"><defs><linearGradient id="sky"><stop class="from" offset="0" stop-color="#ff0000"/><stop class="to" offset="1" stop-color="#00ff00"/></linearGradient></defs>
-      <rect fill="url(#sky)" width="320" height="40"/></svg>
+      <rect class="band" width="320" height="40"/></svg>
     <p>Unitless <code>stroke-width: 6</code> and <code>stroke-dashoffset</code> (10, then 26):</p>
     <svg width="320" height="40"><line class="dashed" x1="10" y1="12" x2="310" y2="12"/><line class="dashed shifted" x1="10" y1="28" x2="310" y2="28"/></svg>
     <p>CSS transforms with units on SVG elements:</p>
@@ -5517,7 +5518,7 @@ const string svgStylesheetHtml = """
     """;
 
 await SaveShowcaseAsync("svg_stylesheet_properties", "Graphics & Effects", "SVG: styled from a stylesheet",
-    "Rules in the document's stylesheet reach a gradient stop's stop-color and stop-opacity, unitless stroke-width and stroke-dashoffset work as SVG allows, and a CSS transform with units (turn, grad, translateX, skew) is read on SVG elements.",
+    "Rules in the document's stylesheet reach a gradient stop's stop-color and stop-opacity, a rule's fill: url(#id) paints a gradient, unitless stroke-width and stroke-dashoffset work as SVG allows, and a CSS transform with units (turn, grad, translateX, skew) is read on SVG elements.",
     svgStylesheetHtml, pdfConfig);
 
 // --- SVG Form XObject reuse showcase ---
