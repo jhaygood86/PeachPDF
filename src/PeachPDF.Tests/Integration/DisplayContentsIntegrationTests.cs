@@ -959,16 +959,11 @@ namespace PeachPDF.Tests.Integration
         public async Task Declarative_ContentsOnTheRoot_IsBlockAndNotDropped()
         {
             var stylesheet = await new PdfGenerator().ParseStyleSheet("#root { display: contents }");
-            var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new PeachBrackets.Html.Utils.CssPropertyFactory(renderContext);
-            var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
-                p => p.Content(c => c.Id("root").Text("hello")), properties);
+            var (page, root, container) = await PeachPDF.Tests.TestSupport.DeclarativeHarness.BuildAsync(
+                p => p.Content(c => c.Id("root").Text("hello")), stylesheet);
 
-            using var container = new PeachPDF.HtmlContainer(renderContext);
-            await container.SetDeclarativeRoot(page.RootBox, null, stylesheet);
-
-            Assert.Equal(DisplayMode.Block, page.RootBox.Display.Value);
-            Assert.Empty(container.HtmlContainerInt.DisplayContentsShells);
+            Assert.Equal(DisplayMode.Block, root.Display.Value);
+            Assert.Empty(container.DisplayContentsShells);
         }
 
         [Fact]
@@ -989,20 +984,15 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Declarative_ATopLevelFragmentShell_StillReachesTheRealTree()
         {
-            var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new PeachBrackets.Html.Utils.CssPropertyFactory(renderContext);
-            var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
-                p => p.Content(c => c.Html("<p>before</p><div id='empty' style='display:contents'></div>")), properties);
+            var (_, root, container) = await PeachPDF.Tests.TestSupport.DeclarativeHarness.BuildAsync(
+                p => p.Content(c => c.Html("<p>before</p><div id='empty' style='display:contents'></div>")));
 
-            using var container = new PeachPDF.HtmlContainer(renderContext);
-            await container.SetDeclarativeRoot(page.RootBox, null, null, properties.DisplayContentsShells);
-
-            var shell = Assert.Single(container.HtmlContainerInt.DisplayContentsShells);
+            var shell = Assert.Single(container.DisplayContentsShells);
 
             // Not the discarded synthetic root of the fragment: a parent chain that ends in the document.
-            Assert.Same(container.HtmlContainerInt, shell.HtmlContainer);
+            Assert.Same(container, shell.HtmlContainer);
             Assert.NotNull(shell.ParentBox);
-            Assert.Contains(shell.ParentBox!, LayoutHarness.Descendants(page.RootBox));
+            Assert.Contains(shell.ParentBox!, LayoutHarness.Descendants(root));
         }
 
         // ─── Bidi ────────────────────────────────────────────────────────────────────────────────

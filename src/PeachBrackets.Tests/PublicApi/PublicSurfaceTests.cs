@@ -31,8 +31,8 @@ namespace PeachBrackets.Tests.PublicApi
         }
 
         /// <summary>
-        /// TEMPORARY: PeachPDF, its CLI and PeachPDF.Tests drive the engine's internals while PeachPDF is moved onto this public API. Each step of that
-        /// move removes a dependence; the end state grants nothing but this project's own tests, and this test is tightened with it.
+        /// PeachPDF and its CLI use only the public API. The one grant left is TEMPORARY: PeachPDF.Tests still asserts on the engine's box tree while
+        /// those tests move into this project's own suite, and this test is tightened to nothing but this project's own tests when they have.
         /// </summary>
         [Fact]
         public void TheGrantedInternalsAreExactlyTheDocumentedSet()
@@ -41,7 +41,7 @@ namespace PeachBrackets.Tests.PublicApi
                 .Select(a => a.AssemblyName)
                 .ToList();
 
-            Assert.Equivalent(new[] { "PeachPDF", "PeachPDF.Cli", "PeachPDF.Tests" }, granted);
+            Assert.Equivalent(new[] { "PeachPDF.Tests" }, granted);
         }
 
         private static string Describe(Assembly assembly)

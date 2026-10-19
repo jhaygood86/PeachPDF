@@ -1,7 +1,12 @@
 using PeachBrackets.Annotations;
+using PeachBrackets.Building;
+using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Annotations;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachBrackets.Html.Pages;
+using PeachBrackets.Html.Parse;
 using PeachBrackets.Tagging;
 using PeachBrackets.Utilities;
 using PeachDrawing.Core;
@@ -32,6 +37,9 @@ namespace PeachBrackets;
 public sealed class HtmlDocument : IDisposable
 {
     private readonly HtmlContainerInt _container;
+
+    /// <summary>The laid-out document the public surface wraps; reached by the test projects that assert on the box tree itself.</summary>
+    internal HtmlContainerInt Container => _container;
     private readonly RenderContext _renderContext;
     private readonly double _unitsPerPoint;
     private PagePainter? _painter;
@@ -88,9 +96,10 @@ public sealed class HtmlDocument : IDisposable
             var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
 
-            var userStyles = string.IsNullOrWhiteSpace(options.UserStyleSheet)
-                ? null
-                : await PeachBrackets.Html.CssData.Parse(renderContext, options.UserStyleSheet, combineWithDefault: true);
+            var userStyles = options.StyleSheet?.Data
+                ?? (string.IsNullOrWhiteSpace(options.UserStyleSheet)
+                    ? null
+                    : await PeachBrackets.Html.CssData.Parse(renderContext, options.UserStyleSheet, combineWithDefault: true));
 
             await container.SetHtml(html, userStyles);
 
@@ -109,6 +118,112 @@ public sealed class HtmlDocument : IDisposable
         {
             document.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Makes a document from a page built in code instead of parsed from HTML, ready to be laid out.
+    /// </summary>
+    /// <param name="page">the page, made by <see cref="DocumentBuildContext.CreatePage"/> and filled with nodes</param>
+    /// <param name="options">the page size, margins and style environment, or null for the defaults of <see cref="HtmlDocumentOptions"/></param>
+    /// <param name="styleSheet">rules applied to the tree, including an <c>@page</c> rule for geometry the page did not set itself, or null for none</param>
+    /// <returns>the document</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="page"/> is null</exception>
+    public static async Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions? options = null, StyleSheet? styleSheet = null)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        options ??= new HtmlDocumentOptions();
+        var renderContext = page.Context.RenderContext;
+        var unitsPerPoint = renderContext.LayoutUnitsPerPoint;
+        var properties = page.Context.Properties;
+        var overrides = page.Overrides;
+
+        ResolvePendingAutoDirections(page.Root.Box, properties);
+
+        var container = new HtmlContainerInt(renderContext);
+        var document = new HtmlDocument(container, renderContext);
+
+        try
+        {
+            container.MarginTop = options.MarginTopPoints * unitsPerPoint;
+            container.MarginRight = options.MarginRightPoints * unitsPerPoint;
+            container.MarginBottom = options.MarginBottomPoints * unitsPerPoint;
+            container.MarginLeft = options.MarginLeftPoints * unitsPerPoint;
+
+            container.PageRules = DomParser.BuildDeclarativePageRules(
+                page.BuildPageRules(), styleSheet?.Data,
+                marginLeftIsExplicit: overrides.HasFlag(PageGeometryOverrides.MarginLeft),
+                marginTopIsExplicit: overrides.HasFlag(PageGeometryOverrides.MarginTop),
+                marginRightIsExplicit: overrides.HasFlag(PageGeometryOverrides.MarginRight),
+                marginBottomIsExplicit: overrides.HasFlag(PageGeometryOverrides.MarginBottom),
+                sizeIsExplicit: overrides.HasFlag(PageGeometryOverrides.Size));
+
+            var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
+            container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
+            container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
+            container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
+            await container.SetDeclarativeRoot(page.Root.Box, options.DefaultLanguage, styleSheet?.Data, properties.DisplayContentsShells);
+
+            if (styleSheet is not null)
+            {
+                // A document-level style sheet's own base @page rule may still adjust whole-page geometry, but only for an edge or size the page
+                // itself left unset. Run after the root is set (it needs the container for em/rem-relative margin resolution).
+                DomParser.CascadeApplyPageStyles(container, page.Root.Box, styleSheet.Data,
+                    allowMarginLeft: !overrides.HasFlag(PageGeometryOverrides.MarginLeft),
+                    allowMarginTop: !overrides.HasFlag(PageGeometryOverrides.MarginTop),
+                    allowMarginRight: !overrides.HasFlag(PageGeometryOverrides.MarginRight),
+                    allowMarginBottom: !overrides.HasFlag(PageGeometryOverrides.MarginBottom),
+                    allowSize: !overrides.HasFlag(PageGeometryOverrides.Size));
+
+                if (container.CssPageSize.HasValue)
+                    sheet = container.CssPageSize.Value;
+            }
+
+            // The content page size is the sheet less its margins, and the document origin sits at the top-left of that band.
+            var content = new Size(
+                sheet.Width - ((container.MarginLeft + container.MarginRight) / unitsPerPoint),
+                sheet.Height - ((container.MarginTop + container.MarginBottom) / unitsPerPoint));
+            container.PageSize = Utils.ToPixels(content, unitsPerPoint);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+
+            return document;
+        }
+        catch
+        {
+            document.Dispose();
+            throw;
+        }
+    }
+
+    private static void ResolvePendingAutoDirections(CssBox root, CssPropertyFactory properties)
+    {
+        if (root.PendingAutoDirection)
+        {
+            properties.Set(root, "direction", BidiDirectionalityResolver.ScanForStrongDirection(root) ?? Keywords.Ltr);
+            root.PendingAutoDirection = false;
+        }
+
+        foreach (var child in root.Boxes)
+            ResolvePendingAutoDirections(child, properties);
+    }
+
+    /// <summary>
+    /// The size of the area the content flows into: the sheet less its margins, in points. Known as soon as the document is loaded.
+    /// </summary>
+    public Size ContentArea => Utils.ToPoints(_container.PageSize, _unitsPerPoint);
+
+    /// <summary>
+    /// The extent the laid-out content actually occupies, in points. Wider than <see cref="ContentArea"/> when something does not fit across,
+    /// which is how a consumer that wants to shrink the content to fit finds out by how much.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public Size ContentExtent
+    {
+        get
+        {
+            _ = Pages;
+            return Utils.ToPoints(_container.ActualSize, _unitsPerPoint);
         }
     }
 

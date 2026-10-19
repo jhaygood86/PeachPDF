@@ -1,7 +1,6 @@
 using PeachDrawing.Core;
 using PeachBrackets.Css;
-using PeachBrackets.Html.Dom;
-using PeachBrackets.Html.Utils;
+using PeachBrackets.Building;
 using PeachPDF.Rendering;
 using System;
 using System.Collections.Generic;
@@ -9,11 +8,11 @@ using System.Collections.Generic;
 namespace PeachPDF.Layout
 {
     /// <summary>
-    /// Builds one page-section's own root <see cref="CssBox"/> tree and records its geometry overrides,
+    /// Builds one page-section's own root <c>CssBox</c> tree and records its geometry overrides,
     /// for <see cref="PdfGenerator"/> to resolve after <see cref="IDocumentBuilder.Page"/>'s handler
     /// returns (each unset geometry override falls back to the document's own <see cref="PdfGenerateConfig"/>).
     /// </summary>
-    internal sealed class PageDescriptorBuilder(CssPropertyFactory properties) : IPageDescriptor
+    internal sealed class PageDescriptorBuilder(DocumentBuildContext context) : IPageDescriptor
     {
         private PageSize? _pageSize;
         private (PdfLength Width, PdfLength Height)? _explicitSize;
@@ -26,8 +25,7 @@ namespace PeachPDF.Layout
         private Action<ITextStyle>? _defaultTextStyleHandler;
         private Action<IContainer>? _headerHandler;
         private Action<IContainer>? _footerHandler;
-        private CssBox? _rootBox;
-        private readonly List<PageRule> _pageRules = [];
+        private DeclarativePage? _page;
 
         public IPageDescriptor Size(PageSize size)
         {
@@ -122,41 +120,41 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(handler);
 
-            // The document root - CssBox.CreateBlock() (no parent) is the same primitive
-            // RunningElementLayout/DomParser's own tree-root construction uses; it needs no
-            // InheritStyle() call since there is no parent to inherit from.
-            var root = CssBox.CreateBlock();
+            // The document root: a block with no parent, which needs no style inheritance since there is nothing to inherit from.
+            var page = context.CreatePage();
+            var root = page.Root;
+            page.Overrides = Overrides;
 
             if (_background is { } backgroundColor)
             {
-                properties.Set(root, "background-color", backgroundColor);
+                root.SetStyle("background-color", backgroundColor);
             }
 
             if (_defaultTextStyleHandler is { } styleHandler)
             {
-                styleHandler(new TextStyleApplier(root, properties));
+                styleHandler(new TextStyleApplier(root));
             }
 
             if (_headerHandler is { } headerHandler)
             {
-                BuildRunningElement(root, headerHandler, "peachpdf-header", "top-center");
+                BuildRunningElement(page, root, headerHandler, "peachpdf-header", "top-center");
             }
 
             if (_footerHandler is { } footerHandler)
             {
-                BuildRunningElement(root, footerHandler, "peachpdf-footer", "bottom-center");
+                BuildRunningElement(page, root, footerHandler, "peachpdf-footer", "bottom-center");
             }
 
-            _rootBox = root;
-            handler(new ContainerBuilder(root, properties));
+            _page = page;
+            handler(new ContainerBuilder(root));
         }
 
         /// <summary>
         /// Builds <paramref name="handler"/>'s content as an ordinary, normal-flow child of
         /// <paramref name="root"/>, marked <c>position: running(&lt;name&gt;)</c> (css-gcpm-3) so the
         /// layout engine excludes it from the page's own flow and registers it as that name's current
-        /// occupant instead (<see cref="CssBox.RegisterAsRunningElement"/>, already called generically for
-        /// any normal-flow child with <see cref="CssBox.IsRunningPositioned"/> - no new discovery code
+        /// occupant instead (<c>CssBox.RegisterAsRunningElement</c>, already called generically for
+        /// any normal-flow child with <c>CssBox.IsRunningPositioned</c> - no new discovery code
         /// needed here). <paramref name="marginBoxSelector"/>'s own <c>content: element(&lt;name&gt;)</c>
         /// (a <c>@page { @top-center { ... } }</c> margin box, built directly rather than parsed from a
         /// caller-authored stylesheet - the one narrow, non-user-facing exception to this feature's
@@ -164,39 +162,26 @@ namespace PeachPDF.Layout
         /// the top/bottom of every page, exactly like a real HTML document's own named margin box already
         /// does for repeating running content.
         /// </summary>
-        private void BuildRunningElement(CssBox root, Action<IContainer> handler, string name, string marginBoxSelector)
+        private void BuildRunningElement(DeclarativePage page, DocumentNode root, Action<IContainer> handler, string name, string marginBoxSelector)
         {
-            var runningBox = CssPropertyFactory.CreateAnonymousBox(root);
-            properties.Set(runningBox, "display", "block");
-            properties.Set(runningBox, "position", $"running({name})");
-            handler(new ContainerBuilder(runningBox, properties));
+            var runningBox = root.AppendBlock();
+            runningBox.SetStyle("display", "block");
+            runningBox.SetStyle("position", $"running({name})");
+            handler(new ContainerBuilder(runningBox));
 
-            // One shared, unconditional (no selector) PageRule for the whole page - PageRuleResolver's
-            // own rule selection treats a selector-less PageRule as "the" base rule, keeping only the
-            // last one seen (there is exactly one to match against, unlike a named/pseudo-class rule,
-            // which can coexist with others by selector). A second base PageRule (one per Header/Footer
-            // call) would silently discard the first's margin boxes rather than merging with them.
-            if (_pageRules.Count == 0)
-            {
-                _pageRules.Add(new PageRule(new StylesheetParser()));
-            }
-
-            var pageRule = _pageRules[0];
-            var marginRule = new MarginStyleRule(pageRule.Parser) { SelectorText = marginBoxSelector };
-            marginRule.Style.Content = $"element({name})";
-            pageRule.AppendChild(marginRule);
+            page.AddMarginBox(marginBoxSelector, $"element({name})");
         }
 
-        /// <summary>The page's own root box, built by <see cref="Content"/>.</summary>
-        internal CssBox RootBox => _rootBox
-            ?? throw new InvalidOperationException("IPageDescriptor.Content(...) must be called to supply the page's content.");
+        private PageGeometryOverrides Overrides =>
+            (_pageSize is not null || _explicitSize is not null ? PageGeometryOverrides.Size : PageGeometryOverrides.None)
+            | (_marginTop is not null ? PageGeometryOverrides.MarginTop : PageGeometryOverrides.None)
+            | (_marginRight is not null ? PageGeometryOverrides.MarginRight : PageGeometryOverrides.None)
+            | (_marginBottom is not null ? PageGeometryOverrides.MarginBottom : PageGeometryOverrides.None)
+            | (_marginLeft is not null ? PageGeometryOverrides.MarginLeft : PageGeometryOverrides.None);
 
-        /// <summary>
-        /// The <c>@page</c> rules built for this page's <see cref="Header"/>/<see cref="Footer"/> (empty
-        /// when neither was called) - <see cref="PdfGenerator"/> assigns these to
-        /// <c>Html.HtmlContainerInt.PageRules</c> before layout.
-        /// </summary>
-        internal IReadOnlyList<PageRule> PageRules => _pageRules;
+        /// <summary>The page this descriptor built: its content tree, margin boxes and which geometry it set explicitly.</summary>
+        internal DeclarativePage Page => _page
+            ?? throw new InvalidOperationException("IPageDescriptor.Content(...) must be called to supply the page's content.");
 
         /// <summary>This page's own explicit sheet size override, or null to fall back to the document's <see cref="PdfGenerateConfig"/>.</summary>
         internal Size? PageSizeOverride

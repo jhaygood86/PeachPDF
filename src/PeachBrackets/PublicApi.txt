@@ -79,6 +79,71 @@ PeachBrackets.Annotations.PagePosition : struct
   method virtual String ToString()
   property Double Top { get; init; }
   property Int32 PageIndex { get; init; }
+PeachBrackets.Building.DeclarativePage : sealed class
+  method Void AddMarginBox(String marginBox, String content)
+  property DocumentNode Root { get; }
+  property PageGeometryOverrides Overrides { get; set; }
+PeachBrackets.Building.DocumentBuildContext : sealed class
+  ctor(RenderContext renderContext)
+  method DeclarativePage CreatePage()
+  property RenderContext RenderContext { get; }
+PeachBrackets.Building.DocumentNode : sealed class
+  method DocumentNode AppendBlock()
+  method DocumentNode AppendElement(String tagName, IReadOnlyDictionary<String, String> attributes = null)
+  method DocumentNode AppendHtmlFragment(String html, StyleSheet styleSheet = null, Func<HtmlFragmentSlot, DocumentNode, Boolean> fillSlot = null)
+  method DocumentNode AppendImage(IReadOnlyDictionary<String, String> attributes = null)
+  method DocumentNode AppendListItem()
+  method DocumentNode AppendText(String text)
+  method String GetAttribute(String name)
+  method Void AddClass(String className)
+  method Void SetAttribute(String name, String value)
+  method Void SetBookmark(String title, Int32 level)
+  method Void SetImageContent(Func<Size, Byte[]> generator)
+  method Void SetImageContent(Image image)
+  method Void SetImageContent(SvgImage svg)
+  method Void SetSectionPageCounter(String sectionId, Boolean isTotal)
+  method Void SetStyle(String property, String value)
+  method Void SetSvgContent(Func<Size, String> generator)
+  method Void SetTagName(String tagName)
+  method Void SetTextAlign(String keyword)
+  method virtual Boolean Equals(DocumentNode other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  property Boolean HasChildren { get; }
+  property Boolean IsTableCell { get; }
+  property Boolean PendingAutoDirection { get; set; }
+  property DocumentNode Parent { get; }
+  property IReadOnlyList<DocumentNode> Children { get; }
+  property RenderContext RenderContext { get; }
+  property String SectionBeginId { get; set; }
+  property String SectionEndId { get; set; }
+  property String TagName { get; }
+  property String Text { get; set; }
+PeachBrackets.Building.HtmlFragmentSlot : sealed class
+  ctor(String Name, IReadOnlyDictionary<String, String> Attributes)
+  method HtmlFragmentSlot <Clone>$()
+  method Void Deconstruct(out String Name, out IReadOnlyDictionary<String, String> Attributes)
+  method virtual Boolean Equals(HtmlFragmentSlot other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyDictionary<String, String> Attributes { get; init; }
+  property String Name { get; init; }
+PeachBrackets.Building.PageGeometryOverrides : enum Int32
+  MarginBottom = 8
+  MarginLeft = 16
+  MarginRight = 4
+  MarginTop = 2
+  None = 0
+  Size = 1
+PeachBrackets.Building.StyleSheet : sealed class
+  method Task AddAsync(ReadOnlyMemory<Char> css)
+  method Task AddAsync(String css)
+  method static Task<StyleSheet> ParseAsync(RenderContext renderContext, ReadOnlyMemory<Char> css, Boolean combineWithDefault = True)
+  method static Task<StyleSheet> ParseAsync(RenderContext renderContext, String css, Boolean combineWithDefault = True)
+PeachBrackets.Building.SvgImage : sealed class
+  method static SvgImage Parse(Byte[] svgBytes, RenderContext renderContext)
+  method static SvgImage Parse(String svgMarkup, RenderContext renderContext)
 PeachBrackets.ClippedTextEntry : struct
   ctor(String Text, Double DrawnWidth, Double VisibleWidth, Double DrawnHeight, Double VisibleHeight)
   method Void Deconstruct(out String Text, out Double DrawnWidth, out Double VisibleWidth, out Double DrawnHeight, out Double VisibleHeight)
@@ -94,6 +159,8 @@ PeachBrackets.ClippedTextEntry : struct
 PeachBrackets.ColorSchemePreference : enum Int32
   Dark = 1
   Light = 0
+PeachBrackets.DataUri : static class
+  method static Boolean TryDecode(String uri, out String mimeType, out Byte[] bytes)
 PeachBrackets.DocumentPage : struct
   ctor(Int32 Index, Double WidthPoints, Double HeightPoints)
   method Void Deconstruct(out Int32 Index, out Double WidthPoints, out Double HeightPoints)
@@ -104,10 +171,25 @@ PeachBrackets.DocumentPage : struct
   property Double HeightPoints { get; init; }
   property Double WidthPoints { get; init; }
   property Int32 Index { get; init; }
+PeachBrackets.FontDefaults : static class
+  method static IReadOnlyList<AxisSetting> ToAxisSettings(String encoded, Double sizeInPixels)
+  property static Double DefaultSizePoints { get; }
+  property static IReadOnlyList<GenericFontKeyword> GenericFamilies { get; }
+  property static String DefaultFamily { get; }
+PeachBrackets.GenericFontKeyword : struct
+  ctor(String Keyword, GenericFamily Family)
+  method Void Deconstruct(out String Keyword, out GenericFamily Family)
+  method virtual Boolean Equals(GenericFontKeyword other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property GenericFamily Family { get; init; }
+  property String Keyword { get; init; }
 PeachBrackets.HtmlDocument : sealed class
   method Rect? GetElementBounds(String elementId)
   method Task LayoutAsync(Canvas measuringCanvas)
   method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
+  method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property DocumentAnnotations Annotations { get; }
@@ -115,6 +197,8 @@ PeachBrackets.HtmlDocument : sealed class
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
   property IStructureTagSink StructureTagSink { get; set; }
+  property Size ContentArea { get; }
+  property Size ContentExtent { get; }
   property String Language { get; }
 PeachBrackets.HtmlDocumentMetadata : sealed class
   ctor(String Title, String Author, String Subject, String Keywords, DateTime? Date, String Generator)
@@ -148,6 +232,10 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property String DefaultLanguage { get; set; }
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }
+  property StyleSheet StyleSheet { get; set; }
+PeachBrackets.Svg.SvgGlyphPainter : sealed class
+  ctor(Canvas host, RenderContext renderContext)
+  method virtual Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
 PeachBrackets.Tagging.IStructureTagSink : interface
   method abstract IDisposable OpenArtifact(Canvas g)
   method abstract IDisposable OpenContentElement(Canvas g, StructureNode node, String structureType, String altText = null)

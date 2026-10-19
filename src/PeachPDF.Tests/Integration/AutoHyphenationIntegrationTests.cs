@@ -1,3 +1,4 @@
+using PeachBrackets;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF;
@@ -112,42 +113,39 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, container.DocumentLanguage);
         }
 
-        // ── PdfGenerateConfig.DefaultLanguage fallback (PdfGenerator.SetContent) ─
+        // ── PdfGenerateConfig.DefaultLanguage fallback (PdfGenerator.ToDocumentOptions) ─
 
         [Fact]
         public async Task DefaultLanguage_FillsInOnlyWhenDocumentDeclaresNone()
         {
             var renderContext = new HtmlRenderContext();
-            var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
-            await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new Size(600, 800));
+            using var document = await HtmlDocument.LoadAsync("<html><body>text</body></html>", renderContext, PdfGenerator.ToDocumentOptions(config, new Size(600, 800)));
 
-            Assert.Equal("en-US", container.HtmlContainerInt.DocumentLanguage);
+            Assert.Equal("en-US", document.Language);
         }
 
         [Fact]
         public async Task DefaultLanguage_DoesNotOverrideDocumentsOwnLang()
         {
             var renderContext = new HtmlRenderContext();
-            var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
-            await PdfGenerator.SetContent(container, config, "<html lang=\"is\"><body>text</body></html>", null, new Size(600, 800));
+            using var document = await HtmlDocument.LoadAsync("<html lang=\"is\"><body>text</body></html>", renderContext, PdfGenerator.ToDocumentOptions(config, new Size(600, 800)));
 
-            Assert.Equal("is", container.HtmlContainerInt.DocumentLanguage);
+            Assert.Equal("is", document.Language);
         }
 
         [Fact]
         public async Task DefaultLanguage_Unset_LeavesLanguageNull_WhenDocumentDeclaresNone()
         {
             var renderContext = new HtmlRenderContext();
-            var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig();
 
-            await PdfGenerator.SetContent(container, config, "<html><body>text</body></html>", null, new Size(600, 800));
+            using var document = await HtmlDocument.LoadAsync("<html><body>text</body></html>", renderContext, PdfGenerator.ToDocumentOptions(config, new Size(600, 800)));
 
-            Assert.Null(container.HtmlContainerInt.DocumentLanguage);
+            Assert.Null(document.Language);
         }
 
         [Fact]

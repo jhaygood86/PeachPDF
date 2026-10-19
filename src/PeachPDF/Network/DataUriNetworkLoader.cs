@@ -33,7 +33,7 @@ namespace PeachPDF.Network
         {
             if (uri.Scheme is not "data") return Task.FromResult<RNetworkResponse?>(null);
 
-            if (!DataUriUtils.TryDecodeDataUri(uri.AbsoluteUri, out var mimeType, out var bytes))
+            if (!PeachBrackets.DataUri.TryDecode(uri.AbsoluteUri, out var mimeType, out var bytes))
                 return Task.FromResult<RNetworkResponse?>(null);
 
             // Report the data URI's own declared MIME type as a Content-Type header so consumers

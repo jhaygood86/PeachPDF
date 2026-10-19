@@ -1,4 +1,5 @@
 using PeachPDF.Rendering;
+using PeachBrackets.Building;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachBrackets.Css;
@@ -38,7 +39,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("card").Id("hero").Tag("li").Padding(20);
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             });
 
@@ -61,7 +62,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("a").Class("b").Id("first").Id("second");
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             });
 
@@ -81,7 +82,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("page-root");
-                    rootBox = cb.Box;
+                    rootBox = cb.Node.Box;
                     cb.Text("x");
                 });
             });
@@ -102,7 +103,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("card");
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             }, stylesheet);
 
@@ -122,7 +123,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("card").PaddingTop(20);
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             }, stylesheet);
 
@@ -141,7 +142,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("card").PaddingTop(20);
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             }, stylesheet);
 
@@ -163,7 +164,7 @@ namespace PeachPDF.Tests.Integration
                     {
                         var child = (ContainerBuilder)column.Item().Class("child");
                         child.Text("hi");
-                        childTextBox = child.Box;
+                        childTextBox = child.Node.Box;
                     });
                 });
             }, stylesheet);
@@ -186,11 +187,11 @@ namespace PeachPDF.Tests.Integration
                     {
                         var tagged = (ContainerBuilder)column.Item().Tag("li");
                         tagged.Text("a");
-                        taggedBox = tagged.Box;
+                        taggedBox = tagged.Node.Box;
 
                         var untagged = (ContainerBuilder)column.Item();
                         untagged.Text("b");
-                        untaggedBox = untagged.Box;
+                        untaggedBox = untagged.Node.Box;
                     });
                 });
             }, stylesheet);
@@ -261,7 +262,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var cb = (ContainerBuilder)c.Class("alt");
                     cb.Text("hello");
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             }, stylesheet);
 
@@ -282,7 +283,7 @@ namespace PeachPDF.Tests.Integration
             {
                 var cb = (ContainerBuilder)c.Class("a");
                 cb.Text("a");
-                aBox = cb.Box;
+                aBox = cb.Node.Box;
             }), content);
 
             // Still just the original rule - an empty memory added nothing and, more importantly, didn't throw.
@@ -342,7 +343,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.Class("box");
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             }, stylesheet);
 
@@ -446,7 +447,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.PageName("chapter");
-                    box = cb.Box;
+                    box = cb.Node.Box;
                     cb.Text("x");
                 });
             });
@@ -483,8 +484,8 @@ namespace PeachPDF.Tests.Integration
             CssBox? boxFromString = null;
             CssBox? boxFromMemory = null;
 
-            await BuildAndLayoutPage(page => page.Content(c => { var cb = (ContainerBuilder)c.Class("x"); boxFromString = cb.Box; }), fromString);
-            await BuildAndLayoutPage(page => page.Content(c => { var cb = (ContainerBuilder)c.Class("x"); boxFromMemory = cb.Box; }), fromMemory);
+            await BuildAndLayoutPage(page => page.Content(c => { var cb = (ContainerBuilder)c.Class("x"); boxFromString = cb.Node.Box; }), fromString);
+            await BuildAndLayoutPage(page => page.Content(c => { var cb = (ContainerBuilder)c.Class("x"); boxFromMemory = cb.Node.Box; }), fromMemory);
 
             Assert.Equal(boxFromString!.ActualColor.R, boxFromMemory!.ActualColor.R);
             Assert.Equal(boxFromString.ActualColor.G, boxFromMemory.ActualColor.G);
@@ -506,10 +507,10 @@ namespace PeachPDF.Tests.Integration
             {
                 var a = (ContainerBuilder)col.Item().Class("a");
                 a.Text("a");
-                aBox = a.Box;
+                aBox = a.Node.Box;
                 var b = (ContainerBuilder)col.Item().Class("b");
                 b.Text("b");
-                bBox = b.Box;
+                bBox = b.Node.Box;
             })), content);
 
             Assert.Equal("rgb(1, 1, 1)", aBox!.Color);
@@ -544,7 +545,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             Assert.Equal(DisplayMode.Block, wrapper.Display.Value);
             Assert.Equal(2, wrapper.Boxes.Count);
             Assert.True(LayoutHarnessContains(root, wrapper));
@@ -564,7 +565,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var table = Assert.Single(wrapper.Boxes);
             Assert.Equal(DisplayMode.Table, table.Display.Value);
         }
@@ -584,7 +585,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             divBox = wrapper.Boxes.Single(b => b.HtmlTag?.Name.Equals("div", StringComparison.OrdinalIgnoreCase) == true);
             Assert.Equal("rgb(7, 8, 9)", divBox.Color);
         }
@@ -604,7 +605,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             Assert.Equal("rgb(11, 12, 13)", div.Color);
         }
@@ -627,7 +628,7 @@ namespace PeachPDF.Tests.Integration
                 });
             }, documentStylesheet);
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             // The wrapper itself is the declarative Html() call's own anonymous box, built directly - only
             // the fragment's own parsed content (its descendants) are flagged.
             Assert.False(wrapper.IsFragmentStyled);
@@ -640,7 +641,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Html_Bytes_And_Stream_OverloadsProduceTheSameStructureAsString()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
             const string html = "<div>x</div>";
 
             var byBytes = DocumentBuilder.BuildPage(
@@ -648,15 +649,15 @@ namespace PeachPDF.Tests.Integration
             var byStream = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Html(new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(html)))), properties);
 
-            Assert.Single(Assert.Single(byBytes.RootBox.Boxes).Boxes);
-            Assert.Single(Assert.Single(byStream.RootBox.Boxes).Boxes);
+            Assert.Single(Assert.Single(byBytes.Page.Root.Box.Boxes).Boxes);
+            Assert.Single(Assert.Single(byStream.Page.Root.Box.Boxes).Boxes);
         }
 
         [Fact]
         public void Html_IsTerminal_SecondCallThrows()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             DocumentBuilder.BuildPage(page =>
                 page.Content(c =>
@@ -687,7 +688,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             var replacement = Assert.Single(div.Boxes);
             var textBox = Assert.Single(replacement.Boxes);
@@ -708,7 +709,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             var slotBox = Assert.Single(div.Boxes);
             Assert.Equal("slot", slotBox.HtmlTag!.Name, ignoreCase: true);
@@ -735,7 +736,7 @@ namespace PeachPDF.Tests.Integration
             });
 
             Assert.True(callbackInvoked);
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             var slotBox = Assert.Single(div.Boxes);
             Assert.Equal("Fallback text", slotBox.Boxes.Single().Text);
@@ -764,7 +765,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(new[] { "one", "two" }, seenNames);
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             Assert.Equal(2, div.Boxes.Count);
             Assert.Equal("filled-one", div.Boxes[0].Boxes.Single().Text);
@@ -793,7 +794,7 @@ namespace PeachPDF.Tests.Integration
                 });
             }, stylesheet);
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             var replacement = Assert.Single(div.Boxes);
             Assert.False(replacement.IsFragmentStyled);
@@ -834,7 +835,7 @@ namespace PeachPDF.Tests.Integration
             // the moment the outer slot was filled - its callback must never have run.
             Assert.Equal(new[] { "outer" }, invokedNames);
 
-            var wrapper = Assert.Single(cb!.Box.Boxes);
+            var wrapper = Assert.Single(cb!.Node.Box.Boxes);
             var div = Assert.Single(wrapper.Boxes);
             var replacement = Assert.Single(div.Boxes);
             Assert.Equal("outer filled", replacement.Boxes.Single().Text);
@@ -850,74 +851,9 @@ namespace PeachPDF.Tests.Integration
         /// the same way <c>DeclarativeApiIntegrationTests.BuildAndLayoutPage</c> does for the pre-existing
         /// surface.
         /// </summary>
-        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayoutPage(
-            Action<IPageDescriptor> pageHandler, PeachPdfCssContent? stylesheet = null, PdfGenerateConfig? config = null)
-        {
-            config ??= new PdfGenerateConfig
-            {
-                PageSize = PageSize.A4,
-                MarginTop = 20,
-                MarginBottom = 20,
-                MarginLeft = 20,
-                MarginRight = 20
-            };
-            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
-            var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
-            PdfGenerator.ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
-
-            var orgPageSize = pageDescriptor.PageSizeOverride
-                ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize)
-                    : new Size(config.ManualPageWidth, config.ManualPageHeight));
-
-            using var container = new HtmlContainer(renderContext)
-            {
-                MarginTop = pageDescriptor.MarginTopOverride ?? config.MarginTop,
-                MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom,
-                MarginLeft = pageDescriptor.MarginLeftOverride ?? config.MarginLeft,
-                MarginRight = pageDescriptor.MarginRightOverride ?? config.MarginRight,
-                PageSize = orgPageSize
-            };
-            container.HtmlContainerInt.PageRules = DomParser.BuildDeclarativePageRules(
-                pageDescriptor.PageRules, stylesheet?.CssData,
-                marginLeftIsExplicit: pageDescriptor.MarginLeftOverride is not null,
-                marginTopIsExplicit: pageDescriptor.MarginTopOverride is not null,
-                marginRightIsExplicit: pageDescriptor.MarginRightOverride is not null,
-                marginBottomIsExplicit: pageDescriptor.MarginBottomOverride is not null,
-                sizeIsExplicit: pageDescriptor.PageSizeOverride is not null);
-
-            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage, stylesheet);
-
-            if (stylesheet is not null)
-            {
-                DomParser.CascadeApplyPageStyles(container.HtmlContainerInt, pageDescriptor.RootBox, stylesheet.CssData,
-                    allowMarginLeft: pageDescriptor.MarginLeftOverride is null,
-                    allowMarginTop: pageDescriptor.MarginTopOverride is null,
-                    allowMarginRight: pageDescriptor.MarginRightOverride is null,
-                    allowMarginBottom: pageDescriptor.MarginBottomOverride is null,
-                    allowSize: pageDescriptor.PageSizeOverride is null);
-
-                if (container.CssPageSize.HasValue)
-                {
-                    orgPageSize = container.CssPageSize.Value;
-                }
-            }
-
-            var contentPageSize = new Size(
-                orgPageSize.Width - container.MarginLeft - container.MarginRight,
-                orgPageSize.Height - container.MarginTop - container.MarginBottom);
-            container.PageSize = contentPageSize;
-            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
-
-            using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, orgPageSize);
-            container.MaxSize = new Size(container.PageSize.Width, 0);
-            await container.PerformLayout(measure);
-
-            var containerInt = container.HtmlContainerInt;
-            Assert.NotNull(containerInt.Root);
-            return (containerInt.Root!, containerInt);
-        }
+        private static Task<(CssBox root, HtmlContainerInt container)> BuildAndLayoutPage(
+            Action<IPageDescriptor> pageHandler, PeachPdfCssContent? stylesheet = null, PdfGenerateConfig? config = null) =>
+            DeclarativeHarness.BuildAndLayoutAsync(pageHandler, stylesheet, config);
 
         private static bool LayoutHarnessContains(CssBox root, CssBox target)
         {

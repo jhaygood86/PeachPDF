@@ -1,4 +1,5 @@
 using PeachBrackets.Annotations;
+using PeachBrackets.Building;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -56,8 +57,8 @@ namespace PeachPDF.Tests.Integration
                     container.Row(row =>
                     {
                         row.Spacing(5);
-                        item1 = ((ContainerBuilder)row.Item().Background(PdfColor.Blue).Width(60).Height(30)).Box;
-                        item2 = ((ContainerBuilder)row.Item().Background(PdfColor.Green).Width(60).Height(30)).Box;
+                        item1 = ((ContainerBuilder)row.Item().Background(PdfColor.Blue).Width(60).Height(30)).Node.Box;
+                        item2 = ((ContainerBuilder)row.Item().Background(PdfColor.Green).Width(60).Height(30)).Node.Box;
                     });
                 });
             });
@@ -97,8 +98,8 @@ namespace PeachPDF.Tests.Integration
                     container.Column(column =>
                     {
                         column.Spacing(4);
-                        item1 = ((ContainerBuilder)column.Item().Background(PdfColor.Red).Width(40).Height(20)).Box;
-                        item2 = ((ContainerBuilder)column.Item().Background(PdfColor.Red).Width(40).Height(20)).Box;
+                        item1 = ((ContainerBuilder)column.Item().Background(PdfColor.Red).Width(40).Height(20)).Node.Box;
+                        item2 = ((ContainerBuilder)column.Item().Background(PdfColor.Red).Width(40).Height(20)).Node.Box;
                     });
                 });
             });
@@ -123,8 +124,8 @@ namespace PeachPDF.Tests.Integration
                 {
                     c.Row(row =>
                     {
-                        fixedItem = ((ContainerBuilder)row.Item().Width(100).Height(20)).Box;
-                        growItem = ((ContainerBuilder)row.Item().Grow().Height(20)).Box;
+                        fixedItem = ((ContainerBuilder)row.Item().Width(100).Height(20)).Node.Box;
+                        growItem = ((ContainerBuilder)row.Item().Grow().Height(20)).Node.Box;
                     });
                 });
             });
@@ -152,7 +153,7 @@ namespace PeachPDF.Tests.Integration
                         .Border(2, PdfColor.FromRgb(10, 20, 30))
                         .Background(PdfColor.FromRgb(200, 210, 220))
                         .CornerRadius(8);
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             });
 
@@ -196,23 +197,23 @@ namespace PeachPDF.Tests.Integration
                         {
                             var h1 = (ContainerBuilder)header.Cell();
                             h1.Text("Head1");
-                            headerCell1 = h1.Box;
+                            headerCell1 = h1.Node.Box;
                             ((ContainerBuilder)header.Cell()).Text("Head2");
                         });
                         table.Row(row =>
                         {
                             var c1 = (ContainerBuilder)row.Cell();
                             c1.Text("A");
-                            bodyCell1 = c1.Box;
+                            bodyCell1 = c1.Node.Box;
                             var c2 = (ContainerBuilder)row.Cell();
                             c2.Text("B");
-                            bodyCell2 = c2.Box;
+                            bodyCell2 = c2.Node.Box;
                         });
                         table.Row(row =>
                         {
                             var spanCell = (ContainerBuilder)row.Cell(columnSpan: 2);
                             spanCell.Text("Spanning");
-                            spanningCell = spanCell.Box;
+                            spanningCell = spanCell.Node.Box;
                         });
                     });
                 });
@@ -258,14 +259,14 @@ namespace PeachPDF.Tests.Integration
                         {
                             var c1 = (ContainerBuilder)row.Cell();
                             c1.Text("Fixed");
-                            fixedCell = c1.Box;
+                            fixedCell = c1.Node.Box;
                             ((ContainerBuilder)row.Cell()).Text("Rest");
                         });
                         table.Footer(footer =>
                         {
                             var f1 = (ContainerBuilder)footer.Cell();
                             f1.Text("Foot1");
-                            footerCell = f1.Box;
+                            footerCell = f1.Node.Box;
                             ((ContainerBuilder)footer.Cell()).Text("Foot2");
                         });
                     });
@@ -294,13 +295,13 @@ namespace PeachPDF.Tests.Integration
                     {
                         var i1 = (ContainerBuilder)list.Item();
                         i1.Text("First");
-                        item1 = i1.Box;
+                        item1 = i1.Node.Box;
                         var i2 = (ContainerBuilder)list.Item();
                         i2.Text("Second");
-                        item2 = i2.Box;
+                        item2 = i2.Node.Box;
                         var i3 = (ContainerBuilder)list.Item();
                         i3.Text("Third");
-                        item3 = i3.Box;
+                        item3 = i3.Node.Box;
                     });
                 });
             });
@@ -327,7 +328,7 @@ namespace PeachPDF.Tests.Integration
                     {
                         var i1 = (ContainerBuilder)list.Item();
                         i1.Text("Bullet");
-                        item1 = i1.Box;
+                        item1 = i1.Node.Box;
                     });
                 });
             });
@@ -358,7 +359,7 @@ namespace PeachPDF.Tests.Integration
                         list.MarkerText("-> ");
                         var i1 = (ContainerBuilder)list.Item();
                         i1.Text("Arrow item");
-                        item1 = i1.Box;
+                        item1 = i1.Node.Box;
                     });
                 });
             });
@@ -381,10 +382,10 @@ namespace PeachPDF.Tests.Integration
                     {
                         var i1 = (ContainerBuilder)list.Item();
                         i1.Text("One");
-                        item1 = i1.Box;
+                        item1 = i1.Node.Box;
                         var i2 = (ContainerBuilder)list.Item();
                         i2.Text("Two");
-                        item2 = i2.Box;
+                        item2 = i2.Node.Box;
                     }, PdfListMarkerType.UpperRoman);
                 });
             });
@@ -409,7 +410,7 @@ namespace PeachPDF.Tests.Integration
                         list.Position(PdfListMarkerPosition.Inside);
                         var i1 = (ContainerBuilder)list.Item();
                         i1.Text("Item");
-                        item1 = i1.Box;
+                        item1 = i1.Node.Box;
                     });
                 });
             });
@@ -421,7 +422,7 @@ namespace PeachPDF.Tests.Integration
         public void List_MarkerImageOverloads_SetListStyleImageOnTheListBox()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var descriptor = DocumentBuilder.BuildPage(page =>
                 page.Content(c =>
@@ -433,7 +434,7 @@ namespace PeachPDF.Tests.Integration
                     });
                 }), properties);
 
-            var listBox = Assert.Single(descriptor.RootBox.Boxes);
+            var listBox = Assert.Single(descriptor.Page.Root.Box.Boxes);
             var image = Assert.IsType<CssImage.Url>(listBox.ListStyleImage);
             Assert.StartsWith("data:image/png;base64,", image.Href);
 
@@ -443,7 +444,7 @@ namespace PeachPDF.Tests.Integration
                     list.MarkerImage(new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF }));
                     list.Item();
                 })), properties);
-            var byStreamImage = Assert.IsType<CssImage.Url>(Assert.Single(byStreamDescriptor.RootBox.Boxes).ListStyleImage);
+            var byStreamImage = Assert.IsType<CssImage.Url>(Assert.Single(byStreamDescriptor.Page.Root.Box.Boxes).ListStyleImage);
             Assert.StartsWith("data:image/jpeg;base64,", byStreamImage.Href);
 
             var byUriDescriptor = DocumentBuilder.BuildPage(page =>
@@ -452,7 +453,7 @@ namespace PeachPDF.Tests.Integration
                     list.MarkerImage(new Uri("https://example.com/marker.png"));
                     list.Item();
                 })), properties);
-            var byUriImage = Assert.IsType<CssImage.Url>(Assert.Single(byUriDescriptor.RootBox.Boxes).ListStyleImage);
+            var byUriImage = Assert.IsType<CssImage.Url>(Assert.Single(byUriDescriptor.Page.Root.Box.Boxes).ListStyleImage);
             Assert.Equal("https://example.com/marker.png", byUriImage.Href);
 
             var byPathDescriptor = DocumentBuilder.BuildPage(page =>
@@ -461,7 +462,7 @@ namespace PeachPDF.Tests.Integration
                     list.MarkerImage("C:/marker.png");
                     list.Item();
                 })), properties);
-            var byPathImage = Assert.IsType<CssImage.Url>(Assert.Single(byPathDescriptor.RootBox.Boxes).ListStyleImage);
+            var byPathImage = Assert.IsType<CssImage.Url>(Assert.Single(byPathDescriptor.Page.Root.Box.Boxes).ListStyleImage);
             Assert.Equal("C:/marker.png", byPathImage.Href);
         }
 
@@ -489,7 +490,7 @@ namespace PeachPDF.Tests.Integration
                             var span = t.Span("x");
                             span.Underline();
                             span.DecorationStyle(style);
-                            spanBox = ((TextStyleApplier)span).Box;
+                            spanBox = ((TextStyleApplier)span).Node.Box;
                         });
                     });
                 });
@@ -511,11 +512,11 @@ namespace PeachPDF.Tests.Integration
                     {
                         var hContainer = (ContainerBuilder)column.Item();
                         hContainer.LineHorizontal(3, PdfColor.FromRgb(11, 12, 13));
-                        hLine = Assert.Single(hContainer.Box.Boxes);
+                        hLine = Assert.Single(hContainer.Node.Box.Boxes);
 
                         var vContainer = (ContainerBuilder)column.Item();
                         vContainer.LineVertical(4, PdfColor.FromRgb(14, 15, 16));
-                        vLine = Assert.Single(vContainer.Box.Boxes);
+                        vLine = Assert.Single(vContainer.Node.Box.Boxes);
                     });
                 });
             });
@@ -543,11 +544,11 @@ namespace PeachPDF.Tests.Integration
                     {
                         var hContainer = (ContainerBuilder)column.Item();
                         hContainer.LineHorizontal(3, PdfColor.FromRgb(11, 12, 13), dashed: true);
-                        hLine = Assert.Single(hContainer.Box.Boxes);
+                        hLine = Assert.Single(hContainer.Node.Box.Boxes);
 
                         var vContainer = (ContainerBuilder)column.Item();
                         vContainer.LineVertical(4, PdfColor.FromRgb(14, 15, 16), dashed: true);
-                        vLine = Assert.Single(vContainer.Box.Boxes);
+                        vLine = Assert.Single(vContainer.Node.Box.Boxes);
                     });
                 });
             });
@@ -606,7 +607,7 @@ namespace PeachPDF.Tests.Integration
             // CssBox must never hold both its own words and child boxes at once, and the wrapped box can
             // already have a child it never advertises (a list item's synthesized ::marker, most
             // notably), so this holds even for a container with no such child.
-            var textBox = Assert.Single(cb!.Box.Boxes);
+            var textBox = Assert.Single(cb!.Node.Box.Boxes);
             Assert.Equal("Hello world", textBox.Text);
             Assert.True(textBox.Words.Count >= 2, "SetDeclarativeRoot must run ParseToWords over the built tree");
         }
@@ -624,7 +625,7 @@ namespace PeachPDF.Tests.Integration
                     {
                         var span = t.Span("styled");
                         span.Bold().FontColor(PdfColor.FromRgb(1, 2, 3));
-                        spanBox = ((TextStyleApplier)span).Box;
+                        spanBox = ((TextStyleApplier)span).Node.Box;
                     });
                 });
             });
@@ -650,7 +651,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var link = (ContainerBuilder)container.Hyperlink("https://example.com/");
                     link.Text("click me");
-                    linkBox = link.Box;
+                    linkBox = link.Node.Box;
                 });
             });
 
@@ -676,13 +677,13 @@ namespace PeachPDF.Tests.Integration
                 {
                     var hb = (ContainerBuilder)h;
                     hb.Text("HEADER");
-                    headerBox = hb.Box;
+                    headerBox = hb.Node.Box;
                 });
                 page.Footer(f =>
                 {
                     var fb = (ContainerBuilder)f;
                     fb.Text("FOOTER");
-                    footerBox = fb.Box;
+                    footerBox = fb.Node.Box;
                 });
                 page.Content(c =>
                 {
@@ -945,7 +946,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(c => c.Text(t =>
                 {
                     t.Span("Before ");
-                    span = ((TextStyleApplier)t.PageNumberWithinSection("body")).Box;
+                    span = ((TextStyleApplier)t.PageNumberWithinSection("body")).Node.Box;
                     t.Span(" after");
                 }));
             });
@@ -971,12 +972,12 @@ namespace PeachPDF.Tests.Integration
                 page.Content(c => c.Column(column =>
                 {
                     column.Spacing(12);
-                    itemA = ((ContainerBuilder)column.Item().Height(20).Background(PdfColor.Red)).Box;
+                    itemA = ((ContainerBuilder)column.Item().Height(20).Background(PdfColor.Red)).Node.Box;
 
                     var b = (ContainerBuilder)column.Item().Height(20).BeginPageNumberOfSection("gap-check");
-                    itemB = b.Box;
+                    itemB = b.Node.Box;
 
-                    itemC = ((ContainerBuilder)column.Item().Height(20).EndPageNumberOfSection("gap-check")).Box;
+                    itemC = ((ContainerBuilder)column.Item().Height(20).EndPageNumberOfSection("gap-check")).Node.Box;
                 }));
             });
 
@@ -1002,7 +1003,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var cb = (ContainerBuilder)container.Bookmark("My \"Quoted\" Heading", level: 2);
                     cb.Text("Heading");
-                    box = cb.Box;
+                    box = cb.Node.Box;
                 });
             });
 
@@ -1117,22 +1118,22 @@ namespace PeachPDF.Tests.Integration
 
                     var link = (ContainerBuilder)cb.Hyperlink(new Uri("https://example.com/page"));
                     link.Text("linked");
-                    linkBox = link.Box;
+                    linkBox = link.Node.Box;
                 });
             });
 
             Assert.NotNull(cb);
-            Assert.InRange(cb!.Box.ActualPaddingLeft, 4, 6);
-            Assert.InRange(cb.Box.ActualPaddingRight, 4, 6);
-            Assert.InRange(cb.Box.ActualPaddingTop, 11.5, 13.5);
-            Assert.InRange(cb.Box.ActualPaddingBottom, 11.5, 13.5);
-            Assert.InRange(cb.Box.ActualBorderLeftWidth, 0.5, 1.5);
-            Assert.InRange(cb.Box.ActualBorderRightWidth, 0.5, 1.5);
-            Assert.InRange(cb.Box.ActualBorderTopWidth, 0.5, 1.5);
-            Assert.InRange(cb.Box.ActualBorderBottomWidth, 0.5, 1.5);
-            Assert.Equal(3, cb.Box.ActualBorderTopColor.R);
-            Assert.Equal(3, cb.Box.ActualBorderLeftColor.R);
-            Assert.True(cb.Box.BackgroundImages is { Count: > 0 });
+            Assert.InRange(cb!.Node.Box.ActualPaddingLeft, 4, 6);
+            Assert.InRange(cb.Node.Box.ActualPaddingRight, 4, 6);
+            Assert.InRange(cb.Node.Box.ActualPaddingTop, 11.5, 13.5);
+            Assert.InRange(cb.Node.Box.ActualPaddingBottom, 11.5, 13.5);
+            Assert.InRange(cb.Node.Box.ActualBorderLeftWidth, 0.5, 1.5);
+            Assert.InRange(cb.Node.Box.ActualBorderRightWidth, 0.5, 1.5);
+            Assert.InRange(cb.Node.Box.ActualBorderTopWidth, 0.5, 1.5);
+            Assert.InRange(cb.Node.Box.ActualBorderBottomWidth, 0.5, 1.5);
+            Assert.Equal(3, cb.Node.Box.ActualBorderTopColor.R);
+            Assert.Equal(3, cb.Node.Box.ActualBorderLeftColor.R);
+            Assert.True(cb.Node.Box.BackgroundImages is { Count: > 0 });
 
             Assert.NotNull(linkBox);
             Assert.True(linkBox!.IsClickable);
@@ -1143,7 +1144,7 @@ namespace PeachPDF.Tests.Integration
         public void ContainerBuilder_SecondTerminalCall_Throws()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             DocumentBuilder.BuildPage(page =>
                 page.Content(c =>
@@ -1163,11 +1164,11 @@ namespace PeachPDF.Tests.Integration
         public void ContainerImage_ByteStreamOverloads_DecodeEagerlyIntoARealCssBoxImage()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var byBytes = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image(MinimalPng)), properties);
-            var imgFromBytes = Assert.Single(byBytes.RootBox.Boxes);
+            var imgFromBytes = Assert.Single(byBytes.Page.Root.Box.Boxes);
             // The box must be a genuine CssBoxImage - not just an "img"-tagged plain CssBox (the pre-
             // existing bug this PR fixes: CssBox.CreateBox(CssBox, HtmlTag) - the overload every other
             // terminal here uses - never dispatches by tag name, so it silently produced a plain CssBox
@@ -1180,7 +1181,7 @@ namespace PeachPDF.Tests.Integration
 
             var byStream = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image(new MemoryStream(MinimalPng))), properties);
-            var imageFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            var imageFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.Page.Root.Box.Boxes));
             Assert.NotNull(imageFromStream.Image);
         }
 
@@ -1202,7 +1203,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var cb = (ContainerBuilder)c.Width(50).Height(50);
                     cb.Image(MinimalPng);
-                    imageBox = Assert.Single(cb.Box.Boxes);
+                    imageBox = Assert.Single(cb.Node.Box.Boxes);
                 });
             });
 
@@ -1217,16 +1218,16 @@ namespace PeachPDF.Tests.Integration
         public void ContainerImage_UriAndFilePath_StillGoThroughTheLazySrcPath()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var byUri = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image(new Uri("https://example.com/pic.png"))), properties);
-            var imgFromUri = Assert.IsType<CssBoxImage>(Assert.Single(byUri.RootBox.Boxes));
+            var imgFromUri = Assert.IsType<CssBoxImage>(Assert.Single(byUri.Page.Root.Box.Boxes));
             Assert.Equal("https://example.com/pic.png", imgFromUri.HtmlTag!.TryGetAttribute("src", ""));
 
             var byPath = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image("C:/some/local/path.png")), properties);
-            var imgFromPath = Assert.IsType<CssBoxImage>(Assert.Single(byPath.RootBox.Boxes));
+            var imgFromPath = Assert.IsType<CssBoxImage>(Assert.Single(byPath.Page.Root.Box.Boxes));
             Assert.Equal("C:/some/local/path.png", imgFromPath.HtmlTag!.TryGetAttribute("src", ""));
         }
 
@@ -1234,13 +1235,13 @@ namespace PeachPDF.Tests.Integration
         public void ContainerImage_SharedPdfImage_ResolvesOnceAndReusesTheSameDecodedImage()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var sharedImage = PdfImage.FromBytes(MinimalPng);
             var byPdfImage1 = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedImage)), properties);
             var byPdfImage2 = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedImage)), properties);
-            var img1 = Assert.IsType<CssBoxImage>(Assert.Single(byPdfImage1.RootBox.Boxes));
-            var img2 = Assert.IsType<CssBoxImage>(Assert.Single(byPdfImage2.RootBox.Boxes));
+            var img1 = Assert.IsType<CssBoxImage>(Assert.Single(byPdfImage1.Page.Root.Box.Boxes));
+            var img2 = Assert.IsType<CssBoxImage>(Assert.Single(byPdfImage2.Page.Root.Box.Boxes));
 
             Assert.NotNull(img1.Image);
             // The whole point of a shared PdfImage: the second placement reuses the exact same decoded
@@ -1255,21 +1256,21 @@ namespace PeachPDF.Tests.Integration
         public void ContainerSvg_StringStreamAndBytesOverloads_ParseIntoARealSvgDocument()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var byString = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(MinimalSvg)), properties);
-            var imgFromString = Assert.IsType<CssBoxImage>(Assert.Single(byString.RootBox.Boxes));
+            var imgFromString = Assert.IsType<CssBoxImage>(Assert.Single(byString.Page.Root.Box.Boxes));
             Assert.NotNull(imgFromString.SvgDocument);
             Assert.Null(imgFromString.Image);
 
             var byStream = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Svg(new MemoryStream(Encoding.UTF8.GetBytes(MinimalSvg)))), properties);
-            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.Page.Root.Box.Boxes));
             Assert.NotNull(imgFromStream.SvgDocument);
 
             var byBytes = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Svg(Encoding.UTF8.GetBytes(MinimalSvg))), properties);
-            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.RootBox.Boxes));
+            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.Page.Root.Box.Boxes));
             Assert.NotNull(imgFromBytes.SvgDocument);
         }
 
@@ -1280,16 +1281,16 @@ namespace PeachPDF.Tests.Integration
             // U+FEFF character, which XElement.Parse rejects outright - same bug, same fix, as
             // PdfImage.Resolve's own BOM handling (see ContainerImage_PdfImageFromSvgBytes_...WithBom).
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
             var bomPrefixedBytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes(MinimalSvg)).ToArray();
 
             var byBytes = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(bomPrefixedBytes)), properties);
-            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.RootBox.Boxes));
+            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.Page.Root.Box.Boxes));
             Assert.NotNull(imgFromBytes.SvgDocument);
 
             var byStream = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Svg(new MemoryStream(bomPrefixedBytes))), properties);
-            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.Page.Root.Box.Boxes));
             Assert.NotNull(imgFromStream.SvgDocument);
         }
 
@@ -1297,7 +1298,7 @@ namespace PeachPDF.Tests.Integration
         public void ContainerSvg_Stream_NeverClosesTheCallersStream()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(MinimalSvg));
 
             DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(stream)), properties);
@@ -1319,7 +1320,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var cb = (ContainerBuilder)c.Width(50).Height(50);
                     cb.Svg(MinimalSvg);
-                    svgBox = Assert.Single(cb.Box.Boxes);
+                    svgBox = Assert.Single(cb.Node.Box.Boxes);
                 });
             });
 
@@ -1331,11 +1332,11 @@ namespace PeachPDF.Tests.Integration
         public void ContainerImage_PdfImageFromSvgBytes_DetectsSvgAutomatically()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var sharedSvg = PdfImage.FromBytes(Encoding.UTF8.GetBytes(MinimalSvg));
             var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedSvg)), properties);
-            var imgBox = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
+            var imgBox = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.Page.Root.Box.Boxes));
 
             Assert.NotNull(imgBox.SvgDocument);
             Assert.Null(imgBox.Image);
@@ -1345,7 +1346,7 @@ namespace PeachPDF.Tests.Integration
         public void ContainerImage_PdfImageFromSvgBytes_DetectsSvgPastLeadingWhitespaceAndBom()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             var bom = new byte[] { 0xEF, 0xBB, 0xBF };
             var leadingWhitespace = "  \n\t"u8.ToArray();
@@ -1353,7 +1354,7 @@ namespace PeachPDF.Tests.Integration
 
             var sharedSvg = PdfImage.FromBytes(bytes);
             var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedSvg)), properties);
-            var imgBox = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
+            var imgBox = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.Page.Root.Box.Boxes));
 
             Assert.NotNull(imgBox.SvgDocument);
         }
@@ -1378,7 +1379,7 @@ namespace PeachPDF.Tests.Integration
                             receivedRasterSize = size;
                             return MinimalPng;
                         });
-                        rasterBox = Assert.Single(rasterCb.Box.Boxes);
+                        rasterBox = Assert.Single(rasterCb.Node.Box.Boxes);
 
                         var svgCb = (ContainerBuilder)column.Item().Width(64).Height(32);
                         svgCb.Svg(size =>
@@ -1386,7 +1387,7 @@ namespace PeachPDF.Tests.Integration
                             receivedSvgSize = size;
                             return MinimalSvg;
                         });
-                        svgBox = Assert.Single(svgCb.Box.Boxes);
+                        svgBox = Assert.Single(svgCb.Node.Box.Boxes);
                     });
                 });
             });
@@ -1553,7 +1554,7 @@ namespace PeachPDF.Tests.Integration
         public void TextSpanContainer_Alignment_AllValuesExecute()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             foreach (TextAlignment alignment in Enum.GetValues<TextAlignment>())
             {
@@ -1567,7 +1568,7 @@ namespace PeachPDF.Tests.Integration
                         });
                     }), properties);
 
-                Assert.NotNull(descriptor.RootBox);
+                Assert.NotNull(descriptor.Page.Root.Box);
             }
         }
 
@@ -1593,7 +1594,7 @@ namespace PeachPDF.Tests.Integration
                             .LetterSpacing(2)
                             .WordSpacing(3)
                             .LineHeight(1.5);
-                        spanBox = ((TextStyleApplier)span).Box;
+                        spanBox = ((TextStyleApplier)span).Node.Box;
                     });
                 });
             });
@@ -1623,11 +1624,11 @@ namespace PeachPDF.Tests.Integration
                 {
                     container.Text(t =>
                     {
-                        subBox = ((TextStyleApplier)t.Span("x").Subscript()).Box;
-                        superBox = ((TextStyleApplier)t.Span("x").Superscript()).Box;
-                        featureBox = ((TextStyleApplier)t.Span("x").FontFeature("liga").FontFeature("smcp", false)).Box;
-                        rtlBox = ((TextStyleApplier)t.Span("x").Direction(PdfTextDirection.Rtl)).Box;
-                        breakBox = ((TextStyleApplier)t.Span("x").BreakAnywhere()).Box;
+                        subBox = ((TextStyleApplier)t.Span("x").Subscript()).Node.Box;
+                        superBox = ((TextStyleApplier)t.Span("x").Superscript()).Node.Box;
+                        featureBox = ((TextStyleApplier)t.Span("x").FontFeature("liga").FontFeature("smcp", false)).Node.Box;
+                        rtlBox = ((TextStyleApplier)t.Span("x").Direction(PdfTextDirection.Rtl)).Node.Box;
+                        breakBox = ((TextStyleApplier)t.Span("x").BreakAnywhere()).Node.Box;
                     });
                 });
             });
@@ -1653,9 +1654,9 @@ namespace PeachPDF.Tests.Integration
                 {
                     container.Text(t =>
                     {
-                        hebrewBox = ((TextStyleApplier)t.Span("שלום").Direction(PdfTextDirection.Auto)).Box;
-                        latinBox = ((TextStyleApplier)t.Span("hello").Direction(PdfTextDirection.Auto)).Box;
-                        noStrongCharBox = ((TextStyleApplier)t.Span("123").Direction(PdfTextDirection.Auto)).Box;
+                        hebrewBox = ((TextStyleApplier)t.Span("שלום").Direction(PdfTextDirection.Auto)).Node.Box;
+                        latinBox = ((TextStyleApplier)t.Span("hello").Direction(PdfTextDirection.Auto)).Node.Box;
+                        noStrongCharBox = ((TextStyleApplier)t.Span("123").Direction(PdfTextDirection.Auto)).Node.Box;
                     });
                 });
             });
@@ -1680,7 +1681,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.DefaultTextStyle(s => s.Direction(PdfTextDirection.Auto));
-                    containerBox = cb.Box;
+                    containerBox = cb.Node.Box;
                     cb.Text("שלום");
                 });
             });
@@ -1701,7 +1702,7 @@ namespace PeachPDF.Tests.Integration
                 page.Content(container =>
                 {
                     var cb = (ContainerBuilder)container.DefaultTextStyle(s => s.Direction(PdfTextDirection.Auto));
-                    containerBox = cb.Box;
+                    containerBox = cb.Node.Box;
                     cb.Text(t =>
                     {
                         t.Span("123");
@@ -1729,7 +1730,7 @@ namespace PeachPDF.Tests.Integration
                         span.DecorationStyle(PdfTextDecorationStyle.Wavy)
                             .DecorationColor(PdfColor.FromRgb(9, 9, 9))
                             .DecorationThickness(3);
-                        spanBox = ((TextStyleApplier)span).Box;
+                        spanBox = ((TextStyleApplier)span).Node.Box;
                     });
                 });
             });
@@ -1772,14 +1773,14 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            Assert.False(string.IsNullOrEmpty(shadowBox!.Box.BoxShadow));
+            Assert.False(string.IsNullOrEmpty(shadowBox!.Node.Box.BoxShadow));
 
-            Assert.Contains("LinearGradient", gradientBorderBox!.Box.BorderImageSource?.GetType().Name ?? "");
+            Assert.Contains("LinearGradient", gradientBorderBox!.Node.Box.BorderImageSource?.GetType().Name ?? "");
 
-            Assert.InRange(paragraphBox!.Box.ActualTextIndent, 11, 13);
-            Assert.InRange(paragraphBox.Box.ActualMarginBottom, 7, 9);
+            Assert.InRange(paragraphBox!.Node.Box.ActualTextIndent, 11, 13);
+            Assert.InRange(paragraphBox.Node.Box.ActualMarginBottom, 7, 9);
 
-            Assert.Contains("2", clampedBox!.Box.LineClamp.ToString());
+            Assert.Contains("2", clampedBox!.Node.Box.LineClamp.ToString());
         }
 
         [Fact]
@@ -1807,12 +1808,12 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            Assert.True(CssValueParser.TryParseSingleString(customEllipsisBox!.Box.BlockEllipsis, out var customText));
+            Assert.True(CssValueParser.TryParseSingleString(customEllipsisBox!.Node.Box.BlockEllipsis, out var customText));
             Assert.Equal("[more]", customText);
 
-            Assert.Equal("none", noEllipsisBox!.Box.BlockEllipsis, ignoreCase: true);
+            Assert.Equal("none", noEllipsisBox!.Node.Box.BlockEllipsis, ignoreCase: true);
 
-            Assert.Equal("auto", defaultEllipsisBox!.Box.BlockEllipsis, ignoreCase: true);
+            Assert.Equal("auto", defaultEllipsisBox!.Node.Box.BlockEllipsis, ignoreCase: true);
         }
 
         [Fact]
@@ -1830,7 +1831,7 @@ namespace PeachPDF.Tests.Integration
                         t.Element(c =>
                         {
                             var cb = (ContainerBuilder)c.Width(20).Height(20).Background(PdfColor.Red);
-                            elementBox = cb.Box;
+                            elementBox = cb.Node.Box;
                         });
                         t.Span(" after");
                     });
@@ -1866,7 +1867,7 @@ namespace PeachPDF.Tests.Integration
         public void TextAlignment_StartAndEnd_ResolveAgainstDirection()
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
+            var properties = new DocumentBuildContext(renderContext);
 
             foreach (var alignment in new[] { TextAlignment.Start, TextAlignment.End })
             {
@@ -1876,7 +1877,7 @@ namespace PeachPDF.Tests.Integration
                         t.Alignment(alignment);
                         t.Span("x");
                     })), properties);
-                Assert.NotNull(descriptor.RootBox);
+                Assert.NotNull(descriptor.Page.Root.Box);
             }
         }
 
@@ -1967,15 +1968,15 @@ namespace PeachPDF.Tests.Integration
 
                 var fromFile = PdfImage.FromFile(tempFile);
                 var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-                var properties = new CssPropertyFactory(renderContext);
+                var properties = new DocumentBuildContext(renderContext);
                 var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromFile)), properties);
-                var img = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
+                var img = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.Page.Root.Box.Boxes));
                 Assert.NotNull(img.Image);
                 Assert.True(string.IsNullOrEmpty(img.HtmlTag!.TryGetAttribute("src", "")));
 
                 var fromStream = PdfImage.FromStream(new MemoryStream(MinimalPng));
                 var streamDescriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromStream)), properties);
-                var streamImg = Assert.IsType<CssBoxImage>(Assert.Single(streamDescriptor.RootBox.Boxes));
+                var streamImg = Assert.IsType<CssBoxImage>(Assert.Single(streamDescriptor.Page.Root.Box.Boxes));
                 Assert.NotNull(streamImg.Image);
             }
             finally
@@ -1992,56 +1993,9 @@ namespace PeachPDF.Tests.Integration
         /// root <see cref="CssBox"/> plus the <see cref="HtmlContainerInt"/> it was laid out in, for
         /// geometry/resolved-style assertions.
         /// </summary>
-        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayoutPage(
-            Action<IPageDescriptor> pageHandler, PdfGenerateConfig? config = null)
-        {
-            // Mirrors PdfGenerator.AddPages's own declarative-specific default (A4/20pt margins) -
-            // PdfGenerateConfig's bare field defaults are PageSize.Undefined/0pt margins, which would
-            // otherwise silently build a 0x0-point page.
-            config ??= new PdfGenerateConfig
-            {
-                PageSize = PageSize.A4,
-                MarginTop = 20,
-                MarginBottom = 20,
-                MarginLeft = 20,
-                MarginRight = 20
-            };
-            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(renderContext);
-            var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
-            PdfGenerator.ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
-
-            var orgPageSize = pageDescriptor.PageSizeOverride
-                ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize)
-                    : new Size(config.ManualPageWidth, config.ManualPageHeight));
-
-            using var container = new HtmlContainer(renderContext)
-            {
-                MarginTop = pageDescriptor.MarginTopOverride ?? config.MarginTop,
-                MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom,
-                MarginLeft = pageDescriptor.MarginLeftOverride ?? config.MarginLeft,
-                MarginRight = pageDescriptor.MarginRightOverride ?? config.MarginRight,
-                PageSize = orgPageSize
-            };
-            container.HtmlContainerInt.PageRules = pageDescriptor.PageRules;
-
-            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage);
-
-            var contentPageSize = new Size(
-                orgPageSize.Width - container.MarginLeft - container.MarginRight,
-                orgPageSize.Height - container.MarginTop - container.MarginBottom);
-            container.PageSize = contentPageSize;
-            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
-
-            using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, orgPageSize);
-            container.MaxSize = new Size(container.PageSize.Width, 0);
-            await container.PerformLayout(measure);
-
-            var containerInt = container.HtmlContainerInt;
-            Assert.NotNull(containerInt.Root);
-            return (containerInt.Root!, containerInt);
-        }
+        private static Task<(CssBox root, HtmlContainerInt container)> BuildAndLayoutPage(
+            Action<IPageDescriptor> pageHandler, PdfGenerateConfig? config = null) =>
+            DeclarativeHarness.BuildAndLayoutAsync(pageHandler, null, config);
 
         private static bool LayoutHarnessContains(CssBox root, CssBox target)
         {
@@ -2080,7 +2034,7 @@ namespace PeachPDF.Tests.Integration
             // shorthand this flips, and CssPropertyFactory.SetTextAlign can go back to a single Set.
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var parser = new CssValueParser(renderContext);
-            var parent = DocumentBuilder.BuildPage(page => page.Content(c => c.Text("x")), new CssPropertyFactory(renderContext)).RootBox;
+            var parent = DocumentBuilder.BuildPage(page => page.Content(c => c.Text("x")), new DocumentBuildContext(renderContext)).Page.Root.Box;
 
             Assert.False(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align", "right"));
             Assert.True(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align-all", "right"));
@@ -2095,7 +2049,7 @@ namespace PeachPDF.Tests.Integration
             {
                 var container = (ContainerBuilder)c;
                 container.Text(t => { t.Alignment(TextAlignment.Right); t.Span("x"); });
-                paragraph = container.Box;
+                paragraph = container.Node.Box;
             }));
 
             Assert.Equal(PeachBrackets.Css.HorizontalAlignment.Right, paragraph!.ActualTextAlignAll);
@@ -2177,7 +2131,7 @@ namespace PeachPDF.Tests.Integration
                         header.Cell().Text("Item");
                         var amount = (ContainerBuilder)header.Cell();
                         amount.AlignRight().Text("Amount");
-                        headerCell = amount.Box;
+                        headerCell = amount.Node.Box;
                     });
                     table.Row(row =>
                     {
@@ -2211,10 +2165,10 @@ namespace PeachPDF.Tests.Integration
                     {
                         var l = (ContainerBuilder)row.Cell();
                         l.Text("left");
-                        left = l.Box;
+                        left = l.Node.Box;
                         var r = (ContainerBuilder)row.Cell();
                         r.AlignRight().Text("right");
-                        right = r.Box;
+                        right = r.Node.Box;
                     });
                 }));
             });
@@ -2239,7 +2193,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var b = (ContainerBuilder)row.Item();
                     b.Width(100).AlignRight().Text("x");
-                    item = b.Box;
+                    item = b.Node.Box;
                 }));
             });
 
@@ -2266,7 +2220,7 @@ namespace PeachPDF.Tests.Integration
                     var sized = b.Width(100);
                     var aligned = which switch { "left" => sized.AlignLeft(), "center" => sized.AlignCenter(), _ => sized.AlignRight() };
                     aligned.Text("x");
-                    item = b.Box;
+                    item = b.Node.Box;
                 }));
             });
 
@@ -2288,7 +2242,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var b = (ContainerBuilder)column.Item();
                     b.AlignRight().Text("x");
-                    item = b.Box;
+                    item = b.Node.Box;
                 }));
             });
 
@@ -2317,9 +2271,9 @@ namespace PeachPDF.Tests.Integration
                         {
                             var b = (ContainerBuilder)col.Item();
                             b.AlignRight().Text("x");
-                            item = b.Box;
+                            item = b.Node.Box;
                         });
-                        cell = second.Box;
+                        cell = second.Node.Box;
                     });
                 }));
             });
@@ -2340,7 +2294,7 @@ namespace PeachPDF.Tests.Integration
                 {
                     var b = (ContainerBuilder)c;
                     b.Text(t => { t.Alignment(TextAlignment.Right); t.Span("RIGHT"); });
-                    paragraph = b.Box;
+                    paragraph = b.Node.Box;
                 });
             });
 
@@ -2364,7 +2318,7 @@ namespace PeachPDF.Tests.Integration
                         row.Cell().Text("label");
                         var second = (ContainerBuilder)row.Cell();
                         fill(second);
-                        cell = second.Box;
+                        cell = second.Node.Box;
                     });
                 }));
             });

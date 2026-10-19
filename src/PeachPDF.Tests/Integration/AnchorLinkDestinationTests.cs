@@ -1,3 +1,4 @@
+using PeachBrackets;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -84,16 +85,12 @@ namespace PeachPDF.Tests.Integration
         public async Task PublicGetLinksNoArgOverload_StillReturnsLinkData()
         {
             var renderContext = new HtmlRenderContext();
-            var container = new HtmlContainer(renderContext);
-            await container.SetHtml("<html><body><a href='https://example.com'>go</a></body></html>");
-            container.MaxSize = new Size(600, 0);
+            using var document = await HtmlDocument.LoadAsync("<html><body><a href='https://example.com'>go</a></body></html>", renderContext);
             using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new Size(600, 800));
-            await container.PerformLayout(measure);
+            await document.LayoutAsync(measure);
 
-            var links = container.GetLinks();
-
-            var link = Assert.Single(links);
-            Assert.Equal("https://example.com/", link.Href);
+            var link = Assert.Single(document.Annotations.Links);
+            Assert.Equal("https://example.com/", link.Uri);
         }
     }
 }

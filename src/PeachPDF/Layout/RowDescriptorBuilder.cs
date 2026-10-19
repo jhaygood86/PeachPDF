@@ -1,21 +1,20 @@
-using PeachBrackets.Html.Dom;
-using PeachBrackets.Html.Utils;
+using PeachBrackets.Building;
 
 namespace PeachPDF.Layout
 {
     /// <summary>Builds a horizontal flex row's items, each a new child of <paramref name="box"/> (a <c>display:flex; flex-direction:row</c> box).</summary>
-    internal sealed class RowDescriptorBuilder(CssBox box, CssPropertyFactory properties) : IRowDescriptor
+    internal sealed class RowDescriptorBuilder(DocumentNode box) : IRowDescriptor
     {
         public IRowDescriptor Spacing(PdfLength value)
         {
-            properties.Set(box, "column-gap", value);
+            box.SetStyle("column-gap", value);
             return this;
         }
 
         public IContainer Item()
         {
-            var item = CssPropertyFactory.CreateAnonymousBox(box);
-            return new ContainerBuilder(item, properties);
+            var item = box.AppendBlock();
+            return new ContainerBuilder(item);
         }
     }
 }

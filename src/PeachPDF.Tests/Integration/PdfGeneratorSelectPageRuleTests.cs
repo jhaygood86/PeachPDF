@@ -1,4 +1,5 @@
 using PeachPDF;
+using PeachBrackets.Html.Pages;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Entities;
 using System.Collections.Generic;
@@ -23,7 +24,7 @@ namespace PeachPDF.Tests.Integration
         {
             var rules = ParsePageRules("@page { margin: 10mm; }");
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             Assert.Same(rules[0], result);
         }
@@ -37,7 +38,7 @@ namespace PeachPDF.Tests.Integration
         {
             var rules = ParsePageRules("@page :left { margin: 1mm; } @page :blank { margin: 2mm; }");
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 0, pageHeight: 800, isBlank);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 2, [], pageY: 0, pageHeight: 800, isBlank);
 
             Assert.Same(rules[expectedRule], result);
         }
@@ -45,7 +46,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void NoRules_ReturnsNull()
         {
-            var result = PdfGenerator.SelectPageRule([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             Assert.Null(result);
         }
@@ -60,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             var namedRule = rules[1];
             var elements = new List<NamedPageElement> { new("chapter", 850) }; // belongs to page 2 of [0,800),[800,1600)
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
 
             Assert.Same(namedRule, result);
         }
@@ -79,7 +80,7 @@ namespace PeachPDF.Tests.Integration
             var baseRule = rules[0];
             var elements = new List<NamedPageElement> { new("chapter", 850) }; // belongs to page 2
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
 
             Assert.Same(baseRule, result);
         }
@@ -94,7 +95,7 @@ namespace PeachPDF.Tests.Integration
             var baseRule = rules[0];
             var elements = new List<NamedPageElement> { new("chapter", 0) }; // lowercase; rule is "Chapter"
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
 
             Assert.Same(baseRule, result);
         }
@@ -112,7 +113,7 @@ namespace PeachPDF.Tests.Integration
             var namedRule = rules[1];
             var elements = new List<NamedPageElement> { new("Chapter", 0) };
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
 
             Assert.Same(namedRule, result);
         }
@@ -134,7 +135,7 @@ namespace PeachPDF.Tests.Integration
             foreach (var name in new[] { "chapter1", "chapter2", "chapter3" })
             {
                 var elements = new List<NamedPageElement> { new(name, 0) };
-                var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+                var result = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
                 Assert.Same(namedRule, result);
             }
         }
@@ -149,7 +150,7 @@ namespace PeachPDF.Tests.Integration
             var baseRule = rules[0];
             var elements = new List<NamedPageElement> { new("chapter9", 0) };
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
 
             Assert.Same(baseRule, result);
         }
@@ -171,7 +172,7 @@ namespace PeachPDF.Tests.Integration
             // chapter2's heading starts on page 2 ([800,1600)); nothing else registers on page 3.
             var elements = new List<NamedPageElement> { new("chapter2", 850) };
 
-            var page3Result = PdfGenerator.SelectPageRule(rules, pageNumber: 3, elements, pageY: 1600, pageHeight: 800);
+            var page3Result = PagePainter.SelectPageRule(rules, pageNumber: 3, elements, pageY: 1600, pageHeight: 800);
 
             Assert.Same(namedRule, page3Result);
         }
@@ -190,11 +191,11 @@ namespace PeachPDF.Tests.Integration
 
             // Page 3 ([1600,2400)) is still within chapter2's span (chapter3 starts later, at Y=2200,
             // which does fall inside this page - so by this page's end chapter3 is already active).
-            var page3Result = PdfGenerator.SelectPageRule(rules, pageNumber: 3, elements, pageY: 1600, pageHeight: 800);
+            var page3Result = PagePainter.SelectPageRule(rules, pageNumber: 3, elements, pageY: 1600, pageHeight: 800);
             Assert.Same(chapter3Rule, page3Result);
 
             // Page 2 ([800,1600)) is entirely before chapter3 starts, so chapter2 is still active there.
-            var page2Result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
+            var page2Result = PagePainter.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
             Assert.Same(chapter2Rule, page2Result);
         }
 
@@ -209,7 +210,7 @@ namespace PeachPDF.Tests.Integration
             var firstRule = rules[2];
             var elements = new List<NamedPageElement> { new("chapter", 0) };
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
 
             Assert.Same(firstRule, result);
         }
@@ -223,7 +224,7 @@ namespace PeachPDF.Tests.Integration
                 """);
             var baseRule = rules[0];
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
 
             Assert.Same(baseRule, result);
         }
@@ -241,7 +242,7 @@ namespace PeachPDF.Tests.Integration
             var baseRule = rules[0];
             Assert.Equal(2, rules.Count);
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             Assert.Same(baseRule, result);
         }
@@ -266,16 +267,16 @@ namespace PeachPDF.Tests.Integration
 
             // Name matches, page is left (even) -> compound rule applies.
             Assert.Same(compoundRule,
-                PdfGenerator.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
+                PagePainter.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
 
             // Name matches but page is right (odd) -> pseudo half fails, base rule applies.
             Assert.Same(baseRule,
-                PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
+                PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
 
             // Page is left but the active name is different -> name half fails, base rule applies.
             var otherElements = new List<NamedPageElement> { new("chapter2", 0) };
             Assert.Same(baseRule,
-                PdfGenerator.SelectPageRule(rules, pageNumber: 2, otherElements, pageY: 800, pageHeight: 800));
+                PagePainter.SelectPageRule(rules, pageNumber: 2, otherElements, pageY: 800, pageHeight: 800));
         }
 
         [Fact]
@@ -288,7 +289,7 @@ namespace PeachPDF.Tests.Integration
             var compoundRule = rules[1];
             var elements = new List<NamedPageElement> { new("chapter2", 0) };
 
-            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
+            var result = PagePainter.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
 
             Assert.Same(compoundRule, result);
         }
@@ -306,7 +307,7 @@ namespace PeachPDF.Tests.Integration
                 @page :left { margin: 30mm; }
                 """);
             Assert.Same(compoundFirst[1],
-                PdfGenerator.SelectPageRule(compoundFirst, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
+                PagePainter.SelectPageRule(compoundFirst, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
 
             var pseudoFirst = ParsePageRules("""
                 @page { margin: 10mm; }
@@ -314,7 +315,7 @@ namespace PeachPDF.Tests.Integration
                 @page chapter1:left { margin: 20mm; }
                 """);
             Assert.Same(pseudoFirst[2],
-                PdfGenerator.SelectPageRule(pseudoFirst, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
+                PagePainter.SelectPageRule(pseudoFirst, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
         }
 
         [Fact]
@@ -330,7 +331,7 @@ namespace PeachPDF.Tests.Integration
                 @page :left { margin: 30mm; }
                 """);
             Assert.Same(namedFirst[1],
-                PdfGenerator.SelectPageRule(namedFirst, pageNumber: 2, elements, pageY: 0, pageHeight: 800));
+                PagePainter.SelectPageRule(namedFirst, pageNumber: 2, elements, pageY: 0, pageHeight: 800));
 
             var pseudoFirst = ParsePageRules("""
                 @page { margin: 10mm; }
@@ -338,7 +339,7 @@ namespace PeachPDF.Tests.Integration
                 @page chapter { margin: 20mm; }
                 """);
             Assert.Same(pseudoFirst[2],
-                PdfGenerator.SelectPageRule(pseudoFirst, pageNumber: 2, elements, pageY: 0, pageHeight: 800));
+                PagePainter.SelectPageRule(pseudoFirst, pageNumber: 2, elements, pageY: 0, pageHeight: 800));
         }
 
         [Fact]
@@ -354,7 +355,7 @@ namespace PeachPDF.Tests.Integration
                 @page :first { margin: 30mm; }
                 """);
             Assert.Same(rules[2],
-                PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
+                PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
 
             var reordered = ParsePageRules("""
                 @page { margin: 10mm; }
@@ -362,7 +363,7 @@ namespace PeachPDF.Tests.Integration
                 @page chapter { margin: 20mm; }
                 """);
             Assert.Same(reordered[1],
-                PdfGenerator.SelectPageRule(reordered, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
+                PagePainter.SelectPageRule(reordered, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
         }
 
         [Fact]
@@ -376,9 +377,9 @@ namespace PeachPDF.Tests.Integration
             var leftRule = rules[1];
             var rightRule = rules[2];
 
-            Assert.Same(rightRule, PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800));
-            Assert.Same(leftRule, PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800));
-            Assert.Same(rightRule, PdfGenerator.SelectPageRule(rules, pageNumber: 3, [], pageY: 1600, pageHeight: 800));
+            Assert.Same(rightRule, PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800));
+            Assert.Same(leftRule, PagePainter.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800));
+            Assert.Same(rightRule, PagePainter.SelectPageRule(rules, pageNumber: 3, [], pageY: 1600, pageHeight: 800));
         }
 
         // ─── SelectApplicableMarginRules: cascade merge across matching rules ───
@@ -400,7 +401,7 @@ namespace PeachPDF.Tests.Integration
                 """);
             var elements = new List<NamedPageElement> { new("chapter", 0) };
 
-            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var margins = PagePainter.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
             var boxNames = margins.Select(m => m.Selector?.Text?.Trim().ToLowerInvariant()).ToList();
 
             // Both the base rule's headers AND the compound rule's page number must be present together.
@@ -418,7 +419,7 @@ namespace PeachPDF.Tests.Integration
                 """);
             var elements = new List<NamedPageElement> { new("chapter", 0) };
 
-            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var margins = PagePainter.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
             var topLeft = Assert.Single(margins, m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-left");
 
             Assert.Equal("\"Compound\"", topLeft.Style.Content);
@@ -431,7 +432,7 @@ namespace PeachPDF.Tests.Integration
                 @page { @top-center { content: "Base only"; } }
                 """);
 
-            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var margins = PagePainter.SelectApplicableMarginRules(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             var box = Assert.Single(margins);
             Assert.Equal("top-center", box.Selector?.Text?.Trim().ToLowerInvariant());
@@ -440,7 +441,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void SelectApplicableMarginRules_NoRulesMatch_ReturnsEmpty()
         {
-            var margins = PdfGenerator.SelectApplicableMarginRules([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var margins = PagePainter.SelectApplicableMarginRules([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             Assert.Empty(margins);
         }
@@ -458,7 +459,7 @@ namespace PeachPDF.Tests.Integration
                 """);
             var elements = new List<NamedPageElement> { new("chapter", 0) };
 
-            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var margins = PagePainter.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
             var topLeft = Assert.Single(margins, m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-left");
 
             Assert.Equal("\"Compound\"", topLeft.Style.Content);
@@ -474,7 +475,7 @@ namespace PeachPDF.Tests.Integration
                 """);
             var elements = new List<NamedPageElement> { new("chapter", 0) };
 
-            var style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var style = PagePainter.SelectApplicablePageStyle(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
 
             Assert.NotNull(style);
             Assert.Equal("\"Satyr10\"", style!.FontFamily);
@@ -483,7 +484,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void SelectApplicablePageStyle_ReturnsNull_WhenNoRuleMatches()
         {
-            var style = PdfGenerator.SelectApplicablePageStyle([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var style = PagePainter.SelectApplicablePageStyle([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             Assert.Null(style);
         }
@@ -500,7 +501,7 @@ namespace PeachPDF.Tests.Integration
                 @page :first { background-image: url("cover.jpg"); }
                 """);
 
-            var style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var style = PagePainter.SelectApplicablePageStyle(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
             Assert.NotNull(style);
             Assert.Equal("rgb(85, 136, 255)", style!.BackgroundColor);
@@ -515,8 +516,8 @@ namespace PeachPDF.Tests.Integration
                 @page :first { background-color: red; }
                 """);
 
-            var page1Style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
-            var page2Style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+            var page1Style = PagePainter.SelectApplicablePageStyle(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var page2Style = PagePainter.SelectApplicablePageStyle(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
 
             Assert.Equal("rgb(255, 0, 0)", page1Style!.BackgroundColor);
             Assert.Equal("rgb(0, 0, 255)", page2Style!.BackgroundColor);
@@ -538,12 +539,12 @@ namespace PeachPDF.Tests.Integration
                 @page :first { margin: 0; }
                 """);
 
-            var page1Rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
-            var page1 = PdfGenerator.ResolvePageMargins(page1Rule, TenMm, TenMm, TenMm, TenMm);
+            var page1Rule = PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var page1 = PagePainter.ResolvePageMargins(page1Rule, TenMm, TenMm, TenMm, TenMm);
             Assert.Equal((0d, 0d, 0d, 0d), page1);
 
-            var page2Rule = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
-            var page2 = PdfGenerator.ResolvePageMargins(page2Rule, TenMm, TenMm, TenMm, TenMm);
+            var page2Rule = PagePainter.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+            var page2 = PagePainter.ResolvePageMargins(page2Rule, TenMm, TenMm, TenMm, TenMm);
             Assert.Equal((TenMm, TenMm, TenMm, TenMm), page2);
         }
 
@@ -556,9 +557,9 @@ namespace PeachPDF.Tests.Integration
                 """);
             var elements = new List<NamedPageElement> { new("cover", 0) };
 
-            var rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+            var rule = PagePainter.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
 
-            Assert.Equal((0d, 0d, 0d, 0d), PdfGenerator.ResolvePageMargins(rule, TenMm, TenMm, TenMm, TenMm));
+            Assert.Equal((0d, 0d, 0d, 0d), PagePainter.ResolvePageMargins(rule, TenMm, TenMm, TenMm, TenMm));
         }
 
         [Fact]
@@ -569,11 +570,11 @@ namespace PeachPDF.Tests.Integration
                 @page :left { margin: 0; }
                 """);
 
-            var leftPageRule = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
-            Assert.Equal((0d, 0d, 0d, 0d), PdfGenerator.ResolvePageMargins(leftPageRule, TenMm, TenMm, TenMm, TenMm));
+            var leftPageRule = PagePainter.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+            Assert.Equal((0d, 0d, 0d, 0d), PagePainter.ResolvePageMargins(leftPageRule, TenMm, TenMm, TenMm, TenMm));
 
-            var rightPageRule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
-            Assert.Equal((TenMm, TenMm, TenMm, TenMm), PdfGenerator.ResolvePageMargins(rightPageRule, TenMm, TenMm, TenMm, TenMm));
+            var rightPageRule = PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            Assert.Equal((TenMm, TenMm, TenMm, TenMm), PagePainter.ResolvePageMargins(rightPageRule, TenMm, TenMm, TenMm, TenMm));
         }
 
         [Fact]
@@ -584,8 +585,8 @@ namespace PeachPDF.Tests.Integration
                 @page :first { margin-top: 0; }
                 """);
 
-            var rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
-            var (l, t, r, b) = PdfGenerator.ResolvePageMargins(rule, TenMm, TenMm, TenMm, TenMm);
+            var rule = PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var (l, t, r, b) = PagePainter.ResolvePageMargins(rule, TenMm, TenMm, TenMm, TenMm);
 
             Assert.Equal(TenMm, l);
             Assert.Equal(0d, t);
@@ -601,15 +602,15 @@ namespace PeachPDF.Tests.Integration
             // both paths now agree when the base rule is the selected winner.
             var rules = ParsePageRules("@page { margin: 0; }");
 
-            var rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var rule = PagePainter.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
 
-            Assert.Equal((0d, 0d, 0d, 0d), PdfGenerator.ResolvePageMargins(rule, 0, 0, 0, 0));
+            Assert.Equal((0d, 0d, 0d, 0d), PagePainter.ResolvePageMargins(rule, 0, 0, 0, 0));
         }
 
         [Fact]
         public void ResolvePageMargins_NullRule_ReturnsBaseMargins()
         {
-            Assert.Equal((1d, 2d, 3d, 4d), PdfGenerator.ResolvePageMargins(null, 1, 2, 3, 4));
+            Assert.Equal((1d, 2d, 3d, 4d), PagePainter.ResolvePageMargins(null, 1, 2, 3, 4));
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

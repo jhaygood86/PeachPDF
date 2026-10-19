@@ -1,12 +1,11 @@
-using PeachBrackets.Html.Dom;
-using PeachBrackets.Html.Utils;
+using PeachBrackets.Building;
 using System.Collections.Generic;
 using System.Globalization;
 
 namespace PeachPDF.Layout
 {
     /// <summary>Builds one table row's cells, each a new <c>display: table-cell</c> child of <paramref name="rowBox"/>.</summary>
-    internal sealed class TableRowDescriptorBuilder(CssBox rowBox, CssPropertyFactory properties) : ITableRowDescriptor
+    internal sealed class TableRowDescriptorBuilder(DocumentNode rowBox) : ITableRowDescriptor
     {
         public IContainer Cell(int columnSpan = 1, int rowSpan = 1)
         {
@@ -21,9 +20,9 @@ namespace PeachPDF.Layout
                 if (rowSpan != 1) attributes["rowspan"] = rowSpan.ToString(CultureInfo.InvariantCulture);
             }
 
-            var cell = CssBox.CreateBox(rowBox, new HtmlTag("td", false, attributes));
-            properties.Set(cell, "display", "table-cell");
-            return new ContainerBuilder(cell, properties);
+            var cell = rowBox.AppendElement("td", attributes);
+            cell.SetStyle("display", "table-cell");
+            return new ContainerBuilder(cell);
         }
     }
 }

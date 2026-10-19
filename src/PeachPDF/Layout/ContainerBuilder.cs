@@ -1,9 +1,8 @@
 using PeachBrackets.Annotations;
 using PeachDrawing.Core;
 using PeachBrackets.Html;
-using PeachBrackets.Html.Dom;
+using PeachBrackets.Building;
 using PeachBrackets.Html.Parse;
-using PeachBrackets.Html.Utils;
 using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
@@ -19,11 +18,11 @@ namespace PeachPDF.Layout
     /// <summary>
     /// The one, reused <see cref="IContainer"/> implementation. A property-setting decorator
     /// (padding/border/background/corner-radius/width/height/grow/align/default-text-style) sets CSS
-    /// properties directly on the wrapped box and returns <c>this</c> - a single <see cref="CssBox"/>
+    /// properties directly on the wrapped box and returns <c>this</c> - a single <c>CssBox</c>
     /// already natively supports holding all of these at once, so there's no need for a new wrapper box
     /// per decorator the way a from-scratch layout model might need. <see cref="Hyperlink(string)"/> is
     /// the one exception: an <c>&lt;a href&gt;</c> box is a real structural requirement
-    /// (<see cref="CssBox.IsClickable"/> has no other trigger), so it creates a genuine new child and
+    /// (<c>CssBox.IsClickable</c> has no other trigger), so it creates a genuine new child and
     /// returns a builder for that instead. Every terminal method (<see cref="Text(string)"/>,
     /// <see cref="Image(byte[])"/>, <see cref="Row"/>, <see cref="Column"/>, etc.) places its content as
     /// a new child of the wrapped box, including plain text - a box must never hold both its own words
@@ -33,11 +32,12 @@ namespace PeachPDF.Layout
     /// applies unconditionally rather than only when a caller's own content happens to need it. May run
     /// at most once.
     /// </summary>
-    internal sealed class ContainerBuilder(CssBox box, CssPropertyFactory properties) : IContainer
+    internal sealed class ContainerBuilder(DocumentNode box) : IContainer
     {
-        private bool _terminalUsed;
+        /// <summary>The node this builder fills; reached by tests that assert on the resulting box.</summary>
+        internal DocumentNode Node => box;
 
-        internal CssBox Box => box;
+        private bool _terminalUsed;
 
         /// <summary>Whether this container's one piece of terminal content has already been placed - used by <see cref="Html(string, PeachPdfCssContent?, Action{SlotContext, IContainer}?)"/>'s slot handling to tell whether a slot callback actually populated the container it was given.</summary>
         internal bool HasContent => _terminalUsed;
@@ -78,25 +78,25 @@ namespace PeachPDF.Layout
 
         public IContainer PaddingTop(PdfLength value)
         {
-            properties.Set(box, "padding-top", value);
+            box.SetStyle("padding-top", value);
             return this;
         }
 
         public IContainer PaddingBottom(PdfLength value)
         {
-            properties.Set(box, "padding-bottom", value);
+            box.SetStyle("padding-bottom", value);
             return this;
         }
 
         public IContainer PaddingLeft(PdfLength value)
         {
-            properties.Set(box, "padding-left", value);
+            box.SetStyle("padding-left", value);
             return this;
         }
 
         public IContainer PaddingRight(PdfLength value)
         {
-            properties.Set(box, "padding-right", value);
+            box.SetStyle("padding-right", value);
             return this;
         }
 
@@ -132,18 +132,18 @@ namespace PeachPDF.Layout
 
         private IContainer SetBorderEdge(string side, PdfLength width, PdfColor? color)
         {
-            properties.Set(box, $"border-{side}-width", width);
-            properties.Set(box, $"border-{side}-style", "solid");
-            properties.Set(box, $"border-{side}-color", color ?? PdfColor.Black);
+            box.SetStyle($"border-{side}-width", width);
+            box.SetStyle($"border-{side}-style", "solid");
+            box.SetStyle($"border-{side}-color", color ?? PdfColor.Black);
             return this;
         }
 
         public IContainer BorderColor(PdfColor color)
         {
-            properties.Set(box, "border-top-color", color);
-            properties.Set(box, "border-right-color", color);
-            properties.Set(box, "border-bottom-color", color);
-            properties.Set(box, "border-left-color", color);
+            box.SetStyle("border-top-color", color);
+            box.SetStyle("border-right-color", color);
+            box.SetStyle("border-bottom-color", color);
+            box.SetStyle("border-left-color", color);
             return this;
         }
 
@@ -151,14 +151,14 @@ namespace PeachPDF.Layout
 
         public IContainer Background(PdfColor color)
         {
-            properties.Set(box, "background-color", color);
+            box.SetStyle("background-color", color);
             return this;
         }
 
         public IContainer BackgroundLinearGradient(double angleDegrees, params PdfColor[] stops)
         {
             var stopsText = string.Join(", ", stops.Select(s => s.ToString()));
-            properties.Set(box, "background-image",
+            box.SetStyle("background-image",
                 string.Create(CultureInfo.InvariantCulture, $"linear-gradient({angleDegrees}deg, {stopsText})"));
             return this;
         }
@@ -170,21 +170,21 @@ namespace PeachPDF.Layout
             Border(width, PdfColor.Transparent);
 
             var stopsText = string.Join(", ", stops.Select(s => s.ToString()));
-            properties.Set(box, "border-image-source",
+            box.SetStyle("border-image-source",
                 string.Create(CultureInfo.InvariantCulture, $"linear-gradient({angleDegrees}deg, {stopsText})"));
 
             // The standard "gradient border" recipe: a 1-unit slice with stretch repeat treats each edge
             // as one continuous stretched strip of the (infinitely-scalable) gradient, rather than tiling
             // or rounding it - PR3's border-image painting already implements gradient/url() sources with
             // stretch repeat.
-            properties.Set(box, "border-image-slice", "1");
-            properties.Set(box, "border-image-repeat", "stretch");
+            box.SetStyle("border-image-slice", "1");
+            box.SetStyle("border-image-repeat", "stretch");
             return this;
         }
 
         public IContainer Shadow(params PdfBoxShadow[] shadows)
         {
-            properties.Set(box, "box-shadow", string.Join(", ", shadows.Select(s => s.ToCssText())));
+            box.SetStyle("box-shadow", string.Join(", ", shadows.Select(s => s.ToCssText())));
             return this;
         }
 
@@ -199,25 +199,25 @@ namespace PeachPDF.Layout
 
         public IContainer CornerRadiusTopLeft(PdfLength radius)
         {
-            properties.Set(box, "border-top-left-radius", radius);
+            box.SetStyle("border-top-left-radius", radius);
             return this;
         }
 
         public IContainer CornerRadiusTopRight(PdfLength radius)
         {
-            properties.Set(box, "border-top-right-radius", radius);
+            box.SetStyle("border-top-right-radius", radius);
             return this;
         }
 
         public IContainer CornerRadiusBottomLeft(PdfLength radius)
         {
-            properties.Set(box, "border-bottom-left-radius", radius);
+            box.SetStyle("border-bottom-left-radius", radius);
             return this;
         }
 
         public IContainer CornerRadiusBottomRight(PdfLength radius)
         {
-            properties.Set(box, "border-bottom-right-radius", radius);
+            box.SetStyle("border-bottom-right-radius", radius);
             return this;
         }
 
@@ -225,19 +225,19 @@ namespace PeachPDF.Layout
 
         public IContainer Width(PdfLength value)
         {
-            properties.Set(box, "width", value);
+            box.SetStyle("width", value);
             return this;
         }
 
         public IContainer Height(PdfLength value)
         {
-            properties.Set(box, "height", value);
+            box.SetStyle("height", value);
             return this;
         }
 
         public IContainer Grow(double ratio = 1)
         {
-            properties.Set(box, "flex-grow", ratio.ToString(CultureInfo.InvariantCulture));
+            box.SetStyle("flex-grow", ratio.ToString(CultureInfo.InvariantCulture));
             return this;
         }
 
@@ -247,18 +247,18 @@ namespace PeachPDF.Layout
         /// content" can mean for a cell is aligning its inline content - which is what a table author asks
         /// for when they right-align a column of amounts - so a cell gets <c>text-align</c> instead.
         /// </summary>
-        private bool IsTableCell => box.Display.Value == PeachBrackets.Css.DisplayMode.TableCell;
+        private bool IsTableCell => box.IsTableCell;
 
         public IContainer AlignLeft()
         {
             if (IsTableCell)
             {
-                properties.SetTextAlign(box, "left");
+                box.SetTextAlign("left");
                 return this;
             }
 
-            properties.Set(box, "margin-left", "0");
-            properties.Set(box, "margin-right", "auto");
+            box.SetStyle("margin-left", "0");
+            box.SetStyle("margin-right", "auto");
             return this;
         }
 
@@ -266,12 +266,12 @@ namespace PeachPDF.Layout
         {
             if (IsTableCell)
             {
-                properties.SetTextAlign(box, "center");
+                box.SetTextAlign("center");
                 return this;
             }
 
-            properties.Set(box, "margin-left", "auto");
-            properties.Set(box, "margin-right", "auto");
+            box.SetStyle("margin-left", "auto");
+            box.SetStyle("margin-right", "auto");
             return this;
         }
 
@@ -279,12 +279,12 @@ namespace PeachPDF.Layout
         {
             if (IsTableCell)
             {
-                properties.SetTextAlign(box, "right");
+                box.SetTextAlign("right");
                 return this;
             }
 
-            properties.Set(box, "margin-left", "auto");
-            properties.Set(box, "margin-right", "0");
+            box.SetStyle("margin-left", "auto");
+            box.SetStyle("margin-right", "0");
             return this;
         }
 
@@ -293,31 +293,31 @@ namespace PeachPDF.Layout
         public IContainer DefaultTextStyle(Action<ITextStyle> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
-            handler(new TextStyleApplier(box, properties));
+            handler(new TextStyleApplier(box));
             return this;
         }
 
         public IContainer ParagraphFirstLineIndentation(PdfLength value)
         {
-            properties.Set(box, "text-indent", value);
+            box.SetStyle("text-indent", value);
             return this;
         }
 
         public IContainer ParagraphSpacing(PdfLength value)
         {
-            properties.Set(box, "margin-bottom", value);
+            box.SetStyle("margin-bottom", value);
             return this;
         }
 
         public IContainer ClampLines(int lines, string? ellipsis = null)
         {
-            properties.Set(box, "overflow-x", "hidden");
-            properties.Set(box, "overflow-y", "hidden");
-            properties.Set(box, "line-clamp", lines.ToString(CultureInfo.InvariantCulture));
+            box.SetStyle("overflow-x", "hidden");
+            box.SetStyle("overflow-y", "hidden");
+            box.SetStyle("line-clamp", lines.ToString(CultureInfo.InvariantCulture));
 
             if (ellipsis is not null)
             {
-                properties.Set(box, "block-ellipsis",
+                box.SetStyle("block-ellipsis",
                     ellipsis.Length == 0 ? "none" : "\"" + EscapeCssStringLiteral(ellipsis) + "\"");
             }
 
@@ -327,8 +327,8 @@ namespace PeachPDF.Layout
         public IContainer Hyperlink(string url)
         {
             ArgumentNullException.ThrowIfNull(url);
-            var link = CssBox.CreateBox(box, new HtmlTag("a", false, new Dictionary<string, string> { ["href"] = url }));
-            return new ContainerBuilder(link, properties);
+            var link = box.AppendElement("a", new Dictionary<string, string> { ["href"] = url });
+            return new ContainerBuilder(link);
         }
 
         public IContainer Hyperlink(Uri url)
@@ -340,8 +340,7 @@ namespace PeachPDF.Layout
         public IContainer Bookmark(string title, int level = 1)
         {
             ArgumentNullException.ThrowIfNull(title);
-            box.BookmarkLevel = level.ToString(CultureInfo.InvariantCulture);
-            box.BookmarkLabel = "\"" + EscapeCssStringLiteral(title) + "\"";
+            box.SetBookmark(title, level);
             return this;
         }
 
@@ -361,22 +360,21 @@ namespace PeachPDF.Layout
             // same invariant PR2's line-clamp work already had to respect). Real HTML never puts text
             // directly on an element box with other children either - a text node always becomes its own
             // anonymous child box - so this matches that shape instead of being a declarative-only shortcut.
-            var textBox = CssPropertyFactory.CreateAnonymousBox(box);
-            textBox.Text = text;
+            box.AppendText(text);
         }
 
         public void Text(Action<ITextSpanContainer> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
             MarkTerminal();
-            handler(new TextSpanContainerBuilder(box, properties));
+            handler(new TextSpanContainerBuilder(box));
         }
 
         public void Image(byte[] data)
         {
             ArgumentNullException.ThrowIfNull(data);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(DecodeRasterBytes(data), null);
+            CreateImageBox().SetImageContent(DecodeRasterBytes(data));
         }
 
         public void Image(Stream stream)
@@ -385,7 +383,7 @@ namespace PeachPDF.Layout
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(DecodeRasterBytes(ms.ToArray()), null);
+            CreateImageBox().SetImageContent(DecodeRasterBytes(ms.ToArray()));
         }
 
         public void Image(Uri uri)
@@ -406,8 +404,12 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(image);
             MarkTerminal();
-            var (decodedImage, svgDocument) = image.Resolve(properties.RenderContext);
-            CreateImageBox().SetDecodedContent(decodedImage, svgDocument);
+            var (decodedImage, svg) = image.Resolve(box.RenderContext);
+            var imageBox = CreateImageBox();
+            if (svg is not null)
+                imageBox.SetImageContent(svg);
+            else
+                imageBox.SetImageContent(decodedImage!);
         }
 
         public void Image(Func<PdfSize, byte[]> generator)
@@ -415,14 +417,14 @@ namespace PeachPDF.Layout
             ArgumentNullException.ThrowIfNull(generator);
             MarkTerminal();
             var imageBox = CreateFillingImageBox();
-            imageBox.SetDynamicRasterContent(size => generator(new PdfSize(size.Width, size.Height)));
+            imageBox.SetImageContent(size => generator(new PdfSize(size.Width, size.Height)));
         }
 
         public void Svg(string svgMarkup)
         {
             ArgumentNullException.ThrowIfNull(svgMarkup);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(svgMarkup));
+            CreateImageBox().SetImageContent(DecodeSvgMarkup(svgMarkup));
         }
 
         public void Svg(Stream stream)
@@ -431,14 +433,14 @@ namespace PeachPDF.Layout
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(ms.ToArray()));
+            CreateImageBox().SetImageContent(DecodeSvgMarkup(ms.ToArray()));
         }
 
         public void Svg(byte[] data)
         {
             ArgumentNullException.ThrowIfNull(data);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(data));
+            CreateImageBox().SetImageContent(DecodeSvgMarkup(data));
         }
 
         public void Svg(Func<PdfSize, string> generator)
@@ -446,7 +448,7 @@ namespace PeachPDF.Layout
             ArgumentNullException.ThrowIfNull(generator);
             MarkTerminal();
             var imageBox = CreateFillingImageBox();
-            imageBox.SetDynamicSvgContent(size => generator(new PdfSize(size.Width, size.Height)));
+            imageBox.SetSvgContent(size => generator(new PdfSize(size.Width, size.Height)));
         }
 
         /// <summary>
@@ -458,22 +460,17 @@ namespace PeachPDF.Layout
             CreateImageBox(new Dictionary<string, string> { ["src"] = src });
 
         /// <summary>
-        /// Creates a real, correctly-typed <see cref="CssBoxImage"/> child of the wrapped box - the
-        /// tag-dispatching <see cref="CssBox.CreateBox(HtmlTag, CssBox?)"/> overload (not the parent-first
-        /// one every other terminal here uses, which always constructs a plain <see cref="CssBox"/>
+        /// Creates a real, correctly-typed <c>CssBoxImage</c> child of the wrapped box - the
+        /// tag-dispatching <c>CssBox.CreateBox</c> overload (not the parent-first
+        /// one every other terminal here uses, which always constructs a plain <c>CssBox</c>
         /// regardless of tag name - so the resulting box actually reaches <c>FragmentContentPainters.For</c>'s
         /// <c>CssBoxImage =&gt; ImagePainter</c> arm and gets the intrinsic-sizing/image-content handling
-        /// only that concrete type implements. That overload doesn't call <see cref="CssBox.InheritStyle"/>
+        /// only that concrete type implements. That overload doesn't call <c>CssBox.InheritStyle</c>
         /// itself (the normal HTML parse path defers that to its own later whole-tree cascade pass, which
         /// a declaratively-built tree never runs), so this does it explicitly, matching
-        /// <see cref="CssPropertyFactory.CreateAnonymousBox"/>'s identical own call.
+        /// <c>CssPropertyFactory.CreateAnonymousBox</c>'s identical own call.
         /// </summary>
-        private CssBoxImage CreateImageBox(Dictionary<string, string>? attributes = null)
-        {
-            var image = (CssBoxImage)CssBox.CreateBox(new HtmlTag("img", true, attributes), box);
-            image.InheritStyle();
-            return image;
-        }
+        private DocumentNode CreateImageBox(Dictionary<string, string>? attributes = null) => box.AppendImage(attributes);
 
         /// <summary>
         /// A dynamic content box (<see cref="Image(Func{PdfSize,byte[]})"/>/<see cref="Svg(Func{PdfSize,string})"/>)
@@ -483,33 +480,25 @@ namespace PeachPDF.Layout
         /// sizing the image call itself) - see <see cref="IContainer.Image(Func{PdfSize,byte[]})"/>'s own
         /// doc comment for the full size-resolution rule this depends on.
         /// </summary>
-        private CssBoxImage CreateFillingImageBox()
+        private DocumentNode CreateFillingImageBox()
         {
             var imageBox = CreateImageBox();
-            properties.Set(imageBox, "width", "100%");
-            properties.Set(imageBox, "height", "100%");
+            imageBox.SetStyle("width", "100%");
+            imageBox.SetStyle("height", "100%");
             return imageBox;
         }
 
         private Image DecodeRasterBytes(byte[] bytes) =>
-            properties.RenderContext.ImageFromStream(new MemoryStream(bytes));
+            box.RenderContext.ImageFromStream(new MemoryStream(bytes));
 
-        private SvgDocument DecodeSvgMarkup(string svgMarkup) =>
-            SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(svgMarkup)), properties.RenderContext);
+        private SvgImage DecodeSvgMarkup(string svgMarkup) => SvgImage.Parse(svgMarkup, box.RenderContext);
 
         /// <summary>
-        /// Decodes raw SVG markup bytes - <see cref="StreamReader"/> with BOM detection (not
-        /// <see cref="Encoding.UTF8"/>.<see cref="Encoding.GetString(byte[])"/> directly), so a leading
-        /// UTF-8 BOM - common in SVG files saved by many editors - is stripped rather than surviving into
-        /// the decoded string as a literal U+FEFF character, which <see cref="XElement.Parse(string)"/>
-        /// rejects outright ("Data at the root level is invalid"). Same fix as <see cref="PdfImage.Resolve"/>'s
-        /// own BOM handling.
+        /// Decodes raw SVG markup bytes with BOM detection (not <see cref="Encoding.UTF8"/>.<see cref="Encoding.GetString(byte[])"/> directly), so a
+        /// leading UTF-8 BOM - common in SVG files saved by many editors - is stripped rather than surviving into the decoded string as a literal
+        /// U+FEFF character, which the XML parser rejects outright. Same fix as <see cref="PdfImage.Resolve"/>'s own BOM handling.
         /// </summary>
-        private SvgDocument DecodeSvgMarkup(byte[] svgBytes)
-        {
-            using var reader = new StreamReader(new MemoryStream(svgBytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            return DecodeSvgMarkup(reader.ReadToEnd());
-        }
+        private SvgImage DecodeSvgMarkup(byte[] svgBytes) => SvgImage.Parse(svgBytes, box.RenderContext);
 
         public void Html(string html, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null)
         {
@@ -550,124 +539,16 @@ namespace PeachPDF.Layout
         /// </summary>
         private void SpliceHtmlFragment(string html, PeachPdfCssContent? stylesheet, Action<SlotContext, IContainer>? onSlot)
         {
-            var wrapper = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(wrapper, "display", "block");
-
-            var (fragmentRoot, fragmentShells) = BuildFragmentTree(html, stylesheet);
-
-            // Must run before slot processing: a slot's replacement content is built via ordinary
-            // ContainerBuilder calls afterward, and those boxes must NOT be flagged - only the fragment's
-            // own real-cascade-styled boxes should be (see CssBox.IsFragmentStyled's own remarks).
-            MarkFragmentStyled(fragmentRoot);
-
-            ProcessSlots(fragmentRoot, onSlot);
-
-            wrapper.SetAllBoxes(fragmentRoot);
-
-            // A shell that was a top-level node of the fragment still names the discarded root as its parent.
-            foreach (var shell in fragmentShells)
-            {
-                if (ReferenceEquals(shell.ParentBox, fragmentRoot)) shell.RetargetShellParent(wrapper);
-            }
-        }
-
-        private (CssBox Root, List<CssBox> DisplayContentsShells) BuildFragmentTree(string html, PeachPdfCssContent? stylesheet)
-        {
-            var built = BuildFragmentTreeAsync(html, stylesheet).GetAwaiter().GetResult();
-            properties.DisplayContentsShells.AddRange(built.DisplayContentsShells);
-            return built;
-        }
-
-        private async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> BuildFragmentTreeAsync(string html, PeachPdfCssContent? stylesheet)
-        {
-            var renderContext = properties.RenderContext;
-
-            // Cloned so this fragment's own <style> tag collection (DomParser.GenerateFragmentCssTree's own
-            // CascadeParseStyles call) never mutates a caller-shared PeachPdfCssContent instance, or the
-            // adapter's cached UA-default CssData.
-            var cssData = (stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(renderContext)).Clone();
-
-            var cssParser = new CssParser(renderContext, htmlContainer: null);
-            var domParser = new DomParser(cssParser);
-            return await domParser.GenerateFragmentCssTree(html, renderContext, cssData);
-        }
-
-        private static void MarkFragmentStyled(CssBox box)
-        {
-            box.IsFragmentStyled = true;
-            foreach (var child in box.Boxes)
-                MarkFragmentStyled(child);
-        }
-
-        /// <summary>
-        /// Finds every &lt;slot&gt; element in <paramref name="fragmentRoot"/> and, when <paramref name="onSlot"/>
-        /// is non-null, invokes it once per slot (document order) with a new, empty <see cref="IContainer"/>
-        /// inserted immediately before that slot's own box. If the callback places any content
-        /// (<see cref="HasContent"/>), the original slot box (and its own fallback content) is discarded;
-        /// otherwise the empty replacement is discarded instead, leaving the slot's fallback content exactly
-        /// as authored - the same outcome as when <paramref name="onSlot"/> is null altogether.
-        /// </summary>
-        private void ProcessSlots(CssBox fragmentRoot, Action<SlotContext, IContainer>? onSlot)
-        {
-            var slotBoxes = new List<CssBox>();
-            CollectSlotBoxes(fragmentRoot, slotBoxes);
-
-            if (slotBoxes.Count == 0 || onSlot is null)
-                return;
-
-            foreach (var slotBox in slotBoxes)
-            {
-                // A <slot> nested inside an earlier sibling slot's own fallback content is still in this
-                // list (collection is a single up-front pass, before any slot is filled) even after that
-                // ancestor slot's own fill already detached the whole fallback subtree it lived in -
-                // invoking its callback at that point would fire real side effects for content that can
-                // never reach the final tree either way, so it's skipped instead.
-                if (!IsAttached(slotBox, fragmentRoot))
-                    continue;
-
-                var attributes = slotBox.HtmlTag?.Attributes is { } tagAttributes
-                    ? new Dictionary<string, string>(tagAttributes, StringComparer.OrdinalIgnoreCase)
-                    : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                var name = slotBox.HtmlTag?.TryGetAttribute("name", "") ?? "";
-                var slotContext = new SlotContext(name, attributes);
-
-                var parent = slotBox.ParentBox!;
-                var replacementWrapper = CssBox.CreateBox(parent, tag: null, before: slotBox);
-                var replacementContainer = new ContainerBuilder(replacementWrapper, properties);
-
-                onSlot(slotContext, replacementContainer);
-
-                if (replacementContainer.HasContent)
+            Func<HtmlFragmentSlot, DocumentNode, bool>? fillSlot = onSlot is null
+                ? null
+                : (slot, replacement) =>
                 {
-                    slotBox.ParentBox = null;
-                }
-                else
-                {
-                    replacementWrapper.ParentBox = null;
-                }
-            }
-        }
+                    var replacementContainer = new ContainerBuilder(replacement);
+                    onSlot(new SlotContext(slot.Name, new Dictionary<string, string>(slot.Attributes, StringComparer.OrdinalIgnoreCase)), replacementContainer);
+                    return replacementContainer.HasContent;
+                };
 
-        /// <summary>Whether <paramref name="box"/> can still reach <paramref name="root"/> by walking up its own <see cref="CssBox.ParentBox"/> chain - false once an ancestor has been detached (<see cref="ProcessSlots"/>'s own reachability guard).</summary>
-        private static bool IsAttached(CssBox box, CssBox root)
-        {
-            for (var current = box; current is not null; current = current.ParentBox)
-            {
-                if (ReferenceEquals(current, root))
-                    return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>Snapshots every &lt;slot&gt; box before any mutation, so later reparenting in <see cref="ProcessSlots"/> can't disturb this walk.</summary>
-        private static void CollectSlotBoxes(CssBox box, List<CssBox> result)
-        {
-            if (box.HtmlTag?.Name.Equals("slot", StringComparison.OrdinalIgnoreCase) == true)
-                result.Add(box);
-
-            foreach (var child in box.Boxes.ToArray())
-                CollectSlotBoxes(child, result);
+            box.AppendHtmlFragment(html, stylesheet?.StyleSheet, fillSlot);
         }
 
         public void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false)
@@ -680,8 +561,8 @@ namespace PeachPDF.Layout
                 throw new ArgumentException("A dashed line's thickness cannot be a percentage - border width has no percentage form.", nameof(thickness));
 
             MarkTerminal();
-            var line = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(line, "display", "block");
+            var line = box.AppendBlock();
+            line.SetStyle("display", "block");
 
             if (dashed)
             {
@@ -689,15 +570,15 @@ namespace PeachPDF.Layout
                 // its own) - drawn instead as a single dashed top border edge on a zero-height box, the
                 // same border-style machinery BordersDrawHandler already paints dotted/dashed borders
                 // through (see SetBorderEdge for the solid-border equivalent of this cascade shape).
-                properties.Set(line, "height", "0");
-                properties.Set(line, "border-top-width", thickness);
-                properties.Set(line, "border-top-style", "dashed");
-                properties.Set(line, "border-top-color", color ?? PdfColor.Black);
+                line.SetStyle("height", "0");
+                line.SetStyle("border-top-width", thickness);
+                line.SetStyle("border-top-style", "dashed");
+                line.SetStyle("border-top-color", color ?? PdfColor.Black);
             }
             else
             {
-                properties.Set(line, "height", thickness);
-                properties.Set(line, "background-color", color ?? PdfColor.Black);
+                line.SetStyle("height", thickness);
+                line.SetStyle("background-color", color ?? PdfColor.Black);
             }
         }
 
@@ -707,20 +588,20 @@ namespace PeachPDF.Layout
                 throw new ArgumentException("A dashed line's thickness cannot be a percentage - border width has no percentage form.", nameof(thickness));
 
             MarkTerminal();
-            var line = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(line, "display", "block");
+            var line = box.AppendBlock();
+            line.SetStyle("display", "block");
 
             if (dashed)
             {
-                properties.Set(line, "width", "0");
-                properties.Set(line, "border-left-width", thickness);
-                properties.Set(line, "border-left-style", "dashed");
-                properties.Set(line, "border-left-color", color ?? PdfColor.Black);
+                line.SetStyle("width", "0");
+                line.SetStyle("border-left-width", thickness);
+                line.SetStyle("border-left-style", "dashed");
+                line.SetStyle("border-left-color", color ?? PdfColor.Black);
             }
             else
             {
-                properties.Set(line, "width", thickness);
-                properties.Set(line, "background-color", color ?? PdfColor.Black);
+                line.SetStyle("width", thickness);
+                line.SetStyle("background-color", color ?? PdfColor.Black);
             }
         }
 
@@ -728,29 +609,29 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(handler);
             MarkTerminal();
-            var rowBox = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(rowBox, "display", "flex");
-            properties.Set(rowBox, "flex-direction", "row");
-            handler(new RowDescriptorBuilder(rowBox, properties));
+            var rowBox = box.AppendBlock();
+            rowBox.SetStyle("display", "flex");
+            rowBox.SetStyle("flex-direction", "row");
+            handler(new RowDescriptorBuilder(rowBox));
         }
 
         public void Column(Action<IColumnDescriptor> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
             MarkTerminal();
-            var columnBox = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(columnBox, "display", "flex");
-            properties.Set(columnBox, "flex-direction", "column");
-            handler(new ColumnDescriptorBuilder(columnBox, properties));
+            var columnBox = box.AppendBlock();
+            columnBox.SetStyle("display", "flex");
+            columnBox.SetStyle("flex-direction", "column");
+            handler(new ColumnDescriptorBuilder(columnBox));
         }
 
         public void Table(Action<ITableDescriptor> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
             MarkTerminal();
-            var tableBox = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(tableBox, "display", "table");
-            handler(new TableDescriptorBuilder(tableBox, properties));
+            var tableBox = box.AppendBlock();
+            tableBox.SetStyle("display", "table");
+            handler(new TableDescriptorBuilder(tableBox));
         }
 
         public void OrderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = PdfListMarkerType.Decimal)
@@ -769,9 +650,9 @@ namespace PeachPDF.Layout
 
         private void BuildList(Action<IListDescriptor> handler, PdfListMarkerType markerType)
         {
-            var listBox = CssPropertyFactory.CreateAnonymousBox(box);
-            properties.Set(listBox, "display", "block");
-            properties.Set(listBox, "list-style-type", markerType.ToKeyword());
+            var listBox = box.AppendBlock();
+            listBox.SetStyle("display", "block");
+            listBox.SetStyle("list-style-type", markerType.ToKeyword());
 
             // list-style-position defaults to "outside" (CSS Lists Level 3's own initial value), which
             // needs real room to its left to draw into - real HTML gets this for free from the UA
@@ -779,9 +660,9 @@ namespace PeachPDF.Layout
             // stylesheet to inherit that from, so an outside marker would otherwise compute a negative,
             // off-page X (CssBoxMarker.PerformLayoutImp: left = owner.ClientLeft - width - margin) and
             // never actually be visible. Matches the same 40px browsers have used for decades.
-            properties.Set(listBox, "padding-left", PdfLength.Pixels(40));
+            listBox.SetStyle("padding-left", PdfLength.Pixels(40));
 
-            handler(new ListDescriptorBuilder(listBox, properties));
+            handler(new ListDescriptorBuilder(listBox));
         }
 
         public IContainer BeginPageNumberOfSection(string sectionId)
@@ -803,32 +684,28 @@ namespace PeachPDF.Layout
         public IContainer Class(string className)
         {
             ArgumentNullException.ThrowIfNull(className);
-            box.EnsureHtmlTag();
-            var existing = box.HtmlTag!.TryGetAttribute("class");
-            box.HtmlTag.SetAttribute("class", string.IsNullOrEmpty(existing) ? className : existing + " " + className);
+            box.AddClass(className);
             return this;
         }
 
         public IContainer Id(string id)
         {
             ArgumentNullException.ThrowIfNull(id);
-            box.EnsureHtmlTag();
-            box.HtmlTag!.SetAttribute("id", id);
+            box.SetAttribute("id", id);
             return this;
         }
 
         public IContainer Tag(string tagName)
         {
             ArgumentException.ThrowIfNullOrEmpty(tagName);
-            box.EnsureHtmlTag();
-            box.HtmlTag!.Name = tagName;
+            box.SetTagName(tagName);
             return this;
         }
 
         public IContainer PageName(string name)
         {
             ArgumentNullException.ThrowIfNull(name);
-            properties.Set(box, "page", name);
+            box.SetStyle("page", name);
             return this;
         }
     }

@@ -3,7 +3,7 @@ using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Rendering
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Everything that decides what an SVG color glyph's artwork looks like - size and position excluded, which the drawing's placement

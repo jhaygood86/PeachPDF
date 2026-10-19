@@ -1,25 +1,20 @@
 ﻿using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Core;
-using PeachDrawing.PDF.Engine.Drawing;
-using PeachDrawing.PDF.Engine.Rendering;
-using PeachBrackets.Svg;
 using System.Collections.Generic;
 
-namespace PeachPDF.Rendering
+namespace PeachBrackets.Svg
 {
     /// <summary>
-    /// Draws the SVG document of a font's glyph (OpenType SVG) through the SVG renderer, onto a graphics: the PDF one a
-    /// <c>PdfCanvas</c> wraps, or a raster surface.
+    /// Draws the SVG artwork of an OpenType SVG glyph (an emoji, say) through the SVG renderer, onto a canvas. A render context hands one out
+    /// from <c>CreateSvgGlyphPainter</c>, so text in a font with SVG glyphs draws as vector artwork rather than as the glyph's outline.
     /// </summary>
     /// <remarks>
-    /// A document is built once per glyph, palette and text colour (<see cref="SvgGlyphDocument"/>) and painted through
-    /// <see cref="SvgRenderer.RenderCachedInto"/>. On the PDF graphics that puts the artwork in a Form XObject shared by every occurrence at
-    /// one size, so a repeated glyph is in the PDF once and referenced; a graphics with no PDF document to own a form (the raster one) is
-    /// painted into directly, so a filter, a shadow or a flattened region sees the real glyph. A document that cannot be built is remembered
-    /// as such and the glyph is drawn as its outline.
+    /// A drawing is built once per glyph, palette and text colour and kept, so a repeated glyph is built once. On a canvas that writes a
+    /// document the artwork is shared by every occurrence at one size; on a bitmap canvas it is painted into directly, so a filter, a shadow or
+    /// a flattened region sees the real glyph. A glyph whose artwork cannot be built is remembered as such and drawn as its outline.
     /// </remarks>
-    internal sealed class PdfSvgGlyphPainter : ISvgGlyphPainter
+    public sealed class SvgGlyphPainter : ISvgGlyphPainter
     {
         private readonly Canvas _host;
         private readonly RenderContext _renderContext;
@@ -29,16 +24,17 @@ namespace PeachPDF.Rendering
 
         private readonly Dictionary<GlyphDocumentKey, SvgDocument?> _documents;
 
-        /// <summary>The graphics this draws on.</summary>
-        internal Canvas Host => _host;
-
-        internal PdfSvgGlyphPainter(Canvas host, RenderContext renderContext)
+        /// <summary>Makes a painter for glyphs drawn on <paramref name="host"/>.</summary>
+        /// <param name="host">the canvas the glyphs are drawn on</param>
+        /// <param name="renderContext">the context that resolves the fonts and colours the artwork uses</param>
+        public SvgGlyphPainter(Canvas host, RenderContext renderContext)
         {
             _host = host;
             _renderContext = renderContext;
             _documents = Documents.GetOrCreateValue(host.TileCacheOwner ?? renderContext);
         }
 
+        /// <inheritdoc />
         public bool TryPaint(Typeface typeface, ushort glyph, SvgGlyph svg, double fontSize, double originX, double baselineY,
             PaintColor foreground, int paletteIndex, IReadOnlyDictionary<int, PaintColor>? overrides)
         {

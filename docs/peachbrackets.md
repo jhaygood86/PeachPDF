@@ -129,6 +129,38 @@ paragraph that continues across a page break is one element. This is the seam a 
 `document.ClippedText` lists the words that were painted but cut by an ancestor's `overflow` clip, with how much of each showed. Read it after
 painting to learn whether content was silently lost, rather than discovering it in the output.
 
+## Building a document in code
+
+`HtmlDocument.LoadAsync` parses HTML. When your tree is not HTML - it comes from a template, a model or a fluent builder - build it directly
+instead, with the types in `PeachBrackets.Building`:
+
+```csharp
+var context = new DocumentBuildContext(renderContext);
+var page = context.CreatePage();
+
+var heading = page.Root.AppendBlock();
+heading.SetStyle("font-size", "24pt");
+heading.AppendText("Quarterly report");
+
+var sheet = await StyleSheet.ParseAsync(renderContext, ".note { color: #555 }");
+using var document = await HtmlDocument.CreateAsync(page, new HtmlDocumentOptions(), sheet);
+```
+
+A `DocumentNode` is one box of the tree. `AppendBlock`, `AppendText`, `AppendElement`, `AppendListItem`, `AppendImage` and
+`AppendHtmlFragment` add children; `SetStyle` writes a CSS property, `SetAttribute`/`AddClass` give a node the `id` and classes a style sheet
+selects on, and `SetImageContent`/`SetSvgContent` supply a decoded image, an `SvgImage`, or a function that produces either at the size the
+layout decides. `DeclarativePage.AddMarginBox` fills one of the page's margin boxes, and `Overrides` records which of the page size and margins
+your code fixed explicitly, so a style sheet's `@page` rule does not replace them. The result lays out and paints exactly like a loaded
+document.
+
+## Font and URI helpers for a host
+
+A `RenderContext` that wants the HTML engine's font behaviour (the CSS generic families, `system-ui`, `font-variation-settings`) needs three
+small things, which `FontDefaults` provides: `DefaultFamily` and `DefaultSizePoints`, `GenericFamilies` (each CSS keyword with the generic
+family it stands for) and `ToAxisSettings` (the encoded `font-variation-settings` as font axes). `DataUri.TryDecode` decodes a `data:` URI,
+percent-decoding before base64-decoding as the URL standard does, and `PeachBrackets.Svg.SvgGlyphPainter` is the `ISvgGlyphPainter` that paints
+SVG-in-OpenType glyphs onto the canvas a `RenderContext` hands out.
+
 ## Using it from PeachPDF
 
 You do not need this package to render HTML to PDF - [PeachPDF](getting-started.md) depends on it and drives it for you, writing the pages
