@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the PDF writer's public API, written the way a consumer of the NuGet package would use it: compose a file, draw on the
+    pages, read the bytes back. Nothing here may reference PeachPDF. The writer's internals are still exercised from PeachPDF.Tests
+    (which this project's package grants InternalsVisibleTo while PeachPDF is moved onto the public API).
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.MTP" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="xunit.analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared with the sibling test projects - see PeachDrawing.Tests.csproj's own precedent. -->
+    <Compile Include="..\PeachPDF.Tests\TestSupport\BundledFonts.cs" Link="TestSupport\BundledFonts.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

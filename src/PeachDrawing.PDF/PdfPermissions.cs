@@ -1,7 +1,6 @@
-// An internal mirror of PeachPDF's public option type of the same name: PeachPDF maps its PdfGenerateConfig onto these.
 #nullable enable
 
-namespace PeachDrawing.PDF.Engine
+namespace PeachDrawing.PDF
 {
     /// <summary>
     /// The operations a PDF reader may allow a person who opened an encrypted document with its
@@ -15,7 +14,7 @@ namespace PeachDrawing.PDF.Engine
     /// <see cref="None"/> and add what to allow.
     /// </remarks>
     [System.Flags]
-    internal enum PdfPermissions
+    public enum PdfPermissions
     {
         /// <summary>Nothing is allowed beyond opening and viewing the document.</summary>
         None = 0,

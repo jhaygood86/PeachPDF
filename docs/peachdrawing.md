@@ -50,7 +50,7 @@ Everything on the right of `.` above resolves inside `PeachDrawing`/`PeachDrawin
 installed on the machine (by name, under `FontSet.InstalledFamilyNames`), so `GetFont`/`GetFontForCodepoint`
 (both inherited from `RenderContext` - see [RenderContext: colors, fonts and paint
 objects](peachdrawing-core.md#rendercontext-colors-fonts-and-paint-objects)) work immediately with
-no setup. Unlike PeachPDF's own `PdfRenderContext`, it does **not** alias CSS generic family names
+no setup. Unlike PeachPDF's own `HtmlRenderContext`, it does **not** alias CSS generic family names
 (`Helvetica`→`Arial`, `system-ui`, math-font resolution) - a standalone caller names a real family directly,
 since there is no CSS cascade here to resolve a generic keyword against.
 
@@ -119,7 +119,7 @@ If you need a different rendering target entirely - a hardware-accelerated backe
 different image library - implement `Canvas`/`RenderContext` directly against `PeachDrawing.Core`
 rather than using this package. See [Implementing your own
 Canvas](peachdrawing-core.md#implementing-your-own-canvas); `RasterCanvas`'s own source is a
-complete, real second worked example alongside PeachPDF's `PdfCanvas`.
+complete, real second worked example alongside [PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfCanvas`.
 
 ## Licences
 

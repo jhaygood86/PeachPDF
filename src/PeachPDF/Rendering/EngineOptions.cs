@@ -13,7 +13,7 @@ namespace PeachPDF.Rendering
 
         public static PeachDrawing.PDF.Engine.PdfXConformance ToEngine(this PeachPDF.PdfXConformance value) => (PeachDrawing.PDF.Engine.PdfXConformance)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PdfVersion ToEngine(this PeachPDF.PdfVersion value) => (PeachDrawing.PDF.Engine.PdfVersion)(int)value;
+        public static PeachDrawing.PDF.PdfVersion ToEngine(this PeachPDF.PdfVersion value) => (PeachDrawing.PDF.PdfVersion)(int)value;
 
         public static PeachDrawing.PDF.Engine.ImageCompression ToEngine(this PeachPDF.ImageCompression value) => (PeachDrawing.PDF.Engine.ImageCompression)(int)value;
 
@@ -21,11 +21,11 @@ namespace PeachPDF.Rendering
 
         public static PeachDrawing.PDF.Engine.PageOrientation ToEngine(this PeachPDF.PageOrientation value) => (PeachDrawing.PDF.Engine.PageOrientation)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PdfPermissions ToEngine(this PeachPDF.PdfPermissions value) => (PeachDrawing.PDF.Engine.PdfPermissions)(int)value;
+        public static PeachDrawing.PDF.PdfPermissions ToEngine(this PeachPDF.PdfPermissions value) => (PeachDrawing.PDF.PdfPermissions)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PdfEncryptionOptions? ToEngine(this PeachPDF.PdfEncryptionOptions? value) => value is null
+        public static PeachDrawing.PDF.PdfEncryptionOptions? ToEngine(this PeachPDF.PdfEncryptionOptions? value) => value is null
             ? null
-            : new PeachDrawing.PDF.Engine.PdfEncryptionOptions
+            : new PeachDrawing.PDF.PdfEncryptionOptions
             {
                 UserPassword = value.UserPassword,
                 OwnerPassword = value.OwnerPassword,

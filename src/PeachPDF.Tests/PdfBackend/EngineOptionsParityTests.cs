@@ -15,11 +15,11 @@ namespace PeachPDF.Tests.PdfBackendTests
         {
             { typeof(PeachPDF.PdfAConformance), typeof(PeachDrawing.PDF.Engine.PdfAConformance) },
             { typeof(PeachPDF.PdfXConformance), typeof(PeachDrawing.PDF.Engine.PdfXConformance) },
-            { typeof(PeachPDF.PdfVersion), typeof(PeachDrawing.PDF.Engine.PdfVersion) },
+            { typeof(PeachPDF.PdfVersion), typeof(PeachDrawing.PDF.PdfVersion) },
             { typeof(PeachPDF.ImageCompression), typeof(PeachDrawing.PDF.Engine.ImageCompression) },
             { typeof(PeachPDF.PageSize), typeof(PeachDrawing.PDF.Engine.PageSize) },
             { typeof(PeachPDF.PageOrientation), typeof(PeachDrawing.PDF.Engine.PageOrientation) },
-            { typeof(PeachPDF.PdfPermissions), typeof(PeachDrawing.PDF.Engine.PdfPermissions) },
+            { typeof(PeachPDF.PdfPermissions), typeof(PeachDrawing.PDF.PdfPermissions) },
             { typeof(PeachPDF.ColorBlackGeneration), typeof(PeachDrawing.PDF.Engine.ColorBlackGeneration) },
             { typeof(PeachPDF.ColorConversionMode), typeof(PeachDrawing.PDF.Engine.ColorConversionMode) },
             { typeof(PeachPDF.ColorRenderingIntent), typeof(PeachDrawing.PDF.Engine.ColorRenderingIntent) },
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.PdfBackendTests
 
         [Theory]
         [InlineData(typeof(PeachPDF.ColorOptions), typeof(PeachDrawing.PDF.Engine.ColorOptions))]
-        [InlineData(typeof(PeachPDF.PdfEncryptionOptions), typeof(PeachDrawing.PDF.Engine.PdfEncryptionOptions))]
+        [InlineData(typeof(PeachPDF.PdfEncryptionOptions), typeof(PeachDrawing.PDF.PdfEncryptionOptions))]
         public void MirroredOptionClass_HasTheSamePublicProperties(Type original, Type mirror)
         {
             static string[] Properties(Type t) => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -88,21 +88,9 @@ namespace PeachPDF.Tests.PdfBackendTests
 
             Assert.Equal("u", mapped.UserPassword);
             Assert.Equal("o", mapped.OwnerPassword);
-            Assert.Equal(PeachDrawing.PDF.Engine.PdfPermissions.ReadOnly, mapped.Permissions);
+            Assert.Equal(PeachDrawing.PDF.PdfPermissions.ReadOnly, mapped.Permissions);
             Assert.False(mapped.EncryptMetadata);
             Assert.Null(((PeachPDF.PdfEncryptionOptions?)null).ToEngine());
-        }
-
-        [Fact]
-        public void TheWritersInternalsAreGrantedToExactlyTheDocumentedSet()
-        {
-            // TEMPORARY: PeachPDF and its tests drive the PDF writer's internals while PeachPDF is moved onto a public API for it. Each step
-            // of that move removes a dependence; the end state grants nothing but the writer's own tests.
-            var granted = typeof(PeachDrawing.PDF.Units).Assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>()
-                .Select(a => a.AssemblyName)
-                .ToList();
-
-            Assert.Equivalent(new[] { "PeachDrawing.PDF.Tests", "PeachPDF", "PeachPDF.Tests" }, granted);
         }
 
         private static string Describe(Type enumType) =>

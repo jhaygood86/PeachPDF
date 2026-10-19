@@ -29,7 +29,7 @@ namespace PeachDrawing.PDF
     /// <summary>
     /// Adapter for WinForms Graphics for core.
     /// </summary>
-    internal sealed class PdfCanvas : Canvas
+    public sealed class PdfCanvas : Canvas
     {
         /// <summary>
         /// The wrapped WinForms graphics object
@@ -51,8 +51,10 @@ namespace PeachDrawing.PDF
         /// </summary>
         private readonly Dictionary<InkCrossingKey, List<InkSpan>?> _inkCrossings = [];
 
+        /// <inheritdoc />
         public override double PixelsPerPoint { get; }
 
+        /// <inheritdoc />
         public override object? TileCacheOwner => _g.Owner;
 
         /// <summary>
@@ -83,7 +85,7 @@ namespace PeachDrawing.PDF
         /// <param name="g">the win forms graphics object to use</param>
         /// <param name="pixelsPerPoint">The number of pixels in each point</param>
         /// <param name="releaseGraphics">optional: if to release the graphics object on dispose (default - false)</param>
-        public PdfCanvas(RenderContext renderContext, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
+        internal PdfCanvas(RenderContext renderContext, PdfGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
             : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             ArgumentNullException.ThrowIfNull(g);
@@ -107,12 +109,14 @@ namespace PeachDrawing.PDF
         /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
         internal RenderContext RenderContext => _renderContext;
 
+        /// <inheritdoc />
         public override void PopClip()
         {
             _clipStack.Pop();
             _g.Restore();
         }
 
+        /// <inheritdoc />
         public override void PushClip(Rect rect)
         {
             _clipStack.Push(rect);
@@ -120,6 +124,7 @@ namespace PeachDrawing.PDF
             _g.IntersectClip(Units.ToPoints(rect, PixelsPerPoint));
         }
 
+        /// <inheritdoc />
         public override void PushClip(GraphicsPath path)
         {
             // No simple bounding rectangle for an arbitrary path, so keep the tracked clip bound
@@ -130,6 +135,7 @@ namespace PeachDrawing.PDF
             _g.IntersectClip(path);
         }
 
+        /// <inheritdoc />
         public override void PushClipExclude(Rect rect)
         { }
 
@@ -138,6 +144,7 @@ namespace PeachDrawing.PDF
         private readonly Stack<Matrix3x2> _transformStack = [];
         private Matrix3x2 _accumulated = Matrix3x2.Identity;
 
+        /// <inheritdoc />
         public override Matrix3x2 CurrentTransform => _accumulated;
 
         /// <summary>Seeds <see cref="CurrentTransform"/> for a freshly created tile - see <see cref="Canvas.CreateTile"/>'s
@@ -145,6 +152,7 @@ namespace PeachDrawing.PDF
         /// its own identity, so this has no effect on what actually gets drawn into it.</summary>
         internal void SeedTransform(Matrix3x2 requester) => _accumulated = requester;
 
+        /// <inheritdoc />
         public override (double X, double Y) TransformScale
         {
             get
@@ -155,6 +163,7 @@ namespace PeachDrawing.PDF
             }
         }
 
+        /// <inheritdoc />
         public override void PushTransform(Matrix3x2 matrix)
         {
             _transformStack.Push(_accumulated);
@@ -166,6 +175,7 @@ namespace PeachDrawing.PDF
                 matrix.M31 / PixelsPerPoint, matrix.M32 / PixelsPerPoint));
         }
 
+        /// <inheritdoc />
         public override void PopTransform()
         {
             if (_transformStack.Count > 0)
@@ -174,24 +184,29 @@ namespace PeachDrawing.PDF
             _g.Restore();
         }
 
+        /// <inheritdoc />
         public override void PushBlendMode(PaintBlendMode mode)
         {
             _g.Save();
             _g.SetBlendMode(mode.ToString());
         }
 
+        /// <inheritdoc />
         public override void PopBlendMode()
         {
             _g.Restore();
         }
 
         // Smoothing has no meaning in PDF output, so there is no state to remember or restore.
+        /// <inheritdoc />
         public override object SetAntiAliasSmoothingMode() => new object();
 
+        /// <inheritdoc />
         public override void ReturnPreviousSmoothingMode(object? prevMode)
         {
         }
 
+        /// <inheritdoc />
         public override Size MeasureString(string str, Font font, ShapeSettings? features = null)
         {
             var realFont = ((PdfCanvasFont)font).Font;
@@ -199,6 +214,7 @@ namespace PeachDrawing.PDF
             return Units.ToPixels(size, PixelsPerPoint);
         }
 
+        /// <inheritdoc />
         public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null)
         {
             // Real production fonts always resolve a typeface (PdfCanvasFont.Typeface never returns null);
@@ -206,12 +222,14 @@ namespace PeachDrawing.PDF
             return Shaper.Shape(font.Typeface!, str, features ?? ShapeSettings.Default).Glyphs.Count;
         }
 
+        /// <inheritdoc />
         public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth)
         {
             // there is no need for it - used for text selection
             throw new NotSupportedException();
         }
 
+        /// <inheritdoc />
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
 
@@ -269,6 +287,7 @@ namespace PeachDrawing.PDF
             }
         }
 
+        /// <inheritdoc />
         public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
         {
             if (InvisibleText)
@@ -286,10 +305,12 @@ namespace PeachDrawing.PDF
             _g.DrawGlyphsAtPositions(positioned, ((PdfCanvasFont)font).Font, xBrush);
         }
 
+        /// <inheritdoc />
         public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
             TextOutlineBuilder.Build(GetGraphicsPath(), font, PixelsPerPoint, str, baselineOrigin, letterSpacing,
                 features ?? ShapeSettings.Default);
 
+        /// <inheritdoc />
         public override IReadOnlyList<InkSpan>? GetInkCrossings(
             string str, Font font, PaintPoint origin, double bandTop, double bandBottom,
             double letterSpacing = 0, ShapeSettings? features = null)
@@ -355,11 +376,13 @@ namespace PeachDrawing.PDF
             TypefaceFont Font, string Text, double BandTop, double BandBottom, double LetterSpacing,
             ShapeSettings Features);
 
+        /// <inheritdoc />
         public override GraphicsPath GetGraphicsPath()
         {
             return new PdfGraphicsPath();
         }
 
+        /// <inheritdoc />
         public override (Canvas Graphics, Image Image)? CreateTile(double width, double height)
         {
             // PdfForm/PdfGraphics.FromForm() is real, working PDF engine infrastructure for drawing into
@@ -406,14 +429,18 @@ namespace PeachDrawing.PDF
             return (tileGraphics, new PdfCanvasImage(form));
         }
 
+        /// <inheritdoc />
         protected override bool SupportsLayerEffects => true;
 
+        /// <inheritdoc />
         protected override void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects) =>
             RasterLayerEffects.Apply(surface, effects);
 
+        /// <inheritdoc />
         public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) =>
             RasterSurfaceFactory.Create(_renderContext, PixelsPerPoint, layoutBounds, dpiOverride ?? _renderContext.RasterizationDpi, _renderContext.MaxRasterPixels, TransformScale, _accumulated);
 
+        /// <inheritdoc />
         public override bool FlattensTransparency =>
             _g.Owner is { } owner && owner.Options.FlattenTransparency &&
             (owner.Options.PdfAConformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A ||
@@ -421,9 +448,11 @@ namespace PeachDrawing.PDF
 
         private TransparencyProbe? _probe;
 
+        /// <inheritdoc />
         public override bool PaintRequiresTransparency(Action<Canvas> paint) =>
             (_probe ??= new TransparencyProbe(_renderContext, PixelsPerPoint)).Requires(paint);
 
+        /// <inheritdoc />
         public override void DrawRaster(RasterSurface surface)
         {
 
@@ -448,61 +477,72 @@ namespace PeachDrawing.PDF
             _g.DrawImage(RasterEmbedding.ToXImage(surface, asCmyk, richBlack), Units.ToPoints(surface.LayoutRect, PixelsPerPoint));
         }
 
+        /// <inheritdoc />
         public override void DrawImageMasked(Image image, Image maskImage, Rect destRect)
         {
             if (((PdfCanvasImage)image).Image is PdfForm imageForm && ((PdfCanvasImage)maskImage).Image is PdfForm maskForm)
                 _g.DrawImageMasked(imageForm, maskForm, Units.ToPoints(destRect, PixelsPerPoint));
         }
 
+        /// <inheritdoc />
         public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal)
         {
             if (((PdfCanvasImage)image).Image is PdfForm imageForm)
                 _g.DrawImageWithOpacity(imageForm, Units.ToPoints(destRect, PixelsPerPoint), opacity, blendMode.ToString());
         }
 
+        /// <inheritdoc />
         public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
         {
             if (((PdfCanvasImage)image).Image is PdfForm imageForm)
                 _g.DrawImageWithColorMatrix(imageForm, Units.ToPoints(destRect, PixelsPerPoint), matrix);
         }
 
+        /// <inheritdoc />
         public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false)
         {
             if (((PdfCanvasImage)image).Image is PdfForm imageForm && ((PdfCanvasImage)maskImage).Image is PdfForm maskForm)
                 _g.DrawImageAlphaMasked(imageForm, maskForm, Units.ToPoints(destRect, PixelsPerPoint), invert);
         }
 
+        /// <inheritdoc />
         public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
         {
             if (((PdfCanvasImage)top).Image is PdfForm topForm && ((PdfCanvasImage)bottom).Image is PdfForm bottomForm)
                 _g.DrawImageBlendedOver(topForm, bottomForm, Units.ToPoints(destRect, PixelsPerPoint), blendMode.ToString());
         }
 
+        /// <inheritdoc />
         public override void BeginMarkedContent(string structureType, int mcid)
         {
             _g.BeginMarkedContent(structureType, mcid);
         }
 
+        /// <inheritdoc />
         public override void EndMarkedContent()
         {
             _g.EndMarkedContent();
         }
 
+        /// <inheritdoc />
         public override void BeginArtifact()
         {
             _g.BeginArtifact();
         }
 
+        /// <inheritdoc />
         public override void BeginVariableText()
         {
             _g.BeginVariableText();
         }
 
+        /// <inheritdoc />
         public override void EndVariableText()
         {
             _g.EndVariableText();
         }
 
+        /// <inheritdoc />
         public override void Dispose()
         {
             _probe?.Dispose();
@@ -522,16 +562,19 @@ namespace PeachDrawing.PDF
 
         #region Delegate graphics methods
 
+        /// <inheritdoc />
         public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {
             _g.DrawLine(ToXPen(pen), x1 / PixelsPerPoint, y1 / PixelsPerPoint, x2 / PixelsPerPoint, y2 / PixelsPerPoint);
         }
 
+        /// <inheritdoc />
         public override void DrawRectangle(Pen pen, double x, double y, double width, double height)
         {
             _g.DrawRectangle(ToXPen(pen), x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
         }
 
+        /// <inheritdoc />
         public override void DrawRectangle(Brush brush, double x, double y, double width, double height)
         {
             if (TryPaintTurnedTiles(brush, new Rect(x, y, width, height), () => PushClip(new Rect(x, y, width, height))))
@@ -556,6 +599,7 @@ namespace PeachDrawing.PDF
             }
         }
 
+        /// <inheritdoc />
         public override void DrawImage(Image image, Rect destRect, Rect srcRect)
         {
             var naturalWidth = image.Width;
@@ -633,11 +677,13 @@ namespace PeachDrawing.PDF
                 naturalHeight * scaleY);
         }
 
+        /// <inheritdoc />
         public override void DrawImage(Image image, Rect destRect)
         {
             _g.DrawImage(((PdfCanvasImage)image).Image, Units.ToPoints(destRect, PixelsPerPoint));
         }
 
+        /// <inheritdoc />
         public override void DrawPath(Pen pen, GraphicsPath path)
         {
             var xPen = ToXPen(pen);
@@ -657,6 +703,7 @@ namespace PeachDrawing.PDF
             }
         }
 
+        /// <inheritdoc />
         public override void DrawPath(Brush brush, GraphicsPath path)
         {
             if (brush is TileBrush or HatchBrush && TryPaintTurnedTiles(brush, new PathMeasure(path).Bounds, () => PushClip(path)))
@@ -675,6 +722,7 @@ namespace PeachDrawing.PDF
             }
         }
 
+        /// <inheritdoc />
         public override void DrawPolygon(Brush brush, PaintPoint[] points)
         {
             if (points is { Length: > 0 })
