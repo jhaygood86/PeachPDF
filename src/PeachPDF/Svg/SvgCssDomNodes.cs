@@ -171,7 +171,14 @@ namespace PeachPDF.Svg
         /// </para>
         /// </summary>
         public static IReadOnlyDictionary<string, string?>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
+            => GetMatchedDeclarations(node, cssData, media, varContext, out _);
+
+        /// <summary>
+        /// The same declarations as the overload without <c>important</c>, also reporting the properties whose winning declaration is <c>!important</c>.
+        /// </summary>
+        public static IReadOnlyDictionary<string, string?>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext, out HashSet<string>? important)
         {
+            important = null;
             if (cssData is null) return null;
 
             // CSS property names are case-insensitive (unlike SVG selectors), so key case-insensitively.
@@ -180,9 +187,11 @@ namespace PeachPDF.Svg
             // Materialize once so both passes reuse the same matched/sorted list instead of re-querying.
             var rules = cssData.GetAuthorStyleRules(MediaQueryContext.TypeOnly(media), node).ToList();
 
+            HashSet<string>? importantNames = null;
             ApplyPass(importantPass: false);
             ApplyPass(importantPass: true);
 
+            important = importantNames;
             return result;
 
             void ApplyPass(bool importantPass)
@@ -219,6 +228,8 @@ namespace PeachPDF.Svg
                         // including overwriting a valid value with null when the winner is guaranteed-invalid,
                         // a revert/unset, or an initial with no known SVG default.
                         result[property.Name] = resolved;
+                        if (importantPass)
+                            (importantNames ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(property.Name);
                     }
                 }
             }

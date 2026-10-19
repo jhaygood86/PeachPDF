@@ -90,6 +90,12 @@ namespace PeachPDF.Svg
         public IReadOnlyDictionary<string, string?>? GetMatchedCssDeclarations() =>
             SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext);
 
+        public bool IsMatchedCssDeclarationImportant(string name)
+        {
+            SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext, out var important);
+            return important?.Contains(name) == true;
+        }
+
         public string? ResolveVar(string value) =>
             _cssData is null ? value : CssVarResolver.Resolve(new SvgCssBoxDomNode(_box, _svgRoot), value, _varContext);
 
