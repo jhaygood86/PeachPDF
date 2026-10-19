@@ -11,8 +11,8 @@ namespace PeachPDF.CSS
         /// <summary><c>none</c> or a <c>url()</c> reference: the grammar of <c>marker</c>, <c>marker-start</c>, <c>marker-mid</c> and <c>marker-end</c>.</summary>
         internal static readonly IValueConverter MarkerReference = Converters.Assign(Keywords.None, Keywords.None).Or(Converters.UrlConverter).OrGlobalValue();
 
-        /// <summary>A <c>&lt;length-percentage&gt;</c> or <c>auto</c>: the grammar of the SVG geometry properties <c>r</c>, <c>cx</c>, <c>cy</c>, <c>rx</c>, <c>ry</c>, <c>x</c> and <c>y</c>.</summary>
-        internal static readonly IValueConverter GeometryLength = Converters.AutoLengthOrPercentConverter.OrGlobalValue();
+        /// <summary>A <c>&lt;length-percentage&gt;</c> or <c>auto</c>: the grammar of the SVG geometry properties <c>r</c>, <c>cx</c>, <c>cy</c>, <c>rx</c>, <c>ry</c>, <c>x</c> and <c>y</c>. A bare number (<c>r: 10</c>) is the attribute's user-unit form, not a length, but a stylesheet takes it too.</summary>
+        internal static readonly IValueConverter GeometryLength = Converters.AutoLengthOrPercentConverter.Or(Converters.NumberConverter).OrGlobalValue();
 
         private readonly IValueConverter _converter;
 
