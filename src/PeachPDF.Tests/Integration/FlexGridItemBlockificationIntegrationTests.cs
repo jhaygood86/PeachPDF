@@ -475,24 +475,31 @@ namespace PeachPDF.Tests.Integration
                 Assert.True(firstRow > 45, $"first row grew to the scaled image: {firstRow}");
         }
 
-        // An svg with only one of width/height has a natural size in that axis alone (and no ratio to derive
-        // the other from), so each axis is decided on its own. Known deviation: Chrome gives the missing axis
-        // the 300x150px default (72 x 112.5pt for the width-only case below) instead of stretching it.
-        [Fact]
-        public async Task SvgImageWithOnlyAWidth_KeepsItsWidth_AndStretchesItsHeightInTheRow()
+        // An svg with only one of width/height (and no viewBox) has a size in that axis and no ratio, so the
+        // other axis takes the default object size, 300x150px, and neither stretches under `normal`.
+        [Theory]
+        [InlineData("grid-template-rows:80pt", 72, 112.5)]
+        [InlineData("", 72, 112.5)]
+        public async Task SvgWithOnlyAWidth_KeepsItsWidth_AndTakesTheDefaultHeight(string containerStyle, double width, double height)
         {
             const string widthOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
-            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                GridWithImage("grid-template-rows:80pt", $"<img id='img' src=\"{widthOnly}\" />")));
+            foreach (var item in new[]
+            {
+                $"<img id='img' src=\"{widthOnly}\" />",
+                "<svg id='img' width='96'><rect width='96' height='48'/></svg>"
+            })
+            {
+                var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(GridWithImage(containerStyle, item)));
 
-            var img = LayoutHarness.FindById(root, "img")!;
+                var img = LayoutHarness.FindById(root, "img")!;
 
-            Assert.Equal(72, img.ActualWidth, 1.0);
-            Assert.Equal(80, img.ActualHeight, 1.0);
+                Assert.Equal(width, img.ActualWidth, 1.0);
+                Assert.Equal(height, img.ActualHeight, 1.0);
+            }
         }
 
         [Fact]
-        public async Task SvgImageWithOnlyAHeight_FillsItsWidth_AndKeepsItsHeightInTheRow()
+        public async Task SvgWithOnlyAHeight_KeepsItsHeight_AndTakesTheDefaultWidth_OverflowingTheTrack()
         {
             const string heightOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
@@ -500,8 +507,23 @@ namespace PeachPDF.Tests.Integration
 
             var img = LayoutHarness.FindById(root, "img")!;
 
-            Assert.Equal(100, img.ActualWidth, 1.0);
-            Assert.True(img.ActualHeight < 60, $"natural height, not the 80pt row's: {img.ActualHeight}");
+            Assert.Equal(225, img.ActualWidth, 1.0);
+            Assert.Equal(36, img.ActualHeight, 1.0);
+        }
+
+        [Theory]
+        [InlineData("justify-self:stretch", 100, 112.5)]   // only the stretched axis fills
+        [InlineData("align-self:stretch", 72, 80)]
+        public async Task SvgWithOnlyAWidth_UnderAnExplicitStretch_FillsThatAxisOnly(string style, double width, double height)
+        {
+            const string widthOnly = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:80pt", $"<img id='img' style='{style}' src=\"{widthOnly}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(width, img.ActualWidth, 1.0);
+            Assert.Equal(height, img.ActualHeight, 1.0);
         }
 
         [Theory]
@@ -511,15 +533,91 @@ namespace PeachPDF.Tests.Integration
         public async Task ReplacedGridItem_WithAnExplicitBlockAxisStretch_FillsTheHeightAndKeepsItsRatioWidth(
             string containerStyle, string imgStyle)
         {
-            // 80pt tall at a 2:1 ratio would be 160pt wide, clamped to the 100pt track. Known deviation: Chrome
-            // lets it overflow to 160pt unless the page sets `max-width: 100%`, which gives 100pt as here.
+            // 80pt tall at a 2:1 ratio is 160pt wide: it overflows the 100pt track, as in a browser, unless
+            // the page sets `max-width: 100%` (next test).
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 GridWithImage("grid-template-rows:80pt; " + containerStyle, $"<img id='img' style='{imgStyle}' src=\"{RedSvg}\" />")));
 
             var img = LayoutHarness.FindById(root, "img")!;
 
-            Assert.Equal(100, img.ActualWidth, 1.0);
+            Assert.Equal(160, img.ActualWidth, 1.0);
             Assert.Equal(80, img.ActualHeight, 1.0);
+        }
+
+        // Inline-axis baseline (css-align-3 §9.3, horizontal writing mode), measured in Chrome with 200px tracks:
+        // the items sharing a column line their border boxes' start edges up at the largest start margin (a: 30,
+        // c: 30), a `last baseline` item sits at the end edge, and an item with no partner stays at its edge.
+        [Fact]
+        public async Task JustifyBaseline_LinesUpTheItemsOfAColumnAtTheirLargestStartMargin()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='g' style='display:grid; grid-template-columns:200pt 200pt; width:400pt'>" +
+                "<div id='a' style='justify-self:baseline; width:50pt; height:20pt'>a</div>" +
+                "<div id='b' style='justify-self:last baseline; width:80pt; height:20pt'>b</div>" +
+                "<div id='c' style='justify-self:first baseline; width:60pt; height:20pt; margin-left:30pt'>c</div>" +
+                "<div id='d' style='justify-self:start; width:60pt; height:20pt'>d</div></div>"));
+
+            var g = LayoutHarness.FindById(root, "g")!;
+            double X(string id) => LayoutHarness.FindById(root, id)!.Location.X - g.Location.X;
+
+            Assert.Equal(30, X("a"), 1.0);
+            Assert.Equal(30, X("c"), 1.0);
+            Assert.Equal(320, X("b"), 1.0);
+            Assert.Equal(200, X("d"), 1.0);
+        }
+
+        [Fact]
+        public async Task JustifyBaseline_ALoneItemStaysAtItsStartEdge()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='g' style='display:grid; grid-template-columns:200pt; width:400pt'>" +
+                "<div id='a' style='justify-self:baseline; width:50pt; height:20pt; margin-left:12pt'>a</div></div>"));
+
+            Assert.Equal(12, LayoutHarness.FindById(root, "a")!.Location.X - LayoutHarness.FindById(root, "g")!.Location.X, 1.0);
+        }
+
+        // A frame or video has the default object size, 300x150 CSS px, and keeps it in a grid under `normal`;
+        // a browser adds the iframe's 2px default border to that (228 x 115.5pt), which PeachPDF does not draw.
+        [Theory]
+        [InlineData("<iframe id='i'></iframe>", "", 225, 112.5)]
+        [InlineData("<iframe id='i'></iframe>", "grid-template-rows:80pt", 225, 112.5)]
+        [InlineData("<video id='i'></video>", "", 225, 112.5)]
+        [InlineData("<video id='i'></video>", "grid-template-rows:80pt", 225, 112.5)]
+        [InlineData("<iframe id='i' style='justify-self:stretch'></iframe>", "", 100, 112.5)]
+        public async Task FrameOrVideoGridItem_KeepsTheDefaultObjectSize(string item, string containerStyle, double width, double height)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(GridWithImage(containerStyle, item)));
+
+            var i = LayoutHarness.FindById(root, "i")!;
+
+            Assert.Equal(width, i.ActualWidth, 1.0);
+            Assert.Equal(height, i.ActualHeight, 1.0);
+        }
+
+        [Theory]
+        [InlineData("max-width:100%", 100)]    // resolves against the 100pt grid area, not the 300pt container
+        [InlineData("max-width:50%", 50)]
+        [InlineData("max-width:120pt", 120)]
+        public async Task StretchedReplacedGridItem_WithAMaxWidth_IsClampedToIt(string maxWidth, int expectedWidth)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("grid-template-rows:80pt", $"<img id='img' style='align-self:stretch; {maxWidth}' src=\"{RedSvg}\" />")));
+
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(expectedWidth, img.ActualWidth, 1.0);
+            Assert.Equal(80, img.ActualHeight, 1.0);
+        }
+
+        [Theory]
+        [InlineData("width:50%", 50)]     // of the 100pt grid area, not the 300pt container
+        [InlineData("width:100%", 100)]
+        public async Task GridItem_WithAPercentageWidth_ResolvesItAgainstItsGridArea(string width, int expectedWidth)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                GridWithImage("", $"<img id='img' style='{width}' src=\"{RedSvg}\" />")));
+
+            Assert.Equal(expectedWidth, LayoutHarness.FindById(root, "img")!.ActualWidth, 1.0);
         }
 
         [Fact]
@@ -537,7 +635,7 @@ namespace PeachPDF.Tests.Integration
 
         [Theory]
         [InlineData(30, 60)]    // 2:1 ratio from the stretched height: 30pt tall is 60pt wide
-        [InlineData(80, 100)]   // 80pt tall would be 160pt wide, clamped to the 100pt track
+        [InlineData(80, 160)]   // 80pt tall is 160pt wide: it overflows the 100pt track
         public async Task RasterImageGridItem_WithAnExplicitBlockAxisStretch_TakesItsWidthFromTheStretchedHeight(
             int rowHeight, int expectedWidth)
         {

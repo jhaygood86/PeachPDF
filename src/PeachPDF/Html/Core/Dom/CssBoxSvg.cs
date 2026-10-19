@@ -62,8 +62,8 @@ namespace PeachPDF.Html.Core.Dom
                 _wordsSizeMeasured = true;
             }
 
-            var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(_document);
-            CssLayoutEngine.MeasureIntrinsicSize(_svgWord, intrinsicWidth, intrinsicHeight);
+            var (intrinsicWidth, intrinsicHeight, hasRatio) = SvgIntrinsicSize.ResolveForBox(_document);
+            CssLayoutEngine.MeasureIntrinsicSize(_svgWord, intrinsicWidth, intrinsicHeight, hasRatio);
         }
 
         /// <summary>The laid-out HTML of <paramref name="foreignObject"/>, or null when it has none.</summary>

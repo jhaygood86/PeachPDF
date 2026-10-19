@@ -1208,7 +1208,10 @@ namespace PeachPDF.CSS
                 { Keywords.Stretch, JustifyItem.Stretch },
                 { Keywords.Normal, JustifyItem.Normal },
                 { Keywords.Left, JustifyItem.Left },
-                { Keywords.Right, JustifyItem.Right }
+                { Keywords.Right, JustifyItem.Right },
+                { Keywords.Baseline, JustifyItem.Baseline },
+                { "first baseline", JustifyItem.Baseline },
+                { "last baseline", JustifyItem.LastBaseline }
             }.Freeze();
 
         public static readonly KeywordMap<JustifyItem> JustifySelfKeywords =
@@ -1222,7 +1225,10 @@ namespace PeachPDF.CSS
                 { Keywords.Stretch, JustifyItem.Stretch },
                 { Keywords.Normal, JustifyItem.Normal },
                 { Keywords.Left, JustifyItem.Left },
-                { Keywords.Right, JustifyItem.Right }
+                { Keywords.Right, JustifyItem.Right },
+                { Keywords.Baseline, JustifyItem.Baseline },
+                { "first baseline", JustifyItem.Baseline },
+                { "last baseline", JustifyItem.LastBaseline }
             }.Freeze();
 
         public static readonly KeywordMap<ContainerType> ContainerTypes =

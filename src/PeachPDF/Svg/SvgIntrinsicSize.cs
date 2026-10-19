@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Core.Dom;
+
 namespace PeachPDF.Svg
 {
     /// <summary>
@@ -32,6 +34,29 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// <see cref="Resolve"/> for sizing a replaced element's box: a document with a size in one axis only
+        /// (a <c>width</c> and no <c>height</c>, or the reverse, and no <c>viewBox</c> to derive it from) takes
+        /// the default object size for the other axis, 300x150 CSS px, as CSS Images 3 §5.1 gives an object with
+        /// no size of its own. <c>HasRatio</c> is false for that case: nothing links its axes, so a box sized
+        /// along one must leave the other at its default rather than scale it.
+        /// </summary>
+        public static (double? Width, double? Height, bool HasRatio) ResolveForBox(SvgDocument? document)
+        {
+            var (width, height) = Resolve(document);
+
+            if (width is null || height is null)
+            {
+                if (width is not null) height = CssLayoutEngine.DefaultObjectHeight;
+                else if (height is not null) width = CssLayoutEngine.DefaultObjectWidth;
+            }
+
+            var hasRatio = document is not null
+                && (document.Width is > 0 && document.Height is > 0 || document.ViewBox is { Width: > 0, Height: > 0 });
+
+            return (width, height, hasRatio);
+        }
+
+        /// <summary>
         /// Whether <paramref name="document"/> has a natural size in the given axis, as opposed to only a
         /// preferred aspect ratio: its own <c>width</c>/<c>height</c> attribute, or the other one plus a
         /// <c>viewBox</c> to derive it from. A <c>viewBox</c>-only document has a ratio but no natural size
@@ -43,10 +68,8 @@ namespace PeachPDF.Svg
             if (document is null)
                 return false;
 
-            var own = horizontal ? document.Width : document.Height;
-            var other = horizontal ? document.Height : document.Width;
-
-            return own is > 0 || (other is > 0 && document.ViewBox is { Width: > 0, Height: > 0 });
+            // A size in either axis gives the other the default object size (see ResolveForBox).
+            return document.Width is > 0 || document.Height is > 0;
         }
     }
 }

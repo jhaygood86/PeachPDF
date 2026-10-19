@@ -160,8 +160,8 @@ namespace PeachPDF.Html.Core.Dom
 
             if (_svgDocument is not null)
             {
-                var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(_svgDocument);
-                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, intrinsicWidth, intrinsicHeight);
+                var (intrinsicWidth, intrinsicHeight, hasRatio) = SvgIntrinsicSize.ResolveForBox(_svgDocument);
+                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, intrinsicWidth, intrinsicHeight, hasRatio);
             }
             else
             {

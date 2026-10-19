@@ -157,16 +157,18 @@ namespace PeachPDF.Tests.Integration
         // its baseline no longer matched anything, and aligning the inline-block to it threw its text 214pt
         // below its line: drawn on no page. The stale line is not the box's baseline.
         [Theory]
-        [InlineData("display:grid;grid-template-columns:repeat(2,1fr);gap:2pt")]
-        [InlineData("display:flex")]
-        public async Task AnInlineBlockInAnEngineItem_IsDrawnOnceAtItsLine(string containerCss)
+        // A grid item's percentage width is of its grid area, so 120% of the half-width area is the 60% of the
+        // whole container the document was minimized with (the same document at 60% of the area double-draws).
+        [InlineData("display:grid;grid-template-columns:repeat(2,1fr);gap:2pt", "120%")]
+        [InlineData("display:flex", "60%")]
+        public async Task AnInlineBlockInAnEngineItem_IsDrawnOnceAtItsLine(string containerCss, string itemWidth)
         {
             // The review's minimized fuzz document (seed 226), verbatim and in Arial: the text widths decide
             // where the item's line wraps, and neither a simplified copy nor the bundled font (swept over page
             // height and item width) reached the stale line. The font-independent test of the rule is below.
             const string image = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
             var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/1.2 Arial}</style></head><body>" +
-                       $"<div style='{containerCss}'>z226_26 <div style='width:60%;border:1px dotted #333'>" +
+                       $"<div style='{containerCss}'>z226_26 <div style='width:{itemWidth};border:1px dotted #333'>" +
                        "<h3 style='line-height:0.6;margin:2pt 0 8pt;padding:3pt;border:1px solid #666;'>" +
                        $"<img style='width:39pt;height:47pt;background:#ccc;vertical-align:middle' src='{image}'></h3>" +
                        "<span style='vertical-align:super;font-size:26pt;'>z226_36 </span> " +

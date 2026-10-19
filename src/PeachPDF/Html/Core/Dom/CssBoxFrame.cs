@@ -72,7 +72,12 @@ namespace PeachPDF.Html.Core.Dom
                 _wordsSizeMeasured = true;
             }
 
-            CssLayoutEngine.MeasureImageSize(_imageWord);
+            // An iframe whose still image was not recognized has the default object size, 300x150 CSS px
+            // (HTML "Sizing of embedded content"), not the broken-image placeholder.
+            if (_imageWord.Image is null)
+                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, CssLayoutEngine.DefaultObjectWidth, CssLayoutEngine.DefaultObjectHeight, hasIntrinsicRatio: false);
+            else
+                CssLayoutEngine.MeasureImageSize(_imageWord);
 
             return ValueTask.CompletedTask;
         }
