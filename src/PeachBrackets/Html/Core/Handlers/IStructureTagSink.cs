@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
-namespace PeachBrackets.Html.Handlers
+namespace PeachBrackets.Tagging
 {
     /// <summary>
     /// What the fragment painter needs from a structure (tagged-PDF) recorder while it walks the page: open the structure element a
@@ -10,7 +10,7 @@ namespace PeachBrackets.Html.Handlers
     /// <c>PeachPDF.PdfFeatures.StructureTagBuilder</c> is the implementation that builds a PDF structure tree. Each <c>Open*</c> call returns a
     /// scope whose disposal closes what it opened.
     /// </summary>
-    internal interface IStructureTagSink
+    public interface IStructureTagSink
     {
         /// <summary>Opens a grouping element for <paramref name="node"/> that nests everything painted until the scope is disposed.</summary>
         IDisposable OpenGroupingElement(StructureNode node, string structureType);

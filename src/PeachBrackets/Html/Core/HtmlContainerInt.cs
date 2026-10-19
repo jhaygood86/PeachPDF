@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets.Tagging;
 using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.CounterStyles;
 using PeachPDF;
@@ -1275,7 +1276,7 @@ namespace PeachBrackets.Html
         /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is
         /// disabled and <c>CssBox.PaintImp</c>'s tagging wrapper is a no-op.
         /// </summary>
-        internal Handlers.IStructureTagSink? StructureTagBuilder { get; set; }
+        internal IStructureTagSink? StructureTagBuilder { get; set; }
 
         /// <summary>
         /// Orchestrates AcroForm field/widget bookkeeping during PDF generation. Set by

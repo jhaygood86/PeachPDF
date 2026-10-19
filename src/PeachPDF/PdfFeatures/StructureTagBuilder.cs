@@ -1,3 +1,4 @@
+using PeachBrackets.Tagging;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachBrackets.Html.Handlers;

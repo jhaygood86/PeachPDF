@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace PeachBrackets.Html.Handlers
+namespace PeachBrackets.Tagging
 {
     /// <summary>
     /// Identifies one element of the document to a structure (tagged-document) recorder, without exposing anything about it.
@@ -13,7 +13,7 @@ namespace PeachBrackets.Html.Handlers
     /// another page, say) it belongs under the structure element the first time made - so a node is a reference identity and nothing more.
     /// What the element is (its structure type, alt text) is decided by the document engine and passed along with each call.
     /// </remarks>
-    internal readonly struct StructureNode : IEquatable<StructureNode>
+    public readonly struct StructureNode : IEquatable<StructureNode>
     {
         private readonly CssBox _box;
 
@@ -21,7 +21,7 @@ namespace PeachBrackets.Html.Handlers
         internal StructureNode(CssBox box) => _box = box;
 
         /// <summary>Wraps a box as the node that identifies it.</summary>
-        public static implicit operator StructureNode(CssBox box) => new(box);
+        internal static StructureNode Of(CssBox box) => new(box);
 
         /// <summary>Whether <paramref name="other"/> identifies the same element.</summary>
         public bool Equals(StructureNode other) => ReferenceEquals(_box, other._box);
@@ -39,5 +39,5 @@ namespace PeachBrackets.Html.Handlers
     /// </summary>
     /// <param name="Node">the element</param>
     /// <param name="StructureType">the kind of structure element it maps to (a heading, a list, a section)</param>
-    internal readonly record struct PhantomAncestor(StructureNode Node, string StructureType);
+    public readonly record struct PhantomAncestor(StructureNode Node, string StructureType);
 }

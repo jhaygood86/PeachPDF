@@ -1,17 +1,18 @@
+using PeachBrackets.Tagging;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Handlers;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachBrackets.Html.Annotations
+namespace PeachBrackets.Annotations
 {
     /// <summary>
     /// A place in the laid-out document: a page and a vertical offset on it.
     /// </summary>
     /// <param name="PageIndex">the zero-based index of the page, in the order the pages were produced</param>
     /// <param name="Top">how far below the top edge of that page the position is, in points</param>
-    internal readonly record struct PagePosition(int PageIndex, double Top);
+    public readonly record struct PagePosition(int PageIndex, double Top);
 
     /// <summary>
     /// A clickable region of a page: the area a hyperlink covers, and where it leads.
@@ -21,7 +22,7 @@ namespace PeachBrackets.Html.Annotations
     /// laid out, so a consumer that writes a format with another convention (PDF's default user space runs y up from the
     /// bottom edge) converts once at its own boundary.
     /// </remarks>
-    internal sealed class PageLink
+    public sealed class PageLink
     {
         /// <summary>The zero-based index of the page the link is on.</summary>
         public required int PageIndex { get; init; }
@@ -55,7 +56,7 @@ namespace PeachBrackets.Html.Annotations
     /// One entry of the document's outline, from an element whose <c>bookmark-level</c> is not <c>none</c>
     /// (CSS Generated Content Module Level 3, §2).
     /// </summary>
-    internal sealed class Bookmark
+    public sealed class Bookmark
     {
         /// <summary>The nesting level, 1 or more. An entry nests under the nearest preceding entry of a shallower level.</summary>
         public required int Level { get; init; }
@@ -80,7 +81,7 @@ namespace PeachBrackets.Html.Annotations
     /// <remarks>
     /// Geometry follows the same convention as <see cref="PageLink"/>: points from the page's top-left corner, y down.
     /// </remarks>
-    internal sealed class PageFormField
+    public sealed class PageFormField
     {
         /// <summary>The zero-based index of the page the control is on.</summary>
         public required int PageIndex { get; init; }
@@ -116,7 +117,7 @@ namespace PeachBrackets.Html.Annotations
     /// <summary>
     /// What a reader of a paged rendering can click or navigate: the hyperlinks of each page and the document's outline.
     /// </summary>
-    internal sealed class DocumentAnnotations
+    public sealed class DocumentAnnotations
     {
         /// <summary>Every hyperlink that lands on a page, in document order (links within running elements follow the document's own).</summary>
         public required IReadOnlyList<PageLink> Links { get; init; }

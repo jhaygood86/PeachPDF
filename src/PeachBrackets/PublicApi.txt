@@ -1,0 +1,184 @@
+PeachBrackets.Annotations.Bookmark : sealed class
+  ctor()
+  property Boolean IsOpen { get; init; }
+  property Int32 Level { get; init; }
+  property PagePosition? Destination { get; init; }
+  property String Title { get; init; }
+  property String Uri { get; init; }
+PeachBrackets.Annotations.DocumentAnnotations : sealed class
+  ctor()
+  property IReadOnlyList<Bookmark> Bookmarks { get; init; }
+  property IReadOnlyList<PageFormField> FormFields { get; init; }
+  property IReadOnlyList<PageLink> Links { get; init; }
+PeachBrackets.Annotations.FormFieldAppearance : sealed class
+  method Double TextFontSizePt(Size sizePt, Boolean autoFontSize, Boolean isPlaceholder)
+  method Void PaintCheckbox(Canvas g, Size sizePt, Boolean isChecked)
+  method Void PaintRadio(Canvas g, Size sizePt, Boolean isSelected)
+  method Void PaintText(Canvas g, Size sizePt, String text, Boolean autoFontSize, Int32? combCells, Boolean isPlaceholder)
+  property Double PixelsPerPoint { get; }
+PeachBrackets.Annotations.FormFieldAttributes : struct
+  ctor(Boolean ReadOnly, Boolean NoExport, Boolean Required, Boolean Password, Int32? MaxLength, String Placeholder)
+  method Void Deconstruct(out Boolean ReadOnly, out Boolean NoExport, out Boolean Required, out Boolean Password, out Int32? MaxLength, out String Placeholder)
+  method virtual Boolean Equals(FormFieldAttributes other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean NoExport { get; init; }
+  property Boolean Password { get; init; }
+  property Boolean ReadOnly { get; init; }
+  property Boolean Required { get; init; }
+  property Int32? MaxLength { get; init; }
+  property String Placeholder { get; init; }
+  property static FormFieldAttributes None { get; }
+PeachBrackets.Annotations.FormFieldClassification : struct
+  field static FormFieldClassification None
+  property Boolean AutoFontSize { get; }
+  property Boolean Checked { get; }
+  property Boolean DoNotScroll { get; }
+  property Boolean PlaceholderShown { get; }
+  property FormFieldAttributes Attributes { get; }
+  property FormFieldKind Kind { get; }
+  property IReadOnlyList<FormFieldOption> Options { get; }
+  property Int32? Comb { get; }
+  property String Name { get; }
+  property String Value { get; }
+PeachBrackets.Annotations.FormFieldKind : enum Int32
+  Checkbox = 2
+  None = 0
+  Radio = 3
+  Select = 4
+  Text = 1
+PeachBrackets.Annotations.FormFieldOption : struct
+  ctor(String value, String label, Boolean selected)
+  property Boolean Selected { get; }
+  property String Label { get; }
+  property String Value { get; }
+PeachBrackets.Annotations.PageFormField : sealed class
+  ctor()
+  property FormFieldAppearance Appearance { get; init; }
+  property FormFieldClassification Classification { get; init; }
+  property Int32 PageIndex { get; init; }
+  property Matrix3x2? AppearanceTransform { get; init; }
+  property Rect Bounds { get; init; }
+  property Size ContentSize { get; init; }
+PeachBrackets.Annotations.PageLink : sealed class
+  ctor()
+  property Int32 PageIndex { get; init; }
+  property PagePosition? Destination { get; init; }
+  property PaintPoint[] Quad { get; init; }
+  property Rect Bounds { get; init; }
+  property String Anchor { get; init; }
+  property String Uri { get; init; }
+  property StructureNode? Source { get; init; }
+PeachBrackets.Annotations.PagePosition : struct
+  ctor(Int32 PageIndex, Double Top)
+  method Void Deconstruct(out Int32 PageIndex, out Double Top)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PagePosition other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Top { get; init; }
+  property Int32 PageIndex { get; init; }
+PeachBrackets.ClippedTextEntry : struct
+  ctor(String Text, Double DrawnWidth, Double VisibleWidth, Double DrawnHeight, Double VisibleHeight)
+  method Void Deconstruct(out String Text, out Double DrawnWidth, out Double VisibleWidth, out Double DrawnHeight, out Double VisibleHeight)
+  method virtual Boolean Equals(ClippedTextEntry other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double DrawnHeight { get; init; }
+  property Double DrawnWidth { get; init; }
+  property Double VisibleHeight { get; init; }
+  property Double VisibleWidth { get; init; }
+  property String Text { get; init; }
+PeachBrackets.ColorSchemePreference : enum Int32
+  Dark = 1
+  Light = 0
+PeachBrackets.DocumentPage : struct
+  ctor(Int32 Index, Double WidthPoints, Double HeightPoints)
+  method Void Deconstruct(out Int32 Index, out Double WidthPoints, out Double HeightPoints)
+  method virtual Boolean Equals(DocumentPage other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double HeightPoints { get; init; }
+  property Double WidthPoints { get; init; }
+  property Int32 Index { get; init; }
+PeachBrackets.HtmlDocument : sealed class
+  method Rect? GetElementBounds(String elementId)
+  method Task LayoutAsync(Canvas measuringCanvas)
+  method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
+  method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
+  method virtual Void Dispose()
+  property DocumentAnnotations Annotations { get; }
+  property HtmlDocumentMetadata Metadata { get; }
+  property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
+  property IReadOnlyList<DocumentPage> Pages { get; }
+  property IStructureTagSink StructureTagSink { get; set; }
+  property String Language { get; }
+PeachBrackets.HtmlDocumentMetadata : sealed class
+  ctor(String Title, String Author, String Subject, String Keywords, DateTime? Date, String Generator)
+  method HtmlDocumentMetadata <Clone>$()
+  method Void Deconstruct(out String Title, out String Author, out String Subject, out String Keywords, out DateTime? Date, out String Generator)
+  method virtual Boolean Equals(HtmlDocumentMetadata other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property DateTime? Date { get; init; }
+  property String Author { get; init; }
+  property String Generator { get; init; }
+  property String Keywords { get; init; }
+  property String Subject { get; init; }
+  property String Title { get; init; }
+PeachBrackets.HtmlDocumentOptions : sealed class
+  ctor()
+  method Void SetMargins(Double points)
+  property Boolean CollectFormFields { get; set; }
+  property Boolean IgnoreAuthorStyleSheets { get; set; }
+  property Boolean SnapBorderWidthsToCssPixels { get; set; }
+  property Boolean SnapBoxDecorationsToCssPixels { get; set; }
+  property ColorSchemePreference ColorScheme { get; set; }
+  property Double MarginBottomPoints { get; set; }
+  property Double MarginLeftPoints { get; set; }
+  property Double MarginRightPoints { get; set; }
+  property Double MarginTopPoints { get; set; }
+  property Double PageHeightPoints { get; set; }
+  property Double PageWidthPoints { get; set; }
+  property Double? AnimationProgress { get; set; }
+  property String DefaultLanguage { get; set; }
+  property String Media { get; set; }
+  property String UserStyleSheet { get; set; }
+PeachBrackets.Tagging.IStructureTagSink : interface
+  method abstract IDisposable OpenArtifact(Canvas g)
+  method abstract IDisposable OpenContentElement(Canvas g, StructureNode node, String structureType, String altText = null)
+  method abstract IDisposable OpenGroupingElement(StructureNode node, String structureType)
+  method abstract IDisposable OpenListItemBodyElement(StructureNode node)
+  method abstract IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors)
+  method abstract Void AttachMathMlSource(StructureNode node, String mathMlSource)
+  property Boolean IsInMarkedContent { get; }
+PeachBrackets.Tagging.PhantomAncestor : struct
+  ctor(StructureNode Node, String StructureType)
+  method Void Deconstruct(out StructureNode Node, out String StructureType)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PhantomAncestor other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property String StructureType { get; init; }
+  property StructureNode Node { get; init; }
+PeachBrackets.Tagging.StructureNode : struct
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(StructureNode other)
+  method virtual Int32 GetHashCode()
+PeachPDF.HtmlRenderErrorType : enum Int32
+  ContextMenu = 8
+  CssParsing = 1
+  General = 0
+  HtmlParsing = 2
+  Iframe = 7
+  Image = 3
+  KeyboardMouse = 6
+  Layout = 5
+  Paint = 4
+PeachPDF.HtmlRenderException : class
+  ctor(String message, HtmlRenderErrorType renderErrorType, Exception innerException = null)
+  property HtmlRenderErrorType RenderErrorType { get; }

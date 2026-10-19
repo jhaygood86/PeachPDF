@@ -14,6 +14,7 @@ using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachBrackets.Css;
+using PeachBrackets;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Entities;

@@ -26,6 +26,8 @@
       url: /peachdrawing.html
     - title: PeachDrawing.PDF
       url: /peachdrawing-pdf.html
+    - title: PeachBrackets
+      url: /peachbrackets.html
     - title: PeachImage
       url: /peachimage.html
     - title: Testing
@@ -48,6 +50,9 @@
     - title: PeachDrawing.PDF
       url: /api/PeachDrawing.PDF/
       prefix: /api/PeachDrawing.PDF/
+    - title: PeachBrackets
+      url: /api/PeachBrackets/
+      prefix: /api/PeachBrackets/
     - title: PeachDrawing.Text
       url: /api/PeachDrawing.Text/
       prefix: /api/PeachDrawing.Text/

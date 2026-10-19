@@ -1,3 +1,4 @@
+using PeachBrackets.Annotations;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Handlers;
 

@@ -3,25 +3,33 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Paint.Content;
 using System;
 
-namespace PeachBrackets.Html.Annotations
+namespace PeachBrackets.Annotations
 {
     /// <summary>
     /// Paints how a form control looks, onto any <see cref="Canvas"/>: the control's real resolved CSS border and background
-    /// (<see cref="FormFieldChrome"/>, shared with the page painter) and its real resolved font, color and padding, so it draws the way any
+    /// (shared with the page painter) and its real resolved font, color and padding, so it draws the way any
     /// other box's content would, including real font embedding for whatever glyphs its text needs. A consumer that makes controls
     /// interactive (a PDF writer making an AcroForm widget) draws each state it needs - the text, the checked and unchecked box - once,
     /// into whatever surface holds that state.
     /// </summary>
     /// <remarks>
-    /// All geometry is in the layout space <see cref="CssBox"/>'s own <c>Actual*</c> properties are in: the control's size in points
+    /// All geometry is in the layout space <c>CssBox</c>'s own <c>Actual*</c> properties are in: the control's size in points
     /// scaled up by <c>pixelsPerPoint</c>. Each paint call takes the size in points and does that scaling itself, then draws onto a canvas
     /// whose own pixels-per-point is the same, so the control's border, padding and font stay sized consistently with the rest of the
     /// box, including under <c>ShrinkToFit</c> or a non-default <c>PixelsPerInch</c>.
     /// </remarks>
-    internal sealed class FormFieldAppearance(CssBox box, double pixelsPerPoint)
+    public sealed class FormFieldAppearance
     {
+        private readonly CssBox box;
+
+        internal FormFieldAppearance(CssBox box, double pixelsPerPoint)
+        {
+            this.box = box;
+            PixelsPerPoint = pixelsPerPoint;
+        }
+
         /// <summary>The pixels per point the control was laid out with, which the canvas passed to the paint calls must use too.</summary>
-        public double PixelsPerPoint { get; } = pixelsPerPoint;
+        public double PixelsPerPoint { get; }
 
         private Rect LayoutRect(Size sizePt) => new(0, 0, sizePt.Width * PixelsPerPoint, sizePt.Height * PixelsPerPoint);
 
@@ -32,7 +40,7 @@ namespace PeachBrackets.Html.Annotations
             Math.Max(0, rect.Height - box.ActualBorderTopWidth - box.ActualBorderBottomWidth - box.ActualPaddingTop - box.ActualPaddingBottom));
 
         /// <summary>
-        /// The font a text or select appearance draws with: the box's own <see cref="CssBox.ActualFont"/> normally, or the same
+        /// The font a text or select appearance draws with: the box's own <c>CssBox.ActualFont</c> normally, or the same
         /// family, weight and style at a size fitted to the field's content-box height when
         /// <c>-peachpdf-pdf-form-field-auto-font-size</c> asked for it. A placeholder takes the independently cascaded
         /// <c>::placeholder</c> style.

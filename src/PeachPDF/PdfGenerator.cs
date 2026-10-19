@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets;
+using PeachBrackets.Annotations;
 using PeachPDF.Rendering;
 using PeachDrawing.Text;
 using PeachDrawing.PDF;

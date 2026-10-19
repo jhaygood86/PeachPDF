@@ -1,3 +1,4 @@
+using PeachBrackets.Tagging;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
