@@ -1352,6 +1352,9 @@ const string backgroundClipTextHtml = """
     h2 { font-size: 22pt; margin: 0.6em 0 0.2em;
          background: linear-gradient(135deg, #f59e0b, #ef4444);
          background-clip: text; -webkit-background-clip: text; color: transparent }
+    h3 { font-size: 22pt; margin: 0.2em 0 0.2em;
+         background: linear-gradient(to right, rgba(37, 99, 235, 0.15), #2563eb);
+         background-clip: text; -webkit-background-clip: text; color: transparent }
     p { font-size: 10.5pt; line-height: 1.5; max-width: 32em; color: #444 }
     p.note { font-size: 9pt; color: #777; font-style: italic }
     </style>
@@ -1359,11 +1362,14 @@ const string backgroundClipTextHtml = """
     <body>
     <h1>Revenue Growth</h1>
     <h2>Q4 Highlights</h2>
+    <h3>Fading in from the left</h3>
     <p>
       The gradient above is clipped to the exact shape of the glyphs themselves
       (<code>background-clip: text</code>) instead of painting across the whole heading&#8217;s box - the
       standard technique for gradient-filled headings, paired here with <code>color: transparent</code>
-      so only the background shows through the letterforms.
+      so only the background shows through the letterforms. The third heading&#8217;s gradient starts from a
+      translucent stop, so it fades in from the left (it follows transparent text, which once made a
+      translucent gradient like this vanish).
     </p>
     <p class="note">
       Unlike PeachPDF&#8217;s SVG gradient-text support, this paragraph and the headings above it all stay
