@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Svg
         {
             var markup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><style>text { text-decoration: overline wavy }</style><text x="10" y="50">Hi</text></svg>""";
             var root = XDocument.Parse(markup).Root!;
-            var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, css, "print", null), RenderContext);
             var text = (SvgTextElement)document.Children[0];
 

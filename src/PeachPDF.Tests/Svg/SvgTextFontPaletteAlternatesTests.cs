@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Svg
     {
         private static CssData Data(string css)
         {
-            var data = new CssData();
+            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(css));
             return data;
         }

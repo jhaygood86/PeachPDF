@@ -215,7 +215,7 @@ public class DocumentTreePseudoClassTests
                   + "</svg>";
 
         var root = XDocument.Parse(svg).Root!;
-        var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+        var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
         var rect = root.Descendants().Single(e => e.Name.LocalName == "rect");
         var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rect, root), cssData, "print");
 
@@ -248,7 +248,7 @@ public class DocumentTreePseudoClassTests
     /// </summary>
     private static bool Matches(ICssDomNode node, string selector)
     {
-        var cssData = new CssData();
+        var cssData = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
         cssData.Stylesheets.Add(CssParser.ParseStyleSheet($"{selector} {{ color: red; }}"));
         return cssData.GetAuthorStyleRules(MediaQueryContext.TypeOnly("print"), node).Any();
     }

@@ -205,7 +205,7 @@ namespace PeachPDF.Html.Core.Handlers
                     // elements (host-document CSS does not apply here) and cascade custom properties for
                     // var(), then match through the full CSS engine like inline SVG does.
                     var root = xdoc.Root;
-                    var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+                    var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), _htmlContainer.RenderContext);
 
                     // Honor the SVG's own @property registrations (initial-value/inherits/syntax) when
                     // resolving var() in its styling — the standalone analogue of the HTML cascade's registry.

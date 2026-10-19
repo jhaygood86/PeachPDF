@@ -13,7 +13,6 @@
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -25,7 +24,6 @@ using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
-using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -1278,7 +1276,7 @@ namespace PeachPDF.Html.Core
         /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is
         /// disabled and <c>CssBox.PaintImp</c>'s tagging wrapper is a no-op.
         /// </summary>
-        internal Handlers.StructureTagBuilder? StructureTagBuilder { get; set; }
+        internal Handlers.IStructureTagSink? StructureTagBuilder { get; set; }
 
         /// <summary>
         /// Orchestrates AcroForm field/widget bookkeeping during PDF generation. Set by
@@ -1287,7 +1285,7 @@ namespace PeachPDF.Html.Core
         /// interactive forms are disabled and both the form-field content painter and
         /// <c>PdfGenerator.HandleFormFields</c> are no-ops.
         /// </summary>
-        internal Handlers.FormFieldBuilder? FormFieldBuilder { get; set; }
+        internal bool InteractiveForms { get; set; }
 
         /// <summary>
         /// Init with optional document and stylesheet.
@@ -1693,7 +1691,7 @@ namespace PeachPDF.Html.Core
         private ContainerQuerySizes BuildContainerQuerySizes()
         {
             var byId = new Dictionary<uint, ContainerQueryContext>();
-            var pixelsPerPoint = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             void Walk(CssBox box)
             {
@@ -2271,7 +2269,7 @@ namespace PeachPDF.Html.Core
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
                 return tree;
 
-            var ppp = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var ppp = RenderContext?.LayoutUnitsPerPoint ?? 1.0;
             var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;

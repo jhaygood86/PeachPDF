@@ -14,7 +14,6 @@
 
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
@@ -89,7 +88,7 @@ namespace PeachPDF.Html.Core.Dom
             // layout coordinate space, which PixelsPerPoint (PdfGenerateConfig.PixelsPerInch / 72)
             // inflates relative to a true PDF point whenever PixelsPerInch != 72 - see
             // CssValueParser.PixelsPerPointOf's own doc comment (issue #814).
-            var pixelsPerPoint = (word.OwnerBox.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = word.OwnerBox.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             // Intrinsic sizes arrive in CSS-pixel space (a raster's device pixels / an SVG's user
             // units, both 1px = 1/96in per spec), while word.Width/Height are layout units (points).

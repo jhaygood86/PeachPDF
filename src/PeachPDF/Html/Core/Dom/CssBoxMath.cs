@@ -1,4 +1,3 @@
-using PeachPDF.PdfBackend;
 using PeachDrawing.Core;
 using PeachPDF.MathML;
 using System.Collections.Generic;
@@ -151,7 +150,7 @@ namespace PeachPDF.Html.Core.Dom
                 // img/svg's intrinsic-size override uses) plus the same percentage-of-containing-block
                 // handling ordinary CSS boxes get, not the full aspect-ratio-driven MeasureIntrinsicSize,
                 // since math content never stretches to fit.
-                var pixelsPerPoint = (HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                var pixelsPerPoint = HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
                 _mathWord.Width = ResolveAxis(new CssLength(Width), layout.InlineSize, ContainingBlock.Size.Width, pixelsPerPoint);
                 _mathWord.Height = ResolveAxis(new CssLength(Height), layout.Ascent + layout.Descent, ContainingBlock.Size.Height, pixelsPerPoint);
@@ -208,7 +207,7 @@ namespace PeachPDF.Html.Core.Dom
             // The root-relative units (rem/rex/rch/...) are the HTML root element's, found from this box; its size
             // is in the adapter's device-scaled measurement space, so it takes PixelsPerPoint to reach true points.
             _document.RootFonts = DerivedStyle;
-            _document.RootFontSizePt = GetRemHeight() * ((HtmlContainer.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0);
+            _document.RootFontSizePt = GetRemHeight() * (HtmlContainer.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
             _layout = MathLayoutEngine.Layout(_document, g);
 
             // The parser builds a real (generic) CssBox for every MathML child element so

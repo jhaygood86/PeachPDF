@@ -79,7 +79,7 @@ internal static class PdfATransparencyGuard
 /// both conformance families with one <c>catch</c> block. A plain <see cref="InvalidOperationException"/>
 /// is still the type external callers should catch (both subclasses work polymorphically as one).
 /// </summary>
-internal abstract class PdfConformanceException(string message) : InvalidOperationException(message);
+internal abstract class PdfConformanceException(string message) : PeachDrawing.Core.CanvasConstraintException(message);
 
 /// <summary>
 /// Thrown for any deliberate PDF/A conformance rejection raised deep in the paint pipeline - e.g.

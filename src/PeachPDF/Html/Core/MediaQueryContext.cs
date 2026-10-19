@@ -1,6 +1,5 @@
 #nullable enable
 
-using PeachPDF.PdfBackend;
 
 namespace PeachPDF.Html.Core
 {
@@ -53,7 +52,7 @@ namespace PeachPDF.Html.Core
             var size = container.PageSize;
             double? width = size.Width > 0 ? size.Width : null;
             double? height = size.Height > 0 ? size.Height : null;
-            var pixelsPerPoint = (container.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = container.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             return new MediaQueryContext(
                 string.IsNullOrEmpty(media) ? "all" : media!,

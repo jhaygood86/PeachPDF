@@ -55,5 +55,12 @@ namespace PeachDrawing.Core
         /// specific concrete image type and reading its native decoded form directly.
         /// </summary>
         public virtual PixelBuffer? GetPixels() => null;
+
+        /// <summary>
+        /// The Exif Orientation (1 to 8, 1 = upright) stored with the image, which its decoded pixels do not apply: the
+        /// consumer applies it when the document asks for it (CSS <c>image-orientation: from-image</c>). 1 for an image that
+        /// carries none or is not a decoded raster.
+        /// </summary>
+        public virtual int ExifOrientation => 1;
     }
 }

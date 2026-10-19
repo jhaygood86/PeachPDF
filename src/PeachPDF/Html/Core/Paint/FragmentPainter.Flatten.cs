@@ -1,4 +1,3 @@
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -74,10 +73,7 @@ namespace PeachPDF.Html.Core.Paint
 
         private bool OwnPaintNeedsTransparency(Canvas g, BoxFragment fragment)
         {
-            if (g is not ITransparencyProbeSource source)
-                return false;
-
-            return source.CreateTransparencyProbe().Requires(scratch =>
+            return g.PaintRequiresTransparency(scratch =>
                 new FragmentPainter(container) { _ownOnly = true, _taggingSuppressed = true }.PaintContent(scratch, fragment));
         }
 

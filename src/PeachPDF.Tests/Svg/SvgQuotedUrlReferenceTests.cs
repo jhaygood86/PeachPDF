@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Svg
                 + "<clipPath id=\"c\"><rect width=\"5\" height=\"5\"/></clipPath><mask id=\"m\"><rect width=\"5\" height=\"5\" fill=\"white\"/></mask></defs>"
                 + element + "</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
         }
 

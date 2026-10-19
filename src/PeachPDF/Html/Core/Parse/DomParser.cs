@@ -11,7 +11,6 @@
 // "The Art of War"
 
 using PeachPDF;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Animation;
@@ -19,7 +18,6 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -525,7 +523,7 @@ namespace PeachPDF.Html.Core.Parse
                 // Descend into @layer/@media/@supports/@container so an @font-face nested in a layer is
                 // still collected; per-stylesheet so each rule's src url() still resolves against this
                 // sheet's own BaseUri.
-                foreach (var fontRule in CssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
+                foreach (var fontRule in cssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
                 {
                     var fontFamilyName = CssValueParser.GetFontFaceFamilyName(fontRule.Family);
                     var fontFaceCandidates = CssValueParser.GetFontFacePropertyValue(fontRule.Source);
@@ -657,7 +655,7 @@ namespace PeachPDF.Html.Core.Parse
             // inside the previous page's true physical clip window, emitting a clipped-but-present
             // duplicate text run into that page's content stream (see MarginBoxRenderer.cs's own
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
-            var pixelsPerPoint = (htmlContainer.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = htmlContainer.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                 allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);

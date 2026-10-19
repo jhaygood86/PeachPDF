@@ -33,7 +33,7 @@ namespace PeachPDF.Html.Core.Paint.Content
             // Only when interactive forms are enabled AND the box actually resolves to a field kind -
             // otherwise this falls through to the generic path, preserving the flag-off static box
             // rendering byte-for-byte (see FormFieldFragmentPainter's own doc comment).
-            CssBoxFormField formField when formField.HtmlContainer?.FormFieldBuilder != null
+            CssBoxFormField formField when formField.HtmlContainer?.InteractiveForms == true
                 && FormFieldMapper.Classify(formField).Kind != FormFieldKind.None => FormFieldPainter,
             _ => null,
         };

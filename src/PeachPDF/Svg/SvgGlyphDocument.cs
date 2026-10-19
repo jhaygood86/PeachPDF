@@ -91,7 +91,7 @@ namespace PeachPDF.Svg
 
                 // The custom properties (--color0 ...) are on the root's style attribute, so the cascade has to run even when the
                 // document has no stylesheet of its own.
-                var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root)) ?? new CssData();
+                var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), renderContext) ?? new CssData(renderContext);
                 var valueParser = new CssValueParser(renderContext);
                 var registered = RegisteredProperty.BuildRegistry(cssData, valueParser);
                 CssVarResolver.VarContext? varContext = registered.Count > 0 ? new CssVarResolver.VarContext(registered, valueParser) : null;

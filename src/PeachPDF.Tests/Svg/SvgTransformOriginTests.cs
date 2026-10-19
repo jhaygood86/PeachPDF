@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Svg
         {
             var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" {rootAttributes}><style>#r {{ {rule} }}</style><rect id=\"r\" x=\"20\" y=\"10\" width=\"40\" height=\"20\" {attributes}/></svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext).Children.Single();
         }
 

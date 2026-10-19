@@ -1,0 +1,556 @@
+PeachPDF.ClipReport : sealed class
+  ctor()
+  property IReadOnlyList<ClippedWord> ClippedWords { get; }
+  property Int32 ClippedChars { get; }
+PeachPDF.ClippedWord : struct
+  ctor(String Text, Double DrawnWidth, Double VisibleWidth, Double DrawnHeight, Double VisibleHeight)
+  method Void Deconstruct(out String Text, out Double DrawnWidth, out Double VisibleWidth, out Double DrawnHeight, out Double VisibleHeight)
+  method virtual Boolean Equals(ClippedWord other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double DrawnHeight { get; init; }
+  property Double DrawnWidth { get; init; }
+  property Double KeptFraction { get; }
+  property Double VisibleHeight { get; init; }
+  property Double VisibleWidth { get; init; }
+  property String Text { get; init; }
+PeachPDF.ColorBlackGeneration : enum Int32
+  UseRichBlack = 1
+  UseTrueBlack = 0
+PeachPDF.ColorConversionMode : enum Int32
+  ConvertToOutputIntent = 1
+  ConvertToProfile = 3
+  GrayscaleViaK = 2
+  PreserveAsAuthored = 0
+PeachPDF.ColorOptions : sealed class
+  ctor()
+  property Boolean UseBlackPointCompensation { get; set; }
+  property Byte[] ConvertToProfile { get; set; }
+  property Byte[] FallbackCmykProfile { get; set; }
+  property Byte[] OutputIntentProfile { get; set; }
+  property ColorBlackGeneration BlackGeneration { get; set; }
+  property ColorConversionMode ConversionMode { get; set; }
+  property ColorRenderingIntent RenderingIntent { get; set; }
+  property String OutputIntentIdentifier { get; set; }
+PeachPDF.ColorRenderingIntent : enum Int32
+  AbsoluteColorimetric = 3
+  Perceptual = 0
+  RelativeColorimetric = 1
+  Saturation = 2
+PeachPDF.FacturXOptions : sealed class
+  ctor()
+  property Byte[] Xml { get; set; }
+  property FacturXProfile? Profile { get; set; }
+  property PdfAttachmentRelationship? Relationship { get; set; }
+  property String Description { get; set; }
+PeachPDF.FacturXProfile : enum Int32
+  Basic = 2
+  BasicWl = 1
+  En16931 = 3
+  Extended = 4
+  Minimum = 0
+  XRechnung = 5
+PeachPDF.HtmlRenderErrorType : enum Int32
+  ContextMenu = 8
+  CssParsing = 1
+  General = 0
+  HtmlParsing = 2
+  Iframe = 7
+  Image = 3
+  KeyboardMouse = 6
+  Layout = 5
+  Paint = 4
+PeachPDF.HtmlRenderException : class
+  ctor(String message, HtmlRenderErrorType renderErrorType, Exception innerException = null)
+  property HtmlRenderErrorType RenderErrorType { get; }
+PeachPDF.ImageCompression : enum Int32
+  Auto = 0
+  Lossless = 1
+  Lossy = 2
+PeachPDF.Layout.IColumnDescriptor : interface
+  method abstract IColumnDescriptor Spacing(PdfLength value)
+  method abstract IContainer Item()
+PeachPDF.Layout.IContainer : interface
+  method abstract IContainer AlignCenter()
+  method abstract IContainer AlignLeft()
+  method abstract IContainer AlignRight()
+  method abstract IContainer Background(PdfColor color)
+  method abstract IContainer BackgroundLinearGradient(Double angleDegrees, PdfColor[] stops)
+  method abstract IContainer BeginPageNumberOfSection(String sectionId)
+  method abstract IContainer Bookmark(String title, Int32 level = 1)
+  method abstract IContainer Border(PdfLength width, PdfColor? color = null)
+  method abstract IContainer BorderBottom(PdfLength width, PdfColor? color = null)
+  method abstract IContainer BorderColor(PdfColor color)
+  method abstract IContainer BorderHorizontal(PdfLength width, PdfColor? color = null)
+  method abstract IContainer BorderLeft(PdfLength width, PdfColor? color = null)
+  method abstract IContainer BorderLinearGradient(PdfLength width, Double angleDegrees, PdfColor[] stops)
+  method abstract IContainer BorderRight(PdfLength width, PdfColor? color = null)
+  method abstract IContainer BorderTop(PdfLength width, PdfColor? color = null)
+  method abstract IContainer BorderVertical(PdfLength width, PdfColor? color = null)
+  method abstract IContainer ClampLines(Int32 lines, String ellipsis = null)
+  method abstract IContainer Class(String className)
+  method abstract IContainer CornerRadius(PdfLength radius)
+  method abstract IContainer CornerRadiusBottomLeft(PdfLength radius)
+  method abstract IContainer CornerRadiusBottomRight(PdfLength radius)
+  method abstract IContainer CornerRadiusTopLeft(PdfLength radius)
+  method abstract IContainer CornerRadiusTopRight(PdfLength radius)
+  method abstract IContainer DefaultTextStyle(Action<ITextStyle> handler)
+  method abstract IContainer EndPageNumberOfSection(String sectionId)
+  method abstract IContainer Grow(Double ratio = 1)
+  method abstract IContainer Height(PdfLength value)
+  method abstract IContainer Hyperlink(String url)
+  method abstract IContainer Hyperlink(Uri url)
+  method abstract IContainer Id(String id)
+  method abstract IContainer Padding(PdfLength value)
+  method abstract IContainer PaddingBottom(PdfLength value)
+  method abstract IContainer PaddingHorizontal(PdfLength value)
+  method abstract IContainer PaddingLeft(PdfLength value)
+  method abstract IContainer PaddingRight(PdfLength value)
+  method abstract IContainer PaddingTop(PdfLength value)
+  method abstract IContainer PaddingVertical(PdfLength value)
+  method abstract IContainer PageName(String name)
+  method abstract IContainer ParagraphFirstLineIndentation(PdfLength value)
+  method abstract IContainer ParagraphSpacing(PdfLength value)
+  method abstract IContainer Shadow(PdfBoxShadow[] shadows)
+  method abstract IContainer Tag(String tagName)
+  method abstract IContainer Width(PdfLength value)
+  method abstract Void Column(Action<IColumnDescriptor> handler)
+  method abstract Void Html(Byte[] data, PeachPdfCssContent stylesheet = null, Action<SlotContext, IContainer> onSlot = null)
+  method abstract Void Html(Stream stream, PeachPdfCssContent stylesheet = null, Action<SlotContext, IContainer> onSlot = null)
+  method abstract Void Html(String html, PeachPdfCssContent stylesheet = null, Action<SlotContext, IContainer> onSlot = null)
+  method abstract Void Image(Byte[] data)
+  method abstract Void Image(Func<PdfSize, Byte[]> generator)
+  method abstract Void Image(PdfImage image)
+  method abstract Void Image(Stream stream)
+  method abstract Void Image(String filePath)
+  method abstract Void Image(Uri uri)
+  method abstract Void LineHorizontal(PdfLength thickness, PdfColor? color = null, Boolean dashed = False)
+  method abstract Void LineVertical(PdfLength thickness, PdfColor? color = null, Boolean dashed = False)
+  method abstract Void OrderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = Decimal)
+  method abstract Void Row(Action<IRowDescriptor> handler)
+  method abstract Void Svg(Byte[] data)
+  method abstract Void Svg(Func<PdfSize, String> generator)
+  method abstract Void Svg(Stream stream)
+  method abstract Void Svg(String svgMarkup)
+  method abstract Void Table(Action<ITableDescriptor> handler)
+  method abstract Void Text(Action<ITextSpanContainer> handler)
+  method abstract Void Text(String text)
+  method abstract Void UnorderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = Disc)
+PeachPDF.Layout.IDocumentBuilder : interface
+  method abstract Void Page(Action<IPageDescriptor> handler)
+  method abstract Void Stylesheet(PeachPdfCssContent content)
+PeachPDF.Layout.IListDescriptor : interface
+  method abstract IContainer Item()
+  method abstract IListDescriptor MarkerImage(Byte[] data)
+  method abstract IListDescriptor MarkerImage(Stream stream)
+  method abstract IListDescriptor MarkerImage(String filePath)
+  method abstract IListDescriptor MarkerImage(Uri uri)
+  method abstract IListDescriptor MarkerText(String text)
+  method abstract IListDescriptor Position(PdfListMarkerPosition position)
+PeachPDF.Layout.IPageDescriptor : interface
+  method abstract IPageDescriptor Background(PdfColor color)
+  method abstract IPageDescriptor DefaultTextStyle(Action<ITextStyle> handler)
+  method abstract IPageDescriptor Footer(Action<IContainer> handler)
+  method abstract IPageDescriptor Header(Action<IContainer> handler)
+  method abstract IPageDescriptor Margin(PdfLength value)
+  method abstract IPageDescriptor MarginBottom(PdfLength value)
+  method abstract IPageDescriptor MarginHorizontal(PdfLength value)
+  method abstract IPageDescriptor MarginLeft(PdfLength value)
+  method abstract IPageDescriptor MarginRight(PdfLength value)
+  method abstract IPageDescriptor MarginTop(PdfLength value)
+  method abstract IPageDescriptor MarginVertical(PdfLength value)
+  method abstract IPageDescriptor Orientation(PageOrientation orientation)
+  method abstract IPageDescriptor Size(PageSize size)
+  method abstract IPageDescriptor Size(PdfLength width, PdfLength height)
+  method abstract Void Content(Action<IContainer> handler)
+PeachPDF.Layout.IRowDescriptor : interface
+  method abstract IContainer Item()
+  method abstract IRowDescriptor Spacing(PdfLength value)
+PeachPDF.Layout.ITableColumnsDescriptor : interface
+  method abstract ITableColumnsDescriptor FixedColumn(PdfLength width)
+  method abstract ITableColumnsDescriptor RelativeColumn(Double weight = 1)
+PeachPDF.Layout.ITableDescriptor : interface
+  method abstract Void Columns(Action<ITableColumnsDescriptor> handler)
+  method abstract Void Footer(Action<ITableRowDescriptor> handler)
+  method abstract Void Header(Action<ITableRowDescriptor> handler)
+  method abstract Void Row(Action<ITableRowDescriptor> handler)
+PeachPDF.Layout.ITableRowDescriptor : interface
+  method abstract IContainer Cell(Int32 columnSpan = 1, Int32 rowSpan = 1)
+PeachPDF.Layout.ITextSpan : interface
+  method abstract ITextSpan DecorationColor(PdfColor color)
+  method abstract ITextSpan DecorationStyle(PdfTextDecorationStyle style)
+  method abstract ITextSpan DecorationThickness(PdfLength thickness)
+PeachPDF.Layout.ITextSpanContainer : interface
+  method abstract ITextSpan CurrentPageNumber()
+  method abstract ITextSpan PageNumberWithinSection(String sectionId)
+  method abstract ITextSpan Span(String text)
+  method abstract ITextSpan TotalPages()
+  method abstract ITextSpan TotalPagesWithinSection(String sectionId)
+  method abstract ITextSpanContainer Alignment(TextAlignment alignment)
+  method abstract Void Element(Action<IContainer> content)
+PeachPDF.Layout.ITextStyle : interface
+  method abstract ITextStyle BackgroundColor(PdfColor color)
+  method abstract ITextStyle Bold()
+  method abstract ITextStyle BreakAnywhere()
+  method abstract ITextStyle Direction(PdfTextDirection direction)
+  method abstract ITextStyle FontColor(PdfColor color)
+  method abstract ITextStyle FontFamily(String family)
+  method abstract ITextStyle FontFamily(String primary, String fallback)
+  method abstract ITextStyle FontFeature(String tag, Boolean enabled = True)
+  method abstract ITextStyle FontSize(PdfLength size)
+  method abstract ITextStyle FontWeight(Int32 weight)
+  method abstract ITextStyle Italic()
+  method abstract ITextStyle LetterSpacing(PdfLength spacing)
+  method abstract ITextStyle LineHeight(Double multiplier)
+  method abstract ITextStyle Overline()
+  method abstract ITextStyle Strikethrough()
+  method abstract ITextStyle Subscript()
+  method abstract ITextStyle Superscript()
+  method abstract ITextStyle Underline()
+  method abstract ITextStyle WordSpacing(PdfLength spacing)
+PeachPDF.Layout.PdfListMarkerPosition : enum Int32
+  Inside = 1
+  Outside = 0
+PeachPDF.Layout.PdfListMarkerType : enum Int32
+  ArabicIndic = 19
+  Armenian = 11
+  Bengali = 20
+  Cambodian = 21
+  Circle = 1
+  CjkDecimal = 22
+  CjkEarthlyBranch = 23
+  CjkHeavenlyStem = 24
+  Decimal = 4
+  DecimalLeadingZero = 5
+  Devanagari = 25
+  Disc = 0
+  DisclosureClosed = 27
+  DisclosureOpen = 26
+  EthiopicNumeric = 28
+  Georgian = 13
+  Gujarati = 29
+  Gurmukhi = 30
+  Hebrew = 14
+  Hiragana = 15
+  HiraganaIroha = 16
+  Kannada = 31
+  Katakana = 17
+  KatakanaIroha = 18
+  Lao = 32
+  LowerAlpha = 8
+  LowerArmenian = 12
+  LowerGreek = 10
+  LowerRoman = 6
+  Malayalam = 33
+  Mongolian = 34
+  Myanmar = 35
+  None = 3
+  Oriya = 36
+  Persian = 37
+  Square = 2
+  Tamil = 38
+  Telugu = 39
+  Thai = 40
+  Tibetan = 41
+  UpperAlpha = 9
+  UpperRoman = 7
+PeachPDF.Layout.PdfTextDecorationStyle : enum Int32
+  Dashed = 3
+  Dotted = 2
+  Double = 1
+  Solid = 0
+  Wavy = 4
+PeachPDF.Layout.PdfTextDirection : enum Int32
+  Auto = 2
+  Ltr = 0
+  Rtl = 1
+PeachPDF.Layout.SlotContext : sealed class
+  property IReadOnlyDictionary<String, String> Attributes { get; }
+  property String Name { get; }
+PeachPDF.Layout.TextAlignment : enum Int32
+  Center = 1
+  End = 5
+  Justify = 3
+  Left = 0
+  Right = 2
+  Start = 4
+PeachPDF.Network.DataUriNetworkLoader : class
+  ctor()
+  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<String> GetPrimaryContents()
+  property RUri BaseUri { get; }
+PeachPDF.Network.FileUriNetworkLoader : class
+  ctor()
+  ctor(String primaryFilePath)
+  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<String> GetPrimaryContents()
+  property RUri BaseUri { get; }
+PeachPDF.Network.HttpClientNetworkLoader : class
+  ctor(HttpClient httpClient, String primaryContentsUri)
+  ctor(HttpClient httpClient, Uri primaryContentsUri)
+  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<String> GetPrimaryContents()
+  property RUri BaseUri { get; }
+PeachPDF.Network.MimeKitNetworkLoader : class
+  ctor(Stream stream)
+  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<String> GetPrimaryContents()
+  property RUri BaseUri { get; }
+PeachPDF.Network.RNetworkLoader : abstract class
+  method abstract Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method abstract Task<String> GetPrimaryContents()
+  property RUri BaseUri { get; }
+PeachPDF.PageOrientation : enum Int32
+  Landscape = 1
+  Portrait = 0
+PeachPDF.PageSize : enum Int32
+  A0 = 1
+  A1 = 2
+  A2 = 3
+  A3 = 4
+  A4 = 5
+  A5 = 6
+  A6 = 19
+  B0 = 13
+  B1 = 14
+  B2 = 15
+  B3 = 16
+  B4 = 17
+  B5 = 18
+  Crown = 109
+  Demy = 111
+  DoubleDemy = 115
+  Elephant = 114
+  Executive = 102
+  Folio = 120
+  Foolscap = 101
+  GovernmentLetter = 103
+  LargePost = 110
+  Ledger = 106
+  Legal = 105
+  Letter = 104
+  Medium = 112
+  Post = 108
+  QuadDemy = 116
+  Quarto = 100
+  RA0 = 7
+  RA1 = 8
+  RA2 = 9
+  RA3 = 10
+  RA4 = 11
+  RA5 = 12
+  Royal = 113
+  STMT = 117
+  Size10x14 = 122
+  Statement = 121
+  Tabloid = 107
+  Undefined = 0
+PeachPDF.PdfAConformance : enum Int32
+  None = 0
+  PdfA1A = 2
+  PdfA1B = 1
+  PdfA2A = 5
+  PdfA2B = 3
+  PdfA2U = 4
+  PdfA3A = 8
+  PdfA3B = 6
+  PdfA3U = 7
+  PdfA4 = 9
+  PdfA4E = 10
+  PdfA4F = 11
+PeachPDF.PdfAttachment : sealed class
+  ctor()
+  property Byte[] Data { get; set; }
+  property DateTimeOffset? ModificationDate { get; set; }
+  property PdfAttachmentRelationship Relationship { get; set; }
+  property String Description { get; set; }
+  property String FileName { get; set; }
+  property String MimeType { get; set; }
+PeachPDF.PdfAttachmentRelationship : enum Int32
+  Alternative = 3
+  Data = 2
+  Source = 1
+  Supplement = 4
+  Unspecified = 0
+PeachPDF.PdfBoxShadow : struct
+  ctor(PdfColor color, PdfLength offsetX, PdfLength offsetY, PdfLength blur = null, PdfLength spread = null, Boolean inset = False)
+  property Boolean Inset { get; }
+  property PdfColor PaintColor { get; }
+  property PdfLength Blur { get; }
+  property PdfLength OffsetX { get; }
+  property PdfLength OffsetY { get; }
+  property PdfLength Spread { get; }
+PeachPDF.PdfColor : struct
+  method static PdfColor FromArgb(Byte a, Byte r, Byte g, Byte b)
+  method static PdfColor FromHex(String hex)
+  method static PdfColor FromRgb(Byte r, Byte g, Byte b)
+  method virtual String ToString()
+  property Byte A { get; }
+  property Byte B { get; }
+  property Byte G { get; }
+  property Byte R { get; }
+  property static PdfColor Black { get; }
+  property static PdfColor Blue { get; }
+  property static PdfColor Gray { get; }
+  property static PdfColor Green { get; }
+  property static PdfColor Red { get; }
+  property static PdfColor Transparent { get; }
+  property static PdfColor White { get; }
+PeachPDF.PdfColorScheme : enum Int32
+  Dark = 1
+  Light = 0
+PeachPDF.PdfDocumentMetadata : sealed class
+  ctor()
+  property DateTimeOffset? CreationDate { get; set; }
+  property ICollection<XElement> CustomXmpProperties { get; }
+  property String Author { get; set; }
+  property String Creator { get; set; }
+  property String Keywords { get; set; }
+  property String Subject { get; set; }
+  property String Title { get; set; }
+PeachPDF.PdfEncryptionOptions : sealed class
+  ctor()
+  method static PdfEncryptionOptions ReadOnly(String userPassword = null, String ownerPassword = null)
+  property Boolean EncryptMetadata { get; set; }
+  property PdfPermissions Permissions { get; set; }
+  property String OwnerPassword { get; set; }
+  property String UserPassword { get; set; }
+PeachPDF.PdfGenerateConfig : sealed class
+  ctor()
+  method Void SetMargins(Int32 value)
+  property Boolean AllowLocalFileAccess { get; set; }
+  property Boolean BrotliCompression { get; set; }
+  property Boolean CompressContentStreams { get; set; }
+  property Boolean DownscaleImages { get; set; }
+  property Boolean EnableInteractivePdfForms { get; set; }
+  property Boolean EnableTaggedPdf { get; set; }
+  property Boolean EnableXmpMetadata { get; set; }
+  property Boolean IgnoreAuthorStyleSheets { get; set; }
+  property Boolean JxlPassthrough { get; set; }
+  property Boolean PortableColorFilters { get; set; }
+  property Boolean RasterAntiAliasing { get; set; }
+  property Boolean ScaleToPageSize { get; set; }
+  property Boolean ShrinkToFit { get; set; }
+  property Boolean SnapBorderWidthsToCssPixels { get; set; }
+  property Boolean SnapBoxDecorationsToCssPixels { get; set; }
+  property Boolean TextStemDarkening { get; set; }
+  property ColorOptions ColorOptions { get; set; }
+  property Double ManualPageHeight { get; set; }
+  property Double ManualPageWidth { get; set; }
+  property Double MaximumDownscaleMultiplier { get; set; }
+  property Double MinContentWidth { get; set; }
+  property Double PixelsPerInch { get; set; }
+  property Double RasterizationDpi { get; set; }
+  property Double? AnimationProgress { get; set; }
+  property FacturXOptions FacturX { get; set; }
+  property ICollection<PdfAttachment> Attachments { get; }
+  property ImageCompression ImageCompression { get; set; }
+  property Int32 DownscaleQuality { get; set; }
+  property Int32 MarginBottom { get; set; }
+  property Int32 MarginLeft { get; set; }
+  property Int32 MarginRight { get; set; }
+  property Int32 MarginTop { get; set; }
+  property Int64 MaxRasterPixels { get; set; }
+  property PageOrientation PageOrientation { get; set; }
+  property PageSize PageSize { get; set; }
+  property PdfAConformance PdfAConformance { get; set; }
+  property PdfColorScheme PreferredColorScheme { get; set; }
+  property PdfDocumentMetadata Metadata { get; set; }
+  property PdfEncryptionOptions Encryption { get; set; }
+  property PdfVersion PdfVersion { get; set; }
+  property PdfXConformance PdfXConformance { get; set; }
+  property RNetworkLoader NetworkLoader { get; set; }
+  property String DefaultLanguage { get; set; }
+  property String Media { get; set; }
+  property TextHinting TextHinting { get; set; }
+  property TransparencyPolicy TransparencyPolicy { get; set; }
+PeachPDF.PdfGenerator : class
+  ctor()
+  method Task AddFontFromStream(Stream stream)
+  method Task AddFontFromStream(Stream stream, IReadOnlyList<RuneRange> unicodeRanges)
+  method Task AddPages(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig config = null)
+  method Task AddPdfPages(PeachPdfDocument document, String html, PageSize pageSize, Int32 margin = 20, PeachPdfCssContent cssData = null)
+  method Task AddPdfPages(PeachPdfDocument document, String html, PdfGenerateConfig config, PeachPdfCssContent cssData = null)
+  method Task<PeachPdfCssContent> ParseStyleSheet(ReadOnlyMemory<Char> stylesheet, Boolean combineWithDefault = True)
+  method Task<PeachPdfCssContent> ParseStyleSheet(String stylesheet, Boolean combineWithDefault = True)
+  method Task<PeachPdfDocument> CreateDocument(Action<IDocumentBuilder> handler, PdfGenerateConfig config = null)
+  method Task<PeachPdfDocument> GeneratePdf(String html, PageSize pageSize, Int32 margin = 20, PeachPdfCssContent cssData = null)
+  method Task<PeachPdfDocument> GeneratePdf(String html, PdfGenerateConfig config, PeachPdfCssContent cssData = null)
+  method Void AddFontFamilyMapping(String fromFamily, String toFamily)
+PeachPDF.PdfImage : sealed class
+  method static PdfImage FromBytes(Byte[] data)
+  method static PdfImage FromFile(String path)
+  method static PdfImage FromStream(Stream stream)
+PeachPDF.PdfLength : struct
+  ctor(Double value, PdfLengthUnit unit = Point)
+  method static PdfLength Centimeters(Double value)
+  method static PdfLength Em(Double value)
+  method static PdfLength Inches(Double value)
+  method static PdfLength Millimeters(Double value)
+  method static PdfLength Percent(Double value)
+  method static PdfLength Picas(Double value)
+  method static PdfLength Pixels(Double value)
+  method static PdfLength Points(Double value)
+  method static PdfLength Rem(Double value)
+  method virtual String ToString()
+  property Double Value { get; }
+  property PdfLengthUnit Unit { get; }
+  property static PdfLength Zero { get; }
+PeachPDF.PdfLengthUnit : enum Int32
+  Centimeter = 3
+  Em = 7
+  Inch = 2
+  Millimeter = 4
+  Percent = 6
+  Pica = 5
+  Pixel = 1
+  Point = 0
+  Rem = 8
+PeachPDF.PdfPermissions : enum Int32
+  All = 3900
+  AllowAccessibilityExtract = 512
+  AllowAnnotations = 32
+  AllowAssemble = 1024
+  AllowCopy = 16
+  AllowFillForms = 256
+  AllowHighQualityPrint = 2048
+  AllowModify = 8
+  AllowPrint = 4
+  None = 0
+  ReadOnly = 2580
+PeachPDF.PdfSize : struct
+  ctor(Double width, Double height)
+  method virtual String ToString()
+  property Double Height { get; }
+  property Double Width { get; }
+PeachPDF.PdfVersion : enum Int32
+  Pdf17 = 0
+  Pdf20 = 1
+PeachPDF.PdfXConformance : enum Int32
+  None = 0
+  X1a = 1
+  X3 = 2
+  X4 = 3
+  X6 = 4
+PeachPDF.PeachPdfCssContent : class
+  method Task AddStyleSheet(ReadOnlyMemory<Char> stylesheet)
+  method Task AddStyleSheet(String stylesheet)
+PeachPDF.PeachPdfDocument : class
+  method Void ConsolidateImages()
+  method Void Save(Stream stream)
+  property ClipReport ClipReport { get; }
+  property Int32 PageCount { get; }
+PeachPDF.RuneRange : struct
+  ctor(Rune Start, Rune End)
+  method Boolean Contains(Rune rune)
+  method Void Deconstruct(out Rune Start, out Rune End)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(RuneRange other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Rune End { get; init; }
+  property Rune Start { get; init; }
+PeachPDF.TransparencyPolicy : enum Int32
+  Flatten = 1
+  Reject = 0

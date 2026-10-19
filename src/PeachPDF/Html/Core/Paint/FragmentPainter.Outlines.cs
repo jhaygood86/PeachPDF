@@ -119,7 +119,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="outer">what <see cref="OpenOutlineScope"/> returned</param>
         /// <param name="builder">the tagged-PDF builder, or null when output is untagged</param>
         /// <param name="draw">false to only restore the enclosing scope - after a paint that failed</param>
-        private void CloseOutlineScope(Canvas g, OutlineScopeState? outer, StructureTagBuilder? builder, bool draw = true)
+        private void CloseOutlineScope(Canvas g, OutlineScopeState? outer, IStructureTagSink? builder, bool draw = true)
         {
             draw &= !_stopped;
 
@@ -143,7 +143,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Draws the outlines this scope has collected so far and empties it, ahead of the scope's
         /// positive <c>z-index</c> layers. Anything collected after this is drawn when the scope closes.
         /// </summary>
-        private void DrawScopeOutlinesSoFar(Canvas g, StructureTagBuilder? builder)
+        private void DrawScopeOutlinesSoFar(Canvas g, IStructureTagSink? builder)
         {
             if (_stopped)
                 return;
@@ -166,7 +166,7 @@ namespace PeachPDF.Html.Core.Paint
         /// is opened there: inside an artifact the rings already are one, and inside a content element
         /// they join its content, which is where an outline was always tagged before it was deferred.
         /// </remarks>
-        private static void DrawOutlines(Canvas g, List<DeferredOutline> outlines, StructureTagBuilder? builder)
+        private static void DrawOutlines(Canvas g, List<DeferredOutline> outlines, IStructureTagSink? builder)
         {
             if (outlines.Count == 0) return;
 

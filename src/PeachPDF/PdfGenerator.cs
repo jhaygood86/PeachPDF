@@ -15,10 +15,12 @@ using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Annotations;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.PdfFeatures;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using System;
@@ -32,6 +34,7 @@ using PeachPDF.PDF.Drawing;
 using PeachPDF.PDF.Advanced;
 using PeachPDF.PDF.Annotations;
 using System.Collections.Generic;
+using System.Numerics;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -976,7 +979,7 @@ namespace PeachPDF
             // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
             // it's not set, so this is the single point that gates the whole feature off by default.
             var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.RenderContext) : null;
-            container.HtmlContainerInt.FormFieldBuilder = formFieldBuilder;
+            container.HtmlContainerInt.InteractiveForms = formFieldBuilder != null;
 
             // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
             // declares one, else html's. Resolved during layout, since the fragment tree's own
@@ -1205,8 +1208,9 @@ namespace PeachPDF
 
                 if (applicableMargins.Count > 0)
                 {
+                    using var marginBoxCanvas = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
                     await MarginBoxRenderer.Render(
-                        g,
+                        marginBoxCanvas,
                         new Size(page.Width, page.Height),
                         mL,
                         mT,
@@ -1269,21 +1273,20 @@ namespace PeachPDF
             // StructureTagBuilder.Finish and HandleLinks's own tagging-aware section below).
             structureTagBuilder?.Finish();
 
-            // add web links and anchors. bookmarkBoxes rides along on the same full-tree walk
-            // GetLinks() already performs (DomUtils.GetAllLinkAndBookmarkBoxes), so building the PDF
-            // outline afterwards adds zero net full-tree traversals.
-            var bookmarkBoxes = new List<CssBox>();
-            HandleLinks(document.PdfDocument, container, fragmentainers, bookmarkBoxes, structureTagBuilder);
+            // The hyperlinks and the outline, worked out from the laid-out pages in terms of pages and points; the PDF
+            // annotations and outline entries are made from them below.
+            var annotations = DocumentAnnotationCollector.Collect(container.HtmlContainerInt, fragmentainers);
+            HandleLinks(document.PdfDocument, annotations, structureTagBuilder);
 
             if (formFieldBuilder != null)
             {
-                HandleFormFields(document.PdfDocument, container, fragmentainers, formFieldBuilder);
+                HandleFormFields(document.PdfDocument, annotations, formFieldBuilder);
             }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
-            // with no headings simply collects zero bookmark boxes above and adds no outline.
-            BookmarkOutlineBuilder.Build(document.PdfDocument, container, fragmentainers, bookmarkBoxes);
+            // with no headings simply collects zero bookmarks above and adds no outline.
+            BookmarkOutlineBuilder.Build(document.PdfDocument, annotations.Bookmarks);
         }
 
         #region Private/Protected methods
@@ -1466,7 +1469,7 @@ namespace PeachPDF
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
             var painter = new FragmentPainter(htmlContainer);
             var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
@@ -1481,7 +1484,7 @@ namespace PeachPDF
                 var cbWidth = MarginBoxRenderer.MarginAreaWidth(boxName, pageSize, marginLeft, marginRight);
                 var cbHeight = MarginBoxRenderer.MarginAreaHeight(boxName, pageSize, marginTop, marginBottom);
 
-                await MarginBoxRenderer.PaintBackgroundAndBorder(g, outerRect, pageSize, rule, pageStyle, remPt,
+                await MarginBoxRenderer.PaintBackgroundAndBorder(pdfCanvas, outerRect, pageSize, rule, pageStyle, remPt,
                     cbWidth, cbHeight, renderContext, htmlContainer, backgroundImageCache);
             }
 
@@ -1523,7 +1526,7 @@ namespace PeachPDF
         /// </summary>
         private static void PaintFootnoteArea(PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
 
             PaintFootnoteArea(pdfCanvas, renderContext, htmlContainer, footnoteArea);
@@ -1575,312 +1578,73 @@ namespace PeachPDF
                 : new CssValueParser(renderContext).GetActualColor(declaredColor);
 
         /// <summary>
-        /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.
-        /// <paramref name="bookmarkBoxes"/> collects every bookmark-candidate box found along the way
-        /// (see <see cref="Html.Core.Utils.DomUtils.GetAllLinkAndBookmarkBoxes"/>), for
-        /// <see cref="BookmarkOutlineBuilder"/> to consume afterwards without a second full-tree walk.
-        /// <paramref name="structureTagBuilder"/> is non-null only when tagged PDF output is enabled -
-        /// used to attach each created Link annotation's "/OBJR" back to its owning "/Link" structure
-        /// element (see the tagging-aware section below), completing the bidirectional PDF/UA
-        /// linkage between the annotation and the structure tree.
+        /// Writes the collected hyperlinks as PDF link annotations, either to an external URL or to another place in the document.
+        /// <paramref name="structureTagBuilder"/> is non-null only when tagged PDF output is enabled - used to attach each created
+        /// Link annotation's "/OBJR" back to its owning "/Link" structure element, completing the bidirectional PDF/UA linkage
+        /// between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, HtmlContainer container, IReadOnlyList<FragmentainerFragment> fragmentainers, List<CssBox> bookmarkBoxes, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfDocument document, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
         {
-            var inner = container.HtmlContainerInt;
-            var ppp = container.PixelsPerPoint;
-
-            var (slotToPage, maxMappedSlot) = PageAnchorResolver.BuildSlotToPageMap(fragmentainers);
-
-            // An anchor inside a skipped (content-empty) slot attributes to the next materialized
-            // page - the nearest place a reader can actually land. Shared by both link sources below
-            // (the main document tree and, per §5.1, css-gcpm-3 running-element content) so they can
-            // never disagree about which page an anchor lands on.
-            (int PageIndex, double TopPt)? ResolveAnchorTarget(string anchorId)
+            foreach (var link in annotations.Links)
             {
-                // href="#" (an empty fragment, commonly used as a JS-driven no-op link) reaches here
-                // as an empty anchorId - there is no element to target, so treat it the same as an
-                // anchor whose target simply wasn't found rather than let the elementId-not-null-or-empty
-                // guard inside GetElementRectangle throw.
-                if (anchorId.Length == 0) return null;
+                if (link.PageIndex >= document.Pages.Count)
+                    continue;
 
-                var anchorRect = container.GetElementRectangle(anchorId);
-                return anchorRect.HasValue
-                    ? PageAnchorResolver.ResolveRectToPage(inner, ppp, fragmentainers, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect.Value)
-                    : null;
-            }
+                var page = document.Pages[link.PageIndex];
 
-            foreach (var link in container.GetLinks(bookmarkBoxes))
-            {
-                // Link rects are true points (the public GetLinks wrapper divides by PixelsPerPoint
-                // and resolves relative hrefs against the document base URI); slot attribution runs
-                // on the internal-pixel shifted grid (content starts at MarginTop, not 0) - the
-                // historical raw Top/PageSize.Height attribution ignored that shift.
-                var firstSlot = Math.Max(inner.PageIndexOf(link.Rectangle.Top * ppp), 0);
-                for (var slot = firstSlot; inner.PageTopOf(slot) < link.Rectangle.Bottom * ppp; slot++)
+                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
+                var xRect = new Rect(link.Bounds.X, page.Height - (link.Bounds.Y + link.Bounds.Height), link.Bounds.Width, link.Bounds.Height);
+
+                PdfLinkAnnotation annotation;
+
+                if (link.Anchor is { } anchorId && link.Destination is { } destination)
                 {
-                    if (!slotToPage.TryGetValue(slot, out var pageIndex) || pageIndex >= document.Pages.Count)
-                        continue;
-
-                    // Page-local geometry in true points, matching the painted content's own per-page
-                    // margins - read off the fragmentainer itself (already corrected against this
-                    // page's materialized number, same as the paint loop reads - see
-                    // HtmlContainerInt.LayoutMarginBoxes and issue #148) rather than re-deriving it
-                    // from the geometry table directly, so this can never disagree with what was
-                    // actually painted. PDF rect y counts from the page bottom.
-                    var slotGeom = fragmentainers[pageIndex].Geometry;
-                    // ContentTopPt/ContentLeftPt (margin + the page box's own border/padding, issue
-                    // #1147), not just MarginTopPt/MarginLeftPt - a link annotation's rect must land
-                    // where the content it overlays is actually painted.
-                    var topPt = slotGeom.ContentTopPt + (link.Rectangle.Top * ppp - inner.PageTopOf(slot)) / ppp;
-                    var leftPt = slotGeom.ContentLeftPt + (link.Rectangle.Left * ppp - inner.MarginLeft) / ppp;
-                    // This page's own resolved height (already written into /MediaBox by the paint loop
-                    // above) - reading it directly here, rather than threading a second value through,
-                    // means this can never disagree with what was actually emitted for the page.
-                    var xRect = new Rect(
-                        leftPt,
-                        document.Pages[pageIndex].Height - (topPt + link.Rectangle.Height),
-                        link.Rectangle.Width,
-                        link.Rectangle.Height);
-
-                    // A link over an element a transform moved goes where it was drawn (css-transforms-1 "Transform Rendering"), which only
-                    // the painter knows: the bounding box of the drawn shape, and the shape itself as /QuadPoints when it is not that box.
-                    PaintPoint[]? quad = null;
-                    if (link.GeometryBox is { } geometryBox && (geometryBox.HtmlContainer ?? inner).Placements.TryGet(geometryBox, slot, out var placement))
-                    {
-                        var page = document.Pages[pageIndex];
-                        var frame = new PageFrame(slotGeom.ContentLeftPt, slotGeom.ContentTopPt, inner.MarginLeft, inner.MarginTop, ppp, page.Height);
-                        var local = new Rect(link.Rectangle.Left * ppp, link.Rectangle.Top * ppp - fragmentainers[pageIndex].LocalOriginY, link.Rectangle.Width * ppp, link.Rectangle.Height * ppp);
-
-                        // Not on the page at all (moved off it, or wholly behind the viewer): nothing drawn there to click.
-                        if (!AnnotationPlacement.TryPlaceLink(placement, local, frame, page, document.Version, out xRect, out quad))
-                            continue;
-                    }
-
-                    PdfLinkAnnotation annotation;
-
-                    if (link.IsAnchor)
-                    {
-                        // create link to another page in the document
-                        var target = ResolveAnchorTarget(link.AnchorId);
-                        if (target is not { } t) continue;
-
-                        // /FitH top fits page width and positions vertically at top - the "jump down
-                        // to this Y" behavior an anchor link destination actually wants; CreateFitVertically
-                        // would instead pass TopPt as /FitV's horizontal left parameter. TopPt itself is
-                        // top-down (0 at the page's own top margin, increasing downward, matching every
-                        // other rect this pass works with - see the xRect construction below), but /FitH's
-                        // own "top" parameter is PDF default user space, which is bottom-up (0 at the page's
-                        // bottom edge) - flipping against the TARGET page's own height is required (not the
-                        // current slot's - a link can jump between differently-sized pages), exactly like
-                        // the xRect construction below already does for the same reason.
-                        document.AddNamedDestination(link.AnchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[t.PageIndex].Height - t.TopPt));
-                        annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
-                    }
-                    else
-                    {
-                        // create link to URL
-                        annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), link.Href);
-                    }
-
-                    if (quad is not null)
-                        annotation.SetQuadPoints(quad);
-
-                    if (structureTagBuilder != null && link.SourceBox != null)
-                    {
-                        structureTagBuilder.LinkAnnotationToStructureElement(link.SourceBox, document.Pages[pageIndex], annotation);
-                    }
+                    // /FitH top fits page width and positions vertically at top - the "jump down to this Y" behavior an anchor link
+                    // destination actually wants; CreateFitVertically would instead pass the offset as /FitV's horizontal left
+                    // parameter. The offset is top-down, but /FitH's own "top" is PDF default user space, which is bottom-up -
+                    // flipping against the TARGET page's own height is required (not this link's page: a link can jump between
+                    // differently-sized pages).
+                    document.AddNamedDestination(anchorId, destination.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[destination.PageIndex].Height - destination.Top));
+                    annotation = page.AddDocumentLink(new PdfRectangle(xRect), anchorId);
                 }
-            }
-
-            HandleRunningElementLinks(document, container, fragmentainers, ResolveAnchorTarget, structureTagBuilder);
-        }
-
-        /// <summary>
-        /// Creates AcroForm fields/widgets for every classified &lt;input&gt;/&lt;select&gt; box, one
-        /// per page. Mirrors <see cref="HandleLinks"/>'s own per-box rect-to-page resolution (matching
-        /// its exact math, since both convert a post-layout box rect to page-space PDF points against
-        /// the same slot geometry) rather than <see cref="HandleLinks"/>'s multi-slot loop, which
-        /// exists only because a link's box can span a page break - a form-control box never can
-        /// (see <c>MonolithicContent.IsReplaced</c>'s <c>CssBoxFormField</c> arm), so each
-        /// field resolves to exactly one page and one rect.
-        /// </summary>
-        private static void HandleFormFields(PdfDocument document, HtmlContainer container, IReadOnlyList<FragmentainerFragment> fragmentainers, FormFieldBuilder formFieldBuilder)
-        {
-            var inner = container.HtmlContainerInt;
-            var ppp = container.PixelsPerPoint;
-            var (slotToPage, _) = PageAnchorResolver.BuildSlotToPageMap(fragmentainers);
-
-            var fieldBoxes = new List<CssBox>();
-            DomUtils.GetAllFormFieldBoxes(inner.Root, fieldBoxes);
-
-            foreach (var box in fieldBoxes)
-            {
-                var classification = FormFieldMapper.Classify(box);
-                if (classification.Kind == FormFieldKind.None)
-                    continue;
-
-                var pixelRect = CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
-
-                var slot = Math.Max(inner.PageIndexOf(pixelRect.Top), 0);
-                if (!slotToPage.TryGetValue(slot, out var pageIndex) || pageIndex >= document.Pages.Count)
-                    continue;
-
-                // Read off the fragmentainer itself (already corrected against this page's
-                // materialized number - see HtmlContainerInt.LayoutMarginBoxes and issue #148) rather
-                // than re-deriving from the geometry table directly, matching HandleLinks' own fix.
-                var slotGeom = fragmentainers[pageIndex].Geometry;
-                // ContentTopPt/ContentLeftPt (margin + the page box's own border/padding, issue #1147) -
-                // matching HandleLinks' own fix.
-                var topPt = slotGeom.ContentTopPt + (pixelRect.Top - inner.PageTopOf(slot)) / ppp;
-                var leftPt = slotGeom.ContentLeftPt + (pixelRect.Left - inner.MarginLeft) / ppp;
-                var widthPt = pixelRect.Width / ppp;
-                var heightPt = pixelRect.Height / ppp;
-
-                if (widthPt <= 0 || heightPt <= 0)
-                    continue;
-
-                var xRect = new Rect(leftPt, document.Pages[pageIndex].Height - (topPt + heightPt), widthPt, heightPt);
-
-                // A control a transform moved sits where it was drawn: /Rect is the bounding box of the drawn shape, and the appearance
-                // (still built upright, at the control's own size) is carried onto it by the map's linear part (see AnnotationPlacement).
-                if ((box.HtmlContainer ?? inner).Placements.TryGet(box, slot, out var placement))
+                else
                 {
-                    var page = document.Pages[pageIndex];
-                    var frame = new PageFrame(slotGeom.ContentLeftPt, slotGeom.ContentTopPt, inner.MarginLeft, inner.MarginTop, ppp, page.Height);
-                    var local = new Rect(pixelRect.Left, pixelRect.Top - fragmentainers[pageIndex].LocalOriginY, pixelRect.Width, pixelRect.Height);
-
-                    // A control that was not drawn on this page (a projected plane outside the clip, or wholly behind the viewer) or was moved off
-                    // it keeps its field, though: it still holds a value and belongs to its form (a radio group would lose a member). The
-                    // widget is then an empty rectangle, so there is nothing to see or click (the /Hidden flag would fail PDF/A), or - moved
-                    // off the page - the /Rect it was drawn at, which is legal outside the page box.
-                    if (placement.Hidden || !AnnotationPlacement.TryMap(placement.Map, local, frame, out var placed))
-                    {
-                        formFieldBuilder.AddField(page, new PdfRectangle(new Rect(xRect.X, xRect.Y, 0, 0)), box, classification, new Size(widthPt, heightPt));
-                        continue;
-                    }
-
-                    formFieldBuilder.AddField(page, new PdfRectangle(placed.Bounds), box, classification, new Size(widthPt, heightPt), placed.AppearanceMatrix);
-                    continue;
+                    annotation = page.AddWebLink(new PdfRectangle(xRect), link.Uri ?? string.Empty);
                 }
 
-                formFieldBuilder.AddField(document.Pages[pageIndex], new PdfRectangle(xRect), box, classification);
-            }
-        }
+                // A link over a transformed element also carries the drawn quadrilateral, which PDF has no key for before 1.6.
+                if (link.Quad is { } quad && document.Version >= 16)
+                    annotation.SetQuadPoints(quad.Select(corner => new PaintPoint(corner.X, page.Height - corner.Y)).ToArray());
 
-        /// <summary>
-        /// The second, per-page link source §5.1 of the implementation plan calls for: a link inside a
-        /// css-gcpm-3 running element's content. <see cref="HandleLinks"/>'s own main loop is driven by
-        /// <c>container.GetLinks()</c>, which walks only the live, main-tree <see cref="CssBox"/>
-        /// geometry - a running box's own <c>&lt;a&gt;</c> is never flowed there
-        /// (<see cref="CssBox.IsRunningPositioned"/> excludes it from the main pass entirely, see
-        /// <c>CssBox.LayoutBlockChildren</c>), and the same <c>&lt;a&gt;</c> can legitimately produce a
-        /// <i>different</i> annotation on every page its running element was selected onto (a different
-        /// rect each time, since <c>RunningElementLayout</c> genuinely re-lays it out per page) - the
-        /// single-Y slot-attribution model the main loop uses doesn't fit that at all. Each page's own
-        /// captured <see cref="MarginBoxFragment.Content"/> already names exactly one page, with an
-        /// already-final rect, so no slot-attribution is needed here - only the anchor-target resolution
-        /// is shared, via <paramref name="resolveAnchorTarget"/>.
-        /// </summary>
-        private static void HandleRunningElementLinks(
-            PdfDocument document,
-            HtmlContainer container,
-            IReadOnlyList<FragmentainerFragment> fragmentainers,
-            Func<string, (int PageIndex, double TopPt)?> resolveAnchorTarget,
-            StructureTagBuilder? structureTagBuilder)
-        {
-            var ppp = container.PixelsPerPoint;
-
-            for (var pageIndex = 0; pageIndex < fragmentainers.Count && pageIndex < document.Pages.Count; pageIndex++)
-            {
-                var marginBoxes = fragmentainers[pageIndex].MarginBoxes;
-                if (marginBoxes.Count == 0) continue;
-
-                foreach (var marginBox in marginBoxes)
+                // The same source box can legitimately gain more than one annotation (once per page its running element was selected
+                // onto) - LinkAnnotationToStructureElement is exercised for a repeated box already.
+                if (structureTagBuilder != null && link.Source is { } source)
                 {
-                    foreach (var (fragment, box) in FindLinkFragments(marginBox.Content))
-                    {
-                        var href = box.HtmlTag?.TryGetAttribute("href") ?? "";
-                        if (href.Length == 0) continue;
-
-                        var rectPt = Utils.ToPoints(fragment.Rect, ppp);
-                        var xRect = new Rect(rectPt.X, document.Pages[pageIndex].Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
-
-                        // A running element's content is laid out in page coordinates, so its frame has no content-box offset to undo.
-                        PaintPoint[]? quad = null;
-                        if ((box.HtmlContainer ?? container.HtmlContainerInt).Placements.TryGet(fragment, out var placement))
-                        {
-                            var page = document.Pages[pageIndex];
-                            var frame = new PageFrame(0, 0, 0, 0, ppp, page.Height);
-                            if (!AnnotationPlacement.TryPlaceLink(placement, fragment.Rect, frame, page, document.Version, out xRect, out quad))
-                                continue;
-                        }
-
-                        PdfLinkAnnotation annotation;
-
-                        if (href[0] == '#')
-                        {
-                            var anchorId = href[1..];
-                            var target = resolveAnchorTarget(anchorId);
-                            if (target is not { } t) continue;
-
-                            // See the same flip's comment in HandleLinks above - TopPt is top-down, /FitH's
-                            // own top parameter needs bottom-up PDF default user space, flipped against the
-                            // TARGET page's own height (not the current page's).
-                            document.AddNamedDestination(anchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[t.PageIndex].Height - t.TopPt));
-                            annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), anchorId);
-                        }
-                        else
-                        {
-                            // Read once per external link per page (a running element's own link is
-                            // re-resolved for every page it was selected onto), so the document base has
-                            // to be memoized rather than re-walked - see HtmlContainerInt.DocumentBaseUri.
-                            var baseUri = container.HtmlContainerInt.DocumentBaseUri;
-                            var resolvedHref = baseUri is null ? href : new RUri(baseUri, href).AbsoluteUri;
-
-                            annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), resolvedHref);
-                        }
-
-                        if (quad is not null)
-                            annotation.SetQuadPoints(quad);
-
-                        // The same source box can legitimately gain more than one annotation here (once
-                        // per page its running element was selected onto) - LinkAnnotationToStructureElement
-                        // is already called once per annotation in the main loop above too, so a repeat
-                        // call for the same box is an existing, exercised shape, not a new one.
-                        if (structureTagBuilder != null)
-                        {
-                            structureTagBuilder.LinkAnnotationToStructureElement(box, document.Pages[pageIndex], annotation);
-                        }
-                    }
+                    structureTagBuilder.LinkAnnotationToStructureElement(source, page, annotation);
                 }
             }
         }
 
         /// <summary>
-        /// Recursively collects every clickable, visible box fragment in <paramref name="fragment"/>'s
-        /// subtree - the fragment-tree analog of <see cref="DomUtils.GetAllLinkBoxes"/>, which walks the
-        /// live <see cref="CssBox"/> tree the same way but is unusable here since a running element's
-        /// content never appears in that tree with meaningful geometry (see <see cref="HandleRunningElementLinks"/>).
+        /// Creates AcroForm fields/widgets for the collected form controls, one per page.
         /// </summary>
-        private static IEnumerable<(BoxFragment Fragment, CssBox Box)> FindLinkFragments(BoxFragment fragment)
+        private static void HandleFormFields(PdfDocument document, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
         {
-            // Not drawn (a transform that leaves no visible area), so not clickable - the same rule the main-tree collectors apply.
-            if (DomUtils.LeavesNoVisibleArea(fragment.Box))
+            foreach (var field in annotations.FormFields)
             {
-                yield break;
-            }
+                if (field.PageIndex >= document.Pages.Count)
+                    continue;
 
-            if (fragment.Box is { IsClickable: true, Visibility.Value: Visibility.Visible })
-            {
-                yield return (fragment, fragment.Box);
-            }
+                var page = document.Pages[field.PageIndex];
 
-            foreach (var child in fragment.Children)
-            {
-                foreach (var found in FindLinkFragments(child))
-                {
-                    yield return found;
-                }
+                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
+                var bounds = field.Bounds;
+                var rect = new Rect(bounds.X, page.Height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height);
+
+                // The appearance stream's own space is y up too, so the y-down map is mirrored across the x axis.
+                Matrix3x2? appearanceMatrix = field.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
+
+                formFieldBuilder.AddField(page, new PdfRectangle(rect), field, appearanceMatrix);
             }
         }
 

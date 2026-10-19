@@ -37,9 +37,13 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Init.
         /// </summary>
-        internal CssData()
+        internal CssData(RenderContext renderContext)
         {
+            _renderContext = renderContext;
         }
+
+        // The context an @supports condition is checked against - the one the stylesheets were parsed with.
+        private readonly RenderContext _renderContext;
 
         // --- Rule index -----------------------------------------------------------------------
         //
@@ -287,7 +291,7 @@ namespace PeachPDF.Html.Core
         /// ever-increasing <see cref="IndexedRule.DocumentOrder"/> and recording the chain of
         /// enclosing media/container conditions it's nested under, if any.
         /// </summary>
-        private static void IndexRules(
+        private void IndexRules(
             IEnumerable<IRule> rules,
             bool isUserAgent,
             MediaList[]? enclosingMedia,
@@ -370,8 +374,7 @@ namespace PeachPDF.Html.Core
                         IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
 
-                    // @supports: the condition is invariant (IConditionFunction.Check() takes no
-                    // arguments - unlike @media, which is re-evaluated per query since media features
+                    // @supports: the condition is invariant (IConditionFunction.Check() takes only the render context - unlike @media, which is re-evaluated per query since media features
                     // can vary per call, see MediaQueryMatcher.Matches below), so it's resolved once,
                     // right here, rather than carried forward as per-query state the way EnclosingMedia
                     // is. A true condition indexes the nested rules normally (inheriting the surrounding
@@ -379,7 +382,7 @@ namespace PeachPDF.Html.Core
                     // contributes nothing - the same "block is a no-op" outcome as before this was wired
                     // up, just decided by the real condition now instead of unconditionally.
                     case ISupportsRule supportsRule:
-                        if (supportsRule.Condition.Check())
+                        if (supportsRule.Condition.Check(_renderContext))
                             IndexRules(supportsRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
 
@@ -430,7 +433,7 @@ namespace PeachPDF.Html.Core
             }
         }
 
-        internal static IEnumerable<IRule> FlattenRules(IEnumerable<IRule> rules)
+        internal IEnumerable<IRule> FlattenRules(IEnumerable<IRule> rules)
         {
             foreach (var rule in rules)
             {
@@ -451,7 +454,7 @@ namespace PeachPDF.Html.Core
                             yield return child;
                         break;
                     case ISupportsRule supportsRule:
-                        if (supportsRule.Condition.Check())
+                        if (supportsRule.Condition.Check(_renderContext))
                             foreach (var child in FlattenRules(supportsRule.Rules))
                                 yield return child;
                         break;
@@ -2220,7 +2223,7 @@ namespace PeachPDF.Html.Core
 
         public CssData Clone()
         {
-            CssData cssData = new();
+            CssData cssData = new(_renderContext);
             cssData.Stylesheets.AddRange(Stylesheets);
             return cssData;
         }

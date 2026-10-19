@@ -1,6 +1,5 @@
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
 using System.Numerics;
 using System;
 
@@ -19,8 +18,15 @@ namespace PeachPDF.Html.Core.Handlers
     /// <param name="PageHeightPt">the page's height in points, which the y flip is against</param>
     internal readonly record struct PageFrame(double ContentLeftPt, double ContentTopPt, double OriginX, double OriginY, double PixelsPerPoint, double PageHeightPt)
     {
+        /// <summary>Where a layout point lands on the page measured from its top-left corner, y down, in points.</summary>
+        internal PaintPoint ToPage(double x, double y) =>
+            new(ContentLeftPt + (x - OriginX) / PixelsPerPoint, ContentTopPt + (y - OriginY) / PixelsPerPoint);
+
+        /// <summary>Where a layout point lands in PDF default user space: <see cref="ToPage"/> with y flipped against the page height.</summary>
         internal PaintPoint ToPdf(double x, double y) =>
             new(ContentLeftPt + (x - OriginX) / PixelsPerPoint, PageHeightPt - (ContentTopPt + (y - OriginY) / PixelsPerPoint));
+
+        internal PaintPoint To(double x, double y, bool yUp) => yUp ? ToPdf(x, y) : ToPage(x, y);
     }
 
     /// <summary>
@@ -43,8 +49,13 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Maps <paramref name="local"/>, a rectangle in fragmentainer-local layout space, through <paramref name="map"/> onto the page.
         /// </summary>
+        /// <param name="map">the map the painter drew the box with</param>
+        /// <param name="local">the rectangle, in fragmentainer-local layout space</param>
+        /// <param name="frame">how layout space lands on the page</param>
+        /// <param name="placement">where it lands</param>
+        /// <param name="yUp">whether the result is in PDF default user space (y up from the page bottom) rather than measured down from the page top</param>
         /// <returns>false when nothing of the rectangle is in front of the viewer (a box wholly behind the eye under perspective)</returns>
-        internal static bool TryMap(in Homography map, Rect local, in PageFrame frame, out AnnotationPlacement placement)
+        internal static bool TryMap(in Homography map, Rect local, in PageFrame frame, out AnnotationPlacement placement, bool yUp = true)
         {
             placement = default;
 
@@ -56,7 +67,7 @@ namespace PeachPDF.Html.Core.Handlers
             var points = new PaintPoint[polygon.Count];
             for (var i = 0; i < polygon.Count; i++)
             {
-                var p = frame.ToPdf(polygon[i].X, polygon[i].Y);
+                var p = frame.To(polygon[i].X, polygon[i].Y, yUp);
                 points[i] = p;
                 minX = Math.Min(minX, p.X);
                 minY = Math.Min(minY, p.Y);
@@ -74,26 +85,26 @@ namespace PeachPDF.Html.Core.Handlers
             if (points.Length == 4 && AllInFront(map, local) && Math.Abs(ShoelaceArea(points) - bounds.Width * bounds.Height) > Tolerance * Math.Max(1, bounds.Width * bounds.Height))
                 quad = [points[0], points[1], points[3], points[2]];
 
-            placement = new AnnotationPlacement(bounds, quad, map.IsAffine ? LinearPart(map, local, frame) : null);
+            placement = new AnnotationPlacement(bounds, quad, map.IsAffine ? LinearPart(map, local, frame, yUp) : null);
             return true;
         }
 
         /// <summary>
-        /// <see cref="TryMap"/> for a link: where its <c>/Rect</c> goes, and the quadrilateral to write as <c>/QuadPoints</c> (null when the box
-        /// says it all, or when the file declares a version older than PDF 1.6, which has no such key).
+        /// <see cref="TryMap"/> for a link, measured down from the page's top-left corner: where its box goes, and the quadrilateral
+        /// (null when the box says it all).
         /// </summary>
-        /// <returns>false when none of it is on <paramref name="page"/> - moved off it, or wholly behind the viewer - so nothing drawn is there to click</returns>
-        internal static bool TryPlaceLink(in Placement placement, Rect local, in PageFrame frame, PeachPDF.PDF.PdfPage page, int pdfVersion,
+        /// <returns>false when none of it is on the sheet - moved off it, or wholly behind the viewer - so nothing drawn is there to click</returns>
+        internal static bool TryPlaceLink(in Placement placement, Rect local, in PageFrame frame, double sheetWidthPt, double sheetHeightPt,
             out Rect bounds, out PaintPoint[]? quad)
         {
             bounds = default;
             quad = null;
 
-            if (placement.Hidden || !TryMap(placement.Map, local, frame, out var placed) || !placed.Bounds.IntersectsWith(new Rect(0, 0, page.Width, page.Height)))
+            if (placement.Hidden || !TryMap(placement.Map, local, frame, out var placed, yUp: false) || !placed.Bounds.IntersectsWith(new Rect(0, 0, sheetWidthPt, sheetHeightPt)))
                 return false;
 
             bounds = placed.Bounds;
-            quad = pdfVersion >= 16 ? placed.Quad : null;
+            quad = placed.Quad;
             return true;
         }
 
@@ -107,6 +118,9 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>The divisor at or below which <see cref="Homography.ProjectRectangle"/> cuts a corner off (its default <c>epsilon</c>).</summary>
         private const double ProjectionEpsilon = 1e-4;
+
+        private static Matrix3x2 Matrix(double m11, double m12, double m21, double m22, double dx, double dy) =>
+            new((float)m11, (float)m12, (float)m21, (float)m22, (float)dx, (float)dy);
 
         /// <summary>The area of the polygon <paramref name="points"/>, whichever way it winds.</summary>
         private static double ShoelaceArea(PaintPoint[] points)
@@ -123,10 +137,11 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// The matrix that takes an appearance stream drawn upright in <c>(0, 0)</c> to <c>(width, height)</c> points, y up, to where the
-        /// rectangle it belongs to was drawn: the images of the rectangle's own axes, which is the map's linear part.
+        /// The matrix that takes an appearance drawn upright in <c>(0, 0)</c> to <c>(width, height)</c> points (y up, or y down when
+        /// <paramref name="yUp"/> is false) to where the rectangle it belongs to was drawn: the images of the rectangle's own axes, which is
+        /// the map's linear part.
         /// </summary>
-        private static Matrix3x2? LinearPart(in Homography map, Rect local, in PageFrame frame)
+        private static Matrix3x2? LinearPart(in Homography map, Rect local, in PageFrame frame, bool yUp)
         {
             if (!(local.Width > 0) || !(local.Height > 0) ||
                 map.Apply(local.Left, local.Top) is not { } topLeft ||
@@ -134,16 +149,26 @@ namespace PeachPDF.Html.Core.Handlers
                 map.Apply(local.Left, local.Bottom) is not { } bottomLeft)
                 return null;
 
-            var bottomLeftPdf = frame.ToPdf(bottomLeft.X, bottomLeft.Y);
-            var topRightPdf = frame.ToPdf(topRight.X, topRight.Y);
-            var topLeftPdf = frame.ToPdf(topLeft.X, topLeft.Y);
+            var bottomLeftPdf = frame.To(bottomLeft.X, bottomLeft.Y, yUp);
+            var topRightPdf = frame.To(topRight.X, topRight.Y, yUp);
+            var topLeftPdf = frame.To(topLeft.X, topLeft.Y, yUp);
             var widthPt = local.Width / frame.PixelsPerPoint;
             var heightPt = local.Height / frame.PixelsPerPoint;
+
+            // Measured down from the page top, the appearance's y runs down the left edge from the top-left corner to the bottom-left one,
+            // so an untransformed control maps to the identity here too.
+            if (!yUp)
+            {
+                return Matrix(
+                    (topRightPdf.X - topLeftPdf.X) / widthPt, (topRightPdf.Y - topLeftPdf.Y) / widthPt,
+                    (bottomLeftPdf.X - topLeftPdf.X) / heightPt, (bottomLeftPdf.Y - topLeftPdf.Y) / heightPt,
+                    0, 0);
+            }
 
             // The appearance's x runs along the top edge, from the top-left corner to the top-right one; its y runs up the left edge,
             // from the bottom-left corner to the top-left one. There is no translation: the reader fits the transformed box to /Rect, so one
             // would only be cancelled, and a plain move is then the identity, which is left out of the stream altogether.
-            return PdfMatrix.Create(
+            return Matrix(
                 (topRightPdf.X - topLeftPdf.X) / widthPt, (topRightPdf.Y - topLeftPdf.Y) / widthPt,
                 (topLeftPdf.X - bottomLeftPdf.X) / heightPt, (topLeftPdf.Y - bottomLeftPdf.Y) / heightPt,
                 0, 0);

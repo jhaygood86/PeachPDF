@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Svg
         {
             var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"100\"><style>{rule}</style>{wrapStart}<defs><linearGradient id=\"g\" {gradientAttributes}>{stops}</linearGradient></defs>{wrapEnd}</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
             return document.Gradients["g"].Stops.ToArray();
         }

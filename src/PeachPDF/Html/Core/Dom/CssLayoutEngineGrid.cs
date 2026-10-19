@@ -1,4 +1,3 @@
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
@@ -1477,7 +1476,7 @@ namespace PeachPDF.Html.Core.Dom
                 // but a browser sizes it as 300x150 CSS px all the same.
                 await box.MeasureWordsSize(g);
                 if (((CssBoxVideo)box).IsReplaced) return null;
-                var ppp = (box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                var ppp = box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
                 var unit = Length.PointsPerPx * ppp;
                 return new ReplacedNaturalSize(true, true,
                     CssLayoutEngine.DefaultObjectWidth / CssLayoutEngine.DefaultObjectHeight,
@@ -1934,7 +1933,7 @@ namespace PeachPDF.Html.Core.Dom
         // so a re-parse through CssValueParser's now-PixelsPerPoint-aware absolute-length resolution
         // (issue #814) lands back on this same internal-space value instead of PixelsPerPoint times it.
         private static string FormatLayoutUnits(double value, CssBox box) =>
-            (value / ((box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0))
+            (value / (box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0))
                 .ToString("F4", CultureInfo.InvariantCulture) + "pt";
 
         // Mirrors the flex engine's twin: the cascade (DomParser.NormalizeFlexOrGridItem) blockifies every

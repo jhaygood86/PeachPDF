@@ -444,6 +444,16 @@ namespace PeachDrawing.Core
         /// </summary>
         public virtual bool FlattensTransparency => false;
 
+        /// <summary>
+        /// Whether painting through <paramref name="paint"/> would need transparency (a transparency group, a soft mask, a
+        /// constant alpha) on this canvas. A canvas whose output forbids transparency (PDF/A-1, PDF/X-1a/X-3) answers by
+        /// running <paramref name="paint"/> against a scratch target of its own that is never saved, so the answer comes from
+        /// the same code that decides what the canvas emits. A canvas with no notion of forbidden transparency - a raster
+        /// surface, say - uses this default and answers <c>false</c> without running <paramref name="paint"/>.
+        /// </summary>
+        /// <param name="paint">paints the content in question onto the canvas it is given</param>
+        public virtual bool PaintRequiresTransparency(Action<Canvas> paint) => false;
+
 
         /// <summary>
         /// How much the transforms pushed so far magnify a unit along each axis: the lengths of the images of the unit x and y
@@ -679,6 +689,52 @@ namespace PeachDrawing.Core
         /// </summary>
         public virtual void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
+
+        /// <summary>
+        /// Draws a single line of <paramref name="str"/> aligned inside <paramref name="rect"/>, in the same working unit
+        /// space as <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/>'s
+        /// own <c>point</c>. The string is not wrapped or clipped: <paramref name="horizontal"/> places it along the rect's
+        /// width (<see cref="BoxAlignment.Start"/> at the left edge, <see cref="BoxAlignment.End"/> at the right edge) and
+        /// <paramref name="vertical"/> along its height (<see cref="BoxAlignment.Start"/> at the top).
+        ///
+        /// A backend that has its own, more exact notion of where a line of text sits inside a box (a PDF writer aligning by
+        /// the typeface's cell ascent and descent, say) overrides this; the default derives the position from
+        /// <see cref="Font.Height"/> and <see cref="MeasureString(string, Font, ShapeSettings?)"/> and forwards to
+        /// <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>.
+        /// </summary>
+        /// <param name="str">the text to draw</param>
+        /// <param name="font">the font to draw with</param>
+        /// <param name="color">the text color</param>
+        /// <param name="rect">the box the line is aligned inside</param>
+        /// <param name="horizontal">where along the rect's width the line sits</param>
+        /// <param name="vertical">where along the rect's height the line sits</param>
+        /// <param name="logicalText">
+        /// the logical-order source text when <paramref name="str"/> was reordered or mirrored for display; see
+        /// <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>
+        /// </param>
+        public virtual void DrawStringInRect(string str, Font font, PaintColor color, Rect rect, BoxAlignment horizontal, BoxAlignment vertical, string? logicalText = null)
+        {
+            if (str.Length == 0)
+            {
+                return;
+            }
+
+            var size = MeasureString(str, font);
+            var x = horizontal switch
+            {
+                BoxAlignment.Center => rect.X + (rect.Width - size.Width) / 2,
+                BoxAlignment.End => rect.X + rect.Width - size.Width,
+                _ => rect.X,
+            };
+            var y = vertical switch
+            {
+                BoxAlignment.Center => rect.Y + (rect.Height - font.Height) / 2,
+                BoxAlignment.End => rect.Y + rect.Height - font.Height,
+                _ => rect.Y,
+            };
+
+            DrawString(str, font, color, new PaintPoint(x, y), size, 0, null, null, logicalText);
+        }
 
         /// <summary>
         /// Draws each of <paramref name="glyphs"/> at its own explicit position, addressed directly by

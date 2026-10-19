@@ -75,7 +75,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             foreach (var element in root.Descendants().Where(e => e.Attribute("id") is not null))
             {
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             string[] expected = ["c2", "c3"];
             foreach (var element in root.Descendants().Where(e => e.Attribute("id") is not null))
@@ -162,7 +162,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -183,7 +183,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -204,7 +204,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -231,7 +231,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -252,7 +252,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -272,7 +272,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -306,7 +306,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
             var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
@@ -327,7 +327,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
@@ -347,7 +347,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """;
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
 
             var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");

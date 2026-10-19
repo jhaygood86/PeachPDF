@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Svg
         private static SvgDocument BuildFrom(string markup)
         {
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             if (cssData is not null)
                 SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
