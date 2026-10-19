@@ -118,6 +118,10 @@ namespace PeachPDF.Html.Core.Dom
         internal bool _resumingIntoTheNextFragmentainer;
         internal double? _groupBlockStartMarginOverride;
         internal bool IsDisplayContentsShell;
+
+        /// <summary>The CSS animations of an element of an inline <c>&lt;svg&gt;</c>, planned once (see <see cref="CssBox.GetSvgAnimationPlan"/>).</summary>
+        internal Animation.AnimationApplier.ElementPlan? SvgAnimationPlan;
+        internal bool SvgAnimationPlanBuilt;
         internal List<CssBox>? DisplayContentsLiftedChildren;
         internal List<CssBox>? DisplayContentsAncestors;
         internal CssBox? OriginatingBox;

@@ -65,9 +65,13 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
 - **Some shadow colours still flip.** A shadow that omits its colour (`0 0 4px` against `0 0 8px red`, where the omitted colour means
   `currentcolor`), shadow lists of different length, and `none` against a shadow flip where a browser mixes; `hwb()` is not mixed
   (it flips), and `#rrggbbaa` inside a shadow list does not mix even without `currentcolor`.
-- **CSS animations on the elements of an inline `<svg>` are not applied.** `rect { animation: ... }` (fill, opacity,
-  transform, stroke-width, `stroke-dashoffset`, `r`, a `<g>`'s transform) is parsed and ignored; the SVG tree builder has its
-  own cascade entry point that does not call the animation step. Only HTML boxes (and their pseudo-elements) are animated.
+- **CSS animations on inline `<svg>` elements have gaps.** The elements of an inline `<svg>` are animated (see
+  docs/supported-svg-features.md), but a standalone SVG (`<img src="x.svg">`) is not; a keyframe shorthand such as `marker` is
+  not expanded (`font` is); content reached through `<use>` mixes from the referenced tree's value; an ancestor's `em`/`%` underlying value
+  is read raw; unequal `stroke-dasharray` lists flip; a negative `r` in a keyframe is not rejected; `currentcolor` in a keyframe
+  is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed frames (which use the element's own `color`) and not by the end
+  points (#1798). `visibility` is not read by the SVG renderer at all (#1797); a comma-separated `stroke-dasharray` and a bare
+  geometry number in a stylesheet or keyframe are dropped by the CSS-OM grammar (#1800).
 - **Gradients, `calc()` of another shape and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
   way; `calc()` against a value of another shape flips; `@-webkit-keyframes` and `-webkit-animation` are ignored.
 - **`prefers-reduced-motion` is reported as `reduce`** (a static PDF has no motion), so the common

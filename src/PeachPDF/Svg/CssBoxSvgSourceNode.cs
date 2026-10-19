@@ -11,8 +11,10 @@
 // "The Art of War"
 
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -94,6 +96,20 @@ namespace PeachPDF.Svg
         {
             SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext, out var important);
             return important?.Contains(name) == true;
+        }
+
+        public ISvgSourceNode? Parent =>
+            ReferenceEquals(_box, _svgRoot) || _box.ParentBox is not { } parent
+                ? null
+                : new CssBoxSvgSourceNode(parent, _svgRoot, _cssData, _media, _varContext);
+
+        public bool IsAnimated => _box.HtmlContainer?.AnimationProgress is not null && _box.GetSvgAnimationPlan() is not null;
+
+        public string? GetAnimatedValue(string name, Func<string?> underlying, Func<string?> parent, Func<string?> initial, bool inherited)
+        {
+            if (_box.HtmlContainer?.AnimationProgress is null || _box.GetSvgAnimationPlan() is not { } plan) return null;
+
+            return AnimationApplier.SampleElement(_box, plan, name, underlying, parent, initial, inherited);
         }
 
         public string? ResolveVar(string value) =>
