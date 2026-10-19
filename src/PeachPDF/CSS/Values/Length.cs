@@ -63,7 +63,7 @@ namespace PeachPDF.CSS
         /// </summary>
         public bool IsAbsolute =>
             Type == Unit.In || Type == Unit.Mm || Type == Unit.Pc || Type == Unit.Px ||
-            Type == Unit.Pt || Type == Unit.Cm;
+            Type == Unit.Pt || Type == Unit.Cm || Type == Unit.Q;
 
         /// <summary>
         ///     Gets if the length is given in relative units.
@@ -139,6 +139,8 @@ namespace PeachPDF.CSS
                         return UnitNames.Pt;
                     case Unit.Pc:
                         return UnitNames.Pc;
+                    case Unit.Q:
+                        return UnitNames.Q;
                     case Unit.Ch:
                         return UnitNames.Ch;
                     case Unit.Rem:
@@ -327,6 +329,7 @@ namespace PeachPDF.CSS
                 "in" => Unit.In,
                 "mm" => Unit.Mm,
                 "pc" => Unit.Pc,
+                "q" => Unit.Q,
                 "pt" => Unit.Pt,
                 "px" => Unit.Px,
                 "rem" => Unit.Rem,
@@ -468,6 +471,8 @@ namespace PeachPDF.CSS
                     (72d / 25.4d) * Value,
                 Unit.Pc => // 1 pc = 12 pt
                     12d * Value,
+                Unit.Q => // 1 Q = 1/40 cm = 72/101.6 pt
+                    (72d / 101.6d) * Value,
                 Unit.Pt => // 1 pt = 1 pt
                     Value,
                 Unit.Cm => // 1 cm = 72/2.54 pt
@@ -512,6 +517,8 @@ namespace PeachPDF.CSS
                     value * 25.4f / 72f,
                 Unit.Pc => // 1 pc = 12 pt
                     value / 12f,
+                Unit.Q => // 1 Q = 72/101.6 pt
+                    value * 101.6f / 72f,
                 Unit.Pt => // 1 pt = 1 pt
                     value,
                 Unit.Cm => // 1 cm = 72/2.54 pt
@@ -538,6 +545,7 @@ namespace PeachPDF.CSS
             In,
             Pt,
             Pc,
+            Q,
             Ch,
             Rem,
             Vw,

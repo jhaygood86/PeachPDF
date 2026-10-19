@@ -35,6 +35,7 @@ namespace PeachPDF.CSS
         public const string Ric = "ric";
         public const string Rlh = "rlh";
         public const string Pc = "pc";
+        public const string Q = "q";
         public const string Percent = "%";
         public const string Cqw = "cqw";
         public const string Cqh = "cqh";

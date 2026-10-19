@@ -21,6 +21,7 @@ All CSS length units resolve through one shared conversion, at their spec-define
 | `in` | 1 in | 72pt |
 | `cm` / `mm` | metric | 28.35pt / 2.835pt |
 | `pc` | 1/6 in | 12pt |
+| `Q` | 1/40 cm | 0.709pt |
 
 In particular, `px` is spec-correct CSS pixels: a `96px`-wide element is exactly one inch wide in the output PDF, and a 96×96-pixel image renders at its true CSS size of one square inch — the same as every browser's print output and other spec-conformant paged renderers. Relative units (`em`/`rem`/`%`) resolve against their usual per-property bases; the font-measured units (`ex`/`ch`/`cap`/`ic`/`lh` and their root-element `rex`/`rch`/`rcap`/`ric`/`rlh` forms) are read from the used font — see [Font-relative units](#font-relative-units); viewport units (`vw`/`vh`/`vmin`/`vmax`, and their logical/small/large/dynamic variants) are supported against the PDF page box — see [CSS Viewport Units](#css-viewport-units).
 

@@ -184,6 +184,17 @@ namespace PeachPDF.Svg
                 return (float)value;
             }
 
+            // A scale factor: a <number>, or a <percentage> that is the same number (CSS Transforms 2: scale(50%) is scale(0.5)).
+            float Factor(int i)
+            {
+                if (i >= args.Count) return 0f;
+
+                var (value, unit) = args[i];
+                if (unit == "%") return (float)(value / 100);
+                if (unit.Length != 0) resolvable = false;
+                return (float)value;
+            }
+
             // Degrees. A bare number is degrees too: that is the attribute grammar (`rotate(10)`).
             float Angle(int i)
             {
@@ -218,6 +229,7 @@ namespace PeachPDF.Svg
                     case "mm": return (float)(value * 96 / 25.4);
                     case "pt": return (float)(value * 4 / 3);
                     case "pc": return (float)(value * 16);
+                    case "q": return (float)(value * 96 / 101.6);
                     default: resolvable = false; return 0f;
                 }
             }
@@ -253,17 +265,17 @@ namespace PeachPDF.Svg
 
                 case "scale" when args.Count >= 1:
                 {
-                    var sx = Arg(0);
-                    matrix = Scaling(sx, args.Count >= 2 ? Arg(1) : sx);
+                    var sx = Factor(0);
+                    matrix = Scaling(sx, args.Count >= 2 ? Factor(1) : sx);
                     break;
                 }
 
                 case "scalex" when args.Count >= 1:
-                    matrix = Scaling(Arg(0), 1f);
+                    matrix = Scaling(Factor(0), 1f);
                     break;
 
                 case "scaley" when args.Count >= 1:
-                    matrix = Scaling(1f, Arg(0));
+                    matrix = Scaling(1f, Factor(0));
                     break;
 
                 case "rotate" or "rotatez" when args.Count >= 1:

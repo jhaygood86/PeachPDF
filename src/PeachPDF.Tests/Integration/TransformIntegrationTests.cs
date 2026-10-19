@@ -137,6 +137,19 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(60, m.M32, 3);
         }
 
+        [Theory]
+        [InlineData("scale(50%)", 0.5, 0.5)]
+        [InlineData("scale(50%, 25%)", 0.5, 0.25)]
+        [InlineData("scaleX(200%)", 2, 1)]
+        [InlineData("scaleY(10%)", 1, 0.1)]
+        public async Task ScalePercentage_IsTheSameNumber(string function, double sx, double sy)
+        {
+            var m = (await FindDivBox($"transform: {function}; transform-origin: 0 0;")).ActualTransformMatrix;
+
+            Assert.Equal(sx, m.M11, 3);
+            Assert.Equal(sy, m.M22, 3);
+        }
+
         [Fact]
         public async Task Matrix_TranslationMatchesTheEquivalentTranslate()
         {

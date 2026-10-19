@@ -1178,6 +1178,10 @@ namespace PeachPDF.Html.Core.Parse
                 return 0f;
             }
 
+            // A percentage in a scale function is a number (CSS Transforms 2): scale(50%) is scale(0.5).
+            float ScaleArg(int index) =>
+                index < args.Count && args[index] is [{ Type: TokenType.Percentage } percent] ? percent.Value / 100f : NumberArg(index);
+
             float AngleArg(int index) =>
                 index < args.Count ? (args[index].ToAngle()?.ToRadian() ?? 0f) : 0f;
 
@@ -1203,18 +1207,18 @@ namespace PeachPDF.Html.Core.Parse
 
             if (Named(name, FunctionNames.Scale))
             {
-                var sx = NumberArg(0);
-                var sy = args.Count > 1 ? NumberArg(1) : sx;
+                var sx = ScaleArg(0);
+                var sy = args.Count > 1 ? ScaleArg(1) : sx;
                 return Matrix4x4.CreateScale(sx, sy, 1);
             }
             if (Named(name, FunctionNames.ScaleX))
-                return Matrix4x4.CreateScale(NumberArg(0), 1, 1);
+                return Matrix4x4.CreateScale(ScaleArg(0), 1, 1);
             if (Named(name, FunctionNames.ScaleY))
-                return Matrix4x4.CreateScale(1, NumberArg(0), 1);
+                return Matrix4x4.CreateScale(1, ScaleArg(0), 1);
             if (Named(name, FunctionNames.ScaleZ))
-                return Matrix4x4.CreateScale(1, 1, NumberArg(0));
+                return Matrix4x4.CreateScale(1, 1, ScaleArg(0));
             if (Named(name, FunctionNames.Scale3d))
-                return Matrix4x4.CreateScale(NumberArg(0), NumberArg(1), NumberArg(2));
+                return Matrix4x4.CreateScale(ScaleArg(0), ScaleArg(1), ScaleArg(2));
 
             if (Named(name, FunctionNames.Rotate) || Named(name, FunctionNames.RotateZ))
                 return Matrix4x4.CreateRotationZ(AngleArg(0));
