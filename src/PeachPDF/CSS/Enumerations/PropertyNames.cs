@@ -226,6 +226,14 @@
         public static readonly string MarkerMid = "marker-mid";
         public static readonly string MarkerStart = "marker-start";
         public static readonly string Mask = "mask";
+        public static readonly string R = "r";
+        public static readonly string Cx = "cx";
+        public static readonly string Cy = "cy";
+        public static readonly string Rx = "rx";
+        public static readonly string Ry = "ry";
+        public static readonly string X = "x";
+        public static readonly string Y = "y";
+        public static readonly string D = "d";
         public static readonly string PaintOrder = "paint-order";
         public static readonly string FloodColor = "flood-color";
         public static readonly string FloodOpacity = "flood-opacity";
