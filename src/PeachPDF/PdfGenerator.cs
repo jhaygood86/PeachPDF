@@ -286,7 +286,7 @@ namespace PeachPDF
                 orgPageSize = container.CssPageSize.Value;
             }
 
-            var measure = PdfGraphics.CreateMeasureContext(container.PageSize);
+            var measure = PdfCanvas.CreateMeasuring(_renderContext, container.PageSize.Width, container.PageSize.Height);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
@@ -328,7 +328,7 @@ namespace PeachPDF
                     await SetContent(container, config, html, cssData, orgPageSize);
 
                     measure?.Dispose();
-                    measure = PdfGraphics.CreateMeasureContext(container.PageSize);
+                    measure = PdfCanvas.CreateMeasuring(_renderContext, container.PageSize.Width, container.PageSize.Height);
                 }
             }
 
@@ -495,7 +495,7 @@ namespace PeachPDF
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = PdfGraphics.CreateMeasureContext(orgPageSize);
+            using var measure = PdfCanvas.CreateMeasuring(_renderContext, orgPageSize.Width, orgPageSize.Height);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
@@ -639,19 +639,15 @@ namespace PeachPDF
                 var (bL, bT, bR, bB) = (geom.BorderLeftPt, geom.BorderTopPt, geom.BorderRightPt, geom.BorderBottomPt);
                 var (pL, pT, pR, pB) = (geom.PaddingLeftPt, geom.PaddingTopPt, geom.PaddingRightPt, geom.PaddingBottomPt);
 
-                var page = document.PdfDocument.AddPage();
                 // This slot's own resolved physical sheet size, in true PDF points - already falls back
                 // to the document's base/configured size (orgPageSize) whenever no @page rule overrides
                 // `size` for this slot, so every existing (non-mixed-size) document is unaffected.
-                page.Height = geom.SheetHeightPt;
-                page.Width = geom.SheetWidthPt;
+                var page = document.Composer.AddPage(geom.SheetWidthPt, geom.SheetHeightPt);
 
-                structureTagBuilder?.BeginPage(page);
-
-                using var g = PdfGraphics.FromPdfPage(page);
+                structureTagBuilder?.BeginPage(page.Page);
 
                 var sheetRect = new Rect(0, 0,
-                    page.Width * _renderContext.PixelsPerPoint, page.Height * _renderContext.PixelsPerPoint);
+                    page.WidthPoints * _renderContext.PixelsPerPoint, page.HeightPoints * _renderContext.PixelsPerPoint);
 
                 // The page box's own border-box/padding-box/content-box rects (css-page-3 §3's box
                 // model), resolved in true PDF points then converted to px - the same border-box ->
@@ -702,7 +698,7 @@ namespace PeachPDF
                 // background already does.
                 if (container.HtmlContainerInt.Root is { } rootBoxForPageBackground && applicablePageStyle is not null)
                 {
-                    using var pageBackgroundGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var pageBackgroundGraphics = page.CreateCanvas(_renderContext);
 
                     await LayeredBackgroundPainter.PaintAsync(
                         pageBackgroundGraphics, applicablePageStyle, _renderContext, container.HtmlContainerInt,
@@ -719,7 +715,7 @@ namespace PeachPDF
                     // just the content rect. The canvas fill is a distinct paint step from the page box's
                     // own background above - CSS2.1 §14.2's canvas propagation always fills the whole
                     // sheet regardless of the page box's own border/padding, exactly as before #1147.
-                    using var canvasGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var canvasGraphics = page.CreateCanvas(_renderContext);
                     FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, sheetRect);
                 }
 
@@ -732,14 +728,13 @@ namespace PeachPDF
                 // never fragments/shares a corner with a neighboring page either.
                 if (applicablePageStyle is not null && (bL > 0 || bT > 0 || bR > 0 || bB > 0))
                 {
-                    using var pageBorderGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var pageBorderGraphics = page.CreateCanvas(_renderContext);
                     MarginBoxRenderer.PaintBorder(
                         pageBorderGraphics, borderBoxRect, applicablePageStyle,
                         pageEmSizePt, pageRemPt, _renderContext.PixelsPerPoint, _renderContext);
                 }
 
                 // Save state so the content transform can be undone for margin box rendering
-                var preContentState = g.Save();
 
                 // No content-area clip pushed here (an earlier version of this method intersected one
                 // directly on the raw PdfGraphics, ahead of FragmentPainter.Paint's own push below) - a raw
@@ -759,8 +754,7 @@ namespace PeachPDF
                 // (geom.BandWidth/BandHeight).
                 var deltaX = mL + bL + pL - container.MarginLeft;
                 var deltaY = mT + bT + pT - container.MarginTop;
-                if (deltaX != 0 || deltaY != 0)
-                    g.TranslateTransform(deltaX, deltaY);
+                var contentShift = deltaX != 0 || deltaY != 0 ? page.Shift(deltaX, deltaY) : null;
 
                 // Same-units (internal pixel space) generalization of PageBoxRect's default paint
                 // window: x/y adapt to this page's margin override via the delta translate above;
@@ -773,10 +767,13 @@ namespace PeachPDF
                 container.HtmlContainerInt.PageClipOverride = new Rect(
                     container.HtmlContainerInt.MarginLeft,
                     container.HtmlContainerInt.MarginTop,
-                    (page.Width - mL) * _renderContext.PixelsPerPoint,
+                    (page.WidthPoints - mL) * _renderContext.PixelsPerPoint,
                     geom.BandHeight);
 
-                container.PerformPaint(g, fragmentainer);
+                using (var contentCanvas = page.CreateCanvas(_renderContext))
+                {
+                    container.PerformPaint(contentCanvas, fragmentainer);
+                }
 
                 // The footnote area's own geometry (AttachFootnoteAreas) is built the same
                 // fragmentainer-local way every other content fragment's is - content stays anchored at
@@ -791,18 +788,18 @@ namespace PeachPDF
                 // here needs to distinguish them.
                 foreach (var footnoteArea in fragmentainer.FootnoteAreas ?? [])
                 {
-                    PaintFootnoteArea(g, _renderContext, container.HtmlContainerInt, footnoteArea);
+                    PaintFootnoteArea(page, _renderContext, container.HtmlContainerInt, footnoteArea);
                 }
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
-                g.Restore(preContentState);
+                contentShift?.Dispose();
 
                 if (applicableMargins.Count > 0)
                 {
-                    using var marginBoxCanvas = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var marginBoxCanvas = page.CreateCanvas(_renderContext);
                     await MarginBoxRenderer.Render(
                         marginBoxCanvas,
-                        new Size(page.Width, page.Height),
+                        new Size(page.WidthPoints, page.HeightPoints),
                         mL,
                         mT,
                         mR,
@@ -827,10 +824,13 @@ namespace PeachPDF
                     !string.IsNullOrEmpty(m.Style.Content) && MarginBoxRenderer.TryParseElementFunction(m.Style.Content, out _, out _));
                 if (hasElementMarginBoxes)
                 {
-                    await PaintElementMarginBoxes(g, _renderContext, container.HtmlContainerInt, fragmentainer.MarginBoxes,
-                        new Size(page.Width, page.Height), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
+                    await PaintElementMarginBoxes(page, _renderContext, container.HtmlContainerInt, fragmentainer.MarginBoxes,
+                        new Size(page.WidthPoints, page.HeightPoints), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
                         marginBoxBackgroundImageCache);
                 }
+
+                // The page's content is complete: write it now rather than holding every page's drawing state until the document is saved.
+                page.Finish();
             }
 
             foreach (var cachedImage in pageBackgroundImageCache.Values)
@@ -867,7 +867,7 @@ namespace PeachPDF
             // The hyperlinks and the outline, worked out from the laid-out pages in terms of pages and points; the PDF
             // annotations and outline entries are made from them below.
             var annotations = DocumentAnnotationCollector.Collect(container.HtmlContainerInt, fragmentainers);
-            HandleLinks(document.PdfDocument, annotations, structureTagBuilder);
+            HandleLinks(document.Composer, annotations, structureTagBuilder);
 
             if (formFieldBuilder != null)
             {
@@ -877,10 +877,18 @@ namespace PeachPDF
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
             // with no headings simply collects zero bookmarks above and adds no outline.
-            BookmarkOutlineBuilder.Build(document.PdfDocument, annotations.Bookmarks);
+            document.Composer.AddBookmarks(annotations.Bookmarks.Select(ToBookmark));
         }
 
         #region Private/Protected methods
+
+        /// <summary>An outline entry the HTML core collected, as the PDF writer's own.</summary>
+        private static PdfBookmark ToBookmark(Bookmark bookmark) => new(bookmark.Level, bookmark.Title, bookmark.IsOpen)
+        {
+            Uri = bookmark.Uri,
+            PageIndex = bookmark.Destination?.PageIndex,
+            TopPoints = bookmark.Destination?.Top ?? 0,
+        };
 
         /// <summary>
         /// The options the document is configured with for one render call: the whole-document format settings from
@@ -1044,13 +1052,13 @@ namespace PeachPDF
         /// </para>
         /// </remarks>
         private static async Task PaintElementMarginBoxes(
-            PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
+            PdfComposerPage page, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
             var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
-            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
+            using var pdfCanvas = page.CreateCanvas((PeachDrawing.PDF.PdfRenderContext)renderContext);
             var painter = new FragmentPainter(htmlContainer);
             var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
             var resolvedBoxNames = marginBoxes.Count > 0
@@ -1104,16 +1112,15 @@ namespace PeachPDF
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
         /// (which is an ordinary box and paints its rule through the normal border path).
         /// </summary>
-        private static void PaintFootnoteArea(PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        private static void PaintFootnoteArea(PdfComposerPage page, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
-            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
-            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
+            using var pdfCanvas = page.CreateCanvas((PeachDrawing.PDF.PdfRenderContext)renderContext);
 
             PaintFootnoteArea(pdfCanvas, renderContext, htmlContainer, footnoteArea);
         }
 
         /// <summary>
-        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(PdfGraphics, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
+        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(PdfComposerPage, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
         /// split out so a test can drive it with a recording <see cref="Canvas"/> and assert the actual
         /// draw call sequence (which calls, in what order) rather than only that a full PDF pipeline
         /// completes without error or that a fragment holds the right data - see this repo's own testing
@@ -1163,44 +1170,32 @@ namespace PeachPDF
         /// Link annotation's "/OBJR" back to its owning "/Link" structure element, completing the bidirectional PDF/UA linkage
         /// between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfComposer composer, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
         {
             foreach (var link in annotations.Links)
             {
-                if (link.PageIndex >= document.Pages.Count)
+                if (link.PageIndex >= composer.Pages.Count)
                     continue;
 
-                var page = document.Pages[link.PageIndex];
+                var page = composer.Pages[link.PageIndex];
 
-                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
-                var xRect = new Rect(link.Bounds.X, page.Height - (link.Bounds.Y + link.Bounds.Height), link.Bounds.Width, link.Bounds.Height);
-
-                PdfLinkAnnotation annotation;
+                PdfLink pdfLink;
 
                 if (link.Anchor is { } anchorId && link.Destination is { } destination)
                 {
-                    // /FitH top fits page width and positions vertically at top - the "jump down to this Y" behavior an anchor link
-                    // destination actually wants; CreateFitVertically would instead pass the offset as /FitV's horizontal left
-                    // parameter. The offset is top-down, but /FitH's own "top" is PDF default user space, which is bottom-up -
-                    // flipping against the TARGET page's own height is required (not this link's page: a link can jump between
-                    // differently-sized pages).
-                    document.AddNamedDestination(anchorId, destination.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[destination.PageIndex].Height - destination.Top));
-                    annotation = page.AddDocumentLink(new PdfRectangle(xRect), anchorId);
+                    composer.AddNamedDestination(anchorId, destination.PageIndex, destination.Top);
+                    pdfLink = page.AddDestinationLink(link.Bounds, anchorId, link.Quad);
                 }
                 else
                 {
-                    annotation = page.AddWebLink(new PdfRectangle(xRect), link.Uri ?? string.Empty);
+                    pdfLink = page.AddLink(link.Bounds, link.Uri ?? string.Empty, link.Quad);
                 }
-
-                // A link over a transformed element also carries the drawn quadrilateral, which PDF has no key for before 1.6.
-                if (link.Quad is { } quad && document.Version >= 16)
-                    annotation.SetQuadPoints(quad.Select(corner => new PaintPoint(corner.X, page.Height - corner.Y)).ToArray());
 
                 // The same source box can legitimately gain more than one annotation (once per page its running element was selected
                 // onto) - LinkAnnotationToStructureElement is exercised for a repeated box already.
                 if (structureTagBuilder != null && link.Source is { } source)
                 {
-                    structureTagBuilder.LinkAnnotationToStructureElement(source, page, annotation);
+                    structureTagBuilder.LinkAnnotationToStructureElement(source, pdfLink.Page.Page, pdfLink.Annotation);
                 }
             }
         }

@@ -1,6 +1,7 @@
 #nullable enable
 
 using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
@@ -28,8 +29,7 @@ namespace PeachDrawing.PDF
     {
         private readonly PdfDocument _document;
         private readonly PdfRenderContext _renderContext;
-        private readonly List<(PdfCanvas Canvas, PdfGraphics Graphics)> _open = [];
-        private bool _saved;
+        private readonly List<PdfComposerPage> _pages = [];
         private bool _configured;
 
         /// <summary>
@@ -52,24 +52,26 @@ namespace PeachDrawing.PDF
         internal PdfDocument Document => _document;
 
         /// <summary>The number of pages added so far.</summary>
-        public int PageCount => _document.PageCount;
+        public int PageCount => _pages.Count;
+
+        /// <summary>The pages added so far, in order.</summary>
+        public IReadOnlyList<PdfComposerPage> Pages => _pages;
 
         /// <summary>
-        /// Adds a page at the end of the document and returns the canvas to draw it with.
+        /// Adds a page at the end of the document.
         /// </summary>
         /// <param name="widthPoints">the page's width in points (1/72 inch); 595 by 842 is A4</param>
         /// <param name="heightPoints">the page's height in points</param>
-        /// <returns>a canvas for the page, valid until the composer is saved or disposed</returns>
-        /// <exception cref="ArgumentOutOfRangeException">a dimension is not a positive number</exception>
-        /// <exception cref="InvalidOperationException">the composer has already been saved</exception>
-        public PdfCanvas AddPage(double widthPoints, double heightPoints)
+        /// <returns>the page; its <see cref="PdfComposerPage.Canvas"/> draws it</returns>
+        /// <exception cref="ArgumentOutOfRangeException">a dimension is negative or not a finite number</exception>
+        public PdfComposerPage AddPage(double widthPoints, double heightPoints)
         {
-            if (!(widthPoints > 0) || double.IsInfinity(widthPoints))
-                throw new ArgumentOutOfRangeException(nameof(widthPoints), widthPoints, "A page needs a positive, finite width.");
-            if (!(heightPoints > 0) || double.IsInfinity(heightPoints))
-                throw new ArgumentOutOfRangeException(nameof(heightPoints), heightPoints, "A page needs a positive, finite height.");
-            if (_saved)
-                throw new InvalidOperationException("The document has been saved; start a new composer for another file.");
+            // Zero is allowed: a page with no area is an empty page, which a caller laying content out against a size it has not been
+            // given yet (an HTML document with no page size) can end up with.
+            if (!(widthPoints >= 0) || double.IsInfinity(widthPoints))
+                throw new ArgumentOutOfRangeException(nameof(widthPoints), widthPoints, "A page needs a non-negative, finite width.");
+            if (!(heightPoints >= 0) || double.IsInfinity(heightPoints))
+                throw new ArgumentOutOfRangeException(nameof(heightPoints), heightPoints, "A page needs a non-negative, finite height.");
 
             EnsureConfigured();
 
@@ -77,30 +79,105 @@ namespace PeachDrawing.PDF
             page.Width = widthPoints;
             page.Height = heightPoints;
 
-            var graphics = PdfGraphics.FromPdfPage(page);
-            var canvas = new PdfCanvas(_renderContext, graphics, _renderContext.PixelsPerPoint);
-            _open.Add((canvas, graphics));
-            return canvas;
+            var composerPage = new PdfComposerPage(this, page, _pages.Count, _renderContext);
+            _pages.Add(composerPage);
+            return composerPage;
         }
 
         /// <summary>
-        /// Finishes the pages and writes the file. The composer cannot be added to afterwards.
+        /// Names a place in the document, so links (<see cref="PdfComposerPage.AddDestinationLink"/>) and readers can jump to it. The reader
+        /// scrolls to put the place at the top of the window, at the width of the page.
+        /// </summary>
+        /// <param name="name">the destination's name; naming one twice keeps the last</param>
+        /// <param name="pageIndex">the zero-based index of the page the place is on</param>
+        /// <param name="topPoints">how far below the top edge of that page the place is, in points</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+        public void AddNamedDestination(string name, int pageIndex, double topPoints)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(name);
+            if (pageIndex < 0 || pageIndex >= _pages.Count)
+                throw new ArgumentOutOfRangeException(nameof(pageIndex), pageIndex, "There is no such page.");
+
+            // /FitH's top is PDF default user space, which is bottom-up (0 at the bottom edge), so the offset down from the top is
+            // flipped against the TARGET page's own height - a link can jump between differently sized pages.
+            _document.AddNamedDestination(name, pageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(_pages[pageIndex].HeightPoints - topPoints));
+        }
+
+        /// <summary>
+        /// Adds entries to the document outline (the bookmarks sidebar of a reader). Each entry nests under the nearest preceding entry
+        /// of the same batch with a shallower level, or sits at the top if there is none - the conventional heading-outline shape.
+        /// </summary>
+        /// <param name="bookmarks">the entries, in document order</param>
+        public void AddBookmarks(IEnumerable<PdfBookmark> bookmarks)
+        {
+            ArgumentNullException.ThrowIfNull(bookmarks);
+
+            var stack = new Stack<(int Level, PdfOutline Outline)>();
+            foreach (var bookmark in bookmarks)
+            {
+                while (stack.Count > 0 && stack.Peek().Level >= bookmark.Level)
+                    stack.Pop();
+
+                var outline = new PdfOutline
+                {
+                    Title = bookmark.Title,
+                    Opened = bookmark.IsOpen,
+                };
+
+                if (bookmark.Uri is { } uri)
+                {
+                    outline.Url = uri;
+                }
+                else if (bookmark.PageIndex is { } pageIndex && pageIndex >= 0 && pageIndex < _pages.Count)
+                {
+                    outline.DestinationPage = _pages[pageIndex].Page;
+                    // /FitH top fits the page width and positions vertically at the top - not /FitV's horizontal left. The offset is top
+                    // down, but /FitH's own top is PDF default user space, bottom-up, so it is flipped against the destination page.
+                    outline.PageDestinationType = PdfPageDestinationType.FitH;
+                    outline.Top = outline.DestinationPage.Height - bookmark.TopPoints;
+                }
+
+                if (stack.Count > 0)
+                    stack.Peek().Outline.Outlines.Add(outline);
+                else
+                    _document.Outlines.Add(outline);
+
+                stack.Push((bookmark.Level, outline));
+            }
+        }
+
+        /// <summary>
+        /// Merges embedded raster images that encode to byte-identical PDF image objects, keeping one copy and pointing every other
+        /// reference at it. Call it after all pages are drawn and before <see cref="Save"/>: the saved file then drops the duplicates.
+        /// </summary>
+        /// <remarks>
+        /// Repeated references to the same image source within one canvas's work already share one embedded image. This is for what that
+        /// does not cover: the same image drawn on separate pages by separate work, or two sources that happen to encode identically. It is
+        /// not run automatically, since hashing every embedded image is not a cost most documents should pay on every save.
+        /// </remarks>
+        public void ConsolidateImages()
+        {
+            foreach (var page in _pages)
+                page.Finish();
+
+            _document.ConsolidateImages();
+        }
+
+        /// <summary>
+        /// Finishes the pages and writes the file. Pages can be added and the document saved again: each save writes everything so far.
         /// </summary>
         /// <param name="stream">where to write; it is not closed</param>
-        /// <exception cref="InvalidOperationException">the document has no pages, or it has already been saved</exception>
+        /// <exception cref="InvalidOperationException">the document has no pages</exception>
         public void Save(Stream stream)
         {
             ArgumentNullException.ThrowIfNull(stream);
 
-            if (_saved)
-                throw new InvalidOperationException("The document has already been saved.");
             if (_document.PageCount == 0)
                 throw new InvalidOperationException("A PDF file needs at least one page; call AddPage first.");
 
             EnsureConfigured();
             FinishPages();
             _document.Save(stream);
-            _saved = true;
         }
 
         /// <summary>Releases the document. Canvases returned by <see cref="AddPage"/> are not usable afterwards.</summary>
@@ -112,13 +189,8 @@ namespace PeachDrawing.PDF
 
         private void FinishPages()
         {
-            foreach (var (canvas, graphics) in _open)
-            {
-                canvas.Dispose();
-                graphics.Dispose();
-            }
-
-            _open.Clear();
+            foreach (var page in _pages)
+                page.Finish();
         }
     }
 }

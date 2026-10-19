@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.TestSupport
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
-            using var measure = PdfGraphics.CreateMeasureContext(
+            using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, 
                 container.PageSize);
 
             container.MaxSize = new Size(container.PageSize.Width, 0);
@@ -115,7 +115,7 @@ namespace PeachPDF.Tests.TestSupport
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
-            var measure = PdfGraphics.CreateMeasureContext(container.PageSize);
+            var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, container.PageSize);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0
@@ -151,7 +151,7 @@ namespace PeachPDF.Tests.TestSupport
                     await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
 
                     measure.Dispose();
-                    measure = PdfGraphics.CreateMeasureContext(container.PageSize);
+                    measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, container.PageSize);
                 }
             }
 

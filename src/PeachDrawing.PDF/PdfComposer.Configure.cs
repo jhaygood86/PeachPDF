@@ -35,9 +35,6 @@ namespace PeachDrawing.PDF
         public void Configure(PdfComposerOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
-            if (_saved)
-                throw new InvalidOperationException("The document has been saved; start a new composer for another file.");
-
             EstablishFormat(options);
             ApplyInformation(options);
             _configured = true;

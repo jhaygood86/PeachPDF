@@ -27,8 +27,14 @@ using System.Text;
 namespace PeachDrawing.PDF
 {
     /// <summary>
-    /// Adapter for WinForms Graphics for core.
+    /// A <see cref="Canvas"/> that draws onto a PDF page. Get one from <see cref="PdfComposerPage"/>, or - for measuring text and layout
+    /// without drawing anything - from <see cref="CreateMeasuring(PdfRenderContext, double, double)"/>.
     /// </summary>
+    /// <remarks>
+    /// The origin is the top-left corner of the page and y grows downward, in the layout units of the <see cref="PdfRenderContext"/> the
+    /// canvas was made with (points unless its <see cref="PdfRenderContext.PixelsPerPoint"/> says otherwise). Several canvases can be made
+    /// over one page: each keeps its own bookkeeping, and they draw into the same content.
+    /// </remarks>
     public sealed class PdfCanvas : Canvas
     {
         /// <summary>
@@ -40,6 +46,12 @@ namespace PeachDrawing.PDF
         /// if to release the graphics object on dispose
         /// </summary>
         private readonly bool _releaseGraphics;
+
+        /// <summary>
+        /// Whether this canvas owns the graphics it wraps and releases it on dispose, without being a tile: a measuring canvas. Unlike
+        /// <see cref="_releaseGraphics"/> this does not make the canvas report <see cref="IsOffscreenTile"/>.
+        /// </summary>
+        private bool _ownsGraphics;
 
         /// <summary>
         /// <c>text-decoration-skip-ink</c>'s measured crossings, keyed by everything they depend on once
@@ -105,6 +117,28 @@ namespace PeachDrawing.PDF
 
         private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
         private readonly PeachDrawing.Core.ISvgGlyphPainter? _ownSvgGlyphPainter;
+
+        /// <summary>
+        /// Creates a canvas that draws nothing: it exists to measure text and lay content out against a nominal page size. Dispose it when
+        /// the measuring is done.
+        /// </summary>
+        /// <param name="renderContext">the context whose fonts are measured and whose <see cref="PdfRenderContext.PixelsPerPoint"/> sets the unit</param>
+        /// <param name="widthPoints">the nominal width, in points</param>
+        /// <param name="heightPoints">the nominal height, in points</param>
+        /// <returns>a canvas on which drawing has no effect</returns>
+        public static PdfCanvas CreateMeasuring(PdfRenderContext renderContext, double widthPoints, double heightPoints) =>
+            CreateMeasuring(renderContext, new Size(widthPoints, heightPoints));
+
+        /// <inheritdoc cref="CreateMeasuring(PdfRenderContext, double, double)"/>
+        /// <param name="renderContext">the context whose fonts are measured and whose <see cref="PdfRenderContext.PixelsPerPoint"/> sets the unit</param>
+        /// <param name="size">the nominal size, in points</param>
+        public static PdfCanvas CreateMeasuring(PdfRenderContext renderContext, Size size)
+        {
+            ArgumentNullException.ThrowIfNull(renderContext);
+
+            var graphics = PdfGraphics.CreateMeasureContext(size);
+            return new PdfCanvas(renderContext, graphics, renderContext.PixelsPerPoint) { _ownsGraphics = true };
+        }
 
         /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
         internal RenderContext RenderContext => _renderContext;
@@ -555,7 +589,7 @@ namespace PeachDrawing.PDF
             if (ReferenceEquals(_g.RasterContext, _renderContext))
                 _g.RasterContext = _previousRasterContext;
 
-            if (_releaseGraphics)
+            if (_releaseGraphics || _ownsGraphics)
                 _g.Dispose();
         }
 

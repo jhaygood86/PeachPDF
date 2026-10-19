@@ -2033,7 +2033,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = PdfGraphics.CreateMeasureContext(orgPageSize);
+            using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, orgPageSize);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 

@@ -66,8 +66,8 @@ A composer writes one file:
 1. **`new PdfComposer(context, options)`** starts a document. `options` is optional.
 2. **`AddPage(widthPoints, heightPoints)`** appends a page and returns its `PdfCanvas`. Page sizes are in points, 1/72 inch: `595 x 842`
    is A4 and `612 x 792` is US Letter. Pages can differ in size.
-3. **`Save(stream)`** finishes every page and writes the file. The stream is not closed. A composer cannot be added to after it is
-   saved, and a document needs at least one page.
+3. **`Save(stream)`** finishes every page and writes the file. The stream is not closed. A document needs at least one page; pages can
+   be added and the document saved again, and each save writes everything so far.
 
 A canvas stays usable until the composer is saved or disposed, so several pages can be drawn in any order. Neither a composer nor its
 canvases are thread safe: use one composer per file.

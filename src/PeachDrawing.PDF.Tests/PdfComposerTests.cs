@@ -50,7 +50,7 @@ namespace PeachDrawing.PDF.Tests
             var (context, font) = await NewContextAsync();
             using var composer = new PdfComposer(context, Plain());
 
-            var canvas = composer.AddPage(595, 842);
+            var canvas = composer.AddPage(595, 842).Canvas;
             canvas.DrawRectangle(canvas.GetSolidBrush(Red), 50, 60, 200, 100);
             canvas.DrawString("Hello PDF", font, Black, new PaintPoint(50, 200), new Size(300, 30));
 
@@ -92,7 +92,7 @@ namespace PeachDrawing.PDF.Tests
             context.PixelsPerPoint = 2;
             using var composer = new PdfComposer(context, Plain());
 
-            var canvas = composer.AddPage(100, 100);
+            var canvas = composer.AddPage(100, 100).Canvas;
             // 200 x 200 layout units over a 100 x 100 point page: the whole page.
             canvas.DrawRectangle(canvas.GetSolidBrush(Red), 0, 0, 200, 200);
 
@@ -147,7 +147,7 @@ namespace PeachDrawing.PDF.Tests
             byte[] Compose(bool compress)
             {
                 using var composer = new PdfComposer(context, new PdfComposerOptions { CompressContentStreams = compress });
-                var canvas = composer.AddPage(500, 500);
+                var canvas = composer.AddPage(500, 500).Canvas;
                 for (var i = 0; i < 200; i++)
                     canvas.DrawRectangle(canvas.GetSolidBrush(Red), i, i, 10, 10);
                 return Save(composer);
@@ -204,21 +204,24 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
-        public async Task AfterSave_AddingAPageOrSavingAgainThrows()
+        public async Task AfterSave_PagesCanBeAdded_AndTheDocumentSavedAgain()
         {
             var (context, _) = await NewContextAsync();
-            using var composer = new PdfComposer(context);
+            using var composer = new PdfComposer(context, Plain());
             composer.AddPage(100, 100);
-            Save(composer);
+            var first = Latin1(Save(composer));
 
-            Assert.Throws<InvalidOperationException>(() => composer.AddPage(100, 100));
-            Assert.Throws<InvalidOperationException>(() => composer.Save(new MemoryStream()));
+            composer.AddPage(200, 50);
+            var second = Latin1(Save(composer));
+
+            Assert.Contains("/Count 1", first);
+            Assert.Contains("/Count 2", second);
+            Assert.Contains("/MediaBox [0 0 200 50]", second);
         }
 
         [Theory]
-        [InlineData(0, 100)]
-        [InlineData(100, 0)]
         [InlineData(-5, 100)]
+        [InlineData(100, -1)]
         [InlineData(double.NaN, 100)]
         [InlineData(100, double.PositiveInfinity)]
         public async Task AddPage_RejectsAnUnusableSize(double width, double height)
@@ -227,6 +230,16 @@ namespace PeachDrawing.PDF.Tests
             using var composer = new PdfComposer(context);
 
             Assert.Throws<ArgumentOutOfRangeException>(() => composer.AddPage(width, height));
+        }
+
+        [Fact]
+        public async Task AZeroSizedPage_IsAnEmptyPage()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+            composer.AddPage(0, 0);
+
+            Assert.Contains("/MediaBox [0 0 0 0]", Latin1(Save(composer)));
         }
 
         [Fact]
@@ -242,7 +255,7 @@ namespace PeachDrawing.PDF.Tests
         {
             var (context, font) = await NewContextAsync(20);
             using var composer = new PdfComposer(context);
-            var canvas = composer.AddPage(100, 100);
+            var canvas = composer.AddPage(100, 100).Canvas;
 
             var narrow = canvas.MeasureString("i", font).Width;
             var wide = canvas.MeasureString("WWWW", font).Width;
@@ -256,7 +269,7 @@ namespace PeachDrawing.PDF.Tests
         {
             var (context, _) = await NewContextAsync();
             using var composer = new PdfComposer(context, Plain());
-            var canvas = composer.AddPage(200, 200);
+            var canvas = composer.AddPage(200, 200).Canvas;
 
             canvas.PushClip(new Rect(10, 10, 100, 100));
             canvas.PushTransform(System.Numerics.Matrix3x2.CreateRotation(0.5f));

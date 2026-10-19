@@ -24,7 +24,7 @@ public class PeachPdfDocument
     /// <summary>
     /// The number of pages currently in the document.
     /// </summary>
-    public int PageCount => PdfDocument.PageCount;
+    public int PageCount => _composer.PageCount;
 
     /// <summary>
     /// Words this render drew and then truncated with a clip - the loss class reading the finished
@@ -46,7 +46,7 @@ public class PeachPdfDocument
     /// <param name="stream">The destination stream. The caller owns the stream and is responsible for disposing it.</param>
     public void Save(Stream stream)
     {
-        PdfDocument.Save(stream);
+        _composer.Save(stream);
     }
 
     /// <summary>
@@ -65,6 +65,6 @@ public class PeachPdfDocument
     /// </remarks>
     public void ConsolidateImages()
     {
-        PdfDocument.ConsolidateImages();
+        _composer.ConsolidateImages();
     }
 }
