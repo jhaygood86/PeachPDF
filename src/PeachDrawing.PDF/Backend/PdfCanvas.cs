@@ -269,7 +269,7 @@ namespace PeachDrawing.PDF
 
         /// <summary>See <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - threaded straight through to
-        /// <see cref="PdfGraphics.DrawString(string, TypefaceFont, Brush, double, double, PdfStringFormat, double, FontPalette?, ShapeSettings?, string?)"/>,
+        /// the engine's own string-drawing routine,
         /// the one real PDF-writing path that acts on it.</summary>
         public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
