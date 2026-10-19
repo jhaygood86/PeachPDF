@@ -1593,7 +1593,7 @@ namespace PeachPDF.Svg
         /// <c>class</c> per call rather than caching, matching this builder's existing preference for
         /// simplicity over micro-optimization elsewhere (e.g. <see cref="BuildDefinitionChildren"/>).
         /// </summary>
-        private static string? ResolveStyledAttr(ISvgSourceNode node, string name)
+        private static string? ResolveStyledAttr(ISvgSourceNode node, string name, Func<string, bool>? isValid = null)
         {
             // Precedence (highest to lowest): inline style="" attribute > matched author-stylesheet rules
             // (full CSS engine: combinators/attr/pseudo selectors, specificity, var()) > presentation
@@ -1604,11 +1604,22 @@ namespace PeachPDF.Svg
             // var() is guaranteed-invalid the declaration is invalid at computed-value time (CSS Custom
             // Properties 1 §3) — it still wins, so this returns null and the caller computes the property to
             // its inherited/initial value, rather than the cascade rolling back to a lower-priority tier.
-            var styleDeclarations = SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"));
-            if (styleDeclarations.TryGetValue(name, out var styleValue))
-                return node.ResolveVar(styleValue); // null (guaranteed-invalid) → inherited/initial, no fall-through
-
+            var styleDeclarations = SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"), out var importantInline);
             var matched = node.GetMatchedCssDeclarations();
+
+            // An !important rule beats an inline declaration that is not itself important (CSS Cascade 4, section 6.1).
+            var ruleWins = styleDeclarations.ContainsKey(name) && matched is not null && matched.ContainsKey(name)
+                && importantInline?.Contains(name) != true && node.IsMatchedCssDeclarationImportant(name);
+
+            // A declaration that is not a valid value for the property is dropped at parse time, so the next tier answers instead
+            // (CSS Cascade 4, section 4.2). A value that still holds var() can only be judged once substituted, as the null case below.
+            if (!ruleWins && styleDeclarations.TryGetValue(name, out var styleValue))
+            {
+                var resolvedStyle = node.ResolveVar(styleValue);
+                if (resolvedStyle is null || isValid is null || isValid(resolvedStyle))
+                    return resolvedStyle; // null (guaranteed-invalid) → inherited/initial, no fall-through
+            }
+
             if (matched is not null && matched.TryGetValue(name, out var matchedValue))
                 return matchedValue; // present (incl. null = invalid at computed-value time) → authoritative
 
@@ -3610,6 +3621,44 @@ namespace PeachPDF.Svg
         private static bool IsUserSpaceOnUse(ISvgSourceNode node) =>
             string.Equals(node.GetAttribute("gradientUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
 
+        private static bool IsStopColorValue(CssValueParser parser, string value)
+        {
+            var trimmed = value.Trim();
+            return trimmed.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || parser.IsColorValid(trimmed);
+        }
+
+        private static bool IsOpacityValue(string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                return true;
+            var number = trimmed.EndsWith('%') ? trimmed[..^1] : trimmed;
+            return double.TryParse(number, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _);
+        }
+
+        /// <summary>
+        /// The value <c>currentColor</c> stands for on <paramref name="element"/>: the nearest <c>color</c> declared on it, on
+        /// <paramref name="container"/> (the gradient it sits in) or on that container's ancestors, else the colour of the host element.
+        /// </summary>
+        private PaintColor ResolveCurrentColor(ISvgSourceNode element, ISvgSourceNode container)
+        {
+            var parser = new CssValueParser(_renderContext);
+
+            bool IsColor(string v) => !v.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase) && parser.IsColorValid(v.Trim());
+
+            PaintColor? Declared(ISvgSourceNode n) =>
+                ResolveStyledAttr(n, "color", IsColor) is { } value && IsColor(value) ? parser.GetActualColor(value.Trim()) : null;
+
+            if (Declared(element) is { } own) return own;
+            if (Declared(container) is { } fromContainer) return fromContainer;
+            for (var i = _definitionAncestors.Length - 1; i >= 0; i--)
+                if (Declared(_definitionAncestors[i]) is { } inherited)
+                    return inherited;
+            return _contextColor;
+        }
+
         private List<SvgGradientStop> BuildStops(ISvgSourceNode node)
         {
             var stops = new List<SvgGradientStop>();
@@ -3625,14 +3674,19 @@ namespace PeachPDF.Svg
                 // Through ResolveStyledAttr, so a stylesheet rule (`stop { stop-color: ... }`) reaches a stop as it does any other element:
                 // inline style="" beats a matching rule beats the presentation attribute.
                 // stop-color and stop-opacity are not inherited, so `inherit` takes the gradient's own value (CSS Cascade 4, section 7.3.1).
-                string? Styled(string name)
+                string? Styled(string name, Func<string, bool>? isValid = null)
                 {
-                    var value = ResolveStyledAttr(child, name);
-                    return value is not null && value.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase) ? ResolveStyledAttr(node, name) : value;
+                    var value = ResolveStyledAttr(child, name, isValid);
+                    return value is not null && value.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase) ? ResolveStyledAttr(node, name, isValid) : value;
                 }
 
-                // currentColor is the colour of the host (see _contextColor), as it is for flood-color.
-                var color = SvgValueParsers.ParseStopColor(Styled("stop-color"), Styled("stop-opacity"), _renderContext, ResolveIcc, _contextColor);
+                // An inline declaration that is not a colour (or not a number) is dropped, and the rule or attribute below it answers.
+                var colorParser = new CssValueParser(_renderContext);
+                var stopColor = Styled("stop-color", v => IsStopColorValue(colorParser, v));
+                var stopOpacity = Styled("stop-opacity", v => IsOpacityValue(v));
+
+                // currentColor is the `color` in effect at the stop: its own, else the gradient's and its ancestors', else the host (see _contextColor).
+                var color = SvgValueParsers.ParseStopColor(stopColor, stopOpacity, _renderContext, ResolveIcc, ResolveCurrentColor(child, node));
 
                 stops.Add(new SvgGradientStop { Offset = offset, PaintColor = color });
             }

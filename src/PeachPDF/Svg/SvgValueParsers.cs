@@ -554,9 +554,17 @@ namespace PeachPDF.Svg
         /// A malformed declaration (no <c>:</c>) is silently skipped; the last declaration for a given
         /// property wins, matching normal CSS cascade-within-one-declaration-block behavior.
         /// </summary>
-        public static Dictionary<string, string> ParseStyleDeclarations(string? style)
+        public static Dictionary<string, string> ParseStyleDeclarations(string? style) => ParseStyleDeclarations(style, out _);
+
+        /// <summary>
+        /// <see cref="ParseStyleDeclarations(string?)"/>, also reporting which properties were declared <c>!important</c>
+        /// (the marker is not part of the returned value). An important inline declaration beats an author rule, important or not
+        /// (CSS Cascade 4, section 6.1).
+        /// </summary>
+        public static Dictionary<string, string> ParseStyleDeclarations(string? style, out HashSet<string>? important)
         {
             var declarations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            important = null;
 
             if (string.IsNullOrWhiteSpace(style))
                 return declarations;
@@ -570,8 +578,22 @@ namespace PeachPDF.Svg
                 var property = declaration[..colonIndex].Trim();
                 var value = declaration[(colonIndex + 1)..].Trim();
 
+                var isImportant = false;
+                const string marker = "!important";
+                if (value.EndsWith(marker, StringComparison.OrdinalIgnoreCase))
+                {
+                    isImportant = true;
+                    value = value[..^marker.Length].TrimEnd();
+                }
+
                 if (property.Length > 0 && value.Length > 0)
+                {
                     declarations[property] = value;
+                    if (isImportant)
+                        (important ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(property);
+                    else
+                        important?.Remove(property);
+                }
             }
 
             return declarations;
