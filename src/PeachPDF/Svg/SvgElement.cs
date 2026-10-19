@@ -91,9 +91,16 @@ namespace PeachPDF.Svg
         /// </summary>
         public Matrix3x2? Transform
         {
-            get => _transform is { } matrix && TransformOrigin is { } origin ? origin.Apply(matrix, this) : _transform;
+            get
+            {
+                var matrix = DeferredTransform?.Resolve(this) ?? _transform;
+                return matrix is { } resolved && TransformOrigin is { } origin ? origin.Apply(resolved, this) : matrix;
+            }
             set => _transform = value;
         }
+
+        /// <summary>The transform as written when it holds a percentage of a <c>fill-box</c> or <c>stroke-box</c>, resolved against the element's geometry each time <see cref="Transform"/> is read; null otherwise.</summary>
+        public SvgDeferredTransform? DeferredTransform { get; set; }
 
         /// <summary><c>transform-origin</c> and <c>transform-box</c> as declared, or null when there is no <c>transform-origin</c> (an SVG element's initial origin is the user-space origin).</summary>
         public SvgTransformOrigin? TransformOrigin { get; set; }

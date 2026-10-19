@@ -43,6 +43,51 @@ namespace PeachPDF.Tests.Svg
             AssertMatrix(Build($"transform: {function}; transform-origin: 0 0").Transform, sx, 0, 0, sy, 0, 0);
         }
 
+        [Theory]
+        [InlineData("transform: translate(calc(5px + 5px), 0)", 10, 0)]
+        [InlineData("transform: translate(calc(10% + 2px), calc(50% - 1px))", 22, 49)]
+        [InlineData("transform: translate(calc(1em + 1px))", 11, 0)]
+        public void ACalcLength_IsEvaluatedFromAStylesheet(string rule, float tx, float ty)
+        {
+            AssertMatrix(Build(rule + "; transform-origin: 0 0").Transform, 1, 0, 0, 1, tx, ty);
+        }
+
+        [Fact]
+        public void ACalcLength_IsEvaluatedFromInlineStyle()
+        {
+            AssertMatrix(Build("", "style=\"transform: translate(calc(5px + 5px), 0)\"").Transform, 1, 0, 0, 1, 10, 0);
+        }
+
+        [Fact]
+        public void ACalcLength_IsNotValidInTheTransformAttribute()
+        {
+            Assert.Null(Build("", "transform=\"translate(calc(5px + 5px) 0)\"").Transform);
+        }
+
+        [Fact]
+        public void ACalcFunction_DoesNotDiscardTheRestOfTheList()
+        {
+            AssertMatrix(Build("transform: translate(calc(5px + 5px)) scale(2); transform-origin: 0 0").Transform, 2, 0, 0, 2, 10, 0);
+        }
+
+        // The rect is 40 x 20 at (20, 10) in a 200 x 100 view box: 10% / 50% is 4 / 10 of its fill box, 20 / 50 of the view box.
+        [Theory]
+        [InlineData("transform: translate(10%, 50%); transform-origin: 0 0", 20, 50)]
+        [InlineData("transform: translate(10%, 50%); transform-box: fill-box; transform-origin: 0 0", 4, 10)]
+        [InlineData("transform: translate(10%, 50%); transform-box: content-box; transform-origin: 0 0", 4, 10)]
+        [InlineData("transform: translate(calc(10% + 1px)); transform-box: fill-box; transform-origin: 0 0", 5, 0)]
+        public void APercentage_IsOfTheTransformBox(string rule, float tx, float ty)
+        {
+            AssertMatrix(Build(rule).Transform, 1, 0, 0, 1, tx, ty);
+        }
+
+        [Fact]
+        public void APercentage_OfAStrokeBox_IncludesHalfTheStrokeWidth()
+        {
+            // 40 + 4 wide: 10% is 4.4.
+            AssertMatrix(Build("transform: translate(10%); transform-box: stroke-box; transform-origin: 0 0", "stroke=\"red\" stroke-width=\"4\"").Transform, 1, 0, 0, 1, 4.4f, 0);
+        }
+
         [Fact]
         public void TheQUnit_IsAQuarterMillimetre()
         {
@@ -107,12 +152,6 @@ namespace PeachPDF.Tests.Svg
         public void RelativeLengths_ResolveInATranslate(string css, float a, float b, float c, float d, float e, float f)
         {
             AssertMatrix(Build(css).Transform, a, b, c, d, e, f);
-        }
-
-        [Fact]
-        public void APercentageTranslate_WithAFillBox_DoesNothingRatherThanGuess()
-        {
-            Assert.Null(Build("transform: translate(10%); transform-box: fill-box").Transform);
         }
 
         // Chrome drops style="transform: rotate(10)" (no unit) as invalid, so the rule answers; the attribute form takes the bare number.

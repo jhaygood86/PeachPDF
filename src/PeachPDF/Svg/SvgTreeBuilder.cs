@@ -1403,10 +1403,20 @@ namespace PeachPDF.Svg
                 : new Rect(0, 0, _viewportWidth ?? 0, _viewportHeight ?? 0);
             var transformContext = new SvgTransformContext(
                 _lengthBasis?.EmPx ?? SvgValueParsers.DefaultEmPx, _lengthBasis?.RootEmPx ?? SvgValueParsers.DefaultEmPx,
-                transformBox == SvgTransformBox.ViewBox ? viewBox.Width : double.NaN, transformBox == SvgTransformBox.ViewBox ? viewBox.Height : double.NaN);
+                transformBox == SvgTransformBox.ViewBox ? viewBox.Width : double.NaN, transformBox == SvgTransformBox.ViewBox ? viewBox.Height : double.NaN, _lengthBasis);
 
             // An inline style="transform: ..." that is not valid CSS (rotate(10) with no unit) is dropped, as in a browser, and the rule or attribute answers.
-            element.Transform = SvgTransformParser.Parse(ResolveStyledAttr(node, "transform", SvgTransformParser.IsValidCssTransform), transformContext);
+            var transformText = ResolveStyledAttr(node, "transform", SvgTransformParser.IsValidCssTransform);
+
+            // calc() is CSS syntax: the transform attribute's grammar is numbers only, so a calc() there stays invalid.
+            var transformIsCss = transformText is not null && (SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"), out _).ContainsKey("transform")
+                || node.GetMatchedCssDeclarations()?.ContainsKey("transform") == true);
+            element.Transform = SvgTransformParser.Parse(transformText, transformContext, allowCalc: transformIsCss);
+
+            // A percentage is of the reference box, which a fill-box or stroke-box only has once the element's geometry is known: read again then.
+            element.DeferredTransform = transformBox != SvgTransformBox.ViewBox && transformText is not null && transformText.Contains('%')
+                ? new SvgDeferredTransform(transformText, transformContext, transformBox, transformIsCss)
+                : null;
             element.TransformOrigin = SvgTransformOrigin.Parse(Attr("transform-origin"), transformBox, viewBox, _lengthBasis);
 
             // fill-rule/stroke-linecap/stroke-linejoin fall back to the INHERITED value (not a hardcoded

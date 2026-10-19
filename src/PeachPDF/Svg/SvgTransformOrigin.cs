@@ -103,12 +103,7 @@ namespace PeachPDF.Svg
         /// <summary><paramref name="matrix"/> turned about this origin on <paramref name="element"/>.</summary>
         public Matrix3x2 Apply(Matrix3x2 matrix, SvgElement element)
         {
-            var box = _box switch
-            {
-                SvgTransformBox.ViewBox => _viewBox,
-                SvgTransformBox.FillBox => SvgGeometryBounds.GetBoundingBox(element) ?? default,
-                _ => Stroked(element),
-            };
+            var box = ReferenceBox(element, _box, _viewBox);
 
             var ox = (float)(box.X + (_x.IsPercent ? _x.Value / 100 * box.Width : _x.Value));
             var oy = (float)(box.Y + (_y.IsPercent ? _y.Value / 100 * box.Height : _y.Value));
@@ -116,6 +111,14 @@ namespace PeachPDF.Svg
             // Row-vector convention: move the origin to the user-space origin, apply the transform, move back.
             return Matrix3x2.CreateTranslation(-ox, -oy) * matrix * Matrix3x2.CreateTranslation(ox, oy);
         }
+
+        /// <summary>The rectangle a percentage in a transform or its origin is of: the view box, the element's object bounding box, or that grown by half the stroke width.</summary>
+        internal static Rect ReferenceBox(SvgElement element, SvgTransformBox box, Rect viewBox) => box switch
+        {
+            SvgTransformBox.ViewBox => viewBox,
+            SvgTransformBox.FillBox => SvgGeometryBounds.GetBoundingBox(element) ?? default,
+            _ => Stroked(element),
+        };
 
         private static Rect Stroked(SvgElement element)
         {
@@ -125,6 +128,19 @@ namespace PeachPDF.Svg
 
             var half = element.StrokeWidth / 2;
             return new Rect(fill.X - half, fill.Y - half, fill.Width + element.StrokeWidth, fill.Height + element.StrokeWidth);
+        }
+    }
+}
+
+namespace PeachPDF.Svg
+{
+    /// <summary>A CSS <c>transform</c> with a percentage that is of a <c>fill-box</c> or <c>stroke-box</c>: parsed again against the element's geometry when it is read.</summary>
+    internal sealed class SvgDeferredTransform(string text, SvgTransformContext context, SvgTransformBox box, bool allowCalc)
+    {
+        public Matrix3x2? Resolve(SvgElement element)
+        {
+            var reference = SvgTransformOrigin.ReferenceBox(element, box, default);
+            return SvgTransformParser.Parse(text, context with { ReferenceWidth = reference.Width, ReferenceHeight = reference.Height }, allowCalc: allowCalc);
         }
     }
 }
