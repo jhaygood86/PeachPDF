@@ -1829,15 +1829,13 @@
     },
     {
       "name": "background-attachment",
+      "comment": "<attachment># where <attachment> = scroll | fixed | local, one per background layer (the painter resolves each layer's own with BackgroundLayerResolver.LayerAt, so a list such as 'fixed, scroll' - which the background shorthand exports when only some layers name an attachment - must be accepted). cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList, reusing the Map.BackgroundAttachments dictionary the real converter uses.",
       "inherited": false,
       "initialValue": "scroll",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "scroll",
-        "fixed",
-        "local"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-list",
+        "keywordMap": "Map.BackgroundAttachments"
+      },
       "html": {
         "propertyPath": "BackgroundAttachment",
         "csharpDataType": "string",

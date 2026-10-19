@@ -321,6 +321,14 @@ static string Swatch(string desc, string css) =>
     $"<div class=\"css\">{css}</div>" +
     "</td>";
 
+// The same cell with the `background` shorthand, for layers that end in a color.
+static string BgSwatch(string desc, string css) =>
+    "<td>" +
+    $"<div class=\"box\" style=\"background: {css}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{css}</div>" +
+    "</td>";
+
 static string RadiusSwatch(string desc, string borderRadiusCss, string boxCss = "") =>
     "<td>" +
     $"<div class=\"rbox\" style=\"{boxCss}border-radius: {borderRadiusCss}\"></div>" +
@@ -668,10 +676,18 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("conic oklch longer", "conic-gradient(in oklch longer hue, red, blue)")
     ) +
 
+    "<h2>17 — Layers with a final background color</h2>" +
+    Row(
+        BgSwatch("gradient, translucent color", "linear-gradient(to right, #00f, #0f0), rgba(255,0,0,.5)"),
+        BgSwatch("two gradients, color", "repeating-linear-gradient(45deg, #0004 0 6px, #0000 6px 12px), linear-gradient(#f39c12, #e74c3c), #333"),
+        BgSwatch("no-repeat gradient, color", "radial-gradient(circle at 30% 40%, #fff 0 10px, #2c3e50 11px) no-repeat, #2c3e50"),
+        BgSwatch("size per layer, color", "linear-gradient(#1abc9c, #16a085) left / 50% 100% no-repeat, linear-gradient(#e67e22, #d35400) right / 50% 100% no-repeat, #ecf0f1")
+    ) +
+
     "</body></html>";
 
 await SaveShowcaseAsync("gradients", "Backgrounds & Borders", "CSS Gradients",
-    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, and CSS Color Level 4 interpolation spaces.",
+    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, gradient layers over a background color, and CSS Color Level 4 interpolation spaces.",
     html, pdfConfig);
 
 // --- Border-radius showcase ---
