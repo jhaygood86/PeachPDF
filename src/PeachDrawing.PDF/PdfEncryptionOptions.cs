@@ -1,9 +1,8 @@
-// An internal mirror of PeachPDF's public option type of the same name: PeachPDF maps its PdfGenerateConfig onto these.
 #nullable enable
 
 using System;
 
-namespace PeachDrawing.PDF.Engine
+namespace PeachDrawing.PDF
 {
     /// <summary>
     /// Password protection and permissions for a generated PDF, written with the PDF standard security
@@ -11,10 +10,10 @@ namespace PeachDrawing.PDF.Engine
     /// deprecated algorithms and are not offered.
     /// </summary>
     /// <remarks>
-    /// Set it on <c>PdfGenerateConfig.Encryption</c>. It cannot be combined with PDF/A or PDF/X, both
-    /// of which forbid encryption, and needs a PDF 1.7 or 2.0 document (the default is 2.0).
+    /// Set it on <see cref="PdfComposerOptions.Encryption"/>. The file's header version is raised to 1.7 when it would otherwise be
+    /// older. PDF/A and PDF/X documents must not be encrypted.
     /// </remarks>
-    internal sealed class PdfEncryptionOptions
+    public sealed class PdfEncryptionOptions
     {
         /// <summary>
         /// The password a reader must supply to open the document. When <see langword="null"/> or empty the document

@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Filters
         private static PdfDocument Pdf20Document(bool brotli = true)
         {
             var document = new PdfDocument();
-            document.Options.PdfVersion = PeachDrawing.PDF.Engine.PdfVersion.Pdf20;
+            document.Options.PdfVersion = PeachDrawing.PDF.PdfVersion.Pdf20;
             document.Options.BrotliCompression = brotli;
             return document;
         }

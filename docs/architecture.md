@@ -72,7 +72,7 @@ public abstract class RNetworkLoader
 
 **Stylesheets and images** — `StylesheetLoadHandler.LoadStylesheet` and `ImageLoadHandler.SetImageFromPath` both resolve their `href`/`src` to an absolute URI against the document base (a `<base href>` element, else `BaseUri`, else the working-directory `file:` default) via the shared `CommonUtils.ResolveAgainstDocumentBase`, then call `adapter.GetResourceStream(uri)`. There is a single resolution path — local files, `data:` URIs, and remote resources all flow through `GetResourceStream` uniformly, with no separate file-system branch. Stylesheet responses are only accepted when the `Content-Type` is `text/css`; a resolved SVG image is detected from its `Content-Type: image/svg+xml` (or `.svg` extension).
 
-**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `PdfRenderContext.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme. Setting [`AllowLocalFileAccess`](usage-examples.md#disabling-local-file-access) to `false` removes the `file:` half of that: every `file:` request then resolves to "not found", and the working-directory base above is withdrawn, so a document cannot reach the file system by either route.
+**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `HtmlRenderContext.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme. Setting [`AllowLocalFileAccess`](usage-examples.md#disabling-local-file-access) to `false` removes the `file:` half of that: every `file:` request then resolves to "not found", and the working-directory base above is withdrawn, so a document cannot reach the file system by either route.
 
 ### Built-in implementations
 
@@ -532,7 +532,7 @@ A fragment's *rectangles* were the last thing still derived from the box's singl
 
 ### Graphics abstraction
 
-The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation, `PdfCanvas`, writes every call as PDF content through the embedded engine's `PdfGraphics`. The abstract surface exposes:
+The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation, `PdfCanvas` (from the [PeachDrawing.PDF](peachdrawing-pdf.md) package), writes every call as PDF content through the embedded engine's `PdfGraphics`. The abstract surface exposes:
 
 | Method | Purpose |
 |---|---|

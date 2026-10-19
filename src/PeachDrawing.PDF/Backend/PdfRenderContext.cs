@@ -31,7 +31,7 @@ namespace PeachDrawing.PDF
     /// decoded for embedding, and the scale between layout units and PDF points. A host adds what is specific to it - HTML and CSS
     /// font-family aliases, <c>font-variation-settings</c> parsing, resource loading - by deriving from it.
     /// </summary>
-    internal class PdfRenderContext : RenderContext
+    public class PdfRenderContext : RenderContext
     {
         /// <summary>The fonts this adapter renders with: the installed fonts plus everything registered on it.</summary>
         private readonly FontSet _fontSet;
@@ -39,7 +39,7 @@ namespace PeachDrawing.PDF
         /// <summary>
         /// Init color resolve.
         /// </summary>
-        internal PdfRenderContext()
+        public PdfRenderContext()
         {
             _fontSet = new FontSet();
 
@@ -73,11 +73,18 @@ namespace PeachDrawing.PDF
         /// </summary>
         public override double LayoutUnitsPerPoint => PixelsPerPoint;
 
+        /// <inheritdoc />
         public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable)
         {
             return mediaTypesAvailable.Contains("print") ? "print" : "all";
         }
 
+        /// <summary>
+        /// Adds a font to the context so pages can draw with it. TrueType, OpenType, WOFF and WOFF2 are recognised by their content.
+        /// </summary>
+        /// <param name="stream">the font file; it is read to the end, and not closed</param>
+        /// <param name="fontFamilyName">the family name to register it under, or <see langword="null"/> to take the name from the font file</param>
+        /// <returns>a task that completes when the font has been added</returns>
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
             await AddFont(stream, fontFamilyName, default);
@@ -119,6 +126,7 @@ namespace PeachDrawing.PDF
         {
         }
 
+        /// <inheritdoc />
         protected override PaintColor GetColorInt(string colorName)
         {
             return Enum.TryParse<KnownColor>(colorName, true, out var knownColor)
@@ -126,16 +134,19 @@ namespace PeachDrawing.PDF
                 : PaintColor.Empty;
         }
 
+        /// <inheritdoc />
         protected override Image ImageFromStreamInt(Stream memoryStream)
         {
             return new PdfCanvasImage(PdfRasterImage.FromStream(() => memoryStream));
         }
 
+        /// <inheritdoc />
         protected override Font CreateFontInt(string family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
+        /// <inheritdoc />
         protected override Font CreateFontInt(FontFamily family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return MatchAndCreateFont(((PdfCanvasFontFamily)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
@@ -200,6 +211,7 @@ namespace PeachDrawing.PDF
             return new PdfCanvasFont(xFont, PixelsPerPoint);
         }
 
+        /// <inheritdoc />
         protected override Font? CreateFontForCodepointInt(string family, double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
             var fontStyle = WithoutSynthesisSwitches(style);
@@ -216,6 +228,7 @@ namespace PeachDrawing.PDF
             return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
         }
 
+        /// <inheritdoc />
         protected override Font? CreateSystemFallbackFontForCodepointInt(double size, PaintFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
         {
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
@@ -243,8 +256,10 @@ namespace PeachDrawing.PDF
             }
         }
 
+        /// <inheritdoc />
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
+        /// <inheritdoc />
         protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             // A missing format() hint is valid CSS (it's an optional hint, not a requirement) and must
@@ -263,6 +278,7 @@ namespace PeachDrawing.PDF
             return false;
         }
 
+        /// <inheritdoc />
         protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             if (!_fontSet.TryGetFontData(localFontFaceName, out var data)) return Task.FromResult(false);

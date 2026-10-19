@@ -13,8 +13,8 @@ dotnet add package PeachDrawing.Core
 
 > **Status: pre-1.0.** Every type described below is the package's full public surface today - see
 > `PublicApi.txt` for the exact, machine-checked snapshot. Two concrete `Canvas`/`RenderContext`
-> implementations exist today: `PeachPDF` (`PdfRenderContext`/`PdfCanvas`, writing PDF, and
-> `RasterCanvas`/`RasterRenderContext` as PeachPDF's own raster fallback for effects PDF can't express as
+> implementations exist today: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
+> renders through, together with `RasterCanvas`/`RasterRenderContext` as its raster fallback for effects PDF can't express as
 > vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
 > with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
 > API may change between releases.
@@ -47,7 +47,7 @@ the life of one render, and is where you register fonts before drawing with them
 ```csharp
 using PeachDrawing.Core;
 
-// A concrete RenderContext implementation - PeachPDF's own PdfRenderContext, or your own.
+// A concrete RenderContext implementation - PeachDrawing.PDF's PdfRenderContext, or your own.
 RenderContext context = ...;
 
 context.AddFontFamily(myFontFamily);
@@ -329,7 +329,7 @@ needs to:
    entirely.
 4. Derive from `Image`/`FontFamily`/`Font` as your backend's font/image loading needs.
 
-PeachPDF's own `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), its `RasterCanvas`
+[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), PeachPDF's use of `RasterCanvas`
 (rasterizing effects PDF can't express as vector content, such as `filter: blur()`), and `PeachDrawing`'s
 own standalone `RasterCanvas`/`RasterRenderContext` (see [docs/peachdrawing.md](peachdrawing.md)) are all
 independent, complete implementations of exactly this - reading their source is the closest thing to a
