@@ -47,8 +47,7 @@ namespace PeachPDF.Tests.Html.Core
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             return FindByTag(container.Root!, "p")!;
@@ -96,7 +95,7 @@ p {{ width: 400px; }}
 
             var resolvedFont = owner.ActualFontForCodepoint(codepoint);
 
-            Assert.NotEqual(latinFamily, ((PdfCanvasFont)resolvedFont).Font.Typeface.FamilyName);
+            Assert.NotEqual(latinFamily, (resolvedFont).Typeface!.FamilyName);
             Assert.True(resolvedFont.HasGlyph(codepoint));
         }
 
@@ -128,7 +127,7 @@ p {{ width: 400px; }}
 
             var resolvedFont = owner.ActualFontForCodepoint(codepoint);
 
-            Assert.Equal(latinFamily, ((PdfCanvasFont)resolvedFont).Font.Typeface.FamilyName);
+            Assert.Equal(latinFamily, (resolvedFont).Typeface!.FamilyName);
         }
     }
 }

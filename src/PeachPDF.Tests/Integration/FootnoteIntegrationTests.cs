@@ -391,7 +391,7 @@ namespace PeachPDF.Tests.Integration
             var config = new PdfGenerateConfig { PageSize = PageSize.A4 };
             var doc = await generator.GeneratePdf(html, config);
 
-            Assert.Equal(2, doc.PdfDocument.Pages.Count);
+            Assert.Equal(2, doc.Inspect().PageCount);
 
             using var ms = new MemoryStream();
             doc.Save(ms);
@@ -423,7 +423,7 @@ namespace PeachPDF.Tests.Integration
             var config = new PdfGenerateConfig { PageSize = PageSize.A4 };
             var doc = await generator.GeneratePdf(html, config);
 
-            Assert.Equal(1, doc.PdfDocument.Pages.Count);
+            Assert.Equal(1, doc.Inspect().PageCount);
 
             using var ms = new MemoryStream();
             doc.Save(ms);

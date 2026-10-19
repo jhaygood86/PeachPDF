@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.CSS;
@@ -1124,7 +1125,7 @@ namespace PeachPDF.Tests.Integration
             var document = await new PdfGenerator().GeneratePdf(GrowingBar,
                 new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = progress });
 
-            Assert.Contains(expectedWidth, RectangleWidths(document.PdfDocument, 0).Select(w => Math.Round(w)));
+            Assert.Contains(expectedWidth, RectangleWidths(document.Inspect(), 0).Select(w => Math.Round(w)));
         }
 
         [Fact]
@@ -1133,7 +1134,7 @@ namespace PeachPDF.Tests.Integration
             // No width is declared outside the animation, so without it the bar is as wide as the page's content box.
             var document = await new PdfGenerator().GeneratePdf(GrowingBar, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
-            var widths = RectangleWidths(document.PdfDocument, 0).Select(w => Math.Round(w)).ToList();
+            var widths = RectangleWidths(document.Inspect(), 0).Select(w => Math.Round(w)).ToList();
             Assert.DoesNotContain(20.0, widths);
             Assert.DoesNotContain(60.0, widths);
             Assert.DoesNotContain(100.0, widths);
@@ -1147,8 +1148,8 @@ namespace PeachPDF.Tests.Integration
             await generator.AddPdfPages(document, GrowingBar, new PdfGenerateConfig { PageSize = PageSize.A4, AnimationProgress = 1 });
 
             Assert.Equal(2, document.PageCount);
-            Assert.Contains(20.0, RectangleWidths(document.PdfDocument, 0).Select(w => Math.Round(w)));
-            Assert.Contains(100.0, RectangleWidths(document.PdfDocument, 1).Select(w => Math.Round(w)));
+            Assert.Contains(20.0, RectangleWidths(document.Inspect(), 0).Select(w => Math.Round(w)));
+            Assert.Contains(100.0, RectangleWidths(document.Inspect(), 1).Select(w => Math.Round(w)));
         }
 
         [Theory]
@@ -1182,17 +1183,10 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(document);
         }
 
-        /// <summary>The widths of every <c>re</c> rectangle in a page's content stream, read from the live object graph.</summary>
-        private static IEnumerable<double> RectangleWidths(PeachDrawing.PDF.Engine.PdfDocument document, int page)
+        /// <summary>The widths of every <c>re</c> rectangle in a page's content stream, read from the saved file.</summary>
+        private static IEnumerable<double> RectangleWidths(PdfFile file, int page)
         {
-            using var bytes = new System.IO.MemoryStream();
-
-            foreach (var content in document.Pages[page].Contents)
-            {
-                bytes.Write(content.Stream.Value, 0, content.Stream.Value.Length);
-            }
-
-            var stream = System.Text.Encoding.Latin1.GetString(bytes.ToArray());
+            var stream = file.ContentText(file.Pages[page]);
 
             foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
                          stream, @"(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re"))
@@ -1735,8 +1729,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

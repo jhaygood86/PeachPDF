@@ -477,8 +477,7 @@ Assert.True(tableBox.ActualBottom > pageHeight);
   container.MarginTop = 20;  // Add margins to match @page CSS
     container.MarginBottom = 20;
 
-    var measure = PdfGraphics.CreateMeasureContext(size);
-using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+    using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
   await container.PerformLayout(graphics);
 
       Assert.NotNull(container.Root);

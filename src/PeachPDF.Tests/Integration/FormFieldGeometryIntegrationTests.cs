@@ -1,10 +1,6 @@
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.AcroForms;
-using PeachDrawing.PDF.Engine.Annotations;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -149,7 +145,7 @@ namespace PeachPDF.Tests.Integration
                 EnableInteractivePdfForms = true
             });
 
-            var pdfRect = WidgetRect(Assert.Single(Fields(result.PdfDocument)));
+            var pdfRect = WidgetRect(Assert.Single(Fields(result.Inspect())));
 
             Assert.Equal(UaCheckboxBorderBox, pdfRect.Width, 0.01);
             Assert.Equal(UaCheckboxBorderBox, pdfRect.Height, 0.01);
@@ -193,27 +189,8 @@ namespace PeachPDF.Tests.Integration
         /// <see cref="PDF.Annotations.PdfWidgetAnnotation"/> kid per button off it, so the
         /// geometry lives on the kid.
         /// </summary>
-        static PdfRectangle WidgetRect(PdfAcroField field)
-        {
-            if (field.Elements.GetArray(PdfAcroField.Keys.Kids) is { Elements.Count: > 0 } kids)
-            {
-                var kid = (PdfDictionary)((PdfReference)kids.Elements[0]).Value;
-                return kid.Elements.GetRectangle(PdfAnnotation.Keys.Rect);
-            }
+        static PdfRect WidgetRect(FormField field) => field.Widgets[0].Rectangle;
 
-            return field.Elements.GetRectangle(PdfAnnotation.Keys.Rect);
-        }
-
-        static List<PdfAcroField> Fields(PdfDocument document)
-        {
-            var result = new List<PdfAcroField>();
-            foreach (var item in document.Catalog.AcroForm.Fields)
-            {
-                var dict = item is PdfReference iref ? iref.Value : item;
-                if (dict is PdfAcroField field)
-                    result.Add(field);
-            }
-            return result;
-        }
+        static IReadOnlyList<FormField> Fields(PdfFile document) => document.FormFields;
     }
 }

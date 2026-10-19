@@ -1,31 +1,33 @@
-using PeachPDF.Rendering;
-using PeachDrawing.Text.Shaping;
-using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PdfFeatures;
-using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Structure;
+using PeachDrawing.Text.Shaping;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace PeachPDF.Tests.Html.Core.Handlers
+namespace PeachPDF.Tests.PdfEngineTests
 {
-    public class StructureTagBuilderTests
+    /// <summary>
+    /// The tag recorder's handling of the cases the HTML pipeline reaches only incidentally: tile-painted content, a link whose content was
+    /// never tagged, the document title, and one element appearing on several pages. Drives <see cref="PdfTagRecorder"/> with plain keys,
+    /// the way any host would, and reads the structure it built back from the document.
+    /// </summary>
+    public class PdfTagRecorderTests
     {
         [Fact]
         public void OpenContentElement_OffscreenTile_AllocatesNoMcid_AndDoesNotEmitMarkedContent()
         {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
-            builder.BeginPage(page);
+            var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
+            recorder.BeginPage(page);
 
-            var box = new CssBox(null, null);
+            var key = new object();
             var g = new RecordingGraphics(isOffscreenTile: true);
 
-            using (builder.OpenContentElement(g, box, "P"))
+            using (recorder.OpenContentElement(g, key, "P"))
             {
             }
 
@@ -33,20 +35,20 @@ namespace PeachPDF.Tests.Html.Core.Handlers
 
             // The struct element is still created (keeps the tree shape well-formed) even though
             // no MCID/BDC was emitted for this tile-painted occurrence.
-            Assert.NotNull(builder.TryGetStructureElement(box));
+            Assert.NotNull(recorder.TryGetStructureElement(key));
         }
 
         [Fact]
         public void OpenArtifact_OffscreenTile_DoesNotEmitBeginArtifact()
         {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
-            builder.BeginPage(page);
+            var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
+            recorder.BeginPage(page);
 
             var g = new RecordingGraphics(isOffscreenTile: true);
 
-            using (builder.OpenArtifact(g))
+            using (recorder.OpenArtifact(g))
             {
             }
 
@@ -56,72 +58,71 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         [Fact]
         public void LinkAnnotationToStructureElement_BoxNeverTagged_IsNoOp()
         {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
-            builder.BeginPage(page);
-            builder.Finish();
+            var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
+            recorder.BeginPage(page);
+            recorder.Finish();
 
-            var untaggedBox = new CssBox(null, null);
-            var annotation = page.AddWebLink(
-                new PdfRectangle(new PeachDrawing.Core.Rect(0, 0, 10, 10)), "https://example.com");
+            var untaggedKey = new object();
+            var link = page.AddLink(new Rect(0, 0, 10, 10), "https://example.com");
 
-            builder.LinkAnnotationToStructureElement(untaggedBox, page, annotation);
+            recorder.LinkAnnotation(untaggedKey, link);
 
             // No struct element was ever created for this box, so linking must be a pure no-op -
             // no /StructParent assigned, no /Tabs override.
-            Assert.False(page.Elements.ContainsKey("/Tabs"));
+            Assert.False(page.Page.Elements.ContainsKey("/Tabs"));
         }
 
         [Fact]
         public void Finish_DocumentHasTitle_SetsDisplayDocTitle()
         {
-            var doc = new PdfDocument();
-            doc.Info.Title = "A Tagged Document";
-            var page = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
-            builder.BeginPage(page);
+            var composer = new PdfComposer(new PdfRenderContext());
+            composer.Document.Info.Title = "A Tagged Document";
+            var page = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
+            recorder.BeginPage(page);
 
-            builder.Finish();
+            recorder.Finish();
 
-            Assert.True(doc.Catalog.ViewerPreferences.DisplayDocTitle);
+            Assert.True(composer.Document.Catalog.ViewerPreferences.DisplayDocTitle);
         }
 
         [Fact]
         public void Finish_DocumentHasNoTitle_LeavesDisplayDocTitleUnset()
         {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
-            builder.BeginPage(page);
+            var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
+            recorder.BeginPage(page);
 
-            builder.Finish();
+            recorder.Finish();
 
-            Assert.False(doc.Catalog.ViewerPreferences.DisplayDocTitle);
+            Assert.False(composer.Document.Catalog.ViewerPreferences.DisplayDocTitle);
         }
 
         [Fact]
         public void OpenContentElement_SameBoxTwiceOnSamePage_ReusesElement_BothMcidsUnderSameElement()
         {
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
-            builder.BeginPage(page);
+            var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
+            recorder.BeginPage(page);
 
-            var box = new CssBox(null, null);
+            var key = new object();
             var g = new RecordingGraphics(isOffscreenTile: false);
 
-            using (builder.OpenContentElement(g, box, "P")) { }
-            using (builder.OpenContentElement(g, box, "P")) { }
+            using (recorder.OpenContentElement(g, key, "P")) { }
+            using (recorder.OpenContentElement(g, key, "P")) { }
 
-            var element = builder.TryGetStructureElement(box);
+            var element = recorder.TryGetStructureElement(key);
             Assert.NotNull(element);
 
-            var kids = PeachDrawing.PDF.Engine.Structure.PdfStructureElement.GetKids(element!.Elements).ToList();
+            var kids = PdfStructureElement.GetKids(element!.Elements).ToList();
             // Both kids are bare MCID integers (not further struct elements), so GetKids (which
             // only surfaces dictionary kids) reports none - assert via the raw /K array instead.
             Assert.Empty(kids);
-            var array = element.Elements.GetArray(PeachDrawing.PDF.Engine.Structure.PdfStructureElement.Keys.K);
+            var array = element.Elements.GetArray(PdfStructureElement.Keys.K);
             Assert.NotNull(array);
             Assert.Equal(2, array!.Elements.Count);
         }
@@ -129,29 +130,29 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         [Fact]
         public void OpenContentElement_SameBoxOnLaterPage_AddsMarkedContentReference()
         {
-            var doc = new PdfDocument();
-            var page1 = doc.AddPage();
-            var page2 = doc.AddPage();
-            var builder = new StructureTagBuilder(doc);
+            var composer = new PdfComposer(new PdfRenderContext());
+            var page1 = composer.AddPage(595, 842);
+            var page2 = composer.AddPage(595, 842);
+            var recorder = composer.CreateTagRecorder();
 
-            var box = new CssBox(null, null);
+            var key = new object();
             var g = new RecordingGraphics(isOffscreenTile: false);
 
-            builder.BeginPage(page1);
-            using (builder.OpenContentElement(g, box, "P")) { }
+            recorder.BeginPage(page1);
+            using (recorder.OpenContentElement(g, key, "P")) { }
 
-            builder.BeginPage(page2);
-            using (builder.OpenContentElement(g, box, "P")) { }
+            recorder.BeginPage(page2);
+            using (recorder.OpenContentElement(g, key, "P")) { }
 
-            var element = builder.TryGetStructureElement(box);
+            var element = recorder.TryGetStructureElement(key);
             Assert.NotNull(element);
-            Assert.Same(page1, element!.Page);
+            Assert.Same(page1.Page, element!.Page);
 
-            var array = element.Elements.GetArray(PeachDrawing.PDF.Engine.Structure.PdfStructureElement.Keys.K);
+            var array = element.Elements.GetArray(PdfStructureElement.Keys.K);
             Assert.NotNull(array);
             Assert.Equal(2, array!.Elements.Count);
-            Assert.IsType<PeachDrawing.PDF.Engine.Structure.PdfMarkedContentReference>(
-                ((PeachDrawing.PDF.Engine.Advanced.PdfReference)array.Elements[1]).Value);
+            Assert.IsType<PdfMarkedContentReference>(
+                ((PdfReference)array.Elements[1]).Value);
         }
 
         sealed class RecordingGraphics : Canvas
@@ -160,7 +161,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             public List<string> Log { get; } = [];
 
             public RecordingGraphics(bool isOffscreenTile)
-                : base(new HtmlRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue))
+                : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue))
             {
                 _isOffscreenTile = isOffscreenTile;
             }

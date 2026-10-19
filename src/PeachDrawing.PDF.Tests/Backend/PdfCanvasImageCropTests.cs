@@ -1,4 +1,3 @@
-using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
@@ -20,7 +19,7 @@ namespace PeachPDF.Tests.PdfBackendTests
     /// </summary>
     public class PdfCanvasImageCropTests
     {
-        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, HtmlRenderContext RenderContext) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext RenderContext) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
@@ -30,7 +29,7 @@ namespace PeachPDF.Tests.PdfBackendTests
             // metric region and fails on a US-region machine (as CI's runners are) purely on page height.
             page.Size = PeachDrawing.PDF.Engine.PageSize.A4;
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var renderContext = new HtmlRenderContext();
+            var renderContext = new PdfRenderContext();
             var graphics = new PdfCanvas(renderContext, pageGfx, 1.0);
             return (document, pageGfx, graphics, renderContext);
         }

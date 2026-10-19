@@ -41,7 +41,7 @@ namespace PeachDrawing.PDF.Tests.PublicApi
                 .Select(a => a.AssemblyName)
                 .ToList();
 
-            Assert.Equivalent(new[] { "PeachDrawing.PDF.Tests", "PeachPDF", "PeachPDF.Tests" }, granted);
+            Assert.Equivalent(new[] { "PeachDrawing.PDF.Tests" }, granted);
         }
 
         private static string Describe(Assembly assembly)

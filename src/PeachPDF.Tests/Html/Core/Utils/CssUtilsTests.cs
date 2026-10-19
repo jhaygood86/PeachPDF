@@ -345,8 +345,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-weight: 700;");
 
-            var font = (PeachDrawing.PDF.PdfCanvasFont)box.ActualFont;
-            Assert.True(font.Font.Typeface.IsBold);
+            var font = box.ActualFont;
+            Assert.True(font.Typeface!.IsBold);
         }
 
         [Fact]
@@ -354,8 +354,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-weight: 400;");
 
-            var font = (PeachDrawing.PDF.PdfCanvasFont)box.ActualFont;
-            Assert.False(font.Font.Typeface.IsBold);
+            var font = box.ActualFont;
+            Assert.False(font.Typeface!.IsBold);
         }
 
         [Fact]
@@ -525,8 +525,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser("font-size: 16px;");
             var renderContext = new HtmlRenderContext();
-            var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-            using var graphics = new PeachDrawing.PDF.PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new Size(595, 842));
 
             var width = CssUtils.WhiteSpace(graphics, box);
 
@@ -1310,8 +1309,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PeachDrawing.PDF.PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -1364,8 +1362,7 @@ div {{ width: 200px; height: 100px; {css} }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PeachDrawing.PDF.PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

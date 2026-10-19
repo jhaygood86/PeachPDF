@@ -1,10 +1,7 @@
+using PeachPDF.Tests.TestSupport;
 using System.Numerics;
 using PeachPDF.Html.Core.Handlers;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.AcroForms;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.Annotations;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -27,16 +24,26 @@ namespace PeachPDF.Tests.Integration
         private static string Block(string style, string href = "http://example.test/") =>
             $"<div style='position:absolute;left:100pt;top:100pt;width:100pt;height:40pt;{style}'><a href='{href}' style='display:block;height:40pt'>link</a></div>";
 
-        private static PdfLinkAnnotation OnlyLink(PeachPdfDocument doc, int page = 0) =>
-            Assert.IsType<PdfLinkAnnotation>(Assert.Single(doc.Pages[page].Annotations.Cast<PdfAnnotation>()));
-
-        private static (double X1, double Y1, double X2, double Y2) RectOf(PdfAnnotation annotation)
+        private static IReadOnlyList<PdfDict> AnnotationsOf(PeachPdfDocument doc, int page = 0)
         {
-            var r = annotation.Rectangle;
-            return (r.X1, r.Y1, r.X2, r.Y2);
+            var file = doc.Inspect();
+            return file.Annotations(file.Pages[page]);
         }
 
-        private static void AssertRect((double X1, double Y1, double X2, double Y2) expected, PdfAnnotation annotation)
+        private static PdfDict OnlyLink(PeachPdfDocument doc, int page = 0)
+        {
+            var annotation = Assert.Single(AnnotationsOf(doc, page));
+            Assert.Equal("/Link", annotation.Name("/Subtype"));
+            return annotation;
+        }
+
+        private static (double X1, double Y1, double X2, double Y2) RectOf(PdfDict annotation)
+        {
+            var r = FormField.Rect(annotation, "/Rect");
+            return (r.Left, r.Bottom, r.Right, r.Top);
+        }
+
+        private static void AssertRect((double X1, double Y1, double X2, double Y2) expected, PdfDict annotation)
         {
             var (x1, y1, x2, y2) = RectOf(annotation);
             Assert.Equal(expected.X1, x1, Tolerance);
@@ -65,10 +72,8 @@ namespace PeachPDF.Tests.Integration
             };
         }
 
-        private static double[]? QuadPointsOf(PdfAnnotation annotation) =>
-            annotation.Elements["/QuadPoints"] is PdfArray array
-                ? array.Elements.Select(item => item is PdfReal real ? real.Value : ((PdfInteger)item).Value).ToArray()
-                : null;
+        private static double[]? QuadPointsOf(PdfDict annotation) =>
+            annotation.Array("/QuadPoints")?.Resolved.Select(item => ((PdfNumber)item).Value).ToArray();
 
         // --- Links ---
 
@@ -204,7 +209,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate(Block("transform:translate(0,5000pt)"));
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(AnnotationsOf(doc));
         }
 
         [Fact]
@@ -351,7 +356,7 @@ namespace PeachPDF.Tests.Integration
             // Drawn nowhere, so not left clickable at the layout rectangle either.
             var doc = await Generate(body);
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(AnnotationsOf(doc));
         }
 
         [Fact]
@@ -409,7 +414,7 @@ namespace PeachPDF.Tests.Integration
 
             if (!expectsQuad)
             {
-                Assert.Empty(doc.Pages[0].Annotations);
+                Assert.Empty(AnnotationsOf(doc));
                 return;
             }
 
@@ -425,37 +430,20 @@ namespace PeachPDF.Tests.Integration
                 "<div style='transform-style:preserve-3d;width:100pt;height:40pt;transform:translateX(5000pt) rotateY(20deg)'>" +
                 "<div style='width:100pt;height:40pt;transform:rotateY(10deg)'><a href='http://example.test/' style='display:block;height:40pt'>link</a></div></div></div>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(AnnotationsOf(doc));
         }
 
         // --- Form widgets ---
 
-        private static PdfAcroField OnlyField(PeachPdfDocument doc)
-        {
-            var fields = new List<PdfAcroField>();
-            foreach (var item in doc.PdfDocument.Catalog.AcroForm.Fields)
-            {
-                if ((item is PdfReference reference ? reference.Value : item) is PdfAcroField field)
-                    fields.Add(field);
-            }
+        private static PdfDict OnlyField(PeachPdfDocument doc) => Assert.Single(doc.Inspect().Fields);
 
-            return Assert.Single(fields);
-        }
+        private static PdfStreamObject NormalAppearance(PdfDict field) =>
+            Assert.IsType<PdfStreamObject>(field.Dict("/AP")!["/N"]);
 
-        private static PdfFormXObject NormalAppearance(PdfAcroField field)
+        /// <summary>The appearance's <c>/Matrix</c>.</summary>
+        private static Matrix3x2 MatrixOf(PdfStreamObject appearance)
         {
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
-            return Assert.IsType<PdfFormXObject>(Assert.IsType<PdfReference>(ap.Elements["/N"]).Value);
-        }
-
-        /// <summary>The appearance's <c>/Matrix</c>, read back from the literal it is written as (<c>[a b c d e f]</c>).</summary>
-        private static Matrix3x2 MatrixOf(PdfFormXObject appearance)
-        {
-            var numbers = appearance.Elements[PdfFormXObject.Keys.Matrix]!.ToString()!
-                .Trim('[', ']', ' ')
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(n => float.Parse(n, System.Globalization.CultureInfo.InvariantCulture))
-                .ToArray();
+            var numbers = appearance.Array("/Matrix")!.Resolved.Select(n => (float)((PdfNumber)n).Value).ToArray();
 
             return new Matrix3x2(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5]);
         }
@@ -473,7 +461,7 @@ namespace PeachPDF.Tests.Integration
             AssertRect((x1 + 30, y1 - 20, x2 + 30, y2 - 20), moved);
 
             // A translation needs no matrix: the appearance is the same stream it was.
-            Assert.False(NormalAppearance(moved).Elements.ContainsKey(PdfFormXObject.Keys.Matrix));
+            Assert.False(NormalAppearance(moved).ContainsKey("/Matrix"));
         }
 
         [Fact]
@@ -491,8 +479,8 @@ namespace PeachPDF.Tests.Integration
 
             // The appearance is still drawn at the control's own size, and the reader's BBox-to-Rect fit does the scaling: no /Matrix needed.
             var appearance = NormalAppearance(scaled);
-            Assert.False(appearance.Elements.ContainsKey(PdfFormXObject.Keys.Matrix));
-            Assert.Equal(w, appearance.Elements.GetRectangle(PdfFormXObject.Keys.BBox).Width, 3);
+            Assert.False(appearance.ContainsKey("/Matrix"));
+            Assert.Equal(w, FormField.Rect(appearance, "/BBox").Width, 3);
         }
 
         [Fact]
@@ -516,7 +504,7 @@ namespace PeachPDF.Tests.Integration
                 "<a href='http://example.test/second' style='position:absolute;left:500pt;top:0;width:100pt;height:40pt;display:block'>second</a>" +
                 "</div></div>");
 
-            Assert.DoesNotContain(doc.Pages[0].Annotations.Cast<PdfAnnotation>(), a => a.Elements["/A"]?.ToString()?.Contains("first") == true);
+            Assert.DoesNotContain(AnnotationsOf(doc), a => a.Dict("/A")?.Text("/URI")?.Contains("first") == true);
         }
 
         [Fact]
@@ -569,14 +557,14 @@ namespace PeachPDF.Tests.Integration
                 "<input type='checkbox' name='c' checked style='position:absolute;left:100pt;top:100pt;width:20pt;height:20pt;transform:rotate(90deg)'>", forms: true);
 
             var field = OnlyField(doc);
-            var states = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!.Elements.GetDictionary("/N")!;
+            var states = field.Dict("/AP")!.Dict("/N")!;
 
             // Two appearance streams, on and off, and each is carried onto the box.
-            Assert.Equal(2, states.Elements.Count);
-            foreach (var key in states.Elements.Keys)
+            Assert.Equal(2, states.Keys.Count());
+            foreach (var key in states.Keys)
             {
-                var appearance = (PdfFormXObject)states.Elements.GetReference(key)!.Value;
-                Assert.True(appearance.Elements.ContainsKey(PdfFormXObject.Keys.Matrix));
+                var appearance = (PdfStreamObject)states[key]!;
+                Assert.True(appearance.ContainsKey("/Matrix"));
             }
         }
 

@@ -1,11 +1,8 @@
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.AcroForms;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.Annotations;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -85,16 +82,14 @@ namespace PeachPDF.Tests.Integration
             // but the assertion below still reads the resulting object graph directly rather than
             // re-parsing the saved bytes.
             var document = await RenderAsync("<input name='n' value='hi' style=\"font: italic 12pt Georgia, serif\" />");
-            document.Save(Stream.Null);
 
             var appearance = ResolveNormalAppearance(Assert.Single(Fields(document)));
-            var fontDict = appearance.Elements.GetDictionary(PdfFormXObject.Keys.Resources)!.Elements.GetDictionary("/Font")!;
-            var embeddedFont = Assert.Single(fontDict.Elements.Values.OfType<PdfReference>().Select(r => r.Value).OfType<PdfDictionary>());
-            var descendantFonts = embeddedFont.Elements.GetArray("/DescendantFonts")!;
-            var descendantFont = (PdfDictionary)((PdfReference)descendantFonts.Elements[0]).Value!;
-            var fontDescriptor = descendantFont.Elements.GetDictionary("/FontDescriptor")!;
+            var fontDict = appearance.Dict("/Resources")!.Dict("/Font")!;
+            var embeddedFont = Assert.Single(fontDict.Keys.Select(k => fontDict[k]).OfType<PdfDict>());
+            var descendantFont = Assert.IsAssignableFrom<PdfDict>(embeddedFont.Array("/DescendantFonts")![0]);
+            var fontDescriptor = descendantFont.Dict("/FontDescriptor")!;
 
-            Assert.True(fontDescriptor.Elements.ContainsKey("/FontFile2") || fontDescriptor.Elements.ContainsKey("/FontFile3"),
+            Assert.True(fontDescriptor.ContainsKey("/FontFile2") || fontDescriptor.ContainsKey("/FontFile3"),
                 "A custom font-family must embed a real font program.");
         }
 
@@ -106,7 +101,7 @@ namespace PeachPDF.Tests.Integration
             // PDF standard Helvetica font, regardless of the field's own font-family - an embedded,
             // subsetted font would have no glyph ready for a character typed after generation.
             var document = await RenderAsync("<input name='n' value='hi' style=\"font: italic 12pt Georgia, serif\" />");
-            var field = Assert.IsType<PdfTextField>(Assert.Single(Fields(document)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Text, Assert.Single(Fields(document)));
 
             Assert.Contains("/Helv", field.DefaultAppearance);
         }
@@ -117,7 +112,7 @@ namespace PeachPDF.Tests.Integration
         {
             var document = await RenderAsync(inputHtml);
             var appearance = ResolveNormalAppearance(Assert.Single(Fields(document)));
-            return appearance.Stream.Value;
+            return appearance.Decoded;
         }
 
         /// <summary>
@@ -126,17 +121,9 @@ namespace PeachPDF.Tests.Integration
         /// (checkbox/radio), the state dictionary's entry matching the field's own current
         /// <see cref="PdfAcroField.AppearanceState"/>.
         /// </summary>
-        static PdfFormXObject ResolveNormalAppearance(PdfAcroField field)
-        {
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
-            if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
-                return direct;
+        static PdfStreamObject ResolveNormalAppearance(FormField field) => field.NormalAppearance!;
 
-            var states = ap.Elements.GetDictionary("/N")!;
-            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!)!.Value;
-        }
-
-        static async Task<PdfDocument> RenderAsync(string bodyHtml)
+        static async Task<PdfFile> RenderAsync(string bodyHtml)
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
             var config = new PdfGenerateConfig
@@ -150,20 +137,9 @@ namespace PeachPDF.Tests.Integration
             };
 
             var result = await new PdfGenerator().GeneratePdf(html, config);
-            return result.PdfDocument;
+            return result.Inspect();
         }
 
-        static List<PdfAcroField> Fields(PdfDocument document)
-        {
-            var array = document.Catalog.AcroForm.Fields;
-            var result = new List<PdfAcroField>();
-            foreach (var item in array)
-            {
-                var dict = item is PdfReference iref ? iref.Value : item;
-                if (dict is PdfAcroField field)
-                    result.Add(field);
-            }
-            return result;
-        }
+        static IReadOnlyList<FormField> Fields(PdfFile document) => document.FormFields;
     }
 }

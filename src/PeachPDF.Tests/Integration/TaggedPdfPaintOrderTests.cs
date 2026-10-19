@@ -185,20 +185,17 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var doc = new PdfDocument();
-            var page = doc.AddPage();
-            page.Width = size.Width;
-            page.Height = size.Height;
+            var composer = new PeachDrawing.PDF.PdfComposer(renderContext);
+            var page = composer.AddPage(size.Width, size.Height);
 
             if (enableTagging)
             {
-                var structureTagBuilder = new StructureTagBuilder(doc);
+                var structureTagBuilder = new StructureTagBuilder(composer.CreateTagRecorder());
                 container.StructureTagBuilder = structureTagBuilder;
                 structureTagBuilder.BeginPage(page);
             }
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var measureGraphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var measureGraphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(measureGraphics);
 
             var recorder = new RecordingGraphics(renderContext);

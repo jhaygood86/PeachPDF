@@ -54,8 +54,7 @@ p {{ width: 300px; }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -66,8 +65,8 @@ p {{ width: 300px; }}
             // 'name' table after WOFF2->OpenType conversion), not the @font-face CSS alias --
             // this confirms the real WOFF2 font was decoded and actually used, not silently
             // falling back to a default/system font.
-            var pdfCanvasFont = Assert.IsType<PdfCanvasFont>(paragraph!.ActualFont);
-            Assert.Equal("Inter Medium", pdfCanvasFont.Font.Typeface.FamilyName);
+            var pdfCanvasFont = paragraph!.ActualFont;
+            Assert.Equal("Inter Medium", pdfCanvasFont.Typeface!.FamilyName);
         }
     }
 }

@@ -255,8 +255,7 @@ namespace PeachPDF.Tests.Integration
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
             var box = DomUtils.GetBoxByTagName(container.Root!, tag);
             Assert.NotNull(box);
@@ -273,8 +272,7 @@ namespace PeachPDF.Tests.Integration
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             var p = DomUtils.GetBoxByTagName(container.Root!, "p");

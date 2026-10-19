@@ -1086,8 +1086,8 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            Assert.Equal(600, document.PdfDocument.Pages[0].Width, 1);
-            Assert.Equal(400, document.PdfDocument.Pages[0].Height, 1);
+            Assert.Equal(600, PdfFile.Width(document.Inspect().Pages[0]), 1);
+            Assert.Equal(400, PdfFile.Height(document.Inspect().Pages[0]), 1);
         }
 
         // ─── Remaining container decorators / image overloads ──────────────────────────────────────

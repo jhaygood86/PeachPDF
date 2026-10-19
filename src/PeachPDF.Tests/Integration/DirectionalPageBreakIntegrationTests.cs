@@ -325,7 +325,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(2, pdf.PdfDocument.PageCount);
+            Assert.Equal(2, pdf.Inspect().PageCount);
 
             var streams = ContentStreams(pdf);
             Assert.Contains("Tj", streams[0]);
@@ -494,7 +494,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(3, pdf.PdfDocument.PageCount);
+            Assert.Equal(3, pdf.Inspect().PageCount);
 
             var streams = ContentStreams(pdf);
             Assert.Contains("Tj", streams[0]);
@@ -518,7 +518,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(3, pdf.PdfDocument.PageCount);
+            Assert.Equal(3, pdf.Inspect().PageCount);
 
             // The folio is drawn on the manufactured page. Text is emitted through a CID font, so the
             // glyphs are hex-encoded rather than literal digits - the show operator is the assertable
@@ -545,7 +545,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(3, pdf.PdfDocument.PageCount);
+            Assert.Equal(3, pdf.Inspect().PageCount);
 
             var streams = ContentStreams(pdf);
             Assert.Contains("Tj", streams[0]);
@@ -570,7 +570,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(2, pdf.PdfDocument.PageCount);
+            Assert.Equal(2, pdf.Inspect().PageCount);
 
             var streams = ContentStreams(pdf);
             Assert.Contains("Tj", streams[0]);
@@ -709,7 +709,7 @@ namespace PeachPDF.Tests.Integration
             var streams = ContentStreams(pdf);
 
             // Slot 0 is the cover, slot 1 the reserved blank page, and the chapter runs on from slot 2.
-            Assert.True(pdf.PdfDocument.PageCount >= 4, $"expected the chapter to span several pages, got {pdf.PdfDocument.PageCount}");
+            Assert.True(pdf.Inspect().PageCount >= 4, $"expected the chapter to span several pages, got {pdf.Inspect().PageCount}");
             Assert.Contains("Tj", streams[0]);
             Assert.DoesNotContain("Tj", streams[1]);
             Assert.Contains("Tj", streams[2]);
@@ -725,23 +725,8 @@ namespace PeachPDF.Tests.Integration
 
         private static string[] ContentStreams(PeachPdfDocument document)
         {
-            var streams = new string[document.PdfDocument.PageCount];
-
-            for (var i = 0; i < streams.Length; i++)
-            {
-                var contents = document.PdfDocument.Pages[i].Contents;
-                var builder = new StringBuilder();
-
-                foreach (var item in contents.Elements)
-                {
-                    if (item is PdfReference { Value: PdfDictionary { Stream: { } stream } })
-                        builder.Append(Encoding.Latin1.GetString(stream.Value));
-                }
-
-                streams[i] = builder.ToString();
-            }
-
-            return streams;
+            var file = document.Inspect();
+            return file.Pages.Select(file.ContentText).ToArray();
         }
 
         private static string TextOf(TextFragment word) => (word.Word.Text ?? "").Trim();

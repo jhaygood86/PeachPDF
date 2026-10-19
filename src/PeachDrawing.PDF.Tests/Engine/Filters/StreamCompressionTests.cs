@@ -8,7 +8,6 @@ using PeachDrawing.Text.Compression;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Filters;
-using PeachPDF.Tests.Integration;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 

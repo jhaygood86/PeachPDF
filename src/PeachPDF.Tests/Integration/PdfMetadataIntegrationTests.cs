@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
 using PeachDrawing.PDF.Engine;
@@ -127,7 +128,7 @@ namespace PeachPDF.Tests.Integration
 
             result.Save(Stream.Null);
 
-            Assert.Equal(PeachPdfProductInfo.Generator, result.PdfDocument.Info.Producer);
+            Assert.Equal(PeachPdfProductInfo.Generator, result.Inspect().Info.Text("/Producer"));
         }
 
         [Fact]
@@ -166,7 +167,7 @@ namespace PeachPDF.Tests.Integration
 
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("fr", result.PdfDocument.Language);
+            Assert.Equal("fr", result.Inspect().Language);
         }
 
         [Fact]
@@ -177,7 +178,7 @@ namespace PeachPDF.Tests.Integration
 
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            Assert.Equal("en-US", result.PdfDocument.Language);
+            Assert.Equal("en-US", result.Inspect().Language);
         }
 
         [Fact]
@@ -188,7 +189,7 @@ namespace PeachPDF.Tests.Integration
 
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            Assert.Equal("de", result.PdfDocument.Language);
+            Assert.Equal("de", result.Inspect().Language);
         }
 
         [Fact]
@@ -198,15 +199,26 @@ namespace PeachPDF.Tests.Integration
 
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.True(string.IsNullOrEmpty(result.PdfDocument.Language));
+            Assert.True(string.IsNullOrEmpty(result.Inspect().Language));
         }
 
         #region Helpers
 
-        private static async Task<PdfDocumentInformation> GenerateInfo(string html)
+        private static async Task<InfoView> GenerateInfo(string html)
         {
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            return result.PdfDocument.Info;
+            return new InfoView(result.Inspect().Info);
+        }
+
+        private sealed class InfoView(PdfDict dict)
+        {
+            public string? Title => dict.Text("/Title");
+            public string? Author => dict.Text("/Author");
+            public string? Subject => dict.Text("/Subject");
+            public string? Keywords => dict.Text("/Keywords");
+            public string? Creator => dict.Text("/Creator");
+            public string? Producer => dict.Text("/Producer");
+            public DateTimeOffset CreationDate => dict.Date("/CreationDate")!.Value;
         }
 
         #endregion

@@ -1,7 +1,4 @@
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.AcroForms;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.Annotations;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -40,7 +37,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<input name='f' />", 0)]
         public async Task TextField_MapsItsAttributesToFieldFlags(string html, int expected)
         {
-            Assert.Equal(expected, (await Field(html)).Elements.GetInteger(PdfAcroField.Keys.Ff));
+            Assert.Equal(expected, (await Field(html)).Flags);
         }
 
         [Theory]
@@ -48,7 +45,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<input type='checkbox' name='f' disabled />", ReadOnly | NoExport)]
         public async Task Checkbox_MapsTheSharedAttributesToFieldFlags(string html, int expected)
         {
-            Assert.Equal(expected, (await Field(html)).Elements.GetInteger(PdfAcroField.Keys.Ff));
+            Assert.Equal(expected, (await Field(html)).Flags);
         }
 
         [Fact]
@@ -63,7 +60,7 @@ namespace PeachPDF.Tests.Integration
             // the mutual exclusion that makes it a radio group at all.
             var group = await Field("<input type='radio' name='f' required /><input type='radio' name='f' />");
 
-            Assert.Equal(Radio | Required, group.Elements.GetInteger(PdfAcroField.Keys.Ff));
+            Assert.Equal(Radio | Required, group.Flags);
         }
 
         [Fact]
@@ -75,7 +72,7 @@ namespace PeachPDF.Tests.Integration
             // would silently drop it from half the ways authors spell the same form.
             var group = await Field("<input type='radio' name='f' /><input type='radio' name='f' required />");
 
-            Assert.Equal(Radio | Required, group.Elements.GetInteger(PdfAcroField.Keys.Ff));
+            Assert.Equal(Radio | Required, group.Flags);
         }
 
         [Fact]
@@ -85,13 +82,13 @@ namespace PeachPDF.Tests.Integration
             // rather than assigned over it, or the field stops being a drop-down.
             var field = await Field("<select name='f' disabled><option>One</option></select>");
 
-            Assert.Equal(Combo | ReadOnly | NoExport, field.Elements.GetInteger(PdfAcroField.Keys.Ff));
+            Assert.Equal(Combo | ReadOnly | NoExport, field.Flags);
         }
 
         [Fact]
         public async Task Maxlength_BecomesMaxLen()
         {
-            Assert.Equal(8, (await Field("<input name='f' maxlength='8' />")).Elements.GetInteger(PdfAcroField.Keys.MaxLen));
+            Assert.Equal(8, (await Field("<input name='f' maxlength='8' />")).Integer("/MaxLen"));
         }
 
         [Theory]
@@ -103,7 +100,7 @@ namespace PeachPDF.Tests.Integration
         {
             // A zero would forbid every character, and the HTML Standard defines maxlength as a valid
             // non-negative integer - anything else is treated as absent rather than clamped.
-            Assert.False((await Field(html)).Elements.ContainsKey(PdfAcroField.Keys.MaxLen));
+            Assert.False((await Field(html)).Dict.ContainsKey("/MaxLen"));
         }
 
         [Fact]
@@ -112,8 +109,8 @@ namespace PeachPDF.Tests.Integration
             // A comb field's cell count IS its /MaxLen (Table 228), so the two cannot both be honoured.
             var field = await Field("<input name='f' maxlength='20' style='-peachpdf-pdf-form-field-comb: 6' />");
 
-            Assert.Equal(6, field.Elements.GetInteger(PdfAcroField.Keys.MaxLen));
-            Assert.Equal(Comb, field.Elements.GetInteger(PdfAcroField.Keys.Ff) & Comb);
+            Assert.Equal(6, field.Integer("/MaxLen"));
+            Assert.Equal(Comb, field.Flags & Comb);
         }
 
         [Theory]
@@ -127,13 +124,13 @@ namespace PeachPDF.Tests.Integration
             // and one that can never be mistaken for the field's value.
             // Read back through the typed property, not the raw dictionary, so the accessor that
             // wrote it is proven to round-trip - /TU is stored UTF-16BE, not as the plain bytes.
-            Assert.Equal("Your name", (await Field(html)).AlternateFieldName);
+            Assert.Equal("Your name", (await Field(html)).Dict.Text("/TU"));
         }
 
         [Fact]
         public async Task AnAbsentPlaceholder_WritesNoTooltip()
         {
-            Assert.False((await Field("<input name='f' />")).Elements.ContainsKey(PdfAcroField.Keys.TU));
+            Assert.False((await Field("<input name='f' />")).Dict.ContainsKey("/TU"));
         }
 
         [Fact]
@@ -155,7 +152,7 @@ namespace PeachPDF.Tests.Integration
         {
             // The masking is presentation only - the author wrote the value into the element, and the
             // field is genuinely prefilled with it.
-            Assert.Equal("hunter2", (await Field("<input type='password' name='f' value='hunter2' />")).Elements.GetString(PdfAcroField.Keys.V));
+            Assert.Equal("hunter2", (await Field("<input type='password' name='f' value='hunter2' />")).Value);
         }
 
         [Fact]
@@ -170,7 +167,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(bare, withHint);
             Assert.Contains("Tj", withHint);
             Assert.Equal(string.Empty, (await Field("<input name='f' placeholder='Your name' />"))
-                .Elements.GetString(PdfAcroField.Keys.V));
+                .Value);
         }
 
         [Fact]
@@ -236,7 +233,7 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        static async Task<PdfDocument> RenderAsync(string bodyHtml)
+        static async Task<PdfFile> RenderAsync(string bodyHtml)
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
             return (await new PdfGenerator().GeneratePdf(html, new PdfGenerateConfig
@@ -244,7 +241,7 @@ namespace PeachPDF.Tests.Integration
                 PageSize = PageSize.A4,
                 CompressContentStreams = false,
                 EnableInteractivePdfForms = true
-            })).PdfDocument;
+            })).Inspect();
         }
 
         static async Task RenderPdfAAsync(string bodyHtml)
@@ -263,26 +260,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>The document's one field. A radio group is the field, not its widget kids.</summary>
-        static async Task<PdfAcroField> Field(string bodyHtml)
+        static async Task<FormField> Field(string bodyHtml)
         {
             var document = await RenderAsync(bodyHtml);
-            var fields = new List<PdfAcroField>();
-            foreach (var item in document.Catalog.AcroForm.Fields)
-            {
-                var dict = item is PdfReference iref ? iref.Value : item;
-                if (dict is PdfAcroField field)
-                    fields.Add(field);
-            }
-            return Assert.Single(fields);
+            return Assert.Single(document.FormFields);
         }
 
         /// <summary>The field's "/AP /N" appearance stream, uncompressed, as operator text.</summary>
         static async Task<string> AppearanceStream(string bodyHtml)
         {
             var field = await Field(bodyHtml);
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
-            var form = (PdfFormXObject)((PdfReference)ap.Elements["/N"]!).Value!;
-            return Encoding.Latin1.GetString(form.Stream.Value);
+            return field.NormalAppearance!.DecodedText;
         }
     }
 }

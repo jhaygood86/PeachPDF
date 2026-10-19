@@ -51,8 +51,7 @@ namespace PeachPDF.Tests.Html.Core
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             return new Layout(renderContext, container.Root!);

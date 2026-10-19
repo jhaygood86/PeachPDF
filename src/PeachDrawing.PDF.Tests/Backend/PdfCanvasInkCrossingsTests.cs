@@ -1,5 +1,4 @@
-using PeachPDF.Rendering;
-using PeachDrawing.PDF;
+﻿using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -235,8 +234,9 @@ namespace PeachPDF.Tests.PdfBackendTests
 
             internal static async Task<Fixture> CreateAsync(string? fontPath = null, string family = "InkTestFont")
             {
-                var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
-                await BundledFonts.RegisterFont(renderContext, fontPath ?? BundledFonts.Ttf, family);
+                var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+                using (var fontStream = File.OpenRead(fontPath ?? BundledFonts.Ttf))
+                    await renderContext.AddFont(fontStream, family);
 
                 var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
                 var graphics = new PdfCanvas(renderContext, measure, 1.0);

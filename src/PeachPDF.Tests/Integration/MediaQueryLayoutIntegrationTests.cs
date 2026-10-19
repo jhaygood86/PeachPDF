@@ -161,8 +161,7 @@ namespace PeachPDF.Tests.Integration
 
             await container.SetHtml(html, null);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

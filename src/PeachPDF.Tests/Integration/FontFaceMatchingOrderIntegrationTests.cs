@@ -37,8 +37,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -61,7 +60,7 @@ namespace PeachPDF.Tests.Integration
 
         private static CssBox FindById(CssBox root, string id) => Find(root, id) ?? throw new InvalidOperationException("No box with the id " + id);
 
-        private static Typeface TypefaceOf(CssBox box) => ((PdfCanvasFont)box.ActualFont).Font.Typeface;
+        private static Typeface TypefaceOf(CssBox box) => (box.ActualFont).Typeface!;
 
         private static double Axis(CssBox box, string tag) => TypefaceOf(box).AxisSettings.Single(s => s.Tag == tag).Value;
 
@@ -70,7 +69,7 @@ namespace PeachPDF.Tests.Integration
         {
             var family = new FontSet().AddFile(path, new AddOptions { FamilyName = "Name-" + Guid.NewGuid().ToString("N") });
             Assert.True(family.TryMatch(new TypefaceQuery(), out var match));
-            return match.Typeface.FullName;
+            return match.Typeface!.FullName;
         }
 
         private static async Task<string> RenderAsync(string html)
@@ -118,9 +117,9 @@ namespace PeachPDF.Tests.Integration
 
             var root = await BuildBoxTree(html);
 
-            Assert.True(((PdfCanvasFont)FindById(root, "a").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
-            Assert.False(((PdfCanvasFont)FindById(root, "b").ActualFont).Font.SyntheticStyle.HasFlag(SyntheticStyle.Italic));
-            Assert.Equal(SyntheticStyle.None, ((PdfCanvasFont)FindById(root, "c").ActualFont).Font.SyntheticStyle);
+            Assert.True((FindById(root, "a").ActualFont).SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.False((FindById(root, "b").ActualFont).SyntheticStyle.HasFlag(SyntheticStyle.Italic));
+            Assert.Equal(SyntheticStyle.None, (FindById(root, "c").ActualFont).SyntheticStyle);
         }
 
         // ---- the requested angle chooses among oblique ranges -----------------------------------------------------------------------

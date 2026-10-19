@@ -485,8 +485,7 @@ h2, h3 { margin: 6pt 0; }
             container.MarginTop = 20;
             container.MarginBottom = 20;
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

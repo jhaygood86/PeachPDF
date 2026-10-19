@@ -48,8 +48,7 @@ namespace PeachPDF.Tests.Html.Core
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             return FindByTag(container.Root!, "p")!;
@@ -72,7 +71,7 @@ namespace PeachPDF.Tests.Html.Core
         private static string ResolvedFamilyName(CssBox ownerBox, char c)
         {
             var font = ownerBox.ActualFontForCodepoint(new Rune(c));
-            return ((PdfCanvasFont)font).Font.Typeface.FamilyName;
+            return (font).Typeface!.FamilyName;
         }
 
         [Fact]

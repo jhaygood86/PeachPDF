@@ -74,30 +74,6 @@ namespace PeachPDF.Tests.PdfEngineTests.Encodings
         }
 
         // A run is written from a 512-character stack buffer, and one whose literal is longer than that takes an array instead.
-        [Theory]
-        [InlineData(20)]
-        [InlineData(300)]
-        public async Task ARunOfAnyLengthIsShownAsOneLiteralOfItsGlyphs(int letters)
-        {
-            var generator = new PdfGenerator();
-            var document = await generator.GeneratePdf(
-                $"<html><body style='margin:0'><p style='white-space: nowrap; font-size: 6pt'>{new string('m', letters)}</p></body></html>",
-                new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false });
-
-            var content = new StringBuilder();
-            foreach (var item in document.PdfDocument.Pages[0].Contents.Elements)
-            {
-                if (item is PdfReference { Value: PdfDictionary { Stream: { } stream } })
-                    content.Append(Encoding.Latin1.GetString(stream.Value));
-            }
-
-            var literals = Regex.Matches(content.ToString(), @"<([0-9A-F\n]+)>\s*Tj")
-                .Select(match => match.Groups[1].Value.Replace("\n", string.Empty).Length / 4)
-                .ToList();
-
-            Assert.Equal(letters, literals.Max());
-        }
-
         [Fact]
         public void AnIndexAboveSixteenBitsKeepsItsLowUnit_AsTheCharCastDid()
         {

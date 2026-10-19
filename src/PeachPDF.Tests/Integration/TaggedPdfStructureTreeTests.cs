@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Structure;
 using System.Collections.Generic;
@@ -13,9 +14,9 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><h1>Title</h1><p>Body</p></body></html>", PageSize.A4);
 
-            var catalogElements = result.PdfDocument.Catalog.Elements;
-            Assert.False(catalogElements.ContainsKey("/MarkInfo"));
-            Assert.False(catalogElements.ContainsKey("/StructTreeRoot"));
+            var catalog = result.Inspect().Catalog;
+            Assert.False(catalog.ContainsKey("/MarkInfo"));
+            Assert.False(catalog.ContainsKey("/StructTreeRoot"));
         }
 
         [Fact]
@@ -25,7 +26,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><p>Hello</p></body></html>", config);
 
-            Assert.True(result.PdfDocument.Catalog.MarkInfo.Marked);
+            Assert.True(result.Inspect().Catalog.Dict("/MarkInfo")!.Bool("/Marked"));
         }
 
         [Fact]
@@ -35,7 +36,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><h1>Title</h1><p>Body text</p></body></html>", config);
 
-            var root = result.PdfDocument.Catalog.StructureTreeRoot;
+            var root = result.Inspect();
             var documentElement = Assert.Single(RootKids(root));
             Assert.Equal("/Document", documentElement.StructureType);
 
@@ -52,7 +53,7 @@ namespace PeachPDF.Tests.Integration
                        "' alt='A cat sleeping' /></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var figure = Kids(documentElement).Single();
 
             Assert.Equal("/Figure", figure.StructureType);
@@ -66,7 +67,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><div style='-peachpdf-pdf-tag-type:none'><h1>Title</h1></div></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var topLevel = Kids(documentElement).ToList();
 
             // The wrapper <div> (tagged none) is fully transparent - /H1 attaches directly to
@@ -82,7 +83,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><div style='-peachpdf-pdf-tag-type:BlockQuote'><h1>Title</h1></div></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var topLevel = Kids(documentElement).ToList();
 
             Assert.Single(topLevel);
@@ -96,14 +97,13 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><p>Hello</p></body></html>", config);
 
-            var page = result.PdfDocument.Pages[0];
-            var structParentsKey = page.StructParents;
+            var file = result.Inspect();
+            var structParentsKey = (int)file.Pages[0].Number("/StructParents")!.Value;
 
-            var parentTree = result.PdfDocument.Catalog.StructureTreeRoot.ParentTree;
-            var entry = parentTree.GetValue(structParentsKey) as PeachDrawing.PDF.Engine.PdfArray;
+            var entry = file.ParentTreeEntry(structParentsKey) as PdfArr;
 
             Assert.NotNull(entry);
-            Assert.True(entry!.Elements.Count > 0);
+            Assert.True(entry!.Count > 0);
         }
 
         [Fact]
@@ -113,7 +113,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var table = Kids(documentElement).Single();
             Assert.Equal("/Table", table.StructureType);
 
@@ -134,7 +134,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><a href='https://example.com'>go</a></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var link = Kids(documentElement).Single();
             Assert.Equal("/Link", link.StructureType);
         }
@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><ul><li>One</li><li>Two</li></ul></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var list = Kids(documentElement).Single();
             Assert.Equal("/L", list.StructureType);
 
@@ -168,7 +168,7 @@ namespace PeachPDF.Tests.Integration
                        "<body><ul><li>One</li></ul></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var list = Kids(documentElement).Single();
             var listItem = Kids(list).Single();
 
@@ -183,30 +183,28 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><a href='https://example.com'>go</a></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var link = Kids(documentElement).Single();
             Assert.Equal("/Link", link.StructureType);
 
             // The struct element's "/K" holds both the anonymous text child's MCID content and,
             // per this linkage, an "/OBJR" pointing at the Link annotation.
-            var rawKids = PeachDrawing.PDF.Engine.Structure.PdfStructureElement.GetKids(link.Elements).ToList();
-            var objRef = Assert.Single(rawKids.OfType<PeachDrawing.PDF.Engine.Structure.PdfObjectReference>());
+            var file = result.Inspect();
+            var objRef = Assert.Single(link.AllKids.OfType<PdfDict>(), k => k.Name("/Type") == "/OBJR");
 
-            var page = result.PdfDocument.Pages[0];
-            var annotation = Assert.IsAssignableFrom<PeachDrawing.PDF.Engine.Annotations.PdfAnnotation>(objRef.Object);
-            Assert.Same(page, objRef.Page);
+            var page = file.Pages[0];
+            var annotation = Assert.IsAssignableFrom<PdfDict>(objRef["/Obj"]);
+            Assert.Equal(page.ObjectNumber, objRef.Dict("/Pg")!.ObjectNumber);
 
             // The annotation's own "/StructParent" resolves, via "/ParentTree", back to this same
             // "/Link" struct element - i.e. navigation works in both directions.
-            var parentTree = result.PdfDocument.Catalog.StructureTreeRoot.ParentTree;
-            var entry = Assert.IsType<PeachDrawing.PDF.Engine.PdfArray>(parentTree.GetValue(annotation.StructParent));
-            var referencedElement = Assert.IsType<PeachDrawing.PDF.Engine.Structure.PdfStructureElement>(
-                ((PeachDrawing.PDF.Engine.Advanced.PdfReference)entry.Elements[0]).Value);
-            Assert.Same(link, referencedElement);
+            var entry = file.ParentTreeEntry((int)annotation.Number("/StructParent")!.Value);
+            var referencedElement = Assert.IsAssignableFrom<PdfDict>(entry is PdfArr array ? array[0] : entry);
+            Assert.Equal(link.Dict.ObjectNumber, referencedElement.ObjectNumber);
 
             // PDF/UA requires tab order to follow structure order once a page has a
             // structure-linked annotation.
-            Assert.Equal("/S", page.Tabs);
+            Assert.Equal("/S", page.Name("/Tabs"));
         }
 
         [Fact]
@@ -216,7 +214,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><p>Above</p><hr/><p>Below</p></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var topLevel = Kids(documentElement).ToList();
 
             Assert.Equal(new[] { "/P", "/P" }, topLevel.Select(e => e.StructureType));
@@ -228,10 +226,8 @@ namespace PeachPDF.Tests.Integration
         const string TinyPngBase64 =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
-        static IEnumerable<PdfStructureElement> RootKids(PdfStructureTreeRoot root) =>
-            PdfStructureElement.GetKids(root.Elements).Cast<PdfStructureElement>();
+        static IEnumerable<StructElem> RootKids(PdfFile file) => file.StructureRoot;
 
-        static IEnumerable<PdfStructureElement> Kids(PdfStructureElement element) =>
-            PdfStructureElement.GetKids(element.Elements).Cast<PdfStructureElement>();
+        static IEnumerable<StructElem> Kids(StructElem element) => element.Kids;
     }
 }

@@ -82,30 +82,5 @@ namespace PeachPDF.Tests.PdfEngineTests
             Assert.True(cmap.CharacterToGlyphIndex.ContainsKey(Grin));
             Assert.NotEqual(0, cmap.CharacterToGlyphIndex[Grin]);
         }
-
-        [Fact]
-        public async Task Emoji_AstralCodepoint_RendersEmbedsAndRoundTripsToUnicode()
-        {
-            var b64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Emoji));
-
-            var html = $@"<!DOCTYPE html><html><head><style>
-@font-face {{ font-family: 'Emoji'; src: url('data:font/truetype;base64,{b64}') format('truetype'); }}
-body {{ font-family: 'Emoji'; font-size: 40pt; }}
-</style></head><body>{char.ConvertFromUtf32(Grin)}</body></html>";
-
-            var generator = new PdfGenerator();
-            var doc = await generator.GeneratePdf(html, PageSize.A4);
-            doc.PdfDocument.Options.CompressContentStreams = false; // keep the ToUnicode stream readable
-
-            var ms = new MemoryStream();
-            doc.Save(ms);
-            var pdf = Encoding.Latin1.GetString(ms.ToArray());
-
-            // The emoji font subset embeds its outline...
-            Assert.Contains("/FontFile2", pdf);
-            // ...and the ToUnicode map carries the emoji back as its UTF-16 surrogate pair (D83D DE00 =
-            // U+1F600), proving the pipeline handled the astral character as ONE codepoint end to end.
-            Assert.Contains("D83DDE00", pdf);
-        }
     }
 }

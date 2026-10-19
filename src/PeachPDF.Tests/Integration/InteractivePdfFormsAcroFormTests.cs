@@ -1,6 +1,4 @@
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.AcroForms;
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -14,7 +12,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input name='n' value='hi' /></body></html>", PageSize.A4);
 
-            Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/AcroForm"));
+            Assert.False(result.Inspect().Catalog.ContainsKey("/AcroForm"));
         }
 
         [Fact]
@@ -24,9 +22,9 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input name='email' value='a@b.com' /></body></html>", config);
 
-            var fields = Fields(result.PdfDocument);
+            var fields = Fields(result.Inspect());
             var field = Assert.Single(fields);
-            var textField = Assert.IsType<PdfTextField>(field);
+            var textField = PdfFieldAssert.IsKind(PdfFieldKind.Text, field);
 
             Assert.Equal("/Tx", textField.FieldType);
             Assert.Equal("email", textField.PartialFieldName);
@@ -42,7 +40,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input type='checkbox' name='agree' checked /></body></html>", config);
 
-            var field = Assert.IsType<PdfCheckBoxField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Checkbox, Assert.Single(Fields(result.Inspect())));
 
             Assert.Equal("/Btn", field.FieldType);
             Assert.Equal("/Yes", field.Value);
@@ -56,7 +54,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input type='checkbox' name='agree' /></body></html>", config);
 
-            var field = Assert.IsType<PdfCheckBoxField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Checkbox, Assert.Single(Fields(result.Inspect())));
 
             Assert.Equal("/Off", field.Value);
             Assert.Equal("/Off", field.AppearanceState);
@@ -72,7 +70,7 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var field = Assert.IsType<PdfRadioButtonField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Radio, Assert.Single(Fields(result.Inspect())));
 
             Assert.Equal("/Btn", field.FieldType);
             Assert.Equal("/Red", field.Value, ignoreCase: true);
@@ -91,13 +89,13 @@ namespace PeachPDF.Tests.Integration
                        "</select></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var field = Assert.IsType<PdfComboBoxField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Combo, Assert.Single(Fields(result.Inspect())));
 
             Assert.Equal("/Ch", field.FieldType);
             Assert.Equal("g", field.Value);
-            var opt = field.Elements.GetArray(PdfAcroField.Keys.Opt);
+            var opt = field.Dict.Array("/Opt");
             Assert.NotNull(opt);
-            Assert.Equal(2, opt.Elements.Count);
+            Assert.Equal(2, opt!.Count);
         }
 
         [Fact]
@@ -109,7 +107,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input type='checkbox' name='agree' value='Off' checked /></body></html>", config);
 
-            var field = Assert.IsType<PdfCheckBoxField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Checkbox, Assert.Single(Fields(result.Inspect())));
 
             Assert.NotEqual("/Off", field.Value);
             Assert.Equal(field.Value, field.AppearanceState);
@@ -122,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input name='n' value='hi' style='-peachpdf-pdf-form-field-auto-font-size:auto' /></body></html>", config);
 
-            var field = Assert.IsType<PdfTextField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Text, Assert.Single(Fields(result.Inspect())));
 
             Assert.Equal("/Helv 0 Tf 0 g", field.DefaultAppearance);
         }
@@ -134,7 +132,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input name='n' value='hi' /></body></html>", config);
 
-            var field = Assert.IsType<PdfTextField>(Assert.Single(Fields(result.PdfDocument)));
+            var field = PdfFieldAssert.IsKind(PdfFieldKind.Text, Assert.Single(Fields(result.Inspect())));
 
             Assert.DoesNotContain("0 Tf", field.DefaultAppearance);
             Assert.Contains("/Helv", field.DefaultAppearance);
@@ -147,22 +145,11 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><input name='n' style='-peachpdf-pdf-form-field:none' /></body></html>", config);
 
-            Assert.Empty(Fields(result.PdfDocument));
+            Assert.Empty(Fields(result.Inspect()));
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        static List<PdfAcroField> Fields(PdfDocument document)
-        {
-            var array = document.Catalog.AcroForm.Fields;
-            var result = new List<PdfAcroField>();
-            foreach (var item in array)
-            {
-                var dict = item is PdfReference iref ? iref.Value : item;
-                if (dict is PdfAcroField field)
-                    result.Add(field);
-            }
-            return result;
-        }
+        static IReadOnlyList<FormField> Fields(PdfFile document) => document.FormFields;
     }
 }

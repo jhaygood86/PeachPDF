@@ -82,12 +82,11 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
             var font = f.Font(PaintFontStyle.Regular);
-            var real = ((PdfCanvasFont)font).Font;
-
+            
             Draw(f, "HHH", font);
 
             // A flat-bottomed capital sits on the baseline: y + cell ascent (in points), not the rounded Font.Ascent.
-            var baseline = 10 + real.Height * real.Typeface.Metrics.CellAscent / real.Typeface.Metrics.LineSpacing;
+            var baseline = 10 + font.Size * font.Typeface!.Metrics.CellAscent / font.Typeface.Metrics.UnitsPerEm;
             var (_, _, _, maxY, _) = InkBounds(f.Graphics);
             Assert.InRange(maxY + 1, baseline - 1, baseline + 1);
         }
@@ -209,25 +208,11 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
             var font = f.Font(PaintFontStyle.Regular);
-            var pdf = new PeachDrawing.PDF.Engine.Drawing.PdfGraphicsMeasureProbe(font).Width("measure me");
+            var pdf = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(f.RenderContext, new PeachDrawing.Core.Size(595, 842)).MeasureString("measure me", font).Width;
 
             Assert.Equal(pdf, f.Graphics.MeasureString("measure me", font).Width, 6);
             Assert.Equal("measure me".Length, f.Graphics.CountShapedGlyphs("measure me", font));
             Assert.Throws<NotSupportedException>(() => f.Graphics.MeasureString("x", font, 10, out _, out _));
-        }
-    }
-}
-
-namespace PeachDrawing.PDF.Engine.Drawing
-{
-    /// <summary>Test-only: measures with the same routine <c>PdfCanvas</c> uses (an <c>PdfGraphics</c> measure context).</summary>
-    internal sealed class PdfGraphicsMeasureProbe(PeachDrawing.Core.Font font)
-    {
-        public double Width(string text)
-        {
-            var real = ((PeachDrawing.PDF.PdfCanvasFont)font).Font;
-            var size = FontHelper.MeasureString(text, real, PdfStringFormats.Default, PeachDrawing.Text.Shaping.ShapeSettings.Default);
-            return size.Width;
         }
     }
 }

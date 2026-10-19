@@ -63,7 +63,7 @@ namespace PeachPDF.Tests.Integration
             var document = await generator.GeneratePdf(html, PageSize.A4, margin: 20);
 
             Assert.Equal(1, document.PageCount);
-            Assert.True(PageHasContent(document.Pages[0]), "the single page should have content");
+            Assert.True(PageHasContent(document.Page(0)), "the single page should have content");
         }
 
         [Fact]
@@ -89,7 +89,7 @@ namespace PeachPDF.Tests.Integration
             var document = await generator.GeneratePdf(html, PageSize.A4, margin: 20);
 
             Assert.Equal(1, document.PageCount);
-            Assert.True(PageHasContent(document.Pages[0]));
+            Assert.True(PageHasContent(document.Page(0)));
         }
 
         [Fact]
@@ -108,7 +108,7 @@ namespace PeachPDF.Tests.Integration
 
             for (var i = 0; i < document.PageCount; i++)
             {
-                Assert.True(PageHasContent(document.Pages[i]), $"page {i + 1} of {document.PageCount} should have content");
+                Assert.True(PageHasContent(document.Page(i)), $"page {i + 1} of {document.PageCount} should have content");
             }
         }
 
@@ -198,8 +198,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using (var layoutGraphics = new PdfCanvas(renderContext, measure, 1.0))
+            using (var layoutGraphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size))
             {
                 await container.PerformLayout(layoutGraphics);
             }
@@ -213,34 +212,7 @@ namespace PeachPDF.Tests.Integration
             return counter.DrawOperations;
         }
 
-        private static bool PageHasContent(PdfPage page)
-        {
-            try
-            {
-                var content = page.Contents;
-                if (content == null)
-                    return false;
-
-                if (content.Elements.Count == 0)
-                    return false;
-
-                foreach (var item in content.Elements)
-                {
-                    if (item is PdfReference { Value: PdfDictionary dict })
-                    {
-                        var stream = dict.Stream;
-                        if (stream?.Value is { Length: > 0 })
-                            return true;
-                    }
-                }
-
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        private static bool PageHasContent(PdfPageView page) => page.HasContent;
 
         /// <summary>
         /// An <see cref="Canvas"/> stub that counts every draw call and no-ops everything else,

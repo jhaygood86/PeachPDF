@@ -677,8 +677,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using (var measureGraphics = new PdfCanvas(renderContext, measure, 1.0))
+            using (var measureGraphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size))
                 await container.PerformLayout(measureGraphics);
 
             var recorder = new TestRecordingGraphics();
@@ -744,8 +743,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using (var measureGraphics = new PdfCanvas(renderContext, measure, 1.0))
+            using (var measureGraphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size))
                 await container.PerformLayout(measureGraphics);
 
             var recorder = new TestRecordingGraphics();
@@ -1223,8 +1221,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(document.PageCount >= 4, $"expected at least 4 pages, got {document.PageCount}");
             for (var i = 0; i < document.PageCount; i++)
             {
-                var content = document.Pages[i].Contents;
-                Assert.True(content is { Elements.Count: > 0 }, $"page {i + 1} should have content");
+                Assert.True(document.Page(i).HasContent, $"page {i + 1} should have content");
             }
         }
 
@@ -1591,8 +1588,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

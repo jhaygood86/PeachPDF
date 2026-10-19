@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using PeachDrawing.PDF.Engine;
 using System.Globalization;
 using System.IO;
@@ -190,7 +191,7 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             var document = await generator.GeneratePdf(html, PageSize.A4, margin: 0);
 
-            return PageContent(document.PdfDocument);
+            return PageContent(document.Inspect());
         }
 
         /// <summary>
@@ -198,16 +199,6 @@ namespace PeachPDF.Tests.Integration
         /// filtered when the document is saved), the same way the interactive-forms paint tests read
         /// theirs.
         /// </summary>
-        private static string PageContent(PdfDocument document)
-        {
-            using var bytes = new MemoryStream();
-
-            foreach (var content in document.Pages[0].Contents)
-            {
-                bytes.Write(content.Stream.Value, 0, content.Stream.Value.Length);
-            }
-
-            return Encoding.Latin1.GetString(bytes.ToArray());
-        }
+        private static string PageContent(PdfFile file) => file.ContentText(file.Pages[0]);
     }
 }

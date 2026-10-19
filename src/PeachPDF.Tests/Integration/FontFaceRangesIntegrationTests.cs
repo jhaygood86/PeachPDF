@@ -41,8 +41,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -78,7 +77,7 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>The location in the design space that a box's font was matched at.</summary>
         private static double Axis(CssBox box, string tag) =>
-            ((PdfCanvasFont)box.ActualFont).Font.Typeface.AxisSettings.Single(s => s.Tag == tag).Value;
+            (box.ActualFont).Typeface!.AxisSettings.Single(s => s.Tag == tag).Value;
 
         private static async Task<(string Pdf, PeachPdfDocument Document)> RenderAsync(string html)
         {

@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
@@ -48,7 +48,7 @@ namespace PeachDrawing.PDF
                 Configure(options);
         }
 
-        /// <summary>The engine's document, for the rest of the package and the temporary bridge to PeachPDF.</summary>
+        /// <summary>The engine's document, for the rest of the package.</summary>
         internal PdfDocument Document => _document;
 
         /// <summary>The number of pages added so far.</summary>

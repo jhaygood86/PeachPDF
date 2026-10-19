@@ -278,7 +278,7 @@ namespace PeachPDF.Tests.Integration
         public async Task X1a_UsesPdf14VersionHeader()
         {
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, X1aConfig());
-            Assert.Equal(14, result.PdfDocument.Version);
+            Assert.Equal("1.4", result.Inspect().Version);
 
             var pdfText = await GetPdfText(SimpleHtml, X1aConfig());
             Assert.StartsWith("%PDF-1.4\n", pdfText);
@@ -307,7 +307,7 @@ namespace PeachPDF.Tests.Integration
         public async Task X3_UsesPdf14VersionHeader_AndNoGtsPdfxConformanceKey()
         {
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, X3Config());
-            Assert.Equal(14, result.PdfDocument.Version);
+            Assert.Equal("1.4", result.Inspect().Version);
 
             var pdfText = await GetPdfText(SimpleHtml, X3Config());
             Assert.StartsWith("%PDF-1.4\n", pdfText);
@@ -329,7 +329,7 @@ namespace PeachPDF.Tests.Integration
         public async Task X4_UsesPdf16VersionHeader()
         {
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, X4Config());
-            Assert.Equal(16, result.PdfDocument.Version);
+            Assert.Equal("1.6", result.Inspect().Version);
 
             var pdfText = await GetPdfText(SimpleHtml, X4Config());
             Assert.StartsWith("%PDF-1.6\n", pdfText);

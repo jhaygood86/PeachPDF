@@ -238,8 +238,8 @@ namespace PeachPDF.Tests.Integration
                 doc.Page(page => page.Content(c => c.Text("Hello")));
             });
 
-            Assert.Equal(300, document.PdfDocument.Pages[0].Width, 1);
-            Assert.Equal(500, document.PdfDocument.Pages[0].Height, 1);
+            Assert.Equal(300, PdfFile.Width(document.Inspect().Pages[0]), 1);
+            Assert.Equal(500, PdfFile.Height(document.Inspect().Pages[0]), 1);
         }
 
         [Fact]

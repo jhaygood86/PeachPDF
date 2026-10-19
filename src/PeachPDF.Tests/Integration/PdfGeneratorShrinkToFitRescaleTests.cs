@@ -105,7 +105,7 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             var doc = await generator.GeneratePdf(html, config);
 
-            Assert.Equal(1, doc.PdfDocument.Pages.Count);
+            Assert.Equal(1, doc.Inspect().PageCount);
         }
 
         // Direct unit tests for the pure decision PdfGenerator.AddPdfPages now gates the expensive path

@@ -72,8 +72,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -97,8 +96,7 @@ namespace PeachPDF.Tests.Integration
         private static IReadOnlyList<GradientStop> BackgroundBrushStops(CssBox box)
         {
             var renderContext = new HtmlRenderContext();
-            var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-            using var g = new PdfCanvas(renderContext, measure, 1.0);
+            using var g = PdfCanvas.CreateMeasuring(renderContext, new Size(595, 842));
             var rect = new Rect(0, 0, 200, 100);
 
             return box.BackgroundImages![0] switch
@@ -140,7 +138,7 @@ namespace PeachPDF.Tests.Integration
             // Through CssImagePainter.Paint, the entry every background layer goes through, not the brush builders alone.
             var box = await BuildAsync($@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background-image: {gradient}"">x</div>");
             var renderContext = new HtmlRenderContext();
-            using var g = new PdfCanvas(renderContext, PdfGraphics.CreateMeasureContext(new Size(595, 842)), 1.0);
+            using var g = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new Size(595, 842));
             var rect = new Rect(0, 0, 200, 100);
             Brush? painted = null;
 
@@ -195,7 +193,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildAsync(@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background-image: conic-gradient(currentcolor, rgb(255, 0, 0))"">x</div>");
             var renderContext = new HtmlRenderContext();
-            using var g = new PdfCanvas(renderContext, PdfGraphics.CreateMeasureContext(new Size(595, 842)), 1.0);
+            using var g = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new Size(595, 842));
             var cg = Assert.IsType<CssImage.ConicGradient>(box.BackgroundImages![0]);
 
             var brush = (ConicGradientBrush)CssImagePainter.GetConicGradientBrush(g, cg.Gradient, new Rect(0, 0, 200, 100));

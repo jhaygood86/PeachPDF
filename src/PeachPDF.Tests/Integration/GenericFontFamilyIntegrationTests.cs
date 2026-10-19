@@ -29,10 +29,10 @@ namespace PeachPDF.Tests.Integration
             if (!OperatingSystem.IsWindows()) return;
 
             var renderContext = new HtmlRenderContext();
-            var font = renderContext.GetFont("monospace", 12, PaintFontStyle.Regular) as PdfCanvasFont;
+            var font = renderContext.GetFont("monospace", 12, PaintFontStyle.Regular);
 
             Assert.NotNull(font);
-            Assert.Equal("Consolas", font!.Font.Typeface.FamilyName);
+            Assert.Equal("Consolas", font!.Typeface!.FamilyName);
         }
 
         [Theory]
@@ -66,10 +66,10 @@ namespace PeachPDF.Tests.Integration
             if (renderContext.IsFontExists("Latin Modern Math"))
                 return;
 
-            var font = renderContext.GetFont("math", 12, PaintFontStyle.Regular) as PdfCanvasFont;
+            var font = renderContext.GetFont("math", 12, PaintFontStyle.Regular);
 
             Assert.NotNull(font);
-            Assert.Equal("Cambria Math", font!.Font.Typeface.FamilyName);
+            Assert.Equal("Cambria Math", font!.Typeface!.FamilyName);
         }
 
         [Fact]
@@ -103,13 +103,12 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             var paragraph = FindByTag(container.Root!, "p")!;
             var math = FindByTag(container.Root!, "math")!;
-            return (((PdfCanvasFont)paragraph.ActualFont).Font.Typeface.FamilyName, ((PdfCanvasFont)math.ActualFont).Font.Typeface.FamilyName);
+            return ((paragraph.ActualFont).Typeface!.FamilyName, (math.ActualFont).Typeface!.FamilyName);
         }
 
         private static CssBox? FindByTag(CssBox box, string tag)

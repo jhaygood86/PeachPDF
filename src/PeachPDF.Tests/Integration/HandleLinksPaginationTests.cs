@@ -32,14 +32,14 @@ namespace PeachPDF.Tests.Integration
             var doc = await generator.GeneratePdf(html, config);
 
             Assert.Equal(2, doc.PageCount);
-            Assert.Equal(0, doc.Pages[0].Annotations.Count);
-            Assert.Equal(1, doc.Pages[1].Annotations.Count);
+            Assert.Empty(doc.PageAnnotations(0));
+            Assert.Single(doc.PageAnnotations(1));
 
             // The link is the first line of page 2's content, so its annotation top must sit within
             // the top margin-plus-a-couple-lines band of the sheet (PDF y counts from the bottom;
             // A4 is 842pt tall, config margins default to 10pt).
-            var rect = doc.Pages[1].Annotations[0]!.Rectangle;
-            var topFromSheetTop = 842 - rect.Y2;
+            var rect = doc.PageAnnotations(1)[0].RectOf();
+            var topFromSheetTop = 842 - rect.Top;
             Assert.InRange(topFromSheetTop, 5, 60);
         }
 
@@ -65,8 +65,8 @@ namespace PeachPDF.Tests.Integration
             var doc = await generator.GeneratePdf(html, config);
 
             Assert.Equal(2, doc.PageCount);
-            Assert.Equal(0, doc.Pages[0].Annotations.Count);
-            Assert.Equal(1, doc.Pages[1].Annotations.Count);
+            Assert.Empty(doc.PageAnnotations(0));
+            Assert.Single(doc.PageAnnotations(1));
         }
     }
 }

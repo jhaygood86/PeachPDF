@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
             Assert.Equal(PdfVersion.Pdf20, config.PdfVersion);
-            Assert.Equal(20, result.PdfDocument.Version);
+            Assert.Equal("2.0", result.Inspect().Version);
         }
 
         [Fact]
@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Integration
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf17 };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.Equal(14, result.PdfDocument.Version);
+            Assert.Equal("1.4", result.Inspect().Version);
         }
 
         [Fact]
@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.Integration
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf20 };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.Equal(20, result.PdfDocument.Version);
+            Assert.Equal("2.0", result.Inspect().Version);
         }
 
         [Fact]
@@ -107,8 +107,8 @@ namespace PeachPDF.Tests.Integration
 
             await generator.AddPdfPages(document, SimpleHtml, config, null);
 
-            Assert.Equal(20, document.PdfDocument.Version);
-            Assert.Equal(2, document.PdfDocument.Pages.Count);
+            Assert.Equal("2.0", document.Inspect().Version);
+            Assert.Equal(2, document.Inspect().PageCount);
         }
 
         static async Task<string> GetPdfText(string html, PdfGenerateConfig config)

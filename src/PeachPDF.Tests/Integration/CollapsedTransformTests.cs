@@ -7,7 +7,6 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
-using PeachDrawing.PDF.Engine.AcroForms;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -37,7 +36,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate($"<div style='transform:{transform};width:100pt;height:40pt'><a href='http://example.test/'>link</a></div>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -45,7 +44,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate("<div style='transform:scale(0);display:block'><a href='http://example.test/' style='display:block'>link</a></div><a href='http://example.test/' style='display:block;transform:scale(0)'>itself</a>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -54,7 +53,7 @@ namespace PeachPDF.Tests.Integration
             // The control: the walk must not drop a link under a transform that leaves a visible area.
             var doc = await Generate("<div style='transform:scale(0.5);width:100pt;height:40pt'><a href='http://example.test/'>link</a></div>");
 
-            Assert.Single(doc.Pages[0].Annotations);
+            Assert.Single(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -62,7 +61,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate("<div style='transform:scale(0)'><a href='http://example.test/a'>gone</a></div><p><a href='http://example.test/b'>kept</a></p>");
 
-            Assert.Single(doc.Pages[0].Annotations);
+            Assert.Single(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -70,7 +69,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate("<div style='transform:scale(0)'><a href='http://example.test/' style='display:contents'><span style='display:block'>link</span></a></div>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -78,7 +77,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate("<div style='transform:scale(0)'><svg width='100' height='100'><a href='http://example.test/'><rect width='50' height='50'/></a></svg></div>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -107,7 +106,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate(body);
 
-            Assert.Single(doc.Pages[0].Annotations);
+            Assert.Single(doc.PageAnnotations(0));
         }
 
         [Theory]
@@ -122,7 +121,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate(body);
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Theory]
@@ -139,7 +138,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate(body);
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -153,7 +152,7 @@ namespace PeachPDF.Tests.Integration
                 "<a href='http://example.test/a'>parent link</a>" +
                 "<div style='width:100pt;height:100pt;background:#33c;backface-visibility:hidden'><a href='http://example.test/b'>child link</a></div></div></div></div>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -165,7 +164,7 @@ namespace PeachPDF.Tests.Integration
                 "<div style='position:absolute;left:50pt;top:30pt;width:100pt;height:100pt;background:#c33;transform-style:preserve-3d;transform:rotateY(90deg)'>" +
                 "<div style='width:100pt;height:100pt;background:#33c;transform:rotateY(-90deg)'><a href='http://example.test/'>link</a></div></div></div></div>");
 
-            Assert.Single(doc.Pages[0].Annotations);
+            Assert.Single(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -173,7 +172,7 @@ namespace PeachPDF.Tests.Integration
         {
             var doc = await Generate("<div style='perspective:300pt'><div style='transform:scaleZ(0);width:100pt;height:40pt'><a href='http://example.test/'>link</a></div></div>");
 
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -182,8 +181,8 @@ namespace PeachPDF.Tests.Integration
             // A bookmark names a place in the document, not something painted: the heading is still there in the layout.
             var doc = await Generate("<h1 style='transform:scale(0)'><a href='http://example.test/'>Chapter</a></h1><p>text</p>");
 
-            Assert.Single(doc.PdfDocument.Outlines);
-            Assert.Empty(doc.Pages[0].Annotations);
+            Assert.Single(doc.Inspect().Outlines);
+            Assert.Empty(doc.PageAnnotations(0));
         }
 
         [Fact]
@@ -196,17 +195,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, FieldCount(shrunk));
         }
 
-        private static int FieldCount(PeachPdfDocument doc)
-        {
-            var count = 0;
-            foreach (var item in doc.PdfDocument.Catalog.AcroForm.Fields)
-            {
-                if ((item is PeachDrawing.PDF.Engine.Advanced.PdfReference reference ? reference.Value : item) is PdfAcroField)
-                    count++;
-            }
-
-            return count;
-        }
+        private static int FieldCount(PeachPdfDocument doc) => doc.Inspect().Fields.Count;
 
         // --- The full 4x4 decides ---
 

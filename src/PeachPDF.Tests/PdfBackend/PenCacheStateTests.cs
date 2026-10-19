@@ -1,4 +1,5 @@
 using PeachDrawing.Core;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.PdfBackendTests
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void GetPen_SameColorTwice_ReturnsTheSameCachedInstance()
         {
-            var renderContext = new TestPdfCanvas();
+            var renderContext = new PdfRenderContext();
             var g = new TestRecordingGraphics();
 
             // Sanity for the tests below: without a shared instance there would be nothing to leak.

@@ -23,5 +23,6 @@ types stay `internal` for this reason as well as for API stability: nothing publ
    competitors above before it lands and record it in the table.
 2. The embedded engine (`Engine/`) is never reachable through the public surface: no public member's signature, base type or documentation names a
    type from it. `PeachDrawing.PDF.Tests`' `PublicSurfaceTests` snapshot makes a leak visible in review.
-3. Until the `InternalsVisibleTo` bridge to PeachPDF is gone (see `.claude/recent-fixes/2026-10-19-pdf-writer-is-its-own-project.md`), the public API is
-   the intended end state and the internals are a means to it; do not grow the bridge to avoid designing a public member.
+3. No assembly but `PeachDrawing.PDF.Tests` has `InternalsVisibleTo` access (a test pins it). PeachPDF reaches the writer only through the public API,
+   so a capability PeachPDF needs and the API lacks is added to the API - designed in the package's own terms and named by rule 1 - and never reached
+   for through a new internals grant.

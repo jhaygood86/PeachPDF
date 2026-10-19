@@ -58,8 +58,7 @@ p {{ width: 300px; }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -69,8 +68,8 @@ p {{ width: 300px; }}
             // The resolved TypefaceFont reports the font's own internal name (read from its 'name' table),
             // not the @font-face CSS alias and not a fallback - confirms the real OTF was actually
             // loaded and used despite the missing format() hint, not silently falling back.
-            var pdfCanvasFont = Assert.IsType<PdfCanvasFont>(paragraph!.ActualFont);
-            Assert.Equal(expectedFontName, pdfCanvasFont.Font.Typeface.FamilyName);
+            var pdfCanvasFont = paragraph!.ActualFont;
+            Assert.Equal(expectedFontName, pdfCanvasFont.Typeface!.FamilyName);
         }
     }
 }

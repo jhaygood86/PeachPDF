@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Html.Core
             public string ColourName => FontName("ColourFam");
             public string TextName => FontName("TextFam");
 
-            private string FontName(string family) => ((PdfCanvasFont)RenderContext.GetFont(family, 12, PaintFontStyle.Regular)!).Font.Typeface.FamilyName;
+            private string FontName(string family) => (RenderContext.GetFont(family, 12, PaintFontStyle.Regular)!).Typeface!.FamilyName;
 
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
 
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Html.Core
                 var box = Box(id);
                 var words = new List<CssRectWord>();
                 Collect(box, words);
-                return words.Select(w => ((PdfCanvasFont)CssBox.ResolveWordFont(w, w.OwnerBox)).Font.Typeface.FamilyName).ToList();
+                return words.Select(w => (CssBox.ResolveWordFont(w, w.OwnerBox)).Typeface!.FamilyName).ToList();
             }
 
             private static CssBox? Find(CssBox box, string id)
@@ -76,8 +76,7 @@ namespace PeachPDF.Tests.Html.Core
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             return new Layout(renderContext, container.Root!);
@@ -246,12 +245,11 @@ namespace PeachPDF.Tests.Html.Core
             var size = new Size(595, 842);
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             var layout = new Layout(renderContext, container.Root!);
-            var expected = ((PdfCanvasFont)renderContext.GetFont("ColourFam", 12, PaintFontStyle.Regular)!).Font.Typeface.FamilyName;
+            var expected = (renderContext.GetFont("ColourFam", 12, PaintFontStyle.Regular)!).Typeface!.FamilyName;
 
             Assert.Equal([expected], layout.WordFonts("p"));
         }

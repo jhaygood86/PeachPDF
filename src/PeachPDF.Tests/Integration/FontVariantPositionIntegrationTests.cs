@@ -74,7 +74,7 @@ namespace PeachPDF.Tests.Integration
             // Glyph indices, not measured width: a well-designed font's superscript figures aren't
             // guaranteed to differ in advance width from the default ones.
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
-            var typeface = ((PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = (box.ActualFont).Typeface!;
 
             var plain = Shaper.Shape(typeface, "42", ShapeSettings.Default);
             var superscript = Shaper.Shape(typeface, "42", box.ActualTextShapingFeatures);
@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Sub_OnAFontWithSubs_SubstitutesRealGlyphs()
         {
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:sub\">42</b>");
-            var typeface = ((PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = (box.ActualFont).Typeface!;
 
             var plain = Shaper.Shape(typeface, "42", ShapeSettings.Default);
             var subscript = Shaper.Shape(typeface, "42", box.ActualTextShapingFeatures);
@@ -236,8 +236,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

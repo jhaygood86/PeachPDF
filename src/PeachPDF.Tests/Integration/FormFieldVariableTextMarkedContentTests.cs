@@ -1,7 +1,4 @@
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.AcroForms;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.Annotations;
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -146,39 +143,15 @@ namespace PeachPDF.Tests.Integration
                 EnableInteractivePdfForms = true
             });
 
-            return Encoding.Latin1.GetString(ResolveNormalAppearance(Single(result.PdfDocument)).Stream.Value);
+            return Encoding.Latin1.GetString(ResolveNormalAppearance(Single(result.Inspect())).Decoded);
         }
 
         /// <summary>
         /// The document's one field - a radio button's geometry and appearance live on the group's
         /// single widget kid rather than on the field itself.
         /// </summary>
-        static PdfDictionary Single(PdfDocument document)
-        {
-            var fields = new List<PdfAcroField>();
-            foreach (var item in document.Catalog.AcroForm.Fields)
-            {
-                var dict = item is PdfReference iref ? iref.Value : item;
-                if (dict is PdfAcroField field)
-                    fields.Add(field);
-            }
+        static FormField Single(PdfFile document) => Assert.Single(document.FormFields).Widgets[0];
 
-            var only = Assert.Single(fields);
-            if (only.Elements.GetArray(PdfAcroField.Keys.Kids) is { Elements.Count: > 0 } kids)
-                return (PdfDictionary)((PdfReference)kids.Elements[0]).Value;
-
-            return only;
-        }
-
-        static PdfFormXObject ResolveNormalAppearance(PdfDictionary widget)
-        {
-            var ap = widget.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
-            if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
-                return direct;
-
-            var states = ap.Elements.GetDictionary("/N")!;
-            var state = widget.Elements.GetName("/AS");
-            return (PdfFormXObject)states.Elements.GetReference(state)!.Value;
-        }
+        static PdfStreamObject ResolveNormalAppearance(FormField widget) => widget.NormalAppearance!;
     }
 }

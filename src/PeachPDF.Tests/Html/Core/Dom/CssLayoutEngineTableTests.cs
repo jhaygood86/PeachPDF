@@ -1843,8 +1843,7 @@ Assert.NotNull(tbody);
             {
                 if (pass > 0)
                 {
-                    var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-                    using var graphics = new PdfCanvas((HtmlRenderContext)container.RenderContext, measure, 1.0);
+                    using var graphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring((HtmlRenderContext)container.RenderContext, new Size(595, 842));
                     await container.PerformLayout(graphics);
                 }
 
@@ -3194,8 +3193,7 @@ Assert.NotNull(tbody);
    container.MarginTop = 20;
         container.MarginBottom = 20;
 
-   var measure = PdfGraphics.CreateMeasureContext(size);
-using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+   using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
       Assert.NotNull(container.Root);

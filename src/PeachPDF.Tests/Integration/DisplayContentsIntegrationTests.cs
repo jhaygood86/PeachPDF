@@ -270,9 +270,9 @@ namespace PeachPDF.Tests.Integration
                        "</section></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var outer = Assert.Single(result.PdfDocument.Outlines);
+            var outer = Assert.Single(result.Inspect().Outlines);
             Assert.Equal("Outer", outer.Title);
-            Assert.Equal("Inner", Assert.Single(outer.Outlines).Title);
+            Assert.Equal("Inner", Assert.Single(outer.Children).Title);
         }
 
         [Fact]
@@ -663,12 +663,12 @@ namespace PeachPDF.Tests.Integration
                        "<div id='w' style='display:contents'><div style='break-before:page'>Target</div></div></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var array = Assert.IsType<PdfArray>(result.PdfDocument.Catalog.Names.NameTree!.GetValue("w"));
-            var literal = Assert.IsType<PdfLiteral>(array.Elements[0]);
-            var match = Regex.Match(literal.Value, @"/FitH\s+([\d.]+)");
+            var array = Assert.IsType<PdfArr>(result.Inspect().NamedDestination("w"));
+            var literal = array.Render();
+            var match = Regex.Match(literal, @"/FitH\s+([\d.]+)");
 
-            Assert.True(match.Success, literal.Value);
-            var pageHeight = (double)result.PdfDocument.Pages[result.PdfDocument.Pages.Count - 1].Height;
+            Assert.True(match.Success, literal);
+            var pageHeight = (double)PdfFile.Height(result.Inspect().Pages[result.Inspect().PageCount - 1]);
             Assert.True(double.Parse(match.Groups[1].Value) > pageHeight * 0.8);
         }
 
@@ -679,7 +679,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><p>see <a style='display:contents' href='https://example.com/'>the <b>docs</b></a> now</p></body></html>", config);
 
-            Assert.True(result.PdfDocument.Pages[0].Annotations.Count > 0);
+            Assert.True(result.Inspect().Annotations(result.Inspect().Pages[0]).Count > 0);
         }
 
         [Fact]
@@ -720,8 +720,8 @@ namespace PeachPDF.Tests.Integration
                        "<h1>Third</h1></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal(new[] { "First", "Second", "Third" }, result.PdfDocument.Outlines.Select(o => o.Title));
-            Assert.All(result.PdfDocument.Outlines, o => Assert.NotNull(o.DestinationPage));
+            Assert.Equal(new[] { "First", "Second", "Third" }, result.Inspect().Outlines.Select(o => o.Title));
+            Assert.All(result.Inspect().Outlines, o => Assert.True(o.HasDestinationPage));
         }
 
         [Fact]
@@ -813,7 +813,7 @@ namespace PeachPDF.Tests.Integration
                        "<body><h1 data-n='7'>  <span>Title</span></h1></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("7. Title", result.PdfDocument.Outlines.Single().Title);
+            Assert.Equal("7. Title", result.Inspect().Outlines.Single().Title);
         }
 
         // ─── string-set (GCPM 3 §1.1.1) ──────────────────────────────────────────────────────────
@@ -918,7 +918,7 @@ namespace PeachPDF.Tests.Integration
                 "<a href='#w'>go</a><div style='height:1200px'></div>" +
                 "<div id='w' style='display:contents'><div style='break-before:page'>Target</div></div>"))));
 
-            Assert.NotNull(document.PdfDocument.Catalog.Names.NameTree!.GetValue("w"));
+            Assert.NotNull(document.Inspect().NamedDestination("w"));
         }
 
         [Fact]
@@ -937,7 +937,7 @@ namespace PeachPDF.Tests.Integration
                 })));
             });
 
-            Assert.Equal("Wrapped", Assert.Single(document.PdfDocument.Outlines).Title);
+            Assert.Equal("Wrapped", Assert.Single(document.Inspect().Outlines).Title);
         }
 
         [Fact]
@@ -951,7 +951,7 @@ namespace PeachPDF.Tests.Integration
                 doc.Page(page => page.Content(c => c.Id("root").Text("still laid out")));
             });
 
-            Assert.Equal(1, document.PdfDocument.Pages.Count);
+            Assert.Equal(1, document.Inspect().PageCount);
         }
 
         [Fact]
@@ -982,7 +982,7 @@ namespace PeachPDF.Tests.Integration
             });
 
             // Page 1's shells belong to a container that was disposed; they must not be handed to page 2's.
-            Assert.Equal(new[] { "First", "Second" }, document.PdfDocument.Outlines.Select(o => o.Title));
+            Assert.Equal(new[] { "First", "Second" }, document.Inspect().Outlines.Select(o => o.Title));
         }
 
         [Fact]
@@ -1030,7 +1030,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><section style='display:contents'><h1>Title</h1><p>Body</p></section></body></html>", config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var section = Assert.Single(Kids(documentElement));
 
             Assert.Equal("/Sect", section.StructureType);
@@ -1044,7 +1044,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><ul style='display:contents'><li>one</li><li>two</li></ul></body></html>", config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var list = Assert.Single(Kids(documentElement));
 
             Assert.Equal("/L", list.StructureType);
@@ -1058,7 +1058,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><table><tbody><tr style='display:contents'><td>a</td><td>b</td></tr></tbody></table></body></html>", config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var table = Assert.Single(Kids(documentElement));
             Assert.Equal("/Table", table.StructureType);
 
@@ -1076,7 +1076,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><ul><li style='display:contents'>one</li></ul></body></html>", config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var item = Descendant(documentElement, "/LI");
 
             Assert.NotNull(item);
@@ -1090,7 +1090,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><table><tbody><td>plain</td><tr style='display:contents'><td>inside</td></tr></tbody></table></body></html>", config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var table = Assert.Single(Kids(documentElement));
 
             // The plain cell has no row of its own, so the synthesized one stays around it; the contents
@@ -1105,24 +1105,22 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(
                 "<html><body><p><a style='display:contents' href='https://example.com/'>go</a></p></body></html>", config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var link = Descendant(documentElement, "/Link");
 
             Assert.NotNull(link);
-            var objectReference = Assert.Single(PdfStructureElement.GetKids(link!.Elements).OfType<PdfObjectReference>());
-            Assert.Same(result.PdfDocument.Pages[0], objectReference.Page);
+            var objectReference = Assert.Single(link!.AllKids.OfType<PdfDict>(), k => k.Name("/Type") == "/OBJR");
+            Assert.Equal(result.Inspect().Pages[0].ObjectNumber, objectReference.Dict("/Pg")!.ObjectNumber);
         }
 
-        private static PdfStructureElement? Descendant(PdfStructureElement element, string type) =>
+        private static StructElem? Descendant(StructElem element, string type) =>
             Kids(element).Select(k => k.StructureType == type ? k : Descendant(k, type)).FirstOrDefault(k => k is not null);
 
-        private static int Count(PdfStructureElement element, string type) =>
+        private static int Count(StructElem element, string type) =>
             Kids(element).Sum(k => (k.StructureType == type ? 1 : 0) + Count(k, type));
 
-        private static IEnumerable<PdfStructureElement> RootKids(PdfStructureTreeRoot root) =>
-            PdfStructureElement.GetKids(root.Elements).Cast<PdfStructureElement>();
+        private static IEnumerable<StructElem> RootKids(PdfFile file) => file.StructureRoot;
 
-        private static IEnumerable<PdfStructureElement> Kids(PdfStructureElement element) =>
-            PdfStructureElement.GetKids(element.Elements).OfType<PdfStructureElement>();
+        private static IEnumerable<StructElem> Kids(StructElem element) => element.Kids;
     }
 }

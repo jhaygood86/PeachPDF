@@ -26,11 +26,11 @@ namespace PeachPDF.Tests.Integration
                        "<h1 id='target'>Target</h1></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var array = Assert.IsType<PdfArray>(result.PdfDocument.Catalog.Names.NameTree!.GetValue("target"));
-            var literal = Assert.IsType<PdfLiteral>(array.Elements[0]);
+            var array = Assert.IsType<PdfArr>(result.Inspect().NamedDestination("target"));
+            var literal = array.Render();
 
-            Assert.Contains("/FitH", literal.Value);
-            Assert.DoesNotContain("/FitV", literal.Value);
+            Assert.Contains("/FitH", literal);
+            Assert.DoesNotContain("/FitV", literal);
         }
 
         // Regression test for a coordinate-space bug found post-implementation: the fix above (FitV ->
@@ -48,14 +48,14 @@ namespace PeachPDF.Tests.Integration
                        "<h1 id='target' style='break-before:page'>Target</h1></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var array = Assert.IsType<PdfArray>(result.PdfDocument.Catalog.Names.NameTree!.GetValue("target"));
-            var literal = Assert.IsType<PdfLiteral>(array.Elements[0]);
+            var array = Assert.IsType<PdfArr>(result.Inspect().NamedDestination("target"));
+            var literal = array.Render();
 
-            var match = Regex.Match(literal.Value, @"/FitH\s+([\d.]+)");
-            Assert.True(match.Success, $"Expected a /FitH value in '{literal.Value}'");
+            var match = Regex.Match(literal, @"/FitH\s+([\d.]+)");
+            Assert.True(match.Success, $"Expected a /FitH value in '{literal}'");
             var top = double.Parse(match.Groups[1].Value);
 
-            var pageHeight = (double)result.PdfDocument.Pages[result.PdfDocument.Pages.Count - 1].Height;
+            var pageHeight = (double)PdfFile.Height(result.Inspect().Pages[result.Inspect().PageCount - 1]);
             Assert.True(top > pageHeight * 0.8,
                 $"Target starts its own fresh page (break-before:page), so its bottom-up Top ({top}) should be near the full page height ({pageHeight}), not near 0.");
         }
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><a href='#'>no-op</a></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal(0, result.PdfDocument.Pages[0].Annotations.Count);
+            Assert.Empty(result.PageAnnotations(0));
         }
 
         // PdfGenerator.HandleLinks always calls the internal HtmlContainer.GetLinks(bookmarkBoxes)

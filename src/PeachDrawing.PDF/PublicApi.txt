@@ -21,6 +21,12 @@ PeachDrawing.PDF.ColorRenderingIntent : enum Int32
   Perceptual = 0
   RelativeColorimetric = 1
   Saturation = 2
+PeachDrawing.PDF.IPdfFormAppearance : interface
+  method abstract Double TextFontSizePoints(Size sizePoints, Boolean autoFontSize, Boolean isPlaceholder)
+  method abstract Void PaintCheckbox(Canvas canvas, Size sizePoints, Boolean isChecked)
+  method abstract Void PaintRadio(Canvas canvas, Size sizePoints, Boolean isSelected)
+  method abstract Void PaintText(Canvas canvas, Size sizePoints, String text, Boolean autoFontSize, Int32? combCells, Boolean isPlaceholder)
+  property Double PixelsPerPoint { get; }
 PeachDrawing.PDF.ImageCompression : enum Int32
   Auto = 0
   Lossless = 1
@@ -101,6 +107,8 @@ PeachDrawing.PDF.PdfCanvas : sealed class
 PeachDrawing.PDF.PdfComposer : sealed class
   ctor(PdfRenderContext renderContext, PdfComposerOptions options = null)
   method PdfComposerPage AddPage(Double widthPoints, Double heightPoints)
+  method PdfFormBuilder CreateFormBuilder(PdfRenderContext renderContext, String generatedNamePrefix = Field)
+  method PdfTagRecorder CreateTagRecorder(Boolean requireAlternateText = False)
   method Void AddBookmarks(IEnumerable<PdfBookmark> bookmarks)
   method Void AddNamedDestination(String name, Int32 pageIndex, Double topPoints)
   method Void Configure(PdfComposerOptions options)
@@ -172,6 +180,39 @@ PeachDrawing.PDF.PdfFacturXInfo : sealed class
   ctor(String fileName, String conformanceLevel)
   property String ConformanceLevel { get; }
   property String FileName { get; }
+PeachDrawing.PDF.PdfFormBuilder : sealed class
+  method Void AddField(PdfComposerPage page, PdfFormFieldDefinition field)
+PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
+  ctor()
+  property Boolean AutoFontSize { get; init; }
+  property Boolean DoNotScroll { get; init; }
+  property Boolean IsChecked { get; init; }
+  property Boolean NoExport { get; init; }
+  property Boolean Password { get; init; }
+  property Boolean PlaceholderShown { get; init; }
+  property Boolean ReadOnly { get; init; }
+  property Boolean Required { get; init; }
+  property IPdfFormAppearance Appearance { get; init; }
+  property IReadOnlyList<PdfFormOption> Options { get; init; }
+  property Int32? CombCells { get; init; }
+  property Int32? MaxLength { get; init; }
+  property Matrix3x2? AppearanceTransform { get; init; }
+  property PdfFormFieldKind Kind { get; init; }
+  property Rect Bounds { get; init; }
+  property Size ContentSize { get; init; }
+  property String Name { get; init; }
+  property String Placeholder { get; init; }
+  property String Value { get; init; }
+PeachDrawing.PDF.PdfFormFieldKind : enum Int32
+  Checkbox = 1
+  Radio = 2
+  Select = 3
+  Text = 0
+PeachDrawing.PDF.PdfFormOption : struct
+  ctor(String value, String label, Boolean selected)
+  property Boolean Selected { get; }
+  property String Label { get; }
+  property String Value { get; }
 PeachDrawing.PDF.PdfLink : sealed class
 PeachDrawing.PDF.PdfPermissions : enum Int32
   All = 3900
@@ -188,9 +229,21 @@ PeachDrawing.PDF.PdfPermissions : enum Int32
 PeachDrawing.PDF.PdfRenderContext : class
   ctor()
   method Task AddFont(Stream stream, String fontFamilyName)
+  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+PeachDrawing.PDF.PdfTagRecorder : sealed class
+  method IDisposable OpenArtifact(Canvas canvas)
+  method IDisposable OpenContentElement(Canvas canvas, Object key, String structureType, String altText = null)
+  method IDisposable OpenGroupingElement(Object key, String structureType)
+  method IDisposable OpenListItemBodyElement(Object key)
+  method IDisposable OpenPhantomAncestors(IReadOnlyList<ValueTuple<Object, String>> ancestors)
+  method Void AttachMathMlSource(Object key, String mathMlSource)
+  method Void BeginPage(PdfComposerPage page)
+  method Void Finish()
+  method Void LinkAnnotation(Object key, PdfLink link)
+  property Boolean IsInMarkedContent { get; }
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

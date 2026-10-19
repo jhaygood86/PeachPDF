@@ -1,7 +1,4 @@
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.AcroForms;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.Annotations;
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -81,7 +78,7 @@ namespace PeachPDF.Tests.Integration
             var document = await RenderAsync("<input name='n' value='PeachProbe' />", enableForms: true);
 
             var pageContentBytes = GetPageContentBytes(document);
-            var widgetAppearanceBytes = ResolveNormalAppearance(Assert.Single(Fields(document))).Stream.Value;
+            var widgetAppearanceBytes = ResolveNormalAppearance(Assert.Single(Fields(document))).Decoded;
 
             var pageContentText = Encoding.Latin1.GetString(pageContentBytes);
             var widgetAppearanceText = Encoding.Latin1.GetString(widgetAppearanceBytes);
@@ -100,8 +97,8 @@ namespace PeachPDF.Tests.Integration
             var documentA = await RenderAsync("<input name='n' value='PeachProbe' />", enableForms: true);
             var documentB = await RenderAsync("<input name='n' value='OtherValue' />", enableForms: true);
 
-            var streamA = ResolveNormalAppearance(Assert.Single(Fields(documentA))).Stream.Value;
-            var streamB = ResolveNormalAppearance(Assert.Single(Fields(documentB))).Stream.Value;
+            var streamA = ResolveNormalAppearance(Assert.Single(Fields(documentA))).Decoded;
+            var streamB = ResolveNormalAppearance(Assert.Single(Fields(documentB))).Decoded;
 
             Assert.NotEqual(streamA, streamB);
         }
@@ -117,23 +114,16 @@ namespace PeachPDF.Tests.Integration
             var documentGreen = await RenderAsync(
                 "<select><option value='r'>Red</option><option value='g' selected>Green</option></select>", enableForms: true);
 
-            var streamRed = ResolveNormalAppearance(Assert.Single(Fields(documentRed))).Stream.Value;
-            var streamGreen = ResolveNormalAppearance(Assert.Single(Fields(documentGreen))).Stream.Value;
+            var streamRed = ResolveNormalAppearance(Assert.Single(Fields(documentRed))).Decoded;
+            var streamGreen = ResolveNormalAppearance(Assert.Single(Fields(documentGreen))).Decoded;
 
             Assert.NotEqual(streamRed, streamGreen);
         }
 
         // ─── Object-graph helpers (see the class remarks on why these don't round-trip through Save()) ─────────────────────
 
-        static byte[] GetPageContentBytes(PdfDocument document)
-        {
-            using var ms = new MemoryStream();
-            foreach (var content in document.Pages[0].Contents)
-            {
-                ms.Write(content.Stream.Value, 0, content.Stream.Value.Length);
-            }
-            return ms.ToArray();
-        }
+        static byte[] GetPageContentBytes(PdfFile document) =>
+            document.ContentStreams(document.Pages[0]).SelectMany(s => s.Decoded).ToArray();
 
         /// <summary>
         /// Resolves a field's "/AP /N" appearance - either a direct reference to one
@@ -141,30 +131,11 @@ namespace PeachPDF.Tests.Integration
         /// (checkbox/radio), the state dictionary's entry matching the field's own current
         /// <see cref="PdfAcroField.AppearanceState"/>.
         /// </summary>
-        static PdfFormXObject ResolveNormalAppearance(PdfAcroField field)
-        {
-            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP)!;
-            if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
-                return direct;
+        static PdfStreamObject ResolveNormalAppearance(FormField field) => field.NormalAppearance!;
 
-            var states = ap.Elements.GetDictionary("/N")!;
-            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!)!.Value;
-        }
+        static IReadOnlyList<FormField> Fields(PdfFile document) => document.FormFields;
 
-        static List<PdfAcroField> Fields(PdfDocument document)
-        {
-            var array = document.Catalog.AcroForm.Fields;
-            var result = new List<PdfAcroField>();
-            foreach (var item in array)
-            {
-                var dict = item is PdfReference iref ? iref.Value : item;
-                if (dict is PdfAcroField field)
-                    result.Add(field);
-            }
-            return result;
-        }
-
-        static async Task<PdfDocument> RenderAsync(string bodyHtml, bool enableForms)
+        static async Task<PdfFile> RenderAsync(string bodyHtml, bool enableForms)
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
             var config = new PdfGenerateConfig
@@ -175,15 +146,13 @@ namespace PeachPDF.Tests.Integration
             };
 
             var result = await new PdfGenerator().GeneratePdf(html, config);
-            return result.PdfDocument;
+            return result.Inspect();
         }
 
         static async Task<string> RenderToPdfText(string bodyHtml, bool enableForms)
         {
             var document = await RenderAsync(bodyHtml, enableForms);
-            var ms = new MemoryStream();
-            document.Save(ms);
-            return Encoding.Latin1.GetString(ms.ToArray());
+            return Encoding.Latin1.GetString(document.Bytes);
         }
     }
 }
