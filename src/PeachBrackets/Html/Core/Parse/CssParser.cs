@@ -1,0 +1,212 @@
+// "Therefore those skilled at the unorthodox
+// are infinite as heaven and earth,
+// inexhaustible as the great rivers.
+// When they come to an end,
+// they begin again,
+// like the days and months;
+// they die and are reborn,
+// like the four seasons."
+// 
+// - Sun Tsu,
+// "The Art of War"
+
+#nullable enable
+
+using PeachPDF;
+using PeachPDF.CSS;
+using PeachDrawing.Core;
+using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Handlers;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace PeachPDF.Html.Core.Parse
+{
+    /// <summary>
+    /// Parser to parse CSS stylesheet source string into CSS objects.
+    /// </summary>
+    internal sealed class CssParser
+    {
+        #region Fields and Consts
+
+        /// <summary>
+        /// 
+        /// </summary>
+        private readonly RenderContext _renderContext;
+
+        /// <summary>
+        /// Utility for value parsing.
+        /// </summary>
+        private readonly CssValueParser _valueParser;
+
+        private readonly HtmlContainerInt? _htmlContainer;
+
+        #endregion
+
+
+        /// <summary>
+        /// Init.
+        /// </summary>
+        public CssParser(RenderContext renderContext, HtmlContainerInt? htmlContainer)
+        {
+            ArgumentNullException.ThrowIfNull(renderContext, "global");
+
+            _valueParser = new CssValueParser(renderContext);
+            _renderContext = renderContext;
+            _htmlContainer = htmlContainer;
+        }
+
+        /// <summary>
+        /// Parse the given stylesheet source to CSS blocks dictionary.<br/>
+        /// The CSS blocks are organized into two level buckets of media type and class name.<br/>
+        /// Root media type are found under 'all' bucket.<br/>
+        /// If <paramref name="combineWithDefault"/> is true the parsed css blocks are added to the 
+        /// default css data (as defined by W3), merged if class name already exists. If false only the data in the given stylesheet is returned.
+        /// </summary>
+        /// <seealso href="http://www.w3.org/TR/CSS21/sample.html">CSS 2.1 default stylesheet for HTML</seealso>
+        /// <param name="stylesheet">raw css stylesheet to parse</param>
+        /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
+        /// <returns>the CSS data with parsed CSS objects (never null)</returns>
+        public async Task<CssData> ParseStyleSheet(string stylesheet, bool combineWithDefault)
+        {
+            // Clone the adapter's shared, cached default (user-agent) CssData before merging so that
+            // adding the caller's rules here - or later via the declarative stylesheet's AddStyleSheet - never
+            // mutates the shared instance (which would leak those rules into other renders). This
+            // mirrors the render path's clone-on-write (DomParser.CloneCssData).
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData(_renderContext);
+
+            if (!string.IsNullOrEmpty(stylesheet))
+            {
+                await ParseStyleSheet(cssData, stylesheet);
+            }
+
+            return cssData;
+        }
+
+        /// <summary>
+        /// Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(string, bool)"/> - see
+        /// <c>StylesheetParser.Parse</c>'s own remarks for why
+        /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
+        /// </summary>
+        public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
+        {
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData(_renderContext);
+
+            if (!stylesheet.IsEmpty)
+            {
+                await ParseStyleSheet(cssData, stylesheet);
+            }
+
+            return cssData;
+        }
+
+        public static Stylesheet ParseStyleSheet(string stylesheet)
+        {
+            StylesheetParser parser = new();
+            return parser.Parse(stylesheet);
+        }
+
+        public static Stylesheet ParseStyleSheet(ReadOnlyMemory<char> stylesheet)
+        {
+            StylesheetParser parser = new();
+            return parser.Parse(stylesheet);
+        }
+
+        /// <summary>
+        /// Parse the given stylesheet source to CSS blocks dictionary.<br/>
+        /// The CSS blocks are organized into two level buckets of media type and class name.<br/>
+        /// Root media type are found under 'all' bucket.<br/>
+        /// The parsed css blocks are added to the given css data, merged if class name already exists.
+        /// </summary>
+        /// <param name="cssData">the CSS data to fill with parsed CSS objects</param>
+        /// <param name="stylesheet">raw css stylesheet to parse</param>
+        /// <param name="baseUri">
+        /// The resolved absolute URI this stylesheet was loaded from (e.g. a &lt;link&gt; href), so that
+        /// relative references inside it (nested <c>@import</c>, <c>@font-face src</c>) resolve against
+        /// its own location rather than the document's base. Null for inline &lt;style&gt; content or
+        /// caller-supplied CSS text, which resolve against the document base as before.
+        /// </param>
+        public async Task ParseStyleSheet(CssData cssData, string stylesheet, RUri? baseUri = null)
+        {
+            if (!string.IsNullOrEmpty(stylesheet))
+            {
+                await ParseStyle(cssData, stylesheet.AsMemory(), baseUri, new HashSet<string>());
+            }
+        }
+
+        /// <summary>Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(CssData, string, RUri?)"/>.</summary>
+        public async Task ParseStyleSheet(CssData cssData, ReadOnlyMemory<char> stylesheet, RUri? baseUri = null)
+        {
+            if (!stylesheet.IsEmpty)
+            {
+                await ParseStyle(cssData, stylesheet, baseUri, new HashSet<string>());
+            }
+        }
+
+        /// <summary>
+        /// Parses a color value in CSS style; e.g. #ff0000, red, rgb(255,0,0), rgb(100%, 0, 0) 
+        /// </summary>
+        /// <param name="colorStr">color string value to parse</param>
+        /// <returns>color value</returns>
+        public PaintColor ParseColor(string colorStr)
+        {
+            return _valueParser.GetActualColor(colorStr);
+        }
+
+        public bool IsColorValid(string colorValue)
+        {
+            return _valueParser.IsColorValid(colorValue);
+        }
+
+        /// <summary>
+        /// <paramref name="stylesheetText"/> is <see cref="ReadOnlyMemory{T}"/>, not <see cref="string"/>, so
+        /// that <see cref="ParseStyleSheet(CssData, ReadOnlyMemory{char}, RUri?)"/>'s caller-supplied text
+        /// flows through with zero copies - a <see cref="string"/> caller wraps its text with
+        /// <see cref="MemoryExtensions.AsMemory(string?)"/> (itself a zero-copy view over the same string),
+        /// so this is a strict widening: every existing <see cref="string"/>-based call site is unaffected.
+        /// </summary>
+        private async Task ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
+        {
+            var stylesheet = ParseStyleSheet(stylesheetText);
+            stylesheet.BaseUri = baseUri;
+
+            // Guards against circular @import chains (A imports B imports A) recursing forever; also
+            // stops a stylesheet from importing itself directly.
+            if (baseUri is not null)
+            {
+                visitedImportUris.Add(baseUri.AbsoluteUri);
+            }
+
+            var hasReachedNonImportRules = false;
+
+            foreach (var rule in stylesheet.Children)
+            {
+                if (rule is IImportRule importRule && !hasReachedNonImportRules)
+                {
+                    if (importRule.Href == null) continue;
+
+                    if (_htmlContainer is null)
+                    {
+                        throw new HtmlRenderException("Cannot import stylesheet without html container", HtmlRenderErrorType.CssParsing);
+                    }
+
+                    // Relative references inside an already-loaded stylesheet resolve against that
+                    // stylesheet's own location, not the document's base.
+                    var (importedContent, importedUri) = await StylesheetLoadHandler.LoadStylesheet(_htmlContainer, importRule.Href, baseUri);
+
+                    if (importedContent is not null && (importedUri is null || visitedImportUris.Add(importedUri.AbsoluteUri)))
+                    {
+                        await ParseStyle(data, importedContent.AsMemory(), importedUri, visitedImportUris);
+                    }
+                }
+                else
+                {
+                    hasReachedNonImportRules = true;
+                }
+            }
+
+            data.Stylesheets.Add(stylesheet);
+        }
+    }
+}

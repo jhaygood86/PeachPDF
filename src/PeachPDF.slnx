@@ -18,5 +18,6 @@
   <Project Path="PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj" />
   <Project Path="PeachPDF.TestHarness/PeachPDF.TestHarness.csproj" />
   <Project Path="PeachPDF.Tests/PeachPDF.Tests.csproj" />
+  <Project Path="PeachBrackets/PeachBrackets.csproj" />
   <Project Path="PeachPDF/PeachPDF.csproj" />
 </Solution>

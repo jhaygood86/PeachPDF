@@ -5,14 +5,14 @@ namespace PeachPDF.Network
 {
     /// <summary>
     /// Controls how PeachPDF loads the root HTML document and every external resource it references
-    /// (stylesheets, images). Set an instance on <see cref="PeachPDF.PdfGenerateConfig.NetworkLoader"/> to
+    /// (stylesheets, images). Set an instance on <c>PeachPDF.PdfGenerateConfig.NetworkLoader</c> to
     /// integrate PeachPDF with a custom resource source (a cloud blob store, a bundler manifest, an in-memory
     /// dictionary, etc.). PeachPDF ships four concrete implementations: <see cref="DataUriNetworkLoader"/>
     /// (the default when none is configured), <see cref="FileUriNetworkLoader"/> for local files,
     /// <see cref="MimeKitNetworkLoader"/> for MHTML archives, and <see cref="HttpClientNetworkLoader"/> for
     /// HTTP(S) sources. <c>data:</c> URIs are always handled internally regardless of which loader is
     /// configured, as are <c>file:</c> URIs unless
-    /// <see cref="PeachPDF.PdfGenerateConfig.AllowLocalFileAccess"/> is set to <c>false</c>, which refuses
+    /// <c>PeachPDF.PdfGenerateConfig.AllowLocalFileAccess</c> is set to <c>false</c>, which refuses
     /// them outright.
     /// </summary>
     public abstract class RNetworkLoader

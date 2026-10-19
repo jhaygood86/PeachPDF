@@ -414,7 +414,7 @@ namespace PeachPDF.Layout
             ArgumentNullException.ThrowIfNull(generator);
             MarkTerminal();
             var imageBox = CreateFillingImageBox();
-            imageBox.SetDynamicRasterContent(generator);
+            imageBox.SetDynamicRasterContent(size => generator(new PdfSize(size.Width, size.Height)));
         }
 
         public void Svg(string svgMarkup)
@@ -445,7 +445,7 @@ namespace PeachPDF.Layout
             ArgumentNullException.ThrowIfNull(generator);
             MarkTerminal();
             var imageBox = CreateFillingImageBox();
-            imageBox.SetDynamicSvgContent(generator);
+            imageBox.SetDynamicSvgContent(size => generator(new PdfSize(size.Width, size.Height)));
         }
 
         /// <summary>

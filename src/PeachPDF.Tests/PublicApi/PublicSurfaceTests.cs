@@ -34,7 +34,8 @@ namespace PeachPDF.Tests.PublicApi
         private static string Describe(Assembly assembly)
         {
             var text = new StringBuilder();
-            foreach (var type in assembly.GetExportedTypes().OrderBy(t => t.FullName, StringComparer.Ordinal))
+            // Types PeachPDF forwards to a package it depends on are still part of its public surface.
+            foreach (var type in assembly.GetExportedTypes().Concat(assembly.GetForwardedTypes().Where(t => t.IsVisible)).OrderBy(t => t.FullName, StringComparer.Ordinal))
             {
                 text.Append(type.FullName).Append(" : ").AppendLine(Kind(type));
 

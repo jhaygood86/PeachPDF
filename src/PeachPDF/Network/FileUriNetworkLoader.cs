@@ -16,7 +16,7 @@ namespace PeachPDF.Network
     /// primary file is given — to the current working directory. <c>file:</c> resources resolve through
     /// this loader automatically regardless of which loader is configured (mirroring how <c>data:</c> URIs
     /// are always handled internally), so relative references in an in-memory HTML string load from disk
-    /// by default. Setting <see cref="PeachPDF.PdfGenerateConfig.AllowLocalFileAccess"/> to <c>false</c>
+    /// by default. Setting <c>PeachPDF.PdfGenerateConfig.AllowLocalFileAccess</c> to <c>false</c>
     /// turns that off: <c>file:</c> resource requests are then refused even for a document rendered
     /// through this loader, though the root document it was constructed with is still read.
     /// </summary>

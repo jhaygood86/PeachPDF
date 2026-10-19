@@ -126,7 +126,7 @@ public class MyLoader : RNetworkLoader
 
 **Library:** [MimeKit](https://github.com/jstedfast/MimeKit)
 
-**Entry point:** `HtmlParser.ParseDocument` ([Html/Core/Parse/HtmlParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/HtmlParser.cs))
+**Entry point:** `HtmlParser.ParseDocument` ([Html/Core/Parse/HtmlParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Parse/HtmlParser.cs))
 
 Raw HTML is tokenized by MimeKit's `HtmlTokenizer`, which produces a flat stream of `HtmlTagToken` and `HtmlDataToken` objects. `HtmlParser` walks that stream and builds a `CssBox` tree in a single pass.
 
@@ -149,7 +149,7 @@ MimeKit also drives MHTML ingestion. `MimeKitNetworkLoader` opens the MIME multi
 
 ## 2. DOM Model — CssBox
 
-**Key types:** `CssBox` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBox.cs)), `ComputedStyle` ([Html/Core/Dom/ComputedStyle.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/ComputedStyle.cs)), `DerivedStyle` ([Html/Core/Dom/DerivedStyle.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/DerivedStyle.cs))
+**Key types:** `CssBox` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssBox.cs)), `ComputedStyle` ([Html/Core/Dom/ComputedStyle.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/ComputedStyle.cs)), `DerivedStyle` ([Html/Core/Dom/DerivedStyle.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/DerivedStyle.cs))
 
 Each HTML element becomes a `CssBox`. The tree mirrors the source HTML structure and is the central data structure that all subsequent phases read from and write to. Every box is assigned a monotonically increasing `Id` so boxes can be identified and ordered throughout the pipeline.
 
@@ -216,9 +216,9 @@ Because the output is paginated, `CssBox` carries a `PageBreakBottoms` dictionar
 
 **Library:** ExCSS (forked and merged into PeachPDF)
 
-**Entry point:** `CssParser.ParseStyleSheet` ([Html/Core/Parse/CssParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/CssParser.cs))
+**Entry point:** `CssParser.ParseStyleSheet` ([Html/Core/Parse/CssParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Parse/CssParser.cs))
 
-CSS is parsed by a fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) merged directly into the PeachPDF source tree under `src/PeachPDF/CSS/`. The fork exists for two reasons:
+CSS is parsed by a fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) merged directly into the PeachPDF source tree under `src/PeachBrackets/CSS/`. The fork exists for two reasons:
 
 1. **Internal API access.** ExCSS does not expose the internals of a parsed stylesheet through its public API. PeachPDF needs direct access to the parsed token and rule structures to efficiently resolve selectors, apply the cascade, and evaluate property values. Merging the library removes the public-API boundary and gives the rendering engine full access to those internals.
 
@@ -226,7 +226,7 @@ CSS is parsed by a fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) merged 
 
 ### Rule types
 
-The parsed output is a `Stylesheet` object containing a typed collection of at-rules and style rules. The rule types are defined under [src/PeachPDF/CSS/Rules/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/CSS/Rules/):
+The parsed output is a `Stylesheet` object containing a typed collection of at-rules and style rules. The rule types are defined under [src/PeachBrackets/CSS/Rules/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachBrackets/CSS/Rules/):
 
 | Rule class | CSS construct |
 |---|---|
@@ -241,17 +241,17 @@ The parsed output is a `Stylesheet` object containing a typed collection of at-r
 
 ### Property definitions
 
-Every CSS property PeachPDF understands has a corresponding class under [src/PeachPDF/CSS/StyleProperties/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/CSS/StyleProperties/), organised by category (Background, Border, Font, Text, etc.). Each property class declares the property name, whether it is inherited, its initial value, and a value converter that validates and normalises the parsed token stream.
+Every CSS property PeachPDF understands has a corresponding class under [src/PeachBrackets/CSS/StyleProperties/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachBrackets/CSS/StyleProperties/), organised by category (Background, Border, Font, Text, etc.). Each property class declares the property name, whether it is inherited, its initial value, and a value converter that validates and normalises the parsed token stream.
 
 ### Value parsing
 
-`CssValueParser` ([Html/Core/Parse/CssValueParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/CssValueParser.cs)) translates raw CSS value strings into the numeric/computed forms that `DerivedStyle` caches in its `Actual*` properties (see [DOM Model](#2-dom-model--cssbox) above). It handles length resolution (px, em, rem, %), colour parsing, and shorthand expansion. All unit→number conversion is centralized in the CSS-OM `Length` struct's `ToPixels` ([CSS/Values/Length.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/Values/Length.cs)): the engine's internal layout unit is 1 PDF point, and every unit — including spec-correct CSS `px` at `1px = 1/96in = 0.75pt` via the single `Length.PointsPerPx` constant — resolves through that one implementation, so body layout, font sizes, `@page` geometry, and image intrinsic sizes all agree by construction (see [Length units](html-css-support.md#length-units) for the full unit table).
+`CssValueParser` ([Html/Core/Parse/CssValueParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Parse/CssValueParser.cs)) translates raw CSS value strings into the numeric/computed forms that `DerivedStyle` caches in its `Actual*` properties (see [DOM Model](#2-dom-model--cssbox) above). It handles length resolution (px, em, rem, %), colour parsing, and shorthand expansion. All unit→number conversion is centralized in the CSS-OM `Length` struct's `ToPixels` ([CSS/Values/Length.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/CSS/Values/Length.cs)): the engine's internal layout unit is 1 PDF point, and every unit — including spec-correct CSS `px` at `1px = 1/96in = 0.75pt` via the single `Length.PointsPerPx` constant — resolves through that one implementation, so body layout, font sizes, `@page` geometry, and image intrinsic sizes all agree by construction (see [Length units](html-css-support.md#length-units) for the full unit table).
 
 ---
 
 ## 4. Stylesheet Application
 
-**Key types:** `CssData` ([Html/Core/CssData.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/CssData.cs)), `DomParser` ([Html/Core/Parse/DomParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/DomParser.cs))
+**Key types:** `CssData` ([Html/Core/CssData.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/CssData.cs)), `DomParser` ([Html/Core/Parse/DomParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Parse/DomParser.cs))
 
 `DomParser.GenerateCssTree` orchestrates both the HTML parse and the full stylesheet application in a single method call, returning the styled `CssBox` root ready for layout.
 
@@ -270,7 +270,7 @@ Before style cascading begins, `CascadeApplyPageStyles` reads `@page` rules from
 
 #### Per-page content bands (and full-page bleed)
 
-Per-page `@page` rules (`:first`, `:left`/`:right`, or a named page) can override margins for individual pages, and a top/bottom override is **layout-affecting**: it changes that page's content-band height, so content paginates against variable bands rather than one uniform page height. That variable geometry lives in `PageGeometryTable` ([Html/Core/PageGeometryTable.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/PageGeometryTable.cs)), which holds one `PageBandGeometry` per pagination slot: the slot's document-space band top and height (internal-pixel layout space) plus its four resolved margins (true PDF points). Slot *k*+1 begins where slot *k*'s band ends, so a page with a taller-than-base top margin shifts everything after it down.
+Per-page `@page` rules (`:first`, `:left`/`:right`, or a named page) can override margins for individual pages, and a top/bottom override is **layout-affecting**: it changes that page's content-band height, so content paginates against variable bands rather than one uniform page height. That variable geometry lives in `PageGeometryTable` ([Html/Core/PageGeometryTable.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/PageGeometryTable.cs)), which holds one `PageBandGeometry` per pagination slot: the slot's document-space band top and height (internal-pixel layout space) plus its four resolved margins (true PDF points). Slot *k*+1 begins where slot *k*'s band ends, so a page with a taller-than-base top margin shifts everything after it down.
 
 The table is built forward-incrementally and lazily, with no fixpoint relayout: a slot's applicable rule depends only on the page number (known a priori for `:first`/`:left`/`:right`) and the named page active at the slot's *start* — and because a page-name change always forces a break onto a fresh slot (`CssBox.PerformLayoutImp`), registered at that slot's top *before* the named box's children lay out, that name is fully determined by content laid out earlier. A named-page registration invalidates only cached slots at or after its own Y (`InvalidateFrom`). Vertical overrides vary the band *height*: `HasVerticalMarginOverrides` OR `HasSizeOverrides` (a per-page `size` change alters a slot's own sheet height too, typically with no margin override at all — e.g. a landscape named page) gates the height machinery, so a document with neither stays on `HtmlContainerInt`'s closed-form uniform page arithmetic and never consults it.
 
@@ -300,7 +300,7 @@ Left/right overrides vary the content-box *width*: each page's own margins (and,
 `CssDefaults.InitialValues`/`InheritedProperties` and the actual per-property parse-validate-and-assign
 step behind `CssUtils.SetPropertyValue`/`GetPropertyValue` (and the equivalent for SVG presentation
 properties, `SvgTreeBuilder.ApplyCommon`) are generated at build time from a single JSON source,
-`src/PeachPDF/css-properties.json`, by a Roslyn source generator (`src/PeachPDF.SourceGenerators`) rather
+`src/PeachBrackets/css-properties.json`, by a Roslyn source generator (`src/PeachPDF.SourceGenerators`) rather
 than hand-written per property. This keeps every property's inheritance flag, initial value, and value
 grammar in one place instead of several hand-synchronized tables — and is exactly what real `@supports`
 evaluation (§[CSS At-Rules](html-css-support.md#css-at-rules)) queries for "does this renderer actually
@@ -325,7 +325,7 @@ After the cascade, `DomParser` runs a series of correction passes to make the tr
 
 ## 5. Layout
 
-**Key types:** `CssLayoutEngine` ([Html/Core/Dom/CssLayoutEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngine.cs)), `CssLayoutEngineTable` ([Html/Core/Dom/CssLayoutEngineTable.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineTable.cs)), `CssLayoutEngineFlex` ([Html/Core/Dom/CssLayoutEngineFlex.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineFlex.cs)), `CssLayoutEngineGrid` ([Html/Core/Dom/CssLayoutEngineGrid.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineGrid.cs)), `CssLayoutEngineColumns` ([Html/Core/Dom/CssLayoutEngineColumns.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineColumns.cs))
+**Key types:** `CssLayoutEngine` ([Html/Core/Dom/CssLayoutEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngine.cs)), `CssLayoutEngineTable` ([Html/Core/Dom/CssLayoutEngineTable.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineTable.cs)), `CssLayoutEngineFlex` ([Html/Core/Dom/CssLayoutEngineFlex.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineFlex.cs)), `CssLayoutEngineGrid` ([Html/Core/Dom/CssLayoutEngineGrid.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineGrid.cs)), `CssLayoutEngineColumns` ([Html/Core/Dom/CssLayoutEngineColumns.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineColumns.cs))
 
 Layout computes the position and size of every box. It runs in two sub-passes: word measurement and box layout.
 
@@ -401,13 +401,13 @@ Floated boxes are removed from normal flow. `CssLayoutEngine.FloatBox` positions
 
 ### Flex layout
 
-**Key type:** `CssLayoutEngineFlex` ([Html/Core/Dom/CssLayoutEngineFlex.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineFlex.cs))
+**Key type:** `CssLayoutEngineFlex` ([Html/Core/Dom/CssLayoutEngineFlex.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineFlex.cs))
 
 Boxes with `display: flex` or `inline-flex` are laid out by a dedicated engine implementing CSS Flexbox Level 1, entered from `CssBox.PerformLayoutImp` in place of the normal block/inline formatting context. It runs as a sequence of phases per the spec: collect and order items (respecting `order`), measure each item's hypothetical main size from `flex-basis`/`width`/`height` or its content size, wrap items into lines (`flex-wrap`), resolve flexible lengths via `flex-grow`/`flex-shrink` clamped to `min`/`max-width`/`height`, size and align lines on the cross axis (`align-content`), position items on the main axis (`justify-content`, with `auto` margins absorbing free space first), and align items on the cross axis (`align-items`/`align-self`). Flex items are blockified before measurement per spec §9.2. `align-items`/`align-self: baseline` aligns items by their first font baseline — each item's baseline is found by descending into its first in-flow child (in document order) for the first line box, using `Font.Ascent` for the offset from that box's top — and only applies for row-direction flex; column-direction flex has no vertical baseline concept and falls back to `flex-start`, as does an item with no discoverable line-box content.
 
 ### Grid layout
 
-**Key type:** `CssLayoutEngineGrid` ([Html/Core/Dom/CssLayoutEngineGrid.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineGrid.cs))
+**Key type:** `CssLayoutEngineGrid` ([Html/Core/Dom/CssLayoutEngineGrid.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineGrid.cs))
 
 Boxes with `display: grid` or `inline-grid` are laid out by a dedicated engine implementing CSS Grid Layout, entered from `CssBox.PerformLayoutImp` the same way flex/table/columns are. Track sizing follows the spec's algorithm: explicit tracks come from `grid-template-columns`/`-rows`/`-areas`, implicit tracks are created and sized from `grid-auto-columns`/`-rows` when an item is placed outside the explicit grid, and each track resolves to a fixed length, a percentage, `auto`, an intrinsic (`min-content`/`max-content`) size, or a flexible `fr` length — the last resolved via the standard flex-fraction algorithm once every non-`fr` track has claimed its space, honoring `minmax()`/`fit-content()` floors and ceilings and `repeat()` (including `auto-fill`/`auto-fit`). An item spanning multiple intrinsic tracks distributes its content contribution across them so a spanned track doesn't collapse to zero.
 
@@ -417,7 +417,7 @@ Grid's role in pagination — each row committing its content as a [§2.1](https
 
 ### Multi-column layout
 
-**Key type:** `CssLayoutEngineColumns` ([Html/Core/Dom/CssLayoutEngineColumns.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineColumns.cs))
+**Key type:** `CssLayoutEngineColumns` ([Html/Core/Dom/CssLayoutEngineColumns.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssLayoutEngineColumns.cs))
 
 A box that establishes a CSS Multi-column formatting context (`column-count`/`column-width` resolved to other than `auto`) is entered from `CssBox.PerformLayoutImp` the same way flex/table are, in place of the normal block-children loop. A column is a fragmentainer in [CSS Fragmentation Level 3](https://www.w3.org/TR/css-break-3/#fragmentainer) terms, and this engine is a **driver over its own fragmentainers** — the same shape `HtmlContainerInt.LayoutDocument` has for pages:
 
@@ -470,7 +470,7 @@ After layout every `CssBox` has a final bounding rectangle and each `CssLineBox`
 
 ## 6. Fragmentation
 
-**Key types:** `FragmentTree` / `FragmentainerFragment` / `BoxFragment` ([Html/Core/Fragments/Fragment.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragments/Fragment.cs)), `FragmentEmitter` ([Html/Core/Fragmentation/FragmentEmitter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragmentation/FragmentEmitter.cs))
+**Key types:** `FragmentTree` / `FragmentainerFragment` / `BoxFragment` ([Html/Core/Fragments/Fragment.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Fragments/Fragment.cs)), `FragmentEmitter` ([Html/Core/Fragmentation/FragmentEmitter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Fragmentation/FragmentEmitter.cs))
 
 The phases above compute geometry *on* the box tree; this phase collects it into an immutable **fragment tree**, which is what layout actually hands downstream. It implements the box-fragment model of [CSS Fragmentation Module Level 3 §2](https://www.w3.org/TR/css-break-3/).
 
@@ -528,7 +528,7 @@ A fragment's *rectangles* were the last thing still derived from the box's singl
 
 ## 7. Painting
 
-**Key types:** `FragmentPainter` ([Html/Core/Paint/FragmentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/FragmentPainter.cs)), `IFragmentContentPainter` ([Html/Core/Paint/Content/IFragmentContentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/Content/IFragmentContentPainter.cs)), `StackingOrder` ([Html/Core/Paint/StackingOrder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/StackingOrder.cs)), `Canvas` ([PeachDrawing.Core/Canvas.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Core/Canvas.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BordersDrawHandler.cs)), `CssImagePainter` ([Html/Core/Handlers/CssImagePainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/CssImagePainter.cs)), `CssImage` ([Html/Core/Entities/CssImage.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Entities/CssImage.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
+**Key types:** `FragmentPainter` ([Html/Core/Paint/FragmentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Paint/FragmentPainter.cs)), `IFragmentContentPainter` ([Html/Core/Paint/Content/IFragmentContentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Paint/Content/IFragmentContentPainter.cs)), `StackingOrder` ([Html/Core/Paint/StackingOrder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Paint/StackingOrder.cs)), `Canvas` ([PeachDrawing.Core/Canvas.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Core/Canvas.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Handlers/BordersDrawHandler.cs)), `CssImagePainter` ([Html/Core/Handlers/CssImagePainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Handlers/CssImagePainter.cs)), `CssImage` ([Html/Core/Entities/CssImage.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Entities/CssImage.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
 
 ### Graphics abstraction
 
@@ -658,7 +658,7 @@ A font family is a `FontFamilyModel` ([Fonts/FontFamilyModel.cs](https://github.
 
 #### Per-character font matching
 
-Cross-family fallback needs the whole authored `font-family` stack, which the ordinary cascade collapses to the first existing family. PeachPDF retains it as `CssBox.FontFamilyList`. During word building, `CssBox.AddWord` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBox.cs)) splits a word into per-face fragments **only when needed** — a fast-path scan (`NeedsPerCodepointFont`, using `Font.HasGlyph`) checks whether the primary font already covers every codepoint in the word, and ordinary fully-covered text stays a single word at zero added cost. When a split is required, each fragment resolves to the first family in the stack that both covers its codepoints and has a glyph for them; this split composes with the small-caps split rather than duplicating it. See [Per-character font matching](html-css-support.md#per-character-font-matching-and-coverage-fallback) for the user-facing behavior.
+Cross-family fallback needs the whole authored `font-family` stack, which the ordinary cascade collapses to the first existing family. PeachPDF retains it as `CssBox.FontFamilyList`. During word building, `CssBox.AddWord` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssBox.cs)) splits a word into per-face fragments **only when needed** — a fast-path scan (`NeedsPerCodepointFont`, using `Font.HasGlyph`) checks whether the primary font already covers every codepoint in the word, and ordinary fully-covered text stays a single word at zero added cost. When a split is required, each fragment resolves to the first family in the stack that both covers its codepoints and has a glyph for them; this split composes with the small-caps split rather than duplicating it. See [Per-character font matching](html-css-support.md#per-character-font-matching-and-coverage-fallback) for the user-facing behavior.
 
 #### Content-addressed font identity
 
@@ -678,7 +678,7 @@ Monochrome emoji follow the ordinary embedded-text path. For **`COLR`/`CPAL` col
 
 Shaping is a multi-stage pipeline in the text engine's `Text` and `Text.Shaping.*` namespaces (the `PeachDrawing.Text` package) ([Text/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachDrawing.Text/Internal/Text)), not a single method — the font-table reader (`OpenTypeDescriptor`, [Fonts/OpenType/OpenTypeDescriptor.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Fonts/OpenType/OpenTypeDescriptor.cs)) only orchestrates it:
 
-1. **CSS → shaping request.** `TextShapingFeatureResolver` ([Html/Core/Utils/TextShapingFeatureResolver.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Utils/TextShapingFeatureResolver.cs)) parses `font-variant-ligatures`/`-caps`/`-numeric`/`-east-asian`, `font-feature-settings`, and `font-kerning` into a `ShapeSettings` request struct — the single shared front end both HTML (`DerivedStyle`) and SVG (`SvgTreeBuilder`) text resolve through.
+1. **CSS → shaping request.** `TextShapingFeatureResolver` ([Html/Core/Utils/TextShapingFeatureResolver.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Utils/TextShapingFeatureResolver.cs)) parses `font-variant-ligatures`/`-caps`/`-numeric`/`-east-asian`, `font-feature-settings`, and `font-kerning` into a `ShapeSettings` request struct — the single shared front end both HTML (`DerivedStyle`) and SVG (`SvgTreeBuilder`) text resolve through.
 2. **Per-run script and joining resolution.** `ScriptRunResolver` determines each run's Unicode script (folding `Common`/`Inherited` codepoints into the surrounding script per [UAX #24](https://www.unicode.org/reports/tr24/) §5.1) and maps it to an OpenType script tag. An Arabic/Syriac-family run additionally resolves per-character joining forms via `ArabicJoiningShaper` ([Text/Shaping/Arabic/ArabicJoiningShaper.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Text/Shaping/Arabic/ArabicJoiningShaper.cs), a direct port of HarfBuzz's `hb-ot-shaper-arabic.cc` state machine); a Devanagari/Bengali/Gujarati/Tamil run resolves Universal Shaping Engine syllable categories via `UseCategoryClassifier`/`UseSyllableScanner` ([Text/Shaping/Use/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachDrawing.Text/Internal/Text/Shaping/Use)); a Khmer run resolves its own, separate (pre-Universal-Shaping-Engine) shaping categories via `KhmerCategoryClassifier`/`KhmerSyllableScanner` ([Text/Shaping/Khmer/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachDrawing.Text/Internal/Text/Shaping/Khmer)).
 3. **`OpenTypeDescriptor.Shape`** — the pipeline entry point — calls, in order: `GsubShaper.Shape` (GSUB), `GposPositioner.Apply` (GPOS), drops hidden-ignorable glyphs (variation selectors, unmapped default-ignorables - after `GsubShaper.MapToGlyphs` has let a variation selector swap in the preceding character's dedicated `cmap` format-14 glyph, when the font has one), and, only for a run marked for right-to-left display, reverses the shaped glyph list and remaps mirrorable glyphs (e.g. parentheses) — the final step, so it never disturbs the logical-order matching GSUB/GPOS just did.
 4. **`GsubShaper.Shape`** ([Text/GsubShaper.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Text/Internal/Text/GsubShaper.cs)) maps codepoints to nominal glyphs via `cmap`, runs the Arabic-joining, USE, or Khmer pre-stage from step 2 if requested (Khmer's own stage reorders coeng+RO/pre-base-vowel sequences *before* applying the font's `locl`/`ccmp`/basic features - the reverse of USE's own stage order, since Khmer's syllable structure is script-specific rather than governed by the shared USE grammar), then the general ordered GSUB feature pass: default-on `ccmp`/`locl`, ligatures (`liga`/`clig`/`rlig`/`dlig`/`hlig`/`calt`), caps (`smcp`/`c2sc`/`pcap`/`c2pc`/`unic`/`titl`), numeric (`lnum`/`onum`/`pnum`/`tnum`/`frac`/`afrc`/`ordn`/`zero`), east-asian (`jp78`/`83`/`90`/`04`/`smpl`/`trad`/`fwid`/`pwid`/`ruby`), and arbitrary `font-feature-settings` tags — dispatched by real GSUB lookup type (single/multiple/alternate/ligature/contextual/chaining-context/reverse-chaining), honoring GDEF mark-filtering (`GlyphSequenceFilter`) and per-language `LangSys` selection (`OpenTypeLanguageTags`, a curated set of roughly 80 languages, falling back to a font's `DefaultLangSys`).
@@ -720,7 +720,7 @@ The engine keeps only what writing needs (no reader, no WPF/GDI rendering target
 
 ### Tagged PDF (PDF/UA) structure tree
 
-**Key types:** `StructureTagBuilder` / `StructureTagMapper` ([Html/Core/Handlers/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Html/Core/Handlers/)), `PdfTagRecorder` ([PdfTagRecorder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.PDF/PdfTagRecorder.cs), in the `PeachDrawing.PDF` package, which owns the structure tree objects)
+**Key types:** `StructureTagBuilder` / `StructureTagMapper` ([Html/Core/Handlers/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachBrackets/Html/Core/Handlers/)), `PdfTagRecorder` ([PdfTagRecorder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.PDF/PdfTagRecorder.cs), in the `PeachDrawing.PDF` package, which owns the structure tree objects)
 
 Tagged output (`PdfGenerateConfig.EnableTaggedPdf`, off by default — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) for the user-facing CSS property and default mapping) is built live from the same fragment paint walk that produces the visible page content, rather than from a separate pass or an event-interception layer around drawing calls (the approach upstream PDFsharp's modern `UAManager`/`StructureBuilder` uses, which depends on an `PdfGraphics` event system this ~2016-era fork doesn't have). PeachPDF already fully controls its own paint walk, so it is the natural place to hook in.
 
@@ -733,7 +733,7 @@ Tagged output (`PdfGenerateConfig.EnableTaggedPdf`, off by default — see [Tagg
 
 ## SVG Rendering
 
-**Key types:** `SvgTreeBuilder` ([Svg/SvgTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgTreeBuilder.cs)), `SvgRenderer` ([Svg/SvgRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgRenderer.cs)), `SvgDocument` ([Svg/SvgDocument.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgDocument.cs)), `ISvgSourceNode` ([Svg/ISvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/ISvgSourceNode.cs)), `CssBoxSvg` ([Html/Core/Dom/CssBoxSvg.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBoxSvg.cs))
+**Key types:** `SvgTreeBuilder` ([Svg/SvgTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/SvgTreeBuilder.cs)), `SvgRenderer` ([Svg/SvgRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/SvgRenderer.cs)), `SvgDocument` ([Svg/SvgDocument.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/SvgDocument.cs)), `ISvgSourceNode` ([Svg/ISvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/ISvgSourceNode.cs)), `CssBoxSvg` ([Html/Core/Dom/CssBoxSvg.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssBoxSvg.cs))
 
 PeachPDF renders SVG — both inline `<svg>` elements in HTML and standalone SVG (`<img src="x.svg">` / `data:image/svg+xml`) — as real vector PDF content: shapes become native PDF path-construction operators, gradients become native PDF shadings, and clips/masks/patterns become native PDF constructs. SVG is never rasterized to a bitmap. This is a cross-cutting subsystem, not a pipeline phase of its own — it plugs into DOM construction (§2), layout (§5), and painting (§6) through two specialised `CssBox` subtypes. For the full element/property compatibility matrix, see [Supported SVG Features](supported-svg-features.md).
 
@@ -752,8 +752,8 @@ Both paths build an `SvgDocument` scene graph once. Inline `<svg>` caches it for
 
 `SvgTreeBuilder` never touches `CssBox` or `XElement` directly. Both entry points instead wrap their underlying tree behind a minimal, source-agnostic interface — `Name`, `GetAttribute(name)`, `Children`, `GetTextContent()` — so the exact same tree-building code produces an identical `SvgDocument` regardless of which source it came from:
 
-- `CssBoxSvgSourceNode` ([Svg/CssBoxSvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/CssBoxSvgSourceNode.cs)) wraps a live `CssBox` tree (inline `<svg>`).
-- `XElementSvgSourceNode` ([Svg/XElementSvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/XElementSvgSourceNode.cs)) wraps a `System.Xml.Linq.XElement` (standalone SVG, parsed as real XML rather than through the HTML tokenizer).
+- `CssBoxSvgSourceNode` ([Svg/CssBoxSvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/CssBoxSvgSourceNode.cs)) wraps a live `CssBox` tree (inline `<svg>`).
+- `XElementSvgSourceNode` ([Svg/XElementSvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/XElementSvgSourceNode.cs)) wraps a `System.Xml.Linq.XElement` (standalone SVG, parsed as real XML rather than through the HTML tokenizer).
 
 `GetTextContent()` returns only a node's own direct text-node children, not descendant elements' text — this matters for `<text>Hello <tspan>World</tspan></text>`, where "Hello" (the `<text>`'s own run) must stay separate from "World" (the `<tspan>`'s own run) for both source kinds identically.
 
@@ -766,7 +766,7 @@ Both paths build an `SvgDocument` scene graph once. Inline `<svg>` caches it for
 
 Presentation properties (fill, stroke, opacity, font, etc.) are threaded down the recursion as small immutable record structs — `InheritedPaint` for paint/stroke properties, `FontContext` for `<text>`'s font-family/size/weight/style — so a property left unspecified on a child correctly resolves to its nearest ancestor's value, matching CSS-style inheritance without needing `CssBox`'s own cascade machinery.
 
-The result is an `SvgDocument`: a `ViewBox`/`Width`/`Height`/`PreserveAspectRatio` plus a `List<SvgElement>` scene graph (`SvgPathElement`, `SvgCircleElement`, `SvgRectElement`, `SvgGroupElement`, `SvgUseElement`, `SvgImageElement`, `SvgTextElement`, and others — see [Svg/SvgElement.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgElement.cs)) plus dictionaries of gradient/clip-path/marker/pattern/mask definitions keyed by id.
+The result is an `SvgDocument`: a `ViewBox`/`Width`/`Height`/`PreserveAspectRatio` plus a `List<SvgElement>` scene graph (`SvgPathElement`, `SvgCircleElement`, `SvgRectElement`, `SvgGroupElement`, `SvgUseElement`, `SvgImageElement`, `SvgTextElement`, and others — see [Svg/SvgElement.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Svg/SvgElement.cs)) plus dictionaries of gradient/clip-path/marker/pattern/mask definitions keyed by id.
 
 ### Paint phase — `SvgRenderer`
 
@@ -798,7 +798,7 @@ See [Supported SVG Features](supported-svg-features.md) for the complete element
 
 ## MathML Rendering
 
-**Key types:** `MathTreeBuilder` ([MathML/MathTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathTreeBuilder.cs)), `MathLayoutEngine` ([MathML/MathLayoutEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathLayoutEngine.cs)), `MathRenderer` ([MathML/MathRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathRenderer.cs)), `MathNode`/`MathBox` ([MathML/MathNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathNode.cs), [MathML/MathBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathBox.cs)), `IMathSourceNode` ([MathML/IMathSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/IMathSourceNode.cs)), `CssBoxMath` ([Html/Core/Dom/CssBoxMath.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBoxMath.cs))
+**Key types:** `MathTreeBuilder` ([MathML/MathTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/MathTreeBuilder.cs)), `MathLayoutEngine` ([MathML/MathLayoutEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/MathLayoutEngine.cs)), `MathRenderer` ([MathML/MathRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/MathRenderer.cs)), `MathNode`/`MathBox` ([MathML/MathNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/MathNode.cs), [MathML/MathBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/MathBox.cs)), `IMathSourceNode` ([MathML/IMathSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/IMathSourceNode.cs)), `CssBoxMath` ([Html/Core/Dom/CssBoxMath.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssBoxMath.cs))
 
 PeachPDF renders inline `<math>` elements as real vector PDF content — glyphs through the ordinary text
 pipeline, fraction bars/radical rules as native path/fill operators, stretchy operators (parentheses,
@@ -838,7 +838,7 @@ with the SVG precedent and so unit tests can build a tree from a lightweight fak
 like SVG's `url(#id)`. It produces a `MathDocument`: a `MathNode` presentation tree (`MathRowNode`,
 `MathTokenNode`, `MathFractionNode`, `MathRadicalNode`, `MathScriptNode`, `MathUnderOverNode`,
 `MathMultiscriptsNode`, `MathTableNode`/`MathTableRowNode`/`MathTableCellNode`, and others — see
-[MathML/MathNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathNode.cs))
+[MathML/MathNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/MathML/MathNode.cs))
 plus a `ResolveFont(sizePt)` delegate the layout engine uses for every distinct scriptlevel-scaled size
 a formula needs. `displaystyle`/`scriptlevel` are resolved to concrete values at build time, following
 MathML Core §3.3.4's per-schema inheritance rules (e.g. a fraction's numerator/denominator are always
@@ -935,7 +935,7 @@ unimplemented here).
 
 ## Named Pages & Margin Boxes
 
-**Key types:** `PageRule`/`MarginStyleRule` ([CSS/Rules/PageRule.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/Rules/PageRule.cs), [CSS/Rules/MarginStyleRule.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/Rules/MarginStyleRule.cs)), `PageNameProperty` ([CSS/StyleProperties/PageNameProperty.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/StyleProperties/PageNameProperty.cs)), `CssNamedStringEngine` ([Html/Core/Dom/CssNamedStringEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssNamedStringEngine.cs)), `MarginBoxRenderer` ([Html/Core/Dom/MarginBoxRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/MarginBoxRenderer.cs))
+**Key types:** `PageRule`/`MarginStyleRule` ([CSS/Rules/PageRule.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/CSS/Rules/PageRule.cs), [CSS/Rules/MarginStyleRule.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/CSS/Rules/MarginStyleRule.cs)), `PageNameProperty` ([CSS/StyleProperties/PageNameProperty.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/CSS/StyleProperties/PageNameProperty.cs)), `CssNamedStringEngine` ([Html/Core/Dom/CssNamedStringEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/CssNamedStringEngine.cs)), `MarginBoxRenderer` ([Html/Core/Dom/MarginBoxRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/MarginBoxRenderer.cs))
 
 CSS Paged Media's named `@page` rules and margin boxes (`@top-center`, `@bottom-right`, …) — the mechanism behind running headers/footers — are a cross-cutting subsystem spanning CSS parsing (§3), layout (§5), and PDF rendering (§7), similar in shape to SVG above.
 
@@ -961,7 +961,7 @@ The `page` CSS longhand (`PageNameProperty`, surfaced as `CssBox.PageName`) assi
 
 ### Running elements — `position: running()` and `element()`
 
-**Key types:** `RunningElement`/`RunningSelectionEngine` ([Html/Core/Entities/RunningElement.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Entities/RunningElement.cs), [Html/Core/Dom/RunningSelectionEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/RunningSelectionEngine.cs)), `RunningElementLayout` ([Html/Core/Dom/RunningElementLayout.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/RunningElementLayout.cs)), `MarginBoxContentFragmentBuilder` ([Html/Core/Fragmentation/MarginBoxContentFragmentBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragmentation/MarginBoxContentFragmentBuilder.cs)), `MarginBoxFragment`/`FragmentainerFragment.MarginBoxes` ([Html/Core/Fragments/Fragment.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragments/Fragment.cs))
+**Key types:** `RunningElement`/`RunningSelectionEngine` ([Html/Core/Entities/RunningElement.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Entities/RunningElement.cs), [Html/Core/Dom/RunningSelectionEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/RunningSelectionEngine.cs)), `RunningElementLayout` ([Html/Core/Dom/RunningElementLayout.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Dom/RunningElementLayout.cs)), `MarginBoxContentFragmentBuilder` ([Html/Core/Fragmentation/MarginBoxContentFragmentBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Fragmentation/MarginBoxContentFragmentBuilder.cs)), `MarginBoxFragment`/`FragmentainerFragment.MarginBoxes` ([Html/Core/Fragments/Fragment.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/Html/Core/Fragments/Fragment.cs))
 
 css-gcpm-3's `running()`/`element()` go further than `string-set`/`string()`: instead of capturing plain text, a `position: running(name)` element is removed from flow entirely and `content: element(name)` shows it *complete with formatting and descendant elements* — genuine layout, not a captured string. That requires more than a document-ordered value list:
 

@@ -1,0 +1,2665 @@
+// "Therefore those skilled at the unorthodox
+// are infinite as heaven and earth,
+// inexhaustible as the great rivers.
+// When they come to an end,
+// they begin again,
+// like the days and months;
+// they die and are reborn,
+// like the four seasons."
+// 
+// - Sun Tsu,
+// "The Art of War"
+
+using PeachDrawing.Text.Unicode;
+using PeachPDF.CSS;
+using PeachDrawing.Core;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Utils;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Numerics;
+using System.Text;
+
+namespace PeachPDF.Html.Core.Parse
+{
+    /// <summary>
+    /// Parse CSS properties values like numbers, Urls, etc.
+    /// </summary>
+    internal sealed class CssValueParser
+    {
+        #region Fields and Consts
+
+        /// <summary>
+        ///
+        /// </summary>
+        private readonly RenderContext _renderContext;
+
+        /// <summary>
+        /// Caches parsed inline <c>style=""</c> rules by their raw attribute text, since machine-generated
+        /// markup often repeats the same attribute text across many elements.
+        /// </summary>
+        private readonly Dictionary<string, StyleRule> _inlineStyleRuleCache = new();
+
+        /// <summary>
+        /// The computed style a text or anonymous box ends up with, by the style it had going into the cascade and its parent's:
+        /// no rule or attribute reaches such a box, so those two are all the result depends on, and every text box under a
+        /// parent of one style (a table of identical cells) gets the same one. Compared by reference: computed styles are
+        /// shared, and equal ones that are not the same instance would only miss.
+        /// </summary>
+        internal Dictionary<(ComputedStyle Before, ComputedStyle Parent), ComputedStyle> InheritedOnlyStyles { get; } =
+            new(StylePairReferenceComparer.Instance);
+
+        private sealed class StylePairReferenceComparer : IEqualityComparer<(ComputedStyle Before, ComputedStyle Parent)>
+        {
+            internal static readonly StylePairReferenceComparer Instance = new();
+
+            public bool Equals((ComputedStyle Before, ComputedStyle Parent) x, (ComputedStyle Before, ComputedStyle Parent) y) =>
+                ReferenceEquals(x.Before, y.Before) && ReferenceEquals(x.Parent, y.Parent);
+
+            public int GetHashCode((ComputedStyle Before, ComputedStyle Parent) pair) =>
+                HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(pair.Before), System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(pair.Parent));
+        }
+
+        #endregion
+
+
+        /// <summary>
+        /// Init.
+        /// </summary>
+        public CssValueParser(RenderContext renderContext)
+        {
+            ArgumentNullException.ThrowIfNull(renderContext, "global");
+
+            _renderContext = renderContext;
+        }
+
+        /// <summary>
+        /// Get the parsed <see cref="StyleRule"/> for an inline <c>style=""</c> attribute's text, parsing
+        /// and caching it on first use so identical attribute text across boxes is only parsed once.
+        /// </summary>
+        internal StyleRule GetOrParseInlineStyleRule(string styleAttributeText)
+        {
+            if (_inlineStyleRuleCache.TryGetValue(styleAttributeText, out var cached))
+            {
+                return cached;
+            }
+
+            var rule = new StyleRule(StylesheetParser.Default);
+            StylesheetParser.Default.AppendDeclarations(rule.Style, styleAttributeText);
+            _inlineStyleRuleCache[styleAttributeText] = rule;
+            return rule;
+        }
+
+        /// <summary>
+        /// Check if the given substring is a valid double number.
+        /// Assume given substring is not empty and all indexes are valid!<br/>
+        /// </summary>
+        /// <returns>true - valid double number, false - otherwise</returns>
+        public static bool IsFloat(string str, int idx, int length)
+        {
+            if (length < 1)
+                return false;
+
+            bool sawDot = false;
+            for (int i = 0; i < length; i++)
+            {
+                if (str[idx + i] == '.')
+                {
+                    if (sawDot)
+                        return false;
+                    sawDot = true;
+                }
+                else if (!char.IsDigit(str[idx + i]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Check if the given substring is a valid double number.
+        /// Assume given substring is not empty and all indexes are valid!<br/>
+        /// </summary>
+        /// <returns>true - valid int number, false - otherwise</returns>
+        public static bool IsInt(string str, int idx, int length)
+        {
+            if (length < 1)
+                return false;
+
+            for (int i = 0; i < length; i++)
+            {
+                if (!char.IsDigit(str[idx + i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Memoizes <see cref="IsValidLength"/> by its input string - a pure function of that string
+        /// alone (<see cref="GetCssTokens(string, bool, bool)"/> always runs with <c>inValueContext: false</c>
+        /// here, and neither it nor <see cref="ValueExtensions.ToDistance"/> reads anything else). A
+        /// document's boxes overwhelmingly repeat the same handful of literal length strings (e.g.
+        /// "0px", "auto"), and every caller in the layout engines (<c>ApplyHeight</c>/<c>GetBoxHeight</c>/
+        /// <c>ApplyParentHeight</c>, the flex/grid/table engines) re-asks this on every layout pass of
+        /// every box - by the time a value reaches here it was already validated once, identically, by
+        /// the cascade-time property setters in <see cref="Utils.CssUtils"/> that gate whether it's
+        /// assigned to the box at all, so re-tokenizing the same string over and over is pure waste.
+        /// Unbounded like <see cref="Hyphenator"/>'s language-pattern cache and
+        /// <c>Network.MimeTypeResolver</c>'s cache: the key space is a small, effectively-fixed
+        /// set of distinct CSS value strings, not user-controlled arbitrary data.
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, bool> IsValidLengthCache = new();
+
+        /// <summary>
+        /// Check if the given string is a valid length value.
+        /// </summary>
+        /// <param name="value">the string value to check</param>
+        /// <returns>true - valid, false - invalid</returns>
+        public static bool IsValidLength(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+
+            if (IsValidLengthCache.TryGetValue(value, out var cached)) return cached;
+
+            var result = IsValidLengthCore(value);
+            IsValidLengthCache[value] = result;
+            return result;
+        }
+
+        private static bool IsValidLengthCore(string value)
+        {
+            if (IsCalcFunction(value)) return true;
+
+            // Defer to the same CSS-OM length/percentage grammar already used at cascade time
+            // (ValueExtensions.ToDistance, which every *Property converter - HeightProperty,
+            // WidthProperty, etc. - is ultimately built on) instead of maintaining a second,
+            // independent length-syntax check here (this repo's "don't write two parsers for the same
+            // grammar" convention). The prior hand-rolled version (chop the last 1-2 characters off the
+            // string and try double.TryParse on what's left, with a manual length-1 cutoff) rejected a
+            // bare unitless "0" outright, so e.g. "height: 0" (a real Acid2 declaration on "#eyes-a")
+            // silently never got assigned to CssBox.Height at all, leaving it at its "auto" default
+            // instead of the declared zero - the CSS-OM layer already handled this case correctly via
+            // ValueExtensions.ToLength's explicit `TokenType.Number when Value == 0f` branch.
+            using var pooledTokens = GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            return tokens.ToDistance() != null;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="value"/> is (syntactically) a single calc-family function - e.g. so
+        /// callers that do their own lightweight text scanning of a length string (like
+        /// <see cref="Dom.CssBox"/>'s FontSize setter, which regex-searches for a bare "Nem"
+        /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
+        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>'s
+        /// real evaluation instead.
+        /// </summary>
+        public static bool IsCalcFunction(string value)
+        {
+            return TryGetCalcFunction(value, out _);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="value"/>'s resolved length depends on the containing block's size at
+        /// all - a bare percentage, or a <c>calc()</c>/<c>min()</c>/<c>max()</c>/<c>clamp()</c> expression
+        /// that contains a percentage anywhere in its tree (e.g. <c>calc(100% - 5px)</c>).
+        /// </summary>
+        /// <remarks>
+        /// <c>EndsWith('%')</c> alone - what every caller in <c>CssLayoutEngine</c>'s height resolution used
+        /// to check - catches a bare percentage but not a percentage buried inside a calc-family expression,
+        /// which ends in <c>)</c>. Such a value was read as a definite length and resolved against whatever
+        /// the containing block's height happened to be at that moment, rather than treated as <c>auto</c>
+        /// against an indefinite one (CSS 2.1 §10.5, css-values-4 §10.2's clamping-to-a-known-range rule for
+        /// a calc() that mixes types cannot apply until the percentage itself is resolved). One shared walk
+        /// of the already-parsed <see cref="CalcNode"/> tree, rather than a second, textual "does this string
+        /// contain a %" check that would also match one inside a quoted <c>content</c> value if ever reused
+        /// there.
+        /// </remarks>
+        internal static bool DependsOnPercentage(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            if (value.EndsWith('%')) return true;
+
+            return TryGetCalcFunction(value, out var function) && function is { } fn
+                   && CalcParser.Parse(fn) is { } node
+                   && CalcNodeContainsPercentage(node);
+        }
+
+        private static bool CalcNodeContainsPercentage(CalcNode node) => node switch
+        {
+            PercentageCalcNode => true,
+            UnaryCalcNode unary => CalcNodeContainsPercentage(unary.Operand),
+            BinaryCalcNode binary => CalcNodeContainsPercentage(binary.Left) || CalcNodeContainsPercentage(binary.Right),
+            CallCalcNode call => call.Arguments.Any(CalcNodeContainsPercentage),
+            _ => false,
+        };
+
+        /// <summary>
+        /// Recognizes a length string that is a single calc-family (calc/min/max/clamp) function, e.g. for
+        /// the syntactic gate in <see cref="IsValidLength"/> and the evaluation branch in
+        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>. Real
+        /// grammar/type validation already happened in Layer A's CalcValueConverter for any value that
+        /// didn't arrive via the var() substitution bypass; this is a syntactic recognizer only.
+        /// </summary>
+        /// <remarks>
+        /// Skips tokenizing entirely when <paramref name="length"/> has no <c>(</c> at all: a CSS function
+        /// token is only ever produced from an ident immediately followed by <c>(</c> (CSS Syntax 3 §4.3.4),
+        /// so <c>tokens is [{ Type: TokenType.Function } fn]</c> below can never hold without one - this is a necessary,
+        /// not merely typical, precondition, so the short-circuit changes no outcome. This runs on every
+        /// length this layer resolves (an ordinary "10px"/"50%"/"auto" value has no calc-family function at
+        /// all, so it's the overwhelming majority), and a `dotnet-trace` allocation profile of the full
+        /// showcase corpus found this the single largest contributor to <see cref="PeachPDF.CSS.Pool"/>'s
+        /// 2.4-million-call, 99%-miss-rate `NewStringBuilder()` volume - the full CSS-OM tokenizer this
+        /// called into (`Lexer`/`TextSource`/its `StringBuilder`) was being constructed fresh just to
+        /// discover almost every time that the value wasn't a function at all.
+        /// </remarks>
+        private static bool TryGetCalcFunction(string length, out Token? function)
+        {
+            if (!length.Contains('('))
+            {
+                function = null;
+                return false;
+            }
+
+            using var pooledTokens = GetCssTokensPooled(length);
+            List<Token> tokens = pooledTokens;
+
+            if (tokens is [{ Type: TokenType.Function } fn] && CalcParser.IsCalcFamily(fn.Data))
+            {
+                function = fn;
+                return true;
+            }
+
+            function = null;
+            return false;
+        }
+
+        /// <summary>
+        /// Evals a number and returns it. If number is a percentage, it will be multiplied by <paramref name="hundredPercent"/>
+        /// </summary>
+        /// <param name="number">Number to be parsed</param>
+        /// <param name="hundredPercent">Number that represents the 100% if parsed number is a percentage</param>
+        /// <returns>Parsed number. Zero if error while parsing.</returns>
+        public static double ParseNumber(string number, double hundredPercent)
+        {
+            if (string.IsNullOrEmpty(number))
+            {
+                return 0f;
+            }
+
+            var toParse = number;
+            var isPercent = number.EndsWith('%');
+
+            if (isPercent)
+                toParse = number[..^1];
+
+            if (!double.TryParse(toParse, NumberStyles.Number, NumberFormatInfo.InvariantInfo, out var result))
+            {
+                return 0f;
+            }
+
+            if (isPercent)
+            {
+                result = (result / 100f) * hundredPercent;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Resolves an already-parsed <see cref="Length"/> (e.g. a keyword-or-value cascade property's
+        /// <c>CssKeywordOrValue{TEnum,Length}.Value</c>) to pixels against <paramref name="box"/>'s own
+        /// em/rem/container-relative-unit context — the same box-context extraction the string-based
+        /// <see cref="ParseLength(string,double,CssBox)"/> overload uses, without re-serializing the
+        /// already-typed length back to text just to re-parse it.
+        /// </summary>
+        /// <param name="length">The already-parsed length</param>
+        /// <param name="hundredPercent">Equivalent to 100 percent when length is a percentage</param>
+        /// <param name="box"></param>
+        public static double ParseLength(Length length, double hundredPercent, CssBox box)
+        {
+            // GetContainerRelativeUnitBasis walks every ancestor looking for the nearest eligible
+            // @container query container - real, non-trivial work worth skipping for the overwhelming
+            // majority of lengths, which don't use a cq* unit at all (see Length.IsContainerRelative).
+            var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = length.IsContainerRelative
+                ? box.GetContainerRelativeUnitBasis()
+                : (null, null, null, null);
+            var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
+            var pixelsPerPoint = PixelsPerPointOf(box);
+
+            // box.GetEmHeight()/GetRemHeight() live in the adapter's device-scaled *font-measurement*
+            // space (trueFontSizePt / pixelsPerPoint - CssBox.NoEms's doc comment, issue #631) - the
+            // OPPOSITE direction from the box's internal, pixelsPerPoint-inflated layout space every other
+            // basis below (container/viewport sizes) already reports. Undoing that device-scaling here
+            // (mirroring CssImagePainter.ResolveGradientLength, issue #826) before handing them to
+            // Length.ToPixels as the em/rem basis is a no-op when only container/viewport/percent units
+            // are in play - those bases are unaffected - so it's safe to always apply.
+            var result = length.ToPixels(box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, hundredPercent,
+                containerInlinePt, containerBlockPt,
+                viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt,
+                box.DerivedStyle);
+
+            // An absolute length (px/pt/in/cm/mm/pc) resolves via Length.ToPixels as if the internal
+            // layout unit were a true PDF point - correct only when PixelsPerPoint is 1 (PixelsPerInch
+            // == 72). em/rem/ex/ch need the same catch-up multiply now that their basis above has been
+            // undone back to true points: Length.ToPixels multiplies that basis by the length's own
+            // literal number, so the result is still in true points until this multiply lands it in the
+            // box's inflated space (issue #826). Container/viewport/percent units need no such multiply -
+            // their basis (GetContainerRelativeUnitBasis/GetViewportUnitBasis) is already reported in the
+            // box's real, possibly PixelsPerPoint-inflated, internal coordinate space (see
+            // HtmlContainer's PageSize/Location/margin properties) - issue #814.
+            // Every internal engine that temporarily re-serializes an already-resolved size back into
+            // box.Width/Height as a "pt" string to re-run layout (CssLayoutEngineFlex/Grid,
+            // ItemContentCommit, a table caption's own Height) pre-divides by this same factor before
+            // formatting, so this multiply round-trips those unchanged rather than double-scaling them.
+            return length.NeedsPixelsPerPointCatchUp ? result * pixelsPerPoint : result;
+        }
+
+        /// <summary>
+        /// The ambient <c>PixelsPerPoint</c> (<c>PdfGenerateConfig.PixelsPerInch / 72</c>) an absolute CSS
+        /// length must be scaled by to land correctly in <paramref name="box"/>'s internal layout
+        /// coordinate space - see <see cref="ParseLength(Length, double, CssBox)"/>. <c>1.0</c> (a no-op)
+        /// when there is no container/adapter in scope, matching every other existing call site of this
+        /// same idiom (e.g. <see cref="Dom.DerivedStyle.ActualFont"/>, <see cref="Dom.CssBox.NoEms"/>).
+        /// </summary>
+        private static double PixelsPerPointOf(CssBox box) =>
+            box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
+
+        /// <summary>
+        /// Resolves a <see cref="LengthOrCalc"/> (a keyword-or-value cascade property's
+        /// <c>CssKeywordOrValue{TEnum,LengthOrCalc}.Value</c>, e.g. <c>word-spacing</c>) to pixels -
+        /// either directly, for the already-resolved <see cref="Length"/> case, or by evaluating the
+        /// stored <c>calc()</c> text against <paramref name="box"/>'s real context, for a relative-unit
+        /// <c>calc()</c> that couldn't fold at cascade time. See <see cref="LengthOrCalc"/>'s own doc
+        /// comment for why this deferred-text case exists.
+        /// </summary>
+        public static double ParseLength(LengthOrCalc value, double hundredPercent, CssBox box) =>
+            value.IsCalc
+                ? ParseLength(value.CalcText!, hundredPercent, box)
+                : ParseLength(value.Length!.Value, hundredPercent, box);
+
+        /// <summary>
+        /// Parses a <c>&lt;length&gt;</c> that may also be a <c>calc()</c> expression needing layout-time
+        /// context to resolve (mixed <c>em</c>/<c>rem</c>/<c>%</c>/<c>cq*</c> units) - the
+        /// <see cref="LengthOrCalc"/>-shaped counterpart to the plain <see cref="Length.TryParse"/> a
+        /// keyword-or-value property's "length" valueType otherwise uses. An absolute-only <c>calc()</c>
+        /// has already folded to a literal length string by the time this runs (Layer A's
+        /// <c>CalcSerializer</c>), so it resolves via the plain <see cref="Length"/> case below exactly
+        /// like any other length; only a genuinely relative-unit <c>calc()</c> takes the deferred-text
+        /// path.
+        /// </summary>
+        public static bool TryParseLengthOrCalc(string value, out LengthOrCalc result)
+        {
+            if (Length.TryParse(value, out var length))
+            {
+                result = new LengthOrCalc(length, null);
+                return true;
+            }
+
+            if (IsCalcFunction(value))
+            {
+                result = new LengthOrCalc(null, value);
+                return true;
+            }
+
+            result = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves a <see cref="LengthOrUnitless"/> (<c>line-height</c>'s
+        /// <c>CssKeywordOrValue{NormalKeyword,LengthOrUnitless}.Value</c>) to pixels - either through the
+        /// same <see cref="LengthOrCalc"/> resolution every other keyword-or-value length property uses,
+        /// or, for a bare unitless multiplier, by scaling <paramref name="box"/>'s own font size (CSS2.1
+        /// §10.8.1: "the used value of the property is this number multiplied by the element's font
+        /// size" - <paramref name="box"/>'s own, not an ancestor's, which is what makes storing the raw
+        /// multiplier and recomputing per box, rather than resolving once at cascade time, the correct
+        /// inheritance behavior here).
+        /// </summary>
+        public static double ParseLength(LengthOrUnitless value, double hundredPercent, CssBox box) =>
+            value.IsUnitless
+                // GetEmHeight() (== ActualFont.Size) is in the adapter's device-scaled font-measurement
+                // space - CreateFontInt divides a requested size by PixelsPerPoint once to get there, so
+                // that division has to be undone here before treating it as a true-point font size, the
+                // same correction CssBox.NoEms/ResolveFontSizeValueComputation already apply for
+                // text-indent/word-spacing/letter-spacing and font-size inheritance (issue #814's
+                // line-height sibling - invisible at the library's default PixelsPerInch of 72, where
+                // PixelsPerPoint == 1).
+                ? value.Unitless!.Value * box.GetEmHeight() * PixelsPerPointOf(box)
+                : ParseLength(value.LengthOrCalc!.Value, hundredPercent, box);
+
+        /// <summary>
+        /// Parses a plain finite <c>&lt;number&gt;</c> such as <c>350.5</c>, for a keyword-or-value property whose non-keyword side is a
+        /// number (<c>font-weight</c>).
+        /// </summary>
+        public static bool TryParseNumber(string value, out double result)
+        {
+            if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
+                return true;
+
+            result = 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Parses a non-negative <c>&lt;percentage&gt;</c> such as <c>87.5%</c> to the number it states (87.5), for a keyword-or-value
+        /// property whose non-keyword side is a percentage of its own scale (<c>font-stretch</c>).
+        /// </summary>
+        public static bool TryParseNonNegativePercentage(string value, out double result)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length > 1 && trimmed[^1] == '%'
+                && double.TryParse(trimmed.AsSpan(0, trimmed.Length - 1), NumberStyles.Float, CultureInfo.InvariantCulture, out result)
+                && double.IsFinite(result) && result >= 0)
+            {
+                return true;
+            }
+
+            result = 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Parses <c>line-height</c>'s non-keyword grammar - a <c>&lt;length-percentage&gt;</c> (itself
+        /// possibly a deferred-calc, via <see cref="TryParseLengthOrCalc"/>) or a bare unitless multiplier
+        /// number. A bare-number <c>calc()</c> (e.g. <c>calc(1 + 0.5)</c>) has already folded to a literal
+        /// numeric string by Layer A's <c>CalcSerializer</c> (<c>CalcCategory.Number</c> always folds, unlike
+        /// <c>CalcCategory.LengthPercentage</c>) before this runs, so it's indistinguishable from - and
+        /// handled by - the plain <see cref="double.TryParse(string,NumberStyles,IFormatProvider,out double)"/>
+        /// fallback below.
+        /// </summary>
+        public static bool TryParseLengthOrUnitless(string value, out LengthOrUnitless result)
+        {
+            if (TryParseLengthOrCalc(value, out var lengthOrCalc))
+            {
+                result = new LengthOrUnitless(lengthOrCalc, null);
+                return true;
+            }
+
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var unitless))
+            {
+                result = new LengthOrUnitless(null, unitless);
+                return true;
+            }
+
+            result = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Parses a length. Lengths are followed by an unit identifier (e.g. 10px, 3.1em)
+        /// </summary>
+        /// <param name="length">Specified length</param>
+        /// <param name="hundredPercent">Equivalent to 100 percent when length is percentage</param>
+        /// <param name="box"></param>
+        /// <returns>the parsed length value with adjustments</returns>
+        public static double ParseLength(string length, double hundredPercent, CssBox box)
+        {
+            // Cheap, conservative pre-filter: every cq* unit's own suffix contains "cq" (cqw/cqh/cqi/cqb/
+            // cqmin/cqmax), so a length string that doesn't contain "cq" anywhere cannot possibly resolve
+            // to one - skip GetContainerRelativeUnitBasis's ancestor walk for the overwhelming majority of
+            // lengths (a false-positive match, e.g. inside a custom-property-derived string, only costs
+            // the walk it would have paid anyway - never a wrong answer).
+            var mightBeContainerRelative = length.Contains("cq", StringComparison.OrdinalIgnoreCase);
+            var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = mightBeContainerRelative
+                ? box.GetContainerRelativeUnitBasis()
+                : (null, null, null, null);
+            var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
+            var pixelsPerPoint = PixelsPerPointOf(box);
+
+            // box.GetEmHeight()/GetRemHeight() need the same device-scaling correction the typed Length
+            // overload above applies (issue #826) before use as the em/rem basis - see that overload's
+            // comment. This is the overload the vast majority of Length-typed CSS box-geometry properties
+            // (padding-*, width/height, margin-*, border-*-radius, min-*/max-*, etc.) actually resolve
+            // through, since css-properties.json stores them as raw strings, not typed Length values.
+            var result = ParseLength(length, hundredPercent, box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, null, false,
+                containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
+                containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, pixelsPerPoint,
+                out var needsPixelsPerPointCatchUp, box.DerivedStyle);
+
+            if (IsCalcFunction(length))
+            {
+                // The pixelsPerPoint passed into the call above already applied the catch-up multiply
+                // per-leaf inside CalcEvaluator (issue #829's fix, see NeedsPixelsPerPointCatchUp) - no
+                // further whole-result multiply, and no point re-parsing length as a literal Length below
+                // (a calc() string never succeeds Length.TryParse anyway).
+                return result;
+            }
+
+            // Same absolute-length catch-up as the typed Length overload above (issue #814), now extended
+            // to em/rem/ex/ch (issue #826). The call above already classified `length`'s own unit (via
+            // GetUnit) whenever `length` actually has one written into it - reuse that answer instead of
+            // re-parsing the same string a second time through Length.TryParse/StylesheetUnit. Only when
+            // GetUnit couldn't find a unit written into `length` itself (needsPixelsPerPointCatchUp is
+            // null - defaultUnit was null at the call site above, so a "no unit" answer there always means
+            // genuinely unitless) does this fall back to the original re-parse, unchanged.
+            if (needsPixelsPerPointCatchUp is { } catchUp)
+            {
+                return catchUp ? result * pixelsPerPoint : result;
+            }
+
+            return Length.TryParse(length, out var parsed) && parsed.NeedsPixelsPerPointCatchUp
+                ? result * pixelsPerPoint
+                : result;
+        }
+
+        /// <summary>
+        /// Parses a length. Lengths are followed by an unit identifier (e.g. 10px, 3.1em)
+        /// </summary>
+        /// <param name="length">Specified length</param>
+        /// <param name="hundredPercent">Equivalent to 100 percent when length is percentage</param>
+        /// <param name="emFactor"></param>
+        /// <param name="remFactor"></param>
+        /// <param name="defaultUnit"></param>
+        /// <param name="returnPoints">Allows the return double to be in points. If false, result will be pixels</param>
+        /// <param name="containerInlineSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same
+        /// name. <c>null</c> for every call site with no candidate box in scope (media queries, `@page`
+        /// margins) - `cqi` then falls back to <paramref name="viewportInlineSizePt"/>, same as the
+        /// box-aware overload's own container-less fallback.</param>
+        /// <param name="containerBlockSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="viewportWidthPt">See <see cref="Length.ToPixels"/>'s parameter of the same name.
+        /// <c>null</c> for every call site with no candidate box in scope - `vw`/etc. units then resolve
+        /// to 0.</param>
+        /// <param name="viewportHeightPt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="containerWidthPt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="containerHeightPt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="viewportInlineSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="viewportBlockSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="pixelsPerPoint">See <see cref="CalcContext.PixelsPerPoint"/> - the catch-up
+        /// multiply an absolute or em/rem/ex/ch <c>calc()</c> leaf needs to land in the box's
+        /// <c>PixelsPerPoint</c>-inflated internal layout space (issue #829). <c>1.0</c> (a no-op) for
+        /// every call site with no real box/adapter in scope (font-size resolution, <c>@page</c> margins),
+        /// which deliberately want the raw, unscaled true-point result.</param>
+        /// <param name="fonts">See <see cref="Length.ToPixels"/>'s <c>fonts</c> parameter. <c>null</c> for
+        /// every call site with no font in scope (media queries, <c>@page</c> geometry), which takes each
+        /// font-relative unit's spec fallback.</param>
+        /// <returns>the parsed length value with adjustments</returns>
+        public static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints,
+            double? containerInlineSizePt = null, double? containerBlockSizePt = null,
+            double? viewportWidthPt = null, double? viewportHeightPt = null,
+            double? containerWidthPt = null, double? containerHeightPt = null,
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
+            double pixelsPerPoint = 1.0, IFontMetricSource? fonts = null)
+            => ParseLength(length, hundredPercent, emFactor, remFactor, defaultUnit, returnPoints,
+                containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt,
+                containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt, pixelsPerPoint,
+                out _, fonts);
+
+        /// <summary>
+        /// Same as the public overload above, plus <paramref name="needsPixelsPerPointCatchUp"/>: whether
+        /// <paramref name="length"/>'s own unit (not <paramref name="defaultUnit"/>) needs the
+        /// <c>PixelsPerPoint</c> catch-up multiply (see <see cref="Length.NeedsPixelsPerPointCatchUp"/>) -
+        /// <see langword="null"/> when <paramref name="length"/> didn't have a unit written into it
+        /// (<c>GetUnit</c>'s <c>hasUnit</c> came back <see langword="false"/>), since then there is no
+        /// answer to give without knowing what the caller's own fallback parse of <paramref name="length"/>
+        /// would say. Exists so <c>ParseLength(string, double, CssBox)</c> can reuse the unit this call
+        /// already classified instead of re-parsing <paramref name="length"/> a second time through
+        /// <see cref="Length.TryParse"/>/<c>StylesheetUnit</c> just to answer the same question.
+        /// </summary>
+        private static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints,
+            double? containerInlineSizePt, double? containerBlockSizePt,
+            double? viewportWidthPt, double? viewportHeightPt,
+            double? containerWidthPt, double? containerHeightPt,
+            double? viewportInlineSizePt, double? viewportBlockSizePt,
+            double pixelsPerPoint,
+            out bool? needsPixelsPerPointCatchUp, IFontMetricSource? fonts)
+        {
+            //Return zero if no length specified, zero specified
+            if (string.IsNullOrEmpty(length) || length == "0")
+            {
+                needsPixelsPerPointCatchUp = null;
+                return 0f;
+            }
+
+            if (TryGetCalcFunction(length, out var calcFunction))
+            {
+                // Every calc-family string reaching layout has already been validated by Layer A's
+                // CalcValueConverter (directly, or via DomParser's var()-substitution re-parse) - a null
+                // result here should be unreachable, but 0 is the same "can't make sense of this" fallback
+                // used elsewhere in this method for any other degenerate input.
+                var node = CalcParser.Parse(calcFunction!.Value);
+                var context = new CalcContext(hundredPercent, emFactor, remFactor, returnPoints, containerInlineSizePt, containerBlockSizePt,
+                    viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt,
+                    pixelsPerPoint, fonts);
+                var pixels = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
+
+                needsPixelsPerPointCatchUp = null;
+                return pixels ?? 0d;
+            }
+
+            //Get units of the length
+            var (unit, numberValue) = GetUnit(length, defaultUnit, out var hasUnit);
+
+            //Number of the length
+            var number = hasUnit ? numberValue : ParseNumber(length, hundredPercent);
+
+            var lengthUnit = unit is not null ? Length.GetUnit(unit) : Length.Unit.None;
+
+            needsPixelsPerPointCatchUp = hasUnit
+                ? new Length(0f, lengthUnit).NeedsPixelsPerPointCatchUp
+                : null;
+
+            // A bare point value returns the raw point number directly rather than round-tripping
+            // through pixel space, avoiding a redundant px->pt->px floating-point conversion.
+            if (returnPoints && unit == UnitNames.Pt)
+            {
+                return number!.Value;
+            }
+
+            return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent, containerInlineSizePt, containerBlockSizePt,
+                viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt,
+                fonts);
+        }
+
+        /// <summary>
+        /// Get the unit to use for the length, use default if no unit found in length string.
+        /// </summary>
+        private static (string? unit, double? value) GetUnit(string length, string? defaultUnit, out bool hasUnit)
+        {
+            switch (TryClassifyLengthFast(length, out var fastUnit, out var fastValue))
+            {
+                case FastLengthKind.Dimension:
+                    hasUnit = true;
+                    return (fastUnit, fastValue);
+                case FastLengthKind.PlainNumber:
+                    hasUnit = false;
+                    return (defaultUnit, null);
+            }
+
+            // Inconclusive - fall through to the real tokenizer unchanged, exactly as before this fast
+            // path existed.
+            using var pooledTokens = GetCssTokensPooled(length);
+            List<Token> tokens = pooledTokens;
+
+            if (tokens is [{ Type: TokenType.Dimension or TokenType.Percentage } unitToken])
+            {
+                hasUnit = true;
+                return (unitToken.Unit, unitToken.Value);
+            }
+
+            hasUnit = false;
+            return (defaultUnit, null);
+        }
+
+        // internal rather than private: a black-box test of ParseLength's final numeric output cannot
+        // tell "classified correctly via the fast path" apart from "always fell through to Inconclusive,
+        // fast path is dead weight" - both look identical from the outside, since GetUnit's fallback is
+        // the same real tokenizer this used to run unconditionally. Direct access lets tests assert this
+        // method actually fires (returns non-Inconclusive) for the common cases, not merely that GetUnit
+        // still gets the right answer regardless.
+        internal enum FastLengthKind { Dimension, PlainNumber, Inconclusive }
+
+        /// <summary>
+        /// An allocation-free classification of the single most common length shapes - a bare number, a
+        /// number+unit dimension, or a number+percentage - built directly on <see cref="NumberSyntax"/>,
+        /// without constructing a <see cref="Lexer"/>/<see cref="TextSource"/>/<see cref="Token"/> object
+        /// graph. Returns <see cref="FastLengthKind.Inconclusive"/> for anything it isn't confident about
+        /// (embedded whitespace, an escape sequence, a unit the real tokenizer wouldn't accept whole, a
+        /// second token after the number) so <see cref="GetUnit"/> can fall through to the real, full
+        /// <see cref="GetCssTokens"/> tokenizer path unchanged for those - the tokenizer stays the one
+        /// authority for anything this shortcut doesn't recognize.
+        /// </summary>
+        internal static FastLengthKind TryClassifyLengthFast(string length, out string? unit, out double value)
+        {
+            unit = null;
+
+            if (!NumberSyntax.TryConsumeNumber(length, out var numberLength, out value))
+                return FastLengthKind.Inconclusive;
+
+            var rest = length.AsSpan(numberLength);
+
+            if (rest.IsEmpty) return FastLengthKind.PlainNumber;
+
+            if (rest is "%")
+            {
+                unit = UnitNames.Percent;
+                return FastLengthKind.Dimension;
+            }
+
+            // Lexer.Dimension() only ever extends a unit through ASCII letters (CharExtensions.IsLetter)
+            // or an escape sequence - never digits, underscore, '-', or further non-ASCII characters,
+            // even though the *first* unit character it accepts is any CSS ident-start char
+            // (IsNameStart, which does include those - see NumberSyntax's remarks for why 'e'/'E' is
+            // ordinary in this respect, not exponent syntax). Every real-world CSS unit ("px", "em",
+            // "vh", ...) is already pure ASCII letters, so restricting this fast path to that shape and
+            // deferring anything else to the real tokenizer costs nothing observable while staying
+            // exactly faithful to what Dimension() actually does.
+            foreach (var c in rest)
+            {
+                if (!c.IsLetter()) return FastLengthKind.Inconclusive;
+            }
+
+            unit = rest.ToString();
+            return FastLengthKind.Dimension;
+        }
+
+        /// <summary>
+        /// Check if the given color string value is valid.
+        /// </summary>
+        /// <param name="colorValue">color string value to parse</param>
+        /// <returns>true - valid, false - invalid</returns>
+        public bool IsColorValid(string colorValue)
+        {
+            return TryGetColor(colorValue, 0, colorValue.Length, out _);
+        }
+
+        /// <summary>
+        /// Parses a color value in CSS style; e.g. #ff0000, red, rgb(255,0,0), rgb(100%, 0, 0)
+        /// </summary>
+        /// <param name="colorValue">color string value to parse</param>
+        /// <returns>PaintColor value</returns>
+        public PaintColor GetActualColor(string colorValue)
+        {
+            TryGetColor(colorValue, 0, colorValue.Length, out var color);
+            return color;
+        }
+
+        /// <summary>
+        /// Parses a color value in CSS style; e.g. #ff0000, RED, RGB(255,0,0), RGB(100%, 0, 0)
+        /// </summary>
+        /// <param name="str">color substring value to parse</param>
+        /// <param name="idx">substring start idx </param>
+        /// <param name="length">substring length</param>
+        /// <param name="color">return the parsed color</param>
+        /// <returns>true - valid color, false - otherwise</returns>
+        public bool TryGetColor(string str, int idx, int length, out PaintColor color)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(str))
+                {
+                    return length switch
+                    {
+                        > 1 when str[idx] == '#' => GetColorByHex(str, idx, length, out color),
+                        > 10 when CommonUtils.SubStringEquals(str, idx, 4, "rgb(") && str[length - 1] == ')' =>
+                            GetColorByRgb(str, idx, length, out color),
+                        > 13 when CommonUtils.SubStringEquals(str, idx, 5, "rgba(") && str[length - 1] == ')' =>
+                            GetColorByRgba(str, idx, length, out color),
+                        _ => GetColorByName(str, idx, length, out color)
+                    };
+                }
+            }
+            catch
+            { }
+            color = PaintColor.Black;
+            return false;
+        }
+
+        /// <summary>
+        /// The Oklab coordinates (L, a, b) of a <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c> colour as written,
+        /// without the clip to the sRGB gamut <see cref="TryGetColor"/> applies. False for any other colour, where the sRGB value is the colour.
+        /// </summary>
+        internal bool TryGetOklab(string str, out double[] oklab)
+        {
+            oklab = [];
+            if (string.IsNullOrEmpty(str) || str.IndexOf('(') < 0) return false;
+
+            using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            return tokens.TryResolveOklab(out oklab);
+        }
+
+        /// <summary>
+        /// Parses a border value in CSS style; e.g. 1px, 1, thin, thick, medium
+        /// </summary>
+        /// <param name="borderValue"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static double GetActualBorderWidth(string borderValue, CssBox b)
+        {
+            if (string.IsNullOrEmpty(borderValue))
+            {
+                return GetActualBorderWidth(Keywords.Medium, b);
+            }
+
+            return borderValue switch
+            {
+                Keywords.Thin => 1f,
+                Keywords.Medium => 2f,
+                Keywords.Thick => 4f,
+                _ => SnapBorderWidth(Math.Abs(ParseLength(borderValue, 1, b)), b.HtmlContainer?.SnapBorderWidthsToCssPixels == true)
+            };
+        }
+
+        /// <summary>
+        /// CSS Values 4 "snap a length as a border width", on the CSS pixel: a width above 0 and below 1px
+        /// becomes 1px, 1px or more is rounded down to a whole number of pixels. A no-op when <paramref name="enabled"/> is false.
+        /// </summary>
+        internal static double SnapBorderWidth(double points, bool enabled)
+        {
+            if (!enabled || points <= 0) return points;
+            var px = points / Length.PointsPerPx;
+            px = px < 1 ? 1 : Math.Floor(px + 1e-9);
+            return px * Length.PointsPerPx;
+        }
+
+        /// <returns>
+        /// The first comma-separated candidate that's actually installed/registered, or null if none of
+        /// them are - callers fall back to <see cref="DefaultFontResolver.DefaultFont"/> in that case (see
+        /// <c>CssBox.ActualFont</c>), same as when the whole family list fails to resolve any
+        /// other way. Previously returned the literal string "inherit" as a not-found sentinel, which was
+        /// confusable with the real CSS <c>inherit</c> keyword downstream.
+        /// </returns>
+        public string? GetFontFamilyByName(string propValue)
+        {
+            int start = 0;
+            while (start < propValue.Length)
+            {
+                while (char.IsWhiteSpace(propValue[start]) || propValue[start] == ',' || propValue[start] == '\'' || propValue[start] == '"')
+                    start++;
+                var end = propValue.IndexOf(',', start);
+                if (end < 0)
+                    end = propValue.Length;
+                var adjEnd = end - 1;
+                while (char.IsWhiteSpace(propValue[adjEnd]) || propValue[adjEnd] == '\'' || propValue[adjEnd] == '"')
+                    adjEnd--;
+
+                var font = propValue.Substring(start, adjEnd - start + 1);
+
+                if (_renderContext.IsFontExists(font))
+                {
+                    return font;
+                }
+
+                start = end;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="propValue">the value of the property to parse</param>
+        /// <returns>parsed value</returns>
+        public static CssImage? GetImagePropertyValue(string propValue)
+        {
+            using var pooledTokens = GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
+
+            var urlToken = tokens.SingleOfTypeOrNull(TokenType.Url);
+
+            return urlToken is { } token ? new CssImage.Url(token.Data.ToString()) : null;
+        }
+
+        /// <summary>
+        /// Parses an <c>@font-face</c> <c>src</c> value into one <see cref="CssFontFace"/> candidate per
+        /// comma-separated entry, in declaration order (e.g. <c>url(a.woff2) format('woff2'), url(a.woff)
+        /// format('woff'), local('Foo')</c>) - the real, common <c>src</c> fallback-list shape. Splitting on
+        /// top-level <see cref="TokenType.Comma"/> tokens first (rather than matching a single <c>url()</c>/
+        /// <c>format()</c>/etc. across the whole value) is required: matching across the whole token stream
+        /// at once threw <see cref="InvalidOperationException"/> the moment more than one <c>url()</c> was
+        /// present, since each candidate token match used to be an unqualified <c>.SingleOrDefault()</c> over
+        /// the entire list.
+        /// </summary>
+        public static List<CssFontFace> GetFontFacePropertyValue(string propValue)
+        {
+            using var pooledTokens = GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
+            var result = new List<CssFontFace>();
+            var segment = new List<Token>();
+
+            static string? FirstArgData(Token? functionToken) =>
+                functionToken is { } ft && ft.ArgumentTokens.Count > 0 ? ft.ArgumentTokens[0].Data.ToString() : null;
+
+            void FlushSegment()
+            {
+                if (segment.Count == 0) return;
+
+                var urlToken = segment.SingleOfTypeOrNull(TokenType.Url);
+                var formatToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("format"));
+                var techToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("tech"));
+                var localToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("local"));
+
+                result.Add(new CssFontFace(urlToken?.Data.ToString(), FirstArgData(formatToken), FirstArgData(techToken), FirstArgData(localToken)));
+                segment = [];
+            }
+
+            foreach (var token in tokens)
+            {
+                if (token.Type == TokenType.Comma)
+                    FlushSegment();
+                else
+                    segment.Add(token);
+            }
+            FlushSegment();
+
+            return result;
+        }
+
+        public static List<Token> GetCssTokens(string propValue, bool inValueContext = false, bool preserveWhitespace = false)
+        {
+            List<Token> tokens = [];
+            TokenizeInto(tokens, propValue, inValueContext, preserveWhitespace);
+            return tokens;
+        }
+
+        /// <summary>
+        /// Parses <paramref name="value"/> as a single CSS <c>&lt;string&gt;</c> token (e.g. <c>"some text"</c>)
+        /// - the shared &lt;string&gt;-only grammar for a property whose own value is nothing but a quoted
+        /// string, such as <c>block-ellipsis</c>'s <c>auto | none | &lt;string&gt;</c> (CSS Overflow 4).
+        /// Fails for anything else: no tokens, more than one token, an unquoted identifier, or a string
+        /// left unterminated by a newline/EOF before its closing quote (<see cref="Token.IsValid"/> false).
+        /// </summary>
+        public static bool TryParseSingleString(string value, out string content)
+        {
+            using var pooled = GetCssTokensPooled(value);
+            List<Token> tokens = pooled;
+
+            if (tokens is [{ Type: TokenType.String, IsValid: true } token])
+            {
+                content = token.Data.ToString();
+                return true;
+            }
+
+            content = "";
+            return false;
+        }
+
+        /// <summary>
+        /// Same tokenization as <see cref="GetCssTokens"/>, but the returned list's backing array comes
+        /// from a thread-static pool instead of a fresh allocation - use only at a call site that has been
+        /// individually audited to never retain the list (or a sub-list/enumerable slice of it) past the
+        /// <c>using</c> block, e.g. <c>using var tokens = GetCssTokensPooled(value); // extract a scalar,
+        /// discard</c>. Reading one or more <see cref="Token"/> <em>values</em> out of it (indexing,
+        /// pattern matching, a value-extracting call like <c>.ToLength()</c>) is always safe regardless of
+        /// pooling, since <see cref="Token"/> is a value type - what must not happen is the list itself
+        /// (or anything wrapping it, like a <see cref="TokenValue"/>/<c>IPropertyValue.Original</c>)
+        /// surviving past the block, since its backing array can be handed to an unrelated caller the
+        /// moment this one's <c>using</c> block ends.
+        /// </summary>
+        public static PooledTokenList GetCssTokensPooled(string propValue, bool inValueContext = false, bool preserveWhitespace = false)
+        {
+            var tokens = Pool.NewTokenList();
+            TokenizeInto(tokens, propValue, inValueContext, preserveWhitespace);
+            return new PooledTokenList(tokens);
+        }
+
+        private static void TokenizeInto(List<Token> tokens, string propValue, bool inValueContext, bool preserveWhitespace)
+        {
+            // In a value context '#rrggbb' lexes to a single PaintColor token; otherwise a letter-leading hex is a
+            // Hash token and a digit-leading hex is '#' + number. Callers that hand the tokens to the Layer-A
+            // color/gradient grammar (which reads PaintColor tokens) must set inValueContext so hex stops resolve.
+            using var lexer = new Lexer(propValue) { IsInValue = inValueContext };
+
+            Token token;
+
+            do
+            {
+                token = lexer.Get();
+
+                // ValueExtensions.ToItems() (behind Many()/FromList()/OneOrMoreValueConverter - the real
+                // Layer A grammar composition several "cssom-grammar" validators call into, see
+                // ValidatorExpressionBuilder.BuildCssOmGrammarClause) splits items on Whitespace tokens, and
+                // gradient direction syntax ("to right", "to top left") also reads whitespace-separated
+                // words - so a caller feeding tokens to one of those must preserve whitespace, unlike every
+                // other existing GetCssTokens caller (a single length/color/keyword check), which wants it
+                // stripped exactly as before.
+                if (token.Type != TokenType.EndOfFile && (preserveWhitespace || token.Type != TokenType.Whitespace))
+                {
+                    tokens.Add(token);
+                }
+
+            } while (token.Type != TokenType.EndOfFile);
+        }
+
+        /// <summary>
+        /// Unlike <see cref="TryParseSingleString"/>'s strict <c>&lt;string&gt;</c> grammar, this
+        /// deliberately does not gate on <see cref="Token.IsValid"/> - a malformed quoted family name
+        /// (e.g. a raw newline before the closing quote) still returns whatever was scanned rather than
+        /// falling back to the raw <paramref name="propValue"/> text, matching font-family's own
+        /// conventionally lenient fallback behavior (best-effort name extraction over strict rejection).
+        /// </summary>
+        public static string GetFontFaceFamilyName(string propValue)
+        {
+            using var pooledTokens = GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
+
+            if (tokens is [{ Type: TokenType.String } stringToken])
+            {
+                return stringToken.Data.ToString();
+            }
+
+            return propValue;
+        }
+
+        /// <summary>
+        /// Parses a CSS <c>transform</c> value (a space-separated list of 2D and/or 3D transform
+        /// functions) together with <c>transform-origin</c>, and reduces the result to a single
+        /// 2D affine matrix suitable for painting via a PDF content-stream 'cm' operator.
+        /// </summary>
+        /// <remarks>
+        /// 3D functions are composed as a genuine 4x4 matrix (see <see cref="BuildFunctionMatrix"/>) and then
+        /// projected onto the box's own z=0 plane - this projection is mathematically exact (the flattened
+        /// result is a true 2D affine transform, with no approximation), see <see cref="ProjectTo2D"/>.
+        /// A <c>perspective()</c> (or a <c>matrix3d()</c> with perspective terms) makes the 4x4 projective; the returned
+        /// affine matrix is then only its linearisation, see <see cref="ParseTransformFull"/>.
+        /// </remarks>
+        public static Matrix3x2 ParseTransform(string transformValue, string transformOriginValue, CssBox box) =>
+            ParseTransformFull(transformValue, transformOriginValue, box).Affine;
+
+        /// <summary>
+        /// <see cref="ParseTransform"/>, plus the full 4x4 (origin baked in, box-local like the affine matrix) the affine matrix was
+        /// projected from - null when there is no transform. A chain containing <c>perspective()</c>, or one a <c>perspective</c> on the
+        /// parent will act on, is not affine once projected onto the box's plane, and the 4x4 is what the raster backend warps with; the
+        /// affine matrix is then only the linearisation around the transform origin.
+        /// </summary>
+        public static (Matrix3x2 Affine, Matrix4x4? Final4) ParseTransformFull(string transformValue, string transformOriginValue, CssBox box)
+        {
+            var built = BuildFinal4(transformValue, transformOriginValue, box);
+            if (built is not { } b)
+                return (Matrix3x2.Identity, null);
+
+            var epsilonX = Math.Max(ReferenceWidth(box) / 2, 1);
+            var epsilonY = Math.Max(ReferenceHeight(box) / 2, 1);
+            return (ProjectTo2D(b.Final4, b.Ox, b.Oy, epsilonX, epsilonY), b.Final4);
+        }
+
+        private readonly record struct Final4Result(Matrix4x4 Final4, double Ox, double Oy);
+
+        /// <summary>
+        /// Shared core of transform parsing: tokenizes, composes the per-function 4x4 matrices (see
+        /// <see cref="BuildFunctionMatrix"/>) in CSS's last-written-applied-first order, and wraps the result
+        /// around the box-local transform-origin. Returns null for "none"/empty/unparsable input.
+        /// </summary>
+        private static Final4Result? BuildFinal4(string transformValue, string transformOriginValue, CssBox box)
+        {
+            if (ComposeTransformFunctions(transformValue, box) is not { } combined)
+                return null;
+
+            // Origin is resolved relative to the box's own top-left corner treated as local (0, 0).
+            // This matrix is cached and computed once (see CssBox.ActualTransformMatrix),
+            // so it must stay position-independent - the box's actual page position can vary across
+            // repeated paint passes (e.g. pagination) and is re-applied at paint time instead, via
+            // Matrix3x2Extensions.RebaseOrigin.
+            var (ox, oy, oz) = ParseTransformOrigin(transformOriginValue, box);
+
+            var final4 =
+                Matrix4x4.CreateTranslation((float)-ox, (float)-oy, (float)-oz) *
+                combined *
+                Matrix4x4.CreateTranslation((float)ox, (float)oy, (float)oz);
+
+            return new Final4Result(final4, ox, oy);
+        }
+
+        /// <summary>
+        /// The single 4x4 matrix a <c>transform</c> value composes to (no origin applied), in the layout unit; null for
+        /// "none"/empty/unparsable input or a list with no function this renderer implements. A percentage argument resolves
+        /// against the box's size, so a caller that runs before layout must not pass one.
+        /// </summary>
+        internal static Matrix4x4? ComposeTransformFunctions(string transformValue, CssBox box)
+        {
+            if (string.IsNullOrWhiteSpace(transformValue) ||
+                string.Equals(transformValue.Trim(), Keywords.None, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            // ToList<Token>() with the explicit type argument, not the bare .ToList() - the latter
+            // resolves to ValueExtensions.ToList(this IEnumerable<Token>) (a comma-splitting helper
+            // returning List<List<Token>>), which shadows System.Linq's for this exact parameter type.
+            List<Token> functionTokens;
+            try
+            {
+                using var pooledTokens = GetCssTokensPooled(transformValue);
+                List<Token> tokens = pooledTokens;
+                functionTokens = tokens.Where(t => t.Type == TokenType.Function).ToList<Token>();
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (functionTokens.Count == 0)
+                return null;
+
+            var combined = Matrix4x4.Identity;
+            var hasAny = false;
+
+            foreach (var funcToken in functionTokens)
+            {
+                Matrix4x4? functionMatrix;
+                try
+                {
+                    functionMatrix = BuildFunctionMatrix(funcToken, box);
+                }
+                catch
+                {
+                    functionMatrix = null;
+                }
+
+                if (functionMatrix is not { } m)
+                    continue;
+
+                // Last-written function is applied first (innermost); first-written applied last (outermost).
+                combined = m * combined;
+                hasAny = true;
+            }
+
+            return hasAny ? combined : null;
+        }
+
+        /// <summary>
+        /// Builds the 4x4 matrix for a single CSS transform function. Returns null for unrecognized functions
+        /// (which contribute identity - i.e. are silently skipped rather than invalidating the whole declaration).
+        /// </summary>
+        private static Matrix4x4? BuildFunctionMatrix(Token funcToken, CssBox box)
+        {
+            var name = funcToken.Data;
+            var args = funcToken.ArgumentTokens.ToList();
+
+            double LengthArg(int index, double hundredPercent) =>
+                index < args.Count ? ParseLength(SingleTokenText(args[index]), hundredPercent, box) : 0;
+
+            float NumberArg(int index)
+            {
+                if (index >= args.Count) return 0f;
+
+                var direct = args[index].ToSingle();
+                if (direct.HasValue) return direct.Value;
+
+                // A calc()-family argument is a Function-typed token, not a Number-typed one, so
+                // ToSingle() above can't see it - fall back to evaluating it directly. hundredPercent is
+                // a don't-care here (1) since a Number-category calc() can never contain a percentage leaf.
+                if (args[index] is [{ Type: TokenType.Function } fn] && CalcParser.IsCalcFamily(fn.Data))
+                {
+                    var node = CalcParser.Parse(fn);
+                    var context = new CalcContext(1, box.GetEmHeight(), box.GetRemHeight(), false, fonts: box.DerivedStyle);
+                    var value = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
+                    return (float?)value ?? 0f;
+                }
+
+                return 0f;
+            }
+
+            // A percentage in a scale function is a number (CSS Transforms 2): scale(50%) is scale(0.5).
+            float ScaleArg(int index) =>
+                index < args.Count && args[index] is [{ Type: TokenType.Percentage } percent] ? percent.Value / 100f : NumberArg(index);
+
+            float AngleArg(int index) =>
+                index < args.Count ? (args[index].ToAngle()?.ToRadian() ?? 0f) : 0f;
+
+            if (Named(name, FunctionNames.Translate))
+            {
+                var tx = LengthArg(0, ReferenceWidth(box));
+                var ty = args.Count > 1 ? LengthArg(1, ReferenceHeight(box)) : 0;
+                return Matrix4x4.CreateTranslation((float)tx, (float)ty, 0);
+            }
+            if (Named(name, FunctionNames.TranslateX))
+                return Matrix4x4.CreateTranslation((float)LengthArg(0, ReferenceWidth(box)), 0, 0);
+            if (Named(name, FunctionNames.TranslateY))
+                return Matrix4x4.CreateTranslation(0, (float)LengthArg(0, ReferenceHeight(box)), 0);
+            if (Named(name, FunctionNames.TranslateZ))
+                return Matrix4x4.CreateTranslation(0, 0, (float)LengthArg(0, 0));
+            if (Named(name, FunctionNames.Translate3d))
+            {
+                var tx = LengthArg(0, ReferenceWidth(box));
+                var ty = LengthArg(1, ReferenceHeight(box));
+                var tz = LengthArg(2, 0);
+                return Matrix4x4.CreateTranslation((float)tx, (float)ty, (float)tz);
+            }
+
+            if (Named(name, FunctionNames.Scale))
+            {
+                var sx = ScaleArg(0);
+                var sy = args.Count > 1 ? ScaleArg(1) : sx;
+                return Matrix4x4.CreateScale(sx, sy, 1);
+            }
+            if (Named(name, FunctionNames.ScaleX))
+                return Matrix4x4.CreateScale(ScaleArg(0), 1, 1);
+            if (Named(name, FunctionNames.ScaleY))
+                return Matrix4x4.CreateScale(1, ScaleArg(0), 1);
+            if (Named(name, FunctionNames.ScaleZ))
+                return Matrix4x4.CreateScale(1, 1, ScaleArg(0));
+            if (Named(name, FunctionNames.Scale3d))
+                return Matrix4x4.CreateScale(ScaleArg(0), ScaleArg(1), ScaleArg(2));
+
+            if (Named(name, FunctionNames.Rotate) || Named(name, FunctionNames.RotateZ))
+                return Matrix4x4.CreateRotationZ(AngleArg(0));
+            if (Named(name, FunctionNames.RotateX))
+                return Matrix4x4.CreateRotationX(AngleArg(0));
+            if (Named(name, FunctionNames.RotateY))
+                return Matrix4x4.CreateRotationY(AngleArg(0));
+            if (Named(name, FunctionNames.Rotate3d))
+            {
+                var axis = new Vector3(NumberArg(0), NumberArg(1), NumberArg(2));
+                if (axis.LengthSquared() < 1e-12f)
+                    return Matrix4x4.Identity;
+                return Matrix4x4.CreateFromAxisAngle(Vector3.Normalize(axis), AngleArg(3));
+            }
+
+            if (Named(name, FunctionNames.SkewX))
+                return new Matrix4x4(1, 0, 0, 0, MathF.Tan(AngleArg(0)), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+            if (Named(name, FunctionNames.SkewY))
+                return new Matrix4x4(1, MathF.Tan(AngleArg(0)), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+            if (Named(name, FunctionNames.Skew))
+            {
+                var ax = AngleArg(0);
+                var ay = args.Count > 1 ? AngleArg(1) : 0f;
+                return new Matrix4x4(1, MathF.Tan(ay), 0, 0, MathF.Tan(ax), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+            }
+
+            if (Named(name, FunctionNames.Matrix))
+            {
+                if (args.Count < 6) return null;
+                float a = NumberArg(0), b = NumberArg(1), c = NumberArg(2),
+                      d = NumberArg(3), e = NumberArg(4), f = NumberArg(5);
+                return PixelMatrixToPoints(new Matrix4x4(
+                    a, b, 0, 0,
+                    c, d, 0, 0,
+                    0, 0, 1, 0,
+                    e, f, 0, 1));
+            }
+            if (Named(name, FunctionNames.Matrix3d))
+            {
+                if (args.Count < 16) return null;
+                var v = new float[16];
+                for (var i = 0; i < 16; i++) v[i] = NumberArg(i);
+                // CSS lists matrix3d() arguments column-major; System.Numerics.Matrix4x4 is row-major
+                // with translation in row 4. These two conventions are transposes of each other, so
+                // reading the 16 source arguments straight into the row-major constructor (in order)
+                // yields the mathematically correct matrix - verified against translate3d() equivalence.
+                return PixelMatrixToPoints(new Matrix4x4(
+                    v[0], v[1], v[2], v[3],
+                    v[4], v[5], v[6], v[7],
+                    v[8], v[9], v[10], v[11],
+                    v[12], v[13], v[14], v[15]));
+            }
+
+            // perspective(<length> | none): the CSS Transforms 2 matrix that divides by 1 - z/d. A non-positive length is invalid there and
+            // contributes nothing, like none.
+            if (Named(name, FunctionNames.Perspective))
+            {
+                if (args.Count < 1 || Named(SingleTokenText(args[0]).AsSpan(), Keywords.None))
+                    return null;
+
+                var distance = LengthArg(0, 0);
+                if (!(distance > 0))
+                    return null;
+
+                var perspective = Matrix4x4.Identity;
+                perspective.M34 = (float)(-1.0 / Math.Max(distance, Length.PointsPerPx)); // under one pixel is one pixel (section 12.2)
+                return perspective;
+            }
+
+            // Unrecognized / unsupported (future functions) -> identity, contributes nothing.
+            return null;
+        }
+
+        /// <summary>
+        /// Re-expresses a matrix whose lengths are CSS pixels (the raw numbers of <c>matrix()</c>/<c>matrix3d()</c>) in the
+        /// layout unit, the point. With <c>S = scale(pt/px)</c> mapping pixel coordinates to point coordinates, a point's
+        /// transform is <c>S⁻¹ · M · S</c> (row-vector convention): the translation (a length) is multiplied by pt/px, the
+        /// perspective terms (<c>w' = x*m14 + y*m24 + z*m34 + 1</c>, a number per length) are divided by it, and the unitless
+        /// linear part is unchanged - which is what keeps <c>matrix3d(..., 0,0,-1/300,1)</c> identical to <c>perspective(300px)</c>.
+        /// </summary>
+        private static Matrix4x4 PixelMatrixToPoints(Matrix4x4 matrixInPixels)
+        {
+            const float pointsPerPx = (float)Length.PointsPerPx;
+            return Matrix4x4.CreateScale(1f / pointsPerPx) * matrixInPixels * Matrix4x4.CreateScale(pointsPerPx);
+        }
+
+        private static bool Named(ReadOnlySpan<char> data, string functionName) =>
+            data.Equals(functionName, StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsRecognizedTransformFunctionName(ReadOnlySpan<char> name) =>
+            Named(name, FunctionNames.Translate) || Named(name, FunctionNames.TranslateX) || Named(name, FunctionNames.TranslateY) ||
+            Named(name, FunctionNames.TranslateZ) || Named(name, FunctionNames.Translate3d) ||
+            Named(name, FunctionNames.Scale) || Named(name, FunctionNames.ScaleX) || Named(name, FunctionNames.ScaleY) ||
+            Named(name, FunctionNames.ScaleZ) || Named(name, FunctionNames.Scale3d) ||
+            Named(name, FunctionNames.Rotate) || Named(name, FunctionNames.RotateX) || Named(name, FunctionNames.RotateY) ||
+            Named(name, FunctionNames.RotateZ) || Named(name, FunctionNames.Rotate3d) ||
+            Named(name, FunctionNames.SkewX) || Named(name, FunctionNames.SkewY) || Named(name, FunctionNames.Skew) ||
+            Named(name, FunctionNames.Matrix) || Named(name, FunctionNames.Matrix3d) || Named(name, FunctionNames.Perspective);
+
+        /// <summary>
+        /// Whether every function in a <c>transform</c> value is one <see cref="BuildFunctionMatrix"/>
+        /// actually implements - the real paint-time support surface, not the broader CSS Transforms
+        /// grammar a generic CSS-OM parser would accept. <c>perspective()</c>, for example, parses as
+        /// valid CSS syntax but paint silently drops it (contributes identity, see
+        /// <see cref="BuildFunctionMatrix"/>'s final fallback) - a value that is accepted but never
+        /// actually honored, which is exactly what an @supports oracle must not report as supported.
+        /// Used by <c>CssPropertyRegistry</c>'s <c>cssDataType: "transform"</c> validator.
+        /// </summary>
+        public static bool IsValidTransformValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), Keywords.None, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            try
+            {
+                using var pooledTokens = GetCssTokensPooled(value);
+                List<Token> tokens = pooledTokens;
+                return tokens.Count > 0 && tokens.All(t => t is { Type: TokenType.Function } ft && IsRecognizedTransformFunctionName(ft.Data));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Syntactically-permissive transform-list check for real dispatch (cssDataType "transform-list"),
+        /// matching the exact accept/reject set of the real <c>Converters.TransformConverter.Many()</c>
+        /// grammar today (matrix/matrix3d, translate family, scale family, rotate family, skew family,
+        /// and - unlike <see cref="IsRecognizedTransformFunctionName"/>'s paint-support-only list -
+        /// <c>perspective</c>, which is a real, if paint-unimplemented, member of that grammar) via manual
+        /// char scanning instead of a List&lt;Token&gt; walk. See the accepted-gap file on why real
+        /// dispatch must accept an unimplemented-at-paint-time function (perspective()) mixed with
+        /// implemented ones - <c>BuildFunctionMatrix</c> already treats an unrecognized function as
+        /// contributing identity rather than failing the whole value.
+        /// </summary>
+        /// <remarks>
+        /// Does NOT validate each function's own argument grammar (that's the deliberate "permissive"
+        /// part) - an argument-shape mismatch inside a recognized function is caught defensively by
+        /// <see cref="BuildFunctionMatrix"/> at paint time instead, which already treats it as a no-op
+        /// rather than throwing, so being permissive about argument shape here doesn't newly break
+        /// anything paint wasn't already tolerating. Concretely: "translate()" (missing its required
+        /// argument) is accepted here but rejected by the real per-function grammar
+        /// (TranslateTransformConverter's LengthOrPercentConverter.Required()) - safe because
+        /// BuildFunctionMatrix's LengthArg/AngleArg helpers already default a missing argument to 0,
+        /// rendering it as an identity transform. See
+        /// CssValueParserIsSyntacticallyValidTransformListTests.ArgumentShapeMismatch_IsAcceptedByDesign_UnlikeTheRealGrammar
+        /// for this documented as an explicit, deliberate divergence rather than a silent one.
+        /// </remarks>
+        /// <remarks>
+        /// No separator is required between two functions ("translate(10px)scale(2)" is accepted, not
+        /// just "translate(10px) scale(2)") - verified empirically against the real declaration parser,
+        /// which accepts both, because <c>ValueExtensions.ToItems()</c> (behind <c>.Many()</c>) treats
+        /// every Function-typed token as its own item boundary regardless of literal whitespace. Genuine
+        /// junk between functions (e.g. "translate(10px)!scale(2)") is still rejected: the next
+        /// identifier scan simply fails to consume any characters at that position.
+        /// </remarks>
+        public static bool IsSyntacticallyValidTransformList(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var s = value.Trim();
+            if (string.Equals(s, Keywords.None, StringComparison.OrdinalIgnoreCase)) return true;
+
+            var i = 0;
+            var sawFunction = false;
+            while (i < s.Length)
+            {
+                while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
+                if (i >= s.Length) break;
+
+                var identStart = i;
+                while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] is '-' or '_')) i++;
+                if (i == identStart || i >= s.Length || s[i] != '(') return false;
+                if (!IsRecognizedTransformFunctionName(s.Substring(identStart, i - identStart)) &&
+                    !Named(s.Substring(identStart, i - identStart), FunctionNames.Perspective))
+                {
+                    return false;
+                }
+
+                i++; // consume '('
+                var depth = 1;
+                while (i < s.Length && depth > 0)
+                {
+                    if (s[i] == '(') depth++;
+                    else if (s[i] == ')') depth--;
+                    else if (char.IsControl(s[i])) return false;
+                    i++;
+                }
+                // Reaching end-of-string with depth still > 0 (an unclosed function) is NOT rejected:
+                // CSS Syntax Level 3's tokenizer error recovery closes an unterminated function at EOF,
+                // so "translate(10px" (missing the final ')') is real, already-accepted input today -
+                // verified against the real cssom round trip (AgreesWithRealCssOmRoundTrip). The loop
+                // above already stops exactly at EOF in that case, so there's nothing further to check.
+
+                sawFunction = true;
+            }
+
+            return sawFunction;
+        }
+
+        /// <summary>
+        /// Validates a <c>page</c> (page-name) value: <c>auto | &amp;lt;custom-ident&amp;gt;</c> (CSS Paged
+        /// Media 3 §4.2). <c>page</c> has no real <c>PropertyFactory</c> registration at all, so its
+        /// former "cssom" clause was unconditionally true (an unregistered name short-circuits that
+        /// clause's left-hand check without ever tokenizing) - a real, deliberate narrowing from "accept
+        /// any string" to "accept auto or a syntactically valid identifier". Does not implement every
+        /// wrinkle of CSS Syntax Level 3's ident-token grammar (escapes, non-ASCII identifiers) - a
+        /// reasonable approximation for author-chosen page names, matching the level of fidelity
+        /// <c>ContainerNameProperty.ToContainerNameList</c> already uses for a similar bare-identifier
+        /// shape elsewhere in this codebase.
+        /// </summary>
+        public static bool IsValidPageName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            if (value.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return true;
+
+            var i = 0;
+            if (value[0] == '-')
+            {
+                i = 1;
+                if (value.Length == 1) return false; // a bare "-" is not a valid custom-ident
+            }
+
+            if (!(char.IsLetter(value[i]) || value[i] == '_')) return false;
+
+            for (i++; i < value.Length; i++)
+            {
+                if (!(char.IsLetterOrDigit(value[i]) || value[i] is '-' or '_')) return false;
+            }
+
+            return true;
+        }
+
+        private static string SingleTokenText(List<Token> group) =>
+            group.Count > 0 ? group[0].ToValue() : "0";
+
+        /// <summary>
+        /// The reference box a <c>transform</c> resolves its percentages against: the box's border box. An inline-flowed
+        /// box (an <c>inline-block</c> or replaced element sitting in a line) never has its <c>Size</c> assigned, so
+        /// <c>ActualWidth</c>/<c>ActualHeight</c> read as its padding and border only; its border box is the rectangle
+        /// the line gave it.
+        /// </summary>
+        private static double ReferenceWidth(CssBox box) =>
+            box.IsInline && box.RectangleCount > 0 ? ReferenceBox(box).Width : box.ActualWidth;
+
+        private static double ReferenceHeight(CssBox box) =>
+            box.IsInline && box.RectangleCount > 0 ? ReferenceBox(box).Height : box.ActualHeight;
+
+        private static Rect ReferenceBox(CssBox box) =>
+            RenderUtils.ClipSourceBoundsOf(box.Bounds, isInline: true, box.RectanglesView);
+
+        /// <summary>
+        /// Parses transform-origin: 1-3 values (X, Y, optional Z). X/Y accept length/percentage/keywords
+        /// (resolved against the box's own border-box size), Z is a plain length (no percentage), default 0.
+        /// </summary>
+        internal static (double X, double Y, double Z) ParseTransformOriginPublic(string value, CssBox box) => ParseTransformOrigin(value, box);
+
+        private static (double X, double Y, double Z) ParseTransformOrigin(string value, CssBox box)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return (ReferenceWidth(box) / 2, ReferenceHeight(box) / 2, 0);
+
+            var parts = value.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
+
+            double ResolveX(string token) => token switch
+            {
+                "left" => 0,
+                "right" => ReferenceWidth(box),
+                "center" => ReferenceWidth(box) / 2,
+                "top" or "bottom" => ReferenceWidth(box) / 2, // keyword belongs to the other axis; fall back to center
+                _ => ParseLength(token, ReferenceWidth(box), box)
+            };
+
+            double ResolveY(string token) => token switch
+            {
+                "top" => 0,
+                "bottom" => ReferenceHeight(box),
+                "center" => ReferenceHeight(box) / 2,
+                "left" or "right" => ReferenceHeight(box) / 2,
+                _ => ParseLength(token, ReferenceHeight(box), box)
+            };
+
+            var ox = ReferenceWidth(box) / 2;
+            var oy = ReferenceHeight(box) / 2;
+            var oz = 0d;
+
+            if (parts.Length >= 1) ox = ResolveX(parts[0].ToLowerInvariant());
+            if (parts.Length >= 2) oy = ResolveY(parts[1].ToLowerInvariant());
+            if (parts.Length >= 3) oz = ParseLength(parts[2], 0, box);
+
+            // Handle the "top"/"bottom" (or "left"/"right") appearing as the *first* token, e.g. "top center".
+            if (parts.Length >= 1)
+            {
+                var first = parts[0].ToLowerInvariant();
+                if (first is "top" or "bottom")
+                {
+                    oy = first == "top" ? 0 : ReferenceHeight(box);
+                    ox = ReferenceWidth(box) / 2;
+                    if (parts.Length >= 2) ox = ResolveX(parts[1].ToLowerInvariant());
+                }
+            }
+
+            return (ox, oy, oz);
+        }
+
+        /// <summary>
+        /// Projects a 4x4 transform (applied to the box's own z=0 plane) down to a 2D affine Matrix3x2,
+        /// via numeric differentiation around the transform-origin point (Ox, Oy). This is exact when
+        /// the projection is linear (i.e. no perspective() in the chain - w stays constant across the
+        /// plane, so the secant used here equals the true tangent everywhere), and a local approximation
+        /// otherwise.
+        /// </summary>
+        /// <param name="m">The 4x4 transform to project.</param>
+        /// <param name="ox">X coordinate of the transform-origin point the projection is taken around.</param>
+        /// <param name="oy">Y coordinate of the transform-origin point the projection is taken around.</param>
+        /// <param name="epsilonX">
+        /// Probe distance along X used to estimate the derivative there - scaled to the box's own half-width
+        /// (rather than a small constant) so that, when perspective() is involved, the fitted line reflects
+        /// the foreshortening actually spanned by the box's own extent instead of an infinitesimal
+        /// neighbourhood around the origin (which would barely differ from the no-perspective case for
+        /// typical box sizes and perspective distances, making perspective() look like a no-op).
+        /// </param>
+        /// <param name="epsilonY">Probe distance along Y used to estimate the derivative there, analogous to <paramref name="epsilonX"/>.</param>
+        private static Matrix3x2 ProjectTo2D(Matrix4x4 m, double ox, double oy, double epsilonX, double epsilonY)
+        {
+            (double X, double Y)? Project(double x, double y)
+            {
+                var p = Vector4.Transform(new Vector4((float)x, (float)y, 0, 1), m);
+                if (MathF.Abs(p.W) < 1e-6f)
+                    return null;
+                return (p.X / p.W, p.Y / p.W);
+            }
+
+            var p0 = Project(ox, oy);
+            if (p0 is not { } origin)
+                return Matrix3x2.Identity;
+
+            var px = Project(ox + epsilonX, oy);
+            var py = Project(ox, oy + epsilonY);
+            if (px is not { } pxv || py is not { } pyv)
+                return Matrix3x2.Identity;
+
+            var m11 = (pxv.X - origin.X) / epsilonX;
+            var m12 = (pxv.Y - origin.Y) / epsilonX;
+            var m21 = (pyv.X - origin.X) / epsilonY;
+            var m22 = (pyv.Y - origin.Y) / epsilonY;
+
+            var offsetX = origin.X - (ox * m11 + oy * m21);
+            var offsetY = origin.Y - (ox * m12 + oy * m22);
+
+            return new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, (float)offsetX, (float)offsetY);
+        }
+
+        private static bool IsCurrentColorText(string colorText) =>
+            colorText.Trim().Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase);
+
+        private ParsedLinearGradient? ParseLinearGradient(string value)
+        {
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
+                    (t.Data.Isi(FunctionNames.LinearGradient) ||
+                     t.Data.Isi(FunctionNames.RepeatingLinearGradient)));
+            }
+
+            if (funcToken is not { } func)
+                return null;
+
+            bool isRepeating = func.Data.Isi(FunctionNames.RepeatingLinearGradient);
+
+            var args = func.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            double angleRad = Math.PI; // default: 180deg = top to bottom
+            int stopOffset = 0;
+
+            var firstGroup = args[0];
+            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariantString()).ToList();
+
+            // Phase D: detect "in <colorspace> [<hue-method>]"
+            var (linearColorSpace, linearHueMethod, nextIdentIdx) = TryParseInColorSpace(firstIdents);
+            if (nextIdentIdx >= 0)
+                stopOffset = 1; // first group is a modifier group
+
+            // Direction keyword or angle. The direction and the "in <color-interpolation-method>" clause
+            // combine with || (CSS Images 4), so they may appear in either order in the first group - take
+            // the direction from the group with the "in ..." slice removed rather than assuming it trails
+            // the clause (otherwise "to right in oklab" would drop its direction and fall back to 180deg).
+            IReadOnlyList<Token> directionTokens = firstGroup;
+            if (nextIdentIdx >= 0 &&
+                ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(firstGroup, out var directionRemainder, out _))
+                directionTokens = directionRemainder;
+
+            var dirIdents = directionTokens.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariantString()).ToList();
+            if (dirIdents.Count > 0 && dirIdents[0] == "to")
+            {
+                // keyword direction: "to right", "to bottom left", etc.
+                angleRad = SideKeywordsToAngleRad(dirIdents.Skip(1).ToList());
+                stopOffset = 1;
+            }
+            else
+            {
+                var angle = directionTokens.ToAngle();
+                if (angle.HasValue)
+                {
+                    angleRad = angle.Value.ToRadian();
+                    stopOffset = 1;
+                }
+                // else no angle token, stopOffset stays 0 (unless set by "in" detection above)
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
+            var currentColorStops = new List<int>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0)
+                    continue;
+
+                Length? position1 = null;
+                Length? position2 = null;
+                int colorItemCount = items.Count;
+
+                // Last item may be a length/percent position
+                var lastItem = items[items.Count - 1];
+                var pv = lastItem.ToDistance();
+                if (pv.HasValue)
+                {
+                    position1 = pv.Value;
+                    colorItemCount--;
+
+                    // A2: check second-to-last for two-position shorthand (e.g. "red 0 50%")
+                    if (colorItemCount > 0)
+                    {
+                        var pv2 = items[colorItemCount - 1].ToDistance();
+                        if (pv2.HasValue)
+                        {
+                            position2 = position1;          // last position is the second one
+                            position1 = pv2.Value;          // second-to-last is the first one
+                            colorItemCount--;
+                        }
+                    }
+                }
+
+                if (colorItemCount == 0)
+                {
+                    // A3: hint — bare position with no color
+                    if (position1.HasValue && !position2.HasValue)
+                        stops.Add((null, position1, IsHint: true));
+                    continue;
+                }
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText))
+                    continue;
+
+                // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
+                // takes that color there (CssImagePainter.ResolveCurrentColorStops).
+                var isCurrentColor = IsCurrentColorText(colorText);
+                var color = isCurrentColor ? default : GetActualColor(colorText);
+                if (isCurrentColor) currentColorStops.Add(stops.Count);
+                stops.Add((color, position1, IsHint: false));
+                if (position2.HasValue)
+                {
+                    if (isCurrentColor) currentColorStops.Add(stops.Count);
+                    stops.Add((color, position2, IsHint: false));
+                }
+            }
+
+            if (stops.Count(s => !s.IsHint) < 2)
+                return null;
+
+            return new ParsedLinearGradient
+            {
+                AngleRad = angleRad,
+                Stops = stops.ToArray(),
+                CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
+                IsRepeating = isRepeating,
+                ColorSpace = linearColorSpace,
+                HueMethod = linearHueMethod,
+            };
+        }
+
+        private ParsedRadialGradient? ParseRadialGradient(string value)
+        {
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
+                    (t.Data.Isi(FunctionNames.RadialGradient) ||
+                     t.Data.Isi(FunctionNames.RepeatingRadialGradient)));
+            }
+
+            if (funcToken is not { } func)
+                return null;
+
+            bool isRepeating = func.Data.Isi(FunctionNames.RepeatingRadialGradient);
+
+            var args = func.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            bool isCircle = false;
+            double centerX = 0.5, centerY = 0.5;
+            int stopOffset = 0;
+            Length? explicitRadiusX = null, explicitRadiusY = null;
+
+            var firstGroup = args[0];
+            var firstGroupItems = firstGroup.ToItems();
+            var firstIdents = firstGroupItems.SelectMany(i => i)
+                                            .Where(t => t.Type == TokenType.Ident)
+                                            .Select(t => t.Data.ToLowerInvariantString())
+                                            .ToList();
+
+            // Phase D: detect "in <colorspace> [<hue-method>]"
+            var (radialColorSpace, radialHueMethod, _) = TryParseInColorSpace(firstIdents);
+
+            // A4: scan items before "at" for explicit length sizes (e.g. "20px" or "20px 30px")
+            // Guard: stop collecting once we see an ident that is not a known gradient modifier
+            // keyword, because it must be a CSS color name (e.g. "red" in "red 0 8px" followed
+            // by stop positions that would otherwise be misread as explicit radii).
+            static bool IsRadialModifierIdent(ReadOnlySpan<char> id) =>
+                id.Isi("circle") ||
+                id.Isi("ellipse") ||
+                id.Isi("in") ||
+                id.Isi("closest-side") ||
+                id.Isi("farthest-corner") ||
+                id.Isi("closest-corner") ||
+                id.Isi("farthest-side") ||
+                id.Isi("srgb") ||
+                id.Isi("srgb-linear") ||
+                id.Isi("oklab") ||
+                id.Isi("oklch") ||
+                id.Isi("lab") ||
+                id.Isi("lch") ||
+                id.Isi("hsl") ||
+                id.Isi("hwb") ||
+                id.Isi("display-p3") ||
+                id.Isi("xyz") ||
+                id.Isi("xyz-d50") ||
+                id.Isi("xyz-d65") ||
+                id.Isi("shorter") ||
+                id.Isi("longer") ||
+                id.Isi("increasing") ||
+                id.Isi("decreasing") ||
+                id.Isi("hue");
+
+            var explicitSizeLengths = new List<Length>();
+            bool seenNonModifierIdent = false;
+            foreach (var item in firstGroupItems)
+            {
+                if (item.Count == 1 && item[0].Type == TokenType.Ident)
+                {
+                    var id = item[0].Data;
+                    if (id.Isi("at")) break;
+                    if (!IsRadialModifierIdent(id)) seenNonModifierIdent = true;
+                    continue;
+                }
+                // A CSS color function (rgb(), rgba(), hsl(), etc.) means this group is a color stop.
+                if (item.Count == 1 && item[0].Type == TokenType.Function)
+                {
+                    seenNonModifierIdent = true;
+                    continue;
+                }
+                if (!seenNonModifierIdent)
+                {
+                    var dist = item.ToDistance();
+                    if (dist.HasValue) explicitSizeLengths.Add(dist.Value);
+                }
+            }
+
+            bool isShapeOrPositionGroup =
+                firstIdents.Contains("in") ||
+                firstIdents.Contains("circle") || firstIdents.Contains("ellipse") ||
+                firstIdents.Contains("at") || firstIdents.Contains("closest-side") ||
+                firstIdents.Contains("farthest-corner") || firstIdents.Contains("closest-corner") ||
+                firstIdents.Contains("farthest-side") || explicitSizeLengths.Count > 0;
+
+            var sizeKeyword = RadialGradientSize.FarthestCorner;
+
+            if (isShapeOrPositionGroup)
+            {
+                stopOffset = 1;
+                isCircle = firstIdents.Contains("circle");
+
+                if (firstIdents.Contains("closest-corner")) sizeKeyword = RadialGradientSize.ClosestCorner;
+                else if (firstIdents.Contains("farthest-side")) sizeKeyword = RadialGradientSize.FarthestSide;
+                else if (firstIdents.Contains("closest-side")) sizeKeyword = RadialGradientSize.ClosestSide;
+
+                // A4: store explicit size lengths
+                if (explicitSizeLengths.Count >= 1)
+                {
+                    explicitRadiusX = explicitSizeLengths[0];
+                    explicitRadiusY = explicitSizeLengths.Count >= 2 ? explicitSizeLengths[1] : explicitSizeLengths[0];
+                }
+
+                if (firstIdents.Contains("at"))
+                {
+                    bool inPosition = false;
+                    int posCount = 0;
+
+                    foreach (var item in firstGroup.ToItems())
+                    {
+                        if (item.Count == 1 && item[0].Type == TokenType.Ident)
+                        {
+                            string ident = item[0].Data.ToLowerInvariantString();
+                            if (!inPosition)
+                            {
+                                if (ident == "at") inPosition = true;
+                                continue;
+                            }
+                            double pos = ident switch
+                            {
+                                "left" => 0.0,
+                                "right" => 1.0,
+                                "top" => 0.0,
+                                "bottom" => 1.0,
+                                "center" => 0.5,
+                                _ => 0.5
+                            };
+                            if (posCount == 0) centerX = pos;
+                            else if (posCount == 1) centerY = pos;
+                            posCount++;
+                        }
+                        else if (inPosition)
+                        {
+                            var dist = item.ToDistance();
+                            if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
+                            {
+                                double pos = dist.Value.Value / 100.0;
+                                if (posCount == 0) centerX = pos;
+                                else if (posCount == 1) centerY = pos;
+                                posCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
+            var currentColorStops = new List<int>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0)
+                    continue;
+
+                Length? position1 = null;
+                Length? position2 = null;
+                int colorItemCount = items.Count;
+
+                var lastItem = items[items.Count - 1];
+                var pv = lastItem.ToDistance();
+                if (pv.HasValue)
+                {
+                    position1 = pv.Value;
+                    colorItemCount--;
+
+                    // A2: two-position shorthand
+                    if (colorItemCount > 0)
+                    {
+                        var pv2 = items[colorItemCount - 1].ToDistance();
+                        if (pv2.HasValue)
+                        {
+                            position2 = position1;
+                            position1 = pv2.Value;
+                            colorItemCount--;
+                        }
+                    }
+                }
+
+                if (colorItemCount == 0)
+                {
+                    // A3: hint
+                    if (position1.HasValue && !position2.HasValue)
+                        stops.Add((null, position1, IsHint: true));
+                    continue;
+                }
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText))
+                    continue;
+
+                // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
+                // takes that color there (CssImagePainter.ResolveCurrentColorStops).
+                var isCurrentColor = IsCurrentColorText(colorText);
+                var color = isCurrentColor ? default : GetActualColor(colorText);
+                if (isCurrentColor) currentColorStops.Add(stops.Count);
+                stops.Add((color, position1, IsHint: false));
+                if (position2.HasValue)
+                {
+                    if (isCurrentColor) currentColorStops.Add(stops.Count);
+                    stops.Add((color, position2, IsHint: false));
+                }
+            }
+
+            if (stops.Count(s => !s.IsHint) < 2)
+                return null;
+
+            return new ParsedRadialGradient
+            {
+                IsCircle = isCircle,
+                CenterX = centerX,
+                CenterY = centerY,
+                Size = sizeKeyword,
+                ExplicitRadiusX = explicitRadiusX,
+                ExplicitRadiusY = explicitRadiusY,
+                Stops = stops.ToArray(),
+                CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
+                IsRepeating = isRepeating,
+                ColorSpace = radialColorSpace,
+                HueMethod = radialHueMethod,
+            };
+        }
+
+        private ParsedConicGradient? ParseConicGradient(string value)
+        {
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
+                    (t.Data.Isi(FunctionNames.ConicGradient) ||
+                     t.Data.Isi(FunctionNames.RepeatingConicGradient)));
+            }
+
+            if (funcToken is not { } func)
+                return null;
+
+            bool isRepeating = func.Data.Isi(FunctionNames.RepeatingConicGradient);
+
+            var args = func.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            double fromAngleRad = 0.0;
+            double centerX = 0.5, centerY = 0.5;
+            int stopOffset = 0;
+
+            // First group: optionally "in <colorspace>", "from <angle>", and/or "at <x> <y>"
+            var firstGroup = args[0];
+            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident)
+                                        .Select(t => t.Data.ToLowerInvariantString()).ToList();
+
+            // Phase D: detect "in <colorspace> [<hue-method>]"
+            var (conicColorSpace, conicHueMethod, _) = TryParseInColorSpace(firstIdents);
+
+            bool hasFrom = firstIdents.Contains("from");
+            bool hasAt   = firstIdents.Contains("at");
+            bool hasIn   = firstIdents.Contains("in");
+
+            if (hasFrom || hasAt || hasIn)
+            {
+                stopOffset = 1;
+                var items = firstGroup.ToItems();
+                bool inFrom = false, inAt = false;
+                int atPosCount = 0;
+
+                foreach (var item in items)
+                {
+                    if (item.Count == 1 && item[0].Type == TokenType.Ident)
+                    {
+                        string kw = item[0].Data.ToLowerInvariantString();
+                        if (kw == "from") { inFrom = true; inAt = false; continue; }
+                        if (kw == "at")   { inAt   = true; inFrom = false; continue; }
+
+                        if (inAt)
+                        {
+                            double kp = kw switch { "left" => 0.0, "right" => 1.0, "top" => 0.0, "bottom" => 1.0, _ => 0.5 };
+                            if (atPosCount == 0) centerX = kp;
+                            else if (atPosCount == 1) centerY = kp;
+                            atPosCount++;
+                        }
+                        continue;
+                    }
+
+                    if (inFrom)
+                    {
+                        var ang = item.ToAngle();
+                        if (ang.HasValue) fromAngleRad = ang.Value.ToRadian();
+                        inFrom = false;
+                        continue;
+                    }
+
+                    if (inAt)
+                    {
+                        var dist = item.ToDistance();
+                        if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
+                        {
+                            double pos = dist.Value.Value / 100.0;
+                            if (atPosCount == 0) centerX = pos;
+                            else if (atPosCount == 1) centerY = pos;
+                            atPosCount++;
+                        }
+                    }
+                }
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(PaintColor? PaintColor, double? PositionRad, bool IsHint)>();
+            var currentColorStops = new List<int>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0) continue;
+
+                double? position1 = null, position2 = null;
+                int colorItemCount = items.Count;
+
+                // Last item may be an angle/percent position
+                var lastItem = items[colorItemCount - 1];
+                double? pv = TryParseConicAngle(lastItem);
+                if (pv.HasValue)
+                {
+                    position1 = pv.Value;
+                    colorItemCount--;
+
+                    // Two-position shorthand
+                    if (colorItemCount > 0)
+                    {
+                        double? pv2 = TryParseConicAngle(items[colorItemCount - 1]);
+                        if (pv2.HasValue)
+                        {
+                            position2 = position1;
+                            position1 = pv2.Value;
+                            colorItemCount--;
+                        }
+                    }
+                }
+
+                if (colorItemCount == 0)
+                {
+                    if (position1.HasValue && !position2.HasValue)
+                        stops.Add((null, position1, IsHint: true));
+                    continue;
+                }
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText)) continue;
+
+                // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
+                // takes that color there (CssImagePainter.ResolveCurrentColorStops).
+                var isCurrentColor = IsCurrentColorText(colorText);
+                var color = isCurrentColor ? default : GetActualColor(colorText);
+                if (isCurrentColor) currentColorStops.Add(stops.Count);
+                stops.Add((color, position1, IsHint: false));
+                if (position2.HasValue)
+                {
+                    if (isCurrentColor) currentColorStops.Add(stops.Count);
+                    stops.Add((color, position2, IsHint: false));
+                }
+            }
+
+            if (stops.Count(s => !s.IsHint) < 2)
+                return null;
+
+            return new ParsedConicGradient
+            {
+                FromAngleRad = fromAngleRad,
+                CenterX = centerX,
+                CenterY = centerY,
+                Stops = stops.ToArray(),
+                CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
+                IsRepeating = isRepeating,
+                ColorSpace = conicColorSpace,
+                HueMethod = conicHueMethod,
+            };
+        }
+
+        public CssImage? ParseImage(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            Token? urlToken;
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                urlToken = tokens.FirstOfTypeOrNull(TokenType.Url);
+                funcToken = tokens.FirstOfTypeOrNull(TokenType.Function);
+            }
+
+            if (urlToken is { } url)
+                return new CssImage.Url(url.Data.ToString());
+
+            if (funcToken is not { } func) return null;
+
+            var name = func.Data;
+            if (name.Equals(FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase))
+            {
+                var g = ParseLinearGradient(value);
+                return g != null ? new CssImage.LinearGradient(g) : null;
+            }
+
+            if (name.Equals(FunctionNames.RadialGradient, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase))
+            {
+                var g = ParseRadialGradient(value);
+                return g != null ? new CssImage.RadialGradient(g) : null;
+            }
+
+            if (name.Equals(FunctionNames.ConicGradient, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase))
+            {
+                var g = ParseConicGradient(value);
+                return g != null ? new CssImage.ConicGradient(g) : null;
+            }
+
+            return null;
+        }
+
+        public IReadOnlyList<CssImage>? ParseImages(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var result = new List<CssImage>();
+            foreach (var segment in SplitTopLevelCommas(value))
+            {
+                var image = ParseImage(segment.Trim());
+                if (image != null) result.Add(image);
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
+        internal static IEnumerable<string> SplitTopLevelCommas(string value)
+        {
+            int depth = 0, start = 0;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (c == ',' && depth == 0)
+                {
+                    yield return value.Substring(start, i - start);
+                    start = i + 1;
+                }
+            }
+            yield return value.Substring(start);
+        }
+
+        /// <summary>
+        /// Splits a string on top-level (paren-depth-zero) whitespace, e.g. for the two-value form of
+        /// border-*-radius or the gap shorthand. Needed because a calc()/min()/max()/clamp() value can
+        /// itself contain spaces (e.g. "calc(10px + 2px) 5px"), which a naive Split(' ') would corrupt.
+        /// </summary>
+        public static IEnumerable<string> SplitTopLevelWhitespace(string value)
+        {
+            int depth = 0, start = 0;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (char.IsWhiteSpace(c) && depth == 0)
+                {
+                    if (i > start) yield return value.Substring(start, i - start);
+                    start = i + 1;
+                }
+            }
+            if (start < value.Length) yield return value.Substring(start);
+        }
+
+        /// <summary>
+        /// Validates a <c>&amp;lt;length-percentage&amp;gt;{min,max}</c> value (border-*-radius) — or, with
+        /// <paramref name="allowPercentage"/> false, a <c>&amp;lt;length&amp;gt;{min,max}</c> value
+        /// (border-spacing) — without the CSS-OM tokenizer/Property round trip: splits on top-level
+        /// whitespace (<see cref="SplitTopLevelWhitespace"/>) and validates each component with the same
+        /// <see cref="IsValidLength"/> a plain "length" declaration uses (memoized by input string, and
+        /// itself really "length-or-percentage" via <c>ToDistance</c>, so a bare "50%" component already
+        /// passes when <paramref name="allowPercentage"/> is true with no extra handling here).
+        /// <paramref name="allowPercentage"/> false only rejects a component ending in a literal '%' — a
+        /// calc()-wrapped percentage (e.g. "calc(50% + 10px)") still passes via <see cref="IsValidLength"/>'s
+        /// own calc-family shortcut, which doesn't check the calc's result category. Pre-existing,
+        /// already-accepted looseness (the same "length" DataTypeKind every other property already has),
+        /// not introduced here — see <c>KeywordOrValueGrammar</c>'s own note on the same shortcut.
+        /// </summary>
+        public static bool IsValidLengthList(string value, int min, int max, bool allowPercentage)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+
+            var count = 0;
+            foreach (var component in SplitTopLevelWhitespace(value))
+            {
+                count++;
+                if (count > max) return false;
+                if (!allowPercentage && component.EndsWith('%')) return false;
+                if (!IsValidLength(component)) return false;
+            }
+
+            return count >= min;
+        }
+
+        /// <summary>
+        /// Validates a comma-separated list (CSS <c>&amp;lt;foo&amp;gt;#</c>), each segment 1..
+        /// <paramref name="maxPerSegment"/> space-separated keywords found in <paramref name="keywordMap"/>'s
+        /// keys, or a literal match against <paramref name="aliasKeywords"/> standing in for a whole segment
+        /// (background-repeat's repeat-x/repeat-y). Splits via <see cref="SplitTopLevelCommas"/>/
+        /// <see cref="SplitTopLevelWhitespace"/> instead of the CSS-OM tokenizer, and reuses the same Map.*
+        /// dictionary the real Layer A property already validates against (CLAUDE.md's "one parser" rule)
+        /// rather than a second, JSON-authored keyword list.
+        /// </summary>
+        public static bool IsValidCommaKeywordList<TValue>(string value, IReadOnlyDictionary<string, TValue> keywordMap,
+            int maxPerSegment = 1, IReadOnlyCollection<string>? aliasKeywords = null)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+
+            foreach (var rawSegment in SplitTopLevelCommas(value))
+            {
+                var segment = rawSegment.Trim();
+                if (segment.Length == 0) return false;
+
+                if (aliasKeywords is not null && aliasKeywords.Any(a => segment.Equals(a, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var wordCount = 0;
+                foreach (var word in SplitTopLevelWhitespace(segment))
+                {
+                    wordCount++;
+                    if (wordCount > maxPerSegment || !keywordMap.ContainsKey(word)) return false;
+                }
+                if (wordCount == 0) return false;
+            }
+
+            return true;
+        }
+
+        private static double? TryParseConicAngle(List<Token> item)
+        {
+            var angle = item.ToAngle();
+            if (angle.HasValue) return angle.Value.ToRadian();
+
+            var dist = item.ToDistance();
+            if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
+                return dist.Value.Value / 100.0 * (2.0 * Math.PI);
+
+            // A calc()-family expression as an angular stop position (e.g. `calc(1turn * 0.35)`), evaluated
+            // to radians. CalcEvaluator maps an angle leaf to radians and a number leaf to a unitless scalar,
+            // so `1turn * 0.35` → 0.35 turn; any percentage inside resolves against a full turn (100% = 2π),
+            // matching the plain-percentage branch above. This is what lets a Charts.css pie slice — whose
+            // every stop position is `calc(1turn * <value>)` — get its correct angular sweep.
+            if (item.Count == 1 && item[0] is { Type: TokenType.Function } function && CalcParser.IsCalcFamily(function.Data))
+            {
+                var node = CalcParser.Parse(function);
+                if (node is not null)
+                {
+                    var radians = CalcEvaluator.Evaluate(node, new CalcContext(2.0 * Math.PI, 0, 0));
+                    if (radians.HasValue) return radians.Value;
+                }
+            }
+
+            // In CSS, bare 0 is a valid zero value for any dimension including angles.
+            if (item.Count == 1 && item[0].Type == TokenType.Number && item[0].Value == 0f)
+                return 0.0;
+
+            return null;
+        }
+
+        private static GradientColorSpace ParseColorSpaceName(string name) => name switch
+        {
+            "srgb" => GradientColorSpace.Srgb,
+            "srgb-linear" => GradientColorSpace.SrgbLinear,
+            "display-p3" => GradientColorSpace.DisplayP3,
+            "lab" => GradientColorSpace.Lab,
+            "oklab" => GradientColorSpace.Oklab,
+            "xyz" or "xyz-d65" => GradientColorSpace.XyzD65,
+            "xyz-d50" => GradientColorSpace.XyzD50,
+            "hsl" => GradientColorSpace.Hsl,
+            "hwb" => GradientColorSpace.Hwb,
+            "lch" => GradientColorSpace.Lch,
+            "oklch" => GradientColorSpace.Oklch,
+            _ => GradientColorSpace.Srgb,
+        };
+
+        private static HueInterpolationMethod ParseHueMethod(List<string> idents, int startIdx)
+        {
+            for (int i = startIdx; i + 1 < idents.Count; i++)
+            {
+                if (idents[i + 1] == "hue")
+                    return idents[i] switch
+                    {
+                        "longer" => HueInterpolationMethod.Longer,
+                        "increasing" => HueInterpolationMethod.Increasing,
+                        "decreasing" => HueInterpolationMethod.Decreasing,
+                        _ => HueInterpolationMethod.Shorter,
+                    };
+            }
+            return HueInterpolationMethod.Shorter;
+        }
+
+        // Detects "in <colorspace> [<hue-method>]" in an ident list; returns (colorSpace, hueMethod)
+        // and the index of the first ident after the "in" clause (or -1 if "in" not found).
+        private static (GradientColorSpace ColorSpace, HueInterpolationMethod HueMethod, int NextIdx)
+            TryParseInColorSpace(List<string> idents)
+        {
+            int inIdx = idents.IndexOf("in");
+            if (inIdx < 0 || inIdx + 1 >= idents.Count ||
+                !ColorInterpolationMethodGrammar.IsColorSpace(idents[inIdx + 1]))
+                return (GradientColorSpace.Srgb, HueInterpolationMethod.Shorter, -1);
+
+            var cs = ParseColorSpaceName(idents[inIdx + 1]);
+            var hue = HueInterpolationMethod.Shorter;
+            int nextIdx = inIdx + 2;
+            if (ColorInterpolationMethodGrammar.IsPolarColorSpace(idents[inIdx + 1]))
+            {
+                hue = ParseHueMethod(idents, nextIdx);
+                // consume up to 2 extra idents for hue method ("shorter hue" etc.)
+                if (nextIdx + 1 < idents.Count && idents[nextIdx + 1] == "hue")
+                    nextIdx += 2;
+            }
+            return (cs, hue, nextIdx);
+        }
+
+        private static double SideKeywordsToAngleRad(List<string> sides)
+        {
+            bool hasTop = sides.Contains("top");
+            bool hasBottom = sides.Contains("bottom");
+            bool hasLeft = sides.Contains("left");
+            bool hasRight = sides.Contains("right");
+
+            if (hasTop && hasRight) return Math.PI / 4;        // 45deg
+            if (hasBottom && hasRight) return 3 * Math.PI / 4; // 135deg
+            if (hasBottom && hasLeft) return 5 * Math.PI / 4;  // 225deg
+            if (hasTop && hasLeft) return 7 * Math.PI / 4;     // 315deg
+            if (hasTop) return 0;                               // 0deg
+            if (hasRight) return Math.PI / 2;                   // 90deg
+            if (hasBottom) return Math.PI;                      // 180deg
+            if (hasLeft) return 3 * Math.PI / 2;               // 270deg
+
+            return Math.PI; // default
+        }
+
+        private static string BuildColorText(IEnumerable<IReadOnlyList<Token>> itemGroups)
+        {
+            var sb = new StringBuilder();
+            foreach (var group in itemGroups)
+            {
+                sb.Append(group.ToText());
+            }
+            return sb.ToString().Trim();
+        }
+
+        #region Private methods
+
+        /// <summary>
+        /// Get color by parsing given hex value color string (#A28B34).
+        /// </summary>
+        /// <returns>true - valid color, false - otherwise</returns>
+        private static bool GetColorByHex(string str, int idx, int length, out PaintColor color)
+        {
+            int r = -1;
+            int g = -1;
+            int b = -1;
+            if (length == 7)
+            {
+                r = ParseHexInt(str, idx + 1, 2);
+                g = ParseHexInt(str, idx + 3, 2);
+                b = ParseHexInt(str, idx + 5, 2);
+            }
+            else if (length == 4)
+            {
+                r = ParseHexInt(str, idx + 1, 1);
+                r = r * 16 + r;
+                g = ParseHexInt(str, idx + 2, 1);
+                g = g * 16 + g;
+                b = ParseHexInt(str, idx + 3, 1);
+                b = b * 16 + b;
+            }
+            if (r > -1 && g > -1 && b > -1)
+            {
+                color = PaintColor.FromArgb(r, g, b);
+                return true;
+            }
+            color = PaintColor.Empty;
+            return false;
+        }
+
+        /// <summary>
+        /// Get color by parsing given RGB value color string (RGB(255,180,90))
+        /// </summary>
+        /// <returns>true - valid color, false - otherwise</returns>
+        private static bool GetColorByRgb(string str, int idx, int length, out PaintColor color)
+        {
+            int r = -1;
+            int g = -1;
+            int b = -1;
+            double a = 1d; // rgb() is opaque unless a CSS PaintColor 4 `/ <alpha>` component is present.
+
+            if (length > 10)
+            {
+                int s = idx + 4;
+                int end = idx + length;
+                r = ParseIntAtIndex(str, ref s);
+                if (s < end)
+                {
+                    g = ParseIntAtIndex(str, ref s);
+                }
+                if (s < end)
+                {
+                    b = ParseIntAtIndex(str, ref s);
+                }
+                if (s < end)
+                {
+                    var parsedAlpha = ParseAlphaAtIndex(str, ref s, end);
+                    if (parsedAlpha >= 0d) a = parsedAlpha;
+                }
+            }
+
+            if (r > -1 && g > -1 && b > -1)
+            {
+                color = PaintColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
+                return true;
+            }
+            color = PaintColor.Empty;
+            return false;
+        }
+
+        /// <summary>
+        /// Get color by parsing given RGBA value color string (RGBA(255,180,90,180))
+        /// </summary>
+        /// <returns>true - valid color, false - otherwise</returns>
+        private static bool GetColorByRgba(string str, int idx, int length, out PaintColor color)
+        {
+            int r = -1;
+            int g = -1;
+            int b = -1;
+            double a = 1d; // Default to opaque if the alpha component is missing/omitted.
+
+            if (length > 13)
+            {
+                int s = idx + 5;
+                int end = idx + length;
+                r = ParseIntAtIndex(str, ref s);
+
+                if (s < end)
+                {
+                    g = ParseIntAtIndex(str, ref s);
+                }
+                if (s < end)
+                {
+                    b = ParseIntAtIndex(str, ref s);
+                }
+                if (s < end)
+                {
+                    var parsedAlpha = ParseAlphaAtIndex(str, ref s, end);
+                    if (parsedAlpha >= 0d) a = parsedAlpha;
+                }
+            }
+
+            if (r > -1 && g > -1 && b > -1)
+            {
+                color = PaintColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
+                return true;
+            }
+            color = PaintColor.Empty;
+            return false;
+        }
+
+        /// <summary>
+        /// Parses the optional trailing alpha of an <c>rgb()/rgba()</c> value, supporting both the legacy
+        /// comma form (<c>…, 0.75</c>) and the CSS PaintColor 4 slash form (<c>… / 75%</c> or <c>… / 0.75</c>).
+        /// The component separator (comma or the space before <c>/</c>) has already been consumed by the
+        /// preceding <see cref="ParseIntAtIndex"/> call, so this skips whitespace and an optional leading
+        /// <c>/</c>, then reads a number optionally suffixed by <c>%</c> (percent → 0..1). Returns the alpha
+        /// in 0..1, or -1 when no alpha is present.
+        /// </summary>
+        private static double ParseAlphaAtIndex(string str, ref int startIdx, int limit)
+        {
+            while (startIdx < limit && char.IsWhiteSpace(str, startIdx))
+                startIdx++;
+            if (startIdx < limit && str[startIdx] == '/')
+            {
+                startIdx++;
+                while (startIdx < limit && char.IsWhiteSpace(str, startIdx))
+                    startIdx++;
+            }
+
+            int len = 0;
+            while (startIdx + len < limit && (char.IsDigit(str, startIdx + len) || str[startIdx + len] == '.'))
+                len++;
+            if (len < 1)
+                return -1d;
+
+            if (!double.TryParse(str.Substring(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
+                return -1d;
+
+            startIdx += len;
+            if (startIdx < limit && str[startIdx] == '%')
+            {
+                val /= 100.0;
+                startIdx++;
+            }
+
+            return val;
+        }
+
+        /// <summary>
+        /// Get color by CSS named-color keyword (e.g. "red", "transparent", "currentcolor"). Delegates
+        /// the actual name table/grammar to the CSS-OM's own <see cref="Converters.ColorConverter"/>
+        /// (shared with every other color-accepting property in <c>PeachPDF.CSS</c>) rather than
+        /// re-implementing a second, independent color-name lookup here - this is what the previous
+        /// adapter-based lookup got wrong for "transparent": it used <c>color.A &gt; 0</c> as its own
+        /// "name not found" signal, which incorrectly also rejects any *validly* fully-transparent
+        /// color (alpha 0 is transparent's own correct, intentional value, not a failure sentinel).
+        /// </summary>
+        /// <returns>true - valid color, false - otherwise</returns>
+        private bool GetColorByName(string str, int idx, int length, out PaintColor color)
+        {
+            var substring = str.Substring(idx, length);
+
+            // Fast path: the overwhelming majority of "by name" values are a bare identifier (a named
+            // color like "black"/"transparent"), not a CSS PaintColor 4 function (hsl()/lab()/color-mix()/...)
+            // or an escaped identifier (`\62 lack`) - skip GetCssTokens/ToResolvedColor's Lexer/
+            // TextSource/StylesheetComposer allocation entirely and consult the CSS-OM's own
+            // Colors.NamedColors table directly (via Colors.GetColor) - the exact same table
+            // PaintColor.FromName/ToColor already resolve a plain Ident token against, not a second,
+            // independently maintained list. A miss (a function, an escape sequence, "currentcolor", or
+            // genuine garbage) falls through unchanged to the tokenizer path below, so this can only ever
+            // be an early exit to the same true answer, never a source of divergence from it.
+            if (substring.IndexOf('(') < 0 && substring.IndexOf('\\') < 0 && Colors.GetColor(substring) is { } named)
+            {
+                color = PaintColor.FromArgb(named.A, named.R, named.G, named.B);
+                return true;
+            }
+
+            // Tokenization and grammar parsing are the CSS-OM's job: ToResolvedColor resolves named
+            // colors, hex, and every color function (rgb/hsl/hwb/gray/lab/oklab/lch/oklch/color-mix) to a
+            // concrete PaintColor. This method's only remaining role is the PaintColor -> PaintColor conversion.
+            // inValueContext: true so a hex value nested inside a function (e.g. a color-mix() operand)
+            // always lexes to a single PaintColor token regardless of its leading character - without it, a
+            // digit-leading hex (e.g. "#2563eb") lexes as '#' + a number instead of a Hash token, because
+            // this lexer's own non-value HashStart() path requires a name-*start* code point right after
+            // '#' (Lexer.cs's IsNameStart(), no digits/hyphens) - narrower than CSS Syntax Level 3 §4.3.4's
+            // own hash-token rule, which only requires a name code point (IsNameStart() OR a digit/hyphen)
+            // or a valid escape. A letter-leading hex (e.g. "#e11d48") satisfies both, so it lexes fine as
+            // a Hash token either way (see GetCssTokens' inValueContext doc comment).
+            using var pooledTokens = GetCssTokensPooled(substring, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            var parsed = tokens.ToResolvedColor();
+
+            if (parsed.HasValue)
+            {
+                var c = parsed.Value;
+                color = c.IsDeviceCmyk
+                    ? PaintColor.FromCmyk(c.A, c.C, c.M, c.Y, c.K)
+                    : PaintColor.FromArgb(c.A, c.R, c.G, c.B);
+                return true;
+            }
+
+            color = PaintColor.Black;
+            return false;
+        }
+
+
+        /// <summary>
+        /// Parse the given decimal number string to positive int value.<br/>
+        /// Start at given <paramref name="startIdx"/>, ignore whitespaces and take
+        /// as many digits as possible to parse to int.
+        /// </summary>
+        /// <param name="str">the string to parse</param>
+        /// <param name="startIdx">the index to start parsing at</param>
+        /// <returns>parsed int or 0</returns>
+        private static int ParseIntAtIndex(string str, ref int startIdx)
+        {
+            int len = 0;
+            while (char.IsWhiteSpace(str, startIdx))
+                startIdx++;
+            while (char.IsDigit(str, startIdx + len))
+                len++;
+            var val = ParseInt(str, startIdx, len);
+            startIdx = startIdx + len + 1;
+            return val;
+        }
+
+        /// <summary>
+        /// Parse the given decimal number string to positive int value.
+        /// Assume given substring is not empty and all indexes are valid!<br/>
+        /// </summary>
+        /// <returns>int value, -1 if not valid</returns>
+        private static int ParseInt(string str, int idx, int length)
+        {
+            if (length < 1)
+                return -1;
+
+            int num = 0;
+            for (int i = 0; i < length; i++)
+            {
+                int c = str[idx + i];
+                if (!(c >= 48 && c <= 57))
+                    return -1;
+
+                num = num * 10 + c - 48;
+            }
+            return num;
+        }
+
+        /// <summary>
+        /// Parse the given hex number string to positive int value.
+        /// Assume given substring is not empty and all indexes are valid!<br/>
+        /// </summary>
+        /// <returns>int value, -1 if not valid</returns>
+        private static int ParseHexInt(string str, int idx, int length)
+        {
+            if (length < 1)
+                return -1;
+
+            int num = 0;
+            for (int i = 0; i < length; i++)
+            {
+                int c = str[idx + i];
+                if (!(c >= 48 && c <= 57) && !(c >= 65 && c <= 70) && !(c >= 97 && c <= 102))
+                    return -1;
+
+                num = num * 16 + (c <= 57 ? c - 48 : (10 + c - (c <= 70 ? 65 : 97)));
+            }
+            return num;
+        }
+
+        #endregion
+    }
+}
