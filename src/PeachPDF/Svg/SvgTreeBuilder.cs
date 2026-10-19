@@ -1395,7 +1395,17 @@ namespace PeachPDF.Svg
             if (opacityAttr is not null)
                 SvgPropertyRegistry.TrySet(element, "opacity", opacityAttr, in ctx);
 
-            element.Transform = SvgTransformParser.Parse(Attr("transform"));
+            var transformBox = SvgTransformOrigin.ParseBox(Attr("transform-box"));
+            var viewBox = _document.ViewBox is { } documentBox
+                ? new Rect(documentBox.X, documentBox.Y, _viewportWidth ?? documentBox.Width, _viewportHeight ?? documentBox.Height)
+                : new Rect(0, 0, _viewportWidth ?? 0, _viewportHeight ?? 0);
+            var transformContext = new SvgTransformContext(
+                _lengthBasis?.EmPx ?? SvgValueParsers.DefaultEmPx, _lengthBasis?.RootEmPx ?? SvgValueParsers.DefaultEmPx,
+                transformBox == SvgTransformBox.ViewBox ? viewBox.Width : double.NaN, transformBox == SvgTransformBox.ViewBox ? viewBox.Height : double.NaN);
+
+            // An inline style="transform: ..." that is not valid CSS (rotate(10) with no unit) is dropped, as in a browser, and the rule or attribute answers.
+            element.Transform = SvgTransformParser.Parse(ResolveStyledAttr(node, "transform", SvgTransformParser.IsValidCssTransform), transformContext);
+            element.TransformOrigin = SvgTransformOrigin.Parse(Attr("transform-origin"), transformBox, viewBox, _lengthBasis);
 
             // fill-rule/stroke-linecap/stroke-linejoin fall back to the INHERITED value (not a hardcoded
             // default) on an invalid value, per SVG 1.1 §11.4 - same shape as stroke-width/etc. above.
@@ -2925,7 +2935,7 @@ namespace PeachPDF.Svg
                 Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? 0,
                 PatternUnitsUserSpaceOnUse = !isObjectBoundingBox,
                 PatternContentUnitsUserSpaceOnUse = contentUnitsUserSpaceOnUse,
-                PatternTransform = SvgTransformParser.Parse(node.GetAttribute("patternTransform")),
+                PatternTransform = SvgTransformParser.Parse(node.GetAttribute("patternTransform"), null, allowUnits: false),
                 ViewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox")),
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
                 Children = BuildDefinitionChildren(node, paint, font),
@@ -3574,7 +3584,7 @@ namespace PeachPDF.Svg
             {
                 Id = node.GetAttribute("id"),
                 GradientUnitsUserSpaceOnUse = !isObjectBoundingBox,
-                GradientTransform = SvgTransformParser.Parse(node.GetAttribute("gradientTransform")),
+                GradientTransform = SvgTransformParser.Parse(node.GetAttribute("gradientTransform"), null, allowUnits: false),
                 SpreadMethod = SvgValueParsers.ParseSpreadMethod(node.GetAttribute("spreadMethod")),
                 // Spec defaults: x1/y1/y2 = 0%, x2 = 100% - expressed directly as the objectBoundingBox
                 // fraction (0 or 1); the userSpaceOnUse-mode default (100% of the current viewport,
@@ -3595,7 +3605,7 @@ namespace PeachPDF.Svg
             {
                 Id = node.GetAttribute("id"),
                 GradientUnitsUserSpaceOnUse = !isObjectBoundingBox,
-                GradientTransform = SvgTransformParser.Parse(node.GetAttribute("gradientTransform")),
+                GradientTransform = SvgTransformParser.Parse(node.GetAttribute("gradientTransform"), null, allowUnits: false),
                 SpreadMethod = SvgValueParsers.ParseSpreadMethod(node.GetAttribute("spreadMethod")),
                 // Spec defaults: cx/cy/r = 50% - expressed directly as the objectBoundingBox fraction
                 // (0.5); see BuildLinearGradient's comment re: the userSpaceOnUse-mode default gap.

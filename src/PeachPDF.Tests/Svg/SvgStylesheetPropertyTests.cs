@@ -137,10 +137,6 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Theory]
-        [InlineData("translate(1em, 2px)")]
-        [InlineData("translate(10px, 1em)")]
-        [InlineData("translate(10%, 5%)")]
-        [InlineData("translateX(1em)")]
         [InlineData("scale(2em)")]
         [InlineData("rotate(1em)")]
         [InlineData("skewX(1em)")]
@@ -157,7 +153,7 @@ namespace PeachPDF.Tests.Svg
         [Theory]
         [InlineData("translate(10px, calc(1px + 2px)) scale(2)", 2, 0, 0, 2, 0, 0)]
         [InlineData("scale(2, calc(3)) translate(5)", 1, 0, 0, 1, 5, 0)]
-        [InlineData("translate(1em) scale(2)", 2, 0, 0, 2, 0, 0)]
+        [InlineData("translate(1vw) scale(2)", 2, 0, 0, 2, 0, 0)]
         [InlineData("scale(2) translate3d(1px, 2px, 3px) translate(5px)", 2, 0, 0, 2, 10, 0)]
         [InlineData("perspective(100px) translate(5px)", 1, 0, 0, 1, 5, 0)]
         public void AFunctionItCannotResolve_DoesNotStopTheOnesAfterIt(string transform, float a, float b, float c, float d, float e, float f)
