@@ -2,6 +2,7 @@ using PeachDrawing.PDF.Engine;
 using System;
 using System.IO;
 using System.Text;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
@@ -20,6 +21,8 @@ namespace PeachPDF.Tests.Integration
     /// wherever two such elements sit next to each other) left the next element's gradient invisible.
     /// This mirrors <see cref="SvgGradientStrokeAlphaTests"/>'s own issue #134 (the identical leak on
     /// the stroke side, already fixed there) - the fill side never got the same guard until now.
+    /// The same reset also runs for a gradient WITH semi-transparent stops (its soft mask carries the per-stop alpha, which the leftover /ca used to multiply
+    /// a second time, or, after /ca 0 text, wipe out), covered by the tests that look at every gs before a pattern fill.
     /// </summary>
     public class GradientFillAlphaTests
     {
@@ -98,6 +101,55 @@ namespace PeachPDF.Tests.Integration
             Assert.True(transparentTextIndex < patternFillIndices[1].Index,
                 "h1's transparent text draw must precede h2's own pattern fill to reproduce the bug");
             Assert.Contains("/ShadingType", pdfText);
+        }
+
+        // An SVG shape with a fill-opacity leaves /ca 0.5 behind; the next shape's gradient has a translucent stop.
+        private const string FillOpacityThenTranslucentGradient = """
+            <svg width="300" height="120" viewBox="0 0 300 120">
+              <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#f00" stop-opacity=".5"/></linearGradient></defs>
+              <rect x="120" y="20" width="10" height="10" fill="#f00" fill-opacity=".5"/>
+              <rect width="100" height="100" fill="url(#g)"/>
+            </svg>
+            """;
+
+        /// <summary>
+        /// The ExtGState bodies a fill-side shading pattern is preceded by, one list per pattern fill: the <c>gs</c> operators written right before its
+        /// <c>/Pattern cs ... scn</c>, in the order written (a fill alpha reset and a soft mask are independent graphics-state keys, so either order is correct).
+        /// </summary>
+        private static System.Collections.Generic.List<System.Collections.Generic.List<string>> ExtGStatesBeforePatternFills(string pdfText) =>
+            Regex.Matches(pdfText, @"((?:/GS\d+ gs\r?\n)+)/Pattern cs\r?\n/Pa\d+ scn")
+                .Select(fill => Regex.Matches(fill.Groups[1].Value, @"/(GS\d+) gs").Select(gs => ResolveResourceObjectBody(pdfText, gs.Groups[1].Value)).ToList())
+                .ToList();
+
+        [Fact]
+        public async Task TranslucentGradientFillAfterAFillOpacityShape_ResetsTheAmbientFillAlpha()
+        {
+            // The gradient's per-stop alpha rides its soft mask; the ambient /ca left by the earlier shape (0.5) used to multiply it a second time,
+            // so the fill came out about half as strong as its own stops say (Chrome draws it as the stops say).
+            var pdfText = await GetPdfText(FillOpacityThenTranslucentGradient);
+
+            var bodies = Assert.Single(ExtGStatesBeforePatternFills(pdfText));
+            Assert.Contains(bodies, body => body.Contains("/SMask"));
+            Assert.Contains(bodies, body => Regex.Match(body, @"/ca\s+([0-9.]+)") is { Success: true } ca
+                && double.Parse(ca.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) == 1.0);
+        }
+
+        [Fact]
+        public async Task TranslucentGradientFillAfterTransparentTextFill_ResetsTheTextsZeroAlpha()
+        {
+            // background-clip: text beside color: transparent text: the transparent text leaves /ca 0, which used to carry over onto the next heading's translucent
+            // gradient and make it vanish (an opaque one was reset already). The last pattern fill is the translucent one.
+            const string style = """
+                h1 { margin: 0; font-size: 40pt; background: linear-gradient(to right, #e11, #11e); background-clip: text; color: transparent; }
+                h2 { margin: 0; font-size: 20pt; background: linear-gradient(to right, rgba(245,158,11,0.2), #ef4444); background-clip: text; color: transparent; }
+                """;
+
+            var pdfText = await GetPdfText(Body, style);
+
+            var bodies = ExtGStatesBeforePatternFills(pdfText).Last();
+            Assert.Contains(bodies, body => body.Contains("/SMask"));
+            Assert.Contains(bodies, body => Regex.Match(body, @"/ca\s+([0-9.]+)") is { Success: true } ca
+                && double.Parse(ca.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) == 1.0);
         }
 
         [Fact]

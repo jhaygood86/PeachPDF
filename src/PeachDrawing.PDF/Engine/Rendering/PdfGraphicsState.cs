@@ -294,24 +294,24 @@ internal sealed class PdfGraphicsState
                 pattern.SetupFromBrush(brush, matrix, _renderer);
                 string name = _renderer.Resources.AddPattern(pattern);
 
+                // The ambient fill alpha left by the LAST solid-color fill (RealizeFillColor, e.g. a `color: transparent` text draw
+                // immediately before this pattern fill - background-clip: text pairs the two routinely, or an SVG shape with a
+                // fill-opacity) silently carries over onto a fill-side pattern: nothing below emits a /ca for it. That makes an opaque
+                // gradient invisible, and a gradient with semi-transparent stops (whose soft mask carries the per-stop alpha, which the
+                // ambient /ca then multiplies a second time) fainter than its own stops say. The stroke side already guards against the
+                // identical leak (see RealizePen's `pen.Paint is not SolidBrush ? 1.0 : color.Opacity()` and its own remarks) - mirror it
+                // here for fills via the same reset Realize(PdfRasterImage,...) uses. Call RealizeFillColor directly (rather than
+                // RealizeNonStrokeTransparency).
+                if (!isForPen)
+                {
+                    RealizeFillColor(_realizedFillColor.WithOpacity(1), colorMode);
+                }
+
                 if (pattern.AlphaExtGState is not null)
                 {
                     PdfATransparencyGuard.RequireAllowed(_renderer.Owner, _renderer._page, "A gradient with a semi-transparent color stop");
                     string gsName = _renderer.Resources.AddExtGState(pattern.AlphaExtGState);
                     _renderer.AppendFormatString("{0} gs\n", gsName);
-                }
-                else if (!isForPen)
-                {
-                    // A fill-side pattern with no semi-transparent stops of its own is fully opaque,
-                    // but nothing above emits a /ca for it - so the ambient fill alpha left by the
-                    // LAST solid-color fill (RealizeFillColor, e.g. a `color: transparent` text draw
-                    // immediately before this pattern fill - background-clip: text pairs the two
-                    // routinely) silently carries over and can make this fill invisible too. The
-                    // stroke side already guards against the identical leak (see RealizePen's
-                    // `strokeAlpha = pen.Brush != null ? 1.0 : color.A` and its own remarks) - mirror
-                    // it here for fills via the same reset Realize(PdfRasterImage,...) uses. Call
-                    // RealizeFillColor directly (rather than RealizeNonStrokeTransparency).
-                    RealizeFillColor(_realizedFillColor.WithOpacity(1), colorMode);
                 }
 
                 if (isForPen)
