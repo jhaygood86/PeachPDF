@@ -480,7 +480,7 @@ namespace PeachPDF.Html.Core.Dom
             var (paddingTop, paddingBottom) = PaddingExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
             var contentBoxRect = Shrink(paddingBoxRect, paddingLeft, paddingTop, paddingRight, paddingBottom);
 
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
 
             Rect ToPixelRect(Rect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
@@ -619,7 +619,7 @@ namespace PeachPDF.Html.Core.Dom
             if (htmlContainer.Root is not { } rootBox)
                 return;
 
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
             var paintRect = new Rect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
 
@@ -1016,7 +1016,7 @@ namespace PeachPDF.Html.Core.Dom
             // division, pre-multiply so the two cancel out to the CSS-specified point size regardless of
             // PixelsPerPoint (normally 1.0, but not under ShrinkToFit/ScaleToPageSize or non-72
             // PixelsPerInch).
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             var pixelSize = sizePt * pixelsPerPoint;
             var resolvedFont = FontFamilyResolver.Resolve(renderContext, familyList, pixelSize, fontStyle)
                                 ?? FontFamilyResolver.Resolve(renderContext, DefaultFontResolver.DefaultFont, pixelSize, fontStyle);

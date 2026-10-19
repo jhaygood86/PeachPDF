@@ -1,6 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragmentation;
@@ -1637,7 +1636,7 @@ namespace PeachPDF.Html.Core.Dom
                     // non-default PixelsPerInch and confirming the stored/computed font size lands on the
                     // spec-correct value (see FontSizeInheritanceIntegrationTests.cs, and this fix's own
                     // commit message for the reasoning).
-                    var pixelsPerPoint = (Owner.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                    var pixelsPerPoint = Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
                     parentSize = parentBox.DerivedStyle.GetEmHeight() * pixelsPerPoint;
                     remSize = GetRemHeight() * pixelsPerPoint;
                 }
@@ -1678,7 +1677,7 @@ namespace PeachPDF.Html.Core.Dom
                 // (GetEmHeight), keeps the unadjusted size, which is what _emScale records.
                 if (SizeAdjust is { } adjust)
                 {
-                    var pixelsPerPoint = (Owner.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                    var pixelsPerPoint = Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
                     _primaryAdjustRatio = FontMetricMeasurement.Ratio(_actualFont, adjust.Metric, pixelsPerPoint);
 
                     var target = double.IsNaN(adjust.Value) ? _primaryAdjustRatio : adjust.Value;
@@ -1944,7 +1943,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (font is not null && SizeAdjust is { } adjust)
             {
-                var pixelsPerPoint = (Owner.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                var pixelsPerPoint = Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
                 var ratio = FontMetricMeasurement.Ratio(font, adjust.Metric, pixelsPerPoint);
                 var target = double.IsNaN(adjust.Value) ? _primaryAdjustRatio : adjust.Value;
                 var adjustedSize = size * target / ratio;
@@ -2050,7 +2049,7 @@ namespace PeachPDF.Html.Core.Dom
 
         private double OwnFontRatio(FontMetric metric)
         {
-            var pixelsPerPoint = (Owner.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             if (metric == FontMetric.Lh)
                 return LineHeightRatio(pixelsPerPoint);

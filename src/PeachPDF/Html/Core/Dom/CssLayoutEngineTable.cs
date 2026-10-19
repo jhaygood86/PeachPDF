@@ -11,7 +11,6 @@
 // "The Art of War"
 
 using PeachPDF;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
@@ -3283,7 +3282,7 @@ namespace PeachPDF.Html.Core.Dom
                     // CssValueParser's absolute-length resolution now scales by PixelsPerPoint on the
                     // way back out (issue #814) - pre-divide by that same factor here so the re-parse
                     // round-trips to this exact value instead of PixelsPerPoint times it.
-                    var captionPixelsPerPoint = (caption.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                    var captionPixelsPerPoint = caption.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
                     caption.Height = (columnAxisExtent / captionPixelsPerPoint)
                         .ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
 

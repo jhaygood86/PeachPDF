@@ -1,5 +1,4 @@
 using PeachPDF;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
@@ -2766,7 +2765,7 @@ namespace PeachPDF.Html.Core.Dom
         // resolves at the spec-correct 0.75pt) still matters for the PixelsPerPoint == 1 common case,
         // for the reason this comment always gave: it must round-trip as the identity unit.
         private static string FormatLayoutUnits(double value, CssBox box) =>
-            (value / ((box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0))
+            (value / (box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0))
                 .ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
 
         // ─── Data classes ─────────────────────────────────────────────────────────

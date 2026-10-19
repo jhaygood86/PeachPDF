@@ -11,7 +11,6 @@
 // "The Art of War"
 
 using PeachDrawing.Text.Unicode;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -369,7 +368,7 @@ namespace PeachPDF.Html.Core.Parse
         /// same idiom (e.g. <see cref="Dom.DerivedStyle.ActualFont"/>, <see cref="Dom.CssBox.NoEms"/>).
         /// </summary>
         private static double PixelsPerPointOf(CssBox box) =>
-            (box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
         /// <summary>
         /// Resolves a <see cref="LengthOrCalc"/> (a keyword-or-value cascade property's

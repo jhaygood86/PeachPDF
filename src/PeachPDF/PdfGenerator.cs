@@ -1466,7 +1466,7 @@ namespace PeachPDF
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
             var painter = new FragmentPainter(htmlContainer);
             var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
@@ -1523,7 +1523,7 @@ namespace PeachPDF
         /// </summary>
         private static void PaintFootnoteArea(PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
-            var pixelsPerPoint = (renderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
 
             PaintFootnoteArea(pdfCanvas, renderContext, htmlContainer, footnoteArea);

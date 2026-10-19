@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
@@ -210,7 +209,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         private static double? ResolveSlotWidth(string sizes, CssBox box)
         {
-            var pixelsPerPoint = (box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
             var unitsPerCssPx = Length.PointsPerPx * pixelsPerPoint;
             var (viewportWidth, _, _, _) = box.GetViewportUnitBasis();
             var basis = viewportWidth ?? 0;

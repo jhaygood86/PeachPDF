@@ -13,7 +13,6 @@
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.CounterStyles;
 using PeachPDF;
-using PeachPDF.PdfBackend;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
@@ -1693,7 +1692,7 @@ namespace PeachPDF.Html.Core
         private ContainerQuerySizes BuildContainerQuerySizes()
         {
             var byId = new Dictionary<uint, ContainerQueryContext>();
-            var pixelsPerPoint = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var pixelsPerPoint = RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             void Walk(CssBox box)
             {
@@ -2271,7 +2270,7 @@ namespace PeachPDF.Html.Core
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
                 return tree;
 
-            var ppp = (RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+            var ppp = RenderContext?.LayoutUnitsPerPoint ?? 1.0;
             var sheetSizePt = new Size(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
