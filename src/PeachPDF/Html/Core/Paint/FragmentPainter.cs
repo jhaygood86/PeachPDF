@@ -738,7 +738,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// <see cref="PaintTagged"/>'s structure-tree bookkeeping around one fragment's content.
         /// </summary>
-        private void PaintTaggedContent(Canvas g, BoxFragment fragment, StructureTagBuilder? builder)
+        private void PaintTaggedContent(Canvas g, BoxFragment fragment, IStructureTagSink? builder)
         {
             var box = fragment.Box;
             if (builder == null)
@@ -807,7 +807,7 @@ namespace PeachPDF.Html.Core.Paint
         /// reading order) - the marker's own on-page paint position is unaffected by this call-order
         /// swap, since it's driven entirely by pre-computed layout coordinates, not paint order.
         /// </summary>
-        private void PaintListItem(Canvas g, BoxFragment fragment, StructureTagBuilder builder)
+        private void PaintListItem(Canvas g, BoxFragment fragment, IStructureTagSink builder)
         {
             using (builder.OpenGroupingElement(fragment.Box, Keywords.Li))
             {

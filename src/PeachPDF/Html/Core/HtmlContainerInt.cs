@@ -1277,7 +1277,7 @@ namespace PeachPDF.Html.Core
         /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is
         /// disabled and <c>CssBox.PaintImp</c>'s tagging wrapper is a no-op.
         /// </summary>
-        internal Handlers.StructureTagBuilder? StructureTagBuilder { get; set; }
+        internal Handlers.IStructureTagSink? StructureTagBuilder { get; set; }
 
         /// <summary>
         /// Orchestrates AcroForm field/widget bookkeeping during PDF generation. Set by

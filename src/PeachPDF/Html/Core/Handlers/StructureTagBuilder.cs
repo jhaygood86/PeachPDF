@@ -19,7 +19,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// same underlying algorithm (AddMarkedContentToStructureElement/AddToParentTree) for.
     /// Only ever constructed when <see cref="PdfGenerateConfig.EnableTaggedPdf"/> is set.
     /// </summary>
-    internal sealed class StructureTagBuilder
+    internal sealed class StructureTagBuilder : IStructureTagSink
     {
         readonly PdfDocument _document;
         readonly PdfStructureTreeRoot _root;
