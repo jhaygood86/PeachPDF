@@ -36,7 +36,7 @@ namespace PeachPDF.Svg
         /// <c>translate()</c>; without it such a function does nothing. <paramref name="allowUnits"/> is false for <c>gradientTransform</c> and
         /// <c>patternTransform</c>, whose attribute grammar takes bare numbers only: a function with any unit does nothing there.
         /// </summary>
-        public static Matrix3x2? Parse(string? value, SvgTransformContext? context = null, bool allowUnits = true)
+        public static Matrix3x2? Parse(string? value, SvgTransformContext? context = null, bool allowUnits = true, bool allowCalc = false)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -47,7 +47,7 @@ namespace PeachPDF.Svg
 
             while (TryReadFunction(value, ref pos, out var name, out var args))
             {
-                var m = BuildMatrix(name, args, context, allowUnits);
+                var m = BuildMatrix(name, args, context, allowUnits, allowCalc);
 
                 if (m is not { } matrix)
                     continue;
@@ -63,6 +63,11 @@ namespace PeachPDF.Svg
 
             return new Matrix3x2(combined.M11, combined.M12, combined.M21, combined.M22, combined.M41, combined.M42);
         }
+
+        /// <summary>Marks an argument that is a <c>calc()</c> expression; the text after it is the expression as written.</summary>
+        private const string CalcPrefix = "calc:";
+
+        private static bool IsCalc(string unit) => unit.StartsWith(CalcPrefix, StringComparison.Ordinal);
 
         private static bool TryReadFunction(string s, ref int pos, out string name, out List<(double Value, string Unit)> args)
         {
@@ -87,31 +92,47 @@ namespace PeachPDF.Svg
 
             pos++;
 
-            while (SvgNumberScanner.TryReadNumber(s, ref pos, out var num))
+            while (true)
             {
-                // A CSS dimension: the unit (letters, or a percent sign) follows the number directly.
-                var unitStart = pos;
-                while (pos < s.Length && (char.IsAsciiLetter(s[pos]) || s[pos] == '%'))
-                    pos++;
+                SvgNumberScanner.SkipSeparators(s, ref pos);
 
-                args.Add((num, s[unitStart..pos].ToLowerInvariant()));
-            }
+                if (pos >= s.Length || s[pos] == ')')
+                    break;
 
-            SvgNumberScanner.SkipSeparators(s, ref pos);
-
-            if (pos < s.Length && s[pos] != ')')
-            {
-                // Something that is not a number (calc(), var(), a nested function): the arguments are not all known here. Skip to the closing
-                // parenthesis, nested ones included, and let the function do nothing, so the functions after it still read.
-                var depth = 0;
-                while (pos < s.Length && !(s[pos] == ')' && depth == 0))
+                if (SvgNumberScanner.TryReadNumber(s, ref pos, out var num))
                 {
-                    if (s[pos] == '(') depth++;
-                    else if (s[pos] == ')') depth--;
+                    // A CSS dimension: the unit (letters, or a percent sign) follows the number directly.
+                    var unitStart = pos;
+                    while (pos < s.Length && (char.IsAsciiLetter(s[pos]) || s[pos] == '%'))
+                        pos++;
+
+                    args.Add((num, s[unitStart..pos].ToLowerInvariant()));
+                    continue;
+                }
+
+                // Something that is not a number: a calc() is kept as written (CalcPrefix) for a length to evaluate, anything else (var(), another
+                // function) is not known here and makes the function do nothing, so the functions after it still read. Nested parentheses are skipped whole.
+                var start = pos;
+                var depth = 0;
+                while (pos < s.Length)
+                {
+                    var c = s[pos];
+                    if (c == '(') depth++;
+                    else if (c == ')')
+                    {
+                        if (depth == 0) break;
+                        depth--;
+                    }
+                    else if (depth == 0 && (c == ',' || char.IsWhiteSpace(c))) break;
+
                     pos++;
                 }
 
-                args.Add((double.NaN, "?"));
+                if (pos == start)
+                    break;
+
+                var text = s[start..pos];
+                args.Add(text.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) ? (double.NaN, CalcPrefix + text) : (double.NaN, "?"));
             }
 
             if (pos < s.Length && s[pos] == ')')
@@ -141,7 +162,7 @@ namespace PeachPDF.Svg
                 any = true;
                 var count = args.Count;
 
-                if (args.Exists(a => a.Unit == "?"))
+                if (args.Exists(a => a.Unit == "?" || IsCalc(a.Unit)))
                     continue; // calc() / var(): judged when it is a number
 
                 bool Plain(int i) => args[i].Unit.Length == 0;
@@ -168,10 +189,12 @@ namespace PeachPDF.Svg
             return any;
         }
 
-        private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args, SvgTransformContext? context, bool allowUnits)
+        private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args, SvgTransformContext? context, bool allowUnits, bool allowCalc)
         {
             // Set when an argument has a unit this parser cannot resolve here: the function then does nothing. An argument that was not a
             // number at all (calc(), a nested function) counts, wherever it stands in the list, even where the function reads fewer arguments.
+            var calcArgs = args.Count(arg => IsCalc(arg.Unit));
+            var calcRead = 0;
             var resolvable = args.TrueForAll(arg => arg.Unit != "?") && (allowUnits || args.TrueForAll(arg => arg.Unit.Length == 0));
 
             // A plain <number>: matrix() entries and the centre of rotate(a cx cy) take no unit.
@@ -230,6 +253,14 @@ namespace PeachPDF.Svg
                     case "pt": return (float)(value * 4 / 3);
                     case "pc": return (float)(value * 16);
                     case "q": return (float)(value * 96 / 101.6);
+                    case var calc when IsCalc(calc) && allowCalc && context is not null:
+                    {
+                        var reference = axis == 0 ? context.ReferenceWidth : context.ReferenceHeight;
+                        var result = SvgValueParsers.ParseLength(calc[CalcPrefix.Length..], double.IsNaN(reference) ? null : reference, context.Basis);
+                        if (result is { } px) { calcRead++; return (float)px; }
+                        resolvable = false;
+                        return 0f;
+                    }
                     default: resolvable = false; return 0f;
                 }
             }
@@ -315,7 +346,8 @@ namespace PeachPDF.Svg
                     return null;
             }
 
-            return resolvable ? matrix : null;
+            // A calc() the function did not read (an extra argument) is one it cannot resolve, as is any other argument it left unread.
+            return resolvable && calcRead == calcArgs ? matrix : null;
         }
 
         // Sine and cosine of an angle in degrees, exact at the quarter turns a rotation most often is (rotate(0.25turn) is a clean 0 and 1, not 1.7e-7).
@@ -361,5 +393,6 @@ namespace PeachPDF.Svg
     /// <param name="RootEmPx">The root element's font size in user units.</param>
     /// <param name="ReferenceWidth">The width of the transform reference box; NaN when it is not known when the transform is read (a <c>fill-box</c>).</param>
     /// <param name="ReferenceHeight">The height of the transform reference box; NaN when it is not known.</param>
-    internal sealed record SvgTransformContext(double EmPx, double RootEmPx, double ReferenceWidth, double ReferenceHeight);
+    /// <param name="Basis">The font a <c>calc()</c> length resolves its font-relative units against.</param>
+    internal sealed record SvgTransformContext(double EmPx, double RootEmPx, double ReferenceWidth, double ReferenceHeight, ISvgLengthBasis? Basis = null);
 }
