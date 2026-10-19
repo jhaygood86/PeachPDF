@@ -41,6 +41,14 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void ABareNumber_IsTakenAsUserUnits()
+        {
+            var circle = Assert.IsType<SvgCircleElement>(Build("circle { r: 10; cx: 20 }", "<circle r=\"1\" cx=\"2\" cy=\"3\"/>"));
+            Assert.Equal(10, circle.R, 3);
+            Assert.Equal(20, circle.Cx, 3);
+        }
+
+        [Fact]
         public void AnInlineStyle_BeatsARule_WhichBeatsTheAttribute()
         {
             var inline = Assert.IsType<SvgCircleElement>(Build("circle { r: 9px }", "<circle r=\"1\" style=\"r: 4px\"/>"));

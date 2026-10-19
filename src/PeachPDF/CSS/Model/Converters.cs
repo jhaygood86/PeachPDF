@@ -631,8 +631,10 @@ namespace PeachPDF.CSS
                 .Or(new StructValueConverter<float>(ValueExtensions.ToNaturalSingle))
                 .Or(new CalcValueConverter(CalcCategory.LengthPercentage | CalcCategory.Number));
 
+        // CSS Fill and Stroke 3: none | <length-percentage>+#, so each comma-separated item is itself a space-separated run.
+        // A bare <number> is not a <length-percentage>; it is the SVG attribute's user-unit form, kept for compatibility.
         public static readonly IValueConverter StrokeDasharrayConverter =
-            LengthOrPercentConverter.Or(NumberConverter).Many().OrNone();
+            LengthOrPercentConverter.Or(NumberConverter).Many().FromList().OrNone();
 
         public static readonly IValueConverter StrokeMiterlimitConverter =
             new StructValueConverter<float>(ValueExtensions.ToGreaterOrEqualOneSingle);

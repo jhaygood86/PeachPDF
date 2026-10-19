@@ -145,6 +145,27 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("1px 2em 3vh 4vw 5 6", concrete.Value);
         }
 
+        [Theory]
+        [InlineData("2px, 4px", "2px, 4px")]
+        [InlineData("2,4", "2, 4")]
+        [InlineData("2px 4px, 6px", "2px 4px, 6px")]
+        public void StrokeDasharrayCommaSeparatedLegal(string value, string expected)
+        {
+            var property = ParseDeclaration("stroke-dasharray: " + value);
+            var concrete = Assert.IsType<StrokeDasharrayProperty>(property);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(expected, concrete.Value);
+        }
+
+        [Theory]
+        [InlineData("rotate(100GRAD)")]
+        [InlineData("rotate(10DEG)")]
+        public void TransformAngleUnitIsCaseInsensitive(string value)
+        {
+            var property = ParseDeclaration("transform: " + value);
+            Assert.True(property.HasValue);
+        }
+
         [Fact]
         public void StrokeDasharrayNoneLegal()
         {
