@@ -39,7 +39,7 @@ namespace PeachPDF.Tests.TestSupport
                     _ => SHA512.HashData(encrypted),
                 };
 
-                if (round >= 63 && encrypted[^1] <= round - 32)
+                if (round >= 63 && encrypted[^1] <= round - 31)
                     break;
             }
 

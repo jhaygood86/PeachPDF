@@ -68,9 +68,8 @@ namespace PeachPDF.Tests.Integration
         /// <summary>Every stream's bytes, as stored.</summary>
         static byte[][] StreamBodies(byte[] file)
         {
-            var text = Encoding.Latin1.GetString(file);
-            return Regex.Matches(text, @"stream\n(.*?)\nendstream", RegexOptions.Singleline)
-                .Select(m => Encoding.Latin1.GetBytes(m.Groups[1].Value)).ToArray();
+            // Read through /Length, not by looking for the "endstream" keyword: the bodies are random ciphertext, which can contain any byte sequence.
+            return PdfFile.Parse(file).Objects.Select(o => o.Value).OfType<PdfStreamObject>().Select(stream => stream.StoredBytes).ToArray();
         }
 
         static async Task<byte[]> Render(PdfGenerateConfig config)
