@@ -463,6 +463,14 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.InlineSize, () => new SvgOnlyProperty(PropertyNames.InlineSize, Converters.Any), true);
             AddLonghand(PropertyNames.ShapeInside, () => new SvgOnlyProperty(PropertyNames.ShapeInside, Converters.Any), true);
             AddLonghand(PropertyNames.ShapeSubtract, () => new SvgOnlyProperty(PropertyNames.ShapeSubtract, Converters.Any), true);
+            AddLonghand(PropertyNames.R, () => new SvgOnlyProperty(PropertyNames.R, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.Cx, () => new SvgOnlyProperty(PropertyNames.Cx, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.Cy, () => new SvgOnlyProperty(PropertyNames.Cy, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.Rx, () => new SvgOnlyProperty(PropertyNames.Rx, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.Ry, () => new SvgOnlyProperty(PropertyNames.Ry, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.X, () => new SvgOnlyProperty(PropertyNames.X, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.Y, () => new SvgOnlyProperty(PropertyNames.Y, SvgOnlyProperty.GeometryLength), true);
+            AddLonghand(PropertyNames.D, () => new SvgOnlyProperty(PropertyNames.D, Converters.Any), true);
             AddLonghand(PropertyNames.StopColor, () => new StopColorProperty(), true);
             AddLonghand(PropertyNames.StopOpacity, () => new StopOpacityProperty(), true);
             AddLonghand(PropertyNames.Stroke, () => new StrokeProperty(), true);

@@ -933,9 +933,29 @@ namespace PeachPDF.Svg
             return anchor;
         }
 
+        /// <summary>
+        /// The path data of <paramref name="node"/>: its <c>d</c> as the CSS property (<c>d: path("M0 0 L10 10")</c>, or <c>none</c>) from an inline
+        /// <c>style=""</c> or a rule, else the <c>d</c> attribute's own data string (SVG 2 section 9.1).
+        /// </summary>
+        private static string? ResolveStyledPathData(ISvgSourceNode node)
+        {
+            var value = ResolveStyledAttr(node, "d")?.Trim();
+            if (value is null || value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            // Not the CSS form: the attribute's own data string (which the styled lookup falls back to).
+            if (!value.StartsWith("path(", StringComparison.OrdinalIgnoreCase))
+                return value;
+
+            // path( [<fill-rule>,]? <string> ): the data is the quoted string.
+            var open = value.IndexOfAny(['"', '\'']);
+            var close = open < 0 ? -1 : value.LastIndexOf(value[open]);
+            return open >= 0 && close > open ? value[(open + 1)..close] : null;
+        }
+
         private SvgPathElement BuildPath(ISvgSourceNode node, InheritedPaint inherited)
         {
-            var path = new SvgPathElement { Segments = SvgPathDataParser.Parse(node.GetAttribute("d")) };
+            var path = new SvgPathElement { Segments = SvgPathDataParser.Parse(ResolveStyledPathData(node)) };
             ApplyCommon(path, node, inherited);
             return path;
         }
@@ -944,9 +964,9 @@ namespace PeachPDF.Svg
         {
             var circle = new SvgCircleElement
             {
-                Cx = SvgValueParsers.ParseLength(node.GetAttribute("cx"), _viewportWidth, _lengthBasis) ?? 0,
-                Cy = SvgValueParsers.ParseLength(node.GetAttribute("cy"), _viewportHeight, _lengthBasis) ?? 0,
-                R = SvgValueParsers.ParseLength(node.GetAttribute("r"), ViewportDiagonal, _lengthBasis) ?? 0,
+                Cx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cx"), _viewportWidth, _lengthBasis) ?? 0,
+                Cy = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cy"), _viewportHeight, _lengthBasis) ?? 0,
+                R = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "r"), ViewportDiagonal, _lengthBasis) ?? 0,
             };
             ApplyCommon(circle, node, inherited);
             return circle;
@@ -968,20 +988,20 @@ namespace PeachPDF.Svg
 
         private SvgRectElement BuildRect(ISvgSourceNode node, InheritedPaint inherited)
         {
-            var width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? 0;
-            var height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? 0;
+            var width = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis) ?? 0;
+            var height = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis) ?? 0;
 
             // rx/ry each default to the other when only one is specified; both default to 0 (no
             // rounding) when neither is specified.
-            double? rx = SvgValueParsers.ParseLength(node.GetAttribute("rx"), _viewportWidth, _lengthBasis);
-            double? ry = SvgValueParsers.ParseLength(node.GetAttribute("ry"), _viewportHeight, _lengthBasis);
+            double? rx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "rx"), _viewportWidth, _lengthBasis);
+            double? ry = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "ry"), _viewportHeight, _lengthBasis);
             rx ??= ry;
             ry ??= rx;
 
             var rect = new SvgRectElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
+                X = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "y"), _viewportHeight, _lengthBasis) ?? 0,
                 Width = width,
                 Height = height,
                 Rx = Math.Clamp(rx ?? 0, 0, Math.Max(0, width / 2)),
@@ -995,10 +1015,10 @@ namespace PeachPDF.Svg
         {
             var ellipse = new SvgEllipseElement
             {
-                Cx = SvgValueParsers.ParseLength(node.GetAttribute("cx"), _viewportWidth, _lengthBasis) ?? 0,
-                Cy = SvgValueParsers.ParseLength(node.GetAttribute("cy"), _viewportHeight, _lengthBasis) ?? 0,
-                Rx = SvgValueParsers.ParseLength(node.GetAttribute("rx"), _viewportWidth, _lengthBasis) ?? 0,
-                Ry = SvgValueParsers.ParseLength(node.GetAttribute("ry"), _viewportHeight, _lengthBasis) ?? 0,
+                Cx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cx"), _viewportWidth, _lengthBasis) ?? 0,
+                Cy = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cy"), _viewportHeight, _lengthBasis) ?? 0,
+                Rx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "rx"), _viewportWidth, _lengthBasis) ?? 0,
+                Ry = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "ry"), _viewportHeight, _lengthBasis) ?? 0,
             };
             ApplyCommon(ellipse, node, inherited);
             return ellipse;
@@ -1032,10 +1052,10 @@ namespace PeachPDF.Svg
             var stripped = IsDisplayContents(node);
             var use = new SvgUseElement
             {
-                X = stripped ? 0 : SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
-                Y = stripped ? 0 : SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
-                Width = stripped ? null : SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis),
-                Height = stripped ? null : SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis),
+                X = stripped ? 0 : SvgValueParsers.ParseLength(ResolveStyledAttr(node, "x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = stripped ? 0 : SvgValueParsers.ParseLength(ResolveStyledAttr(node, "y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = stripped ? null : SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis),
+                Height = stripped ? null : SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis),
             };
             // The <use> element's own resolved paint becomes the inherited context for the
             // (otherwise unstyled) referenced content - e.g. <use fill="none" stroke="red"
@@ -1111,10 +1131,10 @@ namespace PeachPDF.Svg
 
             var nested = new SvgNestedSvgElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? _viewportWidth ?? 0,
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? _viewportHeight ?? 0,
+                X = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis) ?? _viewportWidth ?? 0,
+                Height = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis) ?? _viewportHeight ?? 0,
                 ViewBox = viewBox,
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
             };
@@ -1151,10 +1171,10 @@ namespace PeachPDF.Svg
         {
             var image = new SvgImageElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? 0,
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? 0,
+                X = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis) ?? 0,
+                Height = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis) ?? 0,
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
             };
             ApplyCommon(image, node, inherited);
@@ -1176,10 +1196,10 @@ namespace PeachPDF.Svg
 
             var foreign = new SvgForeignObjectElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? 0,
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? 0,
+                X = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis) ?? 0,
+                Height = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis) ?? 0,
                 Content = content,
             };
             ApplyCommon(foreign, node, inherited);
