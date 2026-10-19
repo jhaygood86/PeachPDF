@@ -10,13 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using System;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Contains all the paint code to paint different background images.

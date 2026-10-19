@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System.Linq;
 using Xunit;
 
@@ -210,7 +210,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.NotNull(rule);
             Assert.Equal(":first", rule.SelectorText);
 
-            var pt = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(rule.Style.MarginTop);
+            var pt = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints(rule.Style.MarginTop);
             Assert.NotNull(pt);
             // 40mm = 40 * 72 / 25.4 ≈ 113.4pt
             Assert.Equal(113.4, pt!.Value, 0);
@@ -266,7 +266,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("72PT",  72.0)] // units are ASCII case-insensitive per CSS Syntax
         public void ParseLengthToPdfPoints_ConvertsUnitsCorrectly(string input, double expectedPt)
         {
-            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input);
+            var result = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints(input);
             Assert.NotNull(result);
             Assert.Equal(expectedPt, result!.Value, 1);
         }
@@ -274,7 +274,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [Fact]
         public void ParseLengthToPdfPoints_ReturnsNull_ForInvalidInput()
         {
-            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints("not-a-length");
+            var result = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints("not-a-length");
             Assert.Null(result);
         }
 
@@ -284,7 +284,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             // CSS Values & Units §5.1: only zero may omit its unit — and the CSS-OM's
             // Length.ToString() only ever serializes zero unitless, so "5" can't occur
             // in CSS-OM-sourced input anyway.
-            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints("5");
+            var result = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints("5");
             Assert.Null(result);
         }
 
@@ -295,14 +295,14 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         {
             // The CONTEXT-LESS overload has no resolution context for relative units — callers
             // with a captured PageLengthContext use the context overload below instead (#150).
-            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input);
+            var result = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints(input);
             Assert.Null(result);
         }
 
         // ── ParseLengthToPdfPoints with PageLengthContext (#150) ───────────────
         // Context: 1em = 12pt (root font), 1rem = 12pt, 100% = 600pt (layout page width).
 
-        private static readonly PeachPDF.Html.Core.Entities.PageLengthContext TestContext = new(12.0, 12.0, 600.0);
+        private static readonly PeachBrackets.Html.Entities.PageLengthContext TestContext = new(12.0, 12.0, 600.0);
 
         [Theory]
         [InlineData("2em", 24.0)]
@@ -319,7 +319,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("3ch", 18.0)] // ch approximates 0.5em - "3ch" against the 12pt EmPt basis is 3 * 6 = 18
         public void ParseLengthToPdfPoints_WithContext_ResolvesRelativeUnitsAndCalc(string input, double expectedPt)
         {
-            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
+            var result = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
             Assert.NotNull(result);
             Assert.Equal(expectedPt, result!.Value, 1);
         }
@@ -345,7 +345,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             // margin (null), not silently resolve to a zero margin. ch is no longer in this list — it
             // approximates 0.5em (see ParseLengthToPdfPoints_WithContext_ResolvesRelativeUnitsAndCalc's
             // "3ch" case), which needs no page-viewport context.
-            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
+            var result = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
             Assert.Null(result);
         }
 
@@ -361,7 +361,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.NotNull(rule);
             Assert.Equal("0", rule.Style.MarginTop);
 
-            var pt = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(rule.Style.MarginTop);
+            var pt = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints(rule.Style.MarginTop);
             Assert.NotNull(pt);
             Assert.Equal(0.0, pt!.Value);
         }

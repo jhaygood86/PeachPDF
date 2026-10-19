@@ -1,10 +1,10 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;

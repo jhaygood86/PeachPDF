@@ -5,7 +5,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     ///     Url class according to RFC3986. 

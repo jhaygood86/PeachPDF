@@ -3,7 +3,7 @@ using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;

@@ -1,7 +1,7 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// Undoes the layout produced <i>after</i> a fragmentainer pass was entered, so that pass can be run

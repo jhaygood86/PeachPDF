@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Specialized converter for CSS properties with time-based disambiguation rules.

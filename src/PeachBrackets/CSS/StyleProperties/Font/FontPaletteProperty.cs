@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>font-palette</c> property (CSS Fonts Module Level 4): selects a color palette for a COLR/CPAL

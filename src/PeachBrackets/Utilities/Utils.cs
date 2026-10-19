@@ -12,7 +12,7 @@
 
 using PeachDrawing.Core;
 
-namespace PeachPDF.Utilities
+namespace PeachBrackets.Utilities
 {
     /// <summary>
     /// Utilities for converting WinForms entities to HtmlRenderer core entities.

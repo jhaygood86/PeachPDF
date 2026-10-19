@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The inert <c>@font-face {{ font-variant: ... }}</c> descriptor (<see cref="IFontFaceRule.Variant"/>) -

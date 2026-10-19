@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Unions axis-aligned rectangles into the closed, axis-aligned contours that bound the region

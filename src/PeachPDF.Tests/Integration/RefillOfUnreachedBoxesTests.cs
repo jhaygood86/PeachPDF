@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF;
 using PeachDrawing.PDF.Engine.Drawing;
 
@@ -55,8 +55,8 @@ public class RefillOfUnreachedBoxesTests
         await container.SetHtml("<!DOCTYPE html><html><body><p id=a>one</p></body></html>", null);
 
         var size = new Size(595, 842);
-        container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-        container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+        container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+        container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
         using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
         await container.PerformLayout(graphics);
 
@@ -67,7 +67,7 @@ public class RefillOfUnreachedBoxesTests
         box.RecordEmittedNothingAt(3, box, 0);
         box.ResetForRefill();
 
-        Assert.False(box.EmittedNothingAtOrBefore(3, box, new PeachPDF.Html.Core.Fragmentation.InvalidationHistory()));
+        Assert.False(box.EmittedNothingAtOrBefore(3, box, new PeachBrackets.Html.Fragmentation.InvalidationHistory()));
         Assert.False(box.NeverTouchedThisLayout);
     }
 }

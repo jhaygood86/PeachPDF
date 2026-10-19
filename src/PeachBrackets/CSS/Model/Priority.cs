@@ -3,7 +3,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1, CharSet = CharSet.Unicode)]
     internal struct Priority : IEquatable<Priority>, IComparable<Priority>

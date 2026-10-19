@@ -1,7 +1,7 @@
 using System.Text;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Applies CSS Text Module Level 3's <c>text-transform</c> to a string - extracted from

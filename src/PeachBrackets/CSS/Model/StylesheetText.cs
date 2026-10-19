@@ -1,6 +1,6 @@
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal class StylesheetText
     {

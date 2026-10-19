@@ -5,7 +5,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// A <c>display: block</c> <c>&lt;img&gt;</c>/inline <c>&lt;svg&gt;</c> is wrapped in a synthetic
-    /// anonymous block (<see cref="PeachPDF.Html.Core.Dom.CssBox.IsReplacedBlockWrapper"/>, see
+    /// anonymous block (<see cref="PeachBrackets.Html.Dom.CssBox.IsReplacedBlockWrapper"/>, see
     /// <see cref="ReplacedBlockWrapperLayoutIntegrationTests"/>'s own remarks) purely so this engine can
     /// size it as a single atomic inline "word". That wrapper's synthetic line must not be treated as a
     /// real inline formatting context an ancestor's <c>text-align</c>/<c>text-align-last</c> can reach

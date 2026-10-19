@@ -1,12 +1,12 @@
 using PeachDrawing.Core;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     internal static partial class SvgRenderer
     {
@@ -62,7 +62,7 @@ namespace PeachPDF.Svg
             starts[count] = paragraph.Length;
 
             var paragraphText = paragraph.ToString();
-            var opportunities = UnicodeLineBreaks.Find(paragraphText, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Auto, text.ShapingFeatures.Language);
+            var opportunities = UnicodeLineBreaks.Find(paragraphText, PeachBrackets.Css.WordBreak.Normal, 0, PeachBrackets.Css.LineBreak.Auto, text.ShapingFeatures.Language);
             var hyphenAfter = FindHyphenationPoints(glyphs, paragraphText, starts);
 
             var hyphenWidths = new Dictionary<GlyphInfo, double>();

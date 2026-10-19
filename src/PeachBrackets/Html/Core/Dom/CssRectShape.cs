@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Represents a word inside an inline box for a vector-drawn list-item marker shape

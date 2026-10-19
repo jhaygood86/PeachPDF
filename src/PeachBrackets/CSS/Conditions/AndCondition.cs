@@ -1,7 +1,7 @@
 ﻿using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS.Conditions
+namespace PeachBrackets.Css.Conditions
 {
     internal sealed class AndCondition : StylesheetNode, IConditionFunction
     {

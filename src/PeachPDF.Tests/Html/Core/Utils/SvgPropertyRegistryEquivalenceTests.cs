@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
     /// this is the actual evidence of "zero production behavior change" ahead of the SVG cutover — see
     /// CLAUDE.md's generator section. The HTML side of this equivalence proof no longer needs a
     /// dedicated test file: since the HTML cutover, <c>CssUtils.SetPropertyValue</c>/
-    /// <c>GetPropertyValue</c> forward directly to <see cref="PeachPDF.Html.Core.Utils.CssPropertyRegistry"/>,
+    /// <c>GetPropertyValue</c> forward directly to <see cref="PeachBrackets.Html.Utils.CssPropertyRegistry"/>,
     /// so <c>CssUtilsTests</c> exercising <c>CssUtils</c>'s public API already covers it end-to-end.
     /// </summary>
     public class SvgPropertyRegistryEquivalenceTests

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The shared grammar for the <c>hyphenate-limit-chars</c> value (CSS Text 4 §6.3.4):
@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
     /// precedent. The first value is the minimum total characters in a hyphenated word, the second the
     /// minimum before the break, the third the minimum after it; a missing third value takes the second's
     /// value, and a missing second value is <c>auto</c> (the UA-chosen minimum — see
-    /// <see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine"/>'s consumption, which lets the hyphenation
+    /// <see cref="PeachBrackets.Html.Dom.CssLayoutEngine"/>'s consumption, which lets the hyphenation
     /// pattern data's own per-language minimum govern whichever side is <c>auto</c> rather than
     /// substituting a hardcoded number).
     /// </summary>
@@ -57,7 +57,7 @@ namespace PeachPDF.CSS
         /// <summary>Convenience overload that tokenizes <paramref name="value"/> first.</summary>
         internal static bool TryParse(string value, out int? wordMin, out int? beforeMin, out int? afterMin)
         {
-            using var pooledTokens = global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokensPooled(value);
+            using var pooledTokens = global::PeachBrackets.Html.Parse.CssValueParser.GetCssTokensPooled(value);
             List<Token> tokens = pooledTokens;
             return TryParse(tokens, out wordMin, out beforeMin, out afterMin);
         }

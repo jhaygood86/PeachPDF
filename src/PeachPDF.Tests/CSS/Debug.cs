@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     public class DebugTests
     {
         [Fact]

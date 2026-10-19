@@ -10,9 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Resolves an <see cref="SvgDocument"/>'s own natural size (independent of any CSS box sizing),

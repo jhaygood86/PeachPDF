@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Linq;

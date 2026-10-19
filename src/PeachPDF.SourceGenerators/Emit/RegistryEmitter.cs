@@ -9,8 +9,8 @@ using static PeachPDF.SourceGenerators.Emit.Identifier;
 namespace PeachPDF.SourceGenerators.Emit
 {
     /// <summary>
-    /// Emits <c>CssPropertyRegistry.g.cs</c> (namespace <c>PeachPDF.Html.Core.Utils</c>, matching
-    /// <c>CssUtils</c>) and <c>SvgPropertyRegistry.g.cs</c> (namespace <c>PeachPDF.Svg</c>, matching
+    /// Emits <c>CssPropertyRegistry.g.cs</c> (namespace <c>PeachBrackets.Html.Utils</c>, matching
+    /// <c>CssUtils</c>) and <c>SvgPropertyRegistry.g.cs</c> (namespace <c>PeachBrackets.Svg</c>, matching
     /// <c>SvgTreeBuilder</c>) from the parsed <c>css-properties.json</c> model. See CLAUDE.md's
     /// generator section and the css-properties.schema.json comments for the schema this reads.
     /// </summary>
@@ -29,12 +29,12 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Frozen;");
             sb.AppendLine("using System.Collections.Generic;");
-            sb.AppendLine("using PeachPDF.CSS;");
-            sb.AppendLine("using PeachPDF.Html.Core.Dom;");
-            sb.AppendLine("using PeachPDF.Html.Core.Entities;");
-            sb.AppendLine("using PeachPDF.Html.Core.Parse;");
+            sb.AppendLine("using PeachBrackets.Css;");
+            sb.AppendLine("using PeachBrackets.Html.Dom;");
+            sb.AppendLine("using PeachBrackets.Html.Entities;");
+            sb.AppendLine("using PeachBrackets.Html.Parse;");
             sb.AppendLine();
-            sb.AppendLine("namespace PeachPDF.Html.Core.Utils");
+            sb.AppendLine("namespace PeachBrackets.Html.Utils");
             sb.AppendLine("{");
             sb.AppendLine("    internal static partial class CssPropertyRegistry");
             sb.AppendLine("    {");
@@ -217,7 +217,7 @@ namespace PeachPDF.SourceGenerators.Emit
                 };
                 // Explicit type arguments: a method-group argument (int.TryParse) doesn't drive generic
                 // inference for TValue the way a concrete delegate instance would.
-                return $"box.{html.PropertyPath} = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<{dt.EnumType}, {resolved.CSharpType}>" +
+                return $"box.{html.PropertyPath} = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<{dt.EnumType}, {resolved.CSharpType}>" +
                        $"({rawValueExpr}, {dt.KeywordMap}, {resolved.TryParseMethod}, {dt.Fallback});";
             }
 
@@ -371,7 +371,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using PeachDrawing.Core;");
             sb.AppendLine();
-            sb.AppendLine("namespace PeachPDF.Svg");
+            sb.AppendLine("namespace PeachBrackets.Svg");
             sb.AppendLine("{");
             sb.AppendLine("    /// <summary>Everything a generated SVG customSetter/default setter needs beyond the raw value — see CLAUDE.md's generator section.</summary>");
             sb.AppendLine("    internal readonly struct SvgPropertyContext");
@@ -468,16 +468,16 @@ namespace PeachPDF.SourceGenerators.Emit
             return kind switch
             {
                 DataTypeKind.SvgPaint =>
-                    "if (!global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.RenderContext, ctx.ContextColor, out var parsed)) return false;\n" +
+                    "if (!global::PeachBrackets.Svg.SvgValueParsers.TryParsePaint(value, ctx.RenderContext, ctx.ContextColor, out var parsed)) return false;\n" +
                     $"element.{svg.PropertyPath} = ctx.ResolveUrlPaintKind(parsed);\nreturn true;",
                 DataTypeKind.SvgOpacity =>
-                    "if (!global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out var parsed)) return false;\n" +
+                    "if (!global::PeachBrackets.Svg.SvgValueParsers.TryParseOpacity(value, out var parsed)) return false;\n" +
                     $"element.{svg.PropertyPath} = parsed;\nreturn true;",
                 DataTypeKind.SvgLength =>
-                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis);\n" +
+                    "var parsed = global::PeachBrackets.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed.Value;\nreturn true;",
                 DataTypeKind.SvgLengthList =>
-                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis);\n" +
+                    "var parsed = global::PeachBrackets.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed;\nreturn true;",
                 _ => throw new NotSupportedException(
                     $"DataTypeKind.{kind} has no default SVG setter and \"{entry.Name}\" declares no customSetter."),

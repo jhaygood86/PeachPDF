@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>The colour scheme a document reports to <c>prefers-color-scheme</c> media queries.</summary>
     internal enum ColorSchemePreference

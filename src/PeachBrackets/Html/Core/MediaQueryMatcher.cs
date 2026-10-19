@@ -2,9 +2,9 @@
 
 using System;
 using System.Linq;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Evaluates a rule's enclosing <c>@media</c> chain against a <see cref="MediaQueryContext"/>, so
@@ -177,7 +177,7 @@ namespace PeachPDF.Html.Core
 
             // In a media query, `em`/`rem` resolve against the initial font size (16px), NOT the
             // document root's font size (Media Queries 4 §1.3 / §6). 16px = 12pt.
-            const double initialFontPt = 16d * PeachPDF.CSS.Length.PointsPerPx;
+            const double initialFontPt = 16d * PeachBrackets.Css.Length.PointsPerPx;
             var valuePt = length.ToPixels(initialFontPt, initialFontPt, actual);
 
             var needsCatchUpMultiply = length.NeedsPixelsPerPointCatchUp;

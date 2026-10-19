@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The relational pseudo-class ":has(S)" - matches an element that has a descendant matching S. Also

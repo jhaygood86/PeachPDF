@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Integration
     /// </list>
     ///
     /// The tests deliberately assert against <b>specified</b> values (a <c>line-height</c> in <c>px</c>
-    /// converted at <see cref="PeachPDF.Html.Core.Utils.Length.PointsPerPx"/>) rather than anything derived
+    /// converted at <see cref="PeachBrackets.Html.Utils.Length.PointsPerPx"/>) rather than anything derived
     /// from the resolved font, so they do not depend on which fallback face the test machine resolves - but
     /// each one that needs the font to be <i>taller</i> than the declared line-height first proves that it is,
     /// by measuring the same markup under <c>line-height: normal</c>. Without that guard a machine whose
@@ -351,8 +351,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

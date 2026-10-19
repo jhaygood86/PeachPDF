@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The negation pseudo-class ":not(S)" - matches an element that does NOT match S.

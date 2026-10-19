@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>grid-auto-flow</c> value (CSS Grid §7.7): <c>[ row | column ] || dense</c> — one of

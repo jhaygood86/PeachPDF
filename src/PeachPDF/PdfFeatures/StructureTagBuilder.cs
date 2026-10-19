@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Handlers;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -6,7 +6,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Svg
 {
     /// <summary>
     /// Real-font characterization for SVG <c>&lt;text&gt;</c>'s Arabic-family joining (issue #533) -
-    /// mirrors <see cref="PeachPDF.Tests.Html.Core.ArabicJoiningCharacterizationTests"/>'s own "prove
+    /// mirrors <see cref="PeachPDF.Tests.Html.ArabicJoiningCharacterizationTests"/>'s own "prove
     /// it isn't a no-op" standard against real font data, applied to SVG's independent pipeline:
     /// renders through the real SVG pipeline with a <see cref="TestRecordingGraphics"/> mock to
     /// capture exactly the <c>(text, ShapeSettings)</c> pair <c>SvgRenderer.PaintGlyphs</c>

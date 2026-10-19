@@ -1,6 +1,6 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// A <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> group that <c>CssLayoutEngineTable</c> took out of the

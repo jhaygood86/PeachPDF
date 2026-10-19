@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Paint.Content;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Paint.Content;
 using System;
 
-namespace PeachPDF.Html.Core.Annotations
+namespace PeachBrackets.Html.Annotations
 {
     /// <summary>
     /// Paints how a form control looks, onto any <see cref="Canvas"/>: the control's real resolved CSS border and background

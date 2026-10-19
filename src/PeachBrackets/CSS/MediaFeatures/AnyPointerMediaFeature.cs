@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>any-pointer</c> media feature (Media Queries 4). Matched against the renderer's fixed

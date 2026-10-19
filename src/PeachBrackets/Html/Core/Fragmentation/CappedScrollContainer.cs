@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// A scroll container with an auto height and a <c>max-height</c>, which breaks between its lines like a

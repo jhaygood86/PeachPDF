@@ -1,12 +1,12 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Svg;
 using System.Numerics;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The HTML inside one <c>&lt;foreignObject&gt;</c> of an inline <c>&lt;svg&gt;</c>, laid out once as an
@@ -36,7 +36,7 @@ namespace PeachPDF.Html.Core.Dom
             if (width <= 0 || height <= 0)
                 return null;
 
-            var unit = CSS.Length.PointsPerPx * g.PixelsPerPoint;
+            var unit = Css.Length.PointsPerPx * g.PixelsPerPoint;
             var rect = new Rect(0, 0, width * unit, height * unit);
 
             await RunningElementLayout.LayoutRunningElementFor(g, box, rect, container);
@@ -49,7 +49,7 @@ namespace PeachPDF.Html.Core.Dom
             // The HTML draws in layout units, which the canvas turns into points itself: a CSS pixel is PointsPerPx points.
             // The SVG's user space is one unit per CSS pixel under whatever scale its viewBox applies, so the content is
             // scaled up to make a CSS pixel one user unit - independent of PixelsPerPoint, which both sides already divide out.
-            var scale = (float)(1.0 / CSS.Length.PointsPerPx);
+            var scale = (float)(1.0 / Css.Length.PointsPerPx);
             g.PushTransform(Matrix3x2.CreateScale(scale));
 
             // In the content's own (layout-unit) space, so the canvas's clip bound used to skip off-screen words agrees with it.

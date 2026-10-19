@@ -1,7 +1,7 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// A table cell that ran out of fragmentainer before it ran out of content, and where it stopped.

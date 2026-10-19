@@ -12,13 +12,13 @@ using System.Collections.Generic;
 using System.Linq;
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     internal static class MathRenderer
     {
         /// <summary>Paints <paramref name="root"/> into <paramref name="destination"/> - the box's own
         /// baseline lands at <c>destination.Y + root.Ascent</c>, matching how
-        /// <see cref="Html.Core.Dom.CssBoxMath"/> sized the phantom word this rect comes from (its
+        /// <see cref="Html.Dom.CssBoxMath"/> sized the phantom word this rect comes from (its
         /// height is exactly <c>root.Ascent + root.Descent</c>).</summary>
         public static void RenderInto(Canvas g, MathBox root, Rect destination)
         {

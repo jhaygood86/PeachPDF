@@ -1,8 +1,8 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// The CSS <c>unicode-bidi</c>/<c>direction</c> integration into UAX#9 (CSS Writing Modes Level 3

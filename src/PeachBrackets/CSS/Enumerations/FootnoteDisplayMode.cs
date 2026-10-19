@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// css-gcpm-3 §2.3's <c>footnote-display</c>: how an already-detached footnote body stacks inside

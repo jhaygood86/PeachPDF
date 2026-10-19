@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -291,7 +291,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottom - top > 5, "the underline should still cover the kept characters");
         }
 
-        private static TestRecordingGraphics Paint(PeachPDF.Html.Core.HtmlContainerInt container)
+        private static TestRecordingGraphics Paint(PeachBrackets.Html.HtmlContainerInt container)
         {
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, g);

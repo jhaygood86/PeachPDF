@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The statement form of <c>@layer</c> (<c>@layer a, b, c;</c>). It declares the relative order of

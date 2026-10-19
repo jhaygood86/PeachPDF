@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The arguments of the <c>linear()</c> easing function (CSS Easing 2 §2.1). The grammar itself is

@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Rendering;
 using System;
 using System.Collections.Generic;
@@ -194,7 +194,7 @@ namespace PeachPDF.Layout
         /// <summary>
         /// The <c>@page</c> rules built for this page's <see cref="Header"/>/<see cref="Footer"/> (empty
         /// when neither was called) - <see cref="PdfGenerator"/> assigns these to
-        /// <see cref="Html.Core.HtmlContainerInt.PageRules"/> before layout.
+        /// <c>Html.HtmlContainerInt.PageRules</c> before layout.
         /// </summary>
         internal IReadOnlyList<PageRule> PageRules => _pageRules;
 

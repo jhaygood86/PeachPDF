@@ -14,7 +14,7 @@ using PeachDrawing.Core;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// A <c>&lt;filter&gt;</c> definition - never painted directly, only referenced by an element's

@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>grid-template-columns</c>/<c>grid-template-rows</c> value: accepts the keyword

@@ -11,18 +11,18 @@
 // "The Art of War"
 
 using MimeKit.Text;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.MathML;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.MathML;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using HtmlUtils = PeachPDF.Html.Core.Utils.HtmlUtils;
+using HtmlUtils = PeachBrackets.Html.Utils.HtmlUtils;
 
-namespace PeachPDF.Html.Core.Parse
+namespace PeachBrackets.Html.Parse
 {
     /// <summary>
     /// 

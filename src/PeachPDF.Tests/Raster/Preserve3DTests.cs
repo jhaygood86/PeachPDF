@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;

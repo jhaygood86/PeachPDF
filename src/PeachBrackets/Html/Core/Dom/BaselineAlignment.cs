@@ -1,7 +1,7 @@
-﻿using PeachPDF.CSS;
-using PeachPDF.Html.Core.Utils;
+﻿using PeachBrackets.Css;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// First-baseline discovery shared by the flex (<see cref="CssLayoutEngineFlex"/>) and grid

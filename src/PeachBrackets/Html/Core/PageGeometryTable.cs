@@ -1,10 +1,10 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// One pagination slot's resolved geometry: its document-space band top and height (internal

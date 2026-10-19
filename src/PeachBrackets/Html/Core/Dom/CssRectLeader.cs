@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Which repeating pattern a <c>leader()</c> content-list item (css-content-3 §6) fills its

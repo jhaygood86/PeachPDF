@@ -1,4 +1,4 @@
-using PeachPDF.MathML;
+using PeachBrackets.MathML;
 using Xunit;
 
 namespace PeachPDF.Tests.MathML

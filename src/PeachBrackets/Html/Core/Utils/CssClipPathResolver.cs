@@ -1,14 +1,14 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Layer B of the <c>clip-path</c> pipeline: resolves a <c>clip-path</c> value (already validated and

@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// One toggle keyword from the <c>font-variant-ligatures</c> grammar (each may appear at most

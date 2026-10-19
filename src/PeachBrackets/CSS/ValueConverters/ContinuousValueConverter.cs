@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class ContinuousValueConverter : IValueConverter
     {

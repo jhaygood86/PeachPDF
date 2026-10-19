@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Parses the toggle-keyword grammar of <c>font-variant-east-asian</c> - one or more whitespace-

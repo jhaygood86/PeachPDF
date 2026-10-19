@@ -1,12 +1,12 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Paints a rectangle's already-resolved edges. It knows nothing about CSS borders or outlines;

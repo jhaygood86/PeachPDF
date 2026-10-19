@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Resolves a computed <c>font-variant-alternates</c> value against the document's

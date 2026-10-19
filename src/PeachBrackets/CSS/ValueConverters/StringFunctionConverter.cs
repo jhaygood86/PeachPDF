@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Converter for the string() function used in content and string-set properties.

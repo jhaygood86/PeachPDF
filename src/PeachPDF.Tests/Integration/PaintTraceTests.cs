@@ -1,5 +1,5 @@
 #if DEBUG
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Html.Paint;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration

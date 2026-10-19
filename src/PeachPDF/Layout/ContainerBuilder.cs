@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -246,7 +246,7 @@ namespace PeachPDF.Layout
         /// content" can mean for a cell is aligning its inline content - which is what a table author asks
         /// for when they right-align a column of amounts - so a cell gets <c>text-align</c> instead.
         /// </summary>
-        private bool IsTableCell => box.Display.Value == PeachPDF.CSS.DisplayMode.TableCell;
+        private bool IsTableCell => box.Display.Value == PeachBrackets.Css.DisplayMode.TableCell;
 
         public IContainer AlignLeft()
         {

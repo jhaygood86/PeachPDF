@@ -1,12 +1,12 @@
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Html.Paint;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using Plane = PeachPDF.Html.Core.Paint.ProjectivePlane<PeachPDF.Svg.SvgElement>;
+using Plane = PeachBrackets.Html.Paint.ProjectivePlane<PeachBrackets.Svg.SvgElement>;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// 3D transforms on SVG elements (CSS Transforms 2 section 11): <c>translate3d()</c>, <c>rotateX()</c>, <c>perspective()</c> and the rest in an
@@ -82,7 +82,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>The thinnest sliver of a plane worth a bitmap, in points: the same as the HTML painter's.</summary>
-        private const double MinVisibleThicknessPoints = 0.017 * PeachPDF.CSS.Length.PointsPerPx;
+        private const double MinVisibleThicknessPoints = 0.017 * PeachBrackets.Css.Length.PointsPerPx;
 
         /// <summary>The matrix that views <paramref name="container"/>'s children through its <c>perspective</c> from its <c>perspective-origin</c>, or null without one.</summary>
         private static Matrix4x4? PerspectiveOf(SvgElement container)

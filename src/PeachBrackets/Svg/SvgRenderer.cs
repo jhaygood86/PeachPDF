@@ -12,11 +12,11 @@
 
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +24,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Paints a parsed <see cref="SvgDocument"/> into an <see cref="Canvas"/>, mapping its
@@ -1774,7 +1774,7 @@ namespace PeachPDF.Svg
                 return;
 
             var half = thickness / 2;
-            var clearance = Math.Min(thickness, FragmentPainter.MaximumInkSkipClearanceCssPixels * PeachPDF.CSS.Length.PointsPerPx * g.PixelsPerPoint);
+            var clearance = Math.Min(thickness, FragmentPainter.MaximumInkSkipClearanceCssPixels * PeachBrackets.Css.Length.PointsPerPx * g.PixelsPerPoint);
 
             for (var i = from; i <= to; i++)
             {

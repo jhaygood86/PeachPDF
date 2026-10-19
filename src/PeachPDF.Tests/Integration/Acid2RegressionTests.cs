@@ -2,12 +2,12 @@ using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using PeachPDF;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 using System;
@@ -38,7 +38,7 @@ namespace PeachPDF.Tests.Integration
     /// inherent to the format, not a bug. The geometry bounds below exist specifically to catch the
     /// class of regression that visual inspection during this test's development actually found: a
     /// content-driven-height box being treated as having a "definite" height for its descendants'
-    /// percentage-height resolution (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine.ApplyHeight"/>),
+    /// percentage-height resolution (<see cref="PeachBrackets.Html.Dom.CssLayoutEngine.ApplyHeight"/>),
     /// and a box's own bottom margin folding into its own border-box height when it doubles as its
     /// parent's last child (<see cref="CssBox.MarginBottomCollapse"/>) - both of which inflated
     /// `.picture` from roughly 230px tall to over 1100px tall, and are exactly the kind of thing a
@@ -361,7 +361,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(forehead.BackgroundImages);
             var layer = Assert.Single(forehead.BackgroundImages!);
-            var urlImage = Assert.IsType<PeachPDF.Html.Core.Entities.CssImage.Url>(layer);
+            var urlImage = Assert.IsType<PeachBrackets.Html.Entities.CssImage.Url>(layer);
             Assert.NotNull(urlImage.Image);
         }
 
@@ -415,7 +415,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(resolvedObjectWithBackground);
             var backgroundImage = Assert.Single(resolvedObjectWithBackground!.BackgroundImages!);
-            var urlImage = Assert.IsType<PeachPDF.Html.Core.Entities.CssImage.Url>(backgroundImage);
+            var urlImage = Assert.IsType<PeachBrackets.Html.Entities.CssImage.Url>(backgroundImage);
             Assert.NotNull(urlImage.Image);
         }
 
@@ -847,8 +847,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new PeachDrawing.Core.Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

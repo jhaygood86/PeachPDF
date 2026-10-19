@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The three CSS Fonts Level 4 <c>font-variant-position</c> keywords.</summary>
     internal enum FontVariantPosition : byte

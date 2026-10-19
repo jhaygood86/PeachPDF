@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>outline-style</c>'s own value set — <c>&lt;'border-style'&gt; | auto</c> (CSS Basic User

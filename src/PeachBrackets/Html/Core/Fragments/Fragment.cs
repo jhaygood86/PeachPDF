@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Fragments
+namespace PeachBrackets.Html.Fragments
 {
     /// <summary>
     /// The immutable output of layout: one piece of laid-out content positioned inside exactly one

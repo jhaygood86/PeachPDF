@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>Hidden, undocumented compat alias for Prince's own -prince-hyphenate-limit-lines spelling - see hyphenate-limit-lines's css-properties.json entry.</summary>
     internal sealed class PrinceHyphenateLimitLinesProperty : Property

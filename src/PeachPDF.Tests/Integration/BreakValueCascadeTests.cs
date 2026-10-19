@@ -1,6 +1,6 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration

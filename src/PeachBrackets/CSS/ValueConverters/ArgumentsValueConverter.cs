@@ -3,7 +3,7 @@ using System.Linq;
 
 #nullable disable
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class ArgumentsValueConverter : IValueConverter
     {

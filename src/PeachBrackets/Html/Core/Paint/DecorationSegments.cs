@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// One half-open interval along a text decoration's inline axis — an x-range, since the decoration

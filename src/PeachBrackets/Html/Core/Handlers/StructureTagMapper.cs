@@ -1,8 +1,8 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// The kind of PDF structure-tree participation a box resolves to for tagging purposes.
@@ -184,7 +184,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Maps a <see cref="PeachPDF.CSS.PdfTagType"/> value to its canonical, case-sensitive PDF
+        /// Maps a <see cref="PeachBrackets.Css.PdfTagType"/> value to its canonical, case-sensitive PDF
         /// standard structure type name (without the leading "/") - the stored
         /// <c>CssBox.PdfTagType</c> string is always lowercased by the CSS tokenizer (see
         /// PdfTagTypeIntegrationTests), so the enum round-trip is what recovers the spec-correct

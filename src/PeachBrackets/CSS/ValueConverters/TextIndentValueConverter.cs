@@ -3,13 +3,13 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>text-indent</c> value through the shared <see cref="TextIndentGrammar"/> -
     /// accepting a <c>&lt;length-percentage&gt;</c> optionally combined with <c>hanging</c>/
     /// <c>each-line</c>, in any order, and rejecting everything else so an invalid value is dropped at
-    /// parse time. The authored text is preserved so Layer B (<see cref="Html.Core.Dom.CssLayoutEngine"/>)
+    /// parse time. The authored text is preserved so Layer B (<see cref="Html.Dom.CssLayoutEngine"/>)
     /// re-parses the same value during layout.
     /// </summary>
     internal sealed class TextIndentValueConverter : IValueConverter

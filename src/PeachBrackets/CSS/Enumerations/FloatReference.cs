@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The four CSS Page Floats <c>float-reference</c> keywords - which fragmentation context a float is

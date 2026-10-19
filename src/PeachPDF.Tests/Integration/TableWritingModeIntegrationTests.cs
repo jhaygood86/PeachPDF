@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
@@ -13,12 +13,12 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// End-to-end layout tests for writing-mode-aware Table sizing, cell placement, captions,
     /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>, collapsed borders, <c>vertical-align</c>, and
-    /// <c>rowspan</c> (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngineTable"/>'s axis-mapping fields),
+    /// <c>rowspan</c> (<see cref="PeachBrackets.Html.Dom.CssLayoutEngineTable"/>'s axis-mapping fields),
     /// asserting actual post-layout <c>CssBox</c> geometry - not just that layout completes - per this
     /// repo's testing conventions for layout-engine changes. <c>colspan</c> straddling the row axis
     /// remains out of scope - see issue #762. Real per-column pagination of a <b>plain-grid</b> vertical
     /// table's own content (issue #783 - no rowspan/colspan/caption/thead-tfoot/collapsed borders; see
-    /// <see cref="PeachPDF.Html.Core.Fragmentation.MonolithicContent.HasColumnPaginationExcludedFeature"/>)
+    /// <see cref="PeachBrackets.Html.Fragmentation.MonolithicContent.HasColumnPaginationExcludedFeature"/>)
     /// is covered below; a table combining real pagination with any of those excluded features remains a
     /// tracked follow-up gap, still monolithic exactly as before.
     /// </summary>

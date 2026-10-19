@@ -1,8 +1,8 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using System;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Strokes a <c>text-decoration-style: wavy</c> line (css-text-decor-3 §2.2: "Draw a wavy line") -

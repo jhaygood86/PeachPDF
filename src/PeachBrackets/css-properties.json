@@ -105,7 +105,7 @@
       "initialValue": {
         "expression": "DefaultFontResolver.DefaultFont"
       },
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.FontFamiliesConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontFamiliesConverter.Convert" },
       "html": {
         "propertyPath": "FontFamily",
         "csharpDataType": "string?",
@@ -250,8 +250,8 @@
         "csharpDataType": "FillMode",
         "inheritedFrom": "FillRule",
         "invalidBehavior": "inherit",
-        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out _)",
-        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out var parsed);\n{element}.FillRule = parsed;"
+        "customValidator": "global::PeachBrackets.Svg.SvgValueParsers.TryParseFillRule({value}, out _)",
+        "customSetter": "global::PeachBrackets.Svg.SvgValueParsers.TryParseFillRule({value}, out var parsed);\n{element}.FillRule = parsed;"
       }
     },
     {
@@ -297,8 +297,8 @@
         "csharpDataType": "LineCap",
         "inheritedFrom": "StrokeLineCap",
         "invalidBehavior": "inherit",
-        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out _)",
-        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out var parsed);\n{element}.StrokeLineCap = parsed;"
+        "customValidator": "global::PeachBrackets.Svg.SvgValueParsers.TryParseLineCap({value}, out _)",
+        "customSetter": "global::PeachBrackets.Svg.SvgValueParsers.TryParseLineCap({value}, out var parsed);\n{element}.StrokeLineCap = parsed;"
       }
     },
     {
@@ -318,8 +318,8 @@
         "csharpDataType": "LineJoin",
         "inheritedFrom": "StrokeLineJoin",
         "invalidBehavior": "inherit",
-        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out _)",
-        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out var parsed);\n{element}.StrokeLineJoin = parsed;"
+        "customValidator": "global::PeachBrackets.Svg.SvgValueParsers.TryParseLineJoin({value}, out _)",
+        "customSetter": "global::PeachBrackets.Svg.SvgValueParsers.TryParseLineJoin({value}, out var parsed);\n{element}.StrokeLineJoin = parsed;"
       }
     },
     {
@@ -568,7 +568,7 @@
       "comment": "CSS Backgrounds and Borders 3 <13>: none | <image>. Parses into a structurally different field (a single CssImage, not a list) via a custom setter, mirroring background-image's own custom-setter pattern; cssDataType 'cssom-grammar' calls the same Converters.OptionalImageSourceConverter.Convert real grammar background-image and this property's own CSS-OM BorderImageSourceProperty already use, so validation and application share one parser rather than a second, independently-derived one.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.OptionalImageSourceConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.OptionalImageSourceConverter.Convert" },
       "html": {
         "propertyPath": "BorderImageSource",
         "csharpDataType": "CssImage?",
@@ -583,7 +583,7 @@
       "comment": "CSS Backgrounds and Borders 3 <13>: [<number-percentage>{1,4} && fill?]. Stored as the raw declared string (like background-size/background-repeat) rather than eagerly resolved - a slice value has no meaning until border-image-source's own natural/concretized size is known at paint time, which BorderImageLayerResolver.ResolveSlice re-derives from this same string using the identical component grammar BorderImageSliceProperty.TheConverter (this cssDataType's own validator) already parses, per the 'don't write two independent parsers' convention.",
       "inherited": false,
       "initialValue": "100%",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageSliceProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageSliceProperty.TheConverter.Convert" },
       "html": {
         "propertyPath": "BorderImageSlice",
         "csharpDataType": "string",
@@ -595,7 +595,7 @@
       "comment": "CSS Backgrounds and Borders 3 <13>: [<length-percentage> | <number> | auto]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveWidth resolves it against the box's own border widths/border-box size at paint time, reusing BorderImageWidthProperty.TheConverter's grammar.",
       "inherited": false,
       "initialValue": "1",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageWidthProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageWidthProperty.TheConverter.Convert" },
       "html": {
         "propertyPath": "BorderImageWidth",
         "csharpDataType": "string",
@@ -607,7 +607,7 @@
       "comment": "CSS Backgrounds and Borders 3 <13>: [<length> | <number>]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveOutset resolves it against the box's own border widths at paint time, reusing BorderImageOutsetProperty.TheConverter's grammar. That CSS-OM grammar also accepts a percentage (pre-existing, tested CSS-OM-layer behavior broader than the spec's own length|number grammar - not introduced or corrected here); the resolver honors one if declared, against the same axis's border width.",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageOutsetProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageOutsetProperty.TheConverter.Convert" },
       "html": {
         "propertyPath": "BorderImageOutset",
         "csharpDataType": "string",
@@ -619,7 +619,7 @@
       "comment": "CSS Backgrounds and Borders 3 <13>: [stretch | repeat | round | space]{1,2}. All four keywords are recognized (Map.BorderRepeatModes/the BorderRepeat enum). Stored as the raw declared string for the same reason border-image-slice is.",
       "inherited": false,
       "initialValue": "stretch",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageRepeatProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageRepeatProperty.TheConverter.Convert" },
       "html": {
         "propertyPath": "BorderImageRepeat",
         "csharpDataType": "string",
@@ -631,7 +631,7 @@
       "comment": "cssDataType 'cssom-grammar' calls BoxShadowGrammar.TryParse directly - the same grammar CssBox.PaintBoxShadows already calls at render time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none' - see its own doc comment).",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BoxShadowGrammar.TryParse" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BoxShadowGrammar.TryParse" },
       "html": {
         "propertyPath": "BoxShadow",
         "csharpDataType": "string",
@@ -643,7 +643,7 @@
       "comment": "cssDataType 'cssom-grammar' calls TextShadowGrammar.TryParse directly - the same grammar FragmentPainter's text-shadow paint calls at render time (none-aware, like box-shadow's). Inherited, per CSS Text Decoration 3 section 4.1.",
       "inherited": true,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.TextShadowGrammar.TryParse" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TextShadowGrammar.TryParse" },
       "html": {
         "propertyPath": "TextShadow",
         "csharpDataType": "string",
@@ -714,7 +714,7 @@
       "comment": "cssDataType 'cssom-grammar' calls TransformOriginProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "50% 50% 0",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.TransformOriginProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransformOriginProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "TransformOrigin",
         "invalidates": "InvalidateTransform",
@@ -727,7 +727,7 @@
       "comment": "cssDataType 'cssom-grammar' calls BasicShapeGrammar.TryParse directly - the same grammar CssClipPathResolver already calls at render time (see its own doc comment), avoiding the full cssom PropertyFactory/StylesheetParser round trip. acceptsNoneLiteral: true because TryParse returns null for the literal 'none' the same as for an invalid value (its own doc comment explains why), so the validator must accept it separately.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BasicShapeGrammar.TryParse", "acceptsNoneLiteral": true },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BasicShapeGrammar.TryParse", "acceptsNoneLiteral": true },
       "html": {
         "propertyPath": "ClipPath",
         "csharpDataType": "string",
@@ -739,7 +739,7 @@
       "comment": "Legacy CSS 2.1 clipping (https://www.w3.org/TR/CSS21/visufx.html#clipping), superseded by clip-path above but kept for compatibility. String-stored, like clip-path - CssClipRectResolver re-tokenizes the raw declared text itself. cssDataType 'cssom-grammar' calls Converters.ShapeConverter.Convert directly (the same converter ClipProperty's own real grammar uses, already .OrAuto()-composed so the 'auto' initial value needs no acceptsNoneLiteral-style special case) instead of the full cssom round trip. ShapeConverter's own rect()-grammar duplication vs CssClipRectResolver's hand-rolled walk is a separate, pre-existing 'one parser' gap, not introduced here.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.ShapeConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ShapeConverter.Convert" },
       "html": {
         "propertyPath": "Clip",
         "csharpDataType": "string",
@@ -775,13 +775,13 @@
         "propertyPath": "Opacity",
         "csharpDataType": "double",
         "invalidBehavior": "leave-unset",
-        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity({value}, out _)",
-        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity({value}, out var parsed);\n{element}.Opacity = parsed;"
+        "customValidator": "global::PeachBrackets.Svg.SvgValueParsers.TryParseOpacity({value}, out _)",
+        "customSetter": "global::PeachBrackets.Svg.SvgValueParsers.TryParseOpacity({value}, out var parsed);\n{element}.Opacity = parsed;"
       }
     },
     {
       "name": "mix-blend-mode",
-      "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.PaintBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to PaintBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachPDF.CSS, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; PeachPDF.CSS.BlendMode is mapped to PaintBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
+      "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.PaintBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to PaintBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachBrackets.Css, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; PeachBrackets.Css.BlendMode is mapped to PaintBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": {
@@ -799,10 +799,10 @@
     },
     {
       "name": "filter",
-      "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachPDF.Html.Core.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. opacity()/brightness()/contrast()/invert() have a native PDF path; blur()/grayscale()/sepia()/saturate()/hue-rotate()/drop-shadow() are rendered into a bitmap by the raster backend (FilterEffectResolver.Resolved.RequiresRaster).",
+      "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachBrackets.Html.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. opacity()/brightness()/contrast()/invert() have a native PDF path; blur()/grayscale()/sepia()/saturate()/hue-rotate()/drop-shadow() are rendered into a bitmap by the raster backend (FilterEffectResolver.Resolved.RequiresRaster).",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FilterGrammar.TryParse" },
       "html": {
         "propertyPath": "Filter",
         "invalidates": "InvalidateFilter",
@@ -815,7 +815,7 @@
       "comment": "none | <length>: how far the viewer is from the z=0 plane, for this box's children (CSS Transforms 2 section 13). cssDataType 'cssom-grammar' calls PerspectiveProperty.ValueGrammar directly. Read at paint time by FragmentPainter's projective path (a child with a transform that moves out of the plane); no cascade-time work.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.PerspectiveProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.PerspectiveProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "Perspective",
         "invalidates": "InvalidatePerspective",
@@ -828,7 +828,7 @@
       "comment": "<position>: the vanishing point of perspective, relative to this box (CSS Transforms 2 section 13). cssDataType 'cssom-grammar' calls PerspectiveOriginProperty.ValueGrammar directly.",
       "inherited": false,
       "initialValue": "50% 50%",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.PerspectiveOriginProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.PerspectiveOriginProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "PerspectiveOrigin",
         "csharpDataType": "string",
@@ -876,7 +876,7 @@
       "comment": "The same function grammar as filter (Filter Effects 2 section 3.1), applied to what was painted behind the element rather than to the element. Always rendered by the raster backend: FragmentPainter.PaintBackdropFilter re-paints the earlier content of the backdrop root into a bitmap, filters it, and draws it under the element's own background.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FilterGrammar.TryParse" },
       "html": {
         "propertyPath": "BackdropFilter",
         "invalidates": "InvalidateBackdropFilter",
@@ -889,7 +889,7 @@
       "comment": "Prefixed alias of backdrop-filter, sharing its storage; still what older Safari-targeted stylesheets write.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FilterGrammar.TryParse" },
       "aliasOf": "backdrop-filter",
       "html": {
         "propertyPath": "BackdropFilter",
@@ -903,7 +903,7 @@
       "comment": "cssDataType 'cssom-grammar' calls ContentProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.ContentProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContentProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "Content",
         "csharpDataType": "string",
@@ -915,7 +915,7 @@
       "comment": "cssDataType 'cssom-grammar' calls QuotesProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "\"«\" \"»\"",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.QuotesProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.QuotesProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "Quotes",
         "csharpDataType": "string",
@@ -927,7 +927,7 @@
       "comment": "cssDataType 'cssom-grammar' calls CounterIncrementProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.CounterIncrementProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterIncrementProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "CounterIncrement",
         "csharpDataType": "string",
@@ -939,7 +939,7 @@
       "comment": "cssDataType 'cssom-grammar' calls CounterResetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.CounterResetProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterResetProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "CounterReset",
         "csharpDataType": "string",
@@ -951,7 +951,7 @@
       "comment": "cssDataType 'cssom-grammar' calls CounterSetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip. See .claude/migration-notes/2026-08-02-counter-set-now-actually-parses.md for why this property's validation was historically fragile - verify against real declarations carefully if touching this again.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.CounterSetProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterSetProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "CounterSet",
         "csharpDataType": "string",
@@ -963,7 +963,7 @@
       "comment": "cssDataType 'cssom-grammar' calls StringSetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.StringSetProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.StringSetProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "StringSet",
         "csharpDataType": "string",
@@ -987,7 +987,7 @@
       "comment": "CSS Animations 1 §3.2. Stored as the raw comma-separated list (cssDataType 'cssom-grammar' validates it through AnimationNameProperty.ValueGrammar, the same grammar the CSS-OM uses). It is read by AnimationApplier at the end of the author-normal cascade phase and never by layout or paint: PeachPDF has no timeline, so an animation is sampled once at PdfGenerateConfig.AnimationProgress and its result written onto the box as ordinary declarations. The animation-* longhands are all non-inherited.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationNameProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationNameProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationName",
         "csharpDataType": "string",
@@ -999,7 +999,7 @@
       "comment": "CSS Animations 1 §3.3. Raw comma-separated <time> list; see animation-name.",
       "inherited": false,
       "initialValue": "0s",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationDurationProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationDurationProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationDuration",
         "csharpDataType": "string",
@@ -1011,7 +1011,7 @@
       "comment": "CSS Animations 1 §3.4 / CSS Easing 1. Raw comma-separated <easing-function> list; see animation-name.",
       "inherited": false,
       "initialValue": "ease",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationTimingFunctionProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationTimingFunctionProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationTimingFunction",
         "csharpDataType": "string",
@@ -1023,7 +1023,7 @@
       "comment": "CSS Animations 1 §3.5. Raw comma-separated <time> list; see animation-name. Parsed and stored for completeness - a snapshot samples an animation relative to the start of its active interval, so the delay never moves it.",
       "inherited": false,
       "initialValue": "0s",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationDelayProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationDelayProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationDelay",
         "csharpDataType": "string",
@@ -1035,7 +1035,7 @@
       "comment": "CSS Animations 1 §3.6. Raw comma-separated <number [0,inf]> | infinite list; see animation-name.",
       "inherited": false,
       "initialValue": "1",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationIterationCountProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationIterationCountProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationIterationCount",
         "csharpDataType": "string",
@@ -1047,7 +1047,7 @@
       "comment": "CSS Animations 1 §3.7. Raw comma-separated normal | reverse | alternate | alternate-reverse list; see animation-name.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationDirectionProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationDirectionProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationDirection",
         "csharpDataType": "string",
@@ -1059,7 +1059,7 @@
       "comment": "CSS Animations 1 §3.9. Raw comma-separated none | forwards | backwards | both list; see animation-name. Stored for completeness - a snapshot is always taken inside the active interval, so the fill mode never changes what is rendered.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationFillModeProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationFillModeProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationFillMode",
         "csharpDataType": "string",
@@ -1071,7 +1071,7 @@
       "comment": "CSS Animations 1 §3.8. Raw comma-separated running | paused list; see animation-name. Stored for completeness - a snapshot has no playback to pause.",
       "inherited": false,
       "initialValue": "running",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.AnimationPlayStateProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationPlayStateProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationPlayState",
         "csharpDataType": "string",
@@ -1083,7 +1083,7 @@
       "comment": "cssDataType 'cssom-grammar' calls Converters.PdfTagTypeConverter.Convert directly (Map.PdfTagTypes.ToConverter(), which already includes \"auto\" as a real keyword) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PdfTagTypeConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfTagTypeConverter.Convert" },
       "html": {
         "propertyPath": "PdfTagType",
         "csharpDataType": "string",
@@ -1095,7 +1095,7 @@
       "comment": "PeachPDF's PDF-output extension for interactive form fields (no W3C spec - see issue #709). auto infers the field kind from the element (tag name + <input type=>) via FormFieldMapper.Classify; text/checkbox/radio/select force a kind regardless of the element's own type. Inert unless PdfGenerateConfig.EnableInteractivePdfForms is set, and only ever applies to a real <input>/<select> element - a declaration on any other element is simply ignored. String-stored, like -peachpdf-pdf-tag-type - FormFieldMapper re-resolves the raw string via Map.PdfFormFieldKinds. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PdfFormFieldConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldConverter.Convert" },
       "html": {
         "propertyPath": "PdfFormField",
         "csharpDataType": "string",
@@ -1107,7 +1107,7 @@
       "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'auto-font-size' sub-option (see the shorthand's own entry) - when auto, a generated text field's /DA font size is written as 0 (PDF's own auto-size convention) instead of a fixed size. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldAutoFontSizeConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PdfFormFieldAutoFontSizeConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldAutoFontSizeConverter.Convert" },
       "html": {
         "propertyPath": "PdfFormFieldAutoFontSize",
         "csharpDataType": "string",
@@ -1119,7 +1119,7 @@
       "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'comb(<integer>)' sub-option (see the shorthand's own entry) - none | <integer>, the number of evenly-spaced character cells. Sets the PDF field flag bit Comb and /MaxLen. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldCombConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PdfFormFieldCombConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldCombConverter.Convert" },
       "html": {
         "propertyPath": "PdfFormFieldComb",
         "csharpDataType": "string",
@@ -1131,7 +1131,7 @@
       "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'do-not-scroll' sub-option (see the shorthand's own entry) - sets the PDF field flag bit DoNotScroll. No appearance-stream effect, just a flag PDF readers use for their own editing UI. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldDoNotScrollConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PdfFormFieldDoNotScrollConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldDoNotScrollConverter.Convert" },
       "html": {
         "propertyPath": "PdfFormFieldDoNotScroll",
         "csharpDataType": "string",
@@ -1143,7 +1143,7 @@
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-level). String-stored, like -peachpdf-pdf-tag-type - BookmarkOutlineBuilder parses the raw none/<integer> string itself (mirroring StructureTagMapper.Classify's own re-parse of PdfTagType). cssDataType 'cssom-grammar' calls Converters.BookmarkLevelConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip. h1-h6 default to 1-6 via CssDefaults.cs's UA stylesheet, everything else defaults to none (this property's own initial value), which is itself the zero-config \"no bookmarks\" state.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkLevelConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLevelConverter.Convert" },
       "html": {
         "propertyPath": "BookmarkLevel",
         "csharpDataType": "string",
@@ -1155,7 +1155,7 @@
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-label). A <content-list> - the same string/counter()/attr()/content()/string() grammar `content` accepts, minus url()/gradients (image content, not applicable to a label) and the quote-modes/element() (meaningful only within flowing generated content, not a standalone label string) - see the shared Converters.ContentListItemConverter both properties' CSS-OM converters reference (this property's own is Converters.BookmarkLabelConverter, already public - cssDataType 'cssom-grammar' calls its .Convert directly), and CssContentEngine.ResolveContentTokens/ResolveBookmarkLabel for the shared resolver. Initial value content(text) means \"the element's own rendered text\", resolved via the same content()/\"text\" branch content() itself uses.",
       "inherited": false,
       "initialValue": "content(text)",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkLabelConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLabelConverter.Convert" },
       "html": {
         "propertyPath": "BookmarkLabel",
         "csharpDataType": "string",
@@ -1167,7 +1167,7 @@
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-state). String-stored, like bookmark-level - BookmarkOutlineBuilder parses the raw open/closed string itself via Map.BookmarkStates. cssDataType 'cssom-grammar' calls Converters.BookmarkStateConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "open",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkStateConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkStateConverter.Convert" },
       "html": {
         "propertyPath": "BookmarkState",
         "csharpDataType": "string",
@@ -1179,7 +1179,7 @@
       "comment": "NOT a css-content-3 property - css-content-3 defines only bookmark-level/-label/-state (verified against the spec source directly; an earlier draft of this issue assumed bookmark-target was part of the same spec and it is not). This is Prince's own extension (prince-bookmark-target, self | url() | attr(), default self) - PeachPDF's own documented spelling follows the -peachpdf-pdf-tag-type precedent for a PDF-output feature with no real spec-track name, rather than the unprefixed spelling Prince itself uses. See BookmarkOutlineBuilder.ResolveTargetValue for self/url()/attr() resolution and the in-document-fragment-vs-external-URL split. cssDataType 'cssom-grammar' calls the already-public Converters.BookmarkTargetConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "self",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkTargetConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkTargetConverter.Convert" },
       "html": {
         "propertyPath": "BookmarkTarget",
         "csharpDataType": "string",
@@ -1191,7 +1191,7 @@
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-level spelling (Prince documents both an unprefixed and a -prince- prefixed form for all four bookmark-* properties) - translates to the real spec property bookmark-level at parse time. Not documented in docs/, same pattern as the other PDF-output extensions' Prince/prefixed compat shims. cssDataType 'cssom-grammar' calls the same Converters.BookmarkLevelConverter.Convert bookmark-level's own real grammar uses.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkLevelConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLevelConverter.Convert" },
       "aliasOf": "bookmark-level",
       "html": {
         "propertyPath": "BookmarkLevel",
@@ -1204,7 +1204,7 @@
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-label spelling - translates to the real spec property bookmark-label at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkLabelConverter.Convert bookmark-label's own real grammar uses.",
       "inherited": false,
       "initialValue": "content(text)",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkLabelConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLabelConverter.Convert" },
       "aliasOf": "bookmark-label",
       "html": {
         "propertyPath": "BookmarkLabel",
@@ -1217,7 +1217,7 @@
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-state spelling - translates to the real spec property bookmark-state at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkStateConverter.Convert bookmark-state's own real grammar uses.",
       "inherited": false,
       "initialValue": "open",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkStateConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkStateConverter.Convert" },
       "aliasOf": "bookmark-state",
       "html": {
         "propertyPath": "BookmarkState",
@@ -1230,7 +1230,7 @@
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-target spelling - translates to -peachpdf-bookmark-target (a PeachPDF extension, not a real spec property - see that entry) at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkTargetConverter.Convert PrinceBookmarkTargetProperty's own real grammar uses.",
       "inherited": false,
       "initialValue": "self",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkTargetConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkTargetConverter.Convert" },
       "aliasOf": "-peachpdf-bookmark-target",
       "html": {
         "propertyPath": "BookmarkTarget",
@@ -1243,7 +1243,7 @@
       "comment": "Hidden, undocumented compat alias for Prince's own bookmark-target spelling (Prince's convenience alias for its prince-bookmark-target extension) - translates to -peachpdf-bookmark-target at parse time. The one place in this file an unprefixed name is NOT a real spec property: css-content-3 defines no bookmark-target at all (see -peachpdf-bookmark-target's own comment). cssDataType 'cssom-grammar' calls the same Converters.BookmarkTargetConverter.Convert BookmarkTargetAliasProperty's own real grammar uses.",
       "inherited": false,
       "initialValue": "self",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkTargetConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkTargetConverter.Convert" },
       "aliasOf": "-peachpdf-bookmark-target",
       "html": {
         "propertyPath": "BookmarkTarget",
@@ -1772,7 +1772,7 @@
       "comment": "background-position is <position># (comma-separated per layer), so cssDataType 'cssom-grammar' calls BackgroundPositionProperty.ValueGrammar.Convert directly - the real Converters.PointConverter.FromList() composition, exposed alongside the property's own .OrDefault()-wrapped Converter - instead of the full cssom round trip. (BackgroundPositionGrammar.TryParse alone only understands a single position, not the comma list; BackgroundPositionValueConverter/BackgroundLayerResolver call it per-layer after FromList() has already split the groups.)",
       "inherited": false,
       "initialValue": "0% 0%",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BackgroundPositionProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BackgroundPositionProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "BackgroundPosition",
         "csharpDataType": "string",
@@ -1796,7 +1796,7 @@
       "comment": "background-size is <bg-size># (comma-separated per layer), so cssDataType 'cssom-grammar' calls BackgroundSizeProperty.ValueGrammar.Convert directly - the real Converters.BackgroundSizeConverter.FromList() composition, exposed alongside the property's own .OrDefault()-wrapped Converter - instead of the full cssom round trip. (BackgroundSizeGrammar.TryParse alone only understands a single layer, not the comma list.)",
       "inherited": false,
       "initialValue": "auto auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BackgroundSizeProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BackgroundSizeProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "BackgroundSize",
         "csharpDataType": "string",
@@ -1884,7 +1884,7 @@
       "comment": "CSS Images 4 5.2. Inherited. from-image applies the raster's own Exif orientation, none ignores it, and [ <angle> || flip ] replaces it with a rotation (rounded to a quarter turn) and optional horizontal flip. Stored as the declaration text and read at use with the same ImageOrientation.TryParse grammar the CSS-OM converter validates with (no second parser); the angle accepts calc(), folded to a quarter turn by the same grammar.",
       "inherited": true,
       "initialValue": "from-image",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.ImageOrientationConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ImageOrientationConverter.Convert" },
       "html": {
         "propertyPath": "ImageOrientation",
         "csharpDataType": "string",
@@ -1896,7 +1896,7 @@
       "comment": "Unlike background-position, object-position is a single <position> (no comma list, no FromList()), so cssDataType 'cssom-grammar' calls the already-public Converters.PointConverter.Convert directly - the same converter ObjectPositionProperty's own real grammar uses - instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "50% 50%",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PointConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PointConverter.Convert" },
       "html": {
         "propertyPath": "ObjectPosition",
         "csharpDataType": "string",
@@ -1937,7 +1937,7 @@
       "comment": "Parses into a structurally different field (image list) via a custom setter; cssDataType 'cssom-grammar' calls Converters.MultipleImageSourceConverter.Convert directly (the same converter BackgroundImageProperty's own real grammar uses, already .OrNone()-composed) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.MultipleImageSourceConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.MultipleImageSourceConverter.Convert" },
       "html": {
         "propertyPath": "BackgroundImages",
         "csharpDataType": "IReadOnlyList<CssImage>?",
@@ -1984,10 +1984,10 @@
     },
     {
       "name": "container-name",
-      "comment": "CSS Containment 3 SS2. Raw space-separated <custom-ident>+ list (or 'none'), stored as text - PeachPDF.CSS.ContainerNameProperty does not yet validate full custom-ident grammar (an existing simplification). cssDataType 'cssom-grammar' calls ContainerNameProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) rather than re-deriving a second parser (see CLAUDE.md's 'one parser' rule), instead of the full cssom round trip. Splitting on whitespace and matching against an @container rule's queried name happens at container-resolution time (CssBox.FindNearestQueryContainer), not here.",
+      "comment": "CSS Containment 3 SS2. Raw space-separated <custom-ident>+ list (or 'none'), stored as text - PeachBrackets.Css.ContainerNameProperty does not yet validate full custom-ident grammar (an existing simplification). cssDataType 'cssom-grammar' calls ContainerNameProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) rather than re-deriving a second parser (see CLAUDE.md's 'one parser' rule), instead of the full cssom round trip. Splitting on whitespace and matching against an @container rule's queried name happens at container-resolution time (CssBox.FindNearestQueryContainer), not here.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.ContainerNameProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainerNameProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "ContainerName",
         "csharpDataType": "string",
@@ -2080,8 +2080,8 @@
         "csharpDataType": "CssProperty<PositionMode>",
         "area": "DisplayPositioningArea",
         "getterExpression": "{box}.Position.ToString()",
-        "customValidator": "global::PeachPDF.CSS.PositionValueGrammar.TryParse({value}, out _, out _)",
-        "customSetter": "global::PeachPDF.CSS.PositionValueGrammar.TryParse({value}, out var runningPositionMode, out var runningElementName);\n{box}.Position = global::PeachPDF.CSS.CssProperty<global::PeachPDF.CSS.PositionMode>.FromValue(global::PeachPDF.CSS.PositionValueGrammar.CanonicalCssText({value}, runningElementName), runningPositionMode);\n{box}.RunningElementName = runningElementName;"
+        "customValidator": "global::PeachBrackets.Css.PositionValueGrammar.TryParse({value}, out _, out _)",
+        "customSetter": "global::PeachBrackets.Css.PositionValueGrammar.TryParse({value}, out var runningPositionMode, out var runningElementName);\n{box}.Position = global::PeachBrackets.Css.CssProperty<global::PeachBrackets.Css.PositionMode>.FromValue(global::PeachBrackets.Css.PositionValueGrammar.CanonicalCssText({value}, runningElementName), runningPositionMode);\n{box}.RunningElementName = runningElementName;"
       }
     },
     {
@@ -2264,7 +2264,7 @@
       "comment": "cssDataType 'cssom-grammar' calls TextIndentValueConverter.Instance.Convert directly (the same shared TextIndentGrammar the real converter uses) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "0",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.TextIndentValueConverter.Instance.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TextIndentValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "TextIndent",
         "csharpDataType": "string",
@@ -2274,7 +2274,7 @@
     },
     {
       "name": "text-align-all",
-      "comment": "css-text-3 §6.2. The longhand text-align's shorthand actually resolves to (PeachPDF.CSS.TextAlignProperty) - a plain text-align value sets this and resets text-align-last to auto; justify-all/match-parent set both. See .claude/recent-fixes/ for the shorthand conversion.",
+      "comment": "css-text-3 §6.2. The longhand text-align's shorthand actually resolves to (PeachBrackets.Css.TextAlignProperty) - a plain text-align value sets this and resets text-align-last to auto; justify-all/match-parent set both. See .claude/recent-fixes/ for the shorthand conversion.",
       "inherited": true,
       "initialValue": "start",
       "cssDataType": {
@@ -2521,7 +2521,7 @@
       "comment": "CSS Overflow 4 §block-ellipsis: auto | none | <string> - customizes line-clamp's own generated ellipsis text (CssLayoutEngine.TryApplyLineClamp), in place of the UA-default '…'. cssDataType 'cssom-grammar' calls Converters.BlockEllipsisConverter.Convert directly - the same shared-converter shape hyphenate-character's own near-identical 'auto | <string>' grammar uses - instead of a second, independently-reimplemented grammar here. The raw declared text is stored as-is (still carrying its quotes, same convention as hyphenate-character); CssLayoutEngine.TryApplyLineClamp re-parses it (via CssValueParser.TryParseSingleString, the shared <string>-token parser) to get the actual ellipsis text/none decision. inherited: true matches the real spec table (confirmed against the W3C draft) even though line-clamp's own longhands (max-lines/continue) are not inherited - a parent's custom marker is meant to apply to any descendant's own line-clamp, not just a box that redeclares it itself. initialValue is a deliberate divergence from the spec's own bare per-property initial ('none') - the spec's line-clamp grammar is 'none | <integer> <block-ellipsis>?', and its own text says the single-value shorthand form ('line-clamp: 3', with no second component) sets block-ellipsis to auto, not to its own bare initial; this engine models line-clamp as one property rather than a true 3-way shorthand (see line-clamp's own comment above), so there is no separate expansion step to carry that 'implies auto' rule - defaulting block-ellipsis's OWN initial to auto reproduces the shorthand's documented result for the only case where this value is ever actually consulted (TryApplyLineClamp never reads it unless line-clamp itself is already active).",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BlockEllipsisConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockEllipsisConverter.Convert" },
       "html": {
         "propertyPath": "BlockEllipsis",
         "csharpDataType": "string",
@@ -2530,7 +2530,7 @@
     },
     {
       "name": "tab-size",
-      "comment": "CSS Text 4 §3.6 (https://www.w3.org/TR/css-text-4/#tab-size-property): <number [0,∞]> | <length [0,∞]> - no percentage. No keyword side, so this doesn't fit the keyword-or-value shape (line-height/word-spacing/letter-spacing) — plain array-union cssDataType instead, same shape as flex-grow/flex-shrink. A bare number isn't resolved here (unlike line-height's bare multiplier, which scales font-size) — the spec defines it as a multiple of the *space glyph's* advance width, which is only known once the tab's actual font is resolved, so DerivedStyle.ResolvedTabSize defers that to CssBox.MeasureWordsSize (see its ExpandTabs helper). Neither the plain \"number\" nor \"length\" DataTypeKind enforces a lower bound on its own (see orphans/flex-grow precedent), so customValidator adds the >=0 check for both union sides; it also explicitly excludes Length.Unit.Percent - unlike the CSS-OM's own ValueExtensions.ToLength (which the generated \"length\" DataTypeKind's base check would otherwise defer to for Layer A), PeachPDF.CSS.Length.TryParse used here accepts percentages, and without this exclusion a value like \"50%\" would validate, then DerivedStyle.ResolvedTabSize would resolve it against a hundredPercent basis of 0 (tab-size has no percentage basis to resolve against) and silently collapse to a zero-width tab-stop instead of being rejected. A calc() length is accepted without a sign check (matching CssValueParser.IsCalcFunction's existing permissiveness for other length properties) since evaluating it needs layout-time context this validator doesn't have.",
+      "comment": "CSS Text 4 §3.6 (https://www.w3.org/TR/css-text-4/#tab-size-property): <number [0,∞]> | <length [0,∞]> - no percentage. No keyword side, so this doesn't fit the keyword-or-value shape (line-height/word-spacing/letter-spacing) — plain array-union cssDataType instead, same shape as flex-grow/flex-shrink. A bare number isn't resolved here (unlike line-height's bare multiplier, which scales font-size) — the spec defines it as a multiple of the *space glyph's* advance width, which is only known once the tab's actual font is resolved, so DerivedStyle.ResolvedTabSize defers that to CssBox.MeasureWordsSize (see its ExpandTabs helper). Neither the plain \"number\" nor \"length\" DataTypeKind enforces a lower bound on its own (see orphans/flex-grow precedent), so customValidator adds the >=0 check for both union sides; it also explicitly excludes Length.Unit.Percent - unlike the CSS-OM's own ValueExtensions.ToLength (which the generated \"length\" DataTypeKind's base check would otherwise defer to for Layer A), PeachBrackets.Css.Length.TryParse used here accepts percentages, and without this exclusion a value like \"50%\" would validate, then DerivedStyle.ResolvedTabSize would resolve it against a hundredPercent basis of 0 (tab-size has no percentage basis to resolve against) and silently collapse to a zero-width tab-stop instead of being rejected. A calc() length is accepted without a sign check (matching CssValueParser.IsCalcFunction's existing permissiveness for other length properties) since evaluating it needs layout-time context this validator doesn't have.",
       "inherited": true,
       "initialValue": "8",
       "cssDataType": ["number", "length"],
@@ -2538,7 +2538,7 @@
         "propertyPath": "TabSize",
         "csharpDataType": "string",
         "area": "TextArea",
-        "customValidator": "(double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out var tabSizeNumber) && tabSizeNumber >= 0) || (global::PeachPDF.CSS.Length.TryParse({value}, out var tabSizeLength) ? (tabSizeLength.Value >= 0 && tabSizeLength.Type != global::PeachPDF.CSS.Length.Unit.Percent) : global::PeachPDF.Html.Core.Parse.CssValueParser.IsCalcFunction({value}))"
+        "customValidator": "(double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out var tabSizeNumber) && tabSizeNumber >= 0) || (global::PeachBrackets.Css.Length.TryParse({value}, out var tabSizeLength) ? (tabSizeLength.Value >= 0 && tabSizeLength.Type != global::PeachBrackets.Css.Length.Unit.Percent) : global::PeachBrackets.Html.Parse.CssValueParser.IsCalcFunction({value}))"
       }
     },
     {
@@ -2615,7 +2615,7 @@
       "comment": "CSS Text 4 §6.3.1: auto | <string>. cssDataType 'cssom-grammar' calls the already-public Converters.HyphenateCharacterConverter.Convert directly instead of the full cssom round trip; layout resolves the raw stored text (list-style-type's own <string>-storage convention - still carries its quotes) to the actual glyph, defaulting auto to '-' (see docs/html-css-support.md and the accepted-gaps note on script-appropriate auto selection).",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.HyphenateCharacterConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HyphenateCharacterConverter.Convert" },
       "html": {
         "propertyPath": "HyphenateCharacter",
         "csharpDataType": "string",
@@ -2627,7 +2627,7 @@
       "comment": "CSS Text 4 §6.3.4: [ auto | <integer> ]{1,3}. cssDataType 'cssom-grammar' calls Converters.HyphenateLimitCharsConverter.Convert directly (the real, already-public converter HyphenateLimitCharsProperty itself uses) instead of the full cssom round trip; layout re-parses the raw stored text to get the word/before/after minimums (CssLayoutEngine.TryHyphenateWord).",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.HyphenateLimitCharsConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HyphenateLimitCharsConverter.Convert" },
       "html": {
         "propertyPath": "HyphenateLimitChars",
         "csharpDataType": "string",
@@ -2689,7 +2689,7 @@
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-character spelling (Prince also documents an unprefixed \"hyphenate-character\" that is spelled identically to the real CSS Text 4 property, so needs no separate alias entry of its own) - translates to hyphenate-character at parse time. Not documented in docs/. cssDataType 'cssom-grammar' calls the same Converters.HyphenateCharacterConverter.Convert hyphenate-character's own real grammar uses.",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.HyphenateCharacterConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HyphenateCharacterConverter.Convert" },
       "aliasOf": "hyphenate-character",
       "html": {
         "propertyPath": "HyphenateCharacter",
@@ -2752,7 +2752,7 @@
         "propertyPath": "HyphenateLimitChars",
         "csharpDataType": "string",
         "area": "TextArea",
-        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithBefore({box}.HyphenateLimitChars, {value});",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachBrackets.Css.HyphenateLimitCharsGrammar.WithBefore({box}.HyphenateLimitChars, {value});",
         "hasGetter": false
       }
     },
@@ -2770,7 +2770,7 @@
         "propertyPath": "HyphenateLimitChars",
         "csharpDataType": "string",
         "area": "TextArea",
-        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithBefore({box}.HyphenateLimitChars, {value});",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachBrackets.Css.HyphenateLimitCharsGrammar.WithBefore({box}.HyphenateLimitChars, {value});",
         "hasGetter": false
       }
     },
@@ -2787,7 +2787,7 @@
         "propertyPath": "HyphenateLimitChars",
         "csharpDataType": "string",
         "area": "TextArea",
-        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithAfter({box}.HyphenateLimitChars, {value});",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachBrackets.Css.HyphenateLimitCharsGrammar.WithAfter({box}.HyphenateLimitChars, {value});",
         "hasGetter": false
       }
     },
@@ -2805,7 +2805,7 @@
         "propertyPath": "HyphenateLimitChars",
         "csharpDataType": "string",
         "area": "TextArea",
-        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithAfter({box}.HyphenateLimitChars, {value});",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachBrackets.Css.HyphenateLimitCharsGrammar.WithAfter({box}.HyphenateLimitChars, {value});",
         "hasGetter": false
       }
     },
@@ -2814,7 +2814,7 @@
       "comment": "cssDataType 'cssom-grammar' calls Converters.TextDecorationLinesConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip. 'blink' validates-and-accepts here exactly as it did under cssom, but paint currently renders it as a plain line - a separate, already-accepted, non-perf-related gap; this change doesn't touch that.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.TextDecorationLinesConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextDecorationLinesConverter.Convert" },
       "html": {
         "propertyPath": "TextDecorationLine",
         "csharpDataType": "string",
@@ -2932,8 +2932,8 @@
         "csharpDataType": "CssProperty<TextUnderlinePosition>",
         "area": "TextArea",
         "getterExpression": "{box}.TextUnderlinePosition.ToString()",
-        "customValidator": "global::PeachPDF.CSS.TextUnderlinePositionGrammar.TryParse({value}, out _, out _)",
-        "customSetter": "global::PeachPDF.CSS.TextUnderlinePositionGrammar.TryParse({value}, out var underlinePosition, out var underlineSide);\nvar underlinePositionCanonicalText = global::PeachPDF.CSS.TextUnderlinePositionGrammar.CanonicalCssText(underlinePosition, underlineSide);\n{box}.TextUnderlinePosition = global::PeachPDF.CSS.CssProperty<global::PeachPDF.CSS.TextUnderlinePosition>.FromValue(underlinePositionCanonicalText, underlinePosition);\n{box}.TextUnderlineSide = global::PeachPDF.CSS.CssProperty<global::PeachPDF.CSS.TextUnderlineSide>.FromValue(underlinePositionCanonicalText, underlineSide);"
+        "customValidator": "global::PeachBrackets.Css.TextUnderlinePositionGrammar.TryParse({value}, out _, out _)",
+        "customSetter": "global::PeachBrackets.Css.TextUnderlinePositionGrammar.TryParse({value}, out var underlinePosition, out var underlineSide);\nvar underlinePositionCanonicalText = global::PeachBrackets.Css.TextUnderlinePositionGrammar.CanonicalCssText(underlinePosition, underlineSide);\n{box}.TextUnderlinePosition = global::PeachBrackets.Css.CssProperty<global::PeachBrackets.Css.TextUnderlinePosition>.FromValue(underlinePositionCanonicalText, underlinePosition);\n{box}.TextUnderlineSide = global::PeachBrackets.Css.CssProperty<global::PeachBrackets.Css.TextUnderlineSide>.FromValue(underlinePositionCanonicalText, underlineSide);"
       }
     },
     {
@@ -2961,7 +2961,7 @@
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontStyleConverter.Convert directly (the real grammar; per the accepted-gap file, oblique <angle> is genuinely implemented via FontObliqueAngleResolver, so there's no parse/render mismatch to preserve here unlike transform's perspective()).",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.FontStyleConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontStyleConverter.Convert" },
       "html": {
         "propertyPath": "FontStyle",
         "csharpDataType": "string",
@@ -3027,7 +3027,7 @@
       "comment": "cssDataType 'cssom-grammar' calls FontVariantAlternatesGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip - CSS Fonts 4 §6.8's seven-clause `||` combinator grammar isn't expressible as a plain keyword/value-list. Cross-referencing a clause's ident(s) against an @font-feature-values registration happens later, at resolve time (DerivedStyle.ActualFontVariantAlternates), not here.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontVariantAlternatesProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontVariantAlternatesProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "FontVariantAlternates",
         "csharpDataType": "string",
@@ -3039,7 +3039,7 @@
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantLigaturesConverter.Convert directly - the real converter enforces each ligature axis (common/discretionary/historical/contextual) appears at most once, which a naive keyword-set grammar would not; reusing it directly preserves that.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.FontVariantLigaturesConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontVariantLigaturesConverter.Convert" },
       "html": {
         "propertyPath": "FontVariantLigatures",
         "csharpDataType": "string",
@@ -3051,7 +3051,7 @@
       "comment": "CSS Fonts 4 section 6.10. cssDataType 'cssom-grammar' calls FontVariationSettingsProperty.ValueGrammar.Convert, like font-feature-settings. The cascaded string is turned into axis settings by FontVariationSettingsResolver and reaches the font through the variations argument of the font-creation chain (see DerivedStyle.ActualFontVariationSettings).",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontVariationSettingsProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontVariationSettingsProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "FontVariationSettings",
         "csharpDataType": "string",
@@ -3081,7 +3081,7 @@
       "comment": "CSS Fonts 5 section 3.2. cssDataType 'cssom-grammar' calls FontSizeAdjustProperty.ValueGrammar.Convert. The authored text is resolved to a metric and factor by FontSizeAdjustGrammar.Resolve where the font is created (DerivedStyle.ActualFont; SvgTreeBuilder.ComputeFontContext). It never changes the computed font-size or em resolution, only the size glyph fonts are created at.",
       "inherited": true,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontSizeAdjustProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontSizeAdjustProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "FontSizeAdjust",
         "csharpDataType": "string",
@@ -3183,7 +3183,7 @@
       "comment": "CSS Fonts 4 section 6.6, normal | <string>. cssDataType 'cssom-grammar' calls FontLanguageOverrideProperty.ValueGrammar.Convert. The authored text is resolved to an OpenType language-system tag by FontLanguageOverrideGrammar.Resolve where the text is shaped (DerivedStyle.ActualTextShapingFeatures; SvgTreeBuilder), where it becomes ShapeSettings.LanguageSystemTag and wins over the tag derived from lang.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontLanguageOverrideProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontLanguageOverrideProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "FontLanguageOverride",
         "csharpDataType": "string",
@@ -3239,7 +3239,7 @@
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantNumericConverter.Convert directly - same per-axis-exclusivity shape as font-variant-ligatures, which a naive keyword-set grammar would not enforce.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.FontVariantNumericConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontVariantNumericConverter.Convert" },
       "html": {
         "propertyPath": "FontVariantNumeric",
         "csharpDataType": "string",
@@ -3251,7 +3251,7 @@
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantEastAsianConverter.Convert directly - same per-axis-exclusivity shape as font-variant-ligatures, which a naive keyword-set grammar would not enforce.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.FontVariantEastAsianConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontVariantEastAsianConverter.Convert" },
       "html": {
         "propertyPath": "FontVariantEastAsian",
         "csharpDataType": "string",
@@ -3263,7 +3263,7 @@
       "comment": "cssDataType 'cssom-grammar' calls FontFeatureSettingsProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontFeatureSettingsProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontFeatureSettingsProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "FontFeatureSettings",
         "csharpDataType": "string",
@@ -3315,7 +3315,7 @@
       "comment": "cssDataType 'cssom-grammar' calls FontPaletteValueConverter.Instance.Convert directly (the real grammar) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontPaletteValueConverter.Instance.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontPaletteValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "FontPalette",
         "invalidates": "InvalidateFontPalette",
@@ -3345,7 +3345,7 @@
       "comment": "cssDataType 'cssom-grammar' calls the already-public Converters.ListStyleConverter.Convert directly (Map.ListStyles - the full predefined-counter-style keyword set - plus a literal <string> marker) rather than re-deriving a second, independently-maintained keyword list here (this repo's 'one parser' rule), instead of the full cssom round trip. CssCounterEngine/CommonUtils.ConvertToAlphaNumber and CssBoxMarker.ResolveDefaultContent are the downstream consumers that turn a stored keyword or quoted-string value into an actual marker.",
       "inherited": true,
       "initialValue": "disc",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.ListStyleConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ListStyleConverter.Convert" },
       "html": {
         "propertyPath": "ListStyleType",
         "csharpDataType": "string",
@@ -3357,7 +3357,7 @@
       "comment": "Parses into a structured field via a custom setter; cssDataType 'cssom-grammar' calls Converters.OptionalImageSourceConverter.Convert directly (the same converter ListStyleImageProperty's own real grammar uses, already .OrNone()-composed) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.OptionalImageSourceConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.OptionalImageSourceConverter.Convert" },
       "html": {
         "propertyPath": "ListStyleImage",
         "csharpDataType": "CssImage?",
@@ -3572,7 +3572,7 @@
       "comment": "cssDataType 'parsed' shares one GridTemplateValueConverter.TryParseForRegistry call between Validate_/Set_ (RegistryEmitter's dedicated Parsed codegen) instead of the former cssom Validate_ pass (PropertyFactory+StylesheetParser) followed by a second, independent FromCssText parse in customSetter. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression. typedValueType is deliberately left unset - reserved schema surface for that future extension, not an oversight here.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "parsed", "converter": "PeachPDF.CSS.GridTemplateValueConverter.TryParseForRegistry", "resultType": "CssProperty<GridTemplate>" },
+      "cssDataType": { "type": "parsed", "converter": "PeachBrackets.Css.GridTemplateValueConverter.TryParseForRegistry", "resultType": "CssProperty<GridTemplate>" },
       "html": {
         "propertyPath": "GridTemplateColumns",
         "csharpDataType": "CssProperty<GridTemplate>",
@@ -3585,7 +3585,7 @@
       "comment": "cssDataType 'parsed' shares one GridTemplateValueConverter.TryParseForRegistry call between Validate_/Set_ (RegistryEmitter's dedicated Parsed codegen) instead of the former cssom Validate_ pass (PropertyFactory+StylesheetParser) followed by a second, independent FromCssText parse in customSetter. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "parsed", "converter": "PeachPDF.CSS.GridTemplateValueConverter.TryParseForRegistry", "resultType": "CssProperty<GridTemplate>" },
+      "cssDataType": { "type": "parsed", "converter": "PeachBrackets.Css.GridTemplateValueConverter.TryParseForRegistry", "resultType": "CssProperty<GridTemplate>" },
       "html": {
         "propertyPath": "GridTemplateRows",
         "csharpDataType": "CssProperty<GridTemplate>",
@@ -3598,7 +3598,7 @@
       "comment": "cssDataType 'cssom-grammar' calls GridTemplateAreasGrammar.TryParse directly (the same grammar GridTemplateAreasValueConverter's real grammar uses) instead of the full cssom round trip. acceptsNoneLiteral: true because TryParse returns null for the literal 'none' the same as for an invalid value (its own doc comment states this explicitly), so the validator must accept it separately.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.GridTemplateAreasGrammar.TryParse", "acceptsNoneLiteral": true },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridTemplateAreasGrammar.TryParse", "acceptsNoneLiteral": true },
       "html": {
         "propertyPath": "GridTemplateAreas",
         "csharpDataType": "string",
@@ -3610,7 +3610,7 @@
       "comment": "cssDataType 'cssom-grammar' calls GridTrackListGrammar.TryParseTrackSizeList directly - the same trimmed-down (<track-size>+, no repeat()/line-names) entry point GridAutoTracksValueConverter itself calls - instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.GridTrackListGrammar.TryParseTrackSizeList" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridTrackListGrammar.TryParseTrackSizeList" },
       "html": {
         "propertyPath": "GridAutoColumns",
         "csharpDataType": "string",
@@ -3622,7 +3622,7 @@
       "comment": "cssDataType 'cssom-grammar' calls GridTrackListGrammar.TryParseTrackSizeList directly - same as grid-auto-columns - instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.GridTrackListGrammar.TryParseTrackSizeList" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridTrackListGrammar.TryParseTrackSizeList" },
       "html": {
         "propertyPath": "GridAutoRows",
         "csharpDataType": "string",
@@ -3634,7 +3634,7 @@
       "comment": "[ row | column ] || dense. cssDataType 'cssom-grammar' calls the real GridAutoFlowValueConverter.Instance.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "row",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.GridAutoFlowValueConverter.Instance.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridAutoFlowValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "GridAutoFlow",
         "csharpDataType": "string",
@@ -3681,7 +3681,7 @@
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridColumnStart",
         "csharpDataType": "string",
@@ -3693,7 +3693,7 @@
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridColumnEnd",
         "csharpDataType": "string",
@@ -3705,7 +3705,7 @@
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridRowStart",
         "csharpDataType": "string",
@@ -3717,7 +3717,7 @@
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridRowEnd",
         "csharpDataType": "string",

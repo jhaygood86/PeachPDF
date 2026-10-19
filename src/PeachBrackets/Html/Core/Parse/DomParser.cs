@@ -11,13 +11,13 @@
 // "The Art of War"
 
 using PeachPDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Animation;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Animation;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -26,7 +26,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Parse
+namespace PeachBrackets.Html.Parse
 {
     /// <summary>
     /// Handle css DOM tree generation from raw html and stylesheet.
@@ -337,7 +337,7 @@ namespace PeachPDF.Html.Core.Parse
         /// merged per name, declarative wins a name both declare; page-level properties copied from the
         /// stylesheet's base rule except whichever margin/size property the caller marks explicit, so
         /// <c>PdfGenerator.AddDeclarativePage</c>'s own Track A geometry resolution is never
-        /// silently re-overridden per-page by <see cref="Html.Core.PageGeometryTable"/>'s separate
+        /// silently re-overridden per-page by <see cref="Html.PageGeometryTable"/>'s separate
         /// per-page <see cref="Dom.PageRuleResolver"/> lookup). Named/pseudo-class stylesheet rules append
         /// as-is - there is no declarative equivalent to conflict with.
         /// </para>
@@ -674,19 +674,19 @@ namespace PeachPDF.Html.Core.Parse
             // resolves to the identical value on the second call. Only the margins - which DO read
             // HundredPercentPt for `%` - actually change between the two calls, becoming correct.
             //
-            // PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
+            // PeachBrackets.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
             // caller-configured page size (an Size, true points) from PageSize (an Size,
             // PixelsPerPoint-scaled internal pixel space, per HtmlContainerInt.PageSize's own doc
             // comment) - nothing between PdfGenerator.SetContent assigning it and this point mutates it,
             // so this is the same comparison PdfGenerator.AddPdfPages used to make one layer up, just
             // before the expensive work starts instead of after. Fully qualified: this namespace
-            // (PeachPDF.Html.Core.Parse) nests under PeachPDF.Html.Core, whose sibling PeachPDF.Html.Core.
+            // (PeachBrackets.Html.Parse) nests under PeachBrackets.Html, whose sibling PeachBrackets.Html.
             // Utils namespace would otherwise shadow the unqualified "Utils" name ahead of the `using
-            // PeachPDF.Utilities;` import.
+            // PeachBrackets.Utilities;` import.
             if (htmlContainer.CssPageSize is { } cssPageSize &&
-                cssPageSize != PeachPDF.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint))
+                cssPageSize != PeachBrackets.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint))
             {
-                htmlContainer.PageSize = PeachPDF.Utilities.Utils.ToPixels(cssPageSize, pixelsPerPoint);
+                htmlContainer.PageSize = PeachBrackets.Utilities.Utils.ToPixels(cssPageSize, pixelsPerPoint);
                 ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
                     allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
             }
@@ -785,7 +785,7 @@ namespace PeachPDF.Html.Core.Parse
                     // "otherwise-configured size" (for a bare orientation keyword to rotate) is the
                     // caller-configured PdfGenerateConfig size, reconstructed the same way the retry
                     // check above does.
-                    var baseSizePt = PeachPDF.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint);
+                    var baseSizePt = PeachBrackets.Utilities.Utils.ToPoints(htmlContainer.PageSize, pixelsPerPoint);
                     htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, baseSizePt);
                 }
             }
@@ -1774,7 +1774,7 @@ namespace PeachPDF.Html.Core.Parse
         /// by the *computed* <c>Display</c> value, not by any particular selector or tag. The common
         /// <c>&lt;li&gt;</c> case already gets one during <see cref="CascadeApplyStyles"/> above (via
         /// the UA stylesheet's <c>li::marker</c> rule's selector-match-time synthesis in
-        /// <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, ICssDomNode?)"/>) - this only needs to
+        /// <see cref="CssData.DoesSelectorMatch(Css.CompoundSelector, ICssDomNode?)"/>) - this only needs to
         /// cover elements that reach <c>Display: list-item</c> WITHOUT that selector matching (e.g.
         /// <c>div { display: list-item }</c>), since selector matching can't key off a computed
         /// <c>Display</c> value (it isn't resolved yet at match time within a cascade pass). Must run

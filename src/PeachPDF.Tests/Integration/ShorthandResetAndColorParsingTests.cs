@@ -1,10 +1,10 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// alternate-stylesheet `.picture { background: none; }` override (meant to cancel an earlier
     /// `.picture { background: red; }`) never took visual effect:
     ///
-    /// 1. <see cref="PeachPDF.CSS.ShorthandProperty.Export"/> left a longhand the shorthand's own
+    /// 1. <see cref="PeachBrackets.Css.ShorthandProperty.Export"/> left a longhand the shorthand's own
     ///    grammar didn't match any tokens for (e.g. background-color when only "none" was given)
     ///    with no declared value at all, rather than resetting it to its CSS-spec initial value -
     ///    so a later "background: none" never actually competed against an earlier same-specificity
@@ -163,8 +163,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

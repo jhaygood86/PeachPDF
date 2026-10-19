@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves CSS <c>background-position</c> and <c>background-size</c> per-layer values into

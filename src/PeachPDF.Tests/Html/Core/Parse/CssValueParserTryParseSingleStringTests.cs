@@ -1,10 +1,10 @@
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 
 namespace PeachPDF.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Direct unit tests for <see cref="CssValueParser.TryParseSingleString"/>. Regression: this method
-    /// used to deliberately skip gating on <see cref="PeachPDF.CSS.Token.IsValid"/>, working around a bug
+    /// used to deliberately skip gating on <see cref="PeachBrackets.Css.Token.IsValid"/>, working around a bug
     /// where <c>Lexer.NewString</c> passed its own "bad" flag straight into <c>Token.NewString</c>'s
     /// "valid" parameter with no inversion - a well-formed string came back <c>IsValid: false</c> and an
     /// unterminated (bad-string-token) one came back <c>IsValid: true</c>. Now that the underlying

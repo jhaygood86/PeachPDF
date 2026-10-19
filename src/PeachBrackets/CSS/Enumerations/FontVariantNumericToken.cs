@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// One toggle keyword from the <c>font-variant-numeric</c> grammar (each of the 4 axes - figure,

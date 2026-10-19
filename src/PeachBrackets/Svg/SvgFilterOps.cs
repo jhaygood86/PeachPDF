@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using PeachDrawing;
 using System;
 
-namespace PeachPDF.Svg;
+namespace PeachBrackets.Svg;
 
 /// <summary>
 /// The two <c>PeachDrawing.Filters.FilterOps</c> pixel operations that stay PeachPDF-side rather than

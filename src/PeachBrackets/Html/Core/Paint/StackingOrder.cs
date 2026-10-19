@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Utils;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// Paint order within one stacking context, per

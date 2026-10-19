@@ -3,11 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Picks the image an <c>&lt;img&gt;</c> loads from its <c>srcset</c>/<c>sizes</c> attributes and an

@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.CSS.PropertyTests
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     public class WhiteSpacePropertyTests : CssConstructionFunctions

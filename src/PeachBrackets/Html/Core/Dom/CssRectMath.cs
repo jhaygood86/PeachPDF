@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Represents a word inside an inline box for a <c>&lt;math&gt;</c> element - the replaced-element

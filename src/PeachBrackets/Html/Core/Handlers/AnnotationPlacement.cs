@@ -3,7 +3,7 @@ using PeachDrawing.Core;
 using System.Numerics;
 using System;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// How a point in a page's fragmentainer-local layout space (the space the painter works in, in layout pixels) lands on the PDF page, in

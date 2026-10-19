@@ -1,6 +1,6 @@
 using System.Linq;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 using Xunit;
 
 namespace PeachPDF.Tests.Html.Core.Parse

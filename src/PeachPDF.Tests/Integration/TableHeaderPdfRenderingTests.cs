@@ -3,7 +3,7 @@ using PeachDrawing.Text.Shaping;
 using PeachPDF;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
+using PeachBrackets.Html;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine.Advanced;
@@ -275,8 +275,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var measureGraphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(measureGraphics);

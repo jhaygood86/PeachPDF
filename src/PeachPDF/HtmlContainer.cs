@@ -13,17 +13,17 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
 using PeachPDF.Network;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachPDF.Utilities;
+using PeachBrackets.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 
 namespace PeachPDF
 {
@@ -93,14 +93,14 @@ namespace PeachPDF
         /// <summary>
         /// All @page rules parsed from the document's stylesheets, in cascade order.
         /// </summary>
-        public IReadOnlyList<CSS.PageRule> PageRules => HtmlContainerInt.PageRules;
+        public IReadOnlyList<PeachBrackets.Css.PageRule> PageRules => HtmlContainerInt.PageRules;
 
         /// <summary>
         /// Named strings captured from the document via string-set, in document order.
         /// </summary>
-        internal IReadOnlyList<Html.Core.Entities.NamedString> NamedStrings => HtmlContainerInt.NamedStrings;
+        internal IReadOnlyList<PeachBrackets.Html.Entities.NamedString> NamedStrings => HtmlContainerInt.NamedStrings;
 
-        internal IReadOnlyList<Html.Core.Entities.NamedPageElement> NamedPageElements => HtmlContainerInt.NamedPageElements;
+        internal IReadOnlyList<PeachBrackets.Html.Entities.NamedPageElement> NamedPageElements => HtmlContainerInt.NamedPageElements;
 
         /// <summary>
         /// the top margin between the page start and the text
@@ -183,7 +183,7 @@ namespace PeachPDF
         /// <summary>
         /// Same as <see cref="GetLinks()"/>, additionally collecting every bookmark-candidate box
         /// (<c>bookmark-level != none</c>) into <paramref name="bookmarkBoxes"/> from the same tree
-        /// walk (see <see cref="Html.Core.HtmlContainerInt.GetLinks(List{CssBox}?)"/>), when a caller
+        /// walk (see <c>Html.HtmlContainerInt.GetLinks</c>), when a caller
         /// needs both - internal only, since the parameter type is internal.
         /// </summary>
         internal List<LinkElementData<Rect>> GetLinks(List<CssBox>? bookmarkBoxes)

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The layout-time context needed to resolve relative units within a calc-family expression: how
@@ -75,7 +75,7 @@ namespace PeachPDF.CSS
         /// <summary>
         /// The ambient <c>PixelsPerPoint</c> (<c>PdfGenerateConfig.PixelsPerInch / 72</c>) an absolute or
         /// <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c> calc() leaf needs multiplied in, mirroring
-        /// <see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(PeachPDF.CSS.Length, double, PeachPDF.Html.Core.Dom.CssBox)"/>'s own
+        /// <see cref="PeachBrackets.Html.Parse.CssValueParser.ParseLength(PeachBrackets.Css.Length, double, PeachBrackets.Html.Dom.CssBox)"/>'s own
         /// catch-up multiply for a literal length (issues #814/#826) - see
         /// <see cref="CalcEvaluator.Evaluate"/>'s <c>DimensionCalcNode</c> case (issue #829). Defaults to
         /// <c>1.0</c> (a no-op) for every call site with no real box/adapter in scope (font-size
@@ -86,7 +86,7 @@ namespace PeachPDF.CSS
 
     /// <summary>
     /// Evaluates a validated calc-family AST to a pixel-space number. This is the one place calc()
-    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>),
+    /// numbers actually get computed — called only from Layer B (<see cref="PeachBrackets.Html.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>),
     /// since only layout has the <see cref="CalcContext"/> a percentage/em/rem leaf needs to resolve.
     /// Reuses <see cref="Length.ToPixels"/> for every leaf, so no unit-conversion arithmetic is duplicated
     /// here. A null result signals a divide-by-zero; per the type-checker's rules every legal divisor is

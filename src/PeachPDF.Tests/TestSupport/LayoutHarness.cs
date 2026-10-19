@@ -1,8 +1,8 @@
 ﻿using PeachDrawing.PDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.TestSupport
             };
 
             var sheet = new Size(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.ToPixels(sheet, pixelsPerPoint);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(sheet, pixelsPerPoint);
 
             await container.SetHtml(html, null);
 
@@ -83,9 +83,9 @@ namespace PeachPDF.Tests.TestSupport
             // puts the root box above the first page's band and makes pagination nonsense.
             var band = new Size(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
-            container.MaxSize = Utilities.Utils.ToPixels(band, pixelsPerPoint);
-            container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(band, pixelsPerPoint);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(band, pixelsPerPoint);
+            container.Location = PeachBrackets.Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, sheet);
             await container.PerformLayout(graphics);
@@ -129,15 +129,15 @@ namespace PeachPDF.Tests.TestSupport
             };
 
             var sheet = new Size(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.ToPixels(sheet, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(sheet, 1.0);
 
             await container.SetHtml(html, null);
 
             var band = new Size(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.ToPixels(band, 1.0);
-            container.MaxSize = Utilities.Utils.ToPixels(band, 1.0);
-            container.Location = Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(band, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(band, 1.0);
+            container.Location = PeachBrackets.Utilities.Utils.ToPixels(new PaintPoint(container.MarginLeft, container.MarginTop), 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, sheet);
 

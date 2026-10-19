@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
 using System.Collections.Generic;
 
 namespace PeachPDF.Tests.Integration
@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     ///
     /// <see cref="Resolve"/> stands in for production's <c>htmlContainer.SlotStartingAt</c>/
     /// <c>currentPageIndex</c> pair with a plain division against a fixed <c>pageHeight</c> — the same
-    /// non-variable-geometry math <see cref="PeachPDF.Html.Core.HtmlContainerInt.PageIndexOf"/> itself falls back
+    /// non-variable-geometry math <see cref="PeachBrackets.Html.HtmlContainerInt.PageIndexOf"/> itself falls back
     /// to when the document uses one uniform page size.
     /// </summary>
     public class MarginBoxResolveNamedStringTests

@@ -1,4 +1,4 @@
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>The unit of a <see cref="MathLength"/> - MathML's own length grammar (MathML 3 §2.1.5),
     /// distinct from CSS's: it adds the "math unit" (<c>mu</c>, 1/18 of the current font's em, used by

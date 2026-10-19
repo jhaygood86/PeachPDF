@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>grid</c> shorthand (CSS Grid §7.8): expands to the three <c>grid-template-*</c> longhands plus

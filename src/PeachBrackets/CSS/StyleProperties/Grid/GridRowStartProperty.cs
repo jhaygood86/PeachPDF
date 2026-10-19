@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>grid-row-start</c> longhand (CSS Grid §8.3), one edge of a

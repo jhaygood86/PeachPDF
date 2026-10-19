@@ -7,7 +7,7 @@ using PeachPDF.SourceGenerators.Model;
 namespace PeachPDF.SourceGenerators.Emit
 {
     /// <summary>
-    /// Emits <c>CssBox.StyleProperties.g.cs</c> (namespace <c>PeachPDF.Html.Core.Dom</c>, <c>partial class
+    /// Emits <c>CssBox.StyleProperties.g.cs</c> (namespace <c>PeachBrackets.Html.Dom</c>, <c>partial class
     /// CssBox</c>) — one cascaded property per JSON entry with an <c>html.area</c>/<c>propertyPath</c>.
     /// The property itself never parses <c>string</c> into a typed value: for an <c>enum-keyword</c>/
     /// <c>keyword-or-value</c> property, that parsing is the registry's job
@@ -49,15 +49,15 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("// edit the JSON entry and rebuild. See CLAUDE.md's generator section.");
             sb.AppendLine("#nullable enable");
             sb.AppendLine();
-            sb.AppendLine("using PeachPDF.CSS;");
+            sb.AppendLine("using PeachBrackets.Css;");
             sb.AppendLine("using PeachDrawing.Core;");
-            sb.AppendLine("using PeachPDF.Html.Core.Entities;");
-            sb.AppendLine("using PeachPDF.Html.Core.Parse;");
-            sb.AppendLine("using PeachPDF.Html.Core.Utils;");
+            sb.AppendLine("using PeachBrackets.Html.Entities;");
+            sb.AppendLine("using PeachBrackets.Html.Parse;");
+            sb.AppendLine("using PeachBrackets.Html.Utils;");
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine();
-            sb.AppendLine("namespace PeachPDF.Html.Core.Dom");
+            sb.AppendLine("namespace PeachBrackets.Html.Dom");
             sb.AppendLine("{");
             sb.AppendLine("    partial class CssBox");
             sb.AppendLine("    {");

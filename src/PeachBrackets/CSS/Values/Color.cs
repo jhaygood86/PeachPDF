@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 // ReSharper disable UnusedMember.Global
 
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1, CharSet = CharSet.Unicode)]
     internal struct Color : IEquatable<Color>, IComparable<Color>, IFormattable

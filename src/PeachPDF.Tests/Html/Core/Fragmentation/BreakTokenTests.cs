@@ -1,5 +1,5 @@
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 
 namespace PeachPDF.Tests.Html.Core.Fragmentation
 {
@@ -252,7 +252,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var finished = new CssBox(null, null);
             var rows = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
             var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
-            var subgridContexts = new Dictionary<CssBox, PeachPDF.Html.Core.Dom.GridSubgridContext>();
+            var subgridContexts = new Dictionary<CssBox, PeachBrackets.Html.Dom.GridSubgridContext>();
 
             var first = new GridBreakToken(container, 1, 0, rows,
                 new List<UnfinishedGridItem> { new(item, itemToken) },
@@ -272,7 +272,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var item = new CssBox(null, null);
             var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
             var rows = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item }, new List<CssBox> { item } };
-            var subgridContexts = new Dictionary<CssBox, PeachPDF.Html.Core.Dom.GridSubgridContext>();
+            var subgridContexts = new Dictionary<CssBox, PeachBrackets.Html.Dom.GridSubgridContext>();
 
             var first = new GridBreakToken(container, 1, 0, rows,
                 new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts, default);
@@ -289,7 +289,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var item = new CssBox(null, null);
             var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
             var rows = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
-            var subgridContexts = new Dictionary<CssBox, PeachPDF.Html.Core.Dom.GridSubgridContext>();
+            var subgridContexts = new Dictionary<CssBox, PeachBrackets.Html.Dom.GridSubgridContext>();
 
             var first = new GridBreakToken(container, 1, 0, rows,
                 new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts,

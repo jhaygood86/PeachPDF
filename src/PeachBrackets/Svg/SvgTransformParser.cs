@@ -16,7 +16,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Parses the SVG <c>transform</c>/<c>gradientTransform</c> attribute grammar: a whitespace
@@ -478,7 +478,7 @@ namespace PeachPDF.Svg
     }
 }
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>A parsed transform list: <paramref name="Affine"/> is its 2D matrix, and <paramref name="Full"/> the 4x4 matrix when the list holds a 3D function (null for a 2D list).</summary>
     internal readonly record struct SvgParsedTransform(Matrix3x2 Affine, Matrix4x4? Full);

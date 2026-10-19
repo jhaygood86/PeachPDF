@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>prefers-contrast</c> media feature (Media Queries 5). Matched against the renderer's fixed

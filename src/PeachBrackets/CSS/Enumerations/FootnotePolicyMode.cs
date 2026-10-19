@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// css-gcpm-3 §2.8's <c>footnote-policy</c>: what happens when a footnote's own note area cannot be

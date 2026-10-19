@@ -5,7 +5,7 @@ using System.Linq;
 
 // ReSharper disable UnusedMember.Global
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class Stylesheet : StylesheetNode
     {

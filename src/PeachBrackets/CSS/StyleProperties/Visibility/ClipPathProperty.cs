@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>clip-path</c> property (CSS Masking Module Level 1). The basic-shape grammar

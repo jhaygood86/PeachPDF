@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Remembers what changing one property of a shared style gave, so the next box that makes the same change to the same style

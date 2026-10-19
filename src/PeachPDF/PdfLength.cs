@@ -70,7 +70,7 @@ namespace PeachPDF
 
         /// <summary>
         /// Formats this length as a canonical CSS length token (e.g. <c>"12pt"</c>, <c>"50%"</c>) - the
-        /// exact text every internal <see cref="Html.Core.Dom.CssBox"/> string-typed length/percentage
+        /// exact text every internal <c>Html.Dom.CssBox</c> string-typed length/percentage
         /// property already accepts and resolves via the real CSS parsing pipeline.
         /// </summary>
         internal string ToCssText() =>
@@ -78,9 +78,9 @@ namespace PeachPDF
 
         /// <summary>
         /// Resolves this length to points directly (the same fixed physical-unit ratios
-        /// <see cref="Html.Core.Parse.CssValueParser"/>'s own length resolution uses, e.g. 1in = 72pt,
+        /// <c>Html.Parse.CssValueParser</c>'s own length resolution uses, e.g. 1in = 72pt,
         /// 1px = 0.75pt), for the one context that needs a page's own sheet size as a plain number before
-        /// any <see cref="Html.Core.Dom.CssBox"/> exists to resolve a CSS string against.
+        /// any <c>Html.Dom.CssBox</c> exists to resolve a CSS string against.
         /// <see cref="PdfLengthUnit.Percent"/>/<see cref="PdfLengthUnit.Em"/>/<see cref="PdfLengthUnit.Rem"/>
         /// have no meaningful absolute size and throw.
         /// </summary>

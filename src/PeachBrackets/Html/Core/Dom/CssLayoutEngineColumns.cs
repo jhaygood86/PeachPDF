@@ -1,17 +1,18 @@
-﻿using PeachPDF.CSS;
+﻿using PeachBrackets.Css;
+using PeachPDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Lays out a CSS Multi-column Layout container (<c>column-count</c>/<c>column-width</c>/<c>columns</c>).

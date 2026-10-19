@@ -1,5 +1,5 @@
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;

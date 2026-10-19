@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Paints a replaced element's content (a raster <see cref="Image"/> or an <see cref="SvgDocument"/>)
@@ -37,8 +37,8 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // Intrinsic pixels -> layout points, to match contentBox.
-            naturalWidth *= CSS.Length.PointsPerPx;
-            naturalHeight *= CSS.Length.PointsPerPx;
+            naturalWidth *= Css.Length.PointsPerPx;
+            naturalHeight *= Css.Length.PointsPerPx;
 
             var (destination, needsClip) = ObjectFitResolver.Compute(
                 contentBox, naturalWidth, naturalHeight, box.ObjectFit.Value, box.ObjectPosition, box);

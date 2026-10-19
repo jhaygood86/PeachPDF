@@ -3,7 +3,7 @@
 using System;
 using System.Globalization;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A pure, allocation-free model of the &lt;number&gt; grammar this codebase's real <see cref="Lexer"/>

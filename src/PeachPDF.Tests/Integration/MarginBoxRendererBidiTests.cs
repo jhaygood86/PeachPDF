@@ -1,5 +1,5 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 using System.Linq;
 
 namespace PeachPDF.Tests.Integration

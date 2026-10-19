@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary><c>text-rendering</c>: <c>auto | optimizeSpeed | optimizeLegibility | geometricPrecision</c>. Inherited.</summary>
     internal sealed class TextRenderingProperty : Property

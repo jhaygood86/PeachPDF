@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal abstract class LexerBase : IDisposable
     {

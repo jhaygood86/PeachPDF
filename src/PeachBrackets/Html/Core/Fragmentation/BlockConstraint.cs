@@ -1,8 +1,8 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// The fragmentainer-relative space a §4.3 mover asks its "does this fit" / "does this straddle"

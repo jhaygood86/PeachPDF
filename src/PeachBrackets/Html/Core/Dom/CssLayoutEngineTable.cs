@@ -11,19 +11,19 @@
 // "The Art of War"
 
 using PeachPDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Layout engine for tables executing the complex layout of tables with rows/columns/headers/etc.
@@ -1943,7 +1943,7 @@ namespace PeachPDF.Html.Core.Dom
         /// from the table's rendering entirely - as if it had <c>display: none</c>, so it takes no
         /// layout space and the rows after it shift up to fill the gap. Distinct from
         /// <c>visibility: hidden</c>, which this engine still lays out normally (its space stays
-        /// reserved) and only <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/> skips painting.
+        /// reserved) and only <see cref="PeachBrackets.Html.Paint.FragmentPainter"/> skips painting.
         /// </summary>
         private static bool IsRowCollapsed(CssBox row) => row.Visibility.Value == Visibility.Collapse;
 

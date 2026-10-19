@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>hyphenate-limit-last</c> property (CSS Text 4 §6.3.5).</summary>
     internal enum HyphenateLimitLast : byte

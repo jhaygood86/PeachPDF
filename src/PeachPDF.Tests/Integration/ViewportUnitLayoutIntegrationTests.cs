@@ -1,10 +1,10 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
@@ -178,8 +178,8 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(renderContext);
 
             var size = new Size(800, 600);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             await container.SetHtml(html, null);
 

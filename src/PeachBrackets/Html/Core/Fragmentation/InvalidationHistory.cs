@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// Every fragmentainer-reopening event <see cref="FragmentEmitter.InvalidateFrom"/> has recorded so

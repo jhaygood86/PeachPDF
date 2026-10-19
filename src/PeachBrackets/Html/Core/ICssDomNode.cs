@@ -13,7 +13,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// A source-agnostic view of one element node, sufficient for CSS selector matching

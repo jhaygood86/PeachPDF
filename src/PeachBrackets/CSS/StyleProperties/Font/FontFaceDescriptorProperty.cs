@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>font-weight</c>, <c>font-style</c> and <c>font-stretch</c> descriptors of <c>@font-face</c> (CSS Fonts 4 section 4.4).

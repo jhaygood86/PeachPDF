@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// <c>display: contents</c> (<see href="https://www.w3.org/TR/css-display-3/#valdef-display-contents">CSS

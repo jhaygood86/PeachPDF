@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>The per-word state only an unusual word has (hyphenation, overflow-wrap pieces, scaled or per-codepoint fonts, first-line variants, script tags). See <see cref="CssRect"/>.</summary>
     internal sealed class WordRareState

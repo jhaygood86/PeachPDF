@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Paints an outline that spans several rectangles as one connected shape, by filling the band just

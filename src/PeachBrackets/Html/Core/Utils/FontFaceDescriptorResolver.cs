@@ -1,14 +1,14 @@
 using PeachDrawing.Text;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using System;
 using System.Globalization;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves an <c>@font-face</c> rule's own <c>font-weight</c>/<c>font-style</c>/<c>font-stretch</c>
-    /// descriptor strings (<see cref="PeachPDF.CSS.IFontFaceRule"/>) into what
+    /// descriptor strings (<see cref="PeachBrackets.Css.IFontFaceRule"/>) into what
     /// <c>PeachDrawing.Text.FontSet.AddData</c> takes: the weights, widths and oblique angles the face covers (CSS Fonts 4
     /// section 4.4: each descriptor is a value or a range of two). These are authoritative for how a specific
     /// registered face participates in matching, independent of what the font file's own internal tables
@@ -114,14 +114,14 @@ namespace PeachPDF.Html.Core.Utils
 
         private static bool TryParseAngle(string token, out double degrees)
         {
-            if (PeachPDF.CSS.Angle.TryParse(token.ToLowerInvariant(), out var angle))
+            if (PeachBrackets.Css.Angle.TryParse(token.ToLowerInvariant(), out var angle))
             {
                 // Not through ToRadian(), which rounds to a float: a declared 10deg has to stay 10 for a range to compare exactly.
                 degrees = angle.Type switch
                 {
-                    PeachPDF.CSS.Angle.Unit.Grad => angle.Value * 0.9,
-                    PeachPDF.CSS.Angle.Unit.Turn => angle.Value * 360.0,
-                    PeachPDF.CSS.Angle.Unit.Rad => angle.Value * 180.0 / Math.PI,
+                    PeachBrackets.Css.Angle.Unit.Grad => angle.Value * 0.9,
+                    PeachBrackets.Css.Angle.Unit.Turn => angle.Value * 360.0,
+                    PeachBrackets.Css.Angle.Unit.Rad => angle.Value * 180.0 / Math.PI,
                     _ => angle.Value
                 };
                 return degrees is >= -90 and <= 90;

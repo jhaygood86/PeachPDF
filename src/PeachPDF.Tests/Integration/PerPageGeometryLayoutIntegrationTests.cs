@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
@@ -145,7 +145,7 @@ namespace PeachPDF.Tests.Integration
             // boundary (CssRect.WouldStraddleFragmentainer moves a straddling line to the next band's
             // top as a whole), and the flow must genuinely reach past the first two bands so several
             // variable boundaries were actually exercised.
-            var words = new List<PeachPDF.Html.Core.Dom.CssRect>();
+            var words = new List<PeachBrackets.Html.Dom.CssRect>();
             CollectWords(container.Root!, words);
             Assert.NotEmpty(words);
             Assert.True(words.Max(w => w.Bottom) > container.PageTopOf(2),
@@ -158,7 +158,7 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
-        private static void CollectWords(CssBox box, List<PeachPDF.Html.Core.Dom.CssRect> words)
+        private static void CollectWords(CssBox box, List<PeachBrackets.Html.Dom.CssRect> words)
         {
             foreach (var word in box.Words)
             {

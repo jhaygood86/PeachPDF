@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Scratch-object pools for the CSS tokenizer/parser. Per-thread rather than a single shared,
@@ -112,7 +112,7 @@ namespace PeachPDF.CSS
 
     /// <summary>
     /// RAII handle for a pooled <see cref="List{Token}"/>, returned by
-    /// <see cref="PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokensPooled"/>. Use as
+    /// <see cref="PeachBrackets.Html.Parse.CssValueParser.GetCssTokensPooled"/>. Use as
     /// <c>using var tokens = CssValueParser.GetCssTokensPooled(value); // tokens: List&lt;Token&gt;</c> -
     /// the implicit conversion hands back the real list for normal use inside the <c>using</c> block, and
     /// <see cref="Dispose"/> returns it to the pool. A <see langword="ref struct"/> so it can't

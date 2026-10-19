@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Draws a raster upright through a rotation/flip matrix (<c>image-orientation</c>) instead of re-encoding it, so every

@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The one parser for the <c>[ &lt;counter-name&gt; &lt;integer&gt;? ]+ | none</c> value grammar shared by

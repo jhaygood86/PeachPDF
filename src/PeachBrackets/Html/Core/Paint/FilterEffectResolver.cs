@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// Resolves a box's parsed <c>filter</c> function list (<see cref="FilterGrammar.FilterFunction"/>,

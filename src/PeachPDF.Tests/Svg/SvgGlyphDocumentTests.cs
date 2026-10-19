@@ -1,7 +1,7 @@
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Core;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;

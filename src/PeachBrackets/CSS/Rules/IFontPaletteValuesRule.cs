@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A palette override declared with a <c>@font-palette-values</c> at-rule (CSS Fonts Module Level 4).

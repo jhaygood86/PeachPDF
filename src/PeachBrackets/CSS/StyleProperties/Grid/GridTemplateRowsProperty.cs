@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>grid-template-rows</c> property (CSS Grid Layout Module Level 1/2 §7.2). Validated by the

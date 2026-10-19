@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The font measurements a font-relative length unit is defined by (CSS Values and Units 4 §6.1.1):

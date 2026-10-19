@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Converter for css-gcpm-3's <c>element(&lt;custom-ident&gt; [, first | start | last | first-except]?)</c>

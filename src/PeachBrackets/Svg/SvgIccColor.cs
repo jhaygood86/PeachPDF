@@ -4,7 +4,7 @@ using System.Globalization;
 using PeachDrawing.Core;
 using PeachImage;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// SVG 1.1 §11.2 <c>&lt;color&gt; icc-color(profile-name, c1, c2, ...)</c>: one <c>&lt;color-profile&gt;</c>

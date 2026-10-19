@@ -7,7 +7,7 @@ using PeachPDF.SourceGenerators.Model;
 namespace PeachPDF.SourceGenerators.Emit
 {
     /// <summary>
-    /// Emits <c>ComputedStyleAreas.g.cs</c> (namespace <c>PeachPDF.Html.Core.Dom</c>) — one
+    /// Emits <c>ComputedStyleAreas.g.cs</c> (namespace <c>PeachBrackets.Html.Dom</c>) — one
     /// <c>partial record</c> per <c>html.area</c> value appearing in <c>css-properties.json</c>, each
     /// holding one <c>{ get; init; }</c> field per property whose <c>html.area</c> names it. The
     /// hand-written <c>ComputedStyleAreas.cs</c> keeps <c>ComputedStyleCow</c> (shared copy-on-write
@@ -29,11 +29,11 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("// edit the JSON entry and rebuild. See CLAUDE.md's generator section.");
             sb.AppendLine("#nullable enable");
             sb.AppendLine();
-            sb.AppendLine("using PeachPDF.CSS;");
-            sb.AppendLine("using PeachPDF.Html.Core.Entities;");
+            sb.AppendLine("using PeachBrackets.Css;");
+            sb.AppendLine("using PeachBrackets.Html.Entities;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine();
-            sb.AppendLine("namespace PeachPDF.Html.Core.Dom");
+            sb.AppendLine("namespace PeachBrackets.Html.Dom");
             sb.AppendLine("{");
 
             var seenAreas = new HashSet<string>();
@@ -61,7 +61,7 @@ namespace PeachPDF.SourceGenerators.Emit
         {
             sb.AppendLine($"    internal sealed partial record {area}");
             sb.AppendLine("    {");
-            sb.AppendLine($"        internal static readonly {area} Default = global::PeachPDF.Html.Core.Dom.StyleTransitionCache.Root(new {area}());");
+            sb.AppendLine($"        internal static readonly {area} Default = global::PeachBrackets.Html.Dom.StyleTransitionCache.Root(new {area}());");
 
             foreach (var entry in entries)
             {
@@ -94,15 +94,15 @@ namespace PeachPDF.SourceGenerators.Emit
             if (entry.CssDataTypes.Count == 1 && entry.CssDataTypes[0].Kind == DataTypeKind.EnumKeyword)
             {
                 var dt = entry.CssDataTypes[0];
-                return $"CssProperty<global::PeachPDF.CSS.{dt.EnumType}>.FromCssText({initialValueExpr}, {dt.KeywordMap}, global::PeachPDF.CSS.{dt.Fallback})";
+                return $"CssProperty<global::PeachBrackets.Css.{dt.EnumType}>.FromCssText({initialValueExpr}, {dt.KeywordMap}, global::PeachBrackets.Css.{dt.Fallback})";
             }
 
             if (entry.CssDataTypes.Count == 1 && entry.CssDataTypes[0].Kind == DataTypeKind.KeywordOrValue)
             {
                 var dt = entry.CssDataTypes[0];
                 var resolved = KeywordOrValueGrammar.Resolve(entry, dt);
-                return $"global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<global::PeachPDF.CSS.{dt.EnumType}, {resolved.CSharpType}>" +
-                       $"({initialValueExpr}, {dt.KeywordMap}, {resolved.TryParseMethod}, global::PeachPDF.CSS.{dt.Fallback})";
+                return $"global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<global::PeachBrackets.Css.{dt.EnumType}, {resolved.CSharpType}>" +
+                       $"({initialValueExpr}, {dt.KeywordMap}, {resolved.TryParseMethod}, global::PeachBrackets.Css.{dt.Fallback})";
             }
 
             if (html.CsharpDataType == "string") return initialValueExpr;

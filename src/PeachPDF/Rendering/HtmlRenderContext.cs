@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Network;
 using System.Collections.Generic;
 using System.Threading.Tasks;

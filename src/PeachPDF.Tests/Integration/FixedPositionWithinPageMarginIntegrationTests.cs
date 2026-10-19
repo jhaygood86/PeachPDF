@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     /// itself, inside a second, outer full-sheet clip <c>SuspendClipping</c> can actually reach.
     /// </item>
     /// <item>
-    /// <b>Fragment-tree region exclusion</b>: <see cref="PeachPDF.Html.Core.Fragmentation.FragmentEmitter"/>'s
+    /// <b>Fragment-tree region exclusion</b>: <see cref="PeachBrackets.Html.Fragmentation.FragmentEmitter"/>'s
     /// per-slot membership test for fixed content used the page's content band (starting at
     /// <c>MarginTop</c>), so a fixed box positioned above that - inside the margin - was excluded from the
     /// materialized fragment tree entirely on every page, not merely clipped at paint time.

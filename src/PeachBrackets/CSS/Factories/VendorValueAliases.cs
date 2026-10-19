@@ -1,6 +1,6 @@
 #nullable enable
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Legacy vendor-prefixed <em>keyword values</em> (<c>display: -webkit-flex</c>, <c>position: -webkit-sticky</c>)

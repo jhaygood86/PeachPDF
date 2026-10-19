@@ -11,10 +11,10 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// A proxy box that references an original source box and maintains independent layout state.

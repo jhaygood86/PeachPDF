@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,8 +10,8 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Covers CSS Page Floats' <c>float: top/bottom/top-bottom/snap/inside/outside</c> (issue #699):
     /// keyword parsing, the dynamic band-start/band-end reservation
-    /// (<see cref="Html.Core.HtmlContainerInt.TopFloatAreaHeightsBySlot"/>/
-    /// <see cref="Html.Core.HtmlContainerInt.BottomFloatAreaHeightsBySlot"/>) that shrinks the usable
+    /// (<see cref="Html.HtmlContainerInt.TopFloatAreaHeightsBySlot"/>/
+    /// <see cref="Html.HtmlContainerInt.BottomFloatAreaHeightsBySlot"/>) that shrinks the usable
     /// content band for ordinary flow content on the float's landing page, the <c>top-bottom</c>/
     /// <c>snap</c> edge-choosing heuristics, and <c>inside</c>/<c>outside</c>'s page-parity-aware
     /// left/right resolution.
@@ -484,7 +484,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await LayoutAsync(html);
             var item = FindById(root, "item")!;
 
-            Assert.Equal(PeachPDF.CSS.Floating.None, item.Float.Value);
+            Assert.Equal(PeachBrackets.Css.Floating.None, item.Float.Value);
             Assert.True(item.ActualRight - item.Location.X > 0, "the item must have real, laid-out geometry, not be dropped");
         }
     }

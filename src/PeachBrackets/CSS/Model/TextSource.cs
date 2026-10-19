@@ -2,7 +2,7 @@
 
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A character cursor over an already-fully-decoded <see cref="ReadOnlyMemory{T}"/> of

@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>&lt;counter-style&gt; = &lt;counter-style-name&gt; | &lt;symbols()&gt;</c> (CSS Counter Styles Level 3

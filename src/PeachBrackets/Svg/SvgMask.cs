@@ -12,7 +12,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// A <c>&lt;mask&gt;</c> definition - never painted directly, only referenced by an element's

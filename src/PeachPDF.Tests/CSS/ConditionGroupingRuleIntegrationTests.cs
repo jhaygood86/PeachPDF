@@ -1,11 +1,11 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 
 namespace PeachPDF.Tests.CSS;
 
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.CSS;
 /// evaluated (<see cref="CssData.IndexRules"/>/<see cref="CssData.FlattenRules"/> resolve
 /// <c>IConditionFunction.Check()</c> once, statically, since the condition takes no arguments and can't
 /// vary per query) against the actual set of HTML/SVG properties PeachPDF's renderer implements — see
-/// <see cref="PeachPDF.CSS.DeclarationCondition"/> and CLAUDE.md's "CSS/SVG property registry generator"
+/// <see cref="PeachBrackets.Css.DeclarationCondition"/> and CLAUDE.md's "CSS/SVG property registry generator"
 /// section. <c>@container</c>'s condition is genuinely evaluated too, per-candidate-box, against the
 /// nearest ancestor <c>container-type: size</c>/<c>inline-size</c> element's resolved size — see
 /// <see cref="ContainerQueryMatcher"/> and <see cref="HtmlContainerInt.PerformLayout"/>'s convergence
@@ -181,8 +181,8 @@ public class ConditionGroupingRuleIntegrationTests
         await container.SetHtml(html, null);
 
         var size = new Size(595, 842);
-        container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-        container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+        container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+        container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
         using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
         await container.PerformLayout(graphics);

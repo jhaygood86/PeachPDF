@@ -12,11 +12,11 @@
 
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Utils;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Represents a word inside an inline box

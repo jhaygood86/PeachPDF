@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Integration
             Enumerable.Range(1, count).Select(i => $"{prefix}{i}");
 
         /// <summary>The words painted on every page, in page order, each with the page it landed on.</summary>
-        private static List<(int Page, string Text)> WordsByPage(PeachPDF.Html.Core.HtmlContainerInt container)
+        private static List<(int Page, string Text)> WordsByPage(PeachBrackets.Html.HtmlContainerInt container)
         {
             var words = new List<(int, string)>();
             var pages = container.FragmentTree!.Fragmentainers.Count;

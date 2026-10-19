@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>writing-mode</c> property's five values (CSS Writing Modes Level 4 §4.1) -

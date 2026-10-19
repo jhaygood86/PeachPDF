@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Defines HTML strings

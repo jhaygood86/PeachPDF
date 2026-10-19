@@ -4,7 +4,7 @@ using System;
 
 // ReSharper disable UnusedMember.Global
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal struct Frequency : IEquatable<Frequency>, IComparable<Frequency>, IFormattable
     {

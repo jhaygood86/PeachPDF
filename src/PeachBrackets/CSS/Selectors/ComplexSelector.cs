@@ -4,7 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class ComplexSelector : StylesheetNode, ISelector, IEnumerable<CombinatorSelector>
     {

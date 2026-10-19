@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// css-text-3 §6.1's real shorthand over <c>text-align-all</c> (<see cref="TextAlignAllProperty"/>,

@@ -3,7 +3,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal static class Colors
     {

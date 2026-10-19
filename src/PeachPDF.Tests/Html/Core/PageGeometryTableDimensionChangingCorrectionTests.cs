@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Html.Core
                 // uses plain pt) - real documents always have one by the time layout runs
                 // (HtmlContainerInt.SetHtml's own CascadeApplyPageStyles sets it), so a direct-construction
                 // harness like this one has to set it itself or `size` overrides silently no-op.
-                PageLengthContext = new PeachPDF.Html.Core.Entities.PageLengthContext(16, 16, 0),
+                PageLengthContext = new PeachBrackets.Html.Entities.PageLengthContext(16, 16, 0),
             };
             return container;
         }

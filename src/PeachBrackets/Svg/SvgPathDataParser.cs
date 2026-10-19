@@ -13,7 +13,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Parses the SVG <c>d</c> path data mini-language (<c>M/L/H/V/C/S/Q/T/A/Z</c>, upper or lower

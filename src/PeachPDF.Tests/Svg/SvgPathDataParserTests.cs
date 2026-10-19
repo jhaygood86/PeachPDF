@@ -1,4 +1,4 @@
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System.Linq;
 
 namespace PeachPDF.Tests.Svg

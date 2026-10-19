@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// CSS Fonts 5 §3.2: <c>none | [ ex-height | cap-height | ch-width | ic-width | ic-height ]? [ from-font | &lt;number [0,∞]&gt; ]</c>.

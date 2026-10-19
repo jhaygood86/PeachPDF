@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachDrawing;
 using PeachDrawing.Filters;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     internal sealed partial class FragmentPainter
     {

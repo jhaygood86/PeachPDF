@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// own margins (resolved by <c>PageGeometryTable</c> from the GRID number during layout) used to
     /// disagree with the materialized-numbered margin-box content painted into them
     /// (<c>PdfGenerator.cs</c>'s page loop, already materialized-numbered). Fixed by
-    /// <see cref="Html.Core.PageGeometryTable.ResolveForMaterializedPage"/>, which re-resolves a
+    /// <see cref="Html.PageGeometryTable.ResolveForMaterializedPage"/>, which re-resolves a
     /// page's margins against its materialized number whenever that wouldn't change the content-box
     /// dimensions layout already used (the ordinary mirrored binding-gutter case) - both fixtures here
     /// use the same content-empty-gap shape (<c>&lt;div style='height: 1500pt'&gt;</c>, following
@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Integration
     /// Also covers issue #1041's narrow, relayout-gated extension for the case
     /// <c>ResolveForMaterializedPage</c> alone still always declines - a page-side override that
     /// itself changes the content-box WIDTH or HEIGHT (not both) - via
-    /// <see cref="Html.Core.HtmlContainerInt.TryApplyDimensionChangingPageCorrection"/>. See
+    /// <see cref="Html.HtmlContainerInt.TryApplyDimensionChangingPageCorrection"/>. See
     /// <c>.claude/accepted-gaps/left-right-page-geometry-vs-materialized-numbering.md</c> for what
     /// still stays out of scope (both dimensions changing at once; a slot under an active named page).
     ///

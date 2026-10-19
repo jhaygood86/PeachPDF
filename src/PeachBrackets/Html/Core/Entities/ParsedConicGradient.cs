@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using PeachDrawing.Core;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     internal sealed class ParsedConicGradient
     {

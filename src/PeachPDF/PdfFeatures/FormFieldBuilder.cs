@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Annotations;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Annotations;
+using PeachBrackets.Html.Handlers;
 using System.Linq;
 
 namespace PeachPDF.PdfFeatures

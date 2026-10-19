@@ -1,5 +1,5 @@
 using PeachPDF.Rendering;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;

@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using PeachPDF.Html.Core;
+using PeachBrackets.Html;
 
 namespace PeachPDF.Tests.Html.Core
 {

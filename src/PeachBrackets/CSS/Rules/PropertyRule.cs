@@ -3,7 +3,7 @@
 using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// An <c>@property</c> at-rule (CSS Properties &amp; Values API Level 1 §3): registers a typed custom

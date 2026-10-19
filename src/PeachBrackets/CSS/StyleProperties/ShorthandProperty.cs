@@ -1,6 +1,6 @@
 ﻿#nullable disable
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal abstract class ShorthandProperty : Property
     {

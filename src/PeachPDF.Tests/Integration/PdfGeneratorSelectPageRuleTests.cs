@@ -1,6 +1,6 @@
 using PeachPDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Entities;
 using System.Collections.Generic;
 using System.Linq;
 

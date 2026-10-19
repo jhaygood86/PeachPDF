@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates <c>image-orientation</c> (<c>from-image | none | [ &lt;angle&gt; || flip ]</c>) through the one shared

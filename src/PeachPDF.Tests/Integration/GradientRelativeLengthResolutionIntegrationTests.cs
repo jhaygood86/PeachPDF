@@ -22,8 +22,8 @@ namespace PeachPDF.Tests.Integration
     /// </item>
     /// </list>
     /// Both are fixed by resolving every relative unit through the same
-    /// <c>CssImagePainter.ResolveGradientLength</c> helper - the box's real <see cref="Html.Core.Dom.CssBox.GetEmHeight"/>/
-    /// <see cref="Html.Core.Dom.CssBox.GetRemHeight"/> for <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c>, and
+    /// <c>CssImagePainter.ResolveGradientLength</c> helper - the box's real <see cref="Html.Dom.CssBox.GetEmHeight"/>/
+    /// <see cref="Html.Dom.CssBox.GetRemHeight"/> for <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c>, and
     /// <c>CssValueParser.ParseLength</c> (already correct for these) for viewport/container-relative units.
     /// </summary>
     public class GradientRelativeLengthResolutionIntegrationTests

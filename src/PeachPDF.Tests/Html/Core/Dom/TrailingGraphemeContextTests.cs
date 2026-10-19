@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System.Globalization;
 
 namespace PeachPDF.Tests.Html.Core.Dom

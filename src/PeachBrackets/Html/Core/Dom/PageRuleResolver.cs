@@ -1,12 +1,12 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The single implementation of the <c>@page</c> rule cascade (which rules apply to a given page,

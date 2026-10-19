@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for a synthesized <c>::footnote-marker</c> pseudo-element (css-gcpm-3) - the leading

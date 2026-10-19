@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Xml.Linq;
@@ -1504,7 +1504,7 @@ namespace PeachPDF.Tests.Svg
         {
             // 2ex against a 20-unit ancestor is two x-heights of the ancestor's font (0.5em where it carries none).
             var parentFont = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text font-size="20">Hi</text></svg>""").Children.Select(FirstText).First(t => t is not null).Font!;
-            var xHeightEm = PeachPDF.Html.Core.Utils.FontMetricMeasurement.Ratio(parentFont, PeachPDF.CSS.FontMetric.Ex);
+            var xHeightEm = PeachBrackets.Html.Utils.FontMetricMeasurement.Ratio(parentFont, PeachBrackets.Css.FontMetric.Ex);
             Assert.Equal(2 * 20 * xHeightEm,
                          TextFontSize("""<g font-size="20"><text font-size="2ex">Hi</text></g>"""), 3);
         }

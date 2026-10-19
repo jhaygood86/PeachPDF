@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints an <c>&lt;img&gt;</c>: its decoded raster, or the parsed SVG scene graph when the source

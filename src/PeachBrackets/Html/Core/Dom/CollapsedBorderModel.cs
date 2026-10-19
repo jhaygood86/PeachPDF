@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The whole table's CSS 2.1 §17.6.2 resolution, one <see cref="CollapsedBorder"/> per unit

@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     /// <summary>
     /// The resolution context a per-page <c>@page</c> margin length needs for relative units, captured

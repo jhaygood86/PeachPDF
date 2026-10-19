@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
-            var flattened = PeachPDF.Html.Core.Paint.StackingOrder.Flatten(FragmentPaintHarness.FragmentOf(container, li)).ToList();
+            var flattened = PeachBrackets.Html.Paint.StackingOrder.Flatten(FragmentPaintHarness.FragmentOf(container, li)).ToList();
             Assert.DoesNotContain(flattened, p => p.Box.IsMarkerPseudoElement);
         }
 
@@ -161,8 +161,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize  = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize  = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

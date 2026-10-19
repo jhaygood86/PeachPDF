@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 using System.Linq;
 
 namespace PeachPDF.Tests.Html.Core.Dom

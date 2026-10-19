@@ -1,7 +1,7 @@
 using PeachDrawing.Text;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// The CSS generic font families (<c>serif</c>, <c>sans-serif</c>, <c>monospace</c>, <c>cursive</c>,

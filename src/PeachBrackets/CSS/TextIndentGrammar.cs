@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The shared grammar for the <c>text-indent</c> value

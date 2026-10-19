@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Represents the possible units of the CSS lengths

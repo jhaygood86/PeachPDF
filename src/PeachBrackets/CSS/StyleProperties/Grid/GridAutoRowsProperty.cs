@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>grid-auto-rows</c> property (CSS Grid §7.6): the size of implicitly-created rows.</summary>
     internal sealed class GridAutoRowsProperty : Property

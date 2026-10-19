@@ -1,9 +1,9 @@
 using PeachDrawing;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// What the painter did with a box that an annotation can sit over, when an ancestor's (or its own) <c>transform</c> moved it away from the

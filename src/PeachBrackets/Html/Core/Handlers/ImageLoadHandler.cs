@@ -13,9 +13,9 @@
 using MimeKit;
 using PeachPDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,7 +24,7 @@ using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Handler for all loading image logic.<br/>

@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.Html.Core.Utils
 {
-    using HtmlUtils = PeachPDF.Html.Core.Utils.HtmlUtils;
+    using HtmlUtils = PeachBrackets.Html.Utils.HtmlUtils;
 
     public class HtmlUtilsTests
     {

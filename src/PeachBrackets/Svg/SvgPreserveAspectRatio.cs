@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// The alignment component of a parsed <c>preserveAspectRatio</c> value - which edge/center of the

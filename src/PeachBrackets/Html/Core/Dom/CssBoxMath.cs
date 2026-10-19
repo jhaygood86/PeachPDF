@@ -1,10 +1,10 @@
 using PeachDrawing.Core;
-using PeachPDF.MathML;
+using PeachBrackets.MathML;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for an inline <c>&lt;math&gt;</c> element. Mirrors <see cref="CssBoxSvg"/>'s

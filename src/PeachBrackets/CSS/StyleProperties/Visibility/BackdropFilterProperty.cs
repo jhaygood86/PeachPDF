@@ -1,4 +1,4 @@
-﻿namespace PeachPDF.CSS
+﻿namespace PeachBrackets.Css
 {
     /// <summary><c>backdrop-filter</c> (Filter Effects Level 2 §3.1): <c>filter</c>'s own grammar. (<c>-webkit-backdrop-filter</c> resolves to this property via <see cref="VendorPropertyAliases"/>.)</summary>
     internal sealed class BackdropFilterProperty : Property

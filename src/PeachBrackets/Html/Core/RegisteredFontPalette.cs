@@ -3,11 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>How a <c>@font-palette-values</c> rule's <c>base-palette</c> selects a CPAL palette.</summary>
     internal enum FontPaletteBaseKind

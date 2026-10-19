@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints the content of one kind of box that the generic box paint

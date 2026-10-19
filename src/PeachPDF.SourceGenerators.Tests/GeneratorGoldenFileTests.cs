@@ -25,7 +25,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_Transform(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value);",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidLength(value);",
                 generated);
             Assert.Contains("private static bool Supports_Transform(CssValueParser parser, string value) => Validate_Transform(parser, value);", generated);
             Assert.Contains("box.Transform = value;", generated);
@@ -100,12 +100,12 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_Transform(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsSyntacticallyValidTransformList(value);",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsSyntacticallyValidTransformList(value);",
                 generated);
             // supportsDataType keeps the existing, stricter "transform" kind untouched.
             Assert.Contains(
                 "private static bool Supports_Transform(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value);",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidTransformValue(value);",
                 generated);
         }
 
@@ -128,7 +128,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_Transform(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value);",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidTransformValue(value);",
                 generated);
         }
 
@@ -139,7 +139,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 {
                   "properties": [
                     { "name": "clip-path", "inherited": false, "initialValue": "none",
-                      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BasicShapeGrammar.TryParse" },
+                      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BasicShapeGrammar.TryParse" },
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -152,8 +152,8 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_ClipPath(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Utils.GrammarMemo.Accepts(value, static v => " +
-                "global::PeachPDF.CSS.BasicShapeGrammar.TryParse(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(v, inValueContext: true, preserveWhitespace: true)) is not null);",
+                "global::PeachBrackets.Html.Utils.GrammarMemo.Accepts(value, static v => " +
+                "global::PeachBrackets.Css.BasicShapeGrammar.TryParse(global::PeachBrackets.Html.Parse.CssValueParser.GetCssTokens(v, inValueContext: true, preserveWhitespace: true)) is not null);",
                 generated);
             // Validator-only: storage stays the plain default assignment, no dedicated Set_ override.
             Assert.Contains("box.Transform = value;", generated);
@@ -204,7 +204,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_BorderSpacing(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLengthList(value, 1, 2, false);",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidLengthList(value, 1, 2, false);",
                 generated);
         }
 
@@ -227,7 +227,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_AspectRatio(CssValueParser parser, string value) => " +
-                "global::PeachPDF.CSS.AspectRatioGrammar.TryParseFast(value, out _, out _);",
+                "global::PeachBrackets.Css.AspectRatioGrammar.TryParseFast(value, out _, out _);",
                 generated);
         }
 
@@ -251,7 +251,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_BackgroundRepeat(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidCommaKeywordList(value, Map.BackgroundRepeats, 2, new[] { \"repeat-x\", \"repeat-y\" });",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidCommaKeywordList(value, Map.BackgroundRepeats, 2, new[] { \"repeat-x\", \"repeat-y\" });",
                 generated);
         }
 
@@ -275,7 +275,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_BackgroundOrigin(CssValueParser parser, string value) => " +
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidCommaKeywordList(value, Map.BoxModels, 1, null);",
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidCommaKeywordList(value, Map.BoxModels, 1, null);",
                 generated);
         }
 
@@ -433,7 +433,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 "Map.AutoKeywords.ContainsKey(value) || int.TryParse(value, out _);",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
+                "box.Transform = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
                 generated);
         }
 
@@ -458,10 +458,10 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_ColumnWidth(CssValueParser parser, string value) => " +
-                "Map.AutoKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc(value, out _);",
+                "Map.AutoKeywords.ContainsKey(value) || global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc(value, out _);",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachPDF.CSS.LengthOrCalc>(value, Map.AutoKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);",
+                "box.Transform = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachBrackets.Css.LengthOrCalc>(value, Map.AutoKeywords, global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);",
                 generated);
         }
 
@@ -486,10 +486,10 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_LineHeight(CssValueParser parser, string value) => " +
-                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _);",
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _);",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachPDF.CSS.LengthOrUnitless>(value, Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless, NormalKeyword.Normal);",
+                "box.Transform = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachBrackets.Css.LengthOrUnitless>(value, Map.NormalKeywords, global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrUnitless, NormalKeyword.Normal);",
                 generated);
         }
 
@@ -514,10 +514,10 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_FontStretch(CssValueParser parser, string value) => " +
-                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _);",
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachBrackets.Html.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _);",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, double>(value, Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage, NormalKeyword.Normal);",
+                "box.Transform = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<NormalKeyword, double>(value, Map.NormalKeywords, global::PeachBrackets.Html.Parse.CssValueParser.TryParseNonNegativePercentage, NormalKeyword.Normal);",
                 generated);
         }
 
@@ -545,7 +545,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 "Map.AutoKeywords.ContainsKey(value) || int.TryParse(value, out var parsedInt) && parsedInt >= 1;",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
+                "box.Transform = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
                 generated);
         }
 
@@ -570,10 +570,10 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_FontWeight(CssValueParser parser, string value) => " +
-                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber(value, out var parsedNumber) && parsedNumber >= 1 && parsedNumber <= 1000;",
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachBrackets.Html.Parse.CssValueParser.TryParseNumber(value, out var parsedNumber) && parsedNumber >= 1 && parsedNumber <= 1000;",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, double>(value, Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber, NormalKeyword.Normal);",
+                "box.Transform = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<NormalKeyword, double>(value, Map.NormalKeywords, global::PeachBrackets.Html.Parse.CssValueParser.TryParseNumber, NormalKeyword.Normal);",
                 generated);
         }
 
@@ -598,7 +598,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_FontWeight(CssValueParser parser, string value) => " +
-                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber(value, out _);",
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachBrackets.Html.Parse.CssValueParser.TryParseNumber(value, out _);",
                 generated);
         }
 
@@ -683,7 +683,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains("SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis) is not null", generated);
-            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis);", generated);
+            Assert.Contains("var parsed = global::PeachBrackets.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis);", generated);
             Assert.Contains("element.StrokeWidth = parsed.Value;", generated);
         }
 
@@ -705,7 +705,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains("SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis) is not null", generated);
-            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis);", generated);
+            Assert.Contains("var parsed = global::PeachBrackets.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis);", generated);
             Assert.Contains("element.StrokeDashArray = parsed;", generated);
         }
 
@@ -753,8 +753,8 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "public CssProperty<BoxSizingMode> BoxSizing { get; init; } = " +
-                "CssProperty<global::PeachPDF.CSS.BoxSizingMode>.FromCssText(CssDefaults.GetInitialValue(\"box-sizing\")!, " +
-                "Map.BoxSizingModes, global::PeachPDF.CSS.BoxSizingMode.ContentBox);",
+                "CssProperty<global::PeachBrackets.Css.BoxSizingMode>.FromCssText(CssDefaults.GetInitialValue(\"box-sizing\")!, " +
+                "Map.BoxSizingModes, global::PeachBrackets.Css.BoxSizingMode.ContentBox);",
                 generated);
         }
 
@@ -965,8 +965,8 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
 
             Assert.Contains(
-                "box.FontSize = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<FontSizeKeyword, global::PeachPDF.CSS.LengthOrCalc>" +
-                "(box.ResolveFontSizeValueComputation(value), Map.FontSizeKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);",
+                "box.FontSize = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<FontSizeKeyword, global::PeachBrackets.Css.LengthOrCalc>" +
+                "(box.ResolveFontSizeValueComputation(value), Map.FontSizeKeywords, global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);",
                 registry);
 
             Assert.DoesNotContain("ResolveFontSizeValueComputation(value)", styleProperties);
@@ -1027,8 +1027,8 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
 
             Assert.Contains(
-                "box.WordSpacing = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachPDF.CSS.LengthOrCalc>" +
-                "(box.NoEms(value), Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, NormalKeyword.Normal);",
+                "box.WordSpacing = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachBrackets.Css.LengthOrCalc>" +
+                "(box.NoEms(value), Map.NormalKeywords, global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc, NormalKeyword.Normal);",
                 registry);
 
             Assert.DoesNotContain("NoEms(value)", styleProperties);

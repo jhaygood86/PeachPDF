@@ -1,6 +1,6 @@
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The CSS calc() type-checking category a (sub-)expression resolves to. Flags so that

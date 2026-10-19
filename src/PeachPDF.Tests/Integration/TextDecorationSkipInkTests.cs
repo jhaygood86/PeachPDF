@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.Integration
 
             var line = Assert.Single(Lines(g));
             var rect = s.Rectangles.Values.Single();
-            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+            var cssPixel = PeachBrackets.Css.Length.PointsPerPx;
             var expectedGap = System.Math.Ceiling(line.Width / (2 * cssPixel)) * cssPixel;
             var expectedCenter = rect.Top + s.ActualFont.TextBaselineOffset + expectedGap + line.Width / 2;
 
@@ -132,7 +132,7 @@ namespace PeachPDF.Tests.Integration
             var (cappedLines, _) = await DecorationAsync("underline", Text, skipInk: "auto",
                 scriptedInk: Crossing, thickness: "20px");
 
-            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+            var cssPixel = PeachBrackets.Css.Length.PointsPerPx;
 
             Assert.Equal(10 + 2 * cssPixel, GapWidth(thinLines), 3);
             Assert.Equal(10 + 2 * 6 * cssPixel, GapWidth(thickLines), 3);
@@ -373,7 +373,7 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static HtmlRenderContext RenderContext(PeachPDF.Html.Core.HtmlContainerInt container) =>
+        private static HtmlRenderContext RenderContext(PeachBrackets.Html.HtmlContainerInt container) =>
             (HtmlRenderContext)container.RenderContext;
 
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
@@ -413,7 +413,7 @@ namespace PeachPDF.Tests.Integration
             return (Lines(g), g);
         }
 
-        private static Task<(PeachPDF.Html.Core.Dom.CssBox Root, PeachPDF.Html.Core.HtmlContainerInt Container)> LayoutAsync(string body) =>
+        private static Task<(PeachBrackets.Html.Dom.CssBox Root, PeachBrackets.Html.HtmlContainerInt Container)> LayoutAsync(string body) =>
             LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>",
                 configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family));

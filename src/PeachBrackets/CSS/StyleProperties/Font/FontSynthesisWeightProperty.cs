@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>CSS Fonts 4 §3.5 <c>FontSynthesisWeight</c>: <c>auto | none</c>.</summary>
     internal sealed class FontSynthesisWeightProperty : Property

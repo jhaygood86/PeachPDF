@@ -13,7 +13,7 @@
 using PeachDrawing.Core;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Parses the <c>points</c> attribute of <c>&lt;polygon&gt;</c>/<c>&lt;polyline&gt;</c> - a list

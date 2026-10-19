@@ -2,7 +2,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// <c>logicalText</c> parameter with its true logical-order source - the plumbing half of the
     /// <c>CharacterMapInfo.AddShapedText</c> ToUnicode fix (see
     /// <c>CharacterMapInfoLogicalTextTests</c> for direct coverage of the remap math itself). Without this
-    /// wiring, <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/> would still paint the correct
+    /// wiring, <see cref="PeachBrackets.Html.Paint.FragmentPainter"/> would still paint the correct
     /// (mirrored) glyphs on the page - only text extraction from the resulting PDF would be wrong -
     /// which is exactly why the original defect went unnoticed until real PDFium/MuPDF extraction was
     /// checked directly.

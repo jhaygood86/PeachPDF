@@ -1,7 +1,7 @@
 namespace PeachPDF.Tests.CSS
 {
     using System;
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     public class GradientTests : CssConstructionFunctions

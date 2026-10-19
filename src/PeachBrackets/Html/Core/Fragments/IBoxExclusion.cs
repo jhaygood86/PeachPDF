@@ -1,6 +1,6 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Fragments
+namespace PeachBrackets.Html.Fragments
 {
     /// <summary>
     /// Says which boxes a capture or a measurement leaves out, without there having to be a set of them: for a column of a

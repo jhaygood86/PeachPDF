@@ -3,7 +3,7 @@ namespace PeachPDF.Tests.CSS
     using System;
     using System.Collections.Generic;
     using System.Runtime.CompilerServices;
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     // Regression coverage for Token.Data's memory-slice-backed design (Lexer.BeginContentAt/

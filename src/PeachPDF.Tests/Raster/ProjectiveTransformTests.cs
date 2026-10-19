@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;
@@ -375,7 +375,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("backface-visibility", "sideways", false)]
         public void TheProperties_AreRecognised(string property, string value, bool valid)
         {
-            Assert.Equal(valid, PeachPDF.Html.Core.Utils.CssPropertyRegistry.SupportsDeclaration(new PeachPDF.Rendering.HtmlRenderContext(), property, value));
+            Assert.Equal(valid, PeachBrackets.Html.Utils.CssPropertyRegistry.SupportsDeclaration(new PeachPDF.Rendering.HtmlRenderContext(), property, value));
         }
 
         // ---- through the PDF pipeline ---------------------------------------------------------------------

@@ -11,7 +11,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>Looks up a character's MathML Core "math-auto" italic mapping (Appendix C.1).</summary>
     internal static class MathItalicMappings

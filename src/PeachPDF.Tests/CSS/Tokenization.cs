@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     public class CssTokenizationTests
@@ -179,7 +179,7 @@ namespace PeachPDF.Tests.CSS
         [Fact]
         public void GetCssTokens_TrailingLoneCarriageReturn_DoesNotHangAndProducesNoTokens()
         {
-            var tokens = PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens("foo\r");
+            var tokens = PeachBrackets.Html.Parse.CssValueParser.GetCssTokens("foo\r");
 
             Assert.Single(tokens);
             Assert.Equal(TokenType.Ident, tokens[0].Type);
@@ -193,7 +193,7 @@ namespace PeachPDF.Tests.CSS
             // scratch StringBuilder in a bad state across repeated calls.
             for (var i = 0; i < 3; i++)
             {
-                var tokens = PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens("12px solid red");
+                var tokens = PeachBrackets.Html.Parse.CssValueParser.GetCssTokens("12px solid red");
                 Assert.NotEmpty(tokens);
             }
         }

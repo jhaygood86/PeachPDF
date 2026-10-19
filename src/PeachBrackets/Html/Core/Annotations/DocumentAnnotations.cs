@@ -1,10 +1,10 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Handlers;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Annotations
+namespace PeachBrackets.Html.Annotations
 {
     /// <summary>
     /// A place in the laid-out document: a page and a vertical offset on it.

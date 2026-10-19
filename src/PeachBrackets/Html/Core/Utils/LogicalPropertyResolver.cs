@@ -1,6 +1,6 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>The four physical box edges a logical (block-start/end, inline-start/end) edge resolves to.</summary>
     internal enum PhysicalSide

@@ -1,5 +1,5 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -273,7 +273,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static System.Collections.Generic.IEnumerable<string> CollectWords(
-            PeachPDF.Html.Core.Fragments.BoxFragment fragment)
+            PeachBrackets.Html.Fragments.BoxFragment fragment)
         {
             foreach (var word in fragment.Words)
                 yield return word.Word.Text ?? string.Empty;

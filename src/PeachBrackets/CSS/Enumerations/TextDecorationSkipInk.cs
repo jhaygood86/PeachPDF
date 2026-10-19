@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>text-decoration-skip-ink</c>'s <c>auto | none | all</c> grammar

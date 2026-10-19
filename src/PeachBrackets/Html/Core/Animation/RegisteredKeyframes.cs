@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Animation
+namespace PeachBrackets.Html.Animation
 {
     /// <summary>One keyframe: the declarations that apply at <see cref="Offset"/> (0 to 1) of an animation.</summary>
     /// <param name="Offset">Where the keyframe sits in the animation, 0 for <c>0%</c>/<c>from</c> to 1 for <c>100%</c>/<c>to</c>.</param>

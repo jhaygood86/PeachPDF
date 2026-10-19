@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The shared grammar for the <c>aspect-ratio</c> value (<c>[ auto || &lt;ratio&gt; ]</c>, where

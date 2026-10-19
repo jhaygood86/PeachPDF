@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Issue #826: <c>CssValueParser.ParseLength</c>'s <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c> handling
-    /// (both the typed-<see cref="Html.Core.CSS.Length"/> and the raw-<c>string</c> overloads - the
+    /// (both the typed-<see cref="Html.CSS.Length"/> and the raw-<c>string</c> overloads - the
     /// latter is what <c>padding-*</c>/<c>width</c>/<c>height</c>/<c>border-*-radius</c>/etc. actually
     /// resolve through, since <c>css-properties.json</c> stores them as raw strings) applied the
     /// <c>PixelsPerPoint</c> catch-up multiply (issue #814's convention) only to absolute lengths.
@@ -100,8 +100,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

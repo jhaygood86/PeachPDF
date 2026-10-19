@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Integration
         /// re-deriving by hand if the floor or the thirds-based split ever changed.
         /// </summary>
         private static double ExpectedStrokeWidth(double totalThickness) =>
-            System.Math.Max(totalThickness / 3, PeachPDF.CSS.Length.PointsPerPx); // PixelsPerPoint is 1.0 in BuildAndLayout
+            System.Math.Max(totalThickness / 3, PeachBrackets.Css.Length.PointsPerPx); // PixelsPerPoint is 1.0 in BuildAndLayout
 
         [Fact]
         public async Task Double_DrawsTwoStrokes_WhereSolidDrawsOne()
@@ -216,8 +216,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

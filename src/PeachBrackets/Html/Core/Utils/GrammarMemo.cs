@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Remembers whether a property grammar accepted a given declaration value, so a document with thousands of boxes

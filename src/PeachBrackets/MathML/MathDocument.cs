@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>
     /// The root of a built MathML presentation tree (mirrors <c>SvgDocument</c>'s role for SVG) -
@@ -32,7 +32,7 @@ namespace PeachPDF.MathML
 
         /// <summary>The root element's font, for the root-relative units (<c>rem</c>/<c>rex</c>/<c>rch</c>/...).
         /// Null when the formula was not built from a live HTML box, which takes each unit's spec fallback.</summary>
-        public PeachPDF.CSS.IFontMetricSource? RootFonts { get; set; }
+        public PeachBrackets.Css.IFontMetricSource? RootFonts { get; set; }
 
         /// <summary>The root element's font-size in points (what 1rem is), or null to use the formula's own size.</summary>
         public double? RootFontSizePt { get; set; }

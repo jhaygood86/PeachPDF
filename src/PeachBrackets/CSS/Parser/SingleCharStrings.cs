@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A one-string-per-possible-<see cref="char"/>-value lookup table, so producing a single-character

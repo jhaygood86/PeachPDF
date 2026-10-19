@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Svg;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Svg;
 
-namespace PeachPDF.Html.Core.Animation
+namespace PeachBrackets.Html.Animation
 {
     /// <summary>
     /// The animations of one element of an inline <c>&lt;svg&gt;</c>, sampled one property at a time. An HTML box takes the sampled values as

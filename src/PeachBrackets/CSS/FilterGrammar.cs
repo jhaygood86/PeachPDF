@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared, layer-agnostic grammar for the CSS <c>filter</c> value (Filter Effects Level 1 §3): the
@@ -20,7 +20,7 @@ namespace PeachPDF.CSS
     /// <c>filter: grayscale(50%) opacity(0.8)</c> is not rejected wholesale just because one function has
     /// no native PDF rendering path today - see <c>ColorMatrix</c>'s remarks for exactly which functions
     /// that is and why. Which functions actually paint anything is a paint-time decision
-    /// (<c>PeachPDF.Html.Core.Paint.FilterEffectResolver</c>), not a parse-time one.
+    /// (<c>PeachBrackets.Html.Paint.FilterEffectResolver</c>), not a parse-time one.
     /// </para>
     /// <para>
     /// Like <see cref="BoxShadowGrammar"/>, each function's arguments are captured as raw authored

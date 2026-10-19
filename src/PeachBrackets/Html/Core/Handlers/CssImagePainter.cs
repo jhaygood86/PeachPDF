@@ -1,15 +1,15 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     internal static class CssImagePainter
     {

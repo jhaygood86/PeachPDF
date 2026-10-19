@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 
-namespace PeachPDF.Html.Core.Entities;
+namespace PeachBrackets.Html.Entities;
 
 internal enum RadialGradientSize
 {

@@ -3,10 +3,10 @@
 using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>Which nested block inside a <see cref="FontFeatureValuesRule"/> a name was declared in
-    /// (CSS Fonts Module Level 4 §6.8) - part of <c>PeachPDF.Html.Core.RegisteredFontFeatureValues</c>'s
+    /// (CSS Fonts Module Level 4 §6.8) - part of <c>PeachBrackets.Html.RegisteredFontFeatureValues</c>'s
     /// registry key, since the same name can be declared independently in more than one block kind.</summary>
     internal enum FontFeatureValueBlockKind
     {
@@ -51,7 +51,7 @@ namespace PeachPDF.CSS
         /// <summary>
         /// The single source of truth for the six recognized block names, shared by
         /// <see cref="StylesheetComposer"/> (deciding whether to descend into a nested block at all) and
-        /// <c>PeachPDF.Html.Core.RegisteredFontFeatureValues</c> (deciding which <see cref="FontFeatureValueBlockKind"/>
+        /// <c>PeachBrackets.Html.RegisteredFontFeatureValues</c> (deciding which <see cref="FontFeatureValueBlockKind"/>
         /// a parsed block is) - CLAUDE.md's "don't write two independent parsers for the same CSS value
         /// grammar across layers" rule applies here even though both call sites are string-name checks,
         /// not full grammars: a name added to one and not the other silently desyncs which blocks parse

@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
     /// instead of drawing a straight <c>DrawLine</c> - it used to resolve to a solid pen and paint a
     /// straight line, the same output <c>solid</c> produces, which is an unambiguous spec deviation
     /// (css-text-decor-3 §2.2 defines <c>wavy</c> in its own words: "Draw a wavy line"). See
-    /// <see cref="PeachPDF.Html.Core.Utils.WavyDecorationRenderer"/> for the wave's geometry and issue #1114.
+    /// <see cref="PeachBrackets.Html.Utils.WavyDecorationRenderer"/> for the wave's geometry and issue #1114.
     /// </summary>
     public class TextDecorationWavyStyleTests
     {
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// <c>text-decoration-thickness: 0</c> must not hang: without a floor on the thickness used for
         /// the wave's own <c>wavelength</c>, the per-period loop in
-        /// <see cref="PeachPDF.Html.Core.Utils.WavyDecorationRenderer.StrokeWavyLine"/> would never
+        /// <see cref="PeachBrackets.Html.Utils.WavyDecorationRenderer.StrokeWavyLine"/> would never
         /// advance (<c>x += 0</c>). This test itself is the regression guard - it would never complete
         /// if that floor were removed.
         /// </summary>
@@ -163,7 +163,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// <c>text-decoration-skip-ink</c> segments a wavy underline exactly like a solid one - each
         /// segment restarts its own phase at its own start (see
-        /// <see cref="PeachPDF.Html.Core.Utils.WavyDecorationRenderer"/>'s remarks on why), so a broken
+        /// <see cref="PeachBrackets.Html.Utils.WavyDecorationRenderer"/>'s remarks on why), so a broken
         /// wavy line is still one stroked path per segment.
         /// </summary>
         [Fact]

@@ -1,6 +1,6 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// One column of one multi-column container, on one pagination slot, as the fill that produced it

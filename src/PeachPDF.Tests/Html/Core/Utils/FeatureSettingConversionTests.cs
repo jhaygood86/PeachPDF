@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {

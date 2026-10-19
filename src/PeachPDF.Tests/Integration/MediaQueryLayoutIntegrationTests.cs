@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
@@ -155,9 +155,9 @@ namespace PeachPDF.Tests.Integration
             var size = new Size(widthPt, heightPt);
             // Set the media inputs before the CSS tree is generated - the MediaQueryContext is built
             // during SetHtml from these values (as PdfGenerator.SetContent does).
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.PreferredColorScheme = scheme == PdfColorScheme.Dark ? PeachPDF.Html.Core.ColorSchemePreference.Dark : PeachPDF.Html.Core.ColorSchemePreference.Light;
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.PreferredColorScheme = scheme == PdfColorScheme.Dark ? PeachBrackets.Html.ColorSchemePreference.Dark : PeachBrackets.Html.ColorSchemePreference.Light;
 
             await container.SetHtml(html, null);
 

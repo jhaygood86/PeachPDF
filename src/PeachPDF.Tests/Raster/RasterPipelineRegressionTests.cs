@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.CSS;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Css;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;

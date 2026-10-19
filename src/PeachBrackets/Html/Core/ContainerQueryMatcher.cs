@@ -1,10 +1,10 @@
 #nullable enable
 
 using System.Linq;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Evaluates an <c>@container</c> rule's enclosing-container chain (<see cref="CssData.ContainerCondition"/>[])

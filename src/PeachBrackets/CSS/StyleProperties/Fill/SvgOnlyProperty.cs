@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A property only an SVG element reads (SVG 2 / Filter Effects / CSS Masking): flood and lighting colours, <c>paint-order</c>, the marker and

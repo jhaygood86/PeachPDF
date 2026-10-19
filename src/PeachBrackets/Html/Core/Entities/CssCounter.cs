@@ -1,6 +1,6 @@
-﻿using PeachPDF.Html.Core.Dom;
+﻿using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     /// <summary>
     /// One counter as a box sees it. <paramref name="ScopeParent"/> is set only for a <c>list-item</c> counter

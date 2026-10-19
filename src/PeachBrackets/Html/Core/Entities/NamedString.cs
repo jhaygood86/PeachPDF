@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     /// <summary>
     /// Represents a named string defined by the string-set CSS property.

@@ -10,18 +10,18 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Animation;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Animation;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
-    /// Wraps a live <see cref="CssBox"/> (built for free by <see cref="Html.Core.Parse.HtmlParser"/>
+    /// Wraps a live <see cref="CssBox"/> (built for free by <see cref="Html.Parse.HtmlParser"/>
     /// out of an inline <c>&lt;svg&gt;</c>'s markup) as an <see cref="ISvgSourceNode"/>. The wrapped
     /// boxes are read purely as a data source here - they are never laid out or painted through the
     /// generic box pipeline. Styling is matched through the full HTML CSS engine against the host

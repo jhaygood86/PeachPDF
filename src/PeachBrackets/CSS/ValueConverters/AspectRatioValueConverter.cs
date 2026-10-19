@@ -3,13 +3,13 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates an <c>aspect-ratio</c> value through the shared <see cref="AspectRatioGrammar"/> — accepting
     /// <c>auto</c>, a <c>&lt;ratio&gt;</c>, or <c>auto &amp;&amp; &lt;ratio&gt;</c>, and rejecting everything
     /// else so an invalid value is dropped at parse time. The authored text is preserved so Layer B
-    /// (<see cref="Html.Core.Dom.CssLayoutEngine"/>) re-parses the same value during layout.
+    /// (<see cref="Html.Dom.CssLayoutEngine"/>) re-parses the same value during layout.
     /// </summary>
     internal sealed class AspectRatioValueConverter : IValueConverter
     {

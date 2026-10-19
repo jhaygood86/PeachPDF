@@ -1,5 +1,5 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 using System.Threading.Tasks;
 using Xunit;
 using static PeachPDF.Tests.TestSupport.LayoutHarness;

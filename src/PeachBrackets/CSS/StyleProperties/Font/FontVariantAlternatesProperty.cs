@@ -1,6 +1,6 @@
 ﻿using PeachDrawing.Text.Shaping;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     using static Converters;
 
@@ -11,7 +11,7 @@ namespace PeachPDF.CSS
     /// parsing/cascading) happens via <c>DerivedStyle.ActualFontVariantAlternates</c> -&gt;
     /// <see cref="PeachDrawing.Text.Shaping.ShapeSettings.ExplicitFeatures"/>, resolved against the
     /// document's <c>@font-feature-values</c> registry
-    /// (<see cref="PeachPDF.Html.Core.FontVariantAlternatesResolver"/>).
+    /// (<see cref="PeachBrackets.Html.FontVariantAlternatesResolver"/>).
     /// </summary>
     internal sealed class FontVariantAlternatesProperty : Property
     {

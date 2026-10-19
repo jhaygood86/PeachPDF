@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// Snaps a box's decoration rectangle to the CSS pixel grid, the way a browser does before it paints a

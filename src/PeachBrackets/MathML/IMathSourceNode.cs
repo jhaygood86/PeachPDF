@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>
     /// A minimal, source-agnostic view of one node of a MathML element tree, so

@@ -1,12 +1,12 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Utils;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// The <c>text-overflow: ellipsis</c> half of the text painter: per-line truncation of whichever

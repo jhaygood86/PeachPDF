@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>The box <c>transform-origin</c> and a percentage in a transform are measured in (CSS Transforms 1 section 6, SVG elements).</summary>
     internal enum SvgTransformBox
@@ -162,7 +162,7 @@ namespace PeachPDF.Svg
     }
 }
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>A CSS <c>transform</c> with a percentage that is of a <c>fill-box</c> or <c>stroke-box</c>: parsed again against the element's geometry when it is read.</summary>
     internal sealed class SvgDeferredTransform(string text, SvgTransformContext context, SvgTransformBox box, bool allowCalc)

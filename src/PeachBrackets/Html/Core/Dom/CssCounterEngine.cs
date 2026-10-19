@@ -1,14 +1,14 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.CounterStyles;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.CounterStyles;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     internal static class CssCounterEngine
     {

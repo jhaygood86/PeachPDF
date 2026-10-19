@@ -2,10 +2,10 @@ using PeachPDF.Rendering;
 using System.Collections.Generic;
 using System.Linq;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Parse;
 using Xunit;
 
 namespace PeachPDF.Tests.Html.Core

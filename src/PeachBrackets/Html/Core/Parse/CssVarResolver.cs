@@ -14,7 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Parse
+namespace PeachBrackets.Html.Parse
 {
     /// <summary>
     /// Resolves CSS <c>var(...)</c> custom-property references in a value string against an

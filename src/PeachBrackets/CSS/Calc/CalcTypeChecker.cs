@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Implements CSS calc()'s type-checking rules over a parsed <see cref="CalcNode"/> tree (Layer A

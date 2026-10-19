@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>grid-auto-columns</c>/<c>grid-auto-rows</c> value: a <c>&lt;track-size&gt;+</c> list

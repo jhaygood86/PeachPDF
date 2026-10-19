@@ -11,7 +11,7 @@
 using PeachDrawing.Core;
 using System.Collections.Generic;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>Base type for every node in a built MathML presentation tree.</summary>
     internal abstract class MathNode

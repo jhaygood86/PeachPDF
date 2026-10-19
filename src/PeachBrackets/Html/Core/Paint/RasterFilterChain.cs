@@ -1,13 +1,13 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using PeachDrawing;
 using PeachDrawing.Filters;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// Runs a CSS <c>filter</c> function list over a rendered <see cref="RasterSurface"/>, in authored order

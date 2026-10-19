@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Why a <see cref="CssRect"/> is measured and painted with a scaled-down face rather than its owner

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Integration
                 "<div class='running'><div id='clipper' style='overflow:hidden; width:40pt; border:2pt solid black; white-space:nowrap'>"
                 + "a long line of running header text</div></div>");
 
-            var clipper = All(root).First(f => f.Box.Overflow.Value == PeachPDF.CSS.Overflow.Hidden);
+            var clipper = All(root).First(f => f.Box.Overflow.Value == PeachBrackets.Css.Overflow.Hidden);
             var inside = All(clipper).Where(f => !ReferenceEquals(f, clipper) && f.Words.Count > 0).ToList();
 
             Assert.NotEmpty(inside);
@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Integration
                 "<div class='running'><div style='overflow:hidden; width:40pt'>"
                 + "<div id='inner' style='overflow:hidden; width:80pt; white-space:nowrap'>a long line of running header text</div></div></div>");
 
-            var inner = All(root).First(f => f.Box.Overflow.Value == PeachPDF.CSS.Overflow.Hidden
+            var inner = All(root).First(f => f.Box.Overflow.Value == PeachBrackets.Css.Overflow.Hidden
                                               && f.Children.Any(c => c.Words.Count > 0));
             var text = All(inner).Where(f => !ReferenceEquals(f, inner) && f.Words.Count > 0).ToList();
 

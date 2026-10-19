@@ -1,11 +1,11 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.MathML;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.MathML;
 using System;
 using System.Collections.Frozen;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// The HTML Standard's first-strong-character algorithm (used to resolve "auto" directionality -

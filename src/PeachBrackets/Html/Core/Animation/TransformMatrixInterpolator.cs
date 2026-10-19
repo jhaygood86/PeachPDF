@@ -1,9 +1,9 @@
 using System;
 using System.Numerics;
 using System.Text;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Animation
+namespace PeachBrackets.Html.Animation
 {
     /// <summary>
     /// Mixes two <c>transform</c> lists that cannot be mixed function by function (CSS Transforms 1 §13, the

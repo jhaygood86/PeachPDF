@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.Animation
+namespace PeachBrackets.Html.Animation
 {
     /// <summary>
     /// A CSS easing function (CSS Easing 1): maps the linear progress of a keyframe interval, 0 to 1, to the

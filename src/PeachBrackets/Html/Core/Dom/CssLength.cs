@@ -1,10 +1,10 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Globalization;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Represents and gets info about a CSS Length

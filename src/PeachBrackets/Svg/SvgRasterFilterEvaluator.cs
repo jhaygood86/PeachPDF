@@ -4,7 +4,7 @@ using PeachDrawing.Filters;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Evaluates a <see cref="SvgFilter"/> that has a primitive PDF cannot express (see <see cref="SvgFilter.RequiresRaster"/>)

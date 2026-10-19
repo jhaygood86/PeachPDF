@@ -1,13 +1,13 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// Lays a single item's own content out for real, attached to a live fragmentainer, at the

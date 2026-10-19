@@ -1,10 +1,10 @@
 #nullable enable
 
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Html.Core.Parse
+namespace PeachBrackets.Html.Parse
 {
     /// <summary>
     /// The pre-standard "flexbox 2009" model (<c>display: -webkit-box</c> and <c>-webkit-box-orient</c>/<c>-direction</c>/

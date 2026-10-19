@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Structure;
 using PeachPDF.Tests.TestSupport;
@@ -606,7 +606,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("after", words);
         }
 
-        private static IEnumerable<PeachPDF.Html.Core.Fragments.BoxFragment> Flatten(PeachPDF.Html.Core.Fragments.BoxFragment fragment)
+        private static IEnumerable<PeachBrackets.Html.Fragments.BoxFragment> Flatten(PeachBrackets.Html.Fragments.BoxFragment fragment)
         {
             yield return fragment;
             foreach (var child in fragment.Children)
@@ -959,7 +959,7 @@ namespace PeachPDF.Tests.Integration
         {
             var stylesheet = await new PdfGenerator().ParseStyleSheet("#root { display: contents }");
             var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(renderContext);
+            var properties = new PeachBrackets.Html.Utils.CssPropertyFactory(renderContext);
             var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
                 p => p.Content(c => c.Id("root").Text("hello")), properties);
 
@@ -989,7 +989,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Declarative_ATopLevelFragmentShell_StillReachesTheRealTree()
         {
             var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
-            var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(renderContext);
+            var properties = new PeachBrackets.Html.Utils.CssPropertyFactory(renderContext);
             var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
                 p => p.Content(c => c.Html("<p>before</p><div id='empty' style='display:contents'></div>")), properties);
 

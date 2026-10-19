@@ -3,7 +3,7 @@ namespace PeachPDF.Tests.CSS
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using PeachPDF.Tests.TestSupport;
     using Xunit;
 

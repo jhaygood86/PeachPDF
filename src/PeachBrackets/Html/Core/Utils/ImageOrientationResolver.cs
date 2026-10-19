@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 using System;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves <c>image-orientation</c> (CSS Images 4 §5.2) for a raster <see cref="Image"/>: the rotation and flip that

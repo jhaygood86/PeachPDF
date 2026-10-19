@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared grammar for <c>text-underline-position</c>'s compound value
@@ -69,7 +69,7 @@ namespace PeachPDF.CSS
         /// <summary>Convenience overload that tokenizes <paramref name="value"/> first.</summary>
         internal static bool TryParse(string value, out TextUnderlinePosition position, out TextUnderlineSide side)
         {
-            using var pooledTokens = global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokensPooled(value);
+            using var pooledTokens = global::PeachBrackets.Html.Parse.CssValueParser.GetCssTokensPooled(value);
             List<Token> tokens = pooledTokens;
             return TryParse(tokens, out position, out side);
         }

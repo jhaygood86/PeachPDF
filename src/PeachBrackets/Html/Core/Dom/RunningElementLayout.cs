@@ -1,12 +1,12 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Lays a <c>position: running(name)</c> box (css-gcpm-3) out for real against a page margin box's

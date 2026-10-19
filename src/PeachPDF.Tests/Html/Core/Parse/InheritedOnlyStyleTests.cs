@@ -1,6 +1,6 @@
 using PeachPDF;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 

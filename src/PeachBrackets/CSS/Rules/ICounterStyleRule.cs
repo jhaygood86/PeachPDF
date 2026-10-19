@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A named counter style declared with an <c>@counter-style</c> at-rule (CSS Counter Styles Level 3 §3).

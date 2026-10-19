@@ -1,10 +1,10 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// One group of boxes that moves together across a fragmentainer boundary — a flex <b>line</b> or a

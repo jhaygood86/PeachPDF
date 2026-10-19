@@ -3,11 +3,11 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>hyphenate-limit-chars</c> value through the shared <see cref="HyphenateLimitCharsGrammar"/>.
-    /// The authored text is preserved so Layer B (<see cref="Html.Core.Dom.CssLayoutEngine"/>) re-parses the
+    /// The authored text is preserved so Layer B (<see cref="Html.Dom.CssLayoutEngine"/>) re-parses the
     /// same value during layout — the <see cref="AspectRatioValueConverter"/> precedent.
     /// </summary>
     internal sealed class HyphenateLimitCharsValueConverter : IValueConverter

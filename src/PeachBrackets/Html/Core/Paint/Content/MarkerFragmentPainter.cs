@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints a synthesized <c>::marker</c> pseudo-element: a marker image, one of the procedural

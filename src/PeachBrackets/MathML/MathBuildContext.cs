@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>
     /// The inherited build-time context threaded through <see cref="MathTreeBuilder"/>'s recursion -

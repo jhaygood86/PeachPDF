@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>One glyph placed at an explicit offset within a <see cref="MathBox"/>'s own coordinate
     /// space - used for a stretchy operator's assembled/variant glyphs (drawn via

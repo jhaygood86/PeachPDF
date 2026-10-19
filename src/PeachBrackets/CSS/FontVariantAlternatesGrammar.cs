@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The value grammar for <c>font-variant-alternates</c> (CSS Fonts Module Level 4 §6.8):
@@ -17,7 +17,7 @@ namespace PeachPDF.CSS
     /// grammar" convention (see CLAUDE.md) - the same shape <c>FontFeatureSettingsProperty.ValueGrammar</c>
     /// already uses. Only grammar is validated here; cross-referencing a clause's ident(s) against an
     /// <c>@font-feature-values</c> registration is a later, per-element, resolve-time operation (see
-    /// <see cref="PeachPDF.Html.Core.FontVariantAlternatesResolver"/>) - an unmatched name is not a parse
+    /// <see cref="PeachBrackets.Html.FontVariantAlternatesResolver"/>) - an unmatched name is not a parse
     /// error, mirroring <c>font-palette</c>'s own precedent.
     /// </summary>
     internal sealed class FontVariantAlternatesGrammar : IValueConverter

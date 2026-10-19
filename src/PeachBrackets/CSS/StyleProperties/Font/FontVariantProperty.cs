@@ -1,6 +1,6 @@
 #nullable disable
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     using static Converters;
 

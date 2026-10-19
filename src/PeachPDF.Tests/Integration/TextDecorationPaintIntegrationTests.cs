@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.Integration
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var rect = s.Rectangles.Values.Single();
-            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+            var cssPixel = PeachBrackets.Css.Length.PointsPerPx;
             var expectedGap = System.Math.Ceiling(line.Width / (2 * cssPixel)) * cssPixel;
             var expectedCenter = rect.Top + s.ActualFont.TextBaselineOffset + expectedGap + line.Width / 2;
 
@@ -637,7 +637,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(line.X2 > box.Right, "the fixture's text must overflow the box for this test to mean anything");
 
             var clip = Assert.Single(ClipsAround(g, line));
-            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+            var cssPixel = PeachBrackets.Css.Length.PointsPerPx;
 
             if (snap)
             {
@@ -751,8 +751,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

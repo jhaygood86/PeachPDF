@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The keyword side of <c>font-size</c>'s <c>&lt;absolute-size&gt; | &lt;relative-size&gt; |
     /// &lt;length-percentage&gt;</c> grammar, for its <see cref="CssKeywordOrValue{TEnum,TValue}"/>.

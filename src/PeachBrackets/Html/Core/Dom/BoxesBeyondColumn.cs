@@ -1,8 +1,8 @@
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The boxes a column of a multi-column container does <b>not</b> hold, read off the break record it stopped at: every child

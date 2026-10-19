@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// How much of a break decision's ideal shape survived — the staged relaxation

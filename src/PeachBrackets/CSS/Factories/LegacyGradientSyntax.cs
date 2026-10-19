@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Rewrites the pre-standard vendor gradient functions (<c>-webkit-linear-gradient()</c>,

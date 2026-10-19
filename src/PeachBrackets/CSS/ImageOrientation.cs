@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The computed value of <c>image-orientation</c> (CSS Images 4 §5.2): <c>from-image</c>, or an explicit
@@ -59,7 +59,7 @@ namespace PeachPDF.CSS
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
 
-            using var pooled = Html.Core.Parse.CssValueParser.GetCssTokensPooled(text.Trim());
+            using var pooled = Html.Parse.CssValueParser.GetCssTokensPooled(text.Trim());
             List<Token> tokens = pooled;
             tokens.RemoveAll(static t => t.Type == TokenType.Whitespace);
             return TryParse(tokens);

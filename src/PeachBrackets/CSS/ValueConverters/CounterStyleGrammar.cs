@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>system</c> descriptor's algorithm (CSS Counter Styles Level 3 §2.1).</summary>
     internal enum CounterSystem

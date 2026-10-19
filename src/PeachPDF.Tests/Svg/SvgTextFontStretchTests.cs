@@ -1,6 +1,6 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 using Xunit;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Svg
     /// asserting <c>CssBox.ActualStretch</c>, one layer before <c>GetFont</c> - there is no SVG-side
     /// equivalent of that property to assert against instead), so this proves the keyword→numeric-scale
     /// resolution and inheritance/override wiring exercise every code path without throwing or nulling
-    /// out <see cref="SvgTextElement.Font"/> - <see cref="Html.Core.Utils.FontStretchResolverTests"/>
+    /// out <see cref="SvgTextElement.Font"/> - <see cref="Html.Utils.FontStretchResolverTests"/>
     /// already covers the keyword-to-numeric-scale mapping itself in isolation.
     /// </summary>
     public class SvgTextFontStretchTests

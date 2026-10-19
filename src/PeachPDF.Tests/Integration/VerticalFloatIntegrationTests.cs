@@ -1,6 +1,6 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -401,8 +401,8 @@ namespace PeachPDF.Tests.Integration
             var blockStartEdge = blockStartIsRight ? f.ActualRight : f.Location.X;
             var blockEndEdge = blockStartIsRight ? f.Location.X : f.ActualRight;
 
-            Assert.True(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockStartEdge, blockStartIsRight));
-            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockEndEdge, blockStartIsRight));
+            Assert.True(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockStartEdge, blockStartIsRight));
+            Assert.False(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockEndEdge, blockStartIsRight));
         }
 
         [Fact]
@@ -454,13 +454,13 @@ namespace PeachPDF.Tests.Integration
             var before = blockStartIsRight ? f.ActualRight + 1 : f.Location.X - 1;
             var blockEndEdge = blockStartIsRight ? f.Location.X : f.ActualRight;
             var beyond = blockStartIsRight ? f.Location.X - 1 : f.ActualRight + 1;
-            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight));
+            Assert.False(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight));
             // ...but a 10pt-thick one reaches into it,
-            Assert.True(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight, 10));
+            Assert.True(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight, 10));
             // while a column that only touches the block-start edge, or starts at its block-end edge, stays clear.
-            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight, 1));
-            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockEndEdge, blockStartIsRight, 10));
-            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, beyond, blockStartIsRight, 0.5));
+            Assert.False(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, before, blockStartIsRight, 1));
+            Assert.False(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockEndEdge, blockStartIsRight, 10));
+            Assert.False(PeachBrackets.Html.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, beyond, blockStartIsRight, 0.5));
         }
     }
 }

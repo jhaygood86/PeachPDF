@@ -1,11 +1,11 @@
 ﻿#nullable disable
 
-using PeachPDF.CSS.Conditions;
+using PeachBrackets.Css.Conditions;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal static class ParserExtensions
     {

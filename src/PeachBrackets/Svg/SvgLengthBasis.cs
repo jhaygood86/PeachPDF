@@ -1,6 +1,6 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// The font an SVG length is resolved against: what <c>1em</c>/<c>1rem</c> are in user units, plus - as an

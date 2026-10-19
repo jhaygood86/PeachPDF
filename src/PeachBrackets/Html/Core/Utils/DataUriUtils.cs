@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Synchronous <c>data:</c> URI decoding shared by every layer that needs to inspect a data

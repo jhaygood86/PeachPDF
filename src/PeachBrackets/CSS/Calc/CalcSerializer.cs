@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Produces the canonical CSS text (<see cref="IPropertyValue.CssText"/>) for a validated calc-family

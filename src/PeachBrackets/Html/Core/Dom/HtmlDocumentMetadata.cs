@@ -1,6 +1,6 @@
 using System;
 
-namespace PeachPDF.Html.Core.Dom;
+namespace PeachBrackets.Html.Dom;
 
 internal sealed record HtmlDocumentMetadata(
     string? Title,

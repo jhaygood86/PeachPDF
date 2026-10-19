@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Paint;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Html.Core.Paint
 {
-    using DomUtils = PeachPDF.Html.Core.Utils.DomUtils;
+    using DomUtils = PeachBrackets.Html.Utils.DomUtils;
 
     /// <summary>
     /// Paint order within a stacking context (CSS 2.1 Appendix E): which fragments a context claims,
@@ -165,8 +165,8 @@ namespace PeachPDF.Tests.Html.Core.Paint
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

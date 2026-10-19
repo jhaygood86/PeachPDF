@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal enum DisplayMode : byte
     {
@@ -25,7 +25,7 @@ namespace PeachPDF.CSS
 
         /// <summary>
         /// <c>flow-root</c> (css-display-3 §2.4): a block-level box that establishes an independent block formatting
-        /// context. Laid out as a block everywhere (<see cref="PeachPDF.Html.Core.Dom.DerivedStyle.ActualDisplay"/>
+        /// context. Laid out as a block everywhere (<see cref="PeachBrackets.Html.Dom.DerivedStyle.ActualDisplay"/>
         /// reads <c>block</c>); only the formatting-context predicates tell it apart.
         /// </summary>
         FlowRoot

@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>Hidden, undocumented compat alias for Prince's own -prince-bookmark-target spelling - see -peachpdf-bookmark-target's css-properties.json entry.</summary>
     internal sealed class PrinceBookmarkTargetProperty : Property

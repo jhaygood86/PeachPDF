@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// A page-margin box's own <c>background</c> (issue #1082) - painted via the shared
-    /// <see cref="PeachPDF.Html.Core.Dom.LayeredBackgroundPainter"/> the <c>@page</c> box's own
+    /// <see cref="PeachBrackets.Html.Dom.LayeredBackgroundPainter"/> the <c>@page</c> box's own
     /// background also uses (<see cref="PageBackgroundIntegrationTests"/>). Verified the same
     /// content-stream-regex way as <see cref="CanvasBackgroundIntegrationTests"/>: a solid-color fill's
     /// exact operator sequence is unambiguous, so this isn't the "content-stream substring" pitfall

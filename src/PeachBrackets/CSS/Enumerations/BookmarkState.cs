@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>CSS Generated Content Module Level 3 <c>bookmark-state</c> - the PDF outline entry's initial expansion state.</summary>
     internal enum BookmarkState

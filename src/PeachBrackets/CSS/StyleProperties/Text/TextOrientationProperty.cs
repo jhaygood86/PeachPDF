@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>text-orientation</c> property (CSS Writing Modes Level 4 §5.2).</summary>
     internal sealed class TextOrientationProperty : Property

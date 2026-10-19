@@ -5,7 +5,7 @@ using System;
 // ReSharper disable UnusedMember.Global
 
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal struct Length : IEquatable<Length>, IComparable<Length>, IFormattable
     {
@@ -97,7 +97,7 @@ namespace PeachPDF.CSS
         /// Whether <see cref="ToPixels"/> actually reads its <c>containerWidthPt</c>/<c>containerHeightPt</c>/
         /// <c>containerInlineSizePt</c>/<c>containerBlockSizePt</c> parameters - true only for the six
         /// CSS Containment 3 §6.2 <c>cq*</c> units. Lets a caller skip
-        /// <see cref="Html.Core.Dom.CssBox.GetContainerRelativeUnitBasis"/>'s ancestor walk (which finds
+        /// <see cref="Html.Dom.CssBox.GetContainerRelativeUnitBasis"/>'s ancestor walk (which finds
         /// the nearest <c>@container</c> query container) for the overwhelming majority of lengths, which
         /// don't use a container-relative unit at all - see <c>CssValueParser.ParseLength</c>.
         /// </summary>
@@ -397,7 +397,7 @@ namespace PeachPDF.CSS
         /// inline-axis size in points (physical width for a <c>horizontal-tb</c> container, physical
         /// height for <c>vertical-rl</c>/<c>vertical-lr</c> - CSS Writing Modes 4 §7.1), for <c>cqi</c>/
         /// <c>cqmin</c>/<c>cqmax</c> - <c>null</c> when there is no eligible ancestor container (see
-        /// <see cref="Html.Core.Dom.CssBox.FindNearestQueryContainer"/>), which falls back to
+        /// <see cref="Html.Dom.CssBox.FindNearestQueryContainer"/>), which falls back to
         /// <paramref name="viewportInlineSizePt"/> (the corresponding small-viewport unit, per CSS
         /// Containment 3 §6.2).</param>
         /// <param name="containerBlockSizePt">The nearest ancestor query container's own resolved
@@ -407,7 +407,7 @@ namespace PeachPDF.CSS
         /// falls back to <paramref name="viewportBlockSizePt"/> for that axis.</param>
         /// <param name="viewportWidthPt">The page box's own width in points, for <c>vw</c> and its
         /// <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqw</c> fallback - <c>null</c> when no
-        /// page context is available (see <see cref="Html.Core.Dom.CssBox.GetViewportUnitBasis"/>), which
+        /// page context is available (see <see cref="Html.Dom.CssBox.GetViewportUnitBasis"/>), which
         /// resolves those units to 0. Always the page's physical width, regardless of anyone's
         /// <c>writing-mode</c> (CSS Values and Units 4 §6.2) - unlike <paramref name="viewportInlineSizePt"/>.</param>
         /// <param name="viewportHeightPt">The page box's own height in points, for <c>vh</c> and its

@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal abstract class SelectorBase : StylesheetNode, ISelector
     {

@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Every eligible <c>@container</c> query container's resolved size for one layout pass, keyed by

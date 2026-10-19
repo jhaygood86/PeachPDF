@@ -11,7 +11,7 @@
 using System.Linq;
 using System.Text;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     internal static class MathMlSerializer
     {

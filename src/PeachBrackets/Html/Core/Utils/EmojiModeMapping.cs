@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>Maps the cascaded <c>font-variant-emoji</c> keyword onto the text engine's own <see cref="EmojiMode"/>.</summary>
     internal static class EmojiModeMapping

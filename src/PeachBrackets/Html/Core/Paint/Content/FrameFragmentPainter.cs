@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints an <c>&lt;iframe&gt;</c>: a static PDF cannot embed a browsing context, so the box shows

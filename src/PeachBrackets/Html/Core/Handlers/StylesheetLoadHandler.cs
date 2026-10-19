@@ -13,14 +13,14 @@
 using MimeKit;
 using PeachDrawing.Core;
 using PeachPDF;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Utils;
 using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Handler for loading a stylesheet data.

@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The CSS 2.1 §5.11.4 language pseudo-class ":lang(C)" - matches an element whose language (the

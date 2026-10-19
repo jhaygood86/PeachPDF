@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachDrawing.Filters;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 
 namespace PeachPDF.Tests.Raster
 {

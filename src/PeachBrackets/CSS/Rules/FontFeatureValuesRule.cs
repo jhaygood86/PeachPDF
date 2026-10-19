@@ -2,7 +2,7 @@
 
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A <c>@font-feature-values</c> at-rule (CSS Fonts Module Level 4): associates named OpenType
@@ -12,7 +12,7 @@ namespace PeachPDF.CSS
     /// <c>font-variant-alternates</c> functions (<c>styleset()</c>, etc.) can reference a name instead
     /// of a raw OpenType feature index. The prelude is a <c>&lt;family-name&gt;#</c> list (unlike
     /// <see cref="FontPaletteValuesRule"/>'s single dashed-ident name), captured as raw text and split/
-    /// normalized at Layer B (<see cref="PeachPDF.Html.Core.RegisteredFontFeatureValues"/>).
+    /// normalized at Layer B (<see cref="PeachBrackets.Html.RegisteredFontFeatureValues"/>).
     /// </summary>
     internal sealed class FontFeatureValuesRule : Rule
     {

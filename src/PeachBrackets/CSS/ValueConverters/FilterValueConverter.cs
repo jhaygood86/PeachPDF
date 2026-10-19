@@ -3,14 +3,14 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>filter</c> value through the shared <see cref="FilterGrammar"/> - accepting
     /// <c>none</c> or a space-separated list of <c>&lt;filter-function&gt;</c> values, and rejecting
     /// everything else so an invalid value (e.g. <c>filter: banana()</c>) is dropped at parse time. The
     /// authored value text is preserved verbatim so the paint-time resolver
-    /// (<c>PeachPDF.Html.Core.Paint.FilterEffectResolver</c>, via <c>CssBox.ActualFilterFunctions</c>)
+    /// (<c>PeachBrackets.Html.Paint.FilterEffectResolver</c>, via <c>CssBox.ActualFilterFunctions</c>)
     /// re-tokenizes and resolves the same value against the box - a single grammar shared across both
     /// layers, mirroring <see cref="BoxShadowValueConverter"/>.
     /// </summary>

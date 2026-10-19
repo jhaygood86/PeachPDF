@@ -1,11 +1,11 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Resolves UAX#9 embedding levels for every paragraph (inline formatting context) in the box tree,

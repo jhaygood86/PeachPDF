@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The set of CSS properties cascaded onto a <see cref="CssBox"/> from any source (author/UA

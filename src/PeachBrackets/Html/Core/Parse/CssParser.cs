@@ -13,15 +13,15 @@
 #nullable enable
 
 using PeachPDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Handlers;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Parse
+namespace PeachBrackets.Html.Parse
 {
     /// <summary>
     /// Parser to parse CSS stylesheet source string into CSS objects.

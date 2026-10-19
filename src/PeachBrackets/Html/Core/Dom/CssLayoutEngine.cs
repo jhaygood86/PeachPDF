@@ -14,13 +14,13 @@
 
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -29,7 +29,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Helps on CSS Layout.

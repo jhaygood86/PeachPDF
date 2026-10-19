@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration

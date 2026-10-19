@@ -1,8 +1,8 @@
 using PeachDrawing;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// Where a box was drawn, for what is written over it afterwards: the link annotation and form widget of an element that a

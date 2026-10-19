@@ -1,11 +1,11 @@
 using PeachPDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Svg;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     internal abstract record CssImage : IDisposable
     {

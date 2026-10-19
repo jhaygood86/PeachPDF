@@ -1,11 +1,11 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>One resolved <c>border-image-slice</c> value, in the source image's own pixel space.</summary>
     internal readonly record struct BorderImageSlice(double Top, double Right, double Bottom, double Left, bool Fill);

@@ -10,11 +10,11 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +22,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Xml.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// An <see cref="ICssDomNode"/> over one element of an inline <c>&lt;svg&gt;</c>'s live

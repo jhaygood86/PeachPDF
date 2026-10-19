@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Parse;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for an <c>&lt;input&gt;</c> or <c>&lt;select&gt;</c> element. Its layout is the same

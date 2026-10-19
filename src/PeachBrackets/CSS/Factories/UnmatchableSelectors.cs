@@ -2,7 +2,7 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The selectors PeachPDF <em>recognizes</em> but does not match: there is no shadow tree, no form

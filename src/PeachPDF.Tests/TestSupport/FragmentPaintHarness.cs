@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Paint;
 
 namespace PeachPDF.Tests.TestSupport
 {

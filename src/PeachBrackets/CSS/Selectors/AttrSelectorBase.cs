@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal abstract class AttrSelectorBase : SelectorBase, IAttrSelector
     {

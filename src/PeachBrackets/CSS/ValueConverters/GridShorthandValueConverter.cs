@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>grid</c> shorthand (CSS Grid §7.8): either a <c>&lt;grid-template&gt;</c>, or one of the two

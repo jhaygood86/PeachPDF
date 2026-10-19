@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// A named OpenType feature-value alias declared with a <c>@font-feature-values</c> at-rule (CSS

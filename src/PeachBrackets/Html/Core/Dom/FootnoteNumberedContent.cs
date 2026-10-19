@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Re-resolves a <c>::footnote-call</c>/<c>::footnote-marker</c>'s own <c>content</c> once the

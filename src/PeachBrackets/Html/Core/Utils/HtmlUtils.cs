@@ -15,7 +15,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     internal static class HtmlUtils
     {

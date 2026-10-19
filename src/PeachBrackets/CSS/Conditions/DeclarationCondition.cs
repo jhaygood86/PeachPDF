@@ -1,9 +1,9 @@
 ﻿using System.IO;
 using System.Linq;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class DeclarationCondition : StylesheetNode, IConditionFunction
     {
@@ -31,7 +31,7 @@ namespace PeachPDF.CSS
         /// <c>CssUtils</c>/<c>SvgTreeBuilder.ApplyCommon</c> dispatch through for real. Checked with OR,
         /// not AND: a single shared stylesheet can't know at parse time whether a rule will end up
         /// matching an HTML box or an SVG element (an inline <c>&lt;svg&gt;</c> shares its host
-        /// document's one <see cref="Html.Core.CssData"/>), so a declaration valid for either counts.
+        /// document's one <see cref="Html.CssData"/>), so a declaration valid for either counts.
         /// </summary>
         public bool Check(PeachDrawing.Core.RenderContext renderContext)
         {

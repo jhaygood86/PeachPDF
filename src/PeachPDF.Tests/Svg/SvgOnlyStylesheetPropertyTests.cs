@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 using PeachDrawing.PDF;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
@@ -44,10 +44,10 @@ namespace PeachPDF.Tests.Svg
         {
             var sheet = CssParser.ParseStyleSheet($"r {{ {property}: {value} }} @keyframes k {{ to {{ {property}: {value} }} }}");
 
-            var rule = sheet.Rules.OfType<PeachPDF.CSS.StyleRule>().Single();
+            var rule = sheet.Rules.OfType<PeachBrackets.Css.StyleRule>().Single();
             Assert.Contains(rule.Style, p => p.Name == property);
-            var keyframes = sheet.Rules.OfType<PeachPDF.CSS.KeyframesRule>().Single();
-            Assert.Contains(keyframes.Rules.OfType<PeachPDF.CSS.KeyframeRule>().SelectMany(r => r.Style), p => p.Name == property);
+            var keyframes = sheet.Rules.OfType<PeachBrackets.Css.KeyframesRule>().Single();
+            Assert.Contains(keyframes.Rules.OfType<PeachBrackets.Css.KeyframeRule>().SelectMany(r => r.Style), p => p.Name == property);
         }
 
         [Theory]
@@ -58,7 +58,7 @@ namespace PeachPDF.Tests.Svg
         {
             var sheet = CssParser.ParseStyleSheet($"r {{ {property}: {value} }}");
 
-            Assert.DoesNotContain(sheet.Rules.OfType<PeachPDF.CSS.StyleRule>().Single().Style, p => p.Name == property);
+            Assert.DoesNotContain(sheet.Rules.OfType<PeachBrackets.Css.StyleRule>().Single().Style, p => p.Name == property);
         }
 
         [Fact]

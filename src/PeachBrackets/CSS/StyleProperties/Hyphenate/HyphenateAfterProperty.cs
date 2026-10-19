@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Hidden, undocumented compat alias for Prince's own standalone "hyphenate-after" property

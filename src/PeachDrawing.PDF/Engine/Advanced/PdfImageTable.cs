@@ -208,7 +208,7 @@ internal sealed class PdfImageTable : PdfResourceTable
     /// than one embed at whichever size happened to be requested first. <see cref="PdfRasterImage.Interpolate"/>
     /// is part of the identity for the same reason: an <see cref="PdfRasterImage"/> can now be shared across
     /// unrelated draw sites (the same decoded image referenced by more than one HTML element - see
-    /// <c>PeachPDF.Html.Core.HtmlContainerInt</c>'s resolved-image cache) that each toggle it
+    /// <c>PeachBrackets.Html.HtmlContainerInt</c>'s resolved-image cache) that each toggle it
     /// transiently around their own draw call (e.g. a repeating background tile forcing it off). Since
     /// a <see cref="PdfImage"/>'s own <c>/Interpolate</c> key is baked in once, at whichever call first
     /// creates it for a given selector, folding the flag into the selector keeps a tile draw's "off"

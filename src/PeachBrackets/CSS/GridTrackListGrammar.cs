@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The kind of a single grid <c>&lt;track-size&gt;</c>/<c>&lt;track-breadth&gt;</c>
     /// (CSS Grid Layout Module Level 1/2 §7.2).</summary>

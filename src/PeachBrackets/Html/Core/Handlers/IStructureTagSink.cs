@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// What the fragment painter needs from a structure (tagged-PDF) recorder while it walks the page: open the structure element a

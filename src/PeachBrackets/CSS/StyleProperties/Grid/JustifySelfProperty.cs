@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>justify-self</c> property (CSS Box Alignment): a grid item's own inline-axis alignment.</summary>
     internal sealed class JustifySelfProperty : Property

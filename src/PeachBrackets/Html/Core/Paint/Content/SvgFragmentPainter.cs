@@ -1,9 +1,9 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Svg;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints an inline <c>&lt;svg&gt;</c> — its scene graph, built once from the element's own

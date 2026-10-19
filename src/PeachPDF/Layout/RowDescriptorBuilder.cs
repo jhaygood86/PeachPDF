@@ -1,5 +1,5 @@
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 
 namespace PeachPDF.Layout
 {

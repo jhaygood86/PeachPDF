@@ -10,20 +10,20 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for image element.

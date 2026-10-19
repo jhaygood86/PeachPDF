@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     [Flags]
     internal enum PropertyFlags : byte

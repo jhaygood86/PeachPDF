@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Handlers;
 
 namespace PeachPDF.Tests.Html.Core.Handlers
 {

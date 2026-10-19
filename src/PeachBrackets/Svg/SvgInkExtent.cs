@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// A conservative bounding box of what a document draws, in the document's own user space: the geometry of every shape with the width its

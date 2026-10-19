@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using System;
     using Xunit;
 

@@ -1,10 +1,11 @@
 ﻿using PeachDrawing.Text.Shaping;
+using PeachPDF;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -12,7 +13,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Values calculated from a <see cref="CssBox"/>'s <see cref="ComputedStyle"/> - the <c>Actual*</c>
@@ -880,7 +881,7 @@ namespace PeachPDF.Html.Core.Dom
             string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>A distance under one CSS pixel is treated as one pixel (CSS Transforms 2 section 8); zero or less is no perspective at all.</summary>
-        private static double ClampPerspective(double distance) => distance > 0 ? Math.Max(distance, CSS.Length.PointsPerPx) : 0;
+        private static double ClampPerspective(double distance) => distance > 0 ? Math.Max(distance, Css.Length.PointsPerPx) : 0;
 
         public double ActualPerspective
         {

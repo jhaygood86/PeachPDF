@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>grid-area</c> shorthand: <c>&lt;grid-line&gt; [ / &lt;grid-line&gt; ]{0,3}</c> in the order

@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     internal record NamedPageElement(string Name, double Y)
     {

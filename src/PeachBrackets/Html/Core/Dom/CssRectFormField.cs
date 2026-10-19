@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The phantom word carrying a <see cref="CssBoxFormField"/>'s intrinsic size (see

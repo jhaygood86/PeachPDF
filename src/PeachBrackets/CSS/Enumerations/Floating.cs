@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal enum Floating : byte
     {
@@ -42,7 +42,7 @@ namespace PeachPDF.CSS
         /// <summary>
         /// CSS Page Floats: floats to the inline edge nearest the binding (the left edge on a right-hand
         /// page, the right edge on a left-hand page) - resolves to an effective <see cref="Left"/>/
-        /// <see cref="Right"/> via <see cref="PeachPDF.Html.Core.Dom.PageRuleResolver.IsRightPage"/> and
+        /// <see cref="Right"/> via <see cref="PeachBrackets.Html.Dom.PageRuleResolver.IsRightPage"/> and
         /// is included in <c>CssBox.IsFloated</c>, unlike <see cref="Top"/>/<see cref="Bottom"/>/
         /// <see cref="TopBottom"/>/<see cref="Snap"/>.
         /// </summary>

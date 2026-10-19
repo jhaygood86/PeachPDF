@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Decodes a <see cref="Stream"/> (an <c>@import</c>/externally-fetched stylesheet) into a fully
