@@ -214,6 +214,20 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(LinearEasingGrammar.TryParse(tokens));
         }
 
+        [Theory]
+        [InlineData("1", "50%", 0.5, 0.75)]
+        [InlineData("25%", "1", 0.5, 0.625)]
+        [InlineData("0%", "100%", 0.25, 0.25)]
+        public async Task OpacityPercentages_MixAsNumbers(string from, string to, double progress, double expected)
+        {
+            // CSS Color 4 section 3.2: a percentage opacity is the number it stands for, so it mixes with a number as one (Chrome: 1 to 50% at half is 0.75).
+            var root = await BuildAsync($@"
+                <style>@keyframes k {{ from {{ opacity: {from} }} to {{ opacity: {to} }} }}
+                #a {{ animation: k 1s linear }}</style><div id=""a"">x</div>", progress);
+
+            Assert.Equal(expected, Opacity(Find(root, "a")), 3);
+        }
+
         // ─── Progress exactly 1 goes through the last interval's easing ───
 
         [Theory]

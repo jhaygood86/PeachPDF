@@ -54,6 +54,9 @@ namespace PeachPDF.Html.Core.Animation
             "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix"
         };
 
+        // The opacities: a percentage is the number it stands for (CSS Color 4 section 3.2), which Interpolate puts in before mixing.
+        private static readonly HashSet<string> OpacityProperties = new(StringComparer.OrdinalIgnoreCase) { "opacity", "fill-opacity", "stroke-opacity", "stop-opacity" };
+
         /// <summary>
         /// Properties whose value may not be negative. An easing that overshoots can take the mix below zero, where the
         /// property's range clamps it (CSS Values 4 §10.1: a mixed value is clamped to the range the property allows).
@@ -82,6 +85,13 @@ namespace PeachPDF.Html.Core.Animation
         {
             from = from.Trim();
             to = to.Trim();
+
+            // CSS Color 4 section 3.2: a percentage opacity is the number it stands for, and a number and a percentage would not mix as they are.
+            if (OpacityProperties.Contains(property))
+            {
+                from = PercentageAsNumber(from);
+                to = PercentageAsNumber(to);
+            }
 
             if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return from;
 
@@ -482,6 +492,12 @@ namespace PeachPDF.Html.Core.Animation
             result = sb.ToString();
             return true;
         }
+
+        private static string PercentageAsNumber(string value) =>
+            value.Length > 1 && value[^1] == '%'
+            && double.TryParse(value.AsSpan(0, value.Length - 1), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var percent)
+                ? Format(percent / 100)
+                : value;
 
         private static bool TryMixNumbers(string property, Token x, Token y, double t, StringBuilder sb, bool wholeValue)
         {
