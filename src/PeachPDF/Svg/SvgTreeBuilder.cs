@@ -1437,7 +1437,12 @@ namespace PeachPDF.Svg
                 && SvgValueParsers.ParseLength(perspectiveText, null, _lengthBasis) is { } distance and > 0
                     ? Math.Max(distance, 1) // a distance under one pixel is one pixel (section 8); 0 is none
                     : null;
-            element.PerspectiveOrigin = SvgTransformOrigin.Parse(Attr("perspective-origin"), transformBox, viewBox, _lengthBasis)
+            // A position of one or two components: the third value of transform-origin is not part of perspective-origin's grammar.
+            var perspectiveOriginText = Attr("perspective-origin");
+            if (perspectiveOriginText is not null && perspectiveOriginText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length > 2)
+                perspectiveOriginText = null;
+
+            element.PerspectiveOrigin = SvgTransformOrigin.Parse(perspectiveOriginText, transformBox, viewBox, _lengthBasis)
                 ?? SvgTransformOrigin.Parse("50% 50%", transformBox, viewBox, _lengthBasis); // the initial value: the middle of the reference box
             element.PreserveThreeD = Attr("transform-style")?.Trim().Equals("preserve-3d", StringComparison.OrdinalIgnoreCase) == true;
             element.BackfaceHidden = Attr("backface-visibility")?.Trim().Equals("hidden", StringComparison.OrdinalIgnoreCase) == true;

@@ -158,6 +158,27 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
+        public async Task AnEdgeOnPlane_WithNoPerspective_PaintsNothing()
+        {
+            // rotateX(90deg) has a cosine of about 4e-8 in floats: not singular, but a hairline at most.
+            var page = await Paint(Square(Red, "transform:rotateX(90deg)"));
+
+            Assert.False(IsCovered(page, 110, 90));
+            Assert.Equal(0, RowExtent(page, 90));
+        }
+
+        [Fact]
+        public async Task AWarpedElementInsideAWarpedGroup_IsNotCroppedToTheOuterSpace()
+        {
+            // The inner card is drawn into the outer group's own bitmap, whose space is the group's, not the page's: it must still show whole.
+            var inner = Square(Red, "transform:perspective(300px) rotateY(40deg)");
+            var page = await Paint($"<g style=\"transform-origin:110px 90px;transform:perspective(900px) rotateX(20deg)\">{inner}</g>");
+
+            var (first, last) = HorizontalExtent(page, 90);
+            Assert.True(last - first > 40, $"the card is drawn whole (spans {first}..{last})");
+        }
+
+        [Fact]
         public async Task ACollapsedMatrix_PaintsNothing()
         {
             var page = await Paint(Square(Red, "transform:scale3d(1,1,0) rotateX(90deg)"));

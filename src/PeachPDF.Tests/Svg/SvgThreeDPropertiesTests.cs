@@ -103,6 +103,17 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(30, y);
         }
 
+        [Fact]
+        public void PerspectiveOrigin_WithAThirdValue_IsInvalid_AndTheInitialOneStays()
+        {
+            var document = Build("#g { perspective: 300px; perspective-origin: 10px 20px 30px }", "<g id=\"g\"><rect width=\"10\" height=\"10\"/></g>", "width=\"200\" height=\"100\" viewBox=\"0 0 200 100\"");
+            var group = document.Children.Single();
+
+            var (x, y, _) = group.PerspectiveOrigin!.Resolve(group);
+            Assert.Equal(100, x);
+            Assert.Equal(50, y);
+        }
+
         // ---- transform-style and backface-visibility ----
 
         [Theory]

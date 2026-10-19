@@ -63,6 +63,24 @@ namespace PeachPDF.Svg
             return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
+        /// <summary>
+        /// Runs <paramref name="paint"/> with no root viewport recorded: inside a plane's source bitmap the space is the plane's own, which differs from the
+        /// one the viewport was recorded in by the very map being applied, so a nested warp there limits itself to the bitmap's bounds instead.
+        /// </summary>
+        private static void InSourceBitmap(Action paint)
+        {
+            var saved = s_viewportClip;
+            s_viewportClip = null;
+            try
+            {
+                paint();
+            }
+            finally
+            {
+                s_viewportClip = saved;
+            }
+        }
+
         /// <summary>The thinnest sliver of a plane worth a bitmap, in points: the same as the HTML painter's.</summary>
         private const double MinVisibleThicknessPoints = 0.017 * PeachPDF.CSS.Length.PointsPerPx;
 
@@ -137,6 +155,9 @@ namespace PeachPDF.Svg
                 if (!(map.M33 > 1e-9))
                     return true;
 
+                if (PlaneExtent(g, document, element, viewport, excluded: null) is { } flatSource && ProjectiveRaster.ProjectsToSliver(map, flatSource, MinVisibleThicknessPoints / Math.Max(g.TransformScale.X, 1e-9)))
+                    return true; // edge-on: a hairline at most
+
                 var affine = new Matrix3x2((float)(map.M11 / map.M33), (float)(map.M21 / map.M33), (float)(map.M12 / map.M33), (float)(map.M22 / map.M33), (float)(map.M13 / map.M33), (float)(map.M23 / map.M33));
                 RenderUnderMatrix(g, document, element, inheritedOpacity, viewport, affine);
                 return true;
@@ -149,14 +170,18 @@ namespace PeachPDF.Svg
                 return true; // nothing to paint
 
             var toleranceUnits = ProjectiveRaster.NearAffineTolerance(g.RasterizationDpi, g.TransformScale.X);
+            var thickness = MinVisibleThicknessPoints / Math.Max(g.TransformScale.X, 1e-9);
+            if (ProjectiveRaster.ProjectsToSliver(map, source, thickness))
+                return true; // edge-on: a hairline at most
+
             if (ProjectiveRaster.TryFitAffine(map, source, toleranceUnits, out var fit))
             {
                 RenderUnderMatrix(g, document, element, inheritedOpacity, viewport, fit);
                 return true;
             }
 
-            var outcome = ProjectiveRaster.Paint(g, map, source, MinVisibleThicknessPoints / Math.Max(g.TransformScale.X, 1e-9),
-                paintSource: sourceGraphics => RenderElementContent(sourceGraphics, document, element, inheritedOpacity, viewport),
+            var outcome = ProjectiveRaster.Paint(g, map, source, thickness,
+                paintSource: sourceGraphics => InSourceBitmap(() => RenderElementContent(sourceGraphics, document, element, inheritedOpacity, viewport)),
                 clip: VisibleRegion(g));
 
             // No raster context (a measure-only pass): the tangent of the map at the centre is the best that is left.
@@ -196,7 +221,10 @@ namespace PeachPDF.Svg
                     if (excluded?.Contains(child) == true || PlaneExtent(g, document, child, viewport, excluded) is not { } childBox)
                         continue;
 
-                    if (child.Transform is { } transform)
+                    if (child.Transform3D is { } childMatrix
+                        && Homography.FromMatrix4(childMatrix).TryProjectRectangleBounds(childBox.Left, childBox.Top, childBox.Right, childBox.Bottom, out var pl, out var pt, out var pr, out var pb))
+                        childBox = new Rect(pl, pt, pr - pl, pb - pt); // a perspective() in its list can reach beyond the orthographic box
+                    else if (child.Transform is { } transform)
                         childBox = SvgGeometryBounds.TransformBounds(childBox, transform);
 
                     box = box is { } existing ? UnionRects(existing, childBox) : childBox;
@@ -328,7 +356,11 @@ namespace PeachPDF.Svg
                 }
 
                 return ProjectiveRaster.Compose(g, span, order[..ordered], destination,
-                    paintPlane: (ref Plane plane, Canvas sourceGraphics) => RenderElementContent(sourceGraphics, document, plane.Subject, inheritedOpacity, viewport),
+                    paintPlane: (ref Plane plane, Canvas sourceGraphics) =>
+                    {
+                        var subject = plane.Subject;
+                        InSourceBitmap(() => RenderElementContent(sourceGraphics, document, subject, inheritedOpacity, viewport));
+                    },
                     planeFailed: (ref Plane _, Canvas _) => { },
                     openArtifact: null);
             }

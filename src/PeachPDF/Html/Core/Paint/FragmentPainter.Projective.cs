@@ -93,9 +93,15 @@ namespace PeachPDF.Html.Core.Paint
             // reflect that region through the origin and paint it.
             // A weak perspective on a small plane stays within a fraction of a device pixel of an affine map: that is carried as a plain `cm`, with the
             // content kept as vector artwork, rather than as a bitmap.
-            if (!showsBack && SubtreeExtent(fragment) is { } extent &&
-                ProjectiveRaster.TryFitAffine(map, Inflate(extent, SubtreeBleed(fragment)), ProjectiveRaster.NearAffineTolerance(container.RenderContext.RasterizationDpi, 1.0), out var fit))
-                return new ProjectiveWarp(map, Hidden: false, fit);
+            if (!showsBack && SubtreeExtent(fragment) is { } extent)
+            {
+                var source = Inflate(extent, SubtreeBleed(fragment));
+
+                // An edge-on plane is left to PaintProjective, which draws nothing for it, rather than becoming a hairline here.
+                if (!ProjectsToSliver(map, source) &&
+                    ProjectiveRaster.TryFitAffine(map, source, ProjectiveRaster.NearAffineTolerance(container.RenderContext.RasterizationDpi, 1.0), out var fit))
+                    return new ProjectiveWarp(map, Hidden: false, fit);
+            }
 
             return new ProjectiveWarp(map, showsBack);
         }
