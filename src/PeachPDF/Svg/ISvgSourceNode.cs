@@ -64,6 +64,12 @@ namespace PeachPDF.Svg
         IReadOnlyDictionary<string, string?>? GetMatchedCssDeclarations() => null;
 
         /// <summary>
+        /// Whether the winning matched author-stylesheet declaration of <paramref name="name"/> is <c>!important</c>, which makes it beat
+        /// an inline <c>style=""</c> declaration that is not (CSS Cascade 4, section 6.1).
+        /// </summary>
+        bool IsMatchedCssDeclarationImportant(string name) => false;
+
+        /// <summary>
         /// Resolves any <c>var()</c> references in a raw value (e.g. from a <c>style=""</c> attribute)
         /// against this node's cascaded custom properties; returns the value unchanged when there is no
         /// CSS context, or null if the value is guaranteed-invalid.
