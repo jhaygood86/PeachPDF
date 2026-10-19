@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Animation
     /// produces are written onto the box as ordinary declarations, so layout and paint need to know nothing about
     /// animation, and an animated <c>width</c> moves its neighbours exactly as a declared one would.
     /// </summary>
-    internal static class AnimationApplier
+    internal static partial class AnimationApplier
     {
         /// <summary>
         /// Applies every animation <paramref name="box"/> names. Called by the cascade between its author-normal
@@ -92,7 +92,7 @@ namespace PeachPDF.Html.Core.Animation
                     DomParser.ResolveDeferredVarProperties(valueParser, box, pendingVarProperties, name => Overlaps(name, set.DeclaredNames));
                 }
 
-                var stops = ResolveStops(valueParser, box, set, uaSnapshot);
+                var stops = ResolveStops(valueParser, box, set, (name, declared) => ResolveGlobalKeyword(box, name, declared, uaSnapshot));
                 var animated = new List<string>();
                 var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -134,7 +134,7 @@ namespace PeachPDF.Html.Core.Animation
 
                 foreach (var property in animated)
                 {
-                    var value = Sample(valueParser, box, stops, property, directed, easing);
+                    var value = Sample(valueParser, box, stops, property, directed, easing, CssUtils.GetPropertyValue(box, property));
                     if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
                 }
             }
@@ -196,7 +196,7 @@ namespace PeachPDF.Html.Core.Animation
                 ? name[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\")
                 : name;
 
-        private static bool IsNone(string? list) =>
+        internal static bool IsNone(string? list) =>
             string.IsNullOrWhiteSpace(list) || list.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Whether a deferred declaration for <paramref name="name"/> covers a property the animation owns.</summary>
@@ -215,7 +215,7 @@ namespace PeachPDF.Html.Core.Animation
         /// <summary>One keyframe with its values settled: <c>var()</c> substituted, global keywords resolved against the box, shorthands split into longhands.</summary>
         private sealed record ResolvedStop(double Offset, string? Easing, Dictionary<string, string> Values);
 
-        private static List<ResolvedStop> ResolveStops(CssValueParser valueParser, CssBox box, KeyframeSet set, IReadOnlyDictionary<string, string?>? uaSnapshot)
+        private static List<ResolvedStop> ResolveStops(CssValueParser valueParser, CssBox box, KeyframeSet set, Func<string, string, string?> resolveKeyword)
         {
             var stops = new List<ResolvedStop>(set.Stops.Count);
 
@@ -225,7 +225,7 @@ namespace PeachPDF.Html.Core.Animation
 
                 foreach (var (name, declared) in stop.Declarations)
                 {
-                    var resolved = ResolveGlobalKeyword(box, name, declared, uaSnapshot);
+                    var resolved = resolveKeyword(name, declared);
                     if (resolved is null) continue;
 
                     resolved = ResolveVariables(valueParser, box, resolved);
@@ -295,7 +295,7 @@ namespace PeachPDF.Html.Core.Animation
         }
 
         /// <summary>The value of one property at <paramref name="progress"/> through the keyframes, or null if it has none.</summary>
-        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing)
+        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying)
         {
             var frames = new List<(double Offset, string Value, string? Easing)>();
 
@@ -309,7 +309,6 @@ namespace PeachPDF.Html.Core.Animation
 
             // §4.2: a property missing from the 0% or 100% keyframe is filled with the value it has without the
             // animation (the "underlying value") - which is what the box holds now.
-            var underlying = CssUtils.GetPropertyValue(box, property);
             if (underlying is not null)
             {
                 if (frames[0].Offset > 0) frames.Insert(0, (0, underlying, null));

@@ -551,7 +551,7 @@ PeachPDF reports `prefers-reduced-motion: reduce`, because a static PDF has no m
 
 `transition` and its longhands are parsed but never run: a transition needs a style change to start from, and a document that has just loaded has none.
 
-Known limitations: the matrix part of a `transform` mix needs both sides to be a matrix before layout, so a pair with a percentage argument in that part (`translateX(50%)`), a `perspective()` against something else, or a collapsed scale (`scale(0)`) still flips half way; `animation-composition`, `animation-timeline` (scroll-driven animations) and `animation-range` are not supported; custom properties are not animated, registered with `@property` or not; the declarative document-building API does not apply animations; CSS animation of the elements inside an inline `<svg>` (`rect { animation: ... }`) is not applied; and SVG's own animation elements (SMIL) are not rendered.
+Known limitations: the matrix part of a `transform` mix needs both sides to be a matrix before layout, so a pair with a percentage argument in that part (`translateX(50%)`), a `perspective()` against something else, or a collapsed scale (`scale(0)`) still flips half way; `animation-composition`, `animation-timeline` (scroll-driven animations) and `animation-range` are not supported; custom properties are not animated, registered with `@property` or not; the declarative document-building API does not apply animations; CSS animation of the elements of a standalone SVG (`<img src="x.svg">`) is not applied (those of an inline `<svg>` are: see [CSS animations in SVG](supported-svg-features.md#css-animations)); and SVG's own animation elements (SMIL) are not rendered.
 
 ### Filters and Blend Modes
 

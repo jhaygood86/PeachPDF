@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.Svg
@@ -75,6 +76,24 @@ namespace PeachPDF.Svg
         /// CSS context, or null if the value is guaranteed-invalid.
         /// </summary>
         string? ResolveVar(string value) => value;
+
+        /// <summary>Whether a CSS animation is in play on this element at the sampled point, which settles at no cost the (common) case of none, before anything is allocated for the lookup.</summary>
+        bool IsAnimated => false;
+
+        /// <summary>The parent element within the same SVG tree, or null at the root (and for a source that does not track it).</summary>
+        ISvgSourceNode? Parent => null;
+
+        /// <summary>
+        /// The value a CSS animation gives <paramref name="name"/> on this element at the sampled point, or null when no animation does (the
+        /// default, and every element of a standalone SVG, which is not animated). The animation origin sits above normal declarations and below
+        /// <c>!important</c> ones (CSS Cascade 4, section 6.1), which the caller settles.
+        /// </summary>
+        /// <param name="name">The property.</param>
+        /// <param name="underlying">The value without the animation: what a keyframe that omits the property stands for. Called at most once.</param>
+        /// <param name="parent">The parent element's value, which <c>inherit</c> in a keyframe takes.</param>
+        /// <param name="initial">The initial value, which <c>initial</c> in a keyframe takes.</param>
+        /// <param name="inherited">Whether the property is inherited.</param>
+        string? GetAnimatedValue(string name, Func<string?> underlying, Func<string?> parent, Func<string?> initial, bool inherited) => null;
 
         /// <summary>
         /// The language this document/embedding context resolves to when nothing in the SVG's own tree

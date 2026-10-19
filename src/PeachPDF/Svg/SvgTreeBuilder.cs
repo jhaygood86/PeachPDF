@@ -1586,7 +1586,8 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Resolves one presentation-style property for <paramref name="node"/> with the same
-        /// precedence <see cref="ApplyCommon"/>'s local <c>Attr</c> closure uses (inline <c>style=</c>
+        /// precedence <see cref="ApplyCommon"/>'s local <c>Attr</c> closure uses (a CSS animation's value when the
+        /// element is animated and no <c>!important</c> declaration sets the property, else inline <c>style=</c>
         /// beats a matching <c>&lt;style&gt;</c> rule beats a bare presentation attribute) - extracted
         /// so <see cref="BuildTextRun"/> can resolve font/text-anchor properties the same way without
         /// duplicating the precedence logic. Re-parses <paramref name="node"/>'s own <c>style=</c>/
@@ -1594,6 +1595,135 @@ namespace PeachPDF.Svg
         /// simplicity over micro-optimization elsewhere (e.g. <see cref="BuildDefinitionChildren"/>).
         /// </summary>
         private static string? ResolveStyledAttr(ISvgSourceNode node, string name, Func<string, bool>? isValid = null)
+        {
+            var declared = ResolveDeclaredAttr(node, name, isValid);
+            return node.IsAnimated ? ApplyAnimation(node, name, declared) : declared;
+        }
+
+        /// <summary>
+        /// The animation origin sits above every normal declaration and below an !important one (CSS Cascade 4, section 6.1): the value a CSS
+        /// animation gives the property, when one does and nothing important declares it. Kept out of <see cref="ResolveStyledAttr"/> so the closures
+        /// it needs are only allocated for an element that is animated.
+        /// </summary>
+        private static string? ApplyAnimation(ISvgSourceNode node, string name, string? declared)
+        {
+            // The parent's value is walked up for once however many of the keyframes' keywords and the underlying value ask for it: asking each
+            // time doubles the work at every level of nesting.
+            string? parentValue = null;
+            var parentKnown = false;
+
+            string? ParentValue()
+            {
+                if (!parentKnown)
+                {
+                    parentValue = node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null;
+                    parentKnown = true;
+                }
+
+                return parentValue;
+            }
+
+            var inherited = IsInheritedProperty(name);
+
+            var animated = node.GetAnimatedValue(
+                name,
+                () => UnderlyingValue(node, name, declared, inherited, ParentValue),
+                ParentValue,
+                () => AnimatedInitialValue(name),
+                inherited);
+
+            return animated is not null && !IsImportantDeclaration(node, name) ? animated : declared;
+        }
+
+        /// <summary>
+        /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a
+        /// presentation attribute is in the attribute grammar (<c>translate(10 20)</c>, <c>rotate(30)</c>), which the animation mixes as CSS text, so it
+        /// goes in as the matrix it means.
+        /// </summary>
+        private static string? UnderlyingValue(ISvgSourceNode node, string name, string? declared, bool inherited, Func<string?> parentValue)
+        {
+            string? InheritedOrInitial() => inherited && node.Parent is not null ? parentValue() : AnimatedInitialValue(name);
+
+            if (declared is null) return InheritedOrInitial();
+
+            // A declaration that is a CSS-wide keyword stands for the value that keyword gives, which is what the animation mixes from.
+            if (CssGlobalKeywords.TryParse(declared, out var keyword))
+            {
+                return keyword switch
+                {
+                    CssGlobalKeyword.Inherit => node.Parent is not null ? parentValue() : AnimatedInitialValue(name),
+                    CssGlobalKeyword.Initial => AnimatedInitialValue(name),
+                    _ => InheritedOrInitial(),
+                };
+            }
+
+            if (name == "transform" && declared == node.GetAttribute("transform"))
+            {
+                return SvgTransformParser.Parse(declared) is { } m
+                    ? string.Create(CultureInfo.InvariantCulture, $"matrix({m.M11:R}, {m.M12:R}, {m.M21:R}, {m.M22:R}, {m.M31:R}, {m.M32:R})")
+                    : "none";
+            }
+
+            return declared;
+        }
+
+        /// <summary>Whether an <c>!important</c> declaration (a matching rule's, or the inline <c>style=""</c>'s) sets <paramref name="name"/>, which outranks an animation.</summary>
+        private static bool IsImportantDeclaration(ISvgSourceNode node, string name)
+        {
+            if (node.IsMatchedCssDeclarationImportant(name)) return true;
+
+            SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"), out var importantInline);
+            return importantInline?.Contains(name) == true;
+        }
+
+        /// <summary>
+        /// The value of <paramref name="name"/> on <paramref name="node"/> as an element below it inherits it: its own declaration (animated or not),
+        /// else its parent's for an inherited property, else the initial value. Null when nothing up the tree declares it and it has no initial value here.
+        /// </summary>
+        private static string? ResolveEffectiveValue(ISvgSourceNode node, string name) =>
+            ResolveStyledAttr(node, name) is { } value
+                ? UnderlyingValue(node, name, value, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
+                : InheritedOrInitialValue(node, name);
+
+        private static string? InheritedOrInitialValue(ISvgSourceNode node, string name) =>
+            IsInheritedProperty(name) && node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : AnimatedInitialValue(name);
+
+        private static string? AnimatedInitialValue(string name) =>
+            SvgPropertyRegistry.GetInitialValue(name) ?? (InitialValuesOutsideTheRegistry.TryGetValue(name, out var initial) ? initial
+                : name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px") : null);
+
+        // Properties the SVG builder reads through ResolveStyledAttr that the generated registry holds no initial value for.
+        private static readonly Dictionary<string, string> InitialValuesOutsideTheRegistry = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["transform"] = "none",
+            ["stop-color"] = "black",
+            ["stop-opacity"] = "1",
+            ["display"] = "inline",
+            // The geometry and the text spacing the registry does not describe: what an element that declares none of them has.
+            ["x"] = "0",
+            ["y"] = "0",
+            ["cx"] = "0",
+            ["cy"] = "0",
+            ["r"] = "0",
+            // auto, which a length does not mix with: the animation flips at its midpoint, as for an explicit auto.
+            ["width"] = "auto",
+            ["height"] = "auto",
+            ["rx"] = "auto",
+            ["ry"] = "auto",
+            ["letter-spacing"] = "0",
+            ["word-spacing"] = "0",
+        };
+
+        // The SVG properties that are inherited (css-properties.json, "inherited": true, beside the HTML ones in CssDefaults.InheritedProperties).
+        private static readonly HashSet<string> InheritedSvgProperties = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "fill", "stroke", "stroke-width", "stroke-miterlimit", "stroke-dashoffset", "stroke-dasharray", "fill-rule", "fill-opacity",
+            "stroke-opacity", "stroke-linecap", "stroke-linejoin", "color",
+        };
+
+        private static bool IsInheritedProperty(string name) => InheritedSvgProperties.Contains(name) || CssDefaults.InheritedProperties.Contains(name);
+
+        private static string? ResolveDeclaredAttr(ISvgSourceNode node, string name, Func<string, bool>? isValid)
         {
             // Precedence (highest to lowest): inline style="" attribute > matched author-stylesheet rules
             // (full CSS engine: combinators/attr/pseudo selectors, specificity, var()) > presentation

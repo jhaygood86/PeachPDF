@@ -14386,6 +14386,17 @@ code { font-size: 7.5pt; color: #444 }
 .palette { height: 22px; border-radius: 4px; animation: palette 4s linear }
 .shuffle { width: 30px; height: 30px; margin: 20px 0 20px 60px; background: #6a4c93; animation: shuffle 4s linear }
 .spring { width: 60px; height: 16px; background: #e76f51; animation: stairs 4s linear(0, 1.25 40%, 0.9 70%, 1) }
+
+/* The elements of an inline <svg> are animated by the same rules. */
+@keyframes draw  { from { stroke-dashoffset: 300 } to { stroke-dashoffset: 0 } }
+@keyframes pulse { from { fill: #e63946; opacity: .35 } to { fill: #1d4ed8; opacity: 1 } }
+@keyframes swing { from { transform: rotate(0deg) } to { transform: rotate(180deg) } }
+@keyframes dawn  { from { stop-color: #e63946 } to { stop-color: #ffe066 } }
+svg.anim { display: block; margin: 4px 0; background: #eef1f5 }
+.draw  { fill: none; stroke: #2a9d8f; stroke-width: 4; stroke-dasharray: 300; animation: draw 4s linear }
+.pulse { animation: pulse 4s linear }
+.swing { fill: #6a4c93; transform-box: fill-box; transform-origin: 50% 50%; animation: swing 4s ease-in-out }
+.dawn  { animation: dawn 4s linear }
 </style></head><body>
 <h1>CSS animations as a still frame</h1>
 <p class="note">PdfGenerateConfig.AnimationProgress samples every animation at one point of its own run. This page is rendered at the start, the midpoint and the end. (docs/html-css-support.md#animations)</p>
@@ -14413,6 +14424,12 @@ code { font-size: 7.5pt; color: #444 }
 <p class="note"><code>background-color: oklch(0.75 0.17 50) → oklch(0.5 0.22 290)</code>: a pair with a non-legacy color is mixed in Oklab (premultiplied), as a browser does, so the middle is the color a browser shows, not the sRGB average of the two.</p>
 <div class="row"><div class="shuffle"></div></div>
 <p class="note"><code>transform: rotate(0deg) → translateX(240px) rotate(90deg) scale(1.6)</code>: the two lists differ in their functions, so they are mixed through matrix decomposition (CSS Transforms 1 §13) - the box slides, turns and grows together instead of jumping from the first value to the second half way through.</p>
+
+<h2>Elements of an inline SVG</h2>
+<svg class="anim" width="320" height="80"><path class="draw" d="M10 60 C 60 0, 110 0, 160 40 S 260 80, 310 20"/></svg>
+<p class="note"><code>stroke-dashoffset: 300 → 0</code> on a path with <code>stroke-dasharray: 300</code>: the line draws itself (a bare number is user units).</p>
+<svg class="anim" width="320" height="80"><circle class="pulse" cx="50" cy="40" r="26"/><rect class="swing" x="124" y="26" width="56" height="26"/><defs><linearGradient id="dusk"><stop class="dawn" offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><rect x="220" y="14" width="86" height="52" fill="url(#dusk)"/></svg>
+<p class="note"><code>fill</code> and <code>opacity</code> of a circle, a <code>rotate()</code> of a rect about its own centre (<code>transform-box: fill-box</code>), and a gradient's <code>stop-color</code>: an element of an inline SVG takes the value its animation has at the sampled point, as an HTML box does.</p>
 </body></html>
 """;
 
