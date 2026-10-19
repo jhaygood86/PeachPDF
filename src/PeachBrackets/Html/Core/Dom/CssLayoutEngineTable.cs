@@ -4319,7 +4319,8 @@ namespace PeachBrackets.Html.Dom
                 // real bottom is readable: did it cross out of the band it began in? Where it did, the
                 // break belongs before it (§4.3), so the placement is taken back and the row is placed
                 // again on the other side of it. At most one correction per row, so this cannot loop.
-                if (StraddleCorrectionAppliesTo(i, container, cursor, rowTop, slot, pageHeight))
+                if (StraddleCorrectionAppliesTo(i, container, cursor, rowTop, slot, pageHeight)
+                    || AvoidedBreakCorrectionAppliesTo(i, container, cursor, slot, pageHeight))
                 {
                     // A placement that closed a spanning cell also stated the geometry that cell occupies
                     // in the bands after its own (CloseSpanningCell), and that is keyed by (box, slot) -
@@ -5436,8 +5437,9 @@ namespace PeachBrackets.Html.Dom
         /// <list type="bullet">
         /// <item><description>
         /// <b>A cell stopped.</b> The row is fragmenting rather than overflowing — it took its break where
-        /// its own flow put it (css-tables-3 §6.1), and retracting that would retract a record a cell has
-        /// already published.
+        /// its own flow put it (css-tables-3 §6.1). The one exception is a row that avoids breaks inside it,
+        /// which <see cref="AvoidedBreakCorrectionAppliesTo"/> moves instead; <see cref="TableRowCursor.Retract"/>
+        /// takes back the unfinished cells that row recorded.
         /// </description></item>
         /// <item><description>
         /// <b>The row begins the band.</b> Moving it would leave the fragmentainer empty, which
@@ -5503,6 +5505,45 @@ namespace PeachBrackets.Html.Dom
             if (RowHoldsAnInternalForcedBreak(_bodyRows[rowIndex])) return false;
 
             return cursor.MaxBottom - rowTop <= RoomForARowIn(container, slot + 1);
+        }
+
+        /// <summary>
+        /// Whether a row that avoids breaks inside it (<c>break-inside: avoid</c> on the row or one of its
+        /// cells, css-break-3 §3.2) but had a cell stop at the band's foot is moved whole into the next band
+        /// instead (#1835).
+        /// </summary>
+        /// <remarks>
+        /// <see cref="StraddleCorrectionAppliesTo"/> declines every stopped row, so without this a row whose
+        /// cells fragment between their lines is cut there whatever it declares. Moved at most once, like the
+        /// straddle correction: a row no fresh band holds stops again where it lands, which is §4.4's relaxation
+        /// of the avoid rather than a loop. The first body row in its band is never moved: above it is only the
+        /// band's top, a repeated header or the table's own head, and moving it would leave those behind alone.
+        /// </remarks>
+        private bool AvoidedBreakCorrectionAppliesTo(
+            int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, int slot, double pageHeight)
+        {
+            if (rowIndex <= ResumeRowIndex || !cursor.Stopped) return false;
+            if (container is null || pageHeight >= double.MaxValue - 1) return false;
+            if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
+            if (rowIndex == 0 || container.SlotStartingAt(_bodyRows[rowIndex - 1].Location.Y) != slot) return false;
+
+            var row = _bodyRows[rowIndex];
+            if (RowHoldsAnInternalForcedBreak(row)) return false;
+
+            return RowAvoidsBreakInside(row);
+        }
+
+        private static bool RowAvoidsBreakInside(CssBox row)
+        {
+            if (BreakValues.AvoidsBreak(row.BreakInside.Value, FragmentationContext.Page)) return true;
+
+            foreach (var cell in row.Boxes)
+            {
+                if (cell is not CssSpacingBox && BreakValues.AvoidsBreak(cell.BreakInside.Value, FragmentationContext.Page))
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>
