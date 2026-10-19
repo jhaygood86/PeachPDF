@@ -70,6 +70,21 @@ public class ConditionGroupingRuleIntegrationTests
         Assert.Equal(supported ? Blue : Red, box.Color);
     }
 
+    [Theory]
+    [InlineData("background: url(a.png) fixed, red", true)]
+    [InlineData("background: url(a.png) local, url(b.png) fixed, #eee", true)]
+    [InlineData("background: url(a.png) no-repeat, red", true)]
+    [InlineData("background-attachment: fixed, scroll", true)]
+    [InlineData("background-attachment: sideways", false)]
+    [InlineData("background: url(a.png),", false)]
+    [InlineData("background: red, url(a.png)", false)]
+    public async Task Supports_LayeredBackgrounds_AreJudgedPerLayer(string declaration, bool supported)
+    {
+        var html = Html($"p {{ color: #ff0000; }} @supports ({declaration}) {{ p {{ color: #0000ff; }} }}", "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal(supported ? Blue : Red, box.Color);
+    }
+
     [Fact]
     public async Task SupportsNot_Fallback_Applies_WhenFeatureIsUnsupported()
     {
