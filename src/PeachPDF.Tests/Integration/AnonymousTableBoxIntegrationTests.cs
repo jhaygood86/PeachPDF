@@ -169,6 +169,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(new[] { before, anonTable, after }, body.Boxes);
         }
 
+        [Fact]
+        public async Task InlineTableWithNonTableChildren_GroupsThemIntoAnonymousRowAndCell()
+        {
+            // Rule 2.1 applies to an 'inline-table' parent as well as a 'table' one. Without the row,
+            // the inline-table's content is never laid out as a table and is not drawn.
+            var html = """
+                <!DOCTYPE html><html><head></head><body>
+                A[<span class="t" style="display:inline-table"><span class="a">X</span><span class="b">Y</span></span>]B
+                </body></html>
+                """;
+
+            var (root, _) = await BuildAndLayout(html);
+
+            var inlineTable = FindByClass(root, "t")!;
+            var a = FindByClass(root, "a")!;
+            var b = FindByClass(root, "b")!;
+
+            Assert.Single(inlineTable.Boxes);
+            var row = inlineTable.Boxes[0];
+            Assert.Equal(DisplayMode.TableRow, row.Display.Value);
+
+            Assert.Single(row.Boxes);
+            var cell = row.Boxes[0];
+            Assert.Equal(DisplayMode.TableCell, cell.Display.Value);
+            Assert.Same(cell, a.ParentBox);
+            Assert.Same(cell, b.ParentBox);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         // The anonymous-table-box correction pass (DomParser.CorrectAnonymousTables) runs during
