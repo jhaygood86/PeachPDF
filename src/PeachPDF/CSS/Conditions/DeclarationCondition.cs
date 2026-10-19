@@ -41,6 +41,12 @@ namespace PeachPDF.CSS
             if (CssPropertyRegistry.SupportsDeclaration(name, value) || SvgPropertyRegistry.SupportsDeclaration(name, value))
                 return true;
 
+            // The SVG-only properties (stop-color, flood-color, paint-order, ...) have no entry in css-properties.json - nothing in
+            // CssBox or SvgElement stores them, the SVG builder reads the value straight from the cascade - so the CSS-OM's own
+            // converter is the grammar that answers for them.
+            if (_property is StopColorProperty or StopOpacityProperty or SvgOnlyProperty && _property.TrySetValue(_tokenValue))
+                return true;
+
             if (_property is ShorthandProperty shorthand)
             {
                 // css-properties.json is longhand-only (Layer A/CSS-OM expands a shorthand into its

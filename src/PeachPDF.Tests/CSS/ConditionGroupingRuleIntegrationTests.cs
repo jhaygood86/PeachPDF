@@ -50,6 +50,25 @@ public class ConditionGroupingRuleIntegrationTests
         Assert.Equal(Red, box.Color);
     }
 
+    // The SVG-only properties are rendered by the SVG builder, so a rule asking for them is supported (and a value no converter accepts is not).
+    [Theory]
+    [InlineData("stop-color: red", true)]
+    [InlineData("stop-opacity: .5", true)]
+    [InlineData("flood-color: red", true)]
+    [InlineData("flood-color: 5", false)]
+    [InlineData("marker-end: url(#m)", true)]
+    [InlineData("marker-end: 12px", false)]
+    [InlineData("clip-rule: evenodd", true)]
+    [InlineData("clip-rule: sideways", false)]
+    [InlineData("paint-order: stroke fill", true)]
+    [InlineData("dominant-baseline: middle", true)]
+    public async Task Supports_SvgOnlyProperties_AreJudgedByTheirGrammar(string declaration, bool supported)
+    {
+        var html = Html($"p {{ color: #ff0000; }} @supports ({declaration}) {{ p {{ color: #0000ff; }} }}", "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal(supported ? Blue : Red, box.Color);
+    }
+
     [Fact]
     public async Task SupportsNot_Fallback_Applies_WhenFeatureIsUnsupported()
     {
