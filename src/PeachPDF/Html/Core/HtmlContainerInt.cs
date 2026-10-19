@@ -24,7 +24,6 @@ using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
-using PeachPDF.PDF.Drawing;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;

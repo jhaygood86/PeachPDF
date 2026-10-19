@@ -1,7 +1,6 @@
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
 using System;
 using System.Collections.Generic;
 
