@@ -13,6 +13,7 @@
 using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace PeachPDF.Svg
@@ -30,7 +31,12 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgTransformParser
     {
-        public static Matrix3x2? Parse(string? value)
+        /// <summary>
+        /// The matrix a transform list stands for. <paramref name="context"/> resolves the font-relative (<c>em</c>, <c>rem</c>) and percentage lengths of
+        /// <c>translate()</c>; without it such a function does nothing. <paramref name="allowUnits"/> is false for <c>gradientTransform</c> and
+        /// <c>patternTransform</c>, whose attribute grammar takes bare numbers only: a function with any unit does nothing there.
+        /// </summary>
+        public static Matrix3x2? Parse(string? value, SvgTransformContext? context = null, bool allowUnits = true)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -41,7 +47,7 @@ namespace PeachPDF.Svg
 
             while (TryReadFunction(value, ref pos, out var name, out var args))
             {
-                var m = BuildMatrix(name, args);
+                var m = BuildMatrix(name, args, context, allowUnits);
 
                 if (m is not { } matrix)
                     continue;
@@ -114,11 +120,59 @@ namespace PeachPDF.Svg
             return true;
         }
 
-        private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args)
+        /// <summary>
+        /// Whether <paramref name="value"/> is a valid CSS <c>transform</c> declaration value (CSS Transforms 1 section 13) in the forms this parser reads: lengths and
+        /// angles carry a unit unless they are zero (so <c>rotate(10)</c> is not valid where the attribute <c>rotate(10)</c> is), and each function has its own
+        /// argument count (<c>rotate(a, cx, cy)</c> is SVG attribute syntax only). A browser drops an invalid declaration, so the next cascade tier answers.
+        /// </summary>
+        public static bool IsValidCssTransform(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            if (value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var pos = 0;
+            var any = false;
+
+            while (TryReadFunction(value, ref pos, out var name, out var args))
+            {
+                any = true;
+                var count = args.Count;
+
+                if (args.Exists(a => a.Unit == "?"))
+                    continue; // calc() / var(): judged when it is a number
+
+                bool Plain(int i) => args[i].Unit.Length == 0;
+                bool Zero(int i) => args[i].Value == 0;
+                bool LengthOk(int i) => !Plain(i) ? args[i].Unit is not ("deg" or "grad" or "rad" or "turn") : Zero(i);
+                bool AngleOk(int i) => !Plain(i) ? args[i].Unit is "deg" or "grad" or "rad" or "turn" : Zero(i);
+
+                var valid = name.ToLowerInvariant() switch
+                {
+                    "matrix" => count == 6 && Enumerable.Range(0, 6).All(Plain),
+                    "translate" => count is 1 or 2 && Enumerable.Range(0, count).All(LengthOk),
+                    "translatex" or "translatey" or "translatez" => count == 1 && LengthOk(0),
+                    "scale" => count is 1 or 2 && Enumerable.Range(0, count).All(i => Plain(i) || args[i].Unit == "%"),
+                    "scalex" or "scaley" or "scalez" => count == 1 && (Plain(0) || args[0].Unit == "%"),
+                    "rotate" or "rotatex" or "rotatey" or "rotatez" or "skewx" or "skewy" => count == 1 && AngleOk(0),
+                    "skew" => count is 1 or 2 && Enumerable.Range(0, count).All(AngleOk),
+                    _ => true, // the 3D functions and anything else: not judged here
+                };
+
+                if (!valid)
+                    return false;
+            }
+
+            return any;
+        }
+
+        private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args, SvgTransformContext? context, bool allowUnits)
         {
             // Set when an argument has a unit this parser cannot resolve here: the function then does nothing. An argument that was not a
             // number at all (calc(), a nested function) counts, wherever it stands in the list, even where the function reads fewer arguments.
-            var resolvable = args.TrueForAll(arg => arg.Unit != "?");
+            var resolvable = args.TrueForAll(arg => arg.Unit != "?") && (allowUnits || args.TrueForAll(arg => arg.Unit.Length == 0));
 
             // A plain <number>: matrix() entries and the centre of rotate(a cx cy) take no unit.
             float Arg(int i)
@@ -146,8 +200,8 @@ namespace PeachPDF.Svg
                 }
             }
 
-            // User units (CSS px). A bare number is one too (the attribute grammar).
-            float Length(int i)
+            // User units (CSS px). A bare number is one too (the attribute grammar). axis: 0 horizontal, 1 vertical (what a percentage is of).
+            float Length(int i, int axis)
             {
                 if (i >= args.Count) return 0f;
 
@@ -155,6 +209,10 @@ namespace PeachPDF.Svg
                 switch (unit)
                 {
                     case "" or "px": return (float)value;
+                    case "em" when context is not null: return (float)(value * context.EmPx);
+                    case "rem" when context is not null: return (float)(value * context.RootEmPx);
+                    case "%" when context is not null && !double.IsNaN(axis == 0 ? context.ReferenceWidth : context.ReferenceHeight):
+                        return (float)(value / 100 * (axis == 0 ? context.ReferenceWidth : context.ReferenceHeight));
                     case "in": return (float)(value * 96);
                     case "cm": return (float)(value * 96 / 2.54);
                     case "mm": return (float)(value * 96 / 25.4);
@@ -182,15 +240,15 @@ namespace PeachPDF.Svg
                 }
 
                 case "translate" when args.Count >= 1:
-                    matrix = Translation(Length(0), args.Count >= 2 ? Length(1) : 0f);
+                    matrix = Translation(Length(0, 0), args.Count >= 2 ? Length(1, 1) : 0f);
                     break;
 
                 case "translatex" when args.Count >= 1:
-                    matrix = Translation(Length(0), 0f);
+                    matrix = Translation(Length(0, 0), 0f);
                     break;
 
                 case "translatey" when args.Count >= 1:
-                    matrix = Translation(0f, Length(0));
+                    matrix = Translation(0f, Length(0, 1));
                     break;
 
                 case "scale" when args.Count >= 1:
@@ -282,4 +340,14 @@ namespace PeachPDF.Svg
             0, 0, 1, 0,
             0, 0, 0, 1);
     }
+}
+
+namespace PeachPDF.Svg
+{
+    /// <summary>What a CSS transform needs to resolve its relative lengths: the font sizes (<c>em</c>, <c>rem</c>) and the reference box a percentage is of.</summary>
+    /// <param name="EmPx">The element's font size in user units.</param>
+    /// <param name="RootEmPx">The root element's font size in user units.</param>
+    /// <param name="ReferenceWidth">The width of the transform reference box; NaN when it is not known when the transform is read (a <c>fill-box</c>).</param>
+    /// <param name="ReferenceHeight">The height of the transform reference box; NaN when it is not known.</param>
+    internal sealed record SvgTransformContext(double EmPx, double RootEmPx, double ReferenceWidth, double ReferenceHeight);
 }

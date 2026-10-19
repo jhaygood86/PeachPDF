@@ -80,7 +80,20 @@ namespace PeachPDF.Svg
         /// </summary>
         public string? FilterRef { get; set; }
 
-        public Matrix3x2? Transform { get; set; }
+        private Matrix3x2? _transform;
+
+        /// <summary>
+        /// The element's own transform, about <see cref="TransformOrigin"/> when it has one. The origin of a <c>fill-box</c> or <c>stroke-box</c> depends
+        /// on the element's bounding box, which a group only has once its children are built, so it is applied when the transform is read.
+        /// </summary>
+        public Matrix3x2? Transform
+        {
+            get => _transform is { } matrix && TransformOrigin is { } origin ? origin.Apply(matrix, this) : _transform;
+            set => _transform = value;
+        }
+
+        /// <summary><c>transform-origin</c> and <c>transform-box</c> as declared, or null when there is no <c>transform-origin</c> (an SVG element's initial origin is the user-space origin).</summary>
+        public SvgTransformOrigin? TransformOrigin { get; set; }
 
         /// <summary>Inherited. Id of a <c>&lt;marker&gt;</c> def (see <see cref="SvgDocument.Markers"/>), or null for none. Only consulted for shapes markers can attach to - see <see cref="SvgMarkerGeometry"/>.</summary>
         public string? MarkerStartRef { get; set; }
