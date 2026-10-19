@@ -189,6 +189,17 @@ namespace PeachPDF.Tests.Svg
         [InlineData("matrix(1, 0, 0, 1, 5px, 6)", false)]
         [InlineData("none", true)]
         [InlineData("translate3d(1px, 2px, 3px)", true)]
+        [InlineData("translate3d(1px, 2px)", false)]
+        [InlineData("rotate3d(0, 1, 0, 45deg)", true)]
+        [InlineData("rotate3d(0, 1, 45deg)", false)]
+        [InlineData("rotateY(45deg)", true)]
+        [InlineData("scale3d(1, 2, 3)", true)]
+        [InlineData("matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1)", true)]
+        [InlineData("matrix3d(1,0,0,0)", false)]
+        [InlineData("perspective(500px)", true)]
+        [InlineData("perspective(0)", true)]
+        [InlineData("perspective(none)", true)]
+        [InlineData("perspective(-1px)", false)]
         [InlineData("", false)]
         public void IsValidCssTransform_FollowsTheCssGrammar(string value, bool valid)
         {

@@ -102,6 +102,38 @@ namespace PeachDrawing.Tests
             Assert.Equal(0, destination[3]);
         }
 
+        [Theory]
+        [InlineData(1)]
+        [InlineData(4)]
+        [InlineData(9)]
+        [InlineData(16)]
+        [InlineData(5)] // not a warp divisor: the scalar reference answers
+        public void StoreAveraged_VectorMatchesScalar_ForEverySumAWarpCanProduce(int divisor)
+        {
+            var vector = new byte[4];
+            var scalar = new byte[4];
+
+            // Every channel value from 0 to the largest sum (255 per sample), one channel at a time against fixed others.
+            for (var total = 0; total <= 255 * divisor; total++)
+            {
+                var sum = Vector128.Create(total, 255 * divisor - total, total / 2, Math.Min(total + 1, 255 * divisor));
+                PixelKernels.StoreAveraged(sum, divisor, vector);
+                PixelKernels.StoreAveragedScalar(sum, divisor, scalar);
+
+                Assert.Equal(scalar, vector);
+            }
+        }
+
+        [Fact]
+        public void StoreAveraged_IntoAShortBuffer_UsesTheScalarPathAndTheFourBytesItHas()
+        {
+            var destination = new byte[4];
+
+            PixelKernels.StoreAveraged(Vector128.Create(40, 80, 120, 160), 4, destination.AsSpan());
+
+            Assert.Equal(new byte[] { 10, 20, 30, 40 }, destination);
+        }
+
         // ---- DepthTestRow ----------------------------------------------------------------------------------------------
 
         private static (float[] Depth, byte[] Coverage) RunDepthTest(bool vector, float[] depth, byte[] coverage, byte[] samples, float z0, float zs, float epsilon)

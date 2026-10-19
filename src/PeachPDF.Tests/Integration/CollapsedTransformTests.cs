@@ -332,14 +332,16 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task GeneratePdf_CollapsedPreserve3dRoot_NeedsNoBitmapUnderPdfA1b()
         {
-            // A visible root is composed as a bitmap, which PDF/A-1b rejects; a collapsed one has no picture, so nothing is rejected.
+            // A visible context that needs a depth test (a plane tilted in perspective) is composed as a bitmap, which PDF/A-1b rejects; a collapsed one has no
+            // picture, so nothing is rejected.
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfAConformance = PdfAConformance.PdfA1B, Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow } };
 
             var doc = await new PdfGenerator().GeneratePdf($"<!DOCTYPE html><html><body>{string.Format(CollapsedContext, "scale(0)")}<p>after</p></body></html>", config);
             Assert.Equal(1, doc.PageCount);
 
+            var visible = CollapsedContext.Replace("transform:translateZ(5px)", "transform:rotateY(30deg)");
             await Assert.ThrowsAnyAsync<InvalidOperationException>(async () =>
-                await new PdfGenerator().GeneratePdf($"<!DOCTYPE html><html><body>{string.Format(CollapsedContext, "scale(0.5)")}<p>after</p></body></html>", config));
+                await new PdfGenerator().GeneratePdf($"<!DOCTYPE html><html><body>{string.Format(visible, "scale(0.5)")}<p>after</p></body></html>", config));
         }
 
         [Fact]
@@ -416,8 +418,9 @@ namespace PeachPDF.Tests.Integration
             var edgeOn = await ContentOf(Context("rotateY(90deg)"));
             var tilted = await ContentOf(Context("rotateY(30deg)"));
 
-            // The context's root plane is composed to a bitmap of its own either way; the plane under test adds a second only when it keeps an image.
-            Assert.Equal(ImageXObject.Matches(tilted).Count - 1, ImageXObject.Matches(edgeOn).Count);
+            // The plane under test is drawn as a bitmap only when it keeps an image: an edge-on one is dropped (the root plane alone has no depth to resolve, so it stays vector).
+            Assert.Empty(ImageXObject.Matches(edgeOn));
+            Assert.NotEmpty(ImageXObject.Matches(tilted));
             Assert.DoesNotMatch(TextRenderModeInvisible, edgeOn);
             Assert.Matches(TextRenderModeInvisible, tilted);
         }

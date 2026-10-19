@@ -92,13 +92,13 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void Parse_UnrecognizedFunctionAlone_ReturnsNull()
         {
-            Assert.Null(SvgTransformParser.Parse("perspective(500)"));
+            Assert.Null(SvgTransformParser.Parse("frobnicate(500)"));
         }
 
         [Fact]
         public void Parse_UnrecognizedFunctionMixedWithSupportedOne_ContributesNothing()
         {
-            var matrix = SvgTransformParser.Parse("perspective(500) translate(5,5)");
+            var matrix = SvgTransformParser.Parse("frobnicate(500) translate(5,5)");
 
             Assert.NotNull(matrix);
             var m = matrix!.Value;
@@ -106,6 +106,112 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(1, m.M22);
             Assert.Equal(5, m.M31);
             Assert.Equal(5, m.M32);
+        }
+
+        [Theory]
+        [InlineData("perspective(500)")]
+        [InlineData("translate(5,5) rotateY(30deg)")]
+        [InlineData("translate3d(1px, 2px, 3px) scale(2)")]
+        public void Parse_ListWithA3DFunction_IsIgnoredWhole_WhereOnlyA2DMatrixFits(string value)
+        {
+            // gradientTransform, patternTransform and a clipPath's transform: CSS Transforms 2 section 11 ignores the whole list.
+            Assert.Null(SvgTransformParser.Parse(value));
+            Assert.NotNull(SvgTransformParser.ParseFull(value)!.Value.Full);
+        }
+
+        [Fact]
+        public void ParseFull_A2DList_HasNoFullMatrix()
+        {
+            var parsed = SvgTransformParser.ParseFull("translate(5,5) rotate(30deg)")!.Value;
+
+            Assert.Null(parsed.Full);
+            Assert.Equal(5, parsed.Affine.M31);
+        }
+
+        [Fact]
+        public void ParseFull_Translate3d_ComposesAndProjectsOrthographically()
+        {
+            var parsed = SvgTransformParser.ParseFull("translate3d(10px, 20px, 30px)")!.Value;
+
+            Assert.Equal(30, parsed.Full!.Value.M43);
+            Assert.Equal(10, parsed.Affine.M31);
+            Assert.Equal(20, parsed.Affine.M32);
+        }
+
+        [Fact]
+        public void ParseFull_RotateY_FoldsTheDepthIntoTheMatrix()
+        {
+            var full = SvgTransformParser.ParseFull("rotateY(90deg)")!.Value.Full!.Value;
+
+            Assert.Equal(0, full.M11, 5);
+            Assert.Equal(-1, full.M13, 5);
+            Assert.Equal(1, full.M31, 5);
+        }
+
+        [Fact]
+        public void ParseFull_Perspective_SetsTheDepthDivisor()
+        {
+            Assert.Equal(-1f / 500f, SvgTransformParser.ParseFull("perspective(500px)")!.Value.Full!.Value.M34, 6);
+        }
+
+        [Fact]
+        public void ParseFull_PerspectiveUnderOnePixel_IsOnePixel()
+        {
+            Assert.Equal(-1f, SvgTransformParser.ParseFull("perspective(0.25px)")!.Value.Full!.Value.M34, 6);
+            Assert.Null(SvgTransformParser.ParseFull("perspective(0)")); // zero does nothing, as in a browser
+        }
+
+        [Fact]
+        public void ParseFull_PerspectiveNone_ContributesNothing()
+        {
+            Assert.Null(SvgTransformParser.ParseFull("perspective(none)"));
+        }
+
+        [Fact]
+        public void ParseFull_Matrix3d_ReadsTheSixteenNumbersColumnMajor()
+        {
+            var full = SvgTransformParser.ParseFull("matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0, 7,8,9,1)")!.Value.Full!.Value;
+
+            Assert.Equal(7, full.M41);
+            Assert.Equal(8, full.M42);
+            Assert.Equal(9, full.M43);
+        }
+
+        [Fact]
+        public void ParseFull_Rotate3d_ZeroAxisTurnsNothing()
+        {
+            Assert.Equal(Matrix4x4.Identity, SvgTransformParser.ParseFull("rotate3d(0, 0, 0, 45deg)")!.Value.Full);
+        }
+
+        [Fact]
+        public void ParseFull_Rotate3d_AboutTheYAxisMatchesRotateY()
+        {
+            var a = SvgTransformParser.ParseFull("rotate3d(0, 1, 0, 40deg)")!.Value.Full!.Value;
+            var b = SvgTransformParser.ParseFull("rotateY(40deg)")!.Value.Full!.Value;
+
+            Assert.Equal(b.M11, a.M11, 5);
+            Assert.Equal(b.M13, a.M13, 5);
+            Assert.Equal(b.M31, a.M31, 5);
+            Assert.Equal(b.M33, a.M33, 5);
+        }
+
+        [Fact]
+        public void ParseFull_ScaleZAndScale3d_ScaleDepth()
+        {
+            Assert.Equal(3, SvgTransformParser.ParseFull("scaleZ(3)")!.Value.Full!.Value.M33);
+            Assert.Equal(4, SvgTransformParser.ParseFull("scale3d(2, 3, 4)")!.Value.Full!.Value.M33);
+        }
+
+        [Fact]
+        public void ParseFull_TranslateZ_RefusesAPercentage()
+        {
+            Assert.Null(SvgTransformParser.ParseFull("translateZ(10%)", new SvgTransformContext(16, 16, 100, 100)));
+        }
+
+        [Fact]
+        public void ParseFull_ANegativePerspective_ContributesNothing()
+        {
+            Assert.Null(SvgTransformParser.ParseFull("perspective(-5px)"));
         }
 
         [Fact]

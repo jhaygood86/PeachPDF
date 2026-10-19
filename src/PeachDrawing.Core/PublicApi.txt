@@ -81,6 +81,7 @@ PeachDrawing.Core.Canvas : abstract class
   property Boolean IsOffscreenTile { get; }
   property Boolean PrefersRasterGroups { get; }
   property Double PixelsPerPoint { get; }
+  property Double RasterizationDpi { get; }
   property Matrix3x2 CurrentTransform { get; }
   property Object TileCacheOwner { get; }
   property ValueTuple<Double, Double> TransformScale { get; }

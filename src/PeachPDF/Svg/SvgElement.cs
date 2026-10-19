@@ -84,20 +84,67 @@ namespace PeachPDF.Svg
         public string? FilterRef { get; set; }
 
         private Matrix3x2? _transform;
+        private Matrix4x4? _transform3D;
+
+        private (Matrix3x2? Affine, Matrix4x4? Full) ResolveTransform()
+        {
+            if (DeferredTransform?.Resolve(this) is { } deferred)
+                return (deferred.Affine, deferred.Full);
+
+            return (_transform, _transform3D);
+        }
 
         /// <summary>
         /// The element's own transform, about <see cref="TransformOrigin"/> when it has one. The origin of a <c>fill-box</c> or <c>stroke-box</c> depends
-        /// on the element's bounding box, which a group only has once its children are built, so it is applied when the transform is read.
+        /// on the element's bounding box, which a group only has once its children are built, so it is applied when the transform is read. When the transform
+        /// holds a 3D function (<see cref="Transform3D"/>) this is that matrix's orthographic projection onto the plane, which is what the bounds, link and ink-extent
+        /// readers (and a renderer that cannot do 3D) work from.
         /// </summary>
         public Matrix3x2? Transform
         {
             get
             {
-                var matrix = DeferredTransform?.Resolve(this) ?? _transform;
-                return matrix is { } resolved && TransformOrigin is { } origin ? origin.Apply(resolved, this) : matrix;
+                var (affine, full) = ResolveTransform();
+
+                if (full is { } matrix4 && TransformOrigin is { } origin3D)
+                {
+                    var turned = origin3D.Apply(matrix4, this);
+                    return new Matrix3x2(turned.M11, turned.M12, turned.M21, turned.M22, turned.M41, turned.M42);
+                }
+
+                return affine is { } resolved && TransformOrigin is { } origin ? origin.Apply(resolved, this) : affine;
             }
             set => _transform = value;
         }
+
+        /// <summary>
+        /// The element's full 4x4 transform, about <see cref="TransformOrigin"/> (its z offset included), when the transform list holds a 3D function (CSS Transforms 2
+        /// section 11); null for a 2D list. The renderer draws such an element through the projective path instead of a plain matrix.
+        /// </summary>
+        public Matrix4x4? Transform3D
+        {
+            get
+            {
+                var full = ResolveTransform().Full;
+                return full is { } matrix && TransformOrigin is { } origin ? origin.Apply(matrix, this) : full;
+            }
+            set => _transform3D = value;
+        }
+
+        /// <summary>
+        /// Not inherited. <c>perspective</c>: the distance (user units) from the viewer to the z=0 plane for this element's children, or null for <c>none</c>. It
+        /// is the container's property and does not move the element itself (CSS Transforms 2 section 8).
+        /// </summary>
+        public double? Perspective { get; set; }
+
+        /// <summary>Not inherited. <c>perspective-origin</c>: the vanishing point of <see cref="Perspective"/>; the initial value is <c>50% 50%</c> of the reference box.</summary>
+        public SvgTransformOrigin? PerspectiveOrigin { get; set; }
+
+        /// <summary>Not inherited. <c>transform-style: preserve-3d</c>: this container's children share one 3D rendering context with it.</summary>
+        public bool PreserveThreeD { get; set; }
+
+        /// <summary>Not inherited. <c>backface-visibility: hidden</c>: the element paints nothing while its back faces the viewer.</summary>
+        public bool BackfaceHidden { get; set; }
 
         /// <summary>The transform as written when it holds a percentage of a <c>fill-box</c> or <c>stroke-box</c>, resolved against the element's geometry each time <see cref="Transform"/> is read; null otherwise.</summary>
         public SvgDeferredTransform? DeferredTransform { get; set; }

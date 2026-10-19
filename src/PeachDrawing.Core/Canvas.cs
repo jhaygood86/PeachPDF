@@ -425,6 +425,12 @@ namespace PeachDrawing.Core
         public bool InvisibleText { get; set; }
 
         /// <summary>
+        /// The resolution, in pixels per inch of paper, a surface from <see cref="BeginRasterSurface"/> is rendered at when the caller names none
+        /// (<see cref="RenderContext.RasterizationDpi"/>). A caller that wants a surface sharper than that - a plane enlarged by a warp - scales it.
+        /// </summary>
+        public double RasterizationDpi => _renderContext.RasterizationDpi;
+
+        /// <summary>
         /// Whether group effects (opacity, blend modes, colour functions) are best done by rendering the element into a tight
         /// bitmap and compositing that, rather than through <see cref="CreateTile"/>. True for a raster graphics, whose tile
         /// would otherwise span from the page origin; false for a PDF graphics, where a tile is a cheap vector Form XObject.

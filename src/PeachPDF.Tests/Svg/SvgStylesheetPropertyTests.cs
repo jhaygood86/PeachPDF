@@ -149,16 +149,27 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(Rect(string.Empty, $"transform=\"{transform}\"").Transform);
         }
 
-        // calc() and the 3D functions are not read here (a rule folds calc() first, so these reach the parser from style="" or an attribute); the functions after them still apply.
+        // calc() is not read here (a rule folds calc() first, so these reach the parser from style="" or an attribute); the functions after it still apply.
         [Theory]
         [InlineData("translate(10px, calc(1px + 2px)) scale(2)", 2, 0, 0, 2, 0, 0)]
         [InlineData("scale(2, calc(3)) translate(5)", 1, 0, 0, 1, 5, 0)]
         [InlineData("translate(1vw) scale(2)", 2, 0, 0, 2, 0, 0)]
-        [InlineData("scale(2) translate3d(1px, 2px, 3px) translate(5px)", 2, 0, 0, 2, 10, 0)]
-        [InlineData("perspective(100px) translate(5px)", 1, 0, 0, 1, 5, 0)]
+        [InlineData("scale(2) translate(1vw) translate(5px)", 2, 0, 0, 2, 10, 0)]
         public void AFunctionItCannotResolve_DoesNotStopTheOnesAfterIt(string transform, float a, float b, float c, float d, float e, float f)
         {
             AssertMatrix(Rect(string.Empty, $"transform=\"{transform}\"").Transform, a, b, c, d, e, f);
+        }
+
+        // The 3D functions are read (CSS Transforms 2 section 11); the plain matrix of an element that holds one is the matrix projected onto the plane.
+        [Theory]
+        [InlineData("scale(2) translate3d(1px, 2px, 3px) translate(5px)", 2, 0, 0, 2, 12, 4)]
+        [InlineData("perspective(100px) translate(5px)", 1, 0, 0, 1, 5, 0)]
+        public void A3DFunction_IsReadAndItsProjectionIsTheElementsPlainMatrix(string transform, float a, float b, float c, float d, float e, float f)
+        {
+            var element = Rect(string.Empty, $"transform=\"{transform}\"");
+
+            AssertMatrix(element.Transform, a, b, c, d, e, f);
+            Assert.NotNull(element.Transform3D);
         }
 
         private static SvgGradientStop[] Stops(string rule, string stops) =>

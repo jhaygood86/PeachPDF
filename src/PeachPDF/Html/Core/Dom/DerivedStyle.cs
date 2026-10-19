@@ -879,6 +879,9 @@ namespace PeachPDF.Html.Core.Dom
         private static bool IsNoneValue(string? value) =>
             string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>A distance under one CSS pixel is treated as one pixel (CSS Transforms 2 section 8); zero or less is no perspective at all.</summary>
+        private static double ClampPerspective(double distance) => distance > 0 ? Math.Max(distance, CSS.Length.PointsPerPx) : 0;
+
         public double ActualPerspective
         {
             get
@@ -890,7 +893,7 @@ namespace PeachPDF.Html.Core.Dom
                     var value = Style.VisualEffects.Perspective;
                     Paint._actualPerspective = !IsTransformable || string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
                         ? 0
-                        : Math.Max(0, CssValueParser.ParseLength(value, 0, Owner));
+                        : ClampPerspective(CssValueParser.ParseLength(value, 0, Owner));
                 }
 
                 return Paint._actualPerspective;

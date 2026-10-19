@@ -32,6 +32,12 @@ namespace PeachPDF.Svg
 
         public List<SvgElement> Children { get; init; } = [];
 
+        /// <summary>
+        /// A group standing for the root <c>&lt;svg&gt;</c> when it has a <c>perspective</c> or a <c>transform-style: preserve-3d</c> (the only things it carries that the page's
+        /// own box for it does not draw): it holds <see cref="Children"/>, and is rendered in their place. Null otherwise.
+        /// </summary>
+        public SvgGroupElement? RootProjection { get; set; }
+
         /// <summary>Gradient definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
         public Dictionary<string, SvgGradient> Gradients { get; init; } = new(StringComparer.Ordinal);
 
