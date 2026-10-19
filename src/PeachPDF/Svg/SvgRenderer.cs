@@ -380,7 +380,7 @@ namespace PeachPDF.Svg
         /// </summary>
         private static void RenderImage(Canvas g, SvgImageElement image, double opacity)
         {
-            if (image.Width <= 0 || image.Height <= 0)
+            if (!image.Visible || image.Width <= 0 || image.Height <= 0)
                 return;
 
             var viewportRect = new Rect(image.X, image.Y, image.Width, image.Height);
@@ -429,7 +429,7 @@ namespace PeachPDF.Svg
         /// </summary>
         private static void RenderForeignObject(Canvas g, SvgForeignObjectElement foreign)
         {
-            if (foreign.Width <= 0 || foreign.Height <= 0)
+            if (!foreign.Visible || foreign.Width <= 0 || foreign.Height <= 0)
                 return;
 
             // Canvas.PushTransform takes layout units and divides by PixelsPerPoint, while everything drawn inside the
@@ -612,12 +612,12 @@ namespace PeachPDF.Svg
                 // remarks on why vertical writing modes and <textPath> (RenderTextPath, a separate
                 // method entirely) are excluded for now.
                 if (!isVertical)
-                    PaintTextDecorations(g, glyphs, opacity);
+                    PaintTextDecorations(g, glyphs.FindAll(static gi => gi.Run.Visible), opacity);
             }
 
             // A <textPath> positions itself entirely along its path; render each in document order after
             // the straight-baseline glyphs (mixing straight text and a textPath in one <text> is rare).
-            foreach (var (run, parentOpacity) in textPaths)
+            foreach (var (run, parentOpacity) in textPaths.Where(static t => t.Run.Visible))
                 RenderTextPath(g, document, run, opacity * parentOpacity);
         }
 
@@ -1463,6 +1463,13 @@ namespace PeachPDF.Svg
             {
                 var start = glyphs[i];
                 var font = start.Font;
+
+                // A hidden run is laid out like any other (so its neighbours keep their places) but not painted.
+                if (!start.Run.Visible)
+                {
+                    i++;
+                    continue;
+                }
 
                 // Under horizontal-tb, rotate="0" is visually identical to no rotate at all, so it's
                 // still left eligible for the batching path below (an unnecessary per-glyph transform
@@ -3520,6 +3527,9 @@ namespace PeachPDF.Svg
 
         private static void PaintShape(Canvas g, SvgDocument document, SvgElement element, GraphicsPath path, double opacity, GraphicsPath? fillPath = null)
         {
+            if (!element.Visible)
+                return;
+
             // Per spec, <line> has no interior region - "fill" never applies to it, regardless of the
             // element's own/inherited fill paint (which otherwise defaults to solid black). Emitting a
             // fill op anyway would be visually harmless (PDF implicitly closes an open subpath before

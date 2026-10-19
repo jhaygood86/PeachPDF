@@ -54,6 +54,9 @@ namespace PeachPDF.Svg
         /// <summary>Inherited. Governs how a self-intersecting fill's interior is determined.</summary>
         public FillMode FillRule { get; set; } = FillMode.Nonzero;
 
+        /// <summary>The resolved, inherited <c>visibility</c>: false for <c>hidden</c>/<c>collapse</c>. A hidden element is not painted but stays in bounding boxes, clip paths and text layout.</summary>
+        public bool Visible { get; set; } = true;
+
         /// <summary>Inherited. Default per SVG spec.</summary>
         public LineCap StrokeLineCap { get; set; } = LineCap.Butt;
 

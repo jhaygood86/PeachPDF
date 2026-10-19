@@ -174,7 +174,8 @@ namespace PeachPDF.Svg
             WritingMode WritingMode,
             TextOrientation TextOrientation,
             SvgPaint ContextFill,
-            SvgPaint ContextStroke)
+            SvgPaint ContextStroke,
+            bool Visible)
         {
             public static readonly InheritedPaint Initial = new(
                 Fill: SvgPaint.Solid(PaintColor.Black),
@@ -195,7 +196,8 @@ namespace PeachPDF.Svg
                 WritingMode: WritingMode.HorizontalTb,
                 TextOrientation: TextOrientation.Mixed,
                 ContextFill: SvgPaint.None,
-                ContextStroke: SvgPaint.None);
+                ContextStroke: SvgPaint.None,
+                Visible: true);
         }
 
         /// <summary>
@@ -1514,6 +1516,14 @@ namespace PeachPDF.Svg
                 ? inherited.TextOrientation
                 : Map.TextOrientations.GetValueOrDefault(textOrientationAttr.Trim(), inherited.TextOrientation);
 
+            // visibility is inherited; hidden and collapse (outside a table or flex item, where collapse means hidden) stop the element painting but
+            // leave it in the rendering tree, so a descendant can set visible again and the element still sizes a clip path or a bounding box.
+            var visibilityAttr = Attr("visibility")?.Trim();
+            element.Visible = visibilityAttr is null ? inherited.Visible
+                : visibilityAttr.Equals("visible", StringComparison.OrdinalIgnoreCase) ? true
+                : visibilityAttr.Equals("hidden", StringComparison.OrdinalIgnoreCase) || visibilityAttr.Equals("collapse", StringComparison.OrdinalIgnoreCase) ? false
+                : inherited.Visible;
+
             // A display: contents element has no box, so what a box does - its own opacity, transform, clip, mask and filter - is
             // gone; its inherited properties still reach its content through the paint returned below.
             if (!_contextOnly && IsDisplayContents(node))
@@ -1544,7 +1554,8 @@ namespace PeachPDF.Svg
                 writingMode,
                 textOrientation,
                 inherited.ContextFill,
-                inherited.ContextStroke);
+                inherited.ContextStroke,
+                element.Visible);
         }
 
         /// <summary>
