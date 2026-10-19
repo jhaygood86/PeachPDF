@@ -1,18 +1,17 @@
-// An internal mirror of PeachPDF's public option type of the same name: PeachPDF maps its PdfGenerateConfig onto these.
 #nullable enable
 
-namespace PeachDrawing.PDF.Engine
+namespace PeachDrawing.PDF
 {
     /// <summary>
     /// The PDF/A (ISO 19005) conformance level to target, set via
-    /// <c>PdfGenerateConfig.PdfAConformance</c>. Defaults to <see cref="None"/> - no PDF/A
+    /// <see cref="PdfComposerOptions.Conformance"/>. Defaults to <see cref="None"/> - no PDF/A
     /// -specific work is done: no <c>/OutputIntents</c>, no forced XMP metadata, no PDF-version bump,
     /// no PDF/A-1 transparency rejection, and no accessible-level language/alt-text requirements.
     /// </summary>
     /// <remarks>
     /// <para>
     /// PDF/A-1 (<see cref="PdfA1B"/>/<see cref="PdfA1A"/>) is defined in terms of PDF 1.4 and forbids
-    /// PDF transparency groups entirely. PeachPDF has no transparency-flattening engine, so instead of
+    /// PDF transparency groups entirely. The writer has no transparency-flattening engine, so instead of
     /// silently producing a non-conformant file, generation throws an <see cref="System.InvalidOperationException"/>
     /// if the document actually uses a feature that requires a transparency group - CSS/SVG
     /// <c>opacity</c> below 1, an SVG <c>&lt;mask&gt;</c>, a semi-transparent gradient color stop, or
@@ -23,12 +22,12 @@ namespace PeachDrawing.PDF.Engine
     /// <para>
     /// The accessible "A" levels (<see cref="PdfA1A"/>/<see cref="PdfA2A"/>/<see cref="PdfA3A"/>)
     /// additionally require a real document language: requesting one implicitly enables tagged-PDF
-    /// output (see <c>PdfGenerateConfig.EnableTaggedPdf</c>) for that render, and generation
+    /// output (see tagged output) for that render, and generation
     /// throws if neither the document's own <c>&lt;html lang&gt;</c> nor
-    /// <c>PdfGenerateConfig.DefaultLanguage</c> resolves to a language.
+    /// <see cref="PdfComposerOptions.Language"/> resolves to a language.
     /// </para>
     /// </remarks>
-    internal enum PdfAConformance
+    public enum PdfAConformance
     {
         /// <summary>No PDF/A conformance is requested. Default.</summary>
         None = 0,
@@ -60,16 +59,16 @@ namespace PeachDrawing.PDF.Engine
         /// <summary>
         /// PDF/A-4 (ISO 19005-4, based on PDF 2.0). Visual conformance with guaranteed Unicode text extraction; there is no
         /// A/B/U level system in this part. Requires <see cref="PdfVersion.Pdf20"/> (selected automatically when
-        /// <c>PdfGenerateConfig.PdfVersion</c> is left alone), which also switches off the non-ISO
+        /// <see cref="PdfComposerOptions.Version"/> is left alone), which also switches off the non-ISO
         /// <c>/BrotliDecode</c> and <c>/JXLDecode</c> filters. The document Information dictionary is omitted: all metadata
         /// is in the XMP stream.
         /// </summary>
         PdfA4,
 
-        /// <summary>PDF/A-4e: PDF/A-4 for engineering documents (the variant that may carry 3D, RichMedia and JavaScript; PeachPDF writes none of those).</summary>
+        /// <summary>PDF/A-4e: PDF/A-4 for engineering documents (the variant that may carry 3D, RichMedia and JavaScript; the writer writes none of those).</summary>
         PdfA4E,
 
-        /// <summary>PDF/A-4f: PDF/A-4 that also permits arbitrary embedded files (<c>PdfGenerateConfig.Attachments</c>).</summary>
+        /// <summary>PDF/A-4f: PDF/A-4 that also permits arbitrary embedded files (<see cref="PdfComposerOptions.EmbeddedFiles"/>).</summary>
         PdfA4F,
     }
 }

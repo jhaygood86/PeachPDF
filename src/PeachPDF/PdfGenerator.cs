@@ -178,7 +178,7 @@ namespace PeachPDF
         public async Task<PeachPdfDocument> GeneratePdf(string? html, PdfGenerateConfig config, PeachPdfCssContent? cssData = null)
         {
             // create PDF document to render the HTML into
-            var document = new PeachPdfDocument(new PdfDocument());
+            var document = new PeachPdfDocument(new PdfComposer(_renderContext));
 
             // add rendered PDF pages to document
             await AddPdfPages(document, html, config, cssData);
@@ -263,8 +263,6 @@ namespace PeachPDF
 
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
 
-            EstablishDocumentOptions(document, config);
-
             _renderContext.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _renderContext.AllowLocalFileAccess = config.AllowLocalFileAccess;
             _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
@@ -348,222 +346,6 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Establishes every whole-document <see cref="PdfDocumentOptions"/> property from <paramref name="config"/>
-        /// - color mode, downscaling, PDF/A and PDF/X conformance (plus their "first call on this document
-        /// wins, a later mismatched call throws" cross-call consistency guards, since both
-        /// <see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>
-        /// and <see cref="AddPages"/> are repeatable APIs that can append further content to an existing
-        /// <see cref="PeachPdfDocument"/>), the PDF version header, and <see cref="ColorOptions"/>. Shared
-        /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>)
-        /// and the declarative document-building path (<see cref="AddPages"/>) - <see cref="RenderPagesCore"/> reads <paramref name="config"/>
-        /// directly for its own validation/XMP/OutputIntent writing, but the paint-time *enforcement* of
-        /// PDF/A/PDF/X construct restrictions (<c>PDF.Rendering.PdfGraphicsState</c>'s
-        /// color-mode resolution, <c>PDF.Advanced.PdfXColorSpaceGuard</c>,
-        /// <c>PDF.Advanced.PdfColorConversionGuard</c>, <c>PDF.Advanced.PdfATransparencyGuard</c>)
-        /// all read <c>document.PdfDocument.Options.*</c> instead, so a caller that skipped this method
-        /// would get a document whose <c>/OutputIntents</c>/XMP conformance claim is real but whose actual
-        /// content is completely unenforced against it - exactly the bug this method's extraction fixes.
-        /// </summary>
-        private static void EstablishDocumentOptions(PeachPdfDocument document, PdfGenerateConfig config)
-        {
-            document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
-            document.PdfDocument.Options.BrotliCompression = config.BrotliCompression;
-            document.PdfDocument.Options.JxlPassthrough = config.JxlPassthrough;
-            // Undefined (not the PDF-engine-internal default of Rgb) lets each color write in
-            // whichever space it actually carries - RGB-authored colors as /DeviceRGB, device-cmyk()
-            // -authored colors as real /DeviceCMYK operators (see PdfEncoders.ToString's per-color branch
-            // under Undefined) - rather than every CMYK-tagged PaintColor being force-collapsed back to a
-            // lossy RGB round-trip by ColorSpaceHelper.EnsureColorMode's Rgb branch. For an all-RGB
-            // document this is byte-identical to Rgb mode (every color's ColorSpace is already Rgb).
-            document.PdfDocument.Options.ColorMode = PdfColorMode.Undefined;
-            document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
-            document.PdfDocument.Options.FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten;
-            document.PdfDocument.Options.PortableColorFilters = config.PortableColorFilters;
-            document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
-            document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
-            document.PdfDocument.Options.ImageCompression = config.ImageCompression.ToEngine();
-            // PDF/A conformance is a whole-document property, but AddPdfPages/AddPages are repeatable
-            // public APIs (a caller can append more pages to an existing PeachPdfDocument) - a second call
-            // requesting a different level than the first would otherwise silently leave the document's
-            // already-written /OutputIntents/XMP conformance claim disagreeing with how some of its
-            // pages were actually painted (earlier pages painted under a different transparency-guard
-            // regime than the level the file now claims). Reject that outright rather than produce a
-            // self-contradictory document; the same level requested again across multiple calls is fine.
-            if (document.PdfDocument.Options.PdfAConformanceEstablished
-                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance.ToEngine())
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfAConformance must be the same on every AddPdfPages/AddPages call " +
-                    $"for a given document - this document was already established as '{document.PdfDocument.Options.PdfAConformance}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfAConformance}'. A single PDF " +
-                    "document can only claim one PDF/A conformance level (or none) as a whole.");
-            }
-
-            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance.ToEngine();
-            document.PdfDocument.Options.PdfAConformanceEstablished = true;
-
-            // ISO 19005-2/3 (PDF/A-2/3) are defined in terms of PDF 1.7/ISO 32000-1. ISO 19005-1
-            // (PDF/A-1) is defined in terms of PDF 1.4 - the version PeachPDF already always emits -
-            // so PdfA1B/PdfA1A need no version change at all.
-            if (config.PdfAConformance is PdfAConformance.PdfA2B or PdfAConformance.PdfA2U or PdfAConformance.PdfA2A
-                or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA3A)
-            {
-                document.PdfDocument.Version = 17;
-            }
-
-            // PDF/A-4 and PDF/X-6 are defined against PDF 2.0; every other PDF/A or PDF/X level is defined against
-            // PDF 1.4, 1.6 or 1.7. A caller who never touched PdfVersion gets the version the requested standard
-            // needs; one who set it explicitly to something the standard cannot use has a contradiction to resolve,
-            // not something to silently pick a winner for.
-            var requiresPdf20 = config.PdfAConformance is PdfAConformance.PdfA4 or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F
-                || config.PdfXConformance == PdfXConformance.X6;
-            // PdfVersion defaults to Pdf20, so a caller who never set it and asks for an earlier PDF/A or PDF/X level gets
-            // the PDF 1.x file that level is defined against, rather than a contradiction to resolve.
-            var requestsEarlierLevel = !requiresPdf20
-                && (config.PdfAConformance != PdfAConformance.None || config.PdfXConformance != PdfXConformance.None);
-            var requestedVersion = config.PdfVersionExplicit
-                ? config.PdfVersion
-                : requiresPdf20 ? PdfVersion.Pdf20
-                : requestsEarlierLevel ? PdfVersion.Pdf17
-                : config.PdfVersion;
-
-            if (requiresPdf20 && requestedVersion != PdfVersion.Pdf20)
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfVersion is set to {requestedVersion}, but PdfAConformance ({config.PdfAConformance}) " +
-                    $"or PdfXConformance ({config.PdfXConformance}) is a level defined against PDF 2.0 (PDF/A-4, PDF/X-6). " +
-                    "Set PdfVersion to Pdf20, or leave it unset.");
-            }
-
-            if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfAConformance is also set to a " +
-                    "level defined against PDF 1.4 or 1.7. Only PDF/A-4 (PdfA4, PdfA4E, PdfA4F) is a PDF 2.0 level; " +
-                    "request PdfVersion.Pdf17 (or leave PdfVersion at its default) for the earlier ones.");
-            }
-
-            if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && config.PdfXConformance != PdfXConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfXConformance is also set to a " +
-                    "level defined against PDF 1.4 (X1a/X3) or 1.6 (X4). Only PdfXConformance.X6 is a PDF 2.0 " +
-                    "level; request PdfVersion.Pdf17 (or leave PdfVersion at its default) for the earlier ones.");
-            }
-
-            // Same "a PDF file has exactly one header version" reasoning as the PdfAConformance guard
-            // above - a second AddPdfPages/AddPages call on the same document requesting a different
-            // PdfVersion than the first would leave the file's already-written header disagreeing with
-            // how some of its pages/structure elements were painted.
-            if (document.PdfDocument.Options.PdfVersionEstablished
-                && document.PdfDocument.Options.PdfVersion != requestedVersion.ToEngine())
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages/AddPages call for " +
-                    $"a given document - this document was already established as '{document.PdfDocument.Options.PdfVersion}' " +
-                    $"by an earlier call, and this call specifies '{requestedVersion}'. A single PDF file " +
-                    "can only have one header version.");
-            }
-
-            document.PdfDocument.Options.PdfVersion = requestedVersion.ToEngine();
-            document.PdfDocument.Options.PdfVersionEstablished = true;
-
-            if (requestedVersion == PdfVersion.Pdf20)
-            {
-                document.PdfDocument.Version = 20;
-            }
-
-            // PDF/A (archival) and PDF/X (print-production) are different documents in practice - no
-            // single file conformance-claims both at once, so requesting both is a contradiction the
-            // caller needs to resolve, not something to silently pick a winner for.
-            if (config.PdfAConformance != PdfAConformance.None && config.PdfXConformance != PdfXConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfAConformance and PdfXConformance are both set to a level other " +
-                    "than None. A single PDF document can only claim one conformance family - archival " +
-                    "(PDF/A) or print-production (PDF/X), not both.");
-            }
-
-            // Same "whole-document property, first AddPdfPages/AddPages call wins" reasoning as
-            // PdfAConformance above.
-            if (document.PdfDocument.Options.PdfXConformanceEstablished
-                && document.PdfDocument.Options.PdfXConformance != config.PdfXConformance.ToEngine())
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfXConformance must be the same on every AddPdfPages/AddPages call " +
-                    $"for a given document - this document was already established as '{document.PdfDocument.Options.PdfXConformance}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfXConformance}'. A single PDF " +
-                    "document can only claim one PDF/X conformance level (or none) as a whole.");
-            }
-
-            document.PdfDocument.Options.PdfXConformance = config.PdfXConformance.ToEngine();
-            document.PdfDocument.Options.PdfXConformanceEstablished = true;
-            document.PdfDocument.Options.ColorOptions = config.ColorOptions.ToEngine();
-
-            // Embedded files are a whole-document property too - and validated here, ahead of any layout or
-            // painting, so a document that is about to be rejected wastes no work. A declarative document
-            // re-enters the render core once per Page(...), so a later call must ask for the same files
-            // (they are embedded once, in RenderPagesCore), exactly like PdfAConformance above.
-            var embeddingPlan = PdfEmbeddingPlan.Create(config);
-            if (document.PdfDocument.Options.EmbeddingPlan is PdfEmbeddingPlan establishedPlan && !establishedPlan.SameAs(embeddingPlan))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.Attachments must be the same on every AddPdfPages/AddPages call for a given " +
-                    "document - this call asks for a different set of embedded files than an earlier call did. " +
-                    "A document's embedded files are established once, by its first call.");
-            }
-
-            document.PdfDocument.Options.EmbeddingPlan = embeddingPlan;
-
-            // /UF (PDF 1.7), /Desc (1.6) and /AFRelationship are newer than the historical 1.4 header, and a
-            // PDF/A-3 level already asks for 1.7 above - so a plain attachment gets the same, not a 1.4 file
-            // that uses 1.7 features. (PDF/X, which would lower it again, is rejected together with files.)
-            if (embeddingPlan.Files.Count > 0 && document.PdfDocument.Version < 17)
-            {
-                document.PdfDocument.Version = 17;
-            }
-
-            // ISO 15930-4/6 (PDF/X-1a:2003/PDF/X-3:2003) target PDF 1.4 - already PeachPDF's own
-            // historical default (see PdfVersionTests.Default_Pdf17_KeepsHistoricalVersion14), so no
-            // explicit change is needed for those two levels; ISO 15930-7 (PDF/X-4) targets PDF 1.6, a
-            // real bump from that default.
-            if (config.PdfXConformance == PdfXConformance.X4)
-            {
-                document.PdfDocument.Version = 16;
-            }
-
-            // Encryption is a whole-document property, like the conformance levels above, and both PDF/A (ISO 19005,
-            // 6.1.3) and PDF/X (ISO 15930) forbid an /Encrypt entry - a document cannot claim one and carry the other.
-            // The snapshot keeps a caller who edits their options object afterwards from changing a document in progress.
-            var encryption = config.Encryption?.Clone();
-            if (encryption is not null
-                && (config.PdfAConformance != PdfAConformance.None || config.PdfXConformance != PdfXConformance.None))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.Encryption cannot be combined with PdfAConformance or PdfXConformance: " +
-                    "PDF/A and PDF/X documents must not be encrypted.");
-            }
-
-            if (document.PdfDocument.Options.EncryptionEstablished
-                && !(document.PdfDocument.Options.Encryption is null ? encryption is null : document.PdfDocument.Options.Encryption.SameAs(encryption.ToEngine())))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.Encryption must be the same on every AddPdfPages/AddPages call for a given " +
-                    "document - a PDF file is encrypted as a whole, with one set of passwords and permissions.");
-            }
-
-            document.PdfDocument.Options.Encryption = encryption.ToEngine();
-            document.PdfDocument.Options.EncryptionEstablished = true;
-
-            // AES-256 (revision 6) is a PDF 2.0 feature that PDF 1.7 readers also accept (Adobe extension level 8); a
-            // file that would otherwise carry an older header is raised to 1.7.
-            if (encryption is not null && document.PdfDocument.Version < 17)
-            {
-                document.PdfDocument.Version = 17;
-            }
-        }
-
-        /// <summary>
         /// Creates a PDF document by building PeachPDF's own internal box tree directly in C#, via
         /// <paramref name="handler"/>, instead of parsing HTML/CSS - a QuestPDF-style declarative
         /// alternative to <see cref="GeneratePdf(string?,PdfGenerateConfig,PeachPdfCssContent?)"/> for a
@@ -585,7 +367,7 @@ namespace PeachPDF
         /// </param>
         public async Task<PeachPdfDocument> CreateDocument(Action<IDocumentBuilder> handler, PdfGenerateConfig? config = null)
         {
-            var document = new PeachPdfDocument(new PdfDocument());
+            var document = new PeachPdfDocument(new PdfComposer(_renderContext));
             await AddPages(document, handler, config);
             return document;
         }
@@ -609,7 +391,6 @@ namespace PeachPDF
             };
 
             ValidateAnimationProgress(config);
-            EstablishDocumentOptions(document, config);
 
             // Collected synchronously first (the builder callback itself is synchronous, matching
             // QuestPDF's own declarative-composition-then-execution shape), then each page's own tree is
@@ -763,207 +544,16 @@ namespace PeachPDF
         /// </summary>
         private async Task RenderPagesCore(PeachPdfDocument document, HtmlContainer container, PdfGenerateConfig config)
         {
-            var resolvedCreationDate = ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
+            // Whole-document format, document information, and what the claimed conformance level requires of the file (the output
+            // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
+            // document. Everything that depends on this render's content (title, language, creation date) is known by now.
+            var embeddings = PdfEmbeddingPlan.Create(config);
+            document.Composer.Configure(BuildComposerOptions(config, container, embeddings));
 
-            // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally
-            // require a real document language - both checked here, once, ahead of the per-page paint
-            // loop that would otherwise be wasted work on a document that's about to be rejected.
+            // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
+            // which Configure has already checked.
             var isAccessibleConformance = config.PdfAConformance is
                 PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A;
-
-            // Wired unconditionally (independent of tagged-PDF output) - a document's own /Lang is
-            // useful metadata regardless, and DocumentLanguage is already resolved by SetContent
-            // (the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage -
-            // so an explicit DefaultLanguage still reaches /Lang when the document declares none).
-            if (!string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage))
-            {
-                document.PdfDocument.Language = container.HtmlContainerInt.DocumentLanguage;
-            }
-            else if (isAccessibleConformance)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfAConformance is set to an accessible ('A') level, which requires " +
-                    "a document language, but neither the source HTML declares <html lang=\"...\"> nor is " +
-                    "PdfGenerateConfig.DefaultLanguage set. Set DefaultLanguage, or add a lang attribute to the document.");
-            }
-
-            // Each non-default ConversionMode needs its own destination ICC profile set and parseable -
-            // validated once here (fail loudly, don't write a placeholder - same stance as the missing
-            // -creation-date/missing-language checks) rather than discovered deep in PdfColorConversionGuard
-            // partway through painting.
-            if (config.ColorOptions is { ConversionMode: ColorConversionMode.ConvertToOutputIntent } convertToOutputIntent)
-            {
-                if (convertToOutputIntent.OutputIntentProfile is not { Length: > 0 })
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.ConvertToOutputIntent, " +
-                        "but ColorOptions.OutputIntentProfile is not set. Set it to the ICC profile every color " +
-                        "should be converted into.");
-                }
-
-                if (!PeachImage.IccColorProfile.TryCreate(convertToOutputIntent.OutputIntentProfile, out _))
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.OutputIntentProfile could not be parsed as a valid ICC profile.");
-                }
-            }
-            else if (config.ColorOptions is { ConversionMode: ColorConversionMode.ConvertToProfile } convertToProfile)
-            {
-                if (convertToProfile.ConvertToProfile is not { Length: > 0 })
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.ConvertToProfile, but " +
-                        "ColorOptions.ConvertToProfile is not set.");
-                }
-
-                if (!PeachImage.IccColorProfile.TryCreate(convertToProfile.ConvertToProfile, out _))
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConvertToProfile could not be parsed as a valid ICC profile.");
-                }
-            }
-            else if (config.ColorOptions is { ConversionMode: ColorConversionMode.GrayscaleViaK } grayscaleViaK)
-            {
-                if (grayscaleViaK.FallbackCmykProfile is not { Length: > 0 })
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.GrayscaleViaK, but " +
-                        "ColorOptions.FallbackCmykProfile is not set - it's the CMYK profile every color is " +
-                        "converted through before taking only its K channel.");
-                }
-
-                if (!PeachImage.IccColorProfile.TryCreate(grayscaleViaK.FallbackCmykProfile, out var grayscaleProfile) ||
-                    grayscaleProfile is null || grayscaleProfile.DataColorSpace != PeachImage.IccColorSpace.Cmyk)
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.FallbackCmykProfile must be a valid CMYK ICC profile when " +
-                        "ConversionMode is ColorConversionMode.GrayscaleViaK.");
-                }
-            }
-
-            var pdfAConformanceRequested = config.PdfAConformance != PdfAConformance.None;
-            var pdfXConformanceRequested = config.PdfXConformance != PdfXConformance.None;
-
-            // Every PDF/X level requires a real output intent, and PeachPDF bundles no default press
-            // profile (unlike PDF/A's bundled sRGB one - there is no single correct default for a print
-            // output intent) - fail loudly rather than silently omit /OutputIntents, same "don't write a
-            // placeholder" stance as the missing-creation-date/missing-language checks.
-            if (pdfXConformanceRequested && config.ColorOptions?.OutputIntentProfile is not { Length: > 0 })
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfXConformance is set, but PdfGenerateConfig.ColorOptions.OutputIntentProfile " +
-                    "is not set. Every PDF/X level requires a real ICC output-intent profile - PeachPDF " +
-                    "bundles no default press profile, so supply one via ColorOptions.OutputIntentProfile " +
-                    "(and ColorOptions.OutputIntentIdentifier).");
-            }
-
-            if (pdfXConformanceRequested && string.IsNullOrEmpty(config.ColorOptions?.OutputIntentIdentifier))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfXConformance is set, but PdfGenerateConfig.ColorOptions.OutputIntentIdentifier " +
-                    "is not set. Set it to a human-readable name for the output-intent profile's condition " +
-                    "(e.g. \"Coated FOGRA39\").");
-            }
-
-            PeachImage.IccColorProfile? outputIntentProfile = null;
-            if (pdfXConformanceRequested)
-            {
-                PeachImage.IccColorProfile.TryCreate(config.ColorOptions!.OutputIntentProfile!, out outputIntentProfile);
-
-                if (config.PdfXConformance == PdfXConformance.X1a &&
-                    outputIntentProfile?.DataColorSpace != PeachImage.IccColorSpace.Cmyk)
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.PdfXConformance is PdfXConformance.X1a, which requires a CMYK " +
-                        "output-intent profile, but ColorOptions.OutputIntentProfile is not a valid CMYK " +
-                        "ICC profile. PdfXConformance.X3/X4 accept a CMYK, RGB, or Gray output intent instead.");
-                }
-            }
-
-            // An XMP metadata stream (EnableXmpMetadata or PdfAConformance) needs a real xmp:CreateDate -
-            // fail loudly rather than write a placeholder/default date, same stance as the language
-            // check above. Independent of PdfAConformance: a plain EnableXmpMetadata with no resolvable
-            // date throws too. PdfXConformance also needs it - PDF/X-4's GTS_PDFXVersion identification is
-            // primarily an XMP property (ISO 15930-7 - see PdfMetadataStream's remarks), not just an Info
-            // -dictionary one the way PDF/X-1a/X3's is.
-            var writeXmpMetadata = config.EnableXmpMetadata
-                || pdfAConformanceRequested
-                || pdfXConformanceRequested
-                || config.Metadata?.CustomXmpProperties.Count > 0;
-            if (writeXmpMetadata && resolvedCreationDate is not { } creationDate)
-            {
-                throw new InvalidOperationException(
-                    "An XMP metadata stream is being written (EnableXmpMetadata, PdfAConformance, " +
-                    "PdfXConformance, or CustomXmpProperties is set), but no creation date is available: " +
-                    "the source HTML has no extractable date, and PdfGenerateConfig.Metadata.CreationDate " +
-                    "was not set. Set PdfDocumentMetadata.CreationDate.");
-            }
-
-            if (writeXmpMetadata)
-            {
-                // Rewritten on every call (not just the first) - unlike the output intent below, the
-                // packet's content (title/dates/custom properties) can legitimately differ call to call,
-                // so always refreshing it is more useful than freezing it at whatever the first call saw.
-                var metadataStream = new PdfMetadataStream(
-                    document.PdfDocument,
-                    document.PdfDocument.Info,
-                    resolvedCreationDate!.Value,
-                    config.PdfAConformance.ToEngine(),
-                    config.PdfXConformance.ToEngine(),
-                    config.Metadata?.CustomXmpProperties ?? [],
-                    (document.PdfDocument.Options.EmbeddingPlan as PdfEmbeddingPlan)?.FacturX is { } facturX
-                        ? (facturX.FileName, facturX.ConformanceLevel)
-                        : null);
-                document.PdfDocument.Catalog.SetMetadata(metadataStream);
-            }
-
-            // Guarded on "not already present" (rather than unconditionally, like SetMetadata above) -
-            // the sRGB output intent never varies call to call, so re-adding it on a second AddPdfPages
-            // call with the same PdfAConformance would only leave the first call's ICC-profile stream
-            // orphaned (still written into the file, just unreferenced) for no benefit.
-            if (pdfAConformanceRequested && !document.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"))
-            {
-                var outputIntent = new PdfOutputIntent(document.PdfDocument, PdfAResources.SRgbIccProfile);
-                document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
-            }
-
-            // Same "not already present" dedup as PDF/A above - ColorOptions.OutputIntentProfile is
-            // validated (non-null, and CMYK under X1a) earlier in this method.
-            if (pdfXConformanceRequested && !document.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"))
-            {
-                var outputIntent = new PdfOutputIntent(document.PdfDocument, config.ColorOptions!.OutputIntentProfile!,
-                    "/GTS_PDFX", config.ColorOptions.OutputIntentIdentifier!, config.ColorOptions.OutputIntentIdentifier!,
-                    explicitN: outputIntentProfile?.ChannelCount);
-                document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
-
-                // The legacy PDF/X identification mechanism (predates XMP - still what many prepress RIPs
-                // and preflight tools check for X1a/X3): /GTS_PDFXVersion (all levels) and, only for the
-                // part-1 "a" variant, /GTS_PDFXConformance. PdfMetadataStream.PdfXIdentifiers is the shared
-                // source of truth for the exact identifier strings (and their sourcing) - this and the XMP
-                // pdfx: block above always agree by construction. Guarded the same way as the OutputIntent
-                // above - these never vary call to call for one document.
-                // PDF/X-6 identifies itself in XMP only (pdfxid), like PDF 2.0's own deprecation of the Info dictionary.
-                if (config.PdfXConformance != PdfXConformance.X6)
-                {
-                    var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance.ToEngine());
-                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.LatinOneByteEncoding);
-                    if (gtsConformance is not null)
-                    {
-                        document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.LatinOneByteEncoding);
-                    }
-                }
-            }
-
-            // Embedded files go in before any page is painted, so they precede the MathML sources that
-            // tagging attaches while painting in /AF. The plan was established (and checked against any
-            // earlier call) in EstablishDocumentOptions; writing it once per document, not once per call, is
-            // what the Applied flag is for.
-            if (document.PdfDocument.Options.EmbeddingPlan is PdfEmbeddingPlan { Files.Count: > 0 } embeddingPlan
-                && !document.PdfDocument.Options.EmbeddingApplied)
-            {
-                embeddingPlan.Apply(document.PdfDocument, resolvedCreationDate);
-                document.PdfDocument.Options.EmbeddingApplied = true;
-            }
 
             // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks
             // HtmlContainerInt.StructureTagBuilder for null and skips all classification/bookkeeping
@@ -1293,65 +883,54 @@ namespace PeachPDF
         #region Private/Protected methods
 
         /// <summary>
-        /// Returns the resolved creation date (override wins over the HTML-extracted date), or
-        /// <c>null</c> if neither is available - the caller decides whether that's acceptable (it
-        /// isn't when an XMP metadata stream is being written, which needs a real <c>xmp:CreateDate</c>).
+        /// The options the document is configured with for one render call: the whole-document format settings from
+        /// <paramref name="config"/>, and the document information - a non-empty field of <see cref="PdfGenerateConfig.Metadata"/> wins over
+        /// the value extracted from the HTML, and a missing one falls back to it.
         /// </summary>
-        private static DateTimeOffset? ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata, PdfDocumentMetadata? overrides)
+        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlContainer container, PdfEmbeddingPlan embeddings)
         {
-            var info = pdfDocument.Info;
-            info.Producer = PeachPdfProductInfo.Generator;
-            info.Creator  = overrides?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator;
+            var metadata = container.DocumentMetadata;
+            var overrides = config.Metadata;
 
-            // A non-null field on the caller-supplied overrides wins over the HTML-extracted value; a
-            // null field falls back to the HTML metadata exactly as before (byte-identical when no
-            // overrides are supplied).
-            if (!string.IsNullOrEmpty(overrides?.Title))         info.Title    = overrides.Title;
-            else if (!string.IsNullOrEmpty(metadata?.Title))     info.Title    = metadata.Title;
-
-            if (!string.IsNullOrEmpty(overrides?.Author))        info.Author   = overrides.Author;
-            else if (!string.IsNullOrEmpty(metadata?.Author))    info.Author   = metadata.Author;
-
-            if (!string.IsNullOrEmpty(overrides?.Subject))       info.Subject  = overrides.Subject;
-            else if (!string.IsNullOrEmpty(metadata?.Subject))   info.Subject  = metadata.Subject;
-
-            if (!string.IsNullOrEmpty(overrides?.Keywords))      info.Keywords = overrides.Keywords;
-            else if (!string.IsNullOrEmpty(metadata?.Keywords))  info.Keywords = metadata.Keywords;
-
-            DateTimeOffset? resolvedCreationDate;
-            if (overrides?.CreationDate is { } overrideDate)
+            var options = new PeachDrawing.PDF.PdfComposerOptions
             {
-                resolvedCreationDate = overrideDate;
+                Title = !string.IsNullOrEmpty(overrides?.Title) ? overrides.Title : metadata?.Title,
+                Author = !string.IsNullOrEmpty(overrides?.Author) ? overrides.Author : metadata?.Author,
+                Subject = !string.IsNullOrEmpty(overrides?.Subject) ? overrides.Subject : metadata?.Subject,
+                Keywords = !string.IsNullOrEmpty(overrides?.Keywords) ? overrides.Keywords : metadata?.Keywords,
+                Creator = overrides?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator,
+                Producer = PeachPdfProductInfo.Generator,
+                // An HTML-extracted date (<meta name="date" content="2024-03-15">) carries no timezone of its own, so it is read as local
+                // time, which is also how the PDF date it is written as is interpreted.
+                CreationDate = overrides?.CreationDate
+                    ?? (metadata?.Date is { } htmlDate ? new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local)) : null),
+                // Resolved by SetContent: the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage.
+                Language = container.HtmlContainerInt.DocumentLanguage,
+                Version = config.PdfVersionExplicit ? config.PdfVersion.ToEngine() : null,
+                Conformance = config.PdfAConformance.ToEngine(),
+                XConformance = config.PdfXConformance.ToEngine(),
+                ColorOptions = config.ColorOptions.ToEngine(),
+                WriteXmpMetadata = config.EnableXmpMetadata,
+                FacturX = embeddings.FacturX,
+                Encryption = config.Encryption.ToEngine(),
+                CompressContentStreams = config.CompressContentStreams,
+                BrotliCompression = config.BrotliCompression,
+                JxlPassthrough = config.JxlPassthrough,
+                ImageCompression = config.ImageCompression.ToEngine(),
+                DownscaleImages = config.DownscaleImages,
+                DownscaleQuality = config.DownscaleQuality,
+                MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier,
+                FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten,
+                PortableColorFilters = config.PortableColorFilters,
+            };
 
-                // .LocalDateTime (not .DateTime) - PdfDocumentInformation.CreationDate's underlying
-                // PdfDate writes the DateTime's "zzz" offset directly (PdfDate.cs), and for a
-                // Kind=Unspecified DateTime (what .DateTime would return) .NET's "zzz" specifier uses
-                // the machine's CURRENT local offset regardless of what offset the value actually
-                // carried - silently mislabeling the instant whenever overrideDate's own offset isn't
-                // the local machine's (e.g. a UTC CreationDate on a non-UTC machine). .LocalDateTime
-                // converts to the equivalent Kind=Local DateTime first, so "zzz" then reports the
-                // correct offset for that same instant instead.
-                info.CreationDate = overrideDate.LocalDateTime;
-            }
-            else if (metadata?.Date is { } htmlDate)
-            {
-                // An HTML-extracted date (e.g. <meta name="date" content="2024-03-15">) carries no
-                // explicit timezone of its own - htmlDate.Kind is Unspecified. info.CreationDate is set
-                // to it completely unchanged (not wrapped/reinterpreted as UTC or converted at all),
-                // preserving this method's exact pre-XMP behavior for this path. To still get a
-                // DateTimeOffset for XMP that agrees with what PdfDate's "zzz" will independently
-                // compute for the very same Unspecified value (which treats it as local, per the same
-                // .NET rule noted above), explicitly mark it Local before deriving the offset here -
-                // this does not change htmlDate's own wall-clock digits, only which offset is attached.
-                resolvedCreationDate = new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local));
-                info.CreationDate = htmlDate;
-            }
-            else
-            {
-                resolvedCreationDate = null;
-            }
+            foreach (var property in overrides?.CustomXmpProperties ?? [])
+                options.CustomXmpProperties.Add(property);
 
-            return resolvedCreationDate;
+            foreach (var file in embeddings.Files)
+                options.EmbeddedFiles.Add(file);
+
+            return options;
         }
 
         /// <summary>

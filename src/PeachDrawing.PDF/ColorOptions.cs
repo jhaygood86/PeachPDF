@@ -1,31 +1,29 @@
-// An internal mirror of PeachPDF's public option type of the same name: PeachPDF maps its PdfGenerateConfig onto these.
 #nullable enable
 
-namespace PeachDrawing.PDF.Engine
+namespace PeachDrawing.PDF
 {
     /// <summary>
-    /// Print color-management options, set via <c>PdfGenerateConfig.ColorOptions</c>. Mirrors the
-    /// <c>PdfGenerateConfig.Metadata</c>/<c>PdfDocumentMetadata</c> nested-options pattern.
+    /// Print color-management options, set via <see cref="PdfComposerOptions.ColorOptions"/>.
     /// </summary>
     /// <remarks>
     /// Real, colorimetric ICC device-to-device conversion (<see cref="ConversionMode"/> beyond
     /// <see cref="ColorConversionMode.PreserveAsAuthored"/>, <see cref="RenderingIntent"/>,
     /// <see cref="UseBlackPointCompensation"/>) via PeachImage's <c>IccColorProfile.ConvertTo</c> - no
     /// naive RGB&lt;-&gt;CMYK formula is used anywhere. A color's source profile is always well-defined: an
-    /// RGB-authored color's source is the ICC-published sRGB profile PeachPDF already bundles for PDF/A
+    /// RGB-authored color's source is the ICC-published sRGB profile the writer already bundles for PDF/A
     /// (CSS colors are sRGB by definition outside of <c>device-cmyk()</c>); a <c>device-cmyk()</c>-authored
     /// color is uncalibrated ink by definition (CSS PaintColor 5 §6) and has no source profile unless
     /// <see cref="FallbackCmykProfile"/> supplies one, so without that set, a <c>device-cmyk()</c> color is
     /// left exactly as authored even under a conversion mode - there is nothing to convert *from*.
     /// </remarks>
-    internal sealed class ColorOptions
+    public sealed class ColorOptions
     {
         /// <summary>
         /// The ICC profile bytes to embed as the document's <c>/OutputIntents</c> destination profile, and
         /// (when <see cref="ConversionMode"/> is <see cref="ColorConversionMode.ConvertToOutputIntent"/>)
         /// the conversion target every color is converted into. Required when
-        /// <c>PdfGenerateConfig.PdfXConformance</c> is anything but <see cref="PdfXConformance.None"/>
-        /// - PeachPDF bundles no default press profile, unlike the sRGB profile it bundles for
+        /// <see cref="PdfComposerOptions.XConformance"/> is anything but <see cref="PdfXConformance.None"/>
+        /// - the writer bundles no default press profile, unlike the sRGB profile it bundles for
         /// <see cref="PdfAConformance"/>, since there is no single correct default for a print output
         /// intent. Under <see cref="PdfXConformance.X1a"/> this profile must itself be a CMYK
         /// profile (validated at generation time); <see cref="PdfXConformance.X3"/>/
@@ -37,7 +35,7 @@ namespace PeachDrawing.PDF.Engine
         /// A human-readable name for <see cref="OutputIntentProfile"/>'s intended output condition (e.g.
         /// <c>"Coated FOGRA39"</c>) - written as the output intent's <c>/OutputConditionIdentifier</c>/
         /// <c>/Info</c>. Required alongside <see cref="OutputIntentProfile"/> whenever
-        /// <c>PdfGenerateConfig.PdfXConformance</c> is not <see cref="PdfXConformance.None"/>.
+        /// <see cref="PdfComposerOptions.XConformance"/> is not <see cref="PdfXConformance.None"/>.
         /// </summary>
         public string? OutputIntentIdentifier { get; set; }
 
@@ -103,7 +101,7 @@ namespace PeachDrawing.PDF.Engine
     /// How to represent an achromatic (gray/black) RGB-authored color as CMYK - see
     /// <see cref="ColorOptions.BlackGeneration"/>.
     /// </summary>
-    internal enum ColorBlackGeneration
+    public enum ColorBlackGeneration
     {
         /// <summary>K-only: C=M=Y=0, K scaled to the source gray's darkness. Default.</summary>
         UseTrueBlack = 0,
@@ -119,10 +117,10 @@ namespace PeachDrawing.PDF.Engine
     /// <summary>
     /// How document colors should be converted for output - see <see cref="ColorOptions.ConversionMode"/>.
     /// Every non-<see cref="PreserveAsAuthored"/> mode requires the relevant destination ICC profile
-    /// property to be set (and parseable) - <c>PdfGenerator</c> validates this at generation time
+    /// property to be set (and parseable) - the composer validates this when the options are applied
     /// rather than discovering it deep in painting.
     /// </summary>
-    internal enum ColorConversionMode
+    public enum ColorConversionMode
     {
         /// <summary>
         /// Every color is written in whichever space it was authored/resolved in - RGB stays RGB,
@@ -148,7 +146,7 @@ namespace PeachDrawing.PDF.Engine
     /// <summary>
     /// An ICC rendering intent (ICC.1:2010 §7.2.15) - see <see cref="ColorOptions.RenderingIntent"/>.
     /// </summary>
-    internal enum ColorRenderingIntent
+    public enum ColorRenderingIntent
     {
         /// <summary>Compresses the whole source gamut into the destination's, preserving perceived relationships.</summary>
         Perceptual = 0,
