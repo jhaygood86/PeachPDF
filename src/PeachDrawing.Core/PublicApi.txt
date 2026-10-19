@@ -65,6 +65,7 @@ PeachDrawing.Core.Canvas : abstract class
   method abstract Void PushClipExclude(Rect rect)
   method abstract Void PushTransform(Matrix3x2 matrix)
   method abstract Void ReturnPreviousSmoothingMode(Object prevMode)
+  method virtual Boolean PaintRequiresTransparency(Action<Canvas> paint)
   method virtual CanvasLayer BeginLayer(LayerOptions options)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
@@ -83,6 +84,7 @@ PeachDrawing.Core.Canvas : abstract class
   property Matrix3x2 CurrentTransform { get; }
   property Object TileCacheOwner { get; }
   property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.Core.CanvasConstraintException : abstract class
 PeachDrawing.Core.CanvasLayer : sealed class
   ctor(Canvas canvas, Action complete)
   method virtual Void Dispose()

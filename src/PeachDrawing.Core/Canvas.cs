@@ -438,6 +438,16 @@ namespace PeachDrawing.Core
         /// </summary>
         public virtual bool FlattensTransparency => false;
 
+        /// <summary>
+        /// Whether painting through <paramref name="paint"/> would need transparency (a transparency group, a soft mask, a
+        /// constant alpha) on this canvas. A canvas whose output forbids transparency (PDF/A-1, PDF/X-1a/X-3) answers by
+        /// running <paramref name="paint"/> against a scratch target of its own that is never saved, so the answer comes from
+        /// the same code that decides what the canvas emits. A canvas with no notion of forbidden transparency - a raster
+        /// surface, say - uses this default and answers <c>false</c> without running <paramref name="paint"/>.
+        /// </summary>
+        /// <param name="paint">paints the content in question onto the canvas it is given</param>
+        public virtual bool PaintRequiresTransparency(Action<Canvas> paint) => false;
+
 
         /// <summary>
         /// How much the transforms pushed so far magnify a unit along each axis: the lengths of the images of the unit x and y

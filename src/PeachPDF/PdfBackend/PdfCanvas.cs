@@ -29,7 +29,7 @@ namespace PeachPDF.PdfBackend
     /// <summary>
     /// Adapter for WinForms Graphics for core.
     /// </summary>
-    internal sealed class PdfCanvas : Canvas, ITransparencyProbeSource
+    internal sealed class PdfCanvas : Canvas
     {
         /// <summary>
         /// The wrapped WinForms graphics object
@@ -419,7 +419,8 @@ namespace PeachPDF.PdfBackend
 
         private TransparencyProbe? _probe;
 
-        public TransparencyProbe CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_renderContext, PixelsPerPoint);
+        public override bool PaintRequiresTransparency(Action<Canvas> paint) =>
+            (_probe ??= new TransparencyProbe(_renderContext, PixelsPerPoint)).Requires(paint);
 
         public override void DrawRaster(RasterSurface surface)
         {
