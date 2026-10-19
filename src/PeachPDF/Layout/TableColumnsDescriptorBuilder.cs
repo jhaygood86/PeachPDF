@@ -1,5 +1,4 @@
-using PeachBrackets.Html.Dom;
-using PeachBrackets.Html.Utils;
+using PeachBrackets.Building;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,23 +11,23 @@ namespace PeachPDF.Layout
     /// only resolved into a real <c>width</c> by <see cref="ResolveRelativeColumnWidths"/>, which
     /// <see cref="TableDescriptorBuilder.Columns"/> calls once the whole handler has returned.
     /// </summary>
-    internal sealed class TableColumnsDescriptorBuilder(CssBox colGroupBox, CssPropertyFactory properties) : ITableColumnsDescriptor
+    internal sealed class TableColumnsDescriptorBuilder(DocumentNode colGroupBox) : ITableColumnsDescriptor
     {
-        private readonly List<(CssBox Box, double Weight)> _relativeColumns = [];
+        private readonly List<(DocumentNode Box, double Weight)> _relativeColumns = [];
         private readonly List<PdfLength> _fixedColumnWidths = [];
 
         public ITableColumnsDescriptor RelativeColumn(double weight = 1)
         {
-            var column = CssPropertyFactory.CreateAnonymousBox(colGroupBox);
-            properties.Set(column, "display", "table-column");
+            var column = colGroupBox.AppendBlock();
+            column.SetStyle("display", "table-column");
             _relativeColumns.Add((column, weight));
             return this;
         }
 
         public ITableColumnsDescriptor FixedColumn(PdfLength width)
         {
-            var column = CssPropertyFactory.CreateAnonymousBox(colGroupBox);
-            properties.Set(column, "display", "table-column");
+            var column = colGroupBox.AppendBlock();
+            column.SetStyle("display", "table-column");
 
             // CssLayoutEngineTable.TryGetColumnElementWidth only reads a <col>'s width when it's a
             // percentage or a pixel/unitless length - a pre-existing, deliberate limitation of that one
@@ -36,7 +35,7 @@ namespace PeachPDF.Layout
             // Converting to the equivalent pixel length here means a FixedColumn declared in any
             // PdfLength unit still actually constrains the column, without touching that shared reader
             // (which auto-layout tables also depend on).
-            properties.Set(column, "width", PdfLength.Pixels(width.ToPoints() / 0.75));
+            column.SetStyle("width", PdfLength.Pixels(width.ToPoints() / 0.75));
             _fixedColumnWidths.Add(width);
             return this;
         }
@@ -51,7 +50,7 @@ namespace PeachPDF.Layout
             {
                 foreach (var (column, weight) in _relativeColumns)
                 {
-                    properties.Set(column, "width", PdfLength.Percent(weight / totalWeight * 100));
+                    column.SetStyle("width", PdfLength.Percent(weight / totalWeight * 100));
                 }
                 return;
             }

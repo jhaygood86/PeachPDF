@@ -1,6 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
+using PeachBrackets;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine;
@@ -48,8 +49,8 @@ namespace PeachPDF.Tests.TestSupport
     {
         /// <summary>
         /// Lays <paramref name="html"/> out for <paramref name="config"/>, mirroring
-        /// <c>PdfGenerator.AddPdfPages</c>' page-size resolution (including its in-place <c>@page</c>
-        /// correction inside <c>SetContent</c>/<c>SetHtml</c>) and its <c>MaxSize</c>/<c>PerformLayout</c> pair.
+        /// <c>PdfGenerator.AddPdfPages</c>' page-size resolution (including the in-place <c>@page</c>
+        /// correction done while the document loads) and its <c>MaxSize</c>/layout pair.
         /// </summary>
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
@@ -63,74 +64,48 @@ namespace PeachPDF.Tests.TestSupport
                 await configureRenderContext(renderContext);
             }
 
-            var orgPageSize = config.PageSize != PageSize.Undefined
-                ? PageSizeConverter.ToSize(config.PageSize)
-                : new Size(config.ManualPageWidth, config.ManualPageHeight);
+            var document = await HtmlDocument.LoadAsync(html, renderContext, PdfGenerator.ToDocumentOptions(config, SheetSize(config)));
 
-            if (config.PageOrientation == PageOrientation.Landscape)
-            {
-                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
-            }
+            var contentArea = document.ContentArea;
+            using var measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
+            await document.LayoutAsync(measure);
 
-            var container = new HtmlContainer(renderContext);
-
-            await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
-
-            using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, 
-                container.PageSize);
-
-            container.MaxSize = new Size(container.PageSize.Width, 0);
-
-            await container.PerformLayout(measure);
-
-            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt);
+            return (document.Container.Root!, document.Container);
         }
 
         /// <summary>
         /// Lays <paramref name="html"/> out exactly like <see cref="LayoutAsync"/>, but also models the
         /// <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> arm <see cref="LayoutAsync"/>'s own doc comment says
-        /// it deliberately skips: the measuring layout pass, and the second <c>SetContent</c>/layout pass
-        /// that <c>PdfGenerator.AddPdfPages</c> only runs when <see cref="PdfGenerator.NeedsRescale"/>
-        /// says the measured content actually needs a different <c>PixelsPerPoint</c> than the one the
-        /// measuring pass already used. Returns whether that second pass ran, so a test can assert
-        /// directly that ordinary non-overflowing content skips it (the common case a caller pays for on
-        /// every <c>ShrinkToFit</c> render otherwise) without duplicating <c>AddPdfPages</c>' own
-        /// decision inside the assertion itself.
+        /// it deliberately skips: the measuring layout pass, and the reload that <c>PdfGenerator.AddPdfPages</c>
+        /// only runs when <see cref="PdfGenerator.NeedsRescale"/> says the measured content actually needs a
+        /// different <c>PixelsPerPoint</c> than the one the measuring pass already used. Returns whether that
+        /// second pass ran, so a test can assert directly that ordinary non-overflowing content skips it (the
+        /// common case a caller pays for on every <c>ShrinkToFit</c> render otherwise) without duplicating
+        /// <c>AddPdfPages</c>' own decision inside the assertion itself.
         /// </summary>
         internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
             string html, PdfGenerateConfig config)
         {
             var renderContext = new HtmlRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var options = PdfGenerator.ToDocumentOptions(config, SheetSize(config));
 
-            var orgPageSize = config.PageSize != PageSize.Undefined
-                ? PageSizeConverter.ToSize(config.PageSize)
-                : new Size(config.ManualPageWidth, config.ManualPageHeight);
-
-            if (config.PageOrientation == PageOrientation.Landscape)
-            {
-                orgPageSize = new Size(orgPageSize.Height, orgPageSize.Width);
-            }
-
-            var container = new HtmlContainer(renderContext);
-
-            await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
-
-            var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, container.PageSize);
+            var document = await HtmlDocument.LoadAsync(html, renderContext, options);
+            var contentArea = document.ContentArea;
+            var measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0
-                ? config.MinContentWidth / container.PageSize.Width
+                ? config.MinContentWidth / contentArea.Width
                 : basePixelsPerPoint;
             var pixelsPerPoint = minPixelsPerPoint;
             var needsRescale = true;
 
             if (config.ScaleToPageSize || config.ShrinkToFit)
             {
-                container.MaxSize = new Size(container.PageSize.Width, 0);
-                await container.PerformLayout(measure);
+                await document.LayoutAsync(measure);
 
-                var actualWidth = container.ActualSize.Width;
-                var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / container.PageSize.Width);
+                var actualWidth = document.ContentExtent.Width;
+                var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / contentArea.Width);
 
                 if (candidatePixelsPerPoint < minPixelsPerPoint)
                 {
@@ -148,22 +123,46 @@ namespace PeachPDF.Tests.TestSupport
                     renderContext.ClearFontCache();
                     renderContext.PixelsPerPoint = effectivePixelsPerPoint;
 
-                    await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
+                    document.Dispose();
+                    document = await HtmlDocument.LoadAsync(html, renderContext, options);
 
                     measure.Dispose();
-                    measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, container.PageSize);
+                    contentArea = document.ContentArea;
+                    measure = PdfCanvas.CreateMeasuring(renderContext, contentArea.Width, contentArea.Height);
                 }
             }
 
             if (needsRescale)
             {
-                container.MaxSize = new Size(container.PageSize.Width, 0);
-                await container.PerformLayout(measure);
+                await document.LayoutAsync(measure);
             }
 
             measure.Dispose();
 
-            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt, needsRescale, renderContext.PixelsPerPoint);
+            return (document.Container.Root!, document.Container, needsRescale, renderContext.PixelsPerPoint);
+        }
+
+        internal static HtmlDocumentOptions ZeroMargins() => new()
+        {
+            PageWidthPoints = 595,
+            PageHeightPoints = 842,
+            MarginTopPoints = 0,
+            MarginRightPoints = 0,
+            MarginBottomPoints = 0,
+            MarginLeftPoints = 0,
+        };
+
+        /// <summary>The top margin the document resolved, in true CSS points whatever the render context's layout scale.</summary>
+        internal static double MarginTopPoints(HtmlDocument document, HtmlRenderContext renderContext) =>
+            document.Container.MarginTop / renderContext.PixelsPerPoint;
+
+        private static Size SheetSize(PdfGenerateConfig config)
+        {
+            var sheet = config.PageSize != PageSize.Undefined
+                ? PageSizeConverter.ToSize(config.PageSize)
+                : new Size(config.ManualPageWidth, config.ManualPageHeight);
+
+            return config.PageOrientation == PageOrientation.Landscape ? new Size(sheet.Height, sheet.Width) : sheet;
         }
     }
 }

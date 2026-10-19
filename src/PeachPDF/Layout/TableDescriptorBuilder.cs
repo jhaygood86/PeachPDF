@@ -1,5 +1,4 @@
-using PeachBrackets.Html.Dom;
-using PeachBrackets.Html.Utils;
+using PeachBrackets.Building;
 using System;
 
 namespace PeachPDF.Layout
@@ -7,19 +6,19 @@ namespace PeachPDF.Layout
     /// <summary>
     /// Builds one <see cref="IContainer.Table"/> call's column/header/footer/row children of
     /// <paramref name="tableBox"/> (a <c>display: table</c> box). Every child is classified purely by its
-    /// own <c>display</c> value (<see cref="CssLayoutEngineTable"/> scans <c>tableBox.Boxes</c> once,
+    /// own <c>display</c> value (<c>CssLayoutEngineTable</c> scans <c>tableBox.Boxes</c> once,
     /// switching on each child's resolved display) - unlike HTML's own anonymous-table-object
     /// construction, there's no positional requirement (colgroup need not precede rows), so each builder
     /// method below is independent of the others' call order.
     /// </summary>
-    internal sealed class TableDescriptorBuilder(CssBox tableBox, CssPropertyFactory properties) : ITableDescriptor
+    internal sealed class TableDescriptorBuilder(DocumentNode tableBox) : ITableDescriptor
     {
         public void Columns(Action<ITableColumnsDescriptor> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
 
-            var colGroupBox = CssPropertyFactory.CreateAnonymousBox(tableBox);
-            properties.Set(colGroupBox, "display", "table-column-group");
+            var colGroupBox = tableBox.AppendBlock();
+            colGroupBox.SetStyle("display", "table-column-group");
 
             // table-layout: fixed makes each <col>'s own width authoritative (CSS Tables §3.3) instead of
             // the auto algorithm recomputing column widths from cell content - but CssLayoutEngineTable
@@ -28,10 +27,10 @@ namespace PeachPDF.Layout
             // distribute among columns in the first place). A declarative table with explicit columns has
             // no other way to state that width, so default it to 100% of the available space - the same
             // "fill the container" default a QuestPDF-style table is expected to have.
-            properties.Set(tableBox, "table-layout", "fixed");
-            properties.Set(tableBox, "width", "100%");
+            tableBox.SetStyle("table-layout", "fixed");
+            tableBox.SetStyle("width", "100%");
 
-            var columns = new TableColumnsDescriptorBuilder(colGroupBox, properties);
+            var columns = new TableColumnsDescriptorBuilder(colGroupBox);
             handler(columns);
             columns.ResolveRelativeColumnWidths();
         }
@@ -52,19 +51,19 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(handler);
 
-            var row = CssPropertyFactory.CreateAnonymousBox(tableBox);
-            properties.Set(row, "display", "table-row");
-            handler(new TableRowDescriptorBuilder(row, properties));
+            var row = tableBox.AppendBlock();
+            row.SetStyle("display", "table-row");
+            handler(new TableRowDescriptorBuilder(row));
         }
 
         private void BuildRowGroup(string groupDisplay, Action<ITableRowDescriptor> handler)
         {
-            var group = CssPropertyFactory.CreateAnonymousBox(tableBox);
-            properties.Set(group, "display", groupDisplay);
+            var group = tableBox.AppendBlock();
+            group.SetStyle("display", groupDisplay);
 
-            var row = CssPropertyFactory.CreateAnonymousBox(group);
-            properties.Set(row, "display", "table-row");
-            handler(new TableRowDescriptorBuilder(row, properties));
+            var row = group.AppendBlock();
+            row.SetStyle("display", "table-row");
+            handler(new TableRowDescriptorBuilder(row));
         }
     }
 }

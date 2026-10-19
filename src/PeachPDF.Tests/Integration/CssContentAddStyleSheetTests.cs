@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Integration
         {
             var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
-            await container.SetHtml(html, cssContent.CssData);
+            await container.SetHtml(html, cssContent.StyleSheet.Data);
 
             var size = new Size(595, 842);
             container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);

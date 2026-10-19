@@ -1,4 +1,5 @@
 using PeachPDF.Rendering;
+using PeachBrackets.Html.Pages;
 using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
@@ -242,7 +243,7 @@ namespace PeachPDF.Tests.Integration
             var g = new RecordingGraphics(new HtmlRenderContext());
             foreach (var area in areas)
             {
-                PdfGenerator.PaintFootnoteArea(g, new HtmlRenderContext(), container, area);
+                PagePainter.PaintFootnoteArea(g, new HtmlRenderContext(), container, area);
             }
 
             var dividers = g.Log.Where(op => op.Kind == PaintOpKind.FillRect).ToList();

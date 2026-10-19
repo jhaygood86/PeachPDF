@@ -1,8 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using PeachDrawing.Core;
-using PeachBrackets.Html;
-using PeachBrackets.Html.Parse;
+using PeachBrackets.Building;
 
 namespace PeachPDF
 {
@@ -13,16 +11,12 @@ namespace PeachPDF
     /// </summary>
     public class PeachPdfCssContent
     {
-        private readonly CssData _cssData;
-        private readonly RenderContext _renderContext;
-
-        internal PeachPdfCssContent(CssData cssData, RenderContext renderContext)
+        internal PeachPdfCssContent(StyleSheet styleSheet)
         {
-            _cssData = cssData;
-            _renderContext = renderContext;
+            StyleSheet = styleSheet;
         }
 
-        internal CssData CssData => _cssData;
+        internal StyleSheet StyleSheet { get; }
 
         /// <summary>
         /// Parses an additional stylesheet and merges its rules into this content's underlying style
@@ -35,20 +29,7 @@ namespace PeachPDF
         /// document context here), the same limitation as <see cref="PdfGenerator.ParseStyleSheet(string, bool)"/>.
         /// </remarks>
         /// <param name="stylesheet">the stylesheet source to parse and add</param>
-        public async Task AddStyleSheet(string stylesheet)
-        {
-            if (string.IsNullOrEmpty(stylesheet))
-            {
-                return;
-            }
-
-            var parser = new CssParser(_renderContext, null);
-            await parser.ParseStyleSheet(_cssData, stylesheet);
-
-            // The selector index is built lazily and cached; adding a stylesheet after it has been
-            // queried would otherwise leave the new rules invisible to matching.
-            _cssData.InvalidateIndex();
-        }
+        public Task AddStyleSheet(string stylesheet) => StyleSheet.AddAsync(stylesheet);
 
         /// <summary>
         /// Genuinely zero-copy counterpart of <see cref="AddStyleSheet(string)"/> - see
@@ -57,17 +38,6 @@ namespace PeachPDF
         /// this method's own <see langword="await"/>), is what makes this possible.
         /// </summary>
         /// <param name="stylesheet">the stylesheet source to parse and add</param>
-        public async Task AddStyleSheet(ReadOnlyMemory<char> stylesheet)
-        {
-            if (stylesheet.IsEmpty)
-            {
-                return;
-            }
-
-            var parser = new CssParser(_renderContext, null);
-            await parser.ParseStyleSheet(_cssData, stylesheet);
-
-            _cssData.InvalidateIndex();
-        }
+        public Task AddStyleSheet(ReadOnlyMemory<char> stylesheet) => StyleSheet.AddAsync(stylesheet);
     }
 }

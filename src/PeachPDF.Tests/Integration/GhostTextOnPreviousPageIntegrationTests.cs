@@ -1,3 +1,4 @@
+using PeachBrackets;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -35,12 +36,11 @@ namespace PeachPDF.Tests.Integration
             // whenever actual content width differs even slightly from the nominal page width - here
             // simulated directly so the test doesn't depend on triggering that heuristic exactly.
             var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.5 };
-            using var container = new HtmlContainer(renderContext);
-            await container.SetHtml(html, null);
+            using var document = await HtmlDocument.LoadAsync(html, renderContext, PdfGeneratorLayoutHarness.ZeroMargins());
 
-            // 15mm = 42.51968503937008pt exactly - must read back as true CSS points via the public
-            // wrapper regardless of the adapter's PixelsPerPoint.
-            Assert.Equal(42.51968503937008, container.MarginTop, 0.0001);
+            // 15mm = 42.51968503937008pt exactly - must read back as true CSS points
+            // regardless of the adapter's PixelsPerPoint.
+            Assert.Equal(42.51968503937008, PdfGeneratorLayoutHarness.MarginTopPoints(document, renderContext), 0.0001);
         }
 
         [Fact]
@@ -59,16 +59,15 @@ namespace PeachPDF.Tests.Integration
             // One container with PixelsPerPoint left at its default (1.0), one forced away from it -
             // both must derive the identical true-points page-content-band height.
             var renderContextDefault = new HtmlRenderContext();
-            using var containerDefault = new HtmlContainer(renderContextDefault);
             var orgPageSize = PeachPDF.PageSizeConverter.ToSize(config.PageSize);
-            await PdfGenerator.SetContent(containerDefault, config, html, null, orgPageSize);
+            var options = PdfGenerator.ToDocumentOptions(config, orgPageSize);
+            using var documentDefault = await HtmlDocument.LoadAsync(html, renderContextDefault, options);
 
             var renderContextScaled = new HtmlRenderContext { PixelsPerPoint = 1.5 };
-            using var containerScaled = new HtmlContainer(renderContextScaled);
-            await PdfGenerator.SetContent(containerScaled, config, html, null, orgPageSize);
+            using var documentScaled = await HtmlDocument.LoadAsync(html, renderContextScaled, options);
 
-            Assert.Equal(containerDefault.PageSize.Height, containerScaled.PageSize.Height, 0.0001);
-            Assert.Equal(containerDefault.MarginTop, containerScaled.MarginTop, 0.0001);
+            Assert.Equal(documentDefault.ContentArea.Height, documentScaled.ContentArea.Height, 0.0001);
+            Assert.Equal(PdfGeneratorLayoutHarness.MarginTopPoints(documentDefault, renderContextDefault), PdfGeneratorLayoutHarness.MarginTopPoints(documentScaled, renderContextScaled), 0.0001);
         }
 
         // Regression test for a bug the post-change review caught in the fix above: ParseLength's
@@ -93,19 +92,16 @@ namespace PeachPDF.Tests.Integration
             // A percentage @page margin resolves against HtmlContainer.PageSize.Width, which must
             // already be set (mirroring how a real PdfGenerator caller only sees percentage margins
             // resolve meaningfully once PageSize carries a real page width, not its unset 0 default).
-            var pageSize = new PeachDrawing.Core.Size(595, 842);
-
             var renderContextDefault = new HtmlRenderContext();
-            using var containerDefault = new HtmlContainer(renderContextDefault) { PageSize = pageSize };
-            await containerDefault.SetHtml(html, null);
+            using var documentDefault = await HtmlDocument.LoadAsync(html, renderContextDefault, PdfGeneratorLayoutHarness.ZeroMargins());
 
             var renderContextScaled = new HtmlRenderContext { PixelsPerPoint = 1.5 };
-            using var containerScaled = new HtmlContainer(renderContextScaled) { PageSize = pageSize };
-            await containerScaled.SetHtml(html, null);
+            using var documentScaled = await HtmlDocument.LoadAsync(html, renderContextScaled, PdfGeneratorLayoutHarness.ZeroMargins());
 
-            Assert.True(containerDefault.MarginTop > 0,
+            var marginDefault = PdfGeneratorLayoutHarness.MarginTopPoints(documentDefault, renderContextDefault);
+            Assert.True(marginDefault > 0,
                 "test setup should resolve a real, non-zero percentage margin");
-            Assert.Equal(containerDefault.MarginTop, containerScaled.MarginTop, 0.0001);
+            Assert.Equal(marginDefault, PdfGeneratorLayoutHarness.MarginTopPoints(documentScaled, renderContextScaled), 0.0001);
         }
     }
 
@@ -242,5 +238,6 @@ namespace PeachPDF.Tests.Integration
             }
             return null;
         }
+
     }
 }

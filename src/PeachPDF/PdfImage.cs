@@ -1,4 +1,5 @@
 using PeachDrawing.Core;
+using PeachBrackets.Building;
 using PeachBrackets.Svg;
 using System;
 using System.IO;
@@ -29,7 +30,7 @@ namespace PeachPDF
         // XObjects are written against one specific PdfDocument.
         private RenderContext? _resolvedByRenderContext;
         private Image? _resolvedImage;
-        private SvgDocument? _resolvedSvgDocument;
+        private SvgImage? _resolvedSvgDocument;
 
         private PdfImage(byte[]? bytes, string? filePath)
         {
@@ -68,7 +69,7 @@ namespace PeachPDF
         /// lazily, here, on first resolution - not at <see cref="FromFile"/> call time, since no adapter
         /// exists yet to decode with then.
         /// </summary>
-        internal (Image? Image, SvgDocument? SvgDocument) Resolve(RenderContext renderContext)
+        internal (Image? Image, SvgImage? SvgDocument) Resolve(RenderContext renderContext)
         {
             if (_resolvedByRenderContext == renderContext)
             {
@@ -88,7 +89,7 @@ namespace PeachPDF
                 // ("Data at the root level is invalid").
                 using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
                 var markup = reader.ReadToEnd();
-                _resolvedSvgDocument = SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(markup)), renderContext);
+                _resolvedSvgDocument = SvgImage.Parse(markup, renderContext);
                 _resolvedImage = null;
             }
             else

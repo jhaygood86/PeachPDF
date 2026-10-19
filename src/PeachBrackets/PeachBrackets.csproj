@@ -54,9 +54,7 @@
 		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<InternalsVisibleTo Include="PeachPDF" />
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
-		<InternalsVisibleTo Include="PeachPDF.Cli" />
 	</ItemGroup>
 	<!--
 		css-properties.json is the source of truth CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs

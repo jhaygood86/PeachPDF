@@ -1,4 +1,5 @@
 using PeachPDF.Rendering;
+using PeachBrackets.Html.Pages;
 using PeachPDF;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
@@ -484,7 +485,7 @@ namespace PeachPDF.Tests.Integration
             // sentinel, see MarginBoxRenderer.PaintBorder's remarks) is carried through as-is; it's
             // PdfGenerator.ResolveFootnoteDividerColor, not this method, that turns it into black -
             // moot here anyway, since a zero-thickness divider never paints regardless of its color.
-            Assert.Equal(PaintColor.Black, PdfGenerator.ResolveFootnoteDividerColor(rule.DividerColor, new HtmlRenderContext()));
+            Assert.Equal(PaintColor.Black, PagePainter.ResolveFootnoteDividerColor(rule.DividerColor, new HtmlRenderContext()));
         }
 
         [Fact]
@@ -771,7 +772,7 @@ namespace PeachPDF.Tests.Integration
         {
             var renderContext = new HtmlRenderContext();
 
-            var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, renderContext);
+            var resolved = PagePainter.ResolveFootnoteDividerColor(declared, renderContext);
 
             Assert.Equal(PaintColor.FromArgb(r, g, b), resolved);
         }
@@ -787,7 +788,7 @@ namespace PeachPDF.Tests.Integration
             var dividerRect = new Rect(10, 20, 300, 3);
             var footnoteArea = new FootnoteAreaFragment(dividerRect, [], "rgb(0, 128, 0)");
 
-            PdfGenerator.PaintFootnoteArea(g, new HtmlRenderContext(), container, footnoteArea);
+            PagePainter.PaintFootnoteArea(g, new HtmlRenderContext(), container, footnoteArea);
 
             var opKinds = g.Log.Select(op => op.Kind).ToList();
             Assert.Equal(
@@ -805,7 +806,7 @@ namespace PeachPDF.Tests.Integration
             var g = new RecordingGraphics(new HtmlRenderContext());
             var footnoteArea = new FootnoteAreaFragment(new Rect(10, 20, 300, 0), [], null);
 
-            PdfGenerator.PaintFootnoteArea(g, new HtmlRenderContext(), container, footnoteArea);
+            PagePainter.PaintFootnoteArea(g, new HtmlRenderContext(), container, footnoteArea);
 
             Assert.DoesNotContain(g.Log, op => op.Kind == PaintOpKind.FillRect);
         }

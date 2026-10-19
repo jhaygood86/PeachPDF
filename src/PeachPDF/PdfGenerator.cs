@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachBrackets;
+using PeachBrackets.Building;
 using PeachBrackets.Annotations;
 using PeachPDF.Rendering;
 using PeachDrawing.Text;
@@ -85,8 +86,8 @@ namespace PeachPDF
         /// <param name="toFamily">the font family to replace with</param>
         public void AddFontFamilyMapping(string fromFamily, string toFamily)
         {
-            ArgChecker.AssertArgNotNullOrEmpty(fromFamily, "fromFamily");
-            ArgChecker.AssertArgNotNullOrEmpty(toFamily, "toFamily");
+            ArgumentException.ThrowIfNullOrEmpty(fromFamily);
+            ArgumentException.ThrowIfNullOrEmpty(toFamily);
 
             _renderContext.AddFontFamilyMapping(fromFamily, toFamily);
         }
@@ -132,8 +133,7 @@ namespace PeachPDF
         /// <returns>the parsed css data</returns>
         public async Task<PeachPdfCssContent> ParseStyleSheet(string stylesheet, bool combineWithDefault = true)
         {
-            var cssData = await CssData.Parse(_renderContext, stylesheet, combineWithDefault);
-            return new PeachPdfCssContent(cssData, _renderContext);
+            return new PeachPdfCssContent(await StyleSheet.ParseAsync(_renderContext, stylesheet, combineWithDefault));
         }
 
         /// <summary>
@@ -147,8 +147,7 @@ namespace PeachPDF
         /// <returns>the parsed css data</returns>
         public async Task<PeachPdfCssContent> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
-            var cssData = await CssData.Parse(_renderContext, stylesheet, combineWithDefault);
-            return new PeachPdfCssContent(cssData, _renderContext);
+            return new PeachPdfCssContent(await StyleSheet.ParseAsync(_renderContext, stylesheet, combineWithDefault));
         }
 
         /// <summary>
@@ -273,79 +272,74 @@ namespace PeachPDF
 
             html ??= await _renderContext.NetworkLoader.GetPrimaryContents();
 
-            using var container = new HtmlContainer(_renderContext);
+            var options = ToDocumentOptions(config, orgPageSize);
+            options.StyleSheet = cssData?.StyleSheet;
 
-            await SetContent(container, config, html, cssData, orgPageSize);
+            var htmlDocument = await HtmlDocument.LoadAsync(html, _renderContext, options);
+            PdfCanvas? measure = null;
 
-            // DomParser.CascadeApplyPageStyles (run inside SetContent's call to SetHtml, above) already
-            // corrects the container's own PageSize/margins in place when the document's @page { size }
-            // differs from orgPageSize (issue #582 - it runs before the expensive cascade/correction
-            // passes within the same parse, so nothing needs to be discarded and re-parsed). Keep this
-            // local variable in sync with that correction, since it - not container.PageSize - is what
-            // the measure/rescale pass below and each page's dimensions (page.Width/page.Height,
-            // MarginBoxRenderer, HandleLinks) use.
-            if (container.CssPageSize.HasValue)
+            try
             {
-                orgPageSize = container.CssPageSize.Value;
-            }
+                // An @page { size } rule in the document corrects the page size while the document is loaded, so the content area is read back
+                // from the document rather than derived from the configured size.
+                var contentArea = htmlDocument.ContentArea;
+                measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
 
-            var measure = PdfCanvas.CreateMeasuring(_renderContext, container.PageSize.Width, container.PageSize.Height);
+                var basePixelsPerPoint = config.PixelsPerInch / 72d;
+                var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / contentArea.Width : basePixelsPerPoint;
+                var pixelsPerPoint = minPixelsPerPoint;
 
-            var basePixelsPerPoint = config.PixelsPerInch / 72d;
-            var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
-            var pixelsPerPoint = minPixelsPerPoint;
+                // Whether the document has already been laid out at its final scale. A plain render lays out once, below. For
+                // ShrinkToFit/ScaleToPageSize the measurement pass is itself a layout, and is kept when no rescale turns out to be needed.
+                var laidOut = false;
 
-            // Tracks whether the final layout pass below still needs to run: it always does for a
-            // plain (non-shrink) render, since it's the only layout pass in that case. For
-            // ShrinkToFit/ScaleToPageSize it's set to false when the measurement pass already
-            // determined no rescale is needed, so the font-cache clear, the full HTML/CSS re-parse,
-            // and this pass aren't repeated against output that would come out byte-for-byte
-            // identical to what the measurement pass already produced (see NeedsRescale below).
-            var needsRescale = true;
-
-            if (config.ScaleToPageSize || config.ShrinkToFit)
-            {
-                container.MaxSize = new Size(container.PageSize.Width, 0);
-                await container.PerformLayout(measure);
-
-                var actualWidth = container.ActualSize.Width;
-
-                var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / container.PageSize.Width);
-
-                if (candidatePixelsPerPoint < minPixelsPerPoint)
+                if (config.ScaleToPageSize || config.ShrinkToFit)
                 {
-                    candidatePixelsPerPoint = minPixelsPerPoint;
+                    await htmlDocument.LayoutAsync(measure);
+
+                    var actualWidth = htmlDocument.ContentExtent.Width;
+
+                    var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / contentArea.Width);
+
+                    if (candidatePixelsPerPoint < minPixelsPerPoint)
+                    {
+                        candidatePixelsPerPoint = minPixelsPerPoint;
+                    }
+
+                    var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
+                        ? candidatePixelsPerPoint
+                        : _renderContext.PixelsPerPoint;
+
+                    if (NeedsRescale(_renderContext.PixelsPerPoint, effectivePixelsPerPoint))
+                    {
+                        _renderContext.ClearFontCache();
+                        _renderContext.PixelsPerPoint = effectivePixelsPerPoint;
+
+                        htmlDocument.Dispose();
+                        htmlDocument = await HtmlDocument.LoadAsync(html, _renderContext, options);
+
+                        measure.Dispose();
+                        contentArea = htmlDocument.ContentArea;
+                        measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
+                    }
+                    else
+                    {
+                        laidOut = true;
+                    }
                 }
 
-                var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
-                    ? candidatePixelsPerPoint
-                    : _renderContext.PixelsPerPoint;
-
-                needsRescale = NeedsRescale(_renderContext.PixelsPerPoint, effectivePixelsPerPoint);
-
-                if (needsRescale)
+                if (!laidOut)
                 {
-                    _renderContext.ClearFontCache();
-                    _renderContext.PixelsPerPoint = effectivePixelsPerPoint;
-
-                    await SetContent(container, config, html, cssData, orgPageSize);
-
-                    measure?.Dispose();
-                    measure = PdfCanvas.CreateMeasuring(_renderContext, container.PageSize.Width, container.PageSize.Height);
+                    await htmlDocument.LayoutAsync(measure);
                 }
-            }
 
-            if (needsRescale)
+                await RenderPagesCore(document, htmlDocument, config);
+            }
+            finally
             {
-                container.MaxSize = new Size(container.PageSize.Width, 0);
-
-                // layout the HTML with the page width restriction to know how many pages are required
-                await container.PerformLayout(measure);
+                measure?.Dispose();
+                htmlDocument.Dispose();
             }
-
-            await RenderPagesCore(document, container, config);
-
-            measure?.Dispose();
         }
 
         /// <summary>
@@ -402,35 +396,22 @@ namespace PeachPDF
             var documentBuilder = new DocumentBuilder();
             handler(documentBuilder);
 
-            var properties = new CssPropertyFactory(_renderContext);
+            var buildContext = new DocumentBuildContext(_renderContext);
 
             foreach (var pageHandler in documentBuilder.PageHandlers)
             {
-                await AddDeclarativePage(document, pageHandler, config, properties, documentBuilder.DocumentStylesheet);
+                await AddDeclarativePage(document, pageHandler, config, buildContext, documentBuilder.DocumentStylesheet);
             }
         }
 
         /// <summary>
-        /// Builds, lays out and renders exactly one <see cref="IDocumentBuilder.Page"/> call's own content
-        /// as one or more physical PDF pages appended to <paramref name="document"/> - mirrors
-        /// <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>'s
-        /// own shape (resolve page geometry, populate the container, lay out, then
-        /// <see cref="RenderPagesCore"/>), but populates the container from an already-built
-        /// <see cref="CssBox"/> tree (<see cref="HtmlContainer.SetDeclarativeRoot"/>) instead of parsing
-        /// HTML. Each <see cref="IDocumentBuilder.Page"/> call is independent - its own page size/margins,
-        /// its own <see cref="HtmlContainer"/>, its own layout pass - exactly like a separate
-        /// <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>
-        /// call appending to the same document would be.
+        /// Builds one declarative page's tree, lays it out and renders it. The tree is built in code (see <c>PeachBrackets.Building</c>), so there
+        /// is no HTML to parse: the style sheet, the page's own margin boxes and the geometry its builder fixed explicitly go to the document as given.
         /// </summary>
-        private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, CssPropertyFactory properties, PeachPdfCssContent? stylesheet)
+        private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, DocumentBuildContext context, PeachPdfCssContent? stylesheet)
         {
-            // The factory is shared by every page of the document, and the fragments this page's builder
-            // callback splices deposit their display: contents shells on it - only this page's, so the
-            // previous page's (which belong to a container already disposed) must not come along.
-            properties.DisplayContentsShells.Clear();
-
-            var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
-            ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
+            var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, context);
+            var page = pageDescriptor.Page;
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
@@ -447,111 +428,70 @@ namespace PeachPDF
             _renderContext.PixelsPerPoint = config.PixelsPerInch / 72d;
             ApplyRasterizationSettings(config);
 
-            using var container = new HtmlContainer(_renderContext);
-
-            container.MarginTop = pageDescriptor.MarginTopOverride ?? config.MarginTop;
-            container.MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom;
-            container.MarginLeft = pageDescriptor.MarginLeftOverride ?? config.MarginLeft;
-            container.MarginRight = pageDescriptor.MarginRightOverride ?? config.MarginRight;
-            container.HtmlContainerInt.PageRules = DomParser.BuildDeclarativePageRules(
-                pageDescriptor.PageRules, stylesheet?.CssData,
-                marginLeftIsExplicit: pageDescriptor.MarginLeftOverride is not null,
-                marginTopIsExplicit: pageDescriptor.MarginTopOverride is not null,
-                marginRightIsExplicit: pageDescriptor.MarginRightOverride is not null,
-                marginBottomIsExplicit: pageDescriptor.MarginBottomOverride is not null,
-                sizeIsExplicit: pageDescriptor.PageSizeOverride is not null);
-
-            container.PageSize = orgPageSize;
-            container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
-            container.HtmlContainerInt.SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels;
-            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage, stylesheet, properties.DisplayContentsShells);
-
-            if (stylesheet is not null)
+            var options = new HtmlDocumentOptions
             {
-                // Track A: a document-level stylesheet's own base @page rule may still adjust whole-page
-                // geometry, but only for an edge/size the page builder itself left unset - see
-                // IDocumentBuilder.Stylesheet's own precedence doc comment. Run after SetDeclarativeRoot
-                // (needs root.HtmlContainer set, for em/rem-relative margin resolution via
-                // CssBox.GetEmHeight/GetRemHeight).
-                DomParser.CascadeApplyPageStyles(container.HtmlContainerInt, pageDescriptor.RootBox, stylesheet.CssData,
-                    allowMarginLeft: pageDescriptor.MarginLeftOverride is null,
-                    allowMarginTop: pageDescriptor.MarginTopOverride is null,
-                    allowMarginRight: pageDescriptor.MarginRightOverride is null,
-                    allowMarginBottom: pageDescriptor.MarginBottomOverride is null,
-                    allowSize: pageDescriptor.PageSizeOverride is null);
+                PageWidthPoints = orgPageSize.Width,
+                PageHeightPoints = orgPageSize.Height,
+                MarginTopPoints = pageDescriptor.MarginTopOverride ?? config.MarginTop,
+                MarginBottomPoints = pageDescriptor.MarginBottomOverride ?? config.MarginBottom,
+                MarginLeftPoints = pageDescriptor.MarginLeftOverride ?? config.MarginLeft,
+                MarginRightPoints = pageDescriptor.MarginRightOverride ?? config.MarginRight,
+                SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
+                SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
+                DefaultLanguage = config.DefaultLanguage,
+                CollectFormFields = config.EnableInteractivePdfForms,
+            };
 
-                // Keep the local sheet-size variable in sync with any in-place correction the call above just
-                // made, mirroring AddPdfPages's own identical "orgPageSize = container.CssPageSize.Value"
-                // sync after SetContent/SetHtml - everything below this point (the content-area computation,
-                // the measure context) must see the corrected size, not the originally-configured one.
-                if (container.CssPageSize.HasValue)
-                {
-                    orgPageSize = container.CssPageSize.Value;
-                }
-            }
+            using var htmlDocument = await HtmlDocument.CreateAsync(page, options, stylesheet?.StyleSheet);
 
-            // Mirrors SetContent's own tail: the content page size is the sheet less its margins, and
-            // the document origin sits at the top-left of that band.
-            var contentPageSize = new Size(
-                orgPageSize.Width - container.MarginLeft - container.MarginRight,
-                orgPageSize.Height - container.MarginTop - container.MarginBottom);
-            container.PageSize = contentPageSize;
-            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+            var contentArea = htmlDocument.ContentArea;
+            using var measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
+            await htmlDocument.LayoutAsync(measure);
 
-            using var measure = PdfCanvas.CreateMeasuring(_renderContext, orgPageSize.Width, orgPageSize.Height);
-            container.MaxSize = new Size(container.PageSize.Width, 0);
-            await container.PerformLayout(measure);
-
-            await RenderPagesCore(document, container, config);
+            await RenderPagesCore(document, htmlDocument, config);
         }
 
-        /// <summary>
-        /// Resolves every <see cref="CssBox.PendingAutoDirection"/> box under <paramref name="root"/> to a
-        /// literal <c>ltr</c>/<c>rtl</c> <c>direction</c>, once over the whole page's already-built tree -
-        /// mirrors <see cref="DomParser"/> resolving the HTML path's own <c>dir="auto"</c> once over a
-        /// whole freshly-parsed document (<see cref="DomParser.GenerateCssTree"/>'s own call to its
-        /// <c>ResolveAutoDirectionality</c>), just triggered here instead of from the parser, since a
-        /// declaratively-built tree has no parse step of its own to hook. Unlike that HTML path (which
-        /// writes a literal <c>dir</c> attribute back onto the element and lets the UA stylesheet's
-        /// <c>[dir]</c> attribute-selector apply <c>direction</c> through the normal cascade), this sets the
-        /// resolved value directly via <paramref name="properties"/> instead - runs before
-        /// <see cref="HtmlContainer.SetDeclarativeRoot"/>'s own optional stylesheet-matching pass (see
-        /// <see cref="IDocumentBuilder.Stylesheet"/>), so the result is tracked in
-        /// <see cref="CssBox.BuilderSetProperties"/> and a plain (non-<c>!important</c>) stylesheet
-        /// <c>direction</c> rule cannot silently override it, the same as any other builder-set property.
-        /// </summary>
-        internal static void ResolvePendingAutoDirections(CssBox root, CssPropertyFactory properties)
+        internal static HtmlDocumentOptions ToDocumentOptions(PdfGenerateConfig config, Size sheet)
         {
-            if (root.PendingAutoDirection)
-            {
-                properties.Set(root, "direction", BidiDirectionalityResolver.ScanForStrongDirection(root) ?? Keywords.Ltr);
-                root.PendingAutoDirection = false;
-            }
+            ValidateAnimationProgress(config);
 
-            foreach (var child in root.Boxes)
+            return new HtmlDocumentOptions
             {
-                ResolvePendingAutoDirections(child, properties);
-            }
+                PageWidthPoints = sheet.Width,
+                PageHeightPoints = sheet.Height,
+                MarginTopPoints = config.MarginTop,
+                MarginRightPoints = config.MarginRight,
+                MarginBottomPoints = config.MarginBottom,
+                MarginLeftPoints = config.MarginLeft,
+                Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media,
+                ColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
+                IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets,
+                SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
+                SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
+                AnimationProgress = config.AnimationProgress,
+                DefaultLanguage = string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage,
+                CollectFormFields = config.EnableInteractivePdfForms,
+            };
         }
 
         /// <summary>
         /// The content-source-agnostic half of page generation: metadata/XMP/output-intent/tagging/form
         /// setup, one PDF page per fragmentainer (paint, footnote area, margin boxes), and the
         /// whole-document link/form-field/bookmark passes at the end. Reads only already-resolved
-        /// <paramref name="container"/> state (its fragment tree, page rules, document metadata/language) -
+        /// <paramref name="htmlDocument"/> state (its fragment tree, page rules, document metadata/language) -
         /// nothing here is specific to how that container's content tree was built, so this is shared
         /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>,
-        /// after its own <see cref="SetContent"/>/<c>ShrinkToFit</c> setup above) and the declarative
+        /// after its own <c>SetContent</c>/<c>ShrinkToFit</c> setup above) and the declarative
         /// document-building path that builds a <c>Html.Dom.CssBox</c> tree directly instead
         /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
         /// </summary>
-        private async Task RenderPagesCore(PeachPdfDocument document, HtmlContainer container, PdfGenerateConfig config)
+        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config)
         {
             // Whole-document format, document information, and what the claimed conformance level requires of the file (the output
             // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
             // document. Everything that depends on this render's content (title, language, creation date) is known by now.
             var embeddings = PdfEmbeddingPlan.Create(config);
-            document.Composer.Configure(BuildComposerOptions(config, container, embeddings));
+            document.Composer.Configure(BuildComposerOptions(config, htmlDocument, embeddings));
 
             // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
             // which Configure has already checked.
@@ -566,35 +506,23 @@ namespace PeachPDF
             var structureTagBuilder = (config.EnableTaggedPdf || isAccessibleConformance)
                 ? new StructureTagBuilder(document.Composer.CreateTagRecorder(requireAlternateText: isAccessibleConformance))
                 : null;
-            container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
+            htmlDocument.StructureTagSink = structureTagBuilder;
 
             // Same shape as structureTagBuilder above: only constructed when interactive PDF forms are
             // enabled - FragmentContentPainters.For and HandleFormFields (below) both check
             // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
             // it's not set, so this is the single point that gates the whole feature off by default.
             var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.Composer.CreateFormBuilder(_renderContext, "PeachPDFField")) : null;
-            container.HtmlContainerInt.InteractiveForms = formFieldBuilder != null;
 
-            // Paints each fragmentainer's layers (see PagePainter) onto a PDF page made for it. A PDF page hands out a canvas per stage and can
-            // shift its origin; those are the only two things the painter asks of it.
-            using var painter = new PagePainter(container.HtmlContainerInt, _renderContext);
-            int pageNumber = 0;
-            foreach (var fragmentainer in painter.Fragmentainers)
+            // One PDF page per page of the laid-out document, painted onto the canvas the PDF page hands out. The sheet size is each page's own
+            // resolved physical size, in true PDF points - it already falls back to the document's base size whenever no @page rule overrides it.
+            foreach (var htmlPage in htmlDocument.Pages)
             {
-                pageNumber++;
-
-                // This slot's own resolved physical sheet size, in true PDF points - already falls back to the document's base/configured
-                // size whenever no @page rule overrides `size` for this slot, so every existing (non-mixed-size) document is unaffected.
-                var geom = fragmentainer.Geometry;
-                var page = document.Composer.AddPage(geom.SheetWidthPt, geom.SheetHeightPt);
+                var page = document.Composer.AddPage(htmlPage.WidthPoints, htmlPage.HeightPoints);
 
                 structureTagBuilder?.BeginPage(page);
 
-                await painter.PaintPageAsync(
-                    fragmentainer,
-                    pageNumber,
-                    () => new CanvasLease(page.CreateCanvas(_renderContext), canvas => canvas.Dispose()),
-                    (x, y) => page.Shift(x, y));
+                await htmlDocument.PaintPageAsync(htmlPage.Index, page.Canvas);
 
                 page.Finish();
             }
@@ -608,7 +536,7 @@ namespace PeachPDF
             // findings of every earlier call. PeachPdfDocument.PageCount accumulates across the same
             // calls via the underlying PdfDocument; a report whose whole purpose is not to lose
             // information quietly should not be the one member that does.
-            document.ClipReport.Append(container.HtmlContainerInt.ClipReport.Words.Select(w =>
+            document.ClipReport.Append(htmlDocument.ClippedText.Select(w =>
                 new ClippedWord(w.Text, w.DrawnWidth, w.VisibleWidth, w.DrawnHeight, w.VisibleHeight)));
 
             // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is
@@ -618,7 +546,7 @@ namespace PeachPDF
 
             // The hyperlinks and the outline, worked out from the laid-out pages in terms of pages and points; the PDF
             // annotations and outline entries are made from them below.
-            var annotations = DocumentAnnotationCollector.Collect(container.HtmlContainerInt, painter.Fragmentainers);
+            var annotations = htmlDocument.Annotations;
             HandleLinks(document.Composer, annotations, structureTagBuilder);
 
             if (formFieldBuilder != null)
@@ -647,9 +575,9 @@ namespace PeachPDF
         /// <paramref name="config"/>, and the document information - a non-empty field of <see cref="PdfGenerateConfig.Metadata"/> wins over
         /// the value extracted from the HTML, and a missing one falls back to it.
         /// </summary>
-        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlContainer container, PdfEmbeddingPlan embeddings)
+        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlDocument htmlDocument, PdfEmbeddingPlan embeddings)
         {
-            var metadata = container.DocumentMetadata;
+            var metadata = htmlDocument.Metadata;
             var overrides = config.Metadata;
 
             var options = new PeachDrawing.PDF.PdfComposerOptions
@@ -665,7 +593,7 @@ namespace PeachPDF
                 CreationDate = overrides?.CreationDate
                     ?? (metadata?.Date is { } htmlDate ? new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local)) : null),
                 // Resolved by SetContent: the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage.
-                Language = container.HtmlContainerInt.DocumentLanguage,
+                Language = htmlDocument.Language,
                 Version = config.PdfVersionExplicit ? config.PdfVersion.ToEngine() : null,
                 Conformance = config.PdfAConformance.ToEngine(),
                 XConformance = config.PdfXConformance.ToEngine(),
@@ -718,64 +646,6 @@ namespace PeachPDF
             }
         }
 
-        internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, Size orgPageSize)
-        {
-            container.MarginBottom = config.MarginBottom;
-            container.MarginLeft = config.MarginLeft;
-            container.MarginRight = config.MarginRight;
-            container.MarginTop = config.MarginTop;
-
-            // Must be set before SetHtml below, which generates the DOM/CSS tree (DomParser) - both feed
-            // into that generation: Media selects which @media rules match, IgnoreAuthorStyleSheets gates
-            // whether the document's own <style>/<link> author sheets are collected at all.
-            container.HtmlContainerInt.Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media;
-            container.HtmlContainerInt.PreferredColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light;
-            container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
-            container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
-            container.HtmlContainerInt.SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels;
-
-            ValidateAnimationProgress(config);
-            container.HtmlContainerInt.AnimationProgress = config.AnimationProgress;
-
-            // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the
-            // language-dependent line-break tailorings need the language then, not after SetHtml returns.
-            container.HtmlContainerInt.DefaultLanguage = string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage;
-
-            // Parse-time @page relative units (% / em, base rule and the captured PageLengthContext
-            // alike) resolve against PageSize as it stands during SetHtml — carry the physical sheet
-            // in so a percentage margin resolves against the page-box width (css-page-3 §7.1), not a
-            // stale band from a previous pass or the unset 0 default on the first pass.
-            container.PageSize = orgPageSize;
-
-            // The document's own <html lang> always wins (DomParser); config.DefaultLanguage, set above, only fills
-            // in when the document declares none — PeachPDF itself never guesses a language on its own initiative.
-            await container.SetHtml(html, cssData?.CssData);
-
-            // Just in case @page rules got applied. SetContent is now only ever called once per render
-            // with the ORIGINAL orgPageSize parameter (DomParser.CascadeApplyPageStyles corrects
-            // PageSize/margins against the CSS @page size in place, inside SetHtml above, rather than a
-            // caller re-invoking SetContent a second time with the corrected size - issue #582) - so this
-            // must subtract margins from the CSS-resolved sheet size (falling back to orgPageSize when
-            // there is no @page { size } rule), or it would clobber that in-place correction with the
-            // stale, originally-configured size.
-            var sheetSize = container.CssPageSize ?? orgPageSize;
-            var pageSize = new Size(sheetSize.Width - container.MarginLeft - container.MarginRight, sheetSize.Height - container.MarginTop - container.MarginBottom);
-            container.PageSize = pageSize;
-            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
-        }
-
-        internal static void PaintFootnoteArea(Canvas canvas, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea) =>
-            PagePainter.PaintFootnoteArea(canvas, renderContext, htmlContainer, footnoteArea);
-
-        internal static PaintColor ResolveFootnoteDividerColor(string? declaredColor, RenderContext renderContext) =>
-            PagePainter.ResolveFootnoteDividerColor(declaredColor, renderContext);
-
-        /// <summary>
-        /// Writes the collected hyperlinks as PDF link annotations, either to an external URL or to another place in the document.
-        /// <paramref name="structureTagBuilder"/> is non-null only when tagged PDF output is enabled - used to attach each created
-        /// Link annotation's "/OBJR" back to its owning "/Link" structure element, completing the bidirectional PDF/UA linkage
-        /// between the annotation and the structure tree.
-        /// </summary>
         private static void HandleLinks(PdfComposer composer, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
         {
             foreach (var link in annotations.Links)
@@ -819,28 +689,6 @@ namespace PeachPDF
                 formFieldBuilder.AddField(composer.Pages[field.PageIndex], field);
             }
         }
-
-        /// <summary>
-        /// Delegating shims over <see cref="PageRuleResolver"/> — the cascade implementation moved to
-        /// Html/Core so layout-time page geometry (<c>PageGeometryTable</c>) and paint-time selection
-        /// share one implementation. These preserve the historical signatures (name attribution via
-        /// pageY/pageHeight, i.e. <see cref="PageRuleResolver.ActiveNameAtPageEnd"/> semantics).
-        /// </summary>
-        internal static PageRule? SelectPageRule(
-            IReadOnlyList<PageRule> rules, int pageNumber, IReadOnlyList<NamedPageElement> namedPageElements, double pageY, double pageHeight, bool isBlank = false)
-            => PagePainter.SelectPageRule(rules, pageNumber, namedPageElements, pageY, pageHeight, isBlank);
-
-        internal static IReadOnlyList<MarginStyleRule> SelectApplicableMarginRules(
-            IReadOnlyList<PageRule> rules, int pageNumber, IReadOnlyList<NamedPageElement> namedPageElements, double pageY, double pageHeight, bool isBlank = false)
-            => PagePainter.SelectApplicableMarginRules(rules, pageNumber, namedPageElements, pageY, pageHeight, isBlank);
-
-        internal static StyleDeclaration? SelectApplicablePageStyle(
-            IReadOnlyList<PageRule> rules, int pageNumber, IReadOnlyList<NamedPageElement> namedPageElements, double pageY, double pageHeight, bool isBlank = false)
-            => PagePainter.SelectApplicablePageStyle(rules, pageNumber, namedPageElements, pageY, pageHeight, isBlank);
-
-        internal static (double L, double T, double R, double B) ResolvePageMargins(
-            PageRule? rule, double baseL, double baseT, double baseR, double baseB)
-            => PagePainter.ResolvePageMargins(rule, baseL, baseT, baseR, baseB);
 
         #endregion
     }

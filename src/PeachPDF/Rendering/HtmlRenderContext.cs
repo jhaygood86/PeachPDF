@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachBrackets.Html.Utils;
+using PeachBrackets;
 using PeachPDF.Network;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -26,12 +26,12 @@ namespace PeachPDF.Rendering
             AddFontFamilyMapping("Helvetica", "Arial");
 
             // "Arial" itself isn't installed on most Linux distros; fall back to whatever
-            // metrically-compatible substitute DefaultFontResolver.DefaultFont already resolved to
+            // metrically-compatible substitute FontDefaults.DefaultFamily already resolved to
             // (e.g. Liberation Sans) so explicit `font-family: Arial` behaves the same as
             // the platform's implicit default font.
             if (!IsFontExists("Arial"))
             {
-                AddFontFamilyMapping("Arial", DefaultFontResolver.DefaultFont);
+                AddFontFamilyMapping("Arial", FontDefaults.DefaultFamily);
             }
 
             // Chromium resolves each generic family differently per OS: hardcoded specific names on
@@ -47,13 +47,13 @@ namespace PeachPDF.Rendering
             // generic (previously only done for Arial above) - otherwise a hardcoded/fontconfig-returned name
             // that isn't actually installed would substitute an arbitrary, unrelated font via the font set's own
             // "give the caller SOMETHING" last resort.
-            foreach (var (keyword, generic) in GenericFontFamilyResolver.Generics)
+            foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
             {
-                AddFontFamilyMapping(keyword, FontSet.ResolveGeneric(generic, IsFontExists) ?? DefaultFontResolver.DefaultFont);
+                AddFontFamilyMapping(keyword, FontSet.ResolveGeneric(generic, IsFontExists) ?? FontDefaults.DefaultFamily);
             }
 
             // Chromium's system-ui resolves to Segoe UI on Windows - an exact match for
-            // DefaultFontResolver.DefaultFont there. On macOS/Android this stays a pragmatic
+            // FontDefaults.DefaultFamily there. On macOS/Android this stays a pragmatic
             // approximation (real native system-UI-font detection, e.g. macOS's private San
             // Francisco font, is out of scope - see docs).
             //
@@ -67,7 +67,7 @@ namespace PeachPDF.Rendering
             // every band was 11.7% taller than the same band under Chromium, and on a page
             // whose top margin the band already fills, that difference is what tipped body
             // text into overprinting it.
-            AddFontFamilyMapping("system-ui", FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? DefaultFontResolver.DefaultFont);
+            AddFontFamilyMapping("system-ui", FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? FontDefaults.DefaultFamily);
         }
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
@@ -128,23 +128,23 @@ namespace PeachPDF.Rendering
 
         /// <summary>
         /// Every PeachPDF-driven canvas (the PDF one, and the raster fallback) shares PeachPDF's own SVG
-        /// engine through <see cref="PdfSvgGlyphPainter"/> - the only <see cref="RenderContext"/> in this
+        /// engine through <c>SvgGlyphPainter</c> - the only <see cref="RenderContext"/> in this
         /// codebase with one to offer.
         /// </summary>
-        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new PdfSvgGlyphPainter(host, this);
+        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new PeachBrackets.Svg.SvgGlyphPainter(host, this);
 
         /// <summary><c>font-variation-settings</c>, in the encoding the HTML engine hands the font layer.</summary>
         protected override IReadOnlyList<AxisSetting>? ResolveVariationAxes(string? variations, double sizeInPixels) =>
-            FontVariationSettingsResolver.ToAxes(variations, sizeInPixels);
+            FontDefaults.ToAxisSettings(variations, sizeInPixels);
 
         /// <summary>
-        /// Points <see cref="DefaultFontResolver.DefaultFont"/> at the family just registered when nothing currently resolves it.
+        /// Points <see cref="FontDefaults.DefaultFamily"/> at the family just registered when nothing currently resolves it.
         /// </summary>
         protected override void OnFontFamilyAdded(string familyName) =>
-            AdoptDefaultFontIfMissing(DefaultFontResolver.DefaultFont, familyName, IsFontExists(DefaultFontResolver.DefaultFont));
+            AdoptDefaultFontIfMissing(FontDefaults.DefaultFamily, familyName, IsFontExists(FontDefaults.DefaultFamily));
 
         /// <summary>
-        /// Points <see cref="DefaultFontResolver.DefaultFont"/> at <paramref name="registeredFamily"/> when nothing
+        /// Points <see cref="FontDefaults.DefaultFamily"/> at <paramref name="registeredFamily"/> when nothing
         /// currently resolves it. On a host with no discoverable system fonts (browser/WebAssembly) the
         /// default names a family that nothing satisfies until the caller registers one - and it is the
         /// engine's last resort, so <c>DerivedStyle.ActualFont</c> throws outright rather than rendering
@@ -157,12 +157,12 @@ namespace PeachPDF.Rendering
         /// registered families before the mapping table.
         /// </para>
         /// </summary>
-        /// <param name="defaultFontFamily">The engine's default font, i.e. <see cref="DefaultFontResolver.DefaultFont"/>.</param>
+        /// <param name="defaultFontFamily">The engine's default font, i.e. <see cref="FontDefaults.DefaultFamily"/>.</param>
         /// <param name="registeredFamily">The family just registered.</param>
         /// <param name="defaultFontExists">
         /// Whether <paramref name="defaultFontFamily"/> already resolves. Both it and the family name are
-        /// passed in rather than read from <see cref="DefaultFontResolver"/> here - mirroring
-        /// <see cref="DefaultFontResolver.DetermineDefaultFont"/>'s own precedent - so the rule stays unit-testable
+        /// passed in rather than read from <see cref="FontDefaults"/> here - mirroring
+        /// the engine's own precedent - so the rule stays unit-testable
         /// on a host whose default font genuinely is installed, which is every desktop CI runner.
         /// </param>
         internal void AdoptDefaultFontIfMissing(string defaultFontFamily, string registeredFamily, bool defaultFontExists)

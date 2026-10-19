@@ -57,6 +57,12 @@ public sealed class HtmlDocumentOptions
     public string? UserStyleSheet { get; set; }
 
     /// <summary>
+    /// A style sheet parsed ahead of time, applied in place of <see cref="UserStyleSheet"/> (which is ignored when this is set), so the same
+    /// parsed rules can serve many documents. It is not changed by loading.
+    /// </summary>
+    public Building.StyleSheet? StyleSheet { get; set; }
+
+    /// <summary>
     /// The language to assume when the document declares none (<c>&lt;html lang&gt;</c>), as a BCP 47 tag, or null to assume none. It
     /// drives hyphenation and language-dependent line breaking.
     /// </summary>
