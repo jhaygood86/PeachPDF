@@ -29,20 +29,18 @@ namespace PeachPDF.Tests.TestSupport
     /// the feature — and a test that cannot fail is worse than none.
     /// </para>
     /// <para>
-    /// The delegate adapter is built over a <see cref="PdfGraphics.CreateMeasureContext"/> context, which is
+    /// The delegate adapter is built over a measuring canvas (<see cref="PdfCanvas.CreateMeasuring(PdfRenderContext, Size)"/>), which is
     /// enough: <c>GetInkCrossings</c> reads only the font's own descriptor and shaping, never the
     /// underlying page.
     /// </para>
     /// </remarks>
     internal sealed class InkAwareRecordingGraphics : TestRecordingGraphics
     {
-        private readonly PdfGraphics _measure;
         private readonly PdfCanvas _real;
 
         internal InkAwareRecordingGraphics(HtmlRenderContext renderContext, double pixelsPerPoint = 1.0)
         {
-            _measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-            _real = new PdfCanvas(renderContext, _measure, pixelsPerPoint);
+            _real = PdfCanvas.CreateMeasuring(renderContext, new Size(595, 842));
         }
 
         /// <summary>One <see cref="Canvas.GetInkCrossings"/> call the painter made.</summary>
@@ -78,7 +76,6 @@ namespace PeachPDF.Tests.TestSupport
         public override void Dispose()
         {
             _real.Dispose();
-            _measure.Dispose();
         }
     }
 }

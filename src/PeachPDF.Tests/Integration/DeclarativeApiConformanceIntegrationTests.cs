@@ -38,13 +38,13 @@ namespace PeachPDF.Tests.Integration
                 },
             };
 
-            var thrown = await Assert.ThrowsAnyAsync<PdfConformanceException>(() =>
+            var thrown = await Assert.ThrowsAnyAsync<PeachDrawing.Core.CanvasConstraintException>(() =>
                 new PdfGenerator().CreateDocument(doc =>
                 {
                     doc.Page(page => page.Background(PdfColor.FromRgb(255, 0, 0)).Content(_ => { }));
                 }, config));
 
-            Assert.IsType<PdfXConformanceException>(thrown);
+            Assert.Equal("PdfXConformanceException", thrown.GetType().Name);
         }
 
         [Fact]
@@ -79,14 +79,14 @@ namespace PeachPDF.Tests.Integration
         {
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, Metadata = new PdfDocumentMetadata { CreationDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero) }, PdfAConformance = PdfAConformance.PdfA1B };
 
-            var thrown = await Assert.ThrowsAnyAsync<PdfConformanceException>(() =>
+            var thrown = await Assert.ThrowsAnyAsync<PeachDrawing.Core.CanvasConstraintException>(() =>
                 new PdfGenerator().CreateDocument(doc =>
                 {
                     // Semi-transparent fill forces a live transparency group - forbidden under PDF/A-1.
                     doc.Page(page => page.Background(PdfColor.FromArgb(128, 255, 0, 0)).Content(_ => { }));
                 }, config));
 
-            Assert.IsType<PdfAConformanceException>(thrown);
+            Assert.Equal("PdfAConformanceException", thrown.GetType().Name);
         }
 
         [Fact]
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Integration
             // Mirrors PdfXConformanceTests.RepeatedAddPdfPages_DifferentConformance_Throws for the
             // declarative path - proves EstablishDocumentOptions's cross-call consistency guard is
             // reached from AddPages too, not just AddPdfPages.
-            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.PdfComposer(new PeachPDF.Rendering.HtmlRenderContext()));
             var generator = new PdfGenerator();
 
             var x1aConfig = new PdfGenerateConfig

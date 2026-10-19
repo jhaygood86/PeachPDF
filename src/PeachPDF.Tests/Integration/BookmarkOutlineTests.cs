@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await new PdfGenerator().GeneratePdf("<html><body><p>Hello</p></body></html>", PageSize.A4);
 
-            Assert.Empty(result.PdfDocument.Outlines);
+            Assert.Empty(result.Inspect().Outlines);
 
             using var stream = new MemoryStream();
             result.Save(stream);
@@ -35,12 +35,12 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var top = result.PdfDocument.Outlines.ToList();
+            var top = result.Inspect().Outlines.ToList();
             Assert.Equal(new[] { "Chapter 1", "Chapter 2" }, top.Select(o => o.Title));
 
-            var chapter1Children = top[0].Outlines.ToList();
+            var chapter1Children = top[0].Children.ToList();
             Assert.Equal(new[] { "Section 1.1", "Section 1.2" }, chapter1Children.Select(o => o.Title));
-            Assert.Empty(top[1].Outlines);
+            Assert.Empty(top[1].Children);
         }
 
         [Fact]
@@ -51,7 +51,7 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var top = result.PdfDocument.Outlines.ToList();
+            var top = result.Inspect().Outlines.ToList();
             Assert.Equal(new[] { "Keep" }, top.Select(o => o.Title));
         }
 
@@ -65,10 +65,10 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var top = result.PdfDocument.Outlines.ToList();
+            var top = result.Inspect().Outlines.ToList();
             var a = Assert.Single(top);
             Assert.Equal("A", a.Title);
-            var b = Assert.Single(a.Outlines);
+            var b = Assert.Single(a.Children);
             Assert.Equal("B", b.Title);
         }
 
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await new PdfGenerator().GeneratePdf("<html><body><h1>Hello World</h1></body></html>", PageSize.A4);
 
-            Assert.Equal("Hello World", result.PdfDocument.Outlines.Single().Title);
+            Assert.Equal("Hello World", result.Inspect().Outlines.Single().Title);
         }
 
         [Fact]
@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("Custom: Intro", result.PdfDocument.Outlines.Single().Title);
+            Assert.Equal("Custom: Intro", result.Inspect().Outlines.Single().Title);
         }
 
         [Fact]
@@ -99,18 +99,18 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("Ch. 1", result.PdfDocument.Outlines.Single().Title);
+            Assert.Equal("Ch. 1", result.Inspect().Outlines.Single().Title);
         }
 
         [Fact]
         public async Task BookmarkState_DefaultsOpen_ClosedIsRespected()
         {
             var html = "<html><body>" +
-                       "<h1>Open by default</h1><h1 style='bookmark-state:closed'>Closed</h1>" +
+                       "<h1>Open by default</h1><h2>Child</h2><h1 style='bookmark-state:closed'>Closed</h1><h2>Hidden child</h2>" +
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var top = result.PdfDocument.Outlines.ToList();
+            var top = result.Inspect().Outlines.ToList();
             Assert.True(top[0].Opened);
             Assert.False(top[1].Opened);
         }
@@ -131,15 +131,16 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var top = result.PdfDocument.Outlines.ToList();
+            var top = result.Inspect().Outlines.ToList();
             var first = top.Single(o => o.Title == "First");
             var second = top.Single(o => o.Title == "Second");
 
-            Assert.Same(first.DestinationPage, second.DestinationPage);
-            Assert.True(first.Top > second.Top,
-                $"First (visually higher) should have a larger bottom-up Top than Second (visually lower), got First.Top={first.Top}, Second.Top={second.Top}");
-            Assert.InRange(first.Top, 0, (double)first.DestinationPage!.Height);
-            Assert.InRange(second.Top, 0, (double)second.DestinationPage!.Height);
+            Assert.Equal(first.DestinationPageIndex, second.DestinationPageIndex);
+            Assert.True(first.DestinationTop > second.DestinationTop,
+                $"First (visually higher) should have a larger bottom-up Top than Second (visually lower), got First.Top={first.DestinationTop}, Second.Top={second.DestinationTop}");
+            var pageHeight = PdfFile.Height(result.Inspect().Pages[first.DestinationPageIndex]);
+            Assert.InRange(first.DestinationTop!.Value, 0, pageHeight);
+            Assert.InRange(second.DestinationTop!.Value, 0, pageHeight);
         }
 
         // Regression test for a second bug the coordinate-flip fix above uncovered: a display:none
@@ -155,9 +156,9 @@ namespace PeachPDF.Tests.Integration
             var html = "<html><body><h1 style='display:none'>Hidden</h1></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var outline = result.PdfDocument.Outlines.Single();
+            var outline = result.Inspect().Outlines.Single();
             Assert.Equal("Hidden", outline.Title);
-            Assert.Null(outline.DestinationPage);
+            Assert.False(outline.HasDestinationPage);
             Assert.Null(outline.Url);
         }
 
@@ -166,8 +167,8 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await new PdfGenerator().GeneratePdf("<html><body><h1>Title</h1></body></html>", PageSize.A4);
 
-            var outline = result.PdfDocument.Outlines.Single();
-            Assert.Same(result.PdfDocument.Pages[0], outline.DestinationPage);
+            var outline = result.Inspect().Outlines.Single();
+            Assert.Equal(0, outline.DestinationPageIndex);
             Assert.Null(outline.Url);
         }
 
@@ -180,8 +181,8 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var outline = result.PdfDocument.Outlines.Single();
-            Assert.NotNull(outline.DestinationPage);
+            var outline = result.Inspect().Outlines.Single();
+            Assert.True(outline.HasDestinationPage);
             Assert.Null(outline.Url);
         }
 
@@ -193,11 +194,11 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            var outline = result.PdfDocument.Outlines.Single();
+            var outline = result.Inspect().Outlines.Single();
             // Resolved via HtmlContainer.ResolveHref, same as an equivalent <a href> - which normalizes
             // a bare-authority URL with an added trailing slash.
             Assert.Equal("https://example.com/", outline.Url);
-            Assert.Null(outline.DestinationPage);
+            Assert.False(outline.HasDestinationPage);
         }
 
         [Fact]
@@ -211,7 +212,7 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("https://example.com/docs/other.html", result.PdfDocument.Outlines.Single().Url);
+            Assert.Equal("https://example.com/docs/other.html", result.Inspect().Outlines.Single().Url);
         }
 
         [Theory]
@@ -222,7 +223,7 @@ namespace PeachPDF.Tests.Integration
             var html = $"<html><body><p style='{levelDeclaration}'>Aliased</p></body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("Aliased", result.PdfDocument.Outlines.Single().Title);
+            Assert.Equal("Aliased", result.Inspect().Outlines.Single().Title);
         }
 
         [Fact]
@@ -233,7 +234,7 @@ namespace PeachPDF.Tests.Integration
                        "</body></html>";
             var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Equal("https://example.com/", result.PdfDocument.Outlines.Single().Url);
+            Assert.Equal("https://example.com/", result.Inspect().Outlines.Single().Url);
         }
     }
 }

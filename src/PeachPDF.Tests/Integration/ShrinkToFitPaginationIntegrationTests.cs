@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.Integration
             };
 
             var doc = await generator.GeneratePdf(html, config);
-            Assert.True(doc.PdfDocument.Pages.Count >= 4, $"Test setup expects 4+ pages, got {doc.PdfDocument.Pages.Count}");
+            Assert.True(doc.Inspect().PageCount >= 4, $"Test setup expects 4+ pages, got {doc.Inspect().PageCount}");
 
             using var ms = new MemoryStream();
             doc.Save(ms);

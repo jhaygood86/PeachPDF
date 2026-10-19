@@ -8,7 +8,7 @@ namespace PeachPDF.Html.Core.Handlers
 {
     /// <summary>
     /// Shared rect-to-page/Y resolution used by both <c>PdfGenerator.HandleLinks</c>'s anchor-link
-    /// destinations and <see cref="PeachPDF.PdfFeatures.BookmarkOutlineBuilder"/>'s PDF outline destinations, so the two
+    /// destinations and <c>PdfComposer.AddBookmarks</c>'s PDF outline destinations, so the two
     /// don't each re-derive the fragmentainer-slot -&gt; <c>document.Pages</c> mapping and per-slot Y
     /// math independently.
     /// </summary>

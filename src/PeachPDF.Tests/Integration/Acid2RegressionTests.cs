@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Integration
 
             for (var i = 0; i < document.PageCount; i++)
             {
-                Assert.True(PageHasContent(document.Pages[i]), $"page {i + 1} of {document.PageCount} should have content");
+                Assert.True(PageHasContent(document.Page(i)), $"page {i + 1} of {document.PageCount} should have content");
             }
         }
 
@@ -128,8 +128,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(2, document.PageCount);
 
-            var page1Rects = GetSolidFillRects(document.Pages[0]);
-            var page2Rects = GetSolidFillRects(document.Pages[1]);
+            var page1Rects = GetSolidFillRects(document.Page(0));
+            var page2Rects = GetSolidFillRects(document.Page(1));
 
             Assert.NotEmpty(page1Rects);
             Assert.NotEmpty(page2Rects);
@@ -826,56 +826,18 @@ namespace PeachPDF.Tests.Integration
         /// (uncompressed) content stream(s) - the color+rect combination (not just the bare rect) so
         /// two coincidentally-same-sized-but-differently-colored rects across pages aren't conflated.
         /// </summary>
-        private static HashSet<string> GetSolidFillRects(PdfPage page)
+        private static HashSet<string> GetSolidFillRects(PdfPageView page)
         {
             var results = new HashSet<string>();
-            var content = page.Contents;
-            if (content == null) return results;
-
-            foreach (var item in content.Elements)
+            foreach (Match match in SolidFillRectPattern.Matches(page.ContentText))
             {
-                if (item is not PdfReference { Value: PdfDictionary dict }) continue;
-                var stream = dict.Stream;
-                if (stream?.Value is not { Length: > 0 } bytes) continue;
-
-                var text = Encoding.Latin1.GetString(bytes);
-                foreach (Match match in SolidFillRectPattern.Matches(text))
-                {
-                    results.Add(match.Value);
-                }
+                results.Add(match.Value);
             }
 
             return results;
         }
 
-        private static bool PageHasContent(PdfPage page)
-        {
-            try
-            {
-                var content = page.Contents;
-                if (content == null)
-                    return false;
-
-                if (content.Elements.Count == 0)
-                    return false;
-
-                foreach (var item in content.Elements)
-                {
-                    if (item is PdfReference { Value: PdfDictionary dict })
-                    {
-                        var stream = dict.Stream;
-                        if (stream?.Value is { Length: > 0 })
-                            return true;
-                    }
-                }
-
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        private static bool PageHasContent(PdfPageView page) => page.HasContent;
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
@@ -888,9 +850,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PeachDrawing.PDF.Engine.Drawing.PdfGraphics.CreateMeasureContext(
-                size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

@@ -81,12 +81,11 @@ namespace PeachPDF.Tests.Raster
         public async Task TheGlyphIsWhereThePdfPlacesIt_TheOriginOnTheBaseline()
         {
             var (g, font, _) = await NewFixture();
-            var real = ((PdfCanvasFont)font).Font;
-
+            
             Draw(g, font, "A", PaintColor.FromArgb(255, 0, 0, 0));
 
             // The square runs from the baseline up 0.8 em; it sits from 0.1 em to 0.9 em of the advance.
-            var baseline = 10 + real.Height * real.Typeface.Metrics.CellAscent / real.Typeface.Metrics.LineSpacing;
+            var baseline = 10 + font.Size * font.Typeface!.Metrics.CellAscent / font.Typeface.Metrics.UnitsPerEm;
             var red = Pixels(g).Where(p => p is { R: 255, G: 0, B: 0, A: 255 }).ToList();
             Assert.InRange(red.Max(p => p.Y) + 1, baseline - 1.5, baseline + 1.5);
             Assert.InRange(red.Min(p => p.Y), baseline - 0.8 * 60 - 1.5, baseline - 0.8 * 60 + 1.5);

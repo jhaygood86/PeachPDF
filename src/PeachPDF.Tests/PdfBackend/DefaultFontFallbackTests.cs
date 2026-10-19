@@ -23,7 +23,8 @@ namespace PeachPDF.Tests.PdfBackendTests
         private static HtmlRenderContext RenderContextWithRegisteredFamily(string familyName)
         {
             var renderContext = new HtmlRenderContext();
-            renderContext.AddFontFamily(new PdfCanvasFontFamily(familyName));
+            using var font = System.IO.File.OpenRead(BundledFonts.Ttf);
+            renderContext.AddFont(font, familyName).GetAwaiter().GetResult();
             return renderContext;
         }
 

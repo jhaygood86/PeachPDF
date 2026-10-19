@@ -1,0 +1,127 @@
+using PeachDrawing.PDF;
+using PeachDrawing.Core;
+using System;
+using Xunit;
+
+namespace PeachPDF.Tests.PdfBackendTests
+{
+    /// <summary>
+    /// <c>RenderContext.RejectMixedColorSpaceGradientStops</c>: a gradient mixing <c>device-cmyk()</c>
+    /// and RGB-authored stops is rejected outright rather than risking a component-count mismatch between
+    /// a shading's <c>/ColorSpace</c> and its <c>/C0</c>/<c>/C1</c> function output (see the guard's own
+    /// doc comment) - no defined conversion exists between the two spaces. A gradient whose stops are all
+    /// CMYK (or all RGB) has no such conflict and is fully supported - see
+    /// <c>DeviceCmykGradientIntegrationTests</c> for the structural PDF-content assertions that prove that
+    /// case actually produces a correct <c>/DeviceCMYK</c> shading, not just that it doesn't throw.
+    /// Exercised directly against the public <see cref="RenderContext"/> gradient-brush entry points rather than
+    /// through HTML, since the legacy 2-color <c>GetLinearGradientBrush(Rect, PaintColor, PaintColor, double)</c>
+    /// overload has no CSS/SVG caller at all today (confirmed by inspection - every real gradient goes
+    /// through the multi-stop overloads) and so is otherwise unreachable from an integration test.
+    /// </summary>
+    public class PdfRenderContextCmykGradientTests
+    {
+        private static readonly PaintColor CmykStop = PaintColor.FromCmyk(255, 0f, 1f, 1f, 0f);
+        private static readonly PaintColor CmykStop2 = PaintColor.FromCmyk(255, 1f, 0f, 0f, 0f);
+        private static readonly PaintColor RgbStop = PaintColor.FromArgb(255, 0, 0);
+
+        [Fact]
+        public void LegacyTwoColorLinearGradient_CmykColor1_Throws()
+        {
+            var renderContext = new PdfRenderContext();
+            Assert.Throws<NotSupportedException>(() =>
+                renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, RgbStop, 0));
+        }
+
+        [Fact]
+        public void LegacyTwoColorLinearGradient_CmykColor2_Throws()
+        {
+            var renderContext = new PdfRenderContext();
+            Assert.Throws<NotSupportedException>(() =>
+                renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, CmykStop, 0));
+        }
+
+        [Fact]
+        public void LegacyTwoColorLinearGradient_BothRgb_Succeeds()
+        {
+            var renderContext = new PdfRenderContext();
+            var brush = renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), RgbStop, RgbStop, 0);
+            Assert.NotNull(brush);
+        }
+
+        [Fact]
+        public void LegacyTwoColorLinearGradient_BothCmyk_Succeeds()
+        {
+            var renderContext = new PdfRenderContext();
+            var brush = renderContext.GetLinearGradientBrush(new Rect(0, 0, 10, 10), CmykStop, CmykStop2, 0);
+            Assert.NotNull(brush);
+        }
+
+        [Fact]
+        public void MultiStopLinearGradient_MixedStop_Throws()
+        {
+            var renderContext = new PdfRenderContext();
+            var stops = new (PaintColor PaintColor, double Position)[] { (RgbStop, 0), (CmykStop, 1) };
+            Assert.Throws<NotSupportedException>(() =>
+                renderContext.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops));
+        }
+
+        [Fact]
+        public void MultiStopLinearGradient_AllCmykStops_Succeeds()
+        {
+            var renderContext = new PdfRenderContext();
+            var stops = new (PaintColor PaintColor, double Position)[] { (CmykStop, 0), (CmykStop2, 1) };
+            var brush = renderContext.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 10), stops);
+            Assert.NotNull(brush);
+        }
+
+        [Fact]
+        public void RadialGradient_MixedStop_Throws()
+        {
+            var renderContext = new PdfRenderContext();
+            var stops = new (PaintColor PaintColor, double Position)[] { (RgbStop, 0), (CmykStop, 1) };
+            Assert.Throws<NotSupportedException>(() =>
+                renderContext.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops));
+        }
+
+        [Fact]
+        public void RadialGradient_AllCmykStops_Succeeds()
+        {
+            var renderContext = new PdfRenderContext();
+            var stops = new (PaintColor PaintColor, double Position)[] { (CmykStop, 0), (CmykStop2, 1) };
+            var brush = renderContext.GetRadialGradientBrush(new PaintPoint(5, 5), 5, 5, stops);
+            Assert.NotNull(brush);
+        }
+
+        [Fact]
+        public void ConicGradient_MixedStop_Throws()
+        {
+            var renderContext = new PdfRenderContext();
+            var colors = new[] { RgbStop, CmykStop };
+            var angles = new[] { 0.0, Math.PI };
+            Assert.Throws<NotSupportedException>(() =>
+                renderContext.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles));
+        }
+
+        [Fact]
+        public void ConicGradient_AllCmykStops_Succeeds()
+        {
+            var renderContext = new PdfRenderContext();
+            var colors = new[] { CmykStop, CmykStop2 };
+            var angles = new[] { 0.0, Math.PI };
+            var brush = renderContext.GetConicGradientBrush(new PaintPoint(5, 5), 5, colors, angles);
+            Assert.NotNull(brush);
+        }
+
+        [Fact]
+        public void ToString_CmykColor_ShowsCmykComponents()
+        {
+            var text = CmykStop.ToString();
+
+            Assert.Contains("C=", text);
+            Assert.Contains("M=", text);
+            Assert.Contains("Y=", text);
+            Assert.Contains("K=", text);
+            Assert.DoesNotContain("R=", text);
+        }
+    }
+}

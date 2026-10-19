@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await RenderTagged("<math><mi>x</mi></math>");
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var formula = Kids(documentElement).Single();
 
             Assert.Equal("/Formula", formula.StructureType);
@@ -61,21 +61,19 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await RenderTagged("<math><mi>x</mi><mo>+</mo><mn>1</mn></math>");
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var formula = Kids(documentElement).Single();
 
-            var afArray = formula.Elements.GetArray("/AF");
+            var afArray = formula.Dict.Array("/AF");
             Assert.NotNull(afArray);
-            var fileSpec = (PdfFileSpecification)((PdfReference)afArray!.Elements[0]).Value;
+            var fileSpec = Assert.IsAssignableFrom<PdfDict>(afArray![0]);
 
-            Assert.Equal("/Supplement", fileSpec.AssociatedFileRelationship);
-            Assert.Equal("formula.mml", fileSpec.FileName);
-            // The in-memory model stores this raw (with its literal "/") - PdfWriter.Write(PdfName)
-            // only escapes it to "#2F" when actually serializing to PDF syntax, not before - see
-            // PdfAssociatedFileTests' identical note.
-            Assert.Equal("/application/mathml+xml", fileSpec.EmbeddedFile!.MimeType);
+            Assert.Equal("/Supplement", fileSpec.Name("/AFRelationship"));
+            Assert.Equal("formula.mml", fileSpec.Text("/F"));
+            var embedded = Assert.IsType<PdfStreamObject>(fileSpec.Dict("/EF")!["/F"]);
+            Assert.Equal("/application/mathml+xml", embedded.Name("/Subtype"));
 
-            var mathml = Encoding.UTF8.GetString(fileSpec.EmbeddedFile.Stream.Value);
+            var mathml = Encoding.UTF8.GetString(embedded.Decoded);
             Assert.Contains("<mi>x</mi>", mathml);
             Assert.Contains("<mo>+</mo>", mathml);
             Assert.Contains("<mn>1</mn>", mathml);
@@ -87,9 +85,9 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await RenderTagged("<math><mi>x</mi></math>");
 
-            var catalogAf = result.PdfDocument.Catalog.Elements.GetArray("/AF");
+            var catalogAf = result.Inspect().Catalog.Array("/AF");
             Assert.NotNull(catalogAf);
-            Assert.Single(catalogAf!.Elements);
+            Assert.Single(catalogAf!.Items);
         }
 
         [Fact]
@@ -101,7 +99,7 @@ namespace PeachPDF.Tests.Integration
             var generator = await CreateGeneratorWithMathFont();
             var result = await generator.GeneratePdf(html, config);
 
-            Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/AF"));
+            Assert.False(result.Inspect().Catalog.ContainsKey("/AF"));
         }
 
         [Fact]
@@ -113,11 +111,11 @@ namespace PeachPDF.Tests.Integration
             var generator = await CreateGeneratorWithMathFont();
             var result = await generator.GeneratePdf(html, config);
 
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            var documentElement = RootKids(result.Inspect()).Single();
             var element = Kids(documentElement).Single();
 
             Assert.Equal("/P", element.StructureType);
-            Assert.NotNull(element.Elements.GetArray("/AF"));
+            Assert.NotNull(element.Dict.Array("/AF"));
         }
 
         [Fact]
@@ -125,17 +123,15 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await RenderTagged("<math><mi>x</mi></math>", pdf20: true);
 
-            Assert.Equal(20, result.PdfDocument.Version);
-            var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
+            Assert.Equal("2.0", result.Inspect().Version);
+            var documentElement = RootKids(result.Inspect()).Single();
             var formula = Kids(documentElement).Single();
             Assert.Equal("/Formula", formula.StructureType);
-            Assert.NotNull(formula.Elements.GetArray("/AF"));
+            Assert.NotNull(formula.Dict.Array("/AF"));
         }
 
-        static IEnumerable<PdfStructureElement> RootKids(PdfStructureTreeRoot root) =>
-            PdfStructureElement.GetKids(root.Elements).Cast<PdfStructureElement>();
+        static IEnumerable<StructElem> RootKids(PdfFile file) => file.StructureRoot;
 
-        static IEnumerable<PdfStructureElement> Kids(PdfStructureElement element) =>
-            PdfStructureElement.GetKids(element.Elements).Cast<PdfStructureElement>();
+        static IEnumerable<StructElem> Kids(StructElem element) => element.Kids;
     }
 }

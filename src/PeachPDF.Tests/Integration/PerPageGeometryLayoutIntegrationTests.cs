@@ -332,9 +332,7 @@ namespace PeachPDF.Tests.Integration
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
             container.MaxSize = new Size(container.PageSize.Width, 0);
 
-            var measure = PdfGraphics.CreateMeasureContext(
-                new Size(container.PageSize.Width, container.PageSize.Height));
-            using var graphics = new PdfCanvas(renderContext, measure, ppp);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, new Size(container.PageSize.Width, container.PageSize.Height));
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

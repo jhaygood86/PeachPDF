@@ -1,4 +1,4 @@
-using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF;
 using System.IO;
 
 namespace PeachPDF;
@@ -9,19 +9,19 @@ namespace PeachPDF;
 /// </summary>
 public class PeachPdfDocument
 {
-    private readonly PdfDocument _document;
+    private readonly PdfComposer _composer;
 
-    internal PeachPdfDocument(PdfDocument document)
+    internal PeachPdfDocument(PdfComposer composer)
     {
-        _document = document;
+        _composer = composer;
     }
 
-    internal PdfDocument PdfDocument => _document;
+    internal PdfComposer Composer => _composer;
 
     /// <summary>
     /// The number of pages currently in the document.
     /// </summary>
-    public int PageCount => _document.PageCount;
+    public int PageCount => _composer.PageCount;
 
     /// <summary>
     /// Words this render drew and then truncated with a clip - the loss class reading the finished
@@ -35,15 +35,13 @@ public class PeachPdfDocument
     /// </remarks>
     public ClipReport ClipReport { get; internal set; } = new();
 
-    internal PdfPages Pages => _document.Pages;
-
     /// <summary>
     /// Writes the completed PDF to the given stream.
     /// </summary>
     /// <param name="stream">The destination stream. The caller owns the stream and is responsible for disposing it.</param>
     public void Save(Stream stream)
     {
-        _document.Save(stream);
+        _composer.Save(stream);
     }
 
     /// <summary>
@@ -62,6 +60,6 @@ public class PeachPdfDocument
     /// </remarks>
     public void ConsolidateImages()
     {
-        _document.ConsolidateImages();
+        _composer.ConsolidateImages();
     }
 }

@@ -20,9 +20,9 @@ namespace PeachPDF.Tests.Integration
         {
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, PageSize.A4);
 
-            Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"));
-            Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/Metadata"));
-            Assert.Equal(20, result.PdfDocument.Version);
+            Assert.False(result.Inspect().Catalog.ContainsKey("/OutputIntents"));
+            Assert.False(result.Inspect().Catalog.ContainsKey("/Metadata"));
+            Assert.Equal("2.0", result.Inspect().Version);
         }
 
         [Fact]
@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.Equal(expectedVersion, result.PdfDocument.Version);
+            Assert.Equal($"{expectedVersion / 10}.{expectedVersion % 10}", result.Inspect().Version);
         }
 
         [Fact]
@@ -212,8 +212,8 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.True(result.PdfDocument.Catalog.Elements.ContainsKey("/Metadata"));
-            Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"));
+            Assert.True(result.Inspect().Catalog.ContainsKey("/Metadata"));
+            Assert.False(result.Inspect().Catalog.ContainsKey("/OutputIntents"));
 
             var packet = await GetXmpPacket(SimpleHtml, config);
             var ns = XNamespace.Get("http://www.aiim.org/pdfa/ns/id/");
@@ -233,7 +233,7 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.True(result.PdfDocument.Catalog.Elements.ContainsKey("/Metadata"));
+            Assert.True(result.Inspect().Catalog.ContainsKey("/Metadata"));
             Assert.False(config.EnableXmpMetadata); // caller's config object is never mutated
         }
 
@@ -296,9 +296,9 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.True(result.PdfDocument.Catalog.MarkInfo.Marked);
-            Assert.Equal("en-US", result.PdfDocument.Catalog.Language);
-            Assert.True(result.PdfDocument.Catalog.Elements.ContainsKey("/StructTreeRoot"));
+            Assert.True(result.Inspect().Catalog.Dict("/MarkInfo")!.Bool("/Marked"));
+            Assert.Equal("en-US", result.Inspect().Language);
+            Assert.True(result.Inspect().Catalog.ContainsKey("/StructTreeRoot"));
             Assert.False(config.EnableTaggedPdf); // caller's config object is never mutated
         }
 
@@ -318,17 +318,12 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = PeachDrawing.PDF.Engine.Structure.PdfStructureElement
-                .GetKids(result.PdfDocument.Catalog.StructureTreeRoot.Elements)
-                .Cast<PeachDrawing.PDF.Engine.Structure.PdfStructureElement>()
-                .Single();
-            var figure = PeachDrawing.PDF.Engine.Structure.PdfStructureElement
-                .GetKids(documentElement.Elements)
-                .Cast<PeachDrawing.PDF.Engine.Structure.PdfStructureElement>()
-                .Single();
+            var file = result.Inspect();
+            var documentElement = Assert.Single(file.StructureChildren(file.StructureTreeRoot!));
+            var figure = Assert.Single(file.StructureChildren(documentElement));
 
-            Assert.Equal("/Figure", figure.StructureType);
-            Assert.Equal(string.Empty, figure.AlternateText);
+            Assert.Equal("/Figure", figure.Name("/S"));
+            Assert.Equal(string.Empty, figure.Text("/Alt"));
         }
 
         [Theory]
@@ -410,10 +405,10 @@ namespace PeachPDF.Tests.Integration
             var document = await generator.GeneratePdf(SimpleHtml, config);
             await generator.AddPdfPages(document, SimpleHtml, config, null);
 
-            var outputIntents = document.PdfDocument.Catalog.Elements.GetArray("/OutputIntents");
+            var outputIntents = document.Inspect().Catalog.Array("/OutputIntents");
             Assert.NotNull(outputIntents);
-            Assert.Single(outputIntents!.Elements);
-            Assert.Equal(2, document.PdfDocument.Pages.Count);
+            Assert.Single(outputIntents!.Items);
+            Assert.Equal(2, document.Inspect().PageCount);
         }
 
         [Fact]
@@ -432,7 +427,7 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.Equal(creationDate.UtcDateTime, result.PdfDocument.Info.CreationDate.ToUniversalTime());
+            Assert.Equal(creationDate.UtcDateTime, result.Inspect().Info.Date("/CreationDate")!.Value.ToUniversalTime());
 
             var packet = await GetXmpPacket(SimpleHtml, config);
             var xmpNs = XNamespace.Get("http://ns.adobe.com/xap/1.0/");
@@ -460,7 +455,7 @@ namespace PeachPDF.Tests.Integration
             // what actually exercises the fixed (no-longer-unconditional) TransparencyUsed logic.
             using var ms = new MemoryStream();
             result.Save(ms);
-            Assert.False(result.PdfDocument.Pages[0].Elements.ContainsKey("/Group"));
+            Assert.False(result.Inspect().Pages[0].ContainsKey("/Group"));
         }
 
         [Fact]
@@ -478,7 +473,7 @@ namespace PeachPDF.Tests.Integration
             var result = await new PdfGenerator().GeneratePdf(html, config);
             using var ms = new MemoryStream();
             result.Save(ms);
-            Assert.True(result.PdfDocument.Pages[0].Elements.ContainsKey("/Group"));
+            Assert.True(result.Inspect().Pages[0].ContainsKey("/Group"));
         }
 
         [Fact]
@@ -500,11 +495,12 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var annotations = result.PdfDocument.Pages[0].Annotations;
-            Assert.Equal(1, annotations.Count);
-            var annotation = annotations[0]!;
-            Assert.True(annotation.Elements.ContainsKey("/F"));
-            Assert.NotEqual(0, annotation.Elements.GetInteger("/F"));
+            var file = result.Inspect();
+            var annotations = file.Annotations(file.Pages[0]);
+            Assert.Single(annotations);
+            var annotation = annotations[0];
+            Assert.True(annotation.ContainsKey("/F"));
+            Assert.NotEqual(0, annotation.Number("/F"));
         }
 
         [Fact]

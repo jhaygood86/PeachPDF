@@ -1,0 +1,255 @@
+PeachDrawing.PDF.ColorBlackGeneration : enum Int32
+  UseRichBlack = 1
+  UseTrueBlack = 0
+PeachDrawing.PDF.ColorConversionMode : enum Int32
+  ConvertToOutputIntent = 1
+  ConvertToProfile = 3
+  GrayscaleViaK = 2
+  PreserveAsAuthored = 0
+PeachDrawing.PDF.ColorOptions : sealed class
+  ctor()
+  property Boolean UseBlackPointCompensation { get; set; }
+  property Byte[] ConvertToProfile { get; set; }
+  property Byte[] FallbackCmykProfile { get; set; }
+  property Byte[] OutputIntentProfile { get; set; }
+  property ColorBlackGeneration BlackGeneration { get; set; }
+  property ColorConversionMode ConversionMode { get; set; }
+  property ColorRenderingIntent RenderingIntent { get; set; }
+  property String OutputIntentIdentifier { get; set; }
+PeachDrawing.PDF.ColorRenderingIntent : enum Int32
+  AbsoluteColorimetric = 3
+  Perceptual = 0
+  RelativeColorimetric = 1
+  Saturation = 2
+PeachDrawing.PDF.IPdfFormAppearance : interface
+  method abstract Double TextFontSizePoints(Size sizePoints, Boolean autoFontSize, Boolean isPlaceholder)
+  method abstract Void PaintCheckbox(Canvas canvas, Size sizePoints, Boolean isChecked)
+  method abstract Void PaintRadio(Canvas canvas, Size sizePoints, Boolean isSelected)
+  method abstract Void PaintText(Canvas canvas, Size sizePoints, String text, Boolean autoFontSize, Int32? combCells, Boolean isPlaceholder)
+  property Double PixelsPerPoint { get; }
+PeachDrawing.PDF.ImageCompression : enum Int32
+  Auto = 0
+  Lossless = 1
+  Lossy = 2
+PeachDrawing.PDF.PdfAConformance : enum Int32
+  None = 0
+  PdfA1A = 2
+  PdfA1B = 1
+  PdfA2A = 5
+  PdfA2B = 3
+  PdfA2U = 4
+  PdfA3A = 8
+  PdfA3B = 6
+  PdfA3U = 7
+  PdfA4 = 9
+  PdfA4E = 10
+  PdfA4F = 11
+PeachDrawing.PDF.PdfBookmark : sealed class
+  ctor(Int32 level, String title, Boolean isOpen)
+  property Boolean IsOpen { get; }
+  property Double TopPoints { get; set; }
+  property Int32 Level { get; }
+  property Int32? PageIndex { get; set; }
+  property String Title { get; }
+  property String Uri { get; set; }
+PeachDrawing.PDF.PdfCanvas : sealed class
+  method static PdfCanvas CreateMeasuring(PdfRenderContext renderContext, Double widthPoints, Double heightPoints)
+  method static PdfCanvas CreateMeasuring(PdfRenderContext renderContext, Size size)
+  method virtual Boolean PaintRequiresTransparency(Action<Canvas> paint)
+  method virtual GraphicsPath GetGraphicsPath()
+  method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
+  method virtual Object SetAntiAliasSmoothingMode()
+  method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
+  method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void BeginArtifact()
+  method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
+  method virtual Void BeginVariableText()
+  method virtual Void Dispose()
+  method virtual Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
+  method virtual Void DrawImage(Image image, Rect destRect)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method virtual Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
+  method virtual Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
+  method virtual Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
+  method virtual Void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
+  method virtual Void DrawImageWithOpacity(Image image, Rect destRect, Double opacity, PaintBlendMode blendMode = Normal)
+  method virtual Void DrawLine(Pen pen, Double x1, Double y1, Double x2, Double y2)
+  method virtual Void DrawPath(Brush brush, GraphicsPath path)
+  method virtual Void DrawPath(Pen pen, GraphicsPath path)
+  method virtual Void DrawPolygon(Brush brush, PaintPoint[] points)
+  method virtual Void DrawRaster(RasterSurface surface)
+  method virtual Void DrawRectangle(Brush brush, Double x, Double y, Double width, Double height)
+  method virtual Void DrawRectangle(Pen pen, Double x, Double y, Double width, Double height)
+  method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing = 0, FontPalette fontPalette = null, ShapeSettings? features = null)
+  method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing, FontPalette fontPalette, ShapeSettings? features, String logicalText)
+  method virtual Void DrawStringInRect(String str, Font font, PaintColor color, Rect rect, BoxAlignment horizontal, BoxAlignment vertical, String logicalText = null)
+  method virtual Void EndMarkedContent()
+  method virtual Void EndVariableText()
+  method virtual Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method virtual Void PopBlendMode()
+  method virtual Void PopClip()
+  method virtual Void PopTransform()
+  method virtual Void PushBlendMode(PaintBlendMode mode)
+  method virtual Void PushClip(GraphicsPath path)
+  method virtual Void PushClip(Rect rect)
+  method virtual Void PushClipExclude(Rect rect)
+  method virtual Void PushTransform(Matrix3x2 matrix)
+  method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
+  property Boolean FlattensTransparency { get; }
+  property Boolean IsOffscreenTile { get; }
+  property Double PixelsPerPoint { get; }
+  property Matrix3x2 CurrentTransform { get; }
+  property Object TileCacheOwner { get; }
+  property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.PDF.PdfComposer : sealed class
+  ctor(PdfRenderContext renderContext, PdfComposerOptions options = null)
+  method PdfComposerPage AddPage(Double widthPoints, Double heightPoints)
+  method PdfFormBuilder CreateFormBuilder(PdfRenderContext renderContext, String generatedNamePrefix = Field)
+  method PdfTagRecorder CreateTagRecorder(Boolean requireAlternateText = False)
+  method Void AddBookmarks(IEnumerable<PdfBookmark> bookmarks)
+  method Void AddNamedDestination(String name, Int32 pageIndex, Double topPoints)
+  method Void Configure(PdfComposerOptions options)
+  method Void ConsolidateImages()
+  method Void Save(Stream stream)
+  method virtual Void Dispose()
+  property IReadOnlyList<PdfComposerPage> Pages { get; }
+  property Int32 PageCount { get; }
+PeachDrawing.PDF.PdfComposerOptions : sealed class
+  ctor()
+  property Boolean BrotliCompression { get; set; }
+  property Boolean CompressContentStreams { get; set; }
+  property Boolean DownscaleImages { get; set; }
+  property Boolean FlattenTransparency { get; set; }
+  property Boolean JxlPassthrough { get; set; }
+  property Boolean PortableColorFilters { get; set; }
+  property Boolean WriteXmpMetadata { get; set; }
+  property ColorOptions ColorOptions { get; set; }
+  property DateTimeOffset? CreationDate { get; set; }
+  property Double MaximumDownscaleMultiplier { get; set; }
+  property ICollection<XElement> CustomXmpProperties { get; }
+  property IList<PdfEmbeddedFile> EmbeddedFiles { get; }
+  property ImageCompression ImageCompression { get; set; }
+  property Int32 DownscaleQuality { get; set; }
+  property PdfAConformance Conformance { get; set; }
+  property PdfEncryptionOptions Encryption { get; set; }
+  property PdfFacturXInfo FacturX { get; set; }
+  property PdfVersion? Version { get; set; }
+  property PdfXConformance XConformance { get; set; }
+  property String Author { get; set; }
+  property String Creator { get; set; }
+  property String Keywords { get; set; }
+  property String Language { get; set; }
+  property String Producer { get; set; }
+  property String Subject { get; set; }
+  property String Title { get; set; }
+PeachDrawing.PDF.PdfComposerPage : sealed class
+  method IDisposable Shift(Double xPoints, Double yPoints)
+  method PdfCanvas CreateCanvas(PdfRenderContext renderContext)
+  method PdfLink AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
+  method PdfLink AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
+  method Void Finish()
+  property Double HeightPoints { get; }
+  property Double WidthPoints { get; }
+  property Int32 Index { get; }
+  property PdfCanvas Canvas { get; }
+PeachDrawing.PDF.PdfEmbeddedFile : sealed class
+  ctor()
+  property Byte[] Data { get; set; }
+  property DateTimeOffset? ModificationDate { get; set; }
+  property PdfEmbeddedFileRelationship Relationship { get; set; }
+  property String Description { get; set; }
+  property String FileName { get; set; }
+  property String MimeType { get; set; }
+PeachDrawing.PDF.PdfEmbeddedFileRelationship : enum Int32
+  Alternative = 3
+  Data = 2
+  Source = 1
+  Supplement = 4
+  Unspecified = 0
+PeachDrawing.PDF.PdfEncryptionOptions : sealed class
+  ctor()
+  method static PdfEncryptionOptions ReadOnly(String userPassword = null, String ownerPassword = null)
+  property Boolean EncryptMetadata { get; set; }
+  property PdfPermissions Permissions { get; set; }
+  property String OwnerPassword { get; set; }
+  property String UserPassword { get; set; }
+PeachDrawing.PDF.PdfFacturXInfo : sealed class
+  ctor(String fileName, String conformanceLevel)
+  property String ConformanceLevel { get; }
+  property String FileName { get; }
+PeachDrawing.PDF.PdfFormBuilder : sealed class
+  method Void AddField(PdfComposerPage page, PdfFormFieldDefinition field)
+PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
+  ctor()
+  property Boolean AutoFontSize { get; init; }
+  property Boolean DoNotScroll { get; init; }
+  property Boolean IsChecked { get; init; }
+  property Boolean NoExport { get; init; }
+  property Boolean Password { get; init; }
+  property Boolean PlaceholderShown { get; init; }
+  property Boolean ReadOnly { get; init; }
+  property Boolean Required { get; init; }
+  property IPdfFormAppearance Appearance { get; init; }
+  property IReadOnlyList<PdfFormOption> Options { get; init; }
+  property Int32? CombCells { get; init; }
+  property Int32? MaxLength { get; init; }
+  property Matrix3x2? AppearanceTransform { get; init; }
+  property PdfFormFieldKind Kind { get; init; }
+  property Rect Bounds { get; init; }
+  property Size ContentSize { get; init; }
+  property String Name { get; init; }
+  property String Placeholder { get; init; }
+  property String Value { get; init; }
+PeachDrawing.PDF.PdfFormFieldKind : enum Int32
+  Checkbox = 1
+  Radio = 2
+  Select = 3
+  Text = 0
+PeachDrawing.PDF.PdfFormOption : struct
+  ctor(String value, String label, Boolean selected)
+  property Boolean Selected { get; }
+  property String Label { get; }
+  property String Value { get; }
+PeachDrawing.PDF.PdfLink : sealed class
+PeachDrawing.PDF.PdfPermissions : enum Int32
+  All = 3900
+  AllowAccessibilityExtract = 512
+  AllowAnnotations = 32
+  AllowAssemble = 1024
+  AllowCopy = 16
+  AllowFillForms = 256
+  AllowHighQualityPrint = 2048
+  AllowModify = 8
+  AllowPrint = 4
+  None = 0
+  ReadOnly = 2580
+PeachDrawing.PDF.PdfRenderContext : class
+  ctor()
+  method Task AddFont(Stream stream, String fontFamilyName)
+  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+  property Double LayoutUnitsPerPoint { get; }
+  property Double PixelsPerPoint { get; set; }
+PeachDrawing.PDF.PdfTagRecorder : sealed class
+  method IDisposable OpenArtifact(Canvas canvas)
+  method IDisposable OpenContentElement(Canvas canvas, Object key, String structureType, String altText = null)
+  method IDisposable OpenGroupingElement(Object key, String structureType)
+  method IDisposable OpenListItemBodyElement(Object key)
+  method IDisposable OpenPhantomAncestors(IReadOnlyList<ValueTuple<Object, String>> ancestors)
+  method Void AttachMathMlSource(Object key, String mathMlSource)
+  method Void BeginPage(PdfComposerPage page)
+  method Void Finish()
+  method Void LinkAnnotation(Object key, PdfLink link)
+  property Boolean IsInMarkedContent { get; }
+PeachDrawing.PDF.PdfVersion : enum Int32
+  Pdf17 = 0
+  Pdf20 = 1
+PeachDrawing.PDF.PdfXConformance : enum Int32
+  None = 0
+  X1a = 1
+  X3 = 2
+  X4 = 3
+  X6 = 4

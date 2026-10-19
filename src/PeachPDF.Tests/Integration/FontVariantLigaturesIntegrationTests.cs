@@ -159,8 +159,8 @@ body {{ font-family: 'SS3'; font-size: 40pt; }}
 </style></head><body>ff</body></html>";
 
             var generator = new PdfGenerator();
-            var doc = await generator.GeneratePdf(html, PageSize.A4);
-            doc.PdfDocument.Options.CompressContentStreams = false; // keep the ToUnicode stream readable
+            // Uncompressed, so the ToUnicode stream stays readable.
+            var doc = await generator.GeneratePdf(html, new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false });
 
             var ms = new MemoryStream();
             doc.Save(ms);
@@ -195,8 +195,7 @@ body {{ font-family: 'SS3'; width: 400px; }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -207,8 +206,7 @@ body {{ font-family: 'SS3'; width: 400px; }}
         {
             var renderContext = new HtmlRenderContext();
             var size = new Size(595, 842);
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            return new PdfCanvas(renderContext, measure, 1.0);
+            return PdfCanvas.CreateMeasuring(renderContext, size);
         }
 
         private static CssBox? FindById(CssBox box, string id)

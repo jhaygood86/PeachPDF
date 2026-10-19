@@ -59,7 +59,11 @@ namespace PeachPDF.Tests.Svg
         {
             public List<PaintPoint[]> Paths { get; } = [];
 
-            public override GraphicsPath GetGraphicsPath() => new PdfGraphicsPath();
+            // A real path, so arcs become the curves the PDF writer would receive.
+            private static readonly PeachDrawing.PDF.PdfCanvas PathFactory =
+                PeachDrawing.PDF.PdfCanvas.CreateMeasuring(new PeachDrawing.PDF.PdfRenderContext(), new Size(1, 1));
+
+            public override GraphicsPath GetGraphicsPath() => PathFactory.GetGraphicsPath();
 
             public override void DrawPath(Pen pen, GraphicsPath path)
             {

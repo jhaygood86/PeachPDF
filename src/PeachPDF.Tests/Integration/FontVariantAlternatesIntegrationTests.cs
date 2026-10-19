@@ -137,8 +137,7 @@ body {{ font-family: 'Recursive'; width: 400px; }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -149,8 +148,7 @@ body {{ font-family: 'Recursive'; width: 400px; }}
         {
             var renderContext = new HtmlRenderContext();
             var size = new Size(595, 842);
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            return new PdfCanvas(renderContext, measure, 1.0);
+            return PdfCanvas.CreateMeasuring(renderContext, size);
         }
 
         private static CssBox? FindById(CssBox box, string id)

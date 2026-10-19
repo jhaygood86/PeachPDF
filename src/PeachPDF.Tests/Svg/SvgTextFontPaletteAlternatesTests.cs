@@ -98,8 +98,7 @@ namespace PeachPDF.Tests.Svg
             var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Recursive);
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Recursive, family);
             var font = renderContext.GetFont(family, 40, PaintFontStyle.Regular)!;
-            using var g = new PeachDrawing.PDF.PdfCanvas(renderContext,
-                PeachDrawing.PDF.Engine.Drawing.PdfGraphics.CreateMeasureContext(new PeachDrawing.Core.Size(595, 842)), 1.0);
+            using var g = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new PeachDrawing.Core.Size(595, 842));
             using var a = g.GetTextOutline("a", font, new PaintPoint(0, 40), features: plain.DrawStringCalls[0].Features)!;
             using var b = g.GetTextOutline("a", font, new PaintPoint(0, 40), features: alt.DrawStringCalls[0].Features)!;
             Assert.NotEqual(

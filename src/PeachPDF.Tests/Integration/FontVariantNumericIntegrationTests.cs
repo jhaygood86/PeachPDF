@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             // well-designed font's oldstyle figures aren't guaranteed to differ in advance width from
             // the default ones.
             var box = await FindWordsBox("<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums\">0123456789</b>");
-            var typeface = ((PeachDrawing.PDF.PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = (box.ActualFont).Typeface!;
 
             var defaultShaped = Shaper.Shape(typeface, "0123456789", ShapeSettings.Default);
             var oldstyleShaped = Shaper.Shape(typeface, "0123456789", box.ActualTextShapingFeatures);
@@ -100,8 +100,7 @@ body {{ font-family: 'SS3Num'; width: 400px; }}
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
@@ -130,8 +129,7 @@ body {{ font-family: 'SS3Num'; width: 400px; }}
         {
             var renderContext = new HtmlRenderContext();
             var size = new Size(595, 842);
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            return new PdfCanvas(renderContext, measure, 1.0);
+            return PdfCanvas.CreateMeasuring(renderContext, size);
         }
     }
 }

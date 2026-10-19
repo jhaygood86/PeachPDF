@@ -110,15 +110,11 @@ namespace PeachPDF.Tests.MathML
                     new PdfGenerateConfig { PageSize = PageSize.A5, CompressContentStreams = false, EnableTaggedPdf = tagged });
 
                 var content = new StringBuilder();
-                for (var i = 0; i < document.PdfDocument.PageCount; i++)
+                for (var i = 0; i < document.Inspect().PageCount; i++)
                 {
                     content.Append("\n%% page ").Append(i).Append('\n');
 
-                    foreach (var item in document.PdfDocument.Pages[i].Contents.Elements)
-                    {
-                        if (item is PdfReference { Value: PdfDictionary { Stream: { } stream } })
-                            content.Append(Encoding.Latin1.GetString(stream.Value));
-                    }
+                    content.Append(document.Inspect().ContentText(document.Inspect().Pages[i]));
                 }
 
                 return content.ToString();

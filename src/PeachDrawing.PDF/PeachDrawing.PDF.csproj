@@ -48,9 +48,14 @@
 			directly. PublicApi/InternalsGrantTests pins the set, and each step of the move removes a dependence; the end state
 			grants nothing but PeachDrawing.PDF.Tests.
 		-->
-		<InternalsVisibleTo Include="PeachPDF" />
-		<InternalsVisibleTo Include="PeachPDF.Tests" />
 	</ItemGroup>
+	<!-- The producer string the composer writes into the document information, from the one version every package carries. -->
+	<Target Name="GeneratePdfComposerProductInfo" BeforeTargets="BeforeBuild">
+		<WriteLinesToFile File="$(IntermediateOutputPath)PdfComposerProductInfo.g.cs" Lines="namespace PeachDrawing.PDF { internal static class PdfComposerProductInfo { public const string Generator = &quot;PeachDrawing.PDF $(PackageVersion)&quot;%3B } }" Overwrite="true" />
+		<ItemGroup>
+			<Compile Include="$(IntermediateOutputPath)PdfComposerProductInfo.g.cs" />
+		</ItemGroup>
+	</Target>
 	<ItemGroup>
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />

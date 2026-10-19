@@ -178,7 +178,7 @@ namespace PeachPDF
         public async Task<PeachPdfDocument> GeneratePdf(string? html, PdfGenerateConfig config, PeachPdfCssContent? cssData = null)
         {
             // create PDF document to render the HTML into
-            var document = new PeachPdfDocument(new PdfDocument());
+            var document = new PeachPdfDocument(new PdfComposer(_renderContext));
 
             // add rendered PDF pages to document
             await AddPdfPages(document, html, config, cssData);
@@ -253,7 +253,7 @@ namespace PeachPDF
             ValidateAnimationProgress(config);
 
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize.ToEngine()) : new Size(config.ManualPageWidth, config.ManualPageHeight);
+            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
@@ -262,8 +262,6 @@ namespace PeachPDF
             }
 
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
-
-            EstablishDocumentOptions(document, config);
 
             _renderContext.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _renderContext.AllowLocalFileAccess = config.AllowLocalFileAccess;
@@ -288,7 +286,7 @@ namespace PeachPDF
                 orgPageSize = container.CssPageSize.Value;
             }
 
-            var measure = PdfGraphics.CreateMeasureContext(container.PageSize);
+            var measure = PdfCanvas.CreateMeasuring(_renderContext, container.PageSize.Width, container.PageSize.Height);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
             var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
@@ -330,7 +328,7 @@ namespace PeachPDF
                     await SetContent(container, config, html, cssData, orgPageSize);
 
                     measure?.Dispose();
-                    measure = PdfGraphics.CreateMeasureContext(container.PageSize);
+                    measure = PdfCanvas.CreateMeasuring(_renderContext, container.PageSize.Width, container.PageSize.Height);
                 }
             }
 
@@ -345,222 +343,6 @@ namespace PeachPDF
             await RenderPagesCore(document, container, config);
 
             measure?.Dispose();
-        }
-
-        /// <summary>
-        /// Establishes every whole-document <see cref="PdfDocumentOptions"/> property from <paramref name="config"/>
-        /// - color mode, downscaling, PDF/A and PDF/X conformance (plus their "first call on this document
-        /// wins, a later mismatched call throws" cross-call consistency guards, since both
-        /// <see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>
-        /// and <see cref="AddPages"/> are repeatable APIs that can append further content to an existing
-        /// <see cref="PeachPdfDocument"/>), the PDF version header, and <see cref="ColorOptions"/>. Shared
-        /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>)
-        /// and the declarative document-building path (<see cref="AddPages"/>) - <see cref="RenderPagesCore"/> reads <paramref name="config"/>
-        /// directly for its own validation/XMP/OutputIntent writing, but the paint-time *enforcement* of
-        /// PDF/A/PDF/X construct restrictions (<c>PDF.Rendering.PdfGraphicsState</c>'s
-        /// color-mode resolution, <c>PDF.Advanced.PdfXColorSpaceGuard</c>,
-        /// <c>PDF.Advanced.PdfColorConversionGuard</c>, <c>PDF.Advanced.PdfATransparencyGuard</c>)
-        /// all read <c>document.PdfDocument.Options.*</c> instead, so a caller that skipped this method
-        /// would get a document whose <c>/OutputIntents</c>/XMP conformance claim is real but whose actual
-        /// content is completely unenforced against it - exactly the bug this method's extraction fixes.
-        /// </summary>
-        private static void EstablishDocumentOptions(PeachPdfDocument document, PdfGenerateConfig config)
-        {
-            document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
-            document.PdfDocument.Options.BrotliCompression = config.BrotliCompression;
-            document.PdfDocument.Options.JxlPassthrough = config.JxlPassthrough;
-            // Undefined (not the PDF-engine-internal default of Rgb) lets each color write in
-            // whichever space it actually carries - RGB-authored colors as /DeviceRGB, device-cmyk()
-            // -authored colors as real /DeviceCMYK operators (see PdfEncoders.ToString's per-color branch
-            // under Undefined) - rather than every CMYK-tagged PaintColor being force-collapsed back to a
-            // lossy RGB round-trip by ColorSpaceHelper.EnsureColorMode's Rgb branch. For an all-RGB
-            // document this is byte-identical to Rgb mode (every color's ColorSpace is already Rgb).
-            document.PdfDocument.Options.ColorMode = PdfColorMode.Undefined;
-            document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
-            document.PdfDocument.Options.FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten;
-            document.PdfDocument.Options.PortableColorFilters = config.PortableColorFilters;
-            document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
-            document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
-            document.PdfDocument.Options.ImageCompression = config.ImageCompression.ToEngine();
-            // PDF/A conformance is a whole-document property, but AddPdfPages/AddPages are repeatable
-            // public APIs (a caller can append more pages to an existing PeachPdfDocument) - a second call
-            // requesting a different level than the first would otherwise silently leave the document's
-            // already-written /OutputIntents/XMP conformance claim disagreeing with how some of its
-            // pages were actually painted (earlier pages painted under a different transparency-guard
-            // regime than the level the file now claims). Reject that outright rather than produce a
-            // self-contradictory document; the same level requested again across multiple calls is fine.
-            if (document.PdfDocument.Options.PdfAConformanceEstablished
-                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance.ToEngine())
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfAConformance must be the same on every AddPdfPages/AddPages call " +
-                    $"for a given document - this document was already established as '{document.PdfDocument.Options.PdfAConformance}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfAConformance}'. A single PDF " +
-                    "document can only claim one PDF/A conformance level (or none) as a whole.");
-            }
-
-            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance.ToEngine();
-            document.PdfDocument.Options.PdfAConformanceEstablished = true;
-
-            // ISO 19005-2/3 (PDF/A-2/3) are defined in terms of PDF 1.7/ISO 32000-1. ISO 19005-1
-            // (PDF/A-1) is defined in terms of PDF 1.4 - the version PeachPDF already always emits -
-            // so PdfA1B/PdfA1A need no version change at all.
-            if (config.PdfAConformance is PdfAConformance.PdfA2B or PdfAConformance.PdfA2U or PdfAConformance.PdfA2A
-                or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA3A)
-            {
-                document.PdfDocument.Version = 17;
-            }
-
-            // PDF/A-4 and PDF/X-6 are defined against PDF 2.0; every other PDF/A or PDF/X level is defined against
-            // PDF 1.4, 1.6 or 1.7. A caller who never touched PdfVersion gets the version the requested standard
-            // needs; one who set it explicitly to something the standard cannot use has a contradiction to resolve,
-            // not something to silently pick a winner for.
-            var requiresPdf20 = config.PdfAConformance is PdfAConformance.PdfA4 or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F
-                || config.PdfXConformance == PdfXConformance.X6;
-            // PdfVersion defaults to Pdf20, so a caller who never set it and asks for an earlier PDF/A or PDF/X level gets
-            // the PDF 1.x file that level is defined against, rather than a contradiction to resolve.
-            var requestsEarlierLevel = !requiresPdf20
-                && (config.PdfAConformance != PdfAConformance.None || config.PdfXConformance != PdfXConformance.None);
-            var requestedVersion = config.PdfVersionExplicit
-                ? config.PdfVersion
-                : requiresPdf20 ? PdfVersion.Pdf20
-                : requestsEarlierLevel ? PdfVersion.Pdf17
-                : config.PdfVersion;
-
-            if (requiresPdf20 && requestedVersion != PdfVersion.Pdf20)
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfVersion is set to {requestedVersion}, but PdfAConformance ({config.PdfAConformance}) " +
-                    $"or PdfXConformance ({config.PdfXConformance}) is a level defined against PDF 2.0 (PDF/A-4, PDF/X-6). " +
-                    "Set PdfVersion to Pdf20, or leave it unset.");
-            }
-
-            if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfAConformance is also set to a " +
-                    "level defined against PDF 1.4 or 1.7. Only PDF/A-4 (PdfA4, PdfA4E, PdfA4F) is a PDF 2.0 level; " +
-                    "request PdfVersion.Pdf17 (or leave PdfVersion at its default) for the earlier ones.");
-            }
-
-            if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && config.PdfXConformance != PdfXConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfXConformance is also set to a " +
-                    "level defined against PDF 1.4 (X1a/X3) or 1.6 (X4). Only PdfXConformance.X6 is a PDF 2.0 " +
-                    "level; request PdfVersion.Pdf17 (or leave PdfVersion at its default) for the earlier ones.");
-            }
-
-            // Same "a PDF file has exactly one header version" reasoning as the PdfAConformance guard
-            // above - a second AddPdfPages/AddPages call on the same document requesting a different
-            // PdfVersion than the first would leave the file's already-written header disagreeing with
-            // how some of its pages/structure elements were painted.
-            if (document.PdfDocument.Options.PdfVersionEstablished
-                && document.PdfDocument.Options.PdfVersion != requestedVersion.ToEngine())
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages/AddPages call for " +
-                    $"a given document - this document was already established as '{document.PdfDocument.Options.PdfVersion}' " +
-                    $"by an earlier call, and this call specifies '{requestedVersion}'. A single PDF file " +
-                    "can only have one header version.");
-            }
-
-            document.PdfDocument.Options.PdfVersion = requestedVersion.ToEngine();
-            document.PdfDocument.Options.PdfVersionEstablished = true;
-
-            if (requestedVersion == PdfVersion.Pdf20)
-            {
-                document.PdfDocument.Version = 20;
-            }
-
-            // PDF/A (archival) and PDF/X (print-production) are different documents in practice - no
-            // single file conformance-claims both at once, so requesting both is a contradiction the
-            // caller needs to resolve, not something to silently pick a winner for.
-            if (config.PdfAConformance != PdfAConformance.None && config.PdfXConformance != PdfXConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfAConformance and PdfXConformance are both set to a level other " +
-                    "than None. A single PDF document can only claim one conformance family - archival " +
-                    "(PDF/A) or print-production (PDF/X), not both.");
-            }
-
-            // Same "whole-document property, first AddPdfPages/AddPages call wins" reasoning as
-            // PdfAConformance above.
-            if (document.PdfDocument.Options.PdfXConformanceEstablished
-                && document.PdfDocument.Options.PdfXConformance != config.PdfXConformance.ToEngine())
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfXConformance must be the same on every AddPdfPages/AddPages call " +
-                    $"for a given document - this document was already established as '{document.PdfDocument.Options.PdfXConformance}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfXConformance}'. A single PDF " +
-                    "document can only claim one PDF/X conformance level (or none) as a whole.");
-            }
-
-            document.PdfDocument.Options.PdfXConformance = config.PdfXConformance.ToEngine();
-            document.PdfDocument.Options.PdfXConformanceEstablished = true;
-            document.PdfDocument.Options.ColorOptions = config.ColorOptions.ToEngine();
-
-            // Embedded files are a whole-document property too - and validated here, ahead of any layout or
-            // painting, so a document that is about to be rejected wastes no work. A declarative document
-            // re-enters the render core once per Page(...), so a later call must ask for the same files
-            // (they are embedded once, in RenderPagesCore), exactly like PdfAConformance above.
-            var embeddingPlan = PdfEmbeddingPlan.Create(config);
-            if (document.PdfDocument.Options.EmbeddingPlan is PdfEmbeddingPlan establishedPlan && !establishedPlan.SameAs(embeddingPlan))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.Attachments must be the same on every AddPdfPages/AddPages call for a given " +
-                    "document - this call asks for a different set of embedded files than an earlier call did. " +
-                    "A document's embedded files are established once, by its first call.");
-            }
-
-            document.PdfDocument.Options.EmbeddingPlan = embeddingPlan;
-
-            // /UF (PDF 1.7), /Desc (1.6) and /AFRelationship are newer than the historical 1.4 header, and a
-            // PDF/A-3 level already asks for 1.7 above - so a plain attachment gets the same, not a 1.4 file
-            // that uses 1.7 features. (PDF/X, which would lower it again, is rejected together with files.)
-            if (embeddingPlan.Files.Count > 0 && document.PdfDocument.Version < 17)
-            {
-                document.PdfDocument.Version = 17;
-            }
-
-            // ISO 15930-4/6 (PDF/X-1a:2003/PDF/X-3:2003) target PDF 1.4 - already PeachPDF's own
-            // historical default (see PdfVersionTests.Default_Pdf17_KeepsHistoricalVersion14), so no
-            // explicit change is needed for those two levels; ISO 15930-7 (PDF/X-4) targets PDF 1.6, a
-            // real bump from that default.
-            if (config.PdfXConformance == PdfXConformance.X4)
-            {
-                document.PdfDocument.Version = 16;
-            }
-
-            // Encryption is a whole-document property, like the conformance levels above, and both PDF/A (ISO 19005,
-            // 6.1.3) and PDF/X (ISO 15930) forbid an /Encrypt entry - a document cannot claim one and carry the other.
-            // The snapshot keeps a caller who edits their options object afterwards from changing a document in progress.
-            var encryption = config.Encryption?.Clone();
-            if (encryption is not null
-                && (config.PdfAConformance != PdfAConformance.None || config.PdfXConformance != PdfXConformance.None))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.Encryption cannot be combined with PdfAConformance or PdfXConformance: " +
-                    "PDF/A and PDF/X documents must not be encrypted.");
-            }
-
-            if (document.PdfDocument.Options.EncryptionEstablished
-                && !(document.PdfDocument.Options.Encryption is null ? encryption is null : document.PdfDocument.Options.Encryption.SameAs(encryption.ToEngine())))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.Encryption must be the same on every AddPdfPages/AddPages call for a given " +
-                    "document - a PDF file is encrypted as a whole, with one set of passwords and permissions.");
-            }
-
-            document.PdfDocument.Options.Encryption = encryption.ToEngine();
-            document.PdfDocument.Options.EncryptionEstablished = true;
-
-            // AES-256 (revision 6) is a PDF 2.0 feature that PDF 1.7 readers also accept (Adobe extension level 8); a
-            // file that would otherwise carry an older header is raised to 1.7.
-            if (encryption is not null && document.PdfDocument.Version < 17)
-            {
-                document.PdfDocument.Version = 17;
-            }
         }
 
         /// <summary>
@@ -585,7 +367,7 @@ namespace PeachPDF
         /// </param>
         public async Task<PeachPdfDocument> CreateDocument(Action<IDocumentBuilder> handler, PdfGenerateConfig? config = null)
         {
-            var document = new PeachPdfDocument(new PdfDocument());
+            var document = new PeachPdfDocument(new PdfComposer(_renderContext));
             await AddPages(document, handler, config);
             return document;
         }
@@ -609,7 +391,6 @@ namespace PeachPDF
             };
 
             ValidateAnimationProgress(config);
-            EstablishDocumentOptions(document, config);
 
             // Collected synchronously first (the builder callback itself is synchronous, matching
             // QuestPDF's own declarative-composition-then-execution shape), then each page's own tree is
@@ -650,7 +431,7 @@ namespace PeachPDF
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize.ToEngine())
+                    ? PageSizeConverter.ToSize(config.PageSize)
                     : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             if ((pageDescriptor.OrientationOverride ?? config.PageOrientation) == PageOrientation.Landscape)
@@ -714,7 +495,7 @@ namespace PeachPDF
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = PdfGraphics.CreateMeasureContext(orgPageSize);
+            using var measure = PdfCanvas.CreateMeasuring(_renderContext, orgPageSize.Width, orgPageSize.Height);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 
@@ -763,207 +544,16 @@ namespace PeachPDF
         /// </summary>
         private async Task RenderPagesCore(PeachPdfDocument document, HtmlContainer container, PdfGenerateConfig config)
         {
-            var resolvedCreationDate = ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
+            // Whole-document format, document information, and what the claimed conformance level requires of the file (the output
+            // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
+            // document. Everything that depends on this render's content (title, language, creation date) is known by now.
+            var embeddings = PdfEmbeddingPlan.Create(config);
+            document.Composer.Configure(BuildComposerOptions(config, container, embeddings));
 
-            // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally
-            // require a real document language - both checked here, once, ahead of the per-page paint
-            // loop that would otherwise be wasted work on a document that's about to be rejected.
+            // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
+            // which Configure has already checked.
             var isAccessibleConformance = config.PdfAConformance is
                 PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A;
-
-            // Wired unconditionally (independent of tagged-PDF output) - a document's own /Lang is
-            // useful metadata regardless, and DocumentLanguage is already resolved by SetContent
-            // (the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage -
-            // so an explicit DefaultLanguage still reaches /Lang when the document declares none).
-            if (!string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage))
-            {
-                document.PdfDocument.Language = container.HtmlContainerInt.DocumentLanguage;
-            }
-            else if (isAccessibleConformance)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfAConformance is set to an accessible ('A') level, which requires " +
-                    "a document language, but neither the source HTML declares <html lang=\"...\"> nor is " +
-                    "PdfGenerateConfig.DefaultLanguage set. Set DefaultLanguage, or add a lang attribute to the document.");
-            }
-
-            // Each non-default ConversionMode needs its own destination ICC profile set and parseable -
-            // validated once here (fail loudly, don't write a placeholder - same stance as the missing
-            // -creation-date/missing-language checks) rather than discovered deep in PdfColorConversionGuard
-            // partway through painting.
-            if (config.ColorOptions is { ConversionMode: ColorConversionMode.ConvertToOutputIntent } convertToOutputIntent)
-            {
-                if (convertToOutputIntent.OutputIntentProfile is not { Length: > 0 })
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.ConvertToOutputIntent, " +
-                        "but ColorOptions.OutputIntentProfile is not set. Set it to the ICC profile every color " +
-                        "should be converted into.");
-                }
-
-                if (!PeachImage.IccColorProfile.TryCreate(convertToOutputIntent.OutputIntentProfile, out _))
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.OutputIntentProfile could not be parsed as a valid ICC profile.");
-                }
-            }
-            else if (config.ColorOptions is { ConversionMode: ColorConversionMode.ConvertToProfile } convertToProfile)
-            {
-                if (convertToProfile.ConvertToProfile is not { Length: > 0 })
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.ConvertToProfile, but " +
-                        "ColorOptions.ConvertToProfile is not set.");
-                }
-
-                if (!PeachImage.IccColorProfile.TryCreate(convertToProfile.ConvertToProfile, out _))
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConvertToProfile could not be parsed as a valid ICC profile.");
-                }
-            }
-            else if (config.ColorOptions is { ConversionMode: ColorConversionMode.GrayscaleViaK } grayscaleViaK)
-            {
-                if (grayscaleViaK.FallbackCmykProfile is not { Length: > 0 })
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.GrayscaleViaK, but " +
-                        "ColorOptions.FallbackCmykProfile is not set - it's the CMYK profile every color is " +
-                        "converted through before taking only its K channel.");
-                }
-
-                if (!PeachImage.IccColorProfile.TryCreate(grayscaleViaK.FallbackCmykProfile, out var grayscaleProfile) ||
-                    grayscaleProfile is null || grayscaleProfile.DataColorSpace != PeachImage.IccColorSpace.Cmyk)
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.ColorOptions.FallbackCmykProfile must be a valid CMYK ICC profile when " +
-                        "ConversionMode is ColorConversionMode.GrayscaleViaK.");
-                }
-            }
-
-            var pdfAConformanceRequested = config.PdfAConformance != PdfAConformance.None;
-            var pdfXConformanceRequested = config.PdfXConformance != PdfXConformance.None;
-
-            // Every PDF/X level requires a real output intent, and PeachPDF bundles no default press
-            // profile (unlike PDF/A's bundled sRGB one - there is no single correct default for a print
-            // output intent) - fail loudly rather than silently omit /OutputIntents, same "don't write a
-            // placeholder" stance as the missing-creation-date/missing-language checks.
-            if (pdfXConformanceRequested && config.ColorOptions?.OutputIntentProfile is not { Length: > 0 })
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfXConformance is set, but PdfGenerateConfig.ColorOptions.OutputIntentProfile " +
-                    "is not set. Every PDF/X level requires a real ICC output-intent profile - PeachPDF " +
-                    "bundles no default press profile, so supply one via ColorOptions.OutputIntentProfile " +
-                    "(and ColorOptions.OutputIntentIdentifier).");
-            }
-
-            if (pdfXConformanceRequested && string.IsNullOrEmpty(config.ColorOptions?.OutputIntentIdentifier))
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfXConformance is set, but PdfGenerateConfig.ColorOptions.OutputIntentIdentifier " +
-                    "is not set. Set it to a human-readable name for the output-intent profile's condition " +
-                    "(e.g. \"Coated FOGRA39\").");
-            }
-
-            PeachImage.IccColorProfile? outputIntentProfile = null;
-            if (pdfXConformanceRequested)
-            {
-                PeachImage.IccColorProfile.TryCreate(config.ColorOptions!.OutputIntentProfile!, out outputIntentProfile);
-
-                if (config.PdfXConformance == PdfXConformance.X1a &&
-                    outputIntentProfile?.DataColorSpace != PeachImage.IccColorSpace.Cmyk)
-                {
-                    throw new InvalidOperationException(
-                        "PdfGenerateConfig.PdfXConformance is PdfXConformance.X1a, which requires a CMYK " +
-                        "output-intent profile, but ColorOptions.OutputIntentProfile is not a valid CMYK " +
-                        "ICC profile. PdfXConformance.X3/X4 accept a CMYK, RGB, or Gray output intent instead.");
-                }
-            }
-
-            // An XMP metadata stream (EnableXmpMetadata or PdfAConformance) needs a real xmp:CreateDate -
-            // fail loudly rather than write a placeholder/default date, same stance as the language
-            // check above. Independent of PdfAConformance: a plain EnableXmpMetadata with no resolvable
-            // date throws too. PdfXConformance also needs it - PDF/X-4's GTS_PDFXVersion identification is
-            // primarily an XMP property (ISO 15930-7 - see PdfMetadataStream's remarks), not just an Info
-            // -dictionary one the way PDF/X-1a/X3's is.
-            var writeXmpMetadata = config.EnableXmpMetadata
-                || pdfAConformanceRequested
-                || pdfXConformanceRequested
-                || config.Metadata?.CustomXmpProperties.Count > 0;
-            if (writeXmpMetadata && resolvedCreationDate is not { } creationDate)
-            {
-                throw new InvalidOperationException(
-                    "An XMP metadata stream is being written (EnableXmpMetadata, PdfAConformance, " +
-                    "PdfXConformance, or CustomXmpProperties is set), but no creation date is available: " +
-                    "the source HTML has no extractable date, and PdfGenerateConfig.Metadata.CreationDate " +
-                    "was not set. Set PdfDocumentMetadata.CreationDate.");
-            }
-
-            if (writeXmpMetadata)
-            {
-                // Rewritten on every call (not just the first) - unlike the output intent below, the
-                // packet's content (title/dates/custom properties) can legitimately differ call to call,
-                // so always refreshing it is more useful than freezing it at whatever the first call saw.
-                var metadataStream = new PdfMetadataStream(
-                    document.PdfDocument,
-                    document.PdfDocument.Info,
-                    resolvedCreationDate!.Value,
-                    config.PdfAConformance.ToEngine(),
-                    config.PdfXConformance.ToEngine(),
-                    config.Metadata?.CustomXmpProperties ?? [],
-                    (document.PdfDocument.Options.EmbeddingPlan as PdfEmbeddingPlan)?.FacturX is { } facturX
-                        ? (facturX.FileName, facturX.ConformanceLevel)
-                        : null);
-                document.PdfDocument.Catalog.SetMetadata(metadataStream);
-            }
-
-            // Guarded on "not already present" (rather than unconditionally, like SetMetadata above) -
-            // the sRGB output intent never varies call to call, so re-adding it on a second AddPdfPages
-            // call with the same PdfAConformance would only leave the first call's ICC-profile stream
-            // orphaned (still written into the file, just unreferenced) for no benefit.
-            if (pdfAConformanceRequested && !document.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"))
-            {
-                var outputIntent = new PdfOutputIntent(document.PdfDocument, PdfAResources.SRgbIccProfile);
-                document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
-            }
-
-            // Same "not already present" dedup as PDF/A above - ColorOptions.OutputIntentProfile is
-            // validated (non-null, and CMYK under X1a) earlier in this method.
-            if (pdfXConformanceRequested && !document.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"))
-            {
-                var outputIntent = new PdfOutputIntent(document.PdfDocument, config.ColorOptions!.OutputIntentProfile!,
-                    "/GTS_PDFX", config.ColorOptions.OutputIntentIdentifier!, config.ColorOptions.OutputIntentIdentifier!,
-                    explicitN: outputIntentProfile?.ChannelCount);
-                document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
-
-                // The legacy PDF/X identification mechanism (predates XMP - still what many prepress RIPs
-                // and preflight tools check for X1a/X3): /GTS_PDFXVersion (all levels) and, only for the
-                // part-1 "a" variant, /GTS_PDFXConformance. PdfMetadataStream.PdfXIdentifiers is the shared
-                // source of truth for the exact identifier strings (and their sourcing) - this and the XMP
-                // pdfx: block above always agree by construction. Guarded the same way as the OutputIntent
-                // above - these never vary call to call for one document.
-                // PDF/X-6 identifies itself in XMP only (pdfxid), like PDF 2.0's own deprecation of the Info dictionary.
-                if (config.PdfXConformance != PdfXConformance.X6)
-                {
-                    var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance.ToEngine());
-                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.LatinOneByteEncoding);
-                    if (gtsConformance is not null)
-                    {
-                        document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.LatinOneByteEncoding);
-                    }
-                }
-            }
-
-            // Embedded files go in before any page is painted, so they precede the MathML sources that
-            // tagging attaches while painting in /AF. The plan was established (and checked against any
-            // earlier call) in EstablishDocumentOptions; writing it once per document, not once per call, is
-            // what the Applied flag is for.
-            if (document.PdfDocument.Options.EmbeddingPlan is PdfEmbeddingPlan { Files.Count: > 0 } embeddingPlan
-                && !document.PdfDocument.Options.EmbeddingApplied)
-            {
-                embeddingPlan.Apply(document.PdfDocument, resolvedCreationDate);
-                document.PdfDocument.Options.EmbeddingApplied = true;
-            }
 
             // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks
             // HtmlContainerInt.StructureTagBuilder for null and skips all classification/bookkeeping
@@ -971,7 +561,7 @@ namespace PeachPDF
             // default. An accessible PdfAConformance level forces this on even if EnableTaggedPdf was
             // left false - config itself is never mutated.
             var structureTagBuilder = (config.EnableTaggedPdf || isAccessibleConformance)
-                ? new StructureTagBuilder(document.PdfDocument, requireAltText: isAccessibleConformance)
+                ? new StructureTagBuilder(document.Composer.CreateTagRecorder(requireAlternateText: isAccessibleConformance))
                 : null;
             container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
 
@@ -979,7 +569,7 @@ namespace PeachPDF
             // enabled - FragmentContentPainters.For and HandleFormFields (below) both check
             // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
             // it's not set, so this is the single point that gates the whole feature off by default.
-            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.RenderContext) : null;
+            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.Composer.CreateFormBuilder(_renderContext, "PeachPDFField")) : null;
             container.HtmlContainerInt.InteractiveForms = formFieldBuilder != null;
 
             // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
@@ -1049,19 +639,15 @@ namespace PeachPDF
                 var (bL, bT, bR, bB) = (geom.BorderLeftPt, geom.BorderTopPt, geom.BorderRightPt, geom.BorderBottomPt);
                 var (pL, pT, pR, pB) = (geom.PaddingLeftPt, geom.PaddingTopPt, geom.PaddingRightPt, geom.PaddingBottomPt);
 
-                var page = document.PdfDocument.AddPage();
                 // This slot's own resolved physical sheet size, in true PDF points - already falls back
                 // to the document's base/configured size (orgPageSize) whenever no @page rule overrides
                 // `size` for this slot, so every existing (non-mixed-size) document is unaffected.
-                page.Height = geom.SheetHeightPt;
-                page.Width = geom.SheetWidthPt;
+                var page = document.Composer.AddPage(geom.SheetWidthPt, geom.SheetHeightPt);
 
                 structureTagBuilder?.BeginPage(page);
 
-                using var g = PdfGraphics.FromPdfPage(page);
-
                 var sheetRect = new Rect(0, 0,
-                    page.Width * _renderContext.PixelsPerPoint, page.Height * _renderContext.PixelsPerPoint);
+                    page.WidthPoints * _renderContext.PixelsPerPoint, page.HeightPoints * _renderContext.PixelsPerPoint);
 
                 // The page box's own border-box/padding-box/content-box rects (css-page-3 §3's box
                 // model), resolved in true PDF points then converted to px - the same border-box ->
@@ -1112,7 +698,7 @@ namespace PeachPDF
                 // background already does.
                 if (container.HtmlContainerInt.Root is { } rootBoxForPageBackground && applicablePageStyle is not null)
                 {
-                    using var pageBackgroundGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var pageBackgroundGraphics = page.CreateCanvas(_renderContext);
 
                     await LayeredBackgroundPainter.PaintAsync(
                         pageBackgroundGraphics, applicablePageStyle, _renderContext, container.HtmlContainerInt,
@@ -1129,7 +715,7 @@ namespace PeachPDF
                     // just the content rect. The canvas fill is a distinct paint step from the page box's
                     // own background above - CSS2.1 §14.2's canvas propagation always fills the whole
                     // sheet regardless of the page box's own border/padding, exactly as before #1147.
-                    using var canvasGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var canvasGraphics = page.CreateCanvas(_renderContext);
                     FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, sheetRect);
                 }
 
@@ -1142,14 +728,13 @@ namespace PeachPDF
                 // never fragments/shares a corner with a neighboring page either.
                 if (applicablePageStyle is not null && (bL > 0 || bT > 0 || bR > 0 || bB > 0))
                 {
-                    using var pageBorderGraphics = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var pageBorderGraphics = page.CreateCanvas(_renderContext);
                     MarginBoxRenderer.PaintBorder(
                         pageBorderGraphics, borderBoxRect, applicablePageStyle,
                         pageEmSizePt, pageRemPt, _renderContext.PixelsPerPoint, _renderContext);
                 }
 
                 // Save state so the content transform can be undone for margin box rendering
-                var preContentState = g.Save();
 
                 // No content-area clip pushed here (an earlier version of this method intersected one
                 // directly on the raw PdfGraphics, ahead of FragmentPainter.Paint's own push below) - a raw
@@ -1169,8 +754,7 @@ namespace PeachPDF
                 // (geom.BandWidth/BandHeight).
                 var deltaX = mL + bL + pL - container.MarginLeft;
                 var deltaY = mT + bT + pT - container.MarginTop;
-                if (deltaX != 0 || deltaY != 0)
-                    g.TranslateTransform(deltaX, deltaY);
+                var contentShift = deltaX != 0 || deltaY != 0 ? page.Shift(deltaX, deltaY) : null;
 
                 // Same-units (internal pixel space) generalization of PageBoxRect's default paint
                 // window: x/y adapt to this page's margin override via the delta translate above;
@@ -1183,10 +767,13 @@ namespace PeachPDF
                 container.HtmlContainerInt.PageClipOverride = new Rect(
                     container.HtmlContainerInt.MarginLeft,
                     container.HtmlContainerInt.MarginTop,
-                    (page.Width - mL) * _renderContext.PixelsPerPoint,
+                    (page.WidthPoints - mL) * _renderContext.PixelsPerPoint,
                     geom.BandHeight);
 
-                container.PerformPaint(g, fragmentainer);
+                using (var contentCanvas = page.CreateCanvas(_renderContext))
+                {
+                    container.PerformPaint(contentCanvas, fragmentainer);
+                }
 
                 // The footnote area's own geometry (AttachFootnoteAreas) is built the same
                 // fragmentainer-local way every other content fragment's is - content stays anchored at
@@ -1201,18 +788,18 @@ namespace PeachPDF
                 // here needs to distinguish them.
                 foreach (var footnoteArea in fragmentainer.FootnoteAreas ?? [])
                 {
-                    PaintFootnoteArea(g, _renderContext, container.HtmlContainerInt, footnoteArea);
+                    PaintFootnoteArea(page, _renderContext, container.HtmlContainerInt, footnoteArea);
                 }
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
-                g.Restore(preContentState);
+                contentShift?.Dispose();
 
                 if (applicableMargins.Count > 0)
                 {
-                    using var marginBoxCanvas = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
+                    using var marginBoxCanvas = page.CreateCanvas(_renderContext);
                     await MarginBoxRenderer.Render(
                         marginBoxCanvas,
-                        new Size(page.Width, page.Height),
+                        new Size(page.WidthPoints, page.HeightPoints),
                         mL,
                         mT,
                         mR,
@@ -1237,10 +824,13 @@ namespace PeachPDF
                     !string.IsNullOrEmpty(m.Style.Content) && MarginBoxRenderer.TryParseElementFunction(m.Style.Content, out _, out _));
                 if (hasElementMarginBoxes)
                 {
-                    await PaintElementMarginBoxes(g, _renderContext, container.HtmlContainerInt, fragmentainer.MarginBoxes,
-                        new Size(page.Width, page.Height), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
+                    await PaintElementMarginBoxes(page, _renderContext, container.HtmlContainerInt, fragmentainer.MarginBoxes,
+                        new Size(page.WidthPoints, page.HeightPoints), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
                         marginBoxBackgroundImageCache);
                 }
+
+                // The page's content is complete: write it now rather than holding every page's drawing state until the document is saved.
+                page.Finish();
             }
 
             foreach (var cachedImage in pageBackgroundImageCache.Values)
@@ -1277,81 +867,78 @@ namespace PeachPDF
             // The hyperlinks and the outline, worked out from the laid-out pages in terms of pages and points; the PDF
             // annotations and outline entries are made from them below.
             var annotations = DocumentAnnotationCollector.Collect(container.HtmlContainerInt, fragmentainers);
-            HandleLinks(document.PdfDocument, annotations, structureTagBuilder);
+            HandleLinks(document.Composer, annotations, structureTagBuilder);
 
             if (formFieldBuilder != null)
             {
-                HandleFormFields(document.PdfDocument, annotations, formFieldBuilder);
+                HandleFormFields(document.Composer, annotations, formFieldBuilder);
             }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
             // with no headings simply collects zero bookmarks above and adds no outline.
-            BookmarkOutlineBuilder.Build(document.PdfDocument, annotations.Bookmarks);
+            document.Composer.AddBookmarks(annotations.Bookmarks.Select(ToBookmark));
         }
 
         #region Private/Protected methods
 
-        /// <summary>
-        /// Returns the resolved creation date (override wins over the HTML-extracted date), or
-        /// <c>null</c> if neither is available - the caller decides whether that's acceptable (it
-        /// isn't when an XMP metadata stream is being written, which needs a real <c>xmp:CreateDate</c>).
-        /// </summary>
-        private static DateTimeOffset? ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata, PdfDocumentMetadata? overrides)
+        /// <summary>An outline entry the HTML core collected, as the PDF writer's own.</summary>
+        private static PdfBookmark ToBookmark(Bookmark bookmark) => new(bookmark.Level, bookmark.Title, bookmark.IsOpen)
         {
-            var info = pdfDocument.Info;
-            info.Producer = PeachPdfProductInfo.Generator;
-            info.Creator  = overrides?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator;
+            Uri = bookmark.Uri,
+            PageIndex = bookmark.Destination?.PageIndex,
+            TopPoints = bookmark.Destination?.Top ?? 0,
+        };
 
-            // A non-null field on the caller-supplied overrides wins over the HTML-extracted value; a
-            // null field falls back to the HTML metadata exactly as before (byte-identical when no
-            // overrides are supplied).
-            if (!string.IsNullOrEmpty(overrides?.Title))         info.Title    = overrides.Title;
-            else if (!string.IsNullOrEmpty(metadata?.Title))     info.Title    = metadata.Title;
+        /// <summary>
+        /// The options the document is configured with for one render call: the whole-document format settings from
+        /// <paramref name="config"/>, and the document information - a non-empty field of <see cref="PdfGenerateConfig.Metadata"/> wins over
+        /// the value extracted from the HTML, and a missing one falls back to it.
+        /// </summary>
+        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlContainer container, PdfEmbeddingPlan embeddings)
+        {
+            var metadata = container.DocumentMetadata;
+            var overrides = config.Metadata;
 
-            if (!string.IsNullOrEmpty(overrides?.Author))        info.Author   = overrides.Author;
-            else if (!string.IsNullOrEmpty(metadata?.Author))    info.Author   = metadata.Author;
-
-            if (!string.IsNullOrEmpty(overrides?.Subject))       info.Subject  = overrides.Subject;
-            else if (!string.IsNullOrEmpty(metadata?.Subject))   info.Subject  = metadata.Subject;
-
-            if (!string.IsNullOrEmpty(overrides?.Keywords))      info.Keywords = overrides.Keywords;
-            else if (!string.IsNullOrEmpty(metadata?.Keywords))  info.Keywords = metadata.Keywords;
-
-            DateTimeOffset? resolvedCreationDate;
-            if (overrides?.CreationDate is { } overrideDate)
+            var options = new PeachDrawing.PDF.PdfComposerOptions
             {
-                resolvedCreationDate = overrideDate;
+                Title = !string.IsNullOrEmpty(overrides?.Title) ? overrides.Title : metadata?.Title,
+                Author = !string.IsNullOrEmpty(overrides?.Author) ? overrides.Author : metadata?.Author,
+                Subject = !string.IsNullOrEmpty(overrides?.Subject) ? overrides.Subject : metadata?.Subject,
+                Keywords = !string.IsNullOrEmpty(overrides?.Keywords) ? overrides.Keywords : metadata?.Keywords,
+                Creator = overrides?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator,
+                Producer = PeachPdfProductInfo.Generator,
+                // An HTML-extracted date (<meta name="date" content="2024-03-15">) carries no timezone of its own, so it is read as local
+                // time, which is also how the PDF date it is written as is interpreted.
+                CreationDate = overrides?.CreationDate
+                    ?? (metadata?.Date is { } htmlDate ? new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local)) : null),
+                // Resolved by SetContent: the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage.
+                Language = container.HtmlContainerInt.DocumentLanguage,
+                Version = config.PdfVersionExplicit ? config.PdfVersion.ToEngine() : null,
+                Conformance = config.PdfAConformance.ToEngine(),
+                XConformance = config.PdfXConformance.ToEngine(),
+                ColorOptions = config.ColorOptions.ToEngine(),
+                WriteXmpMetadata = config.EnableXmpMetadata,
+                FacturX = embeddings.FacturX,
+                Encryption = config.Encryption.ToEngine(),
+                CompressContentStreams = config.CompressContentStreams,
+                BrotliCompression = config.BrotliCompression,
+                JxlPassthrough = config.JxlPassthrough,
+                ImageCompression = config.ImageCompression.ToEngine(),
+                DownscaleImages = config.DownscaleImages,
+                DownscaleQuality = config.DownscaleQuality,
+                MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier,
+                FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten,
+                PortableColorFilters = config.PortableColorFilters,
+            };
 
-                // .LocalDateTime (not .DateTime) - PdfDocumentInformation.CreationDate's underlying
-                // PdfDate writes the DateTime's "zzz" offset directly (PdfDate.cs), and for a
-                // Kind=Unspecified DateTime (what .DateTime would return) .NET's "zzz" specifier uses
-                // the machine's CURRENT local offset regardless of what offset the value actually
-                // carried - silently mislabeling the instant whenever overrideDate's own offset isn't
-                // the local machine's (e.g. a UTC CreationDate on a non-UTC machine). .LocalDateTime
-                // converts to the equivalent Kind=Local DateTime first, so "zzz" then reports the
-                // correct offset for that same instant instead.
-                info.CreationDate = overrideDate.LocalDateTime;
-            }
-            else if (metadata?.Date is { } htmlDate)
-            {
-                // An HTML-extracted date (e.g. <meta name="date" content="2024-03-15">) carries no
-                // explicit timezone of its own - htmlDate.Kind is Unspecified. info.CreationDate is set
-                // to it completely unchanged (not wrapped/reinterpreted as UTC or converted at all),
-                // preserving this method's exact pre-XMP behavior for this path. To still get a
-                // DateTimeOffset for XMP that agrees with what PdfDate's "zzz" will independently
-                // compute for the very same Unspecified value (which treats it as local, per the same
-                // .NET rule noted above), explicitly mark it Local before deriving the offset here -
-                // this does not change htmlDate's own wall-clock digits, only which offset is attached.
-                resolvedCreationDate = new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local));
-                info.CreationDate = htmlDate;
-            }
-            else
-            {
-                resolvedCreationDate = null;
-            }
+            foreach (var property in overrides?.CustomXmpProperties ?? [])
+                options.CustomXmpProperties.Add(property);
 
-            return resolvedCreationDate;
+            foreach (var file in embeddings.Files)
+                options.EmbeddedFiles.Add(file);
+
+            return options;
         }
 
         /// <summary>
@@ -1465,13 +1052,13 @@ namespace PeachPDF
         /// </para>
         /// </remarks>
         private static async Task PaintElementMarginBoxes(
-            PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
+            PdfComposerPage page, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
             Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
             var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
-            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
+            using var pdfCanvas = page.CreateCanvas((PeachDrawing.PDF.PdfRenderContext)renderContext);
             var painter = new FragmentPainter(htmlContainer);
             var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
             var resolvedBoxNames = marginBoxes.Count > 0
@@ -1525,16 +1112,15 @@ namespace PeachPDF
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
         /// (which is an ordinary box and paints its rule through the normal border path).
         /// </summary>
-        private static void PaintFootnoteArea(PdfGraphics g, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        private static void PaintFootnoteArea(PdfComposerPage page, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {
-            var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
-            using var pdfCanvas = new PdfCanvas(renderContext, g, pixelsPerPoint);
+            using var pdfCanvas = page.CreateCanvas((PeachDrawing.PDF.PdfRenderContext)renderContext);
 
             PaintFootnoteArea(pdfCanvas, renderContext, htmlContainer, footnoteArea);
         }
 
         /// <summary>
-        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(PdfGraphics, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
+        /// The <see cref="Canvas"/>-level half of <see cref="PaintFootnoteArea(PdfComposerPage, RenderContext, HtmlContainerInt, FootnoteAreaFragment)"/>,
         /// split out so a test can drive it with a recording <see cref="Canvas"/> and assert the actual
         /// draw call sequence (which calls, in what order) rather than only that a full PDF pipeline
         /// completes without error or that a fragment holds the right data - see this repo's own testing
@@ -1584,44 +1170,32 @@ namespace PeachPDF
         /// Link annotation's "/OBJR" back to its owning "/Link" structure element, completing the bidirectional PDF/UA linkage
         /// between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfComposer composer, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
         {
             foreach (var link in annotations.Links)
             {
-                if (link.PageIndex >= document.Pages.Count)
+                if (link.PageIndex >= composer.Pages.Count)
                     continue;
 
-                var page = document.Pages[link.PageIndex];
+                var page = composer.Pages[link.PageIndex];
 
-                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
-                var xRect = new Rect(link.Bounds.X, page.Height - (link.Bounds.Y + link.Bounds.Height), link.Bounds.Width, link.Bounds.Height);
-
-                PdfLinkAnnotation annotation;
+                PdfLink pdfLink;
 
                 if (link.Anchor is { } anchorId && link.Destination is { } destination)
                 {
-                    // /FitH top fits page width and positions vertically at top - the "jump down to this Y" behavior an anchor link
-                    // destination actually wants; CreateFitVertically would instead pass the offset as /FitV's horizontal left
-                    // parameter. The offset is top-down, but /FitH's own "top" is PDF default user space, which is bottom-up -
-                    // flipping against the TARGET page's own height is required (not this link's page: a link can jump between
-                    // differently-sized pages).
-                    document.AddNamedDestination(anchorId, destination.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[destination.PageIndex].Height - destination.Top));
-                    annotation = page.AddDocumentLink(new PdfRectangle(xRect), anchorId);
+                    composer.AddNamedDestination(anchorId, destination.PageIndex, destination.Top);
+                    pdfLink = page.AddDestinationLink(link.Bounds, anchorId, link.Quad);
                 }
                 else
                 {
-                    annotation = page.AddWebLink(new PdfRectangle(xRect), link.Uri ?? string.Empty);
+                    pdfLink = page.AddLink(link.Bounds, link.Uri ?? string.Empty, link.Quad);
                 }
-
-                // A link over a transformed element also carries the drawn quadrilateral, which PDF has no key for before 1.6.
-                if (link.Quad is { } quad && document.Version >= 16)
-                    annotation.SetQuadPoints(quad.Select(corner => new PaintPoint(corner.X, page.Height - corner.Y)).ToArray());
 
                 // The same source box can legitimately gain more than one annotation (once per page its running element was selected
                 // onto) - LinkAnnotationToStructureElement is exercised for a repeated box already.
                 if (structureTagBuilder != null && link.Source is { } source)
                 {
-                    structureTagBuilder.LinkAnnotationToStructureElement(source, page, annotation);
+                    structureTagBuilder.LinkAnnotationToStructureElement(source, pdfLink);
                 }
             }
         }
@@ -1629,23 +1203,14 @@ namespace PeachPDF
         /// <summary>
         /// Creates AcroForm fields/widgets for the collected form controls, one per page.
         /// </summary>
-        private static void HandleFormFields(PdfDocument document, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
+        private static void HandleFormFields(PdfComposer composer, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
         {
             foreach (var field in annotations.FormFields)
             {
-                if (field.PageIndex >= document.Pages.Count)
+                if (field.PageIndex >= composer.Pages.Count)
                     continue;
 
-                var page = document.Pages[field.PageIndex];
-
-                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
-                var bounds = field.Bounds;
-                var rect = new Rect(bounds.X, page.Height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height);
-
-                // The appearance stream's own space is y up too, so the y-down map is mirrored across the x axis.
-                Matrix3x2? appearanceMatrix = field.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
-
-                formFieldBuilder.AddField(page, new PdfRectangle(rect), field, appearanceMatrix);
+                formFieldBuilder.AddField(composer.Pages[field.PageIndex], field);
             }
         }
 

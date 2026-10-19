@@ -238,8 +238,8 @@ namespace PeachPDF.Tests.Integration
                 doc.Page(page => page.Content(c => c.Text("Hello")));
             });
 
-            Assert.Equal(300, document.PdfDocument.Pages[0].Width, 1);
-            Assert.Equal(500, document.PdfDocument.Pages[0].Height, 1);
+            Assert.Equal(300, PdfFile.Width(document.Inspect().Pages[0]), 1);
+            Assert.Equal(500, PdfFile.Height(document.Inspect().Pages[0]), 1);
         }
 
         [Fact]
@@ -868,7 +868,7 @@ namespace PeachPDF.Tests.Integration
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize))
+                    ? PageSizeConverter.ToSize(config.PageSize)
                     : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             using var container = new HtmlContainer(renderContext)
@@ -910,7 +910,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = contentPageSize;
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
 
-            using var measure = PdfGraphics.CreateMeasureContext(orgPageSize);
+            using var measure = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, orgPageSize);
             container.MaxSize = new Size(container.PageSize.Width, 0);
             await container.PerformLayout(measure);
 

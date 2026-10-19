@@ -21,10 +21,10 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             var document = await generator.GeneratePdf(HtmlWithMetadata, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
-            Assert.Equal("HTML Title", document.PdfDocument.Info.Title);
-            Assert.Equal("HTML Author", document.PdfDocument.Info.Author);
-            Assert.Equal("HTML Subject", document.PdfDocument.Info.Subject);
-            Assert.Equal("html,keywords", document.PdfDocument.Info.Keywords);
+            Assert.Equal("HTML Title", document.Inspect().Info.Text("/Title"));
+            Assert.Equal("HTML Author", document.Inspect().Info.Text("/Author"));
+            Assert.Equal("HTML Subject", document.Inspect().Info.Text("/Subject"));
+            Assert.Equal("html,keywords", document.Inspect().Info.Text("/Keywords"));
         }
 
         [Fact]
@@ -46,11 +46,11 @@ namespace PeachPDF.Tests.Integration
 
             var document = await generator.GeneratePdf(HtmlWithMetadata, config);
 
-            Assert.Equal("Override Title", document.PdfDocument.Info.Title);
-            Assert.Equal("Override Author", document.PdfDocument.Info.Author);
-            Assert.Equal("Override Subject", document.PdfDocument.Info.Subject);
-            Assert.Equal("override,keywords", document.PdfDocument.Info.Keywords);
-            Assert.Equal("Override Creator", document.PdfDocument.Info.Creator);
+            Assert.Equal("Override Title", document.Inspect().Info.Text("/Title"));
+            Assert.Equal("Override Author", document.Inspect().Info.Text("/Author"));
+            Assert.Equal("Override Subject", document.Inspect().Info.Text("/Subject"));
+            Assert.Equal("override,keywords", document.Inspect().Info.Text("/Keywords"));
+            Assert.Equal("Override Creator", document.Inspect().Info.Text("/Creator"));
         }
 
         [Fact]
@@ -66,9 +66,9 @@ namespace PeachPDF.Tests.Integration
 
             var document = await generator.GeneratePdf(HtmlWithMetadata, config);
 
-            Assert.Equal("Just Title", document.PdfDocument.Info.Title);
-            Assert.Equal("HTML Author", document.PdfDocument.Info.Author);
-            Assert.Equal("HTML Subject", document.PdfDocument.Info.Subject);
+            Assert.Equal("Just Title", document.Inspect().Info.Text("/Title"));
+            Assert.Equal("HTML Author", document.Inspect().Info.Text("/Author"));
+            Assert.Equal("HTML Subject", document.Inspect().Info.Text("/Subject"));
         }
 
         [Fact]
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Integration
             var document = await generator.GeneratePdf(
                 "<html><body><p>x</p></body></html>", config);
 
-            Assert.Equal("de-DE", document.PdfDocument.Language);
+            Assert.Equal("de-DE", document.Inspect().Language);
         }
 
         [Fact]
@@ -92,7 +92,7 @@ namespace PeachPDF.Tests.Integration
             var document = await generator.GeneratePdf(
                 "<html lang=\"en-US\"><body><p>x</p></body></html>", config);
 
-            Assert.Equal("en-US", document.PdfDocument.Language);
+            Assert.Equal("en-US", document.Inspect().Language);
         }
     }
 }

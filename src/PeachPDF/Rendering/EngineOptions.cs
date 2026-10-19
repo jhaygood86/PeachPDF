@@ -1,31 +1,27 @@
-using PeachDrawing.PDF.Engine;
-
 namespace PeachPDF.Rendering
 {
     /// <summary>
-    /// Maps the public option types of <see cref="PdfGenerateConfig"/> onto the PDF writer's own. The two sets are kept apart on
-    /// purpose: PeachPDF's are its public API, the writer's belong to the writer and change with it. Every enum is mirrored member for
-    /// member (a test pins that), so a conversion is a cast.
+    /// Maps the public option types of <see cref="PdfGenerateConfig"/> onto the PDF writer's own (<c>PeachDrawing.PDF</c>). The two sets are
+    /// kept apart on purpose: PeachPDF's are its public API, the writer's belong to the writer and change with it. Every enum is mirrored
+    /// member for member (a test pins that), so a conversion is a cast.
     /// </summary>
     internal static class EngineOptions
     {
-        public static PeachDrawing.PDF.Engine.PdfAConformance ToEngine(this PeachPDF.PdfAConformance value) => (PeachDrawing.PDF.Engine.PdfAConformance)(int)value;
+        public static PeachDrawing.PDF.PdfAConformance ToEngine(this PeachPDF.PdfAConformance value) => (PeachDrawing.PDF.PdfAConformance)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PdfXConformance ToEngine(this PeachPDF.PdfXConformance value) => (PeachDrawing.PDF.Engine.PdfXConformance)(int)value;
+        public static PeachDrawing.PDF.PdfXConformance ToEngine(this PeachPDF.PdfXConformance value) => (PeachDrawing.PDF.PdfXConformance)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PdfVersion ToEngine(this PeachPDF.PdfVersion value) => (PeachDrawing.PDF.Engine.PdfVersion)(int)value;
+        public static PeachDrawing.PDF.PdfVersion ToEngine(this PeachPDF.PdfVersion value) => (PeachDrawing.PDF.PdfVersion)(int)value;
 
-        public static PeachDrawing.PDF.Engine.ImageCompression ToEngine(this PeachPDF.ImageCompression value) => (PeachDrawing.PDF.Engine.ImageCompression)(int)value;
+        public static PeachDrawing.PDF.ImageCompression ToEngine(this PeachPDF.ImageCompression value) => (PeachDrawing.PDF.ImageCompression)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PageSize ToEngine(this PeachPDF.PageSize value) => (PeachDrawing.PDF.Engine.PageSize)(int)value;
+        public static PeachDrawing.PDF.PdfPermissions ToEngine(this PeachPDF.PdfPermissions value) => (PeachDrawing.PDF.PdfPermissions)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PageOrientation ToEngine(this PeachPDF.PageOrientation value) => (PeachDrawing.PDF.Engine.PageOrientation)(int)value;
+        public static PeachDrawing.PDF.PdfEmbeddedFileRelationship ToEngine(this PeachPDF.PdfAttachmentRelationship value) => (PeachDrawing.PDF.PdfEmbeddedFileRelationship)(int)value;
 
-        public static PeachDrawing.PDF.Engine.PdfPermissions ToEngine(this PeachPDF.PdfPermissions value) => (PeachDrawing.PDF.Engine.PdfPermissions)(int)value;
-
-        public static PeachDrawing.PDF.Engine.PdfEncryptionOptions? ToEngine(this PeachPDF.PdfEncryptionOptions? value) => value is null
+        public static PeachDrawing.PDF.PdfEncryptionOptions? ToEngine(this PeachPDF.PdfEncryptionOptions? value) => value is null
             ? null
-            : new PeachDrawing.PDF.Engine.PdfEncryptionOptions
+            : new PeachDrawing.PDF.PdfEncryptionOptions
             {
                 UserPassword = value.UserPassword,
                 OwnerPassword = value.OwnerPassword,
@@ -33,17 +29,27 @@ namespace PeachPDF.Rendering
                 EncryptMetadata = value.EncryptMetadata,
             };
 
-        public static PeachDrawing.PDF.Engine.ColorOptions? ToEngine(this PeachPDF.ColorOptions? value) => value is null
+        public static PeachDrawing.PDF.PdfEmbeddedFile ToEngine(this PeachPDF.PdfAttachment value) => new()
+        {
+            FileName = value.FileName,
+            Data = value.Data,
+            MimeType = value.MimeType,
+            Relationship = value.Relationship.ToEngine(),
+            Description = value.Description,
+            ModificationDate = value.ModificationDate,
+        };
+
+        public static PeachDrawing.PDF.ColorOptions? ToEngine(this PeachPDF.ColorOptions? value) => value is null
             ? null
-            : new PeachDrawing.PDF.Engine.ColorOptions
+            : new PeachDrawing.PDF.ColorOptions
             {
                 OutputIntentProfile = value.OutputIntentProfile,
                 OutputIntentIdentifier = value.OutputIntentIdentifier,
-                BlackGeneration = (PeachDrawing.PDF.Engine.ColorBlackGeneration)(int)value.BlackGeneration,
+                BlackGeneration = (PeachDrawing.PDF.ColorBlackGeneration)(int)value.BlackGeneration,
                 FallbackCmykProfile = value.FallbackCmykProfile,
-                ConversionMode = (PeachDrawing.PDF.Engine.ColorConversionMode)(int)value.ConversionMode,
+                ConversionMode = (PeachDrawing.PDF.ColorConversionMode)(int)value.ConversionMode,
                 ConvertToProfile = value.ConvertToProfile,
-                RenderingIntent = (PeachDrawing.PDF.Engine.ColorRenderingIntent)(int)value.RenderingIntent,
+                RenderingIntent = (PeachDrawing.PDF.ColorRenderingIntent)(int)value.RenderingIntent,
                 UseBlackPointCompensation = value.UseBlackPointCompensation,
             };
     }

@@ -319,7 +319,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithTheSameAttachments_EmbedsThemOnlyOnce()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.PdfComposer(new PeachPDF.Rendering.HtmlRenderContext()));
 
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
@@ -334,7 +334,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithADifferentSet_IsRejected()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.PdfComposer(new PeachPDF.Rendering.HtmlRenderContext()));
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
 
             var different = Csv();
@@ -342,14 +342,14 @@ namespace PeachPDF.Tests.Integration
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => generator.AddPdfPages(document, SimpleHtml, A3Config(different)));
-            Assert.Contains("Attachments must be the same", ex.Message);
+            Assert.Contains("EmbeddedFiles must be the same", ex.Message);
         }
 
         [Fact]
         public async Task SecondCall_WithNoAttachments_AfterAnEarlierCallHadSome_IsRejected()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.PdfComposer(new PeachPDF.Rendering.HtmlRenderContext()));
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
 
             await Assert.ThrowsAsync<InvalidOperationException>(
@@ -366,7 +366,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_DifferingInAnyField_IsRejected(string field)
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.PdfComposer(new PeachPDF.Rendering.HtmlRenderContext()));
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
 
             var config = A3Config(Csv());
@@ -437,14 +437,14 @@ namespace PeachPDF.Tests.Integration
         public async Task Attachment_WithoutPdfA_RaisesThePdfVersionTo17_ButNoAttachmentLeavesItAlone()
         {
             var plain = await new PdfGenerator().GeneratePdf(SimpleHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf17 });
-            Assert.Equal(14, plain.PdfDocument.Version);
+            Assert.Equal("1.4", plain.Inspect().Version);
 
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfVersion = PdfVersion.Pdf17 };
             config.Attachments.Add(Csv());
             var withFile = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
             // /UF, /Desc and /AFRelationship are newer than the historical 1.4 header.
-            Assert.Equal(17, withFile.PdfDocument.Version);
+            Assert.Equal("1.7", withFile.Inspect().Version);
             Assert.StartsWith("%PDF-1.7", Save(withFile));
         }
 
@@ -456,7 +456,7 @@ namespace PeachPDF.Tests.Integration
 
             var document = await new PdfGenerator().GeneratePdf(SimpleHtml, config);
 
-            Assert.Equal(20, document.PdfDocument.Version);
+            Assert.Equal("2.0", document.Inspect().Version);
         }
 
         // --- Helpers ---

@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using PeachPDF;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
@@ -139,12 +140,12 @@ namespace PeachPDF.Tests.Integration
             var doc = await generator.GeneratePdf(html, config);
 
             Assert.Equal(2, doc.PageCount);
-            Assert.Equal(1, doc.Pages[1].Annotations.Count);
+            Assert.Single(doc.PageAnnotations(1));
 
             // The link sits flush at the page's own content-left edge, so its rect's X1 is exactly
             // this page's resolved margin-left - :left's 100pt, not :right's 40pt.
-            var rect = doc.Pages[1].Annotations[0]!.Rectangle;
-            Assert.Equal(100, rect.X1, 1);
+            var rect = doc.PageAnnotations(1)[0].RectOf();
+            Assert.Equal(100, rect.Left, 1);
         }
 
         [Fact]
@@ -177,20 +178,21 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(2, doc.PageCount);
 
-            var outline = Assert.Single(doc.PdfDocument.Outlines);
+            var outline = Assert.Single(doc.Inspect().Outlines);
             Assert.Equal("heading after the gap", outline.Title);
-            Assert.Same(doc.Pages[1], outline.DestinationPage);
+            Assert.Equal(1, outline.DestinationPageIndex);
 
             // PDF Y counts from the page bottom. Both preceding blocks have explicit, deterministic
             // heights (12pt + 1500pt), so the heading's own top position is pinned regardless of font
             // metrics: pageHeight - outline.Top must be :left's 90pt margin plus that fixed content
             // offset (158pt total) - never anywhere near :right's 30pt (what the pre-fix grid-numbered
             // margin would have produced instead, 98pt total).
-            var topFromPageTop = outline.DestinationPage!.Height - outline.Top;
-            Assert.Equal(158, (double)topFromPageTop, 1);
+            var file = doc.Inspect();
+            var topFromPageTop = PdfFile.Height(file.Pages[outline.DestinationPageIndex]) - outline.DestinationTop!.Value;
+            Assert.Equal(158, topFromPageTop, 1);
         }
 
-        private static async Task<PdfDocument> GeneratePdf(string leftRule, string rightRule)
+        private static async Task<PdfFile> GeneratePdf(string leftRule, string rightRule)
         {
             var html = $$"""
                 <!DOCTYPE html><html><head><style>
@@ -209,19 +211,16 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
             var doc = await generator.GeneratePdf(html, config);
-            return doc.PdfDocument;
+            return doc.Inspect();
         }
 
-        private static double GetLeadingDeltaX(PdfDocument doc, int pageIndex)
+        private static double GetLeadingDeltaX(PdfFile doc, int pageIndex)
         {
-            var content = doc.Pages[pageIndex].Contents;
-            foreach (var item in content.Elements)
+            foreach (var stream in doc.ContentStreams(doc.Pages[pageIndex]))
             {
-                if (item is not PdfReference { Value: PdfDictionary dict }) continue;
-                if (dict.Stream?.Value is not { Length: > 0 } bytes) continue;
+                if (stream.Decoded.Length == 0) continue;
 
-                var text = Encoding.Latin1.GetString(bytes);
-                var match = LeadingTranslate.Match(text);
+                var match = LeadingTranslate.Match(stream.DecodedText);
                 if (match.Success)
                     return double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
             }

@@ -1,4 +1,3 @@
-using PeachDrawing.PDF.Engine.Security;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -50,12 +49,12 @@ namespace PeachPDF.Tests.Integration
             var validationSalt = entry[32..40];
             var keySalt = entry[40..48];
 
-            if (!PdfAes256SecurityHandler.Hash(pw, validationSalt, extra).AsSpan().SequenceEqual(entry.AsSpan(0, 32)))
+            if (!PdfPasswordHash.Hash(pw, validationSalt, extra).AsSpan().SequenceEqual(entry.AsSpan(0, 32)))
                 return null;
 
             var wrapped = EncryptEntry(pdf, owner ? "/OE" : "/UE");
             using var aes = Aes.Create();
-            aes.Key = PdfAes256SecurityHandler.Hash(pw, keySalt, extra);
+            aes.Key = PdfPasswordHash.Hash(pw, keySalt, extra);
             return aes.DecryptCbc(wrapped, new byte[16], PaddingMode.None);
         }
 
@@ -69,9 +68,8 @@ namespace PeachPDF.Tests.Integration
         /// <summary>Every stream's bytes, as stored.</summary>
         static byte[][] StreamBodies(byte[] file)
         {
-            var text = Encoding.Latin1.GetString(file);
-            return Regex.Matches(text, @"stream\n(.*?)\nendstream", RegexOptions.Singleline)
-                .Select(m => Encoding.Latin1.GetBytes(m.Groups[1].Value)).ToArray();
+            // Read through /Length, not by looking for the "endstream" keyword: the bodies are random ciphertext, which can contain any byte sequence.
+            return PdfFile.Parse(file).Objects.Select(o => o.Value).OfType<PdfStreamObject>().Select(stream => stream.StoredBytes).ToArray();
         }
 
         static async Task<byte[]> Render(PdfGenerateConfig config)
@@ -80,84 +78,6 @@ namespace PeachPDF.Tests.Integration
             using var stream = new MemoryStream();
             document.Save(stream);
             return stream.ToArray();
-        }
-
-        [Theory]
-        [InlineData(PdfPermissions.All, -4)]
-        [InlineData(PdfPermissions.None, -3904)]
-        [InlineData(PdfPermissions.AllowPrint, -3900)]
-        [InlineData(PdfPermissions.ReadOnly, -1324)]
-        public void PermissionWord_SetsTheReservedBitsAndTheFlags(PdfPermissions permissions, int expected) =>
-            Assert.Equal(expected, PdfAes256SecurityHandler.ToPermissionWord(PeachPDF.Rendering.EngineOptions.ToEngine(permissions)));
-
-        [Fact]
-        public void Handler_UserAndOwnerPasswords_UnwrapTheSameFileKey_AndWrongOnesAreRejected()
-        {
-            var options = new PeachDrawing.PDF.Engine.PdfEncryptionOptions { UserPassword = "user", OwnerPassword = "owner" };
-            var handler = new PdfAes256SecurityHandler(options);
-            var pdf = "x /Encrypt<< " + string.Join(" ", new[] { ("/U", handler.U), ("/UE", handler.UE), ("/O", handler.O), ("/OE", handler.OE) }
-                .Select(p => $"{p.Item1} <{Convert.ToHexString(p.Item2)}>")) + ">>";
-
-            Assert.Equal(handler.FileKey, RecoverFileKey(pdf, "user", owner: false));
-            Assert.Equal(handler.FileKey, RecoverFileKey(pdf, "owner", owner: true));
-            Assert.Null(RecoverFileKey(pdf, "nope", owner: false));
-            Assert.Null(RecoverFileKey(pdf, "user", owner: true));
-        }
-
-        [Fact]
-        public void Handler_Perms_DecryptsToTheWordTheFlagsAndTheAdbMarker()
-        {
-            var handler = new PdfAes256SecurityHandler(new PeachDrawing.PDF.Engine.PdfEncryptionOptions
-            {
-                UserPassword = "u", OwnerPassword = "o", Permissions = PeachDrawing.PDF.Engine.PdfPermissions.ReadOnly, EncryptMetadata = false,
-            });
-
-            using var aes = Aes.Create();
-            aes.Key = handler.FileKey;
-            var block = aes.DecryptEcb(handler.Perms, PaddingMode.None);
-
-            Assert.Equal(PdfAes256SecurityHandler.ToPermissionWord(PeachDrawing.PDF.Engine.PdfPermissions.ReadOnly), BitConverter.ToInt32(block, 0));
-            Assert.Equal([0xFF, 0xFF, 0xFF, 0xFF], block[4..8]);
-            Assert.Equal("Fadb", Encoding.ASCII.GetString(block, 8, 4));
-        }
-
-        [Fact]
-        public void Handler_FreshKeyPerInstance()
-        {
-            var options = new PeachDrawing.PDF.Engine.PdfEncryptionOptions { UserPassword = "u" };
-
-            Assert.NotEqual(new PdfAes256SecurityHandler(options).FileKey, new PdfAes256SecurityHandler(options).FileKey);
-        }
-
-        [Fact]
-        public void Handler_WithoutAnOwnerPassword_NothingUnlocksTheOwnerEntries()
-        {
-            var handler = new PdfAes256SecurityHandler(new PeachDrawing.PDF.Engine.PdfEncryptionOptions { UserPassword = "u" });
-            var pdf = $"/Encrypt<< /U <{Convert.ToHexString(handler.U)}> /O <{Convert.ToHexString(handler.O)}> /OE <{Convert.ToHexString(handler.OE)}> >>";
-
-            Assert.Null(RecoverFileKey(pdf, "", owner: true));
-            Assert.Null(RecoverFileKey(pdf, "u", owner: true));
-        }
-
-        [Fact]
-        public void PreparePassword_CutsAtExactlyTheByteLimit()
-        {
-            var longAscii = PdfAes256SecurityHandler.PreparePassword(new string('a', 300));
-            // 126 ASCII bytes then a 3-byte character straddle byte 127: a reader keeps exactly 127 bytes, so must we.
-            var straddling = PdfAes256SecurityHandler.PreparePassword(new string('a', 126) + "€");
-
-            Assert.Equal(127, longAscii.Length);
-            Assert.Equal(127, straddling.Length);
-            Assert.Equal(0xE2, straddling[126]);
-            Assert.Empty(PdfAes256SecurityHandler.PreparePassword(null));
-            Assert.Empty(PdfAes256SecurityHandler.PreparePassword(""));
-        }
-
-        [Fact]
-        public void PreparePassword_NormalizesCompatibilityForms()
-        {
-            // U+FB01 (the "fi" ligature) folds to "fi" under NFKC.
-            Assert.Equal("fi"u8.ToArray(), PdfAes256SecurityHandler.PreparePassword("ﬁ"));
         }
 
         [Fact]

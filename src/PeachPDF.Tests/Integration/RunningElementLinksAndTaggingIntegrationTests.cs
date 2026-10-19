@@ -1,3 +1,4 @@
+using PeachPDF.Tests.TestSupport;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Structure;
 using System.Collections.Generic;
@@ -41,7 +42,7 @@ namespace PeachPDF.Tests.Integration
 
             for (var i = 0; i < doc.PageCount; i++)
             {
-                Assert.True(doc.Pages[i].Annotations.Count > 0,
+                Assert.True(doc.PageAnnotations(i).Count > 0,
                     $"page {i + 1} is missing the running header's link annotation");
             }
         }
@@ -58,7 +59,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(doc.PageCount > 1, "fixture does not paginate, so it asserts nothing");
             for (var i = 0; i < doc.PageCount; i++)
-                Assert.Empty(doc.Pages[i].Annotations);
+                Assert.Empty(doc.PageAnnotations(i));
         }
 
         [Fact]
@@ -68,8 +69,8 @@ namespace PeachPDF.Tests.Integration
 
             // A6 = 297.64pt tall; the link is inside a 12mm (~34pt) top margin, so its annotation must
             // sit near the physical top of the page, not down in the body content.
-            var rect = doc.Pages[0].Annotations[0]!.Rectangle;
-            var topFromSheetTop = doc.Pages[0].Height - rect.Y2;
+            var rect = doc.PageAnnotations(0)[0].RectOf();
+            var topFromSheetTop = doc.Page(0).Height - rect.Top;
             Assert.InRange(topFromSheetTop, 0, 40);
         }
 
@@ -98,7 +99,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(doc.PageCount > 1, "fixture does not paginate, so it asserts nothing");
             for (var i = 0; i < doc.PageCount; i++)
             {
-                Assert.True(doc.Pages[i].Annotations.Count > 0,
+                Assert.True(doc.PageAnnotations(i).Count > 0,
                     $"page {i + 1} is missing the running header's anchor-link annotation");
             }
         }
@@ -151,11 +152,11 @@ namespace PeachPDF.Tests.Integration
             var config = new PdfGenerateConfig { PageSize = PageSize.A6, EnableTaggedPdf = true };
             var doc = await new PdfGenerator().GeneratePdf(LinkFixture(), config);
 
-            Assert.True(doc.PdfDocument.Catalog.MarkInfo.Marked);
+            Assert.True(doc.Inspect().Catalog.Dict("/MarkInfo")!.Bool("/Marked"));
 
             // The running header's <a> produced a real /Link structure element somewhere in the tree -
             // proof that content: element() content is reachable by the structure builder at all.
-            var allElements = AllStructureElements(doc.PdfDocument.Catalog.StructureTreeRoot).ToList();
+            var allElements = AllStructureElements(doc.Inspect()).ToList();
             Assert.Contains(allElements, e => e.StructureType == "/Link");
         }
 
@@ -168,23 +169,23 @@ namespace PeachPDF.Tests.Integration
             // The running <h1> itself - real element() content painted via the same FragmentPainter
             // choke point tagging already flows through - should also produce a heading structure
             // element, proving §5.2's "falls out automatically" claim rather than leaving it assumed.
-            var allElements = AllStructureElements(doc.PdfDocument.Catalog.StructureTreeRoot).ToList();
+            var allElements = AllStructureElements(doc.Inspect()).ToList();
             Assert.Contains(allElements, e => e.StructureType == "/H1");
         }
 
-        private static IEnumerable<PdfStructureElement> AllStructureElements(PdfStructureTreeRoot root)
+        private static IEnumerable<StructElem> AllStructureElements(PdfFile file)
         {
-            foreach (var top in PdfStructureElement.GetKids(root.Elements).OfType<PdfStructureElement>())
+            foreach (var top in file.StructureRoot)
             {
                 foreach (var e in Descendants(top))
                     yield return e;
             }
         }
 
-        private static IEnumerable<PdfStructureElement> Descendants(PdfStructureElement element)
+        private static IEnumerable<StructElem> Descendants(StructElem element)
         {
             yield return element;
-            foreach (var child in PdfStructureElement.GetKids(element.Elements).OfType<PdfStructureElement>())
+            foreach (var child in element.Kids)
             {
                 foreach (var e in Descendants(child))
                     yield return e;

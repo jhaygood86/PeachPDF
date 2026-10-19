@@ -23,11 +23,11 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.Letter);
-            var page = doc.PdfDocument.Pages[0];
+            var page = doc.Inspect().Pages[0];
 
             // A4 = 595.28 × 841.89 pt
-            Assert.Equal(595.0, page.Width, 0);
-            Assert.Equal(842.0, page.Height, 0);
+            Assert.Equal(595.0, PdfFile.Width(page), 0);
+            Assert.Equal(842.0, PdfFile.Height(page), 0);
         }
 
         [Fact]
@@ -42,11 +42,11 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            var page = doc.PdfDocument.Pages[0];
+            var page = doc.Inspect().Pages[0];
 
             // US Letter = 612 × 792 pt
-            Assert.Equal(612.0, page.Width, 0);
-            Assert.Equal(792.0, page.Height, 0);
+            Assert.Equal(612.0, PdfFile.Width(page), 0);
+            Assert.Equal(792.0, PdfFile.Height(page), 0);
         }
 
         [Fact]
@@ -61,11 +61,11 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            var page = doc.PdfDocument.Pages[0];
+            var page = doc.Inspect().Pages[0];
 
             // Landscape: width > height
-            Assert.True(page.Width > page.Height,
-                $"Expected landscape but got {page.Width} × {page.Height}");
+            Assert.True(PdfFile.Width(page) > PdfFile.Height(page),
+                $"Expected landscape but got {PdfFile.Width(page)} × {PdfFile.Height(page)}");
         }
 
         [Fact]
@@ -80,11 +80,11 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            var page = doc.PdfDocument.Pages[0];
+            var page = doc.Inspect().Pages[0];
 
             // 200mm ≈ 566.93pt, 100mm ≈ 283.46pt
-            Assert.Equal(567.0, page.Width, 0);
-            Assert.Equal(283.0, page.Height, 0);
+            Assert.Equal(567.0, PdfFile.Width(page), 0);
+            Assert.Equal(283.0, PdfFile.Height(page), 0);
         }
 
         [Fact]
@@ -108,11 +108,11 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            var page = doc.PdfDocument.Pages[0];
+            var page = doc.Inspect().Pages[0];
 
             // Font-relative size resolved to a real (non-A4) page, proving `size` took effect.
-            Assert.True(page.Width > 0 && page.Height > 0);
-            Assert.NotEqual(595.0, page.Width, 0);
+            Assert.True(PdfFile.Width(page) > 0 && PdfFile.Height(page) > 0);
+            Assert.NotEqual(595.0, PdfFile.Width(page), 0);
         }
 
         // ── page count ─────────────────────────────────────────────────────────
@@ -133,8 +133,8 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            Assert.True(doc.PdfDocument.PageCount >= 2,
-                $"Expected at least 2 pages but got {doc.PdfDocument.PageCount}");
+            Assert.True(doc.Inspect().PageCount >= 2,
+                $"Expected at least 2 pages but got {doc.Inspect().PageCount}");
         }
 
         // ── margin box content ─────────────────────────────────────────────────
@@ -337,8 +337,8 @@ namespace PeachPDF.Tests.Integration
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.True(doc.PdfDocument.PageCount >= 3,
-                $"Expected at least 3 pages but got {doc.PdfDocument.PageCount}");
+            Assert.True(doc.Inspect().PageCount >= 3,
+                $"Expected at least 3 pages but got {doc.Inspect().PageCount}");
         }
 
         [Fact]
@@ -372,8 +372,8 @@ namespace PeachPDF.Tests.Integration
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.True(doc.PdfDocument.PageCount >= 3,
-                $"Expected at least 3 pages but got {doc.PdfDocument.PageCount}");
+            Assert.True(doc.Inspect().PageCount >= 3,
+                $"Expected at least 3 pages but got {doc.Inspect().PageCount}");
         }
 
         // ── margin box explicit width ───────────────────────────────────────────
@@ -418,12 +418,12 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
-            Assert.Equal(1, doc.PdfDocument.PageCount);
+            Assert.Equal(1, doc.Inspect().PageCount);
 
-            var page = doc.PdfDocument.Pages[0];
+            var page = doc.Inspect().Pages[0];
             // A4 default
-            Assert.Equal(595.0, page.Width, 0);
-            Assert.Equal(842.0, page.Height, 0);
+            Assert.Equal(595.0, PdfFile.Width(page), 0);
+            Assert.Equal(842.0, PdfFile.Height(page), 0);
         }
     }
 }

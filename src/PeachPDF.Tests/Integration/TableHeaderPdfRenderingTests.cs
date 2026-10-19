@@ -72,12 +72,12 @@ namespace PeachPDF.Tests.Integration
           $"PDF should have at least 2 pages but has {pdfDocument.PageCount}");
 
             // Verify both pages have content
-            Assert.True(PageHasContent(pdfDocument.Pages[0]), "Page 1 should have content");
-            Assert.True(PageHasContent(pdfDocument.Pages[1]), "Page 2 should have content");
+            Assert.True(PageHasContent(pdfDocument.Page(0)), "Page 1 should have content");
+            Assert.True(PageHasContent(pdfDocument.Page(1)), "Page 2 should have content");
 
             // Verify the PDF structure looks correct
-            Assert.NotNull(pdfDocument.Pages[0].Contents);
-            Assert.NotNull(pdfDocument.Pages[1].Contents);
+            Assert.NotNull(pdfDocument.Page(0).Contents);
+            Assert.NotNull(pdfDocument.Page(1).Contents);
         }
 
         [Fact]
@@ -125,7 +125,7 @@ namespace PeachPDF.Tests.Integration
             // Verify all pages have content
             for (int pageNum = 0; pageNum < Math.Min(3, pdfDocument.PageCount); pageNum++)
             {
-                Assert.True(PageHasContent(pdfDocument.Pages[pageNum]),
+                Assert.True(PageHasContent(pdfDocument.Page(pageNum)),
                     $"Page {pageNum + 1} should have content");
             }
         }
@@ -187,8 +187,8 @@ namespace PeachPDF.Tests.Integration
         $"PDF should have at least 2 pages for complex header test");
 
             // Verify both pages have content
-            Assert.True(PageHasContent(pdfDocument.Pages[0]), "Page 1 should have content");
-            Assert.True(PageHasContent(pdfDocument.Pages[1]), "Page 2 should have content");
+            Assert.True(PageHasContent(pdfDocument.Page(0)), "Page 1 should have content");
+            Assert.True(PageHasContent(pdfDocument.Page(1)), "Page 2 should have content");
         }
 
         [Fact]
@@ -244,7 +244,7 @@ namespace PeachPDF.Tests.Integration
             // Verify all pages have content
             for (int i = 0; i < pdfDocument.PageCount; i++)
             {
-                Assert.True(PageHasContent(pdfDocument.Pages[i]),
+                Assert.True(PageHasContent(pdfDocument.Page(i)),
                    $"Page {i + 1} should have content");
             }
         }
@@ -278,8 +278,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PdfGraphics.CreateMeasureContext(size);
-            using var measureGraphics = new PdfCanvas(renderContext, measure, 1.0);
+            using var measureGraphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(measureGraphics);
 
             var recorder = new DrawStringRecordingGraphics(renderContext);
@@ -365,35 +364,6 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Helper method to check if a PDF page has any content.
         /// </summary>
-        private bool PageHasContent(PdfPage page)
-        {
-            try
-            {
-                var content = page.Contents;
-                if (content == null)
-                    return false;
-
-                // Check if there are any content streams
-                if (content.Elements.Count == 0)
-                    return false;
-
-                // Check if at least one stream has data
-                foreach (var item in content.Elements)
-                {
-                    if (item is PdfReference reference && reference.Value is PdfDictionary dict)
-                    {
-                        var stream = dict.Stream;
-                        if (stream != null && stream.Value != null && stream.Value.Length > 0)
-                            return true;
-                    }
-                }
-
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        private bool PageHasContent(PdfPageView page) => page.HasContent;
     }
 }

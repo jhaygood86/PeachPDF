@@ -125,8 +125,7 @@ public class CascadeLayerAtRuleCollectionTests
         container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
         await container.SetHtml(html, null);
 
-        var measure = PdfGraphics.CreateMeasureContext(size);
-        using var graphics = new PdfCanvas(renderContext, measure, 1.0);
+        using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
         await container.PerformLayout(graphics);
         return container;
     }

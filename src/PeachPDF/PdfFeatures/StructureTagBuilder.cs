@@ -1,386 +1,45 @@
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.CSS;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachDrawing.PDF.Engine;
-using PeachDrawing.PDF.Engine.Advanced;
-using PeachDrawing.PDF.Engine.Annotations;
-using PeachDrawing.PDF.Engine.Structure;
+using PeachDrawing.PDF;
+using PeachPDF.Html.Core.Handlers;
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 
 namespace PeachPDF.PdfFeatures
 {
     /// <summary>
-    /// Orchestrates tagged-PDF structure-tree/MCID/ParentTree bookkeeping, driven live from the
-    /// fragment paint walk (see <see cref="Html.Core.Paint.FragmentPainter"/>) rather than an event-interception
-    /// layer around raw drawing calls - PeachPDF already fully controls its own paint walk, unlike
-    /// upstream PDFsharp's PdfGraphics-event-driven UAManager/StructureBuilder this reimplements the
-    /// same underlying algorithm (AddMarkedContentToStructureElement/AddToParentTree) for.
-    /// Only ever constructed when <see cref="PdfGenerateConfig.EnableTaggedPdf"/> is set.
+    /// Feeds the structure the fragment paint walk reports (<see cref="IStructureTagSink"/>) to the PDF writer's tag recorder, which builds the
+    /// tagged-PDF structure tree. It only translates: an element is identified to the recorder by its <see cref="StructureNode"/>, and
+    /// everything about how the structure is stored and written is the recorder's.
+    /// Only ever constructed when <see cref="PdfGenerateConfig.EnableTaggedPdf"/> is set (or an accessible PDF/A level asks for it).
     /// </summary>
-    internal sealed class StructureTagBuilder : IStructureTagSink
+    internal sealed class StructureTagBuilder(PdfTagRecorder recorder) : IStructureTagSink
     {
-        readonly PdfDocument _document;
-        readonly PdfStructureTreeRoot _root;
-        readonly PdfStructureElement _documentElement;
-        readonly Dictionary<StructureNode, PdfStructureElement> _elementsByBox = new();
+        /// <summary>Called once per page, right after the page is created, before it is painted.</summary>
+        public void BeginPage(PdfComposerPage page) => recorder.BeginPage(page);
 
-        // A tagged <li> box needs TWO distinct structure elements of its own ("/LI" itself and its
-        // "/LBody" - see OpenListItemBodyElement) - a second cache, keyed by the same node, avoids
-        // colliding with the box's "/LI" entry in _elementsByBox.
-        readonly Dictionary<StructureNode, PdfStructureElement> _lbodyElementsByBox = new();
+        public IDisposable OpenGroupingElement(StructureNode node, string structureType) => recorder.OpenGroupingElement(node, structureType);
 
-        readonly Stack<PdfStructureElement> _parentStack = new();
+        public IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors) =>
+            recorder.OpenPhantomAncestors(ancestors.Select(a => ((object)a.Node, a.StructureType)).ToList());
 
-        // Guards AttachMathMlSource against attaching the same <math> element's source more than once -
-        // OpenContentElement's own element cache already returns the same PdfStructureElement for a
-        // box painted again (e.g. a formula whose line spans a page break via CssRectMath's own
-        // /MCR handling), but nothing else stops this method's own caller from running per-occurrence.
-        readonly HashSet<StructureNode> _mathMlAttached = new();
+        public IDisposable OpenListItemBodyElement(StructureNode node) => recorder.OpenListItemBodyElement(node);
 
-        // Per-StructParents-key (i.e. per page) ordered list of parent-tree entries, index == MCID.
-        readonly List<List<PdfItem>> _parentTreeEntriesByKey = new();
+        public IDisposable OpenContentElement(Canvas g, StructureNode node, string structureType, string? altText = null) =>
+            recorder.OpenContentElement(g, node, structureType, altText);
 
-        PdfPage? _currentPage;
-        int _currentPageStructParentsKey;
-        int _nextMcidOnCurrentPage;
-        readonly bool _requireAltText;
+        public void AttachMathMlSource(StructureNode node, string mathMlSource) => recorder.AttachMathMlSource(node, mathMlSource);
+
+        public bool IsInMarkedContent => recorder.IsInMarkedContent;
+
+        public IDisposable OpenArtifact(Canvas g) => recorder.OpenArtifact(g);
 
         /// <summary>
-        /// How many marked-content sequences (a content element's BDC, an artifact's BMC) this builder
-        /// has opened and not yet closed.
+        /// Ties a link to the structure element of the content it covers - called once per link, after painting and <see cref="Finish"/>.
         /// </summary>
-        int _openSequences;
+        public void LinkAnnotationToStructureElement(StructureNode node, PdfLink link) => recorder.LinkAnnotation(node, link);
 
-        /// <param name="document">The document to build the structure tree for.</param>
-        /// <param name="requireAltText">
-        /// When <c>true</c> (only for PDF/A's accessible "A" conformance levels - see
-        /// <see cref="PeachPDF.PdfAConformance"/>), a <c>/Figure</c>-mapped content element with no
-        /// <c>alt</c> text still gets an empty <c>/Alt</c> entry, rather than none at all - PDF/A-a
-        /// (and PDF/UA) validation requires the entry to be present (empty marks it decorative), even
-        /// though a missing one is legal for ordinary tagged-PDF output. Defaults to <c>false</c>,
-        /// leaving plain <see cref="PeachPDF.PdfGenerateConfig.EnableTaggedPdf"/> output unaffected.
-        /// </param>
-        public StructureTagBuilder(PdfDocument document, bool requireAltText = false)
-        {
-            _document = document;
-            _requireAltText = requireAltText;
-
-            var catalog = document.Catalog;
-            catalog.MarkInfo.Marked = true;
-
-            _root = catalog.StructureTreeRoot;
-
-            _documentElement = new PdfStructureElement(document) { StructureType = "/Document" };
-            document.Internals.AddObject(_documentElement);
-            _documentElement.Parent = _root;
-            _root.SetRootKid(_documentElement);
-        }
-
-        /// <summary>
-        /// Called once per page, right after the page is created, before it is painted.
-        /// </summary>
-        public void BeginPage(PdfPage page)
-        {
-            _currentPage = page;
-            _nextMcidOnCurrentPage = 0;
-            _currentPageStructParentsKey = _parentTreeEntriesByKey.Count;
-            _parentTreeEntriesByKey.Add(new List<PdfItem>());
-            page.StructParents = _currentPageStructParentsKey;
-        }
-
-        /// <summary>
-        /// Opens a pure-grouping structure element for <paramref name="box"/>: creates/caches its
-        /// <see cref="PdfStructureElement"/>, links it to the current parent, and pushes it as the
-        /// parent for any nested Open* calls until disposed. No MCID, no marked content - matches
-        /// upstream's GroupingItem, which never opens a marked-content sequence of its own.
-        /// </summary>
-        public IDisposable OpenGroupingElement(StructureNode box, string structureType)
-        {
-            var element = GetOrCreateElement(_elementsByBox, box, structureType);
-            _parentStack.Push(element);
-            return new PopParentScope(_parentStack);
-        }
-
-        /// <summary>
-        /// Re-opens the structure elements of the <c>display: contents</c> elements
-        /// <paramref name="ancestors"/> a box was lifted out of (outermost first), so the box's own element
-        /// still nests inside them. Such an element generates no box, but only the box tree is affected
-        /// (CSS Display 3 §2.5) - the document's semantics, and so its structure, are not. The elements
-        /// are cached by box like any other, so lifted siblings share one <c>/Sect</c> or <c>/L</c>.
-        /// </summary>
-        public IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors)
-        {
-            var opened = 0;
-
-            foreach (var ancestor in ancestors)
-            {
-                _parentStack.Push(GetOrCreateElement(_elementsByBox, ancestor.Node, ancestor.StructureType));
-                opened++;
-
-                if (ancestor.StructureType == Keywords.Li)
-                {
-                    _parentStack.Push(GetOrCreateElement(_lbodyElementsByBox, ancestor.Node, "LBody"));
-                    opened++;
-                }
-            }
-
-            return opened == 0 ? NullScope.Instance : new PopParentsScope(_parentStack, opened);
-        }
-
-        /// <summary>
-        /// Opens the "/LBody" grouping element for a tagged &lt;li&gt;'s body content - see
-        /// <c>FragmentPainter.PaintListItem</c>. A dedicated cache/overload (rather than
-        /// <see cref="OpenGroupingElement"/>) because the same <paramref name="box"/> (the &lt;li&gt;
-        /// itself) already owns a distinct "/LI" element in <see cref="_elementsByBox"/>.
-        /// </summary>
-        public IDisposable OpenListItemBodyElement(StructureNode box)
-        {
-            var element = GetOrCreateElement(_lbodyElementsByBox, box, "LBody");
-            _parentStack.Push(element);
-            return new PopParentScope(_parentStack);
-        }
-
-        /// <summary>
-        /// Opens a content structure element for <paramref name="box"/>: creates/caches its
-        /// <see cref="PdfStructureElement"/>, allocates an MCID, emits a BDC around the caller's own
-        /// paint calls, and records the MCID (or, for content spanning a page break, a
-        /// <see cref="PdfMarkedContentReference"/>) both on the element's own "/K" and in the
-        /// document's /ParentTree. Does not push itself as a parent - content elements are always
-        /// leaves in this engine (see StructureTagMapper for why real elements' own text is always
-        /// carried by an anonymous child box, never the element's own box).
-        /// </summary>
-        public IDisposable OpenContentElement(Canvas g, StructureNode box, string structureType, string? altText = null)
-        {
-            var element = GetOrCreateElement(_elementsByBox, box, structureType);
-
-            if (!string.IsNullOrEmpty(altText))
-                element.AlternateText = altText;
-            else if (_requireAltText && structureType == "Figure")
-                // PDF/A-a (and PDF/UA) validation requires a /Figure element to carry an /Alt entry -
-                // present-but-empty is valid (marks it decorative), absent is not. Ordinary tagged-PDF
-                // output (EnableTaggedPdf alone, _requireAltText false) is unaffected.
-                element.AlternateText = string.Empty;
-
-            if (g.IsOffscreenTile)
-                // Struct element still created above (keeps the tree shape well-formed), but no
-                // MCID/BDC for tile-painted content in v1 - see Canvas.IsOffscreenTile.
-                return NullScope.Instance;
-
-            var mcid = _nextMcidOnCurrentPage++;
-            AddMarkedContentToStructureElement(element, mcid);
-
-            // The BDC operator's tag operand must be a PDF name (always slash-prefixed) - use the
-            // struct element's own already-prefixed /S value rather than the bare structureType
-            // parameter, so both agree exactly (mirrors upstream, whose BDC line is built from
-            // reading the struct element's own /S name back out, not from the caller's raw tag text).
-            g.BeginMarkedContent(element.StructureType, mcid);
-            _openSequences++;
-            return new EndMarkedContentScope(g, this);
-        }
-
-        /// <summary>
-        /// Attaches a &lt;math&gt; element's original MathML markup to its own (already-opened, via
-        /// <see cref="OpenContentElement"/>) <c>Formula</c> structure element as a PDF 2.0 Associated
-        /// File (ISO 32000-2 §14.13, <c>/AFRelationship /Supplement</c>) - the accessible-math
-        /// mechanism this repo's docs describe under the <c>-peachpdf-pdf-tag-type: Formula</c>
-        /// mapping. Also indexes it in the document-level <c>/AF</c> array
-        /// (<see cref="PdfCatalog.AddAssociatedFile"/>). No-op if <paramref name="box"/> was never
-        /// tagged (classification resolved to something other than <c>Formula</c>, or tagging is
-        /// off), or if this box's source has already been attached (a formula spanning a page break
-        /// paints more than once).
-        /// </summary>
-        public void AttachMathMlSource(StructureNode box, string mathMlSource)
-        {
-            if (!_mathMlAttached.Add(box))
-                return;
-
-            if (!_elementsByBox.TryGetValue(box, out var element))
-                return;
-
-            var bytes = Encoding.UTF8.GetBytes(mathMlSource);
-            var embeddedFile = new PdfEmbeddedFile(_document, bytes) { MimeType = "application/mathml+xml" };
-            var fileSpec = new PdfFileSpecification(_document, "formula.mml", embeddedFile)
-            {
-                AssociatedFileRelationship = "/Supplement",
-            };
-
-            element.AppendAssociatedFile(fileSpec);
-            _document.Catalog.AddAssociatedFile(fileSpec);
-        }
-
-        /// <summary>
-        /// Whether content painted now lands inside a marked-content sequence already - a content
-        /// element's or an artifact's. Marked content must not nest, so a caller about to open an
-        /// artifact for paint that may be reached from inside another box's sequence checks this first.
-        /// </summary>
-        public bool IsInMarkedContent => _openSequences > 0;
-
-        /// <summary>
-        /// Opens an artifact marked-content sequence around the caller's own paint calls - no
-        /// struct element, not part of the logical structure tree (e.g. a decorative &lt;hr&gt;).
-        /// </summary>
-        public IDisposable OpenArtifact(Canvas g)
-        {
-            if (g.IsOffscreenTile)
-                return NullScope.Instance;
-
-            g.BeginArtifact();
-            _openSequences++;
-            return new EndMarkedContentScope(g, this);
-        }
-
-        /// <summary>
-        /// Looks up the structure element created for <paramref name="box"/>, if any - used by
-        /// <c>PdfGenerator.HandleLinks</c> to attach an "/OBJR" from a Link annotation back to its
-        /// owning structure element.
-        /// </summary>
-        public PdfStructureElement? TryGetStructureElement(StructureNode box)
-        {
-            return _elementsByBox.TryGetValue(box, out var element) ? element : null;
-        }
-
-        /// <summary>
-        /// Completes the bidirectional PDF/UA link between a Link annotation and its owning
-        /// "/Link" structure element - called from <c>PdfGenerator.HandleLinks</c> once per Link
-        /// annotation it creates, after painting (and this builder's own <see cref="Finish"/>)
-        /// have already run. Appends a <see cref="PdfObjectReference"/> ("/OBJR") to the struct
-        /// element's "/K" (so a reader walking the structure tree can reach the annotation), and
-        /// gives the annotation its own "/StructParent"-keyed <see cref="PdfNumberTreeNode"/>
-        /// entry pointing back at the struct element (so a reader starting from the annotation -
-        /// e.g. via the page's own annotation array - can reach the structure tree). Both entries
-        /// draw from the same <see cref="PdfStructureTreeRoot.ParentTreeNextKey"/> counter
-        /// <see cref="Finish"/> already advanced past every page-keyed MCID entry, so annotation
-        /// keys never collide with page/MCID keys. No-op if <paramref name="box"/> was never
-        /// tagged "/Link" (tagging disabled, or the box's classification resolved to something
-        /// else, e.g. an author suppressed it with <c>-peachpdf-pdf-tag-type: none</c>).
-        /// </summary>
-        public void LinkAnnotationToStructureElement(StructureNode box, PdfPage page, PdfAnnotation annotation)
-        {
-            var element = TryGetStructureElement(box);
-            if (element == null)
-                return;
-
-            var objectReference = new PdfObjectReference(_document) { Page = page, Object = annotation };
-            _document.Internals.AddObject(objectReference);
-            element.AppendKid(objectReference);
-
-            var structParentKey = _root.ParentTreeNextKey;
-            _root.ParentTreeNextKey = structParentKey + 1;
-            annotation.StructParent = structParentKey;
-
-            var array = new PdfArray(_document);
-            array.Elements.Add(element.RequiredReference);
-            _root.ParentTree.AddNumber(structParentKey, array);
-
-            // PDF/UA requires tab order to follow structure order on any page that has an
-            // annotation linked into the structure tree.
-            page.Tabs = "S";
-        }
-
-        /// <summary>
-        /// Finalizes the structure tree after the whole page-render loop: builds each page's
-        /// /ParentTree /Nums entry and sets /ViewerPreferences/DisplayDocTitle when a title is
-        /// present (required once a document is tagged). Per-annotation ("/OBJR") ParentTree
-        /// entries (see PdfGenerator.HandleLinks) are appended after this call, from the same
-        /// underlying /ParentTree/ParentTreeNextKey sequence - Finish() itself only needs to have
-        /// already assigned all page-keyed entries so annotation keys allocate after them.
-        /// </summary>
-        public void Finish()
-        {
-            var parentTree = _root.ParentTree;
-            for (var key = 0; key < _parentTreeEntriesByKey.Count; key++)
-            {
-                var array = new PdfArray(_document);
-                foreach (var item in _parentTreeEntriesByKey[key])
-                    array.Elements.Add(item);
-                parentTree.AddNumber(key, array);
-            }
-
-            _root.ParentTreeNextKey = _parentTreeEntriesByKey.Count;
-
-            if (!string.IsNullOrEmpty(_document.Info.Title))
-                _document.Catalog.ViewerPreferences.DisplayDocTitle = true;
-        }
-
-        PdfStructureElement GetOrCreateElement(Dictionary<StructureNode, PdfStructureElement> cache, StructureNode box, string structureType)
-        {
-            if (cache.TryGetValue(box, out var existing))
-                return existing;
-
-            var parent = _parentStack.Count > 0 ? _parentStack.Peek() : _documentElement;
-
-            var element = new PdfStructureElement(_document) { StructureType = "/" + structureType };
-            _document.Internals.AddObject(element);
-            element.Parent = parent;
-            parent.AppendKid(element);
-
-            cache[box] = element;
-            return element;
-        }
-
-        /// <summary>
-        /// Adds the marked content with the given MCID on the current page to the given structure
-        /// element, and records the corresponding /ParentTree entry - mirrors upstream's
-        /// AddMarkedContentToStructureElement/AddToParentTree.
-        /// </summary>
-        void AddMarkedContentToStructureElement(PdfStructureElement element, int mcid)
-        {
-            if (element.Page == null)
-            {
-                // First content this element has ever received - claim the current page as its own.
-                element.Page = _currentPage!;
-                element.AppendKid(new PdfInteger(mcid));
-            }
-            else if (ReferenceEquals(element.Page, _currentPage))
-            {
-                element.AppendKid(new PdfInteger(mcid));
-            }
-            else
-            {
-                // Same logical box painted again on a later page (e.g. a paragraph whose lines span
-                // a page break) - the element's own primary /Pg stays on its first page, so this
-                // occurrence needs a full /MCR pointing at the actual page it's really on.
-                var mcr = new PdfMarkedContentReference(_document) { Page = _currentPage!, Mcid = mcid };
-                _document.Internals.AddObject(mcr);
-                element.AppendKid(mcr);
-            }
-
-            var entries = _parentTreeEntriesByKey[_currentPageStructParentsKey];
-            System.Diagnostics.Debug.Assert(mcid == entries.Count, "MCIDs must be allocated contiguously per page.");
-            entries.Add(element.RequiredReference);
-        }
-
-        sealed class PopParentScope : IDisposable
-        {
-            readonly Stack<PdfStructureElement> _stack;
-            public PopParentScope(Stack<PdfStructureElement> stack) => _stack = stack;
-            public void Dispose() => _stack.Pop();
-        }
-
-        sealed class PopParentsScope(Stack<PdfStructureElement> stack, int count) : IDisposable
-        {
-            public void Dispose()
-            {
-                for (var i = 0; i < count; i++) stack.Pop();
-            }
-        }
-
-        sealed class EndMarkedContentScope(Canvas g, StructureTagBuilder builder) : IDisposable
-        {
-            public void Dispose()
-            {
-                g.EndMarkedContent();
-                builder._openSequences--;
-            }
-        }
-
-        sealed class NullScope : IDisposable
-        {
-            public static readonly NullScope Instance = new();
-            public void Dispose() { }
-        }
+        /// <summary>Completes the structure tree after the whole page-render loop.</summary>
+        public void Finish() => recorder.Finish();
     }
 }
