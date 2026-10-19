@@ -21,9 +21,9 @@ namespace PeachPDF.CSS
             }
         }
 
-        public bool Check()
+        public bool Check(PeachDrawing.Core.RenderContext renderContext)
         {
-            return !Content.Check();
+            return !Content.Check(renderContext);
         }
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)

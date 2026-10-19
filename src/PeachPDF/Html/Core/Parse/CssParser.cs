@@ -75,7 +75,7 @@ namespace PeachPDF.Html.Core.Parse
             // adding the caller's rules here - or later via PeachPdfCssContent.AddStyleSheet - never
             // mutates the shared instance (which would leak those rules into other renders). This
             // mirrors the render path's clone-on-write (DomParser.CloneCssData).
-            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData();
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData(_renderContext);
 
             if (!string.IsNullOrEmpty(stylesheet))
             {
@@ -92,7 +92,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
         {
-            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData();
+            var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData(_renderContext);
 
             if (!stylesheet.IsEmpty)
             {

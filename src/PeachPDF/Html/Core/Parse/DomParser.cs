@@ -524,7 +524,7 @@ namespace PeachPDF.Html.Core.Parse
                 // Descend into @layer/@media/@supports/@container so an @font-face nested in a layer is
                 // still collected; per-stylesheet so each rule's src url() still resolves against this
                 // sheet's own BaseUri.
-                foreach (var fontRule in CssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
+                foreach (var fontRule in cssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
                 {
                     var fontFamilyName = CssValueParser.GetFontFaceFamilyName(fontRule.Family);
                     var fontFaceCandidates = CssValueParser.GetFontFacePropertyValue(fontRule.Source);

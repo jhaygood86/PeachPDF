@@ -331,7 +331,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static CssData StyleData(string css)
         {
-            var data = new CssData();
+            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(css));
             return data;
         }

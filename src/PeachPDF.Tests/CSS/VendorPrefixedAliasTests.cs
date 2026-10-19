@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet("@supports (-webkit-box-shadow: 0 0 2px black) { }");
             var supports = (SupportsRule)sheet.Rules[0];
 
-            Assert.True(supports.Condition.Check());
+            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
         }
 
         // --- Box layer: the cascade sees only the standard name, so ordering and var() behave uniformly. ---

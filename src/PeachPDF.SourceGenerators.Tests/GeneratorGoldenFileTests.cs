@@ -35,7 +35,7 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
-        public void Emits_A_Nominal_Context_SupportsDeclaration_Overload_For_Callers_With_No_Live_Parser()
+        public void Emits_A_RenderContext_SupportsDeclaration_Overload_For_Callers_With_No_Live_Parser()
         {
             var json = """
                 {
@@ -51,8 +51,8 @@ namespace PeachPDF.SourceGenerators.Tests
             var generated = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
 
-            Assert.Contains("internal static bool SupportsDeclaration(string name, string value) =>", generated);
-            Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.PdfBackend.PdfRenderContext()), name, value);", generated);
+            Assert.Contains("internal static bool SupportsDeclaration(global::PeachDrawing.Core.RenderContext renderContext, string name, string value) =>", generated);
+            Assert.Contains("SupportsDeclaration(new CssValueParser(renderContext), name, value);", generated);
         }
 
         [Fact]

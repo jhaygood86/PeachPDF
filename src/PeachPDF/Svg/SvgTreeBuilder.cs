@@ -1243,7 +1243,7 @@ namespace PeachPDF.Svg
             if (!TryParseSvgRoot(Encoding.UTF8.GetString(bytes), out var nestedRoot))
                 return null;   // malformed embedded SVG - renders nothing
 
-            var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot));
+            var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot), _renderContext);
 
             var valueParser = new CssValueParser(_renderContext);
             var registered = nestedCssData is null ? null : RegisteredProperty.BuildRegistry(nestedCssData, valueParser);

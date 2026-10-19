@@ -374,7 +374,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("backface-visibility", "sideways", false)]
         public void TheProperties_AreRecognised(string property, string value, bool valid)
         {
-            Assert.Equal(valid, PeachPDF.Html.Core.Utils.CssPropertyRegistry.SupportsDeclaration(property, value));
+            Assert.Equal(valid, PeachPDF.Html.Core.Utils.CssPropertyRegistry.SupportsDeclaration(new PeachPDF.PdfBackend.PdfRenderContext(), property, value));
         }
 
         // ---- through the PDF pipeline ---------------------------------------------------------------------

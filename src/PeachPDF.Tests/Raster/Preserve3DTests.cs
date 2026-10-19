@@ -318,7 +318,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("transform-style", "sideways", false)]
         public void TheProperty_IsRecognised(string property, string value, bool valid)
         {
-            Assert.Equal(valid, CssPropertyRegistry.SupportsDeclaration(property, value));
+            Assert.Equal(valid, CssPropertyRegistry.SupportsDeclaration(new PeachPDF.PdfBackend.PdfRenderContext(), property, value));
         }
 
         // ---- Nothing to resolve stays vector; a real context is a bitmap -------------------------------------------------

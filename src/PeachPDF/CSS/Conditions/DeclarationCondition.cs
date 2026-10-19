@@ -26,19 +26,19 @@ namespace PeachPDF.CSS
         /// or not <see cref="PdfGenerateConfig.AnimationProgress"/> is set, the way <c>@supports</c> stays true in
         /// a browser whose user has asked for reduced motion (which is what <c>prefers-reduced-motion</c> is for).
         /// Delegates
-        /// to the generated <see cref="CssPropertyRegistry.SupportsDeclaration(string, string)"/>/
+        /// to the generated <see cref="CssPropertyRegistry.SupportsDeclaration(PeachDrawing.Core.RenderContext, string, string)"/>/
         /// <see cref="SvgPropertyRegistry.SupportsDeclaration"/> instead - the same registries
         /// <c>CssUtils</c>/<c>SvgTreeBuilder.ApplyCommon</c> dispatch through for real. Checked with OR,
         /// not AND: a single shared stylesheet can't know at parse time whether a rule will end up
         /// matching an HTML box or an SVG element (an inline <c>&lt;svg&gt;</c> shares its host
         /// document's one <see cref="Html.Core.CssData"/>), so a declaration valid for either counts.
         /// </summary>
-        public bool Check()
+        public bool Check(PeachDrawing.Core.RenderContext renderContext)
         {
             var name = _property.Name.ToLowerInvariant();
             var value = _tokenValue.Text;
 
-            if (CssPropertyRegistry.SupportsDeclaration(name, value) || SvgPropertyRegistry.SupportsDeclaration(name, value))
+            if (CssPropertyRegistry.SupportsDeclaration(renderContext, name, value) || SvgPropertyRegistry.SupportsDeclaration(renderContext, name, value))
                 return true;
 
             // The SVG-only properties (stop-color, flood-color, paint-order, ...) have no entry in css-properties.json - nothing in
@@ -72,7 +72,7 @@ namespace PeachPDF.CSS
                 shorthand.Export(longhands);
 
                 return longhands.All(longhand =>
-                    CssGlobalKeywords.TryParse(longhand.Value, out _) || CssPropertyRegistry.SupportsDeclaration(longhand.Name, longhand.Value));
+                    CssGlobalKeywords.TryParse(longhand.Value, out _) || CssPropertyRegistry.SupportsDeclaration(renderContext, longhand.Name, longhand.Value));
             }
 
             // Same CSS-wide-keyword rule as above, for a longhand: gated on the property actually

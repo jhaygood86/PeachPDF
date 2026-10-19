@@ -101,7 +101,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void BuildRegistry_KeysByNameAndFamily_CaseInsensitiveFamily()
         {
-            var data = new CssData();
+            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(
                 "@font-palette-values --a { font-family: Nabla; base-palette: 1; }" +
                 "@font-palette-values --b { font-family: Other; base-palette: 2; }"));

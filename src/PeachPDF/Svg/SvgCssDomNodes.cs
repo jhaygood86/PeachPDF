@@ -253,11 +253,11 @@ namespace PeachPDF.Svg
         /// and skipping the UA sheet avoids HTML pseudo-element synthesis noise). Null when there is no
         /// <c>&lt;style&gt;</c> content, in which case only presentation/<c>style=""</c> attributes apply.
         /// </summary>
-        public static CssData? BuildStyleData(string? styleText)
+        public static CssData? BuildStyleData(string? styleText, PeachDrawing.Core.RenderContext renderContext)
         {
             if (string.IsNullOrWhiteSpace(styleText)) return null;
 
-            var cssData = new CssData();
+            var cssData = new CssData(renderContext);
             cssData.Stylesheets.Add(CssParser.ParseStyleSheet(styleText));
             return cssData;
         }

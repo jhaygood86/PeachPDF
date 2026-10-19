@@ -334,7 +334,7 @@ namespace PeachPDF.Tests.Integration
         {
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg"><style>{rule}</style><rect class="s"/></svg>""";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
             var rect = root.Descendants().Single(e => e.Name.LocalName == "rect");
 
             return SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rect, root), cssData, "print")!;
