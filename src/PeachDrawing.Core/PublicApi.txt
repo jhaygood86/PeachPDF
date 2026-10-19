@@ -10,6 +10,10 @@ PeachDrawing.Core.BlurEffect : sealed class
   method virtual String ToString()
   property Double SigmaX { get; init; }
   property Double SigmaY { get; init; }
+PeachDrawing.Core.BoxAlignment : enum Int32
+  Center = 1
+  End = 2
+  Start = 0
 PeachDrawing.Core.Brush : abstract class
   method virtual Void Dispose()
 PeachDrawing.Core.Canvas : abstract class
@@ -68,6 +72,7 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
   method virtual Void DrawRaster(RasterSurface surface)
   method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing, FontPalette fontPalette, ShapeSettings? features, String logicalText)
+  method virtual Void DrawStringInRect(String str, Font font, PaintColor color, Rect rect, BoxAlignment horizontal, BoxAlignment vertical, String logicalText = null)
   method virtual Void PopAntiAlias()
   method virtual Void PushAntiAlias(Boolean enabled)
   property Boolean FlattensTransparency { get; }

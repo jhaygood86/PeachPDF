@@ -1205,8 +1205,9 @@ namespace PeachPDF
 
                 if (applicableMargins.Count > 0)
                 {
+                    using var marginBoxCanvas = new PdfCanvas(_renderContext, g, _renderContext.PixelsPerPoint);
                     await MarginBoxRenderer.Render(
-                        g,
+                        marginBoxCanvas,
                         new Size(page.Width, page.Height),
                         mL,
                         mT,
@@ -1481,7 +1482,7 @@ namespace PeachPDF
                 var cbWidth = MarginBoxRenderer.MarginAreaWidth(boxName, pageSize, marginLeft, marginRight);
                 var cbHeight = MarginBoxRenderer.MarginAreaHeight(boxName, pageSize, marginTop, marginBottom);
 
-                await MarginBoxRenderer.PaintBackgroundAndBorder(g, outerRect, pageSize, rule, pageStyle, remPt,
+                await MarginBoxRenderer.PaintBackgroundAndBorder(pdfCanvas, outerRect, pageSize, rule, pageStyle, remPt,
                     cbWidth, cbHeight, renderContext, htmlContainer, backgroundImageCache);
             }
 

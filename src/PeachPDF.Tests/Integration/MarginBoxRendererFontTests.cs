@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, renderContext);
             var expected = renderContext.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface!.FamilyName);
         }
 
         [Fact]
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, renderContext);
             var expected = renderContext.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface!.FamilyName);
         }
 
         [Fact]
@@ -57,7 +57,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
             var expected = renderContext.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface!.FamilyName);
             Assert.Equal(DefaultFontResolver.FontSize, font.Size, 3);
         }
 
@@ -70,7 +70,7 @@ namespace PeachPDF.Tests.Integration
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, renderContext);
             var expected = renderContext.GetFont("monospace", DefaultFontResolver.FontSize, PaintFontStyle.Regular) as PdfCanvasFont;
 
-            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface.FamilyName);
+            Assert.Equal(expected!.Font.Typeface.FamilyName, font.Typeface!.FamilyName);
         }
 
         [Fact]

@@ -675,6 +675,52 @@ namespace PeachDrawing.Core
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
 
         /// <summary>
+        /// Draws a single line of <paramref name="str"/> aligned inside <paramref name="rect"/>, in the same working unit
+        /// space as <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/>'s
+        /// own <c>point</c>. The string is not wrapped or clipped: <paramref name="horizontal"/> places it along the rect's
+        /// width (<see cref="BoxAlignment.Start"/> at the left edge, <see cref="BoxAlignment.End"/> at the right edge) and
+        /// <paramref name="vertical"/> along its height (<see cref="BoxAlignment.Start"/> at the top).
+        ///
+        /// A backend that has its own, more exact notion of where a line of text sits inside a box (a PDF writer aligning by
+        /// the typeface's cell ascent and descent, say) overrides this; the default derives the position from
+        /// <see cref="Font.Height"/> and <see cref="MeasureString(string, Font, ShapeSettings?)"/> and forwards to
+        /// <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>.
+        /// </summary>
+        /// <param name="str">the text to draw</param>
+        /// <param name="font">the font to draw with</param>
+        /// <param name="color">the text color</param>
+        /// <param name="rect">the box the line is aligned inside</param>
+        /// <param name="horizontal">where along the rect's width the line sits</param>
+        /// <param name="vertical">where along the rect's height the line sits</param>
+        /// <param name="logicalText">
+        /// the logical-order source text when <paramref name="str"/> was reordered or mirrored for display; see
+        /// <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>
+        /// </param>
+        public virtual void DrawStringInRect(string str, Font font, PaintColor color, Rect rect, BoxAlignment horizontal, BoxAlignment vertical, string? logicalText = null)
+        {
+            if (str.Length == 0)
+            {
+                return;
+            }
+
+            var size = MeasureString(str, font);
+            var x = horizontal switch
+            {
+                BoxAlignment.Center => rect.X + (rect.Width - size.Width) / 2,
+                BoxAlignment.End => rect.X + rect.Width - size.Width,
+                _ => rect.X,
+            };
+            var y = vertical switch
+            {
+                BoxAlignment.Center => rect.Y + (rect.Height - font.Height) / 2,
+                BoxAlignment.End => rect.Y + rect.Height - font.Height,
+                _ => rect.Y,
+            };
+
+            DrawString(str, font, color, new PaintPoint(x, y), size, 0, null, null, logicalText);
+        }
+
+        /// <summary>
         /// Draws each of <paramref name="glyphs"/> at its own explicit position, addressed directly by
         /// font glyph index rather than by Unicode character - unlike
         /// <see cref="DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/>,

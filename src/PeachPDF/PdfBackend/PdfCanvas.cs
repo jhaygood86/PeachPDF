@@ -241,6 +241,32 @@ namespace PeachPDF.PdfBackend
             }
         }
 
+        /// <summary>
+        /// Aligns the line inside <paramref name="rect"/> with the PDF writer's own rect-and-format text layout, which
+        /// positions by the typeface's cell ascent and descent (rather than the default's <see cref="Font.Height"/>
+        /// arithmetic), so a margin box's text lands where it always has.
+        /// </summary>
+        public override void DrawStringInRect(string str, Font font, PaintColor color, Rect rect, BoxAlignment horizontal, BoxAlignment vertical, string? logicalText = null)
+        {
+            var xBrush = ToXBrush(_renderContext.GetSolidBrush(InvisibleText ? PaintColor.Black : color));
+            _g.InvisibleText = InvisibleText;
+            var xRect = new Rect(rect.X / PixelsPerPoint, rect.Y / PixelsPerPoint, rect.Width / PixelsPerPoint, rect.Height / PixelsPerPoint);
+            var format = new PdfStringFormat
+            {
+                Alignment = horizontal switch { BoxAlignment.Center => PdfStringAlignment.Center, BoxAlignment.End => PdfStringAlignment.Far, _ => PdfStringAlignment.Near },
+                LineAlignment = vertical switch { BoxAlignment.Center => PdfLineAlignment.Center, BoxAlignment.End => PdfLineAlignment.Far, _ => PdfLineAlignment.Near },
+            };
+
+            try
+            {
+                _g.DrawString(str, ((PdfCanvasFont)font).Font, xBrush, xRect, format, 0, null, ShapeSettings.Default, logicalText);
+            }
+            finally
+            {
+                _g.InvisibleText = false;
+            }
+        }
+
         public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
         {
             if (InvisibleText)
