@@ -157,6 +157,15 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal(expected, concrete.Value);
         }
 
+        [Theory]
+        [InlineData("rotate(100GRAD)")]
+        [InlineData("rotate(10DEG)")]
+        public void TransformAngleUnitIsCaseInsensitive(string value)
+        {
+            var property = ParseDeclaration("transform: " + value);
+            Assert.True(property.HasValue);
+        }
+
         [Fact]
         public void StrokeDasharrayNoneLegal()
         {
