@@ -235,6 +235,79 @@ namespace PeachPDF.Tests.Svg
             Assert.Empty(late.Children[0].StrokeDashArray);
         }
 
+        [Theory]
+        [InlineData("fill-opacity", 0.75)]
+        [InlineData("stroke-opacity", 0.75)]
+        [InlineData("stop-opacity", 0.75)]
+        [InlineData("opacity", 0.75)]
+        public async Task AnOpacityPercentageInAKeyframe_MixesAsTheNumberItStandsFor(string property, double expected)
+        {
+            // Chrome: 1 to 50% is 0.75 halfway. The percentage used to be dropped (fill-opacity, stroke-opacity) or flipped (the rest).
+            var document = await BuildAsync($"@keyframes k {{ to {{ {property}: 50% }} }} rect, stop {{ animation: k 1s linear }}",
+                "<defs><linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"red\"/></linearGradient></defs><rect width=\"10\" height=\"10\" stroke=\"black\"/>", 0.5);
+
+            if (property == "stop-opacity")
+            {
+                Assert.Equal(expected, document.Gradients["g"].Stops[0].PaintColor.A / 255.0, 2);
+                return;
+            }
+
+            var rect = document.Children[0];
+            Assert.Equal(expected, property switch { "fill-opacity" => rect.FillOpacity, "stroke-opacity" => rect.StrokeOpacity, _ => rect.Opacity }, 2);
+        }
+
+        [Fact]
+        public async Task AnOpacityPercentageInAStylesheetRule_IsRead()
+        {
+            // fill-opacity and stroke-opacity took a number only, so the rule was dropped before anything animated.
+            var document = await BuildAsync("rect { fill-opacity: 25%; stroke-opacity: 75% }", "<rect width=\"10\" height=\"10\" stroke=\"black\"/>", null);
+
+            Assert.Equal(0.25, document.Children[0].FillOpacity, 2);
+            Assert.Equal(0.75, document.Children[0].StrokeOpacity, 2);
+        }
+
+        [Fact]
+        public async Task ATextLengthFromABareNumberAttribute_MixesWithALengthInPixels()
+        {
+            // Chrome: font-size="20" to 60px is 40 halfway; read as 20 against 60px it would flip, or mix as a calc() of another unit.
+            var document = await BuildAsync("@keyframes k { to { font-size: 60px; letter-spacing: 10px } } text { animation: k 1s linear }",
+                "<text x=\"0\" y=\"20\" font-size=\"20\" letter-spacing=\"2\">a</text>", 0.5);
+
+            var text = Assert.IsType<SvgTextElement>(document.Children[0]);
+            Assert.Equal(40, text.Font!.Size, 2);
+            Assert.Equal(6, text.LetterSpacing, 2);
+        }
+
+        [Fact]
+        public async Task ARadiusNothingDeclares_MixesFromZero()
+        {
+            var document = await BuildAsync("@keyframes k { to { r: 40px } } circle { animation: k 1s linear }", "<circle cx=\"50\" cy=\"50\"/>", 0.5);
+
+            Assert.Equal(20, Assert.IsType<SvgCircleElement>(document.Children[0]).R, 2);
+        }
+
+        [Theory]
+        [InlineData(0.25, 1)]
+        [InlineData(1, 0)]
+        public async Task DisplayNothingDeclares_MixesFromInline(double progress, int expectedChildren)
+        {
+            // The omitted 0% is display: inline, so the element shows from the first instant until the discrete step to none at the end.
+            var document = await BuildAsync("@keyframes k { to { display: none } } rect { animation: k 1s linear }", "<rect width=\"10\" height=\"10\"/>", progress);
+
+            Assert.Equal(expectedChildren, document.Children.Count);
+        }
+
+        [Theory]
+        [InlineData("forwards", 255, 0, 0)]
+        [InlineData("none", 0, 255, 0)]
+        public async Task AZeroDurationAnimation_AppliesOnlyWithAForwardsFill(string fill, int red, int green, int blue)
+        {
+            var document = await BuildAsync($"@keyframes k {{ to {{ fill: #ff0000 }} }} rect {{ animation: k 0s linear {fill} }}",
+                "<rect width=\"10\" height=\"10\" fill=\"#00ff00\"/>", 0.5);
+
+            Assert.Equal(PaintColor.FromArgb(255, (byte)red, (byte)green, (byte)blue), document.Children[0].Fill.PaintColor);
+        }
+
         [Fact]
         public async Task AStrokeDasharrayWithBareNumbers_MixesWithLengthsInPixels()
         {
