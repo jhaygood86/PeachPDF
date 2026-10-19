@@ -526,7 +526,8 @@ namespace PeachPDF.Svg
             // Resolved before the definitions below: they inherit from the root through their ancestors.
             _lengthBasis = _rootBasis;
             _contextOnly = true;
-            var rootPaint = _rootPaint = ApplyCommon(new SvgGroupElement(), root, _seed);
+            var rootElement = new SvgGroupElement();
+            var rootPaint = _rootPaint = ApplyCommon(rootElement, root, _seed);
             _contextOnly = false;
             _lengthBasis = null;
 
@@ -546,6 +547,15 @@ namespace PeachPDF.Svg
                 var element = BuildElement(child, rootPaint, rootFont);
                 if (element is not null)
                     _document.Children.Add(element);
+            }
+
+            // The root <svg> is a box of the page, which the HTML painter draws, but its content is not: what it holds is seen through the root's own perspective
+            // and shares its 3D space (CSS Transforms 2 section 11 lists svg), which the page's boxes know nothing of.
+            if (rootElement.Perspective is not null || rootElement.PreserveThreeD)
+            {
+                var projection = new SvgGroupElement { Perspective = rootElement.Perspective, PerspectiveOrigin = rootElement.PerspectiveOrigin, PreserveThreeD = rootElement.PreserveThreeD };
+                projection.Children.AddRange(_document.Children);
+                _document.RootProjection = projection;
             }
 
             return _document;
@@ -1411,13 +1421,31 @@ namespace PeachPDF.Svg
             // calc() is CSS syntax: the transform attribute's grammar is numbers only, so a calc() there stays invalid.
             var transformIsCss = transformText is not null && (SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"), out _).ContainsKey("transform")
                 || node.GetMatchedCssDeclarations()?.ContainsKey("transform") == true);
-            element.Transform = SvgTransformParser.Parse(transformText, transformContext, allowCalc: transformIsCss);
+            var parsedTransform = SvgTransformParser.ParseFull(transformText, transformContext, allowCalc: transformIsCss);
+            element.Transform = parsedTransform?.Affine;
+            element.Transform3D = parsedTransform?.Full;
 
             // A percentage is of the reference box, which a fill-box or stroke-box only has once the element's geometry is known: read again then.
             element.DeferredTransform = transformBox != SvgTransformBox.ViewBox && transformText is not null && transformText.Contains('%')
                 ? new SvgDeferredTransform(transformText, transformContext, transformBox, transformIsCss)
                 : null;
             element.TransformOrigin = SvgTransformOrigin.Parse(Attr("transform-origin"), transformBox, viewBox, _lengthBasis);
+
+            // The 3D rendering properties (CSS Transforms 2 sections 8-10 and 11): none is inherited, and an invalid value is the initial one.
+            var perspectiveText = Attr("perspective")?.Trim();
+            element.Perspective = perspectiveText is { Length: > 0 } && !perspectiveText.Equals("none", StringComparison.OrdinalIgnoreCase)
+                && SvgValueParsers.ParseLength(perspectiveText, null, _lengthBasis) is { } distance and > 0
+                    ? Math.Max(distance, 1) // a distance under one pixel is one pixel (section 8); 0 is none
+                    : null;
+            // A position of one or two components: the third value of transform-origin is not part of perspective-origin's grammar.
+            var perspectiveOriginText = Attr("perspective-origin");
+            if (perspectiveOriginText is not null && perspectiveOriginText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length > 2)
+                perspectiveOriginText = null;
+
+            element.PerspectiveOrigin = SvgTransformOrigin.Parse(perspectiveOriginText, transformBox, viewBox, _lengthBasis)
+                ?? SvgTransformOrigin.Parse("50% 50%", transformBox, viewBox, _lengthBasis); // the initial value: the middle of the reference box
+            element.PreserveThreeD = Attr("transform-style")?.Trim().Equals("preserve-3d", StringComparison.OrdinalIgnoreCase) == true;
+            element.BackfaceHidden = Attr("backface-visibility")?.Trim().Equals("hidden", StringComparison.OrdinalIgnoreCase) == true;
 
             // fill-rule/stroke-linecap/stroke-linejoin fall back to the INHERITED value (not a hardcoded
             // default) on an invalid value, per SVG 1.1 §11.4 - same shape as stroke-width/etc. above.
@@ -1540,6 +1568,10 @@ namespace PeachPDF.Svg
             {
                 element.Opacity = 1;
                 element.Transform = null;
+                element.Transform3D = null;
+                element.Perspective = null;
+                element.PreserveThreeD = false;
+                element.BackfaceHidden = false;
                 element.ClipPathRef = null;
                 element.MaskRef = null;
                 element.FilterRef = null;

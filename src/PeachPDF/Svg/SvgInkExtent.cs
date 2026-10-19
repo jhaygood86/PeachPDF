@@ -49,7 +49,7 @@ namespace PeachPDF.Svg
             return IsFinite(mapped) ? mapped : null;
         }
 
-        private static Rect? LocalBounds(SvgElement element)
+        internal static Rect? LocalBounds(SvgElement element)
         {
             switch (element)
             {

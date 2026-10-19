@@ -114,12 +114,25 @@ public static class Warp
         var src = source.Pixels;
         var sw = source.Width;
         var sh = source.Height;
+        var srcPitchX = source.PixelsPerUnitX;
+        var srcPitchY = source.PixelsPerUnitY;
+        var srcGridX = source.GridX;
+        var srcGridY = source.GridY;
 
-        for (var x = xStart; x < xEnd; x++)
+        // The inverse's raw output (u, v, w) is affine in the destination position, so along a row it moves by the same step every pixel, and from
+        // one row to the next by another: it is computed once for the first pixel of the row, then stepped, instead of being recomputed (with the
+        // two neighbours the sampling rate needs) for every pixel.
+        var unitX = 1.0 / destination.PixelsPerUnitX;
+        var unitY = 1.0 / destination.PixelsPerUnitY;
+        var (u, v, w) = inverse.ApplyHomogeneous((destination.GridX + xStart + 0.5) * unitX, (destination.GridY + y + 0.5) * unitY);
+        double du = inverse.M11 * unitX, dv = inverse.M21 * unitX, dw = inverse.M31 * unitX; // one pixel to the right
+        double eu = inverse.M12 * unitY, ev = inverse.M22 * unitY, ew = inverse.M32 * unitY; // one pixel down
+
+        // No perspective: the divisor is the same everywhere, so is how many source pixels a destination pixel spans.
+        var constantAxis = inverse.IsAffine && w > 1e-9 ? SamplesPerAxis(u / w, v / w, u, v, du, dv, dw, eu, ev, ew, srcPitchX, srcPitchY, w) : 0;
+
+        for (var x = xStart; x < xEnd; x++, u += du, v += dv, w += dw)
         {
-            var dx = (destination.GridX + x + 0.5) / destination.PixelsPerUnitX;
-            var dy = (destination.GridY + y + 0.5) / destination.PixelsPerUnitY;
-            var (u, v, w) = inverse.ApplyHomogeneous(dx, dy);
             if (!(w > 1e-9))
             {
                 if (!valid.IsEmpty)
@@ -127,12 +140,15 @@ public static class Warp
                 continue;
             }
 
-            var sxc = u / w * source.PixelsPerUnitX - source.GridX;
-            var syc = v / w * source.PixelsPerUnitY - source.GridY;
+            var reciprocal = 1.0 / w;
+            var ur = u * reciprocal;
+            var vr = v * reciprocal;
+            var sxc = ur * srcPitchX - srcGridX;
+            var syc = vr * srcPitchY - srcGridY;
 
             // How many source pixels one destination pixel spans here: enough samples to average them, so a receding plane
             // (which packs many source pixels into one) does not alias.
-            var axis = SamplesPerAxis(inverse, destination, source, x, y, sxc, syc);
+            var axis = constantAxis != 0 ? constantAxis : SamplesPerAxis(ur, vr, u, v, du, dv, dw, eu, ev, ew, srcPitchX, srcPitchY, w);
 
             // One sample per pixel is the one at the pixel's centre, which is what was just computed.
             if (axis == 1)
@@ -143,19 +159,22 @@ public static class Warp
                 continue;
             }
 
+            // The sub-samples sit at fixed offsets from the pixel centre, and (u, v, w) is affine in the position, so each is the centre's plus a constant.
+            var offsets = SubSampleOffsets[axis];
             var sum = Vector128<int>.Zero;
             var taken = 0;
             for (var j = 0; j < axis; j++)
             {
                 for (var i = 0; i < axis; i++)
                 {
-                    var px = destination.GridX + x + (i + 0.5) / axis;
-                    var py = destination.GridY + y + (j + 0.5) / axis;
-                    var (su, sv, sw2) = inverse.ApplyHomogeneous(px / destination.PixelsPerUnitX, py / destination.PixelsPerUnitY);
+                    var ox = offsets[i];
+                    var oy = offsets[j];
+                    var sw2 = w + ox * dw + oy * ew;
                     if (!(sw2 > 1e-9))
                         continue;
 
-                    sum += Bilinear(src, sw, sh, su / sw2 * source.PixelsPerUnitX - source.GridX, sv / sw2 * source.PixelsPerUnitY - source.GridY);
+                    var r2 = 1.0 / sw2;
+                    sum += Bilinear(src, sw, sh, (u + ox * du + oy * eu) * r2 * srcPitchX - srcGridX, (v + ox * dv + oy * ev) * r2 * srcPitchY - srcGridY);
                     taken++;
                 }
             }
@@ -171,6 +190,22 @@ public static class Warp
             if (!valid.IsEmpty)
                 valid[x] = 255;
         }
+    }
+
+    /// <summary>For each number of samples along an axis, where they sit relative to the pixel's centre, in pixels: <c>(i + 0.5) / axis - 0.5</c>.</summary>
+    private static readonly double[][] SubSampleOffsets = BuildSubSampleOffsets();
+
+    private static double[][] BuildSubSampleOffsets()
+    {
+        var table = new double[MaxSamplesPerAxis + 1][];
+        for (var axis = 1; axis <= MaxSamplesPerAxis; axis++)
+        {
+            table[axis] = new double[axis];
+            for (var i = 0; i < axis; i++)
+                table[axis][i] = (i + 0.5) / axis - 0.5;
+        }
+
+        return table;
     }
 
     /// <summary>The bilinear sample of the premultiplied source at pixel-space position (<paramref name="x"/>, <paramref name="y"/>) (pixel centres at +0.5), against transparency outside.</summary>
@@ -190,22 +225,28 @@ public static class Warp
         return PixelKernels.BilinearTexels(pixels, width, height, x0, y0, tx, ty);
     }
 
-    private static int SamplesPerAxis(in Homography inverse, RasterSurface destination, RasterSurface source, int x, int y, double sx, double sy)
+    /// <summary>
+    /// How many samples along each axis a destination pixel needs: the number of source pixels it spans, rounded up, at most <see cref="MaxSamplesPerAxis"/>.
+    /// The raw output (<paramref name="u"/>, <paramref name="v"/>, <paramref name="w"/>) is at the pixel's centre, where the source position is
+    /// (<paramref name="ur"/>, <paramref name="vr"/>) = (<c>u / w</c>, <c>v / w</c>); <paramref name="du"/> and the like are its steps to the next pixel across
+    /// and down. Compared as squared lengths against 1, 4, 9 and 16, which is the same as rounding the length up without taking a root.
+    /// </summary>
+    private static int SamplesPerAxis(double ur, double vr, double u, double v, double du, double dv, double dw, double eu, double ev, double ew, double srcPitchX, double srcPitchY, double w)
     {
-        var (u, v, w) = inverse.ApplyHomogeneous((destination.GridX + x + 1.5) / destination.PixelsPerUnitX, (destination.GridY + y + 0.5) / destination.PixelsPerUnitY);
-        var (u2, v2, w2) = inverse.ApplyHomogeneous((destination.GridX + x + 0.5) / destination.PixelsPerUnitX, (destination.GridY + y + 1.5) / destination.PixelsPerUnitY);
-        if (!(w > 1e-9) || !(w2 > 1e-9))
+        var nextW = w + dw;
+        var belowW = w + ew;
+        if (!(nextW > 1e-9) || !(belowW > 1e-9))
             return MaxSamplesPerAxis;
 
-        var rx = u / w * source.PixelsPerUnitX - source.GridX;
-        var ry = v / w * source.PixelsPerUnitY - source.GridY;
-        var bx = u2 / w2 * source.PixelsPerUnitX - source.GridX;
-        var by = v2 / w2 * source.PixelsPerUnitY - source.GridY;
+        var nextReciprocal = 1.0 / nextW;
+        var belowReciprocal = 1.0 / belowW;
+        var rx = ((u + du) * nextReciprocal - ur) * srcPitchX;
+        var ry = ((v + dv) * nextReciprocal - vr) * srcPitchY;
+        var bx = ((u + eu) * belowReciprocal - ur) * srcPitchX;
+        var by = ((v + ev) * belowReciprocal - vr) * srcPitchY;
 
-        var stepX = Math.Sqrt((rx - sx) * (rx - sx) + (ry - sy) * (ry - sy));
-        var stepY = Math.Sqrt((bx - sx) * (bx - sx) + (by - sy) * (by - sy));
-        var scale = Math.Max(stepX, stepY);
-        return Math.Clamp((int)Math.Ceiling(scale), 1, MaxSamplesPerAxis);
+        var squared = Math.Max(rx * rx + ry * ry, bx * bx + by * by);
+        return squared <= 1 ? 1 : squared <= 4 ? 2 : squared <= 9 ? 3 : 4;
     }
 }
 

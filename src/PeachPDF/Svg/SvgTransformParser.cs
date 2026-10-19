@@ -26,8 +26,9 @@ namespace PeachPDF.Svg
     /// <c>cm</c> and <c>mm</c>, the single-axis <c>translateX()</c>/<c>translateY()</c>/<c>scaleX()</c>/<c>scaleY()</c>, <c>skew()</c> and
     /// <c>rotateZ()</c>. It is one parser for the <c>transform</c> attribute, <c>gradientTransform</c> and <c>patternTransform</c> too, so those
     /// accept the CSS forms as well (a superset of what a browser takes there). A function that has an argument this parser cannot resolve - a unit it
-    /// does not know (<c>em</c>, a percentage of a length), a <c>calc()</c> or another function - or that is a 3D function, contributes nothing, and
-    /// the functions after it still apply.
+    /// does not know (<c>em</c>, a percentage of a length), a <c>calc()</c> or another function - contributes nothing, and
+    /// the functions after it still apply. The 3D functions (CSS Transforms 2) are read into a 4x4 matrix (<see cref="ParseFull"/>); <see cref="Parse"/>, for the places that
+    /// hold only a 2D matrix, ignores a list that holds one.
     /// </summary>
     internal static class SvgTransformParser
     {
@@ -38,16 +39,32 @@ namespace PeachPDF.Svg
         /// </summary>
         public static Matrix3x2? Parse(string? value, SvgTransformContext? context = null, bool allowUnits = true, bool allowCalc = false)
         {
+            // The 2D readers (gradientTransform, patternTransform, a clipPath's transform) cannot hold a 3D function: CSS Transforms 2 section 11 ignores the whole list there.
+            var parsed = ParseFull(value, context, allowUnits, allowCalc);
+            return parsed is { Full: null } flat ? flat.Affine : null;
+        }
+
+        /// <summary>
+        /// The transform a list stands for, with its full 4x4 matrix when the list holds a 3D function (<c>translate3d()</c>, <c>translateZ()</c>, <c>scale3d()</c>,
+        /// <c>scaleZ()</c>, <c>rotate3d()</c>, <c>rotateX()</c>, <c>rotateY()</c>, <c>matrix3d()</c> or <c>perspective()</c>). <see cref="SvgParsedTransform.Affine"/> is
+        /// that matrix's orthographic projection onto the plane (what a renderer that cannot do 3D would draw). Null when no function of the list reads.
+        /// </summary>
+        public static SvgParsedTransform? ParseFull(string? value, SvgTransformContext? context = null, bool allowUnits = true, bool allowCalc = false)
+        {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
             var pos = 0;
             var combined = Matrix4x4.Identity;
             var hasAny = false;
+            var has3D = false;
 
             while (TryReadFunction(value, ref pos, out var name, out var args))
             {
-                var m = BuildMatrix(name, args, context, allowUnits, allowCalc);
+                var m = BuildMatrix(name, args, context, allowUnits, allowCalc, out var is3D);
+
+                // A 3D function counts whether or not it resolved: a list that holds one is a 3D list (and is ignored whole where 3D cannot be).
+                has3D |= is3D;
 
                 if (m is not { } matrix)
                     continue;
@@ -61,7 +78,9 @@ namespace PeachPDF.Svg
             if (!hasAny)
                 return null;
 
-            return new Matrix3x2(combined.M11, combined.M12, combined.M21, combined.M22, combined.M41, combined.M42);
+            return new SvgParsedTransform(
+                new Matrix3x2(combined.M11, combined.M12, combined.M21, combined.M22, combined.M41, combined.M42),
+                has3D ? combined : null);
         }
 
         /// <summary>Marks an argument that is a <c>calc()</c> expression; the text after it is the expression as written.</summary>
@@ -179,7 +198,12 @@ namespace PeachPDF.Svg
                     "scalex" or "scaley" or "scalez" => count == 1 && (Plain(0) || args[0].Unit == "%"),
                     "rotate" or "rotatex" or "rotatey" or "rotatez" or "skewx" or "skewy" => count == 1 && AngleOk(0),
                     "skew" => count is 1 or 2 && Enumerable.Range(0, count).All(AngleOk),
-                    _ => true, // the 3D functions and anything else: not judged here
+                    "translate3d" => count == 3 && Enumerable.Range(0, 3).All(LengthOk),
+                    "scale3d" => count == 3 && Enumerable.Range(0, 3).All(i => Plain(i) || args[i].Unit == "%"),
+                    "rotate3d" => count == 4 && Enumerable.Range(0, 3).All(Plain) && AngleOk(3),
+                    "matrix3d" => count == 16 && Enumerable.Range(0, 16).All(Plain),
+                    "perspective" => count == 1 && LengthOk(0) && args[0].Value >= 0,
+                    _ => true, // anything else: not judged here
                 };
 
                 if (!valid)
@@ -189,8 +213,10 @@ namespace PeachPDF.Svg
             return any;
         }
 
-        private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args, SvgTransformContext? context, bool allowUnits, bool allowCalc)
+        private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args, SvgTransformContext? context, bool allowUnits, bool allowCalc, out bool is3D)
         {
+            is3D = name.ToLowerInvariant() is "translatez" or "translate3d" or "scalez" or "scale3d" or "rotatex" or "rotatey" or "rotate3d" or "matrix3d" or "perspective";
+
             // Set when an argument has a unit this parser cannot resolve here: the function then does nothing. An argument that was not a
             // number at all (calc(), a nested function) counts, wherever it stands in the list, even where the function reads fewer arguments.
             var calcArgs = args.Count(arg => IsCalc(arg.Unit));
@@ -234,7 +260,7 @@ namespace PeachPDF.Svg
                 }
             }
 
-            // User units (CSS px). A bare number is one too (the attribute grammar). axis: 0 horizontal, 1 vertical (what a percentage is of).
+            // User units (CSS px). A bare number is one too (the attribute grammar). axis: 0 horizontal, 1 vertical (what a percentage is of), 2 depth (no percentage).
             float Length(int i, int axis)
             {
                 if (i >= args.Count) return 0f;
@@ -245,7 +271,7 @@ namespace PeachPDF.Svg
                     case "" or "px": return (float)value;
                     case "em" when context is not null: return (float)(value * context.EmPx);
                     case "rem" when context is not null: return (float)(value * context.RootEmPx);
-                    case "%" when context is not null && !double.IsNaN(axis == 0 ? context.ReferenceWidth : context.ReferenceHeight):
+                    case "%" when axis != 2 && context is not null && !double.IsNaN(axis == 0 ? context.ReferenceWidth : context.ReferenceHeight):
                         return (float)(value / 100 * (axis == 0 ? context.ReferenceWidth : context.ReferenceHeight));
                     case "in": return (float)(value * 96);
                     case "cm": return (float)(value * 96 / 2.54);
@@ -340,6 +366,72 @@ namespace PeachPDF.Svg
                     matrix = Skew(MathF.Tan(Angle(0) * (MathF.PI / 180f)), args.Count >= 2 ? MathF.Tan(Angle(1) * (MathF.PI / 180f)) : 0f);
                     break;
 
+                case "translatez" when args.Count >= 1:
+                    matrix = Matrix4x4.CreateTranslation(0, 0, Length(0, 2));
+                    break;
+
+                case "translate3d" when args.Count >= 3:
+                    matrix = Matrix4x4.CreateTranslation(Length(0, 0), Length(1, 1), Length(2, 2));
+                    break;
+
+                case "scalez" when args.Count >= 1:
+                    matrix = Matrix4x4.CreateScale(1f, 1f, Factor(0));
+                    break;
+
+                case "scale3d" when args.Count >= 3:
+                    matrix = Matrix4x4.CreateScale(Factor(0), Factor(1), Factor(2));
+                    break;
+
+                case "rotatex" when args.Count >= 1:
+                    matrix = Matrix4x4.CreateRotationX(Angle(0) * (MathF.PI / 180f));
+                    break;
+
+                case "rotatey" when args.Count >= 1:
+                    matrix = Matrix4x4.CreateRotationY(Angle(0) * (MathF.PI / 180f));
+                    break;
+
+                case "rotate3d" when args.Count >= 4:
+                {
+                    var axis = new Vector3(Arg(0), Arg(1), Arg(2));
+                    var degrees = Angle(3);
+
+                    // A zero direction vector turns nothing (CSS Transforms 2 section 14).
+                    matrix = axis.LengthSquared() < 1e-12f
+                        ? Matrix4x4.Identity
+                        : Matrix4x4.CreateFromAxisAngle(Vector3.Normalize(axis), degrees * (MathF.PI / 180f));
+                    break;
+                }
+
+                case "matrix3d" when args.Count >= 16:
+                {
+
+                    // CSS lists the sixteen numbers column-major, and System.Numerics is row-major with the translation in the fourth row: the two are
+                    // transposes of each other, so the numbers read in order into the row-major constructor are the right matrix.
+                    var v = new float[16];
+                    for (var i = 0; i < 16; i++) v[i] = Arg(i);
+                    matrix = new Matrix4x4(
+                        v[0], v[1], v[2], v[3],
+                        v[4], v[5], v[6], v[7],
+                        v[8], v[9], v[10], v[11],
+                        v[12], v[13], v[14], v[15]);
+                    break;
+                }
+
+                case "perspective" when args.Count >= 1:
+                {
+                    var distance = Length(0, 2);
+
+                    // A negative or zero length does nothing (as does none, which is not a number and did not resolve above). Under one pixel is one pixel
+                    // (CSS Transforms 2 section 12.2): a smaller distance is a sliver of the plane the viewer sits in, nothing a document means to draw.
+                    if (!(distance > 0))
+                        return null;
+
+                    var perspective = Matrix4x4.Identity;
+                    perspective.M34 = -1f / MathF.Max(distance, 1f);
+                    matrix = perspective;
+                    break;
+                }
+
                 default:
                     // Unrecognized function name - recognized only so we can skip past the
                     // parentheses; contributes no transform.
@@ -388,6 +480,9 @@ namespace PeachPDF.Svg
 
 namespace PeachPDF.Svg
 {
+    /// <summary>A parsed transform list: <paramref name="Affine"/> is its 2D matrix, and <paramref name="Full"/> the 4x4 matrix when the list holds a 3D function (null for a 2D list).</summary>
+    internal readonly record struct SvgParsedTransform(Matrix3x2 Affine, Matrix4x4? Full);
+
     /// <summary>What a CSS transform needs to resolve its relative lengths: the font sizes (<c>em</c>, <c>rem</c>) and the reference box a percentage is of.</summary>
     /// <param name="EmPx">The element's font size in user units.</param>
     /// <param name="RootEmPx">The root element's font size in user units.</param>
