@@ -1292,7 +1292,7 @@ namespace PeachPDF.Svg
                     var clipPath = new SvgClipPath
                     {
                         Id = id,
-                        ClipRule = SvgValueParsers.ParseFillRule(node.GetAttribute("clip-rule")),
+                        ClipRule = SvgValueParsers.ParseFillRule(ResolveStyledAttr(node, "clip-rule")),
                         // Default is userSpaceOnUse; objectBoundingBox maps 0..1 child geometry to the
                         // referencing element's bounding box (resolved at render time).
                         ClipPathUnitsUserSpaceOnUse =
@@ -2940,7 +2940,7 @@ namespace PeachPDF.Svg
         private List<FilterPrimitive>? BuildFilterPrimitives(ISvgSourceNode node, bool primitiveUnitsUserSpaceOnUse)
         {
             var primitives = new List<FilterPrimitive>();
-            var filterLinear = ParseColorInterpolationFilters(node.GetAttribute("color-interpolation-filters"), true);
+            var filterLinear = ParseColorInterpolationFilters(ResolveStyledAttr(node, "color-interpolation-filters"), true);
 
             foreach (var child in node.Children)
             {
@@ -2950,7 +2950,7 @@ namespace PeachPDF.Svg
                 if (BuildFilterPrimitive(child) is not { } primitive)
                     return null;
 
-                primitive.LinearRgb = ParseColorInterpolationFilters(child.GetAttribute("color-interpolation-filters"), filterLinear);
+                primitive.LinearRgb = ParseColorInterpolationFilters(ResolveStyledAttr(child, "color-interpolation-filters"), filterLinear);
                 primitive.ReadsReservedInput = ReadsReservedInput(child, out var readsBackdrop);
                 if (readsBackdrop)
                     _document.ReadsBackdrop = true;
@@ -3086,7 +3086,7 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeFlood(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            var floodColorAttr = node.GetAttribute("flood-color");
+            var floodColorAttr = ResolveStyledAttr(node, "flood-color");
             var color = string.IsNullOrWhiteSpace(floodColorAttr)
                 ? PaintColor.Black
                 : floodColorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
@@ -3098,7 +3098,7 @@ namespace PeachPDF.Svg
                 In = inAttr,
                 Result = node.GetAttribute("result"),
                 PaintColor = color,
-                Opacity = SvgValueParsers.ParseOpacity(node.GetAttribute("flood-opacity")),
+                Opacity = SvgValueParsers.ParseOpacity(ResolveStyledAttr(node, "flood-opacity")),
             };
         }
 
@@ -3332,7 +3332,7 @@ namespace PeachPDF.Svg
             if (ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 2, 2) is not { } deviation)
                 return null;
 
-            var colorAttr = node.GetAttribute("flood-color");
+            var colorAttr = ResolveStyledAttr(node, "flood-color");
             var color = string.IsNullOrWhiteSpace(colorAttr)
                 ? PaintColor.Black
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
@@ -3348,7 +3348,7 @@ namespace PeachPDF.Svg
                 StdDeviationX = deviation.First,
                 StdDeviationY = deviation.Second,
                 PaintColor = color,
-                Opacity = SvgValueParsers.ParseOpacity(node.GetAttribute("flood-opacity")),
+                Opacity = SvgValueParsers.ParseOpacity(ResolveStyledAttr(node, "flood-opacity")),
             };
         }
 
@@ -3492,7 +3492,7 @@ namespace PeachPDF.Svg
             if (light is null)
                 return null;
 
-            var colorAttr = node.GetAttribute("lighting-color");
+            var colorAttr = ResolveStyledAttr(node, "lighting-color");
             var color = string.IsNullOrWhiteSpace(colorAttr)
                 ? PaintColor.White
                 : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)

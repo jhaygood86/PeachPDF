@@ -226,6 +226,14 @@
         public static readonly string MarkerMid = "marker-mid";
         public static readonly string MarkerStart = "marker-start";
         public static readonly string Mask = "mask";
+        public static readonly string PaintOrder = "paint-order";
+        public static readonly string FloodColor = "flood-color";
+        public static readonly string FloodOpacity = "flood-opacity";
+        public static readonly string LightingColor = "lighting-color";
+        public static readonly string TransformBox = "transform-box";
+        public static readonly string InlineSize = "inline-size";
+        public static readonly string ShapeInside = "shape-inside";
+        public static readonly string ShapeSubtract = "shape-subtract";
         public static readonly string MaxHeight = "max-height";
         public static readonly string MaxWidth = "max-width";
         public static readonly string MinHeight = "min-height";
