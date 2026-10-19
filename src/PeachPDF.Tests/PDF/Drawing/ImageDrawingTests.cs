@@ -1,7 +1,7 @@
 using System.Numerics;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
 

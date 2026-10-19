@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -225,7 +226,7 @@ namespace PeachPDF.Tests.Integration
             var painted = new List<string>();
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
             {
-                var recording = new RecordingGraphics(new PeachPDF.PdfBackend.PdfRenderContext());
+                var recording = new RecordingGraphics(new PeachPDF.Rendering.HtmlRenderContext());
                 FragmentPaintHarness.PaintPage(container, recording, page);
                 painted.AddRange(VisiblyDrawnStrings(recording.Log));
             }

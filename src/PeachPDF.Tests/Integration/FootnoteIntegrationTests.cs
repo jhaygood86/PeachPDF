@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachPDF;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
@@ -483,7 +484,7 @@ namespace PeachPDF.Tests.Integration
             // sentinel, see MarginBoxRenderer.PaintBorder's remarks) is carried through as-is; it's
             // PdfGenerator.ResolveFootnoteDividerColor, not this method, that turns it into black -
             // moot here anyway, since a zero-thickness divider never paints regardless of its color.
-            Assert.Equal(PaintColor.Black, PdfGenerator.ResolveFootnoteDividerColor(rule.DividerColor, new PdfRenderContext()));
+            Assert.Equal(PaintColor.Black, PdfGenerator.ResolveFootnoteDividerColor(rule.DividerColor, new HtmlRenderContext()));
         }
 
         [Fact]
@@ -768,7 +769,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("rgb(255, 0, 0)", 255, 0, 0)]
         public void ResolveFootnoteDividerColor_FallsBackToBlack_ForNoRealColor(string? declared, byte r, byte g, byte b)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
 
             var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, renderContext);
 
@@ -781,12 +782,12 @@ namespace PeachPDF.Tests.Integration
             // The Canvas-level overload, driven directly with a recording mock - per this repo's own
             // testing conventions, a page-count/stream-length check (as the full-pipeline tests above
             // use) cannot tell a real divider draw call apart from a silently no-op one.
-            var container = new HtmlContainerInt(new PdfRenderContext());
-            var g = new RecordingGraphics(new PdfRenderContext());
+            var container = new HtmlContainerInt(new HtmlRenderContext());
+            var g = new RecordingGraphics(new HtmlRenderContext());
             var dividerRect = new Rect(10, 20, 300, 3);
             var footnoteArea = new FootnoteAreaFragment(dividerRect, [], "rgb(0, 128, 0)");
 
-            PdfGenerator.PaintFootnoteArea(g, new PdfRenderContext(), container, footnoteArea);
+            PdfGenerator.PaintFootnoteArea(g, new HtmlRenderContext(), container, footnoteArea);
 
             var opKinds = g.Log.Select(op => op.Kind).ToList();
             Assert.Equal(
@@ -800,11 +801,11 @@ namespace PeachPDF.Tests.Integration
         {
             // border-top: none/hidden (or no @footnote rule declaring one at all, on a page where the
             // resolved thickness happens to be zero) must not draw a phantom zero-height rectangle.
-            var container = new HtmlContainerInt(new PdfRenderContext());
-            var g = new RecordingGraphics(new PdfRenderContext());
+            var container = new HtmlContainerInt(new HtmlRenderContext());
+            var g = new RecordingGraphics(new HtmlRenderContext());
             var footnoteArea = new FootnoteAreaFragment(new Rect(10, 20, 300, 0), [], null);
 
-            PdfGenerator.PaintFootnoteArea(g, new PdfRenderContext(), container, footnoteArea);
+            PdfGenerator.PaintFootnoteArea(g, new HtmlRenderContext(), container, footnoteArea);
 
             Assert.DoesNotContain(g.Log, op => op.Kind == PaintOpKind.FillRect);
         }

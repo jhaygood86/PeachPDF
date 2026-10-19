@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -205,7 +206,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """;
 
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = 0,

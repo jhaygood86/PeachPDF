@@ -1,7 +1,8 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 
@@ -38,7 +39,7 @@ namespace PeachPDF.Tests.TestSupport
         private readonly PdfGraphics _measure;
         private readonly PdfCanvas _real;
 
-        internal InkAwareRecordingGraphics(PdfRenderContext renderContext, double pixelsPerPoint = 1.0)
+        internal InkAwareRecordingGraphics(HtmlRenderContext renderContext, double pixelsPerPoint = 1.0)
         {
             _measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
             _real = new PdfCanvas(renderContext, _measure, pixelsPerPoint);

@@ -1,6 +1,6 @@
 using PeachImage;
 using PeachImage.Formats.Gif;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using Xunit;
@@ -8,7 +8,7 @@ using Xunit;
 namespace PeachPDF.Tests.PdfEngineTests.Advanced
 {
     /// <summary>
-    /// Covers <see cref="PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf"/> directly (no PDF rendering/rasterization needed -
+    /// Covers <see cref="PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf"/> directly (no PDF rendering/rasterization needed -
     /// this is a pure byte-transform), verifying it against an independent, from-scratch MSB-first
     /// (PDF/TIFF-convention) LZW decoder rather than round-tripping through the same repack logic.
     /// </summary>
@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
         /// <summary>
         /// A from-scratch MSB-first LZW decoder implementing PDF/TIFF's own conventions (Clear=256,
         /// End=257, starts at 9-bit codes, widens one code earlier than GIF's own trigger) - written
-        /// independently of <see cref="PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf"/> so this test can't just be
+        /// independently of <see cref="PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf"/> so this test can't just be
         /// validating the repack logic against its own assumptions.
         /// </summary>
         private static byte[] DecodePdfStyleMsbFirstLzw(byte[] data, int pixelCount)
@@ -128,7 +128,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
             using var decodedImage = Image.Load(new MemoryStream(bytes));
             var expectedRgb = decodedImage.GetPixelSpan();
 
-            var pdfLzwData = PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData);
+            var pdfLzwData = PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData);
             var actualIndices = DecodePdfStyleMsbFirstLzw(pdfLzwData, 16 * 16);
 
             for (int i = 0; i < actualIndices.Length; i++)
@@ -152,7 +152,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
             using var decodedImage = Image.Load(new MemoryStream(bytes));
             var expectedRgb = decodedImage.GetPixelSpan();
 
-            var pdfLzwData = PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData);
+            var pdfLzwData = PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData);
             var actualIndices = DecodePdfStyleMsbFirstLzw(pdfLzwData, 64 * 64);
 
             for (int i = 0; i < actualIndices.Length; i++)
@@ -178,7 +178,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
             GifPassthrough.TryRead(new MemoryStream(bytes), out var info);
             var truncated = info.LzwData[..(info.LzwData.Length / 2)];
 
-            var pdfLzwData = PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf(truncated);
+            var pdfLzwData = PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf(truncated);
 
             Assert.NotEmpty(pdfLzwData);
         }

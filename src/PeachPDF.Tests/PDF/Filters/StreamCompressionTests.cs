@@ -5,9 +5,9 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using PeachDrawing.Text.Compression;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Filters;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Filters;
 using PeachPDF.Tests.Integration;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Filters
         private static PdfDocument Pdf20Document(bool brotli = true)
         {
             var document = new PdfDocument();
-            document.Options.PdfVersion = PeachPDF.PdfVersion.Pdf20;
+            document.Options.PdfVersion = PeachDrawing.PDF.Engine.PdfVersion.Pdf20;
             document.Options.BrotliCompression = brotli;
             return document;
         }

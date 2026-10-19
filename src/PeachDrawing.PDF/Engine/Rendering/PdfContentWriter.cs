@@ -1,0 +1,248 @@
+//
+// Accumulates PDF page/form content directly as raw bytes. PDF content operators
+// are ASCII, while encoded text strings use the same byte-to-char identity mapping
+// as PdfEncoders.LatinOneByteEncoding.
+//
+
+using PeachDrawing.PDF.Engine.Drawing;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
+using PeachDrawing.PDF.Engine.Internal;
+
+namespace PeachDrawing.PDF.Engine.Rendering;
+
+internal sealed class PdfContentWriter
+{
+    private const int InitialChunkSize = 256;
+    private const int DefaultChunkSize = 16 * 1024;
+
+    private readonly int _initialChunkSize;
+    private readonly int _maximumChunkSize;
+    private readonly List<byte[]> _completedChunks = [];
+    private StringBuilder? _formatBuffer;
+    private byte[]? _currentChunk;
+    private int _currentCount;
+    private int _length;
+    private int _nextChunkSize;
+
+    public PdfContentWriter()
+    {
+        _initialChunkSize = InitialChunkSize;
+        _maximumChunkSize = DefaultChunkSize;
+        _nextChunkSize = InitialChunkSize;
+    }
+
+    public PdfContentWriter(int chunkSize)
+    {
+        if (chunkSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(chunkSize));
+
+        _initialChunkSize = chunkSize;
+        _maximumChunkSize = chunkSize;
+        _nextChunkSize = chunkSize;
+    }
+
+    public int Length => _length;
+
+    public PdfContentWriter Append(char value)
+    {
+        EnsureCurrentChunk();
+        _currentChunk![_currentCount++] = (byte)value;
+        _length++;
+        return this;
+    }
+
+    public PdfContentWriter Append(string? value)
+    {
+        if (value is not null)
+            Append(value.AsSpan());
+        return this;
+    }
+
+    public PdfContentWriter Append(ReadOnlySpan<char> value)
+    {
+        while (!value.IsEmpty)
+        {
+            EnsureCurrentChunk();
+            int count = Math.Min(value.Length, _currentChunk!.Length - _currentCount);
+            Span<byte> destination = _currentChunk.AsSpan(_currentCount, count);
+            for (int i = 0; i < count; i++)
+                destination[i] = (byte)value[i];
+
+            _currentCount += count;
+            _length += count;
+            value = value[count..];
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Appends a number formatted with the invariant culture, straight into the current chunk when it has room.
+    /// </summary>
+    public PdfContentWriter Append<T>(T value, string format) where T : IUtf8SpanFormattable, IFormattable
+    {
+        EnsureCurrentChunk();
+        Span<byte> free = _currentChunk.AsSpan(_currentCount);
+        if (free.Length >= 64 && value.TryFormat(free, out int written, format, CultureInfo.InvariantCulture))
+        {
+            _currentCount += written;
+            _length += written;
+            return this;
+        }
+
+        Span<byte> scratch = stackalloc byte[64];
+        return value.TryFormat(scratch, out written, format, CultureInfo.InvariantCulture)
+            ? Append(scratch[..written])
+            : Append(value.ToString(format, CultureInfo.InvariantCulture));
+    }
+
+    public PdfContentWriter Append(ReadOnlySpan<byte> value)
+    {
+        while (!value.IsEmpty)
+        {
+            EnsureCurrentChunk();
+            int count = Math.Min(value.Length, _currentChunk!.Length - _currentCount);
+            value[..count].CopyTo(_currentChunk.AsSpan(_currentCount));
+            _currentCount += count;
+            _length += count;
+            value = value[count..];
+        }
+
+        return this;
+    }
+
+    public PdfContentWriter AppendFormat(IFormatProvider? provider, string format, params object?[] args)
+    {
+        StringBuilder buffer = PrepareFormatBuffer();
+        try
+        {
+            buffer.AppendFormat(provider, format, args);
+            AppendFormatBuffer(buffer);
+            return this;
+        }
+        finally
+        {
+            buffer.Clear();
+        }
+    }
+
+    public PdfContentWriter AppendFormat(IFormatProvider? provider, string format, object? arg0)
+    {
+        StringBuilder buffer = PrepareFormatBuffer();
+        try
+        {
+            buffer.AppendFormat(provider, format, arg0);
+            AppendFormatBuffer(buffer);
+            return this;
+        }
+        finally
+        {
+            buffer.Clear();
+        }
+    }
+
+    public PdfContentWriter AppendFormat(
+        IFormatProvider? provider,
+        string format,
+        object? arg0,
+        object? arg1)
+    {
+        StringBuilder buffer = PrepareFormatBuffer();
+        try
+        {
+            buffer.AppendFormat(provider, format, arg0, arg1);
+            AppendFormatBuffer(buffer);
+            return this;
+        }
+        finally
+        {
+            buffer.Clear();
+        }
+    }
+
+    public PdfContentWriter AppendFormat(
+        IFormatProvider? provider,
+        string format,
+        object? arg0,
+        object? arg1,
+        object? arg2)
+    {
+        StringBuilder buffer = PrepareFormatBuffer();
+        try
+        {
+            buffer.AppendFormat(provider, format, arg0, arg1, arg2);
+            AppendFormatBuffer(buffer);
+            return this;
+        }
+        finally
+        {
+            buffer.Clear();
+        }
+    }
+
+    public byte[] ToArray()
+    {
+        if (_length == 0)
+            return [];
+
+        var result = new byte[_length];
+        int offset = 0;
+        foreach (byte[] chunk in _completedChunks)
+        {
+            chunk.CopyTo(result, offset);
+            offset += chunk.Length;
+        }
+
+        if (_currentCount > 0)
+            _currentChunk!.AsSpan(0, _currentCount).CopyTo(result.AsSpan(offset));
+
+        return result;
+    }
+
+    public void Clear()
+    {
+        _completedChunks.Clear();
+        _currentChunk = null;
+        _currentCount = 0;
+        _length = 0;
+        _nextChunkSize = _initialChunkSize;
+        _formatBuffer?.Clear();
+    }
+
+    public override string ToString()
+        => PdfEncoders.LatinOneByteEncoding.GetString(ToArray());
+
+    private void EnsureCurrentChunk()
+    {
+        if (_currentChunk is not null && _currentCount < _currentChunk.Length)
+            return;
+
+        if (_currentChunk is not null)
+            _completedChunks.Add(_currentChunk);
+
+        _currentChunk = new byte[_nextChunkSize];
+        _currentCount = 0;
+        if (_nextChunkSize < _maximumChunkSize)
+        {
+            _nextChunkSize = _nextChunkSize <= _maximumChunkSize / 4
+                ? _nextChunkSize * 4
+                : _maximumChunkSize;
+        }
+    }
+
+    private StringBuilder PrepareFormatBuffer()
+    {
+        _formatBuffer ??= new StringBuilder();
+        _formatBuffer.Clear();
+        return _formatBuffer;
+    }
+
+    private void AppendFormatBuffer(StringBuilder buffer)
+    {
+        foreach (ReadOnlyMemory<char> chunk in buffer.GetChunks())
+            Append(chunk.Span);
+    }
+}

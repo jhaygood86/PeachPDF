@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Integration;
 /// </summary>
 public class MulticolTableFontMetricTests
 {
-    private static Task RegisterSourceSans(PeachPDF.PdfBackend.PdfRenderContext renderContext) =>
+    private static Task RegisterSourceSans(PeachPDF.Rendering.HtmlRenderContext renderContext) =>
         BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Metric Fixture");
 
     [Theory]

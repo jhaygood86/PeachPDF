@@ -1,7 +1,8 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -83,7 +84,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string body)
         {
-            var adapter = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var adapter = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml($"<!DOCTYPE html><html><head></head><body>{body}</body></html>", null);
 

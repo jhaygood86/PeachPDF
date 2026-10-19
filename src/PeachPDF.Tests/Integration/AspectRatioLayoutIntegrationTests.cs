@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -85,7 +86,7 @@ namespace PeachPDF.Tests.Integration
                 <div id="parent"><div id="child"></div></div>
                 </body></html>
                 """;
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);
@@ -117,7 +118,7 @@ namespace PeachPDF.Tests.Integration
                 <div id="flex"><div id="item"><div id="gc"></div></div></div>
                 </body></html>
                 """;
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
@@ -280,7 +281,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> LayoutContainer(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

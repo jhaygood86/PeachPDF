@@ -1,10 +1,11 @@
 ﻿using Microsoft.Playwright;
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
 namespace PeachPDF.Tests.Integration
@@ -135,7 +136,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private async Task<(CssBox box, Dictionary<string, NamedString> namedStrings)> BuildCssBoxTree(string html, string selector)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             // Parse HTML and build CSS box tree

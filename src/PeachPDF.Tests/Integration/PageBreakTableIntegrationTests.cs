@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Threading.Tasks;
 using Xunit;
@@ -195,7 +196,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """;
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
@@ -290,7 +291,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox? table, double pageHeight)> GetTableAndPageHeight(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Svg
 {
     public class SvgTreeBuilderTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         // Mirrors the standalone-SVG loader (ImageLoadHandler.LoadSvgFromStream): builds an SVG-local
         // CssData from the markup's own <style> elements and cascades custom properties, so <style>-based
@@ -19,7 +20,7 @@ namespace PeachPDF.Tests.Svg
         private static SvgDocument BuildFrom(string markup)
         {
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             if (cssData is not null)
                 SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
@@ -1387,7 +1388,7 @@ namespace PeachPDF.Tests.Svg
             var span = Assert.Single(text.Spans);
             // Font.Size reports the underlying TypefaceFont's own (adapter-internal-units) size, not the raw
             // SVG font-size value directly - assert the ratio instead of an absolute value so this
-            // isn't coupled to PdfRenderContext.PixelsPerPoint's default.
+            // isn't coupled to HtmlRenderContext.PixelsPerPoint's default.
             Assert.Equal(3.0, span.Font!.Size / text.Font!.Size, 3);
         }
 

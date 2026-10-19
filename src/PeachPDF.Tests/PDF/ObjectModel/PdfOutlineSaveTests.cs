@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 {
@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             // (mutually exclusive per PDF 32000-1:2008 Table 153/176) - see PdfOutline.PrepareForSave.
             var doc = new PdfDocument();
             doc.AddPage();
-            var outline = new PeachPDF.PDF.PdfOutline { Title = "External", Url = "https://example.com" };
+            var outline = new PeachDrawing.PDF.Engine.PdfOutline { Title = "External", Url = "https://example.com" };
             doc.Outlines.Add(outline);
 
             using var stream = new MemoryStream();

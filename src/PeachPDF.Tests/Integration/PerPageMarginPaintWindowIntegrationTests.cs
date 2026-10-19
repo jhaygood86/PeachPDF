@@ -1,7 +1,8 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -126,7 +127,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

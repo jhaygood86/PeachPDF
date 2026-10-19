@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -300,7 +301,7 @@ div {{ width: 200pt; height: 100pt; {css} }}
 
         private async Task<CssBox> FindDivBoxFromHtml(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

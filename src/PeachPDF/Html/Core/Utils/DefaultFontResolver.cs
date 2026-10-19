@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
@@ -104,7 +105,7 @@ namespace PeachPDF.Html.Core.Utils
             // font that cannot possibly be present, since FontResolver discovers none there.
             // Nothing is registered yet when this runs (the application registers its fonts
             // afterwards, via PdfGenerator.AddFontFromStream), so this names the font it is
-            // most likely to have bundled; PdfRenderContext.AddFont then points the default at
+            // most likely to have bundled; HtmlRenderContext.AddFont then points the default at
             // whatever family is actually registered first if that guess turns out wrong.
             if (isBrowser)
                 return PickBrowserDefaultFont(GetInstalledFontFamilyNames());

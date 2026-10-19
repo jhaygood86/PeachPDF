@@ -1,4 +1,4 @@
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Integration
             // Mirrors PdfXConformanceTests.RepeatedAddPdfPages_DifferentConformance_Throws for the
             // declarative path - proves EstablishDocumentOptions's cross-call consistency guard is
             // reached from AddPages too, not just AddPdfPages.
-            var document = new PeachPdfDocument(new PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
             var generator = new PdfGenerator();
 
             var x1aConfig = new PdfGenerateConfig

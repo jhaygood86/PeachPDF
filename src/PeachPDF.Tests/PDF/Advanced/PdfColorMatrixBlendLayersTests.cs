@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Numerics;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine.Advanced;
 
 namespace PeachPDF.Tests.PdfEngineTests.Advanced
 {

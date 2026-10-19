@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Numerics;
@@ -13,13 +14,13 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgThreeDPropertiesTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgDocument Build(string rule, string content, string rootAttributes = "width=\"200\" height=\"100\"")
         {
             var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" {rootAttributes}><style>{rule}</style>{content}</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
         }
 

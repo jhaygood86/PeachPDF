@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -13,13 +14,13 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgVisibilityTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static TestRecordingGraphics Render(string body, string style = "")
         {
             var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><style>{style}</style>{body}</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 100, 100));

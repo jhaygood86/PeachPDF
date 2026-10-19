@@ -1,7 +1,8 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -238,10 +239,10 @@ namespace PeachPDF.Tests.Integration
             var areas = AreasOf(container);
             Assert.Equal(2, areas.Count);
 
-            var g = new RecordingGraphics(new PdfRenderContext());
+            var g = new RecordingGraphics(new HtmlRenderContext());
             foreach (var area in areas)
             {
-                PdfGenerator.PaintFootnoteArea(g, new PdfRenderContext(), container, area);
+                PdfGenerator.PaintFootnoteArea(g, new HtmlRenderContext(), container, area);
             }
 
             var dividers = g.Log.Where(op => op.Kind == PaintOpKind.FillRect).ToList();

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -105,7 +106,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         private static FragmentainerContext ColumnBreakContext() =>
-            new(new HtmlContainerInt(new PdfRenderContext()), new CssBox(null, null), 0, (0, 100));
+            new(new HtmlContainerInt(new HtmlRenderContext()), new CssBox(null, null), 0, (0, 100));
 
         [Fact]
         public void None_LeavesTheSplitAndTheTokenUntouched()

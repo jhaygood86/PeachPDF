@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Html.Core
     /// <summary>
     /// HTML-layer regression test for the bug where a `@font-face src: url(...)` with no `format()`
     /// hint at all (valid CSS - format() is an optional hint) was silently dropped by
-    /// <c>PdfRenderContext.AddFontFromStream</c>'s format allowlist, which had no case for a missing
+    /// <c>HtmlRenderContext.AddFontFromStream</c>'s format allowlist, which had no case for a missing
     /// hint. Real-world stylesheets (e.g. css4.pub's Icelandic dictionary page: `src: url("Satyr10.otf")`,
     /// no format()) hit this exactly, causing the custom font to silently fall back to a default/system
     /// font instead of rendering. Mirrors <see cref="FontFaceWoff2RenderingTests"/>'s direct-layout
@@ -49,7 +50,7 @@ p {{ width: 300px; }}
 <body><p>Hello CFF, no format hint</p></body>
 </html>";
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

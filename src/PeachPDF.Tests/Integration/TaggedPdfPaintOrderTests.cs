@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.PdfFeatures;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -175,7 +176,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

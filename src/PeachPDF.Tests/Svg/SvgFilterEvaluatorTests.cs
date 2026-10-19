@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System;
@@ -21,7 +22,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterEvaluatorTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgRectElement NewElement() => new() { Width = 50, Height = 50 };
 

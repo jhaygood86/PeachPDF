@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -151,7 +152,7 @@ namespace PeachPDF.Tests.Html.Core
             // Drives the real font-metrics path (FontHelper.MeasureString) through the rune-based loop with
             // a line feed (which starts a new measured line), a tab (treated as a space), and a control
             // character (skipped) - the branches a mock measurement adapter never exercises.
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml("<!DOCTYPE html><html><body><p style=\"font-size:14pt\">x</p></body></html>", null);
 
@@ -176,7 +177,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<CssBox> LayoutParagraph(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

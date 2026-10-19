@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfBackend;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration;
 
@@ -17,7 +18,7 @@ public class RefillOfUnreachedBoxesTests
 {
     private static async Task<HtmlContainerInt> SetUp(string body)
     {
-        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml($"<!DOCTYPE html><html><body>{body}</body></html>", null);
         return container;
@@ -49,7 +50,7 @@ public class RefillOfUnreachedBoxesTests
     [Fact]
     public async Task ResettingABoxLayoutHasReached_StillReportsItsGeometryChanged()
     {
-        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml("<!DOCTYPE html><html><body><p id=a>one</p></body></html>", null);
 

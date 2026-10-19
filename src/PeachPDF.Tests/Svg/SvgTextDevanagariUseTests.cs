@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -25,7 +26,7 @@ namespace PeachPDF.Tests.Svg
         private const string Ssa = "ष";
         private const string VowelSignI = "ि";
 
-        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
+        private static readonly HtmlRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static TestRecordingGraphics Render(string body)
         {

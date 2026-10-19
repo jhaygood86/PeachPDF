@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using Microsoft.Playwright;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
 namespace PeachPDF.Tests.Integration
@@ -341,7 +342,7 @@ isPseudoBefore: true,
             string selector,
          bool isPseudoBefore)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             await container.SetHtml(html, null);

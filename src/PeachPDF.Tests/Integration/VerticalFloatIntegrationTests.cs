@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -31,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             return (wrapper, boxes);
         }
 
-        private static Task RegisterFont(PdfRenderContext renderContext) =>
+        private static Task RegisterFont(HtmlRenderContext renderContext) =>
             BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Vertical Float Fixture");
 
         [Theory]

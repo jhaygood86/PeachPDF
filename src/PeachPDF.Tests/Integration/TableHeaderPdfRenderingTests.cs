@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using PeachPDF;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine.Advanced;
 using System.Linq;
 using System.Numerics;
 using PeachPDF.Tests.TestSupport;
@@ -268,7 +269,7 @@ namespace PeachPDF.Tests.Integration
                 "<tfoot><tr><th>Footer</th></tr></tfoot>" +
                 "</table></body></html>";
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

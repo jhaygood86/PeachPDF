@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration;
 
@@ -21,7 +22,7 @@ public class OrthogonalIntrinsicWidthTests
                    ".vbox{border:2px solid #000;padding:8px;writing-mode:vertical-rl;width:60px;height:140px}</style></head>" +
                    $"<body><div class='row'><div id='item'>{item}</div><div id='after'>x</div></div></body></html>";
 
-        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(renderContext) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
         await container.SetHtml(html, null);
 

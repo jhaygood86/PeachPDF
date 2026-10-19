@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -10,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>SVG text reading the <c>font</c>, <c>font-variant</c> and <c>text-decoration</c> shorthands from <c>style=""</c>, a presentation attribute and a stylesheet.</summary>
     public class SvgTextShorthandTests
     {
-        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
+        private static readonly HtmlRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static SvgTextElement BuildText(string svgBody)
         {
@@ -68,7 +69,7 @@ namespace PeachPDF.Tests.Svg
         {
             var markup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><style>text { text-decoration: overline wavy }</style><text x="10" y="50">Hi</text></svg>""";
             var root = XDocument.Parse(markup).Root!;
-            var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, css, "print", null), RenderContext);
             var text = (SvgTextElement)document.Children[0];
 

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -22,7 +23,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var container = new CssBox(null, null)
             {
-                HtmlContainer = new HtmlContainerInt(new PdfRenderContext()),
+                HtmlContainer = new HtmlContainerInt(new HtmlRenderContext()),
                 Location = new PaintPoint(0, 0),
                 Size = new Size(400, 200),
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
@@ -43,7 +44,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var container = new CssBox(null, null)
             {
-                HtmlContainer = new HtmlContainerInt(new PdfRenderContext()),
+                HtmlContainer = new HtmlContainerInt(new HtmlRenderContext()),
                 Location = new PaintPoint(0, 0),
                 Size = new Size(400, 200),
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
@@ -70,7 +71,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // null, while widthPt/inlineSizePt (both physical-height-driven here) remain available.
             var container = new CssBox(null, null)
             {
-                HtmlContainer = new HtmlContainerInt(new PdfRenderContext()),
+                HtmlContainer = new HtmlContainerInt(new HtmlRenderContext()),
                 Location = new PaintPoint(0, 0),
                 Size = new Size(400, 200),
                 ContainerType = CssProperty<ContainerType>.FromValue("inline-size", ContainerType.InlineSize),
@@ -97,7 +98,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // (150pt) directly from the Height string, not the live (still-zero) ClientBottom - ClientTop.
             var container = new CssBox(null, null)
             {
-                HtmlContainer = new HtmlContainerInt(new PdfRenderContext()),
+                HtmlContainer = new HtmlContainerInt(new HtmlRenderContext()),
                 Location = new PaintPoint(0, 0),
                 Size = new Size(400, 0), // width settled; height NOT yet settled (still its default)
                 Height = "200px",
@@ -120,7 +121,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // at 300px (225pt), so cqh/cqb must report that clamped value, not the unclamped 100px (75pt).
             var container = new CssBox(null, null)
             {
-                HtmlContainer = new HtmlContainerInt(new PdfRenderContext()),
+                HtmlContainer = new HtmlContainerInt(new HtmlRenderContext()),
                 Location = new PaintPoint(0, 0),
                 Size = new Size(400, 0),
                 Height = "100px",
@@ -144,7 +145,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // declaring `height: 300px; max-height: 100px;` actually lays out at 100px (75pt).
             var container = new CssBox(null, null)
             {
-                HtmlContainer = new HtmlContainerInt(new PdfRenderContext()),
+                HtmlContainer = new HtmlContainerInt(new HtmlRenderContext()),
                 Location = new PaintPoint(0, 0),
                 Size = new Size(400, 0),
                 Height = "300px",
@@ -176,7 +177,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void GetViewportUnitBasis_HorizontalRoot_InlineIsWidthAndBlockIsHeight()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(800, 600),
@@ -195,7 +196,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void GetViewportUnitBasis_VerticalRoot_InlineIsHeightAndBlockIsWidth()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(800, 600),

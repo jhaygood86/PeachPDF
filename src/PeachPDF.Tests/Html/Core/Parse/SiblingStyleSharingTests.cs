@@ -3,8 +3,8 @@ using PeachPDF;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 

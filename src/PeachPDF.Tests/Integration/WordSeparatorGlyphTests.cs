@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -122,7 +123,7 @@ namespace PeachPDF.Tests.Integration
             // it. (An image gets no space in front of it: only a text word paints one.)
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"""<p id="p">AA <img src="{OnePixelPng}" style="width:20pt;height:10pt"> BB</p>"""));
-            using var recorder = new RecordingGraphics(new PdfRenderContext());
+            using var recorder = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
             var image = AllWords(LayoutHarness.FindById(root, "p")!).Single(w => w.IsImage);
 
@@ -297,7 +298,7 @@ namespace PeachPDF.Tests.Integration
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("""<p style="font-family:EmojiOnly">AA BB</p>"""),
                 configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Emoji, "EmojiOnly"));
-            using var recorder = new RecordingGraphics(new PdfRenderContext());
+            using var recorder = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
 
             var ops = recorder.Log.Where(o => o.Kind == PaintOpKind.DrawString).ToList();
@@ -460,7 +461,7 @@ namespace PeachPDF.Tests.Integration
             string body, Func<string, Font, ShapeSettings?, Size>? measureString = null)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body));
-            using var recorder = new RecordingGraphics(new PdfRenderContext()) { MeasureStringOverride = measureString };
+            using var recorder = new RecordingGraphics(new HtmlRenderContext()) { MeasureStringOverride = measureString };
             FragmentPaintHarness.PaintPage(container, recorder);
             return recorder.Log;
         }

@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Network;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -2494,7 +2495,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void InlineSvg_FilledPolyline_FillsAClosedShapeButStrokesTheOpenOne()
         {
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
             var markup = """
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                   <polyline points="10,10 90,10 50,90" fill="#ff0000" stroke="#0000ff" stroke-width="4"/>

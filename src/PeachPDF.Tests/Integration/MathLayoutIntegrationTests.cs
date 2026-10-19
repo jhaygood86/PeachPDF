@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.MathML;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ namespace PeachPDF.Tests.Integration
         static async Task<MathBox> LayoutMath(string mathHtml)
         {
             var html = Wrap(mathHtml);
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "TestMath");
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
@@ -60,7 +61,7 @@ namespace PeachPDF.Tests.Integration
         static async Task<CssBox?> CascadeMathMl(string mathHtml, string css)
         {
             var html = $"<html><head><style>{css}</style></head><body>{mathHtml}</body></html>";
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 
@@ -128,7 +129,7 @@ namespace PeachPDF.Tests.Integration
 
         static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutMathBox(string html)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "TestMath");
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
@@ -494,7 +495,7 @@ namespace PeachPDF.Tests.Integration
             // No font-family override - resolves to whatever default font the test environment has,
             // almost certainly with no MATH table, exercising MathMetrics' fallback path.
             var html = "<html><body><math><mfrac><mi>x</mi><mi>y</mi></mfrac></math></body></html>";
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);

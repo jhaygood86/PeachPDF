@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -473,7 +474,7 @@ h2, h3 { margin: 6pt 0; }
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
 
             await container.SetHtml(html, null);

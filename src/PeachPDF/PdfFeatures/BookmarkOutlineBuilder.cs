@@ -1,8 +1,8 @@
 ﻿using PeachDrawing.Core;
 using PeachPDF.Html.Core.Annotations;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using System.Collections.Generic;
 
 namespace PeachPDF.PdfFeatures

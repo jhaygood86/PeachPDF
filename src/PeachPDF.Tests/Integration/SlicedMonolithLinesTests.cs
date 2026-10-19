@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Tests.TestSupport;
@@ -137,7 +138,7 @@ namespace PeachPDF.Tests.Integration
 
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
             {
-                var recording = new RecordingGraphics(new PeachPDF.PdfBackend.PdfRenderContext());
+                var recording = new RecordingGraphics(new PeachPDF.Rendering.HtmlRenderContext());
                 FragmentPaintHarness.PaintPage(container, recording, page);
 
                 var clips = new Stack<Rect?>();
@@ -178,7 +179,7 @@ namespace PeachPDF.Tests.Integration
 
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
             {
-                var recording = new RecordingGraphics(new PeachPDF.PdfBackend.PdfRenderContext());
+                var recording = new RecordingGraphics(new PeachPDF.Rendering.HtmlRenderContext());
                 FragmentPaintHarness.PaintPage(container, recording, page);
                 pages.Add(recording.Log.Where(o => o.Kind == PaintOpKind.DrawString && o.Text is not null)
                     .Select(o => o.Text!).ToList());

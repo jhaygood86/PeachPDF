@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain("/DCTDecode", pdfText);
             Assert.Matches(new Regex(@"/Indexed\s*/DeviceRGB\s+\d+"), pdfText);
             Assert.DoesNotContain("/Mask", pdfText);
-            AssertContainsRawBytes(pdfText, PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData));
+            AssertContainsRawBytes(pdfText, PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData));
         }
 
         [Fact]
@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Integration
             // Structural check on the actual array value, not just "/Mask present" - the same pitfall
             // PngPassthroughIntegrationTests' own tRNS tests warn about for token-presence-only checks.
             Assert.Matches(new Regex($@"/Mask\s*\[\s*{info.TransparentColorIndex}\s+{info.TransparentColorIndex}\s*\]"), pdfText);
-            AssertContainsRawBytes(pdfText, PeachPDF.PDF.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData));
+            AssertContainsRawBytes(pdfText, PeachDrawing.PDF.Engine.Advanced.PdfImage.RepackGifLzwForPdf(info.LzwData));
         }
 
         [Fact]

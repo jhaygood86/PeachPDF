@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -80,7 +81,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 </table>"));
 
             var table = LayoutHarness.Descendants(root).First(x => x.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable);
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -104,7 +105,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                     <tr><td>a</td></tr>
                 </table>"));
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 

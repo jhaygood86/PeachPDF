@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 
 namespace PeachPDF.Tests.PdfBackendTests
 {

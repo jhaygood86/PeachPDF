@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Fragments;
@@ -1081,7 +1082,7 @@ namespace PeachPDF.Tests.Integration
                 + "<h2 id='h2'>Head</h2>"
                 + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>");
 
-        private static Task RegisterResumedParagraphFont(PeachPDF.PdfBackend.PdfRenderContext renderContext) =>
+        private static Task RegisterResumedParagraphFont(PeachPDF.Rendering.HtmlRenderContext renderContext) =>
             BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Early Break Fixture");
 
         /// <summary>

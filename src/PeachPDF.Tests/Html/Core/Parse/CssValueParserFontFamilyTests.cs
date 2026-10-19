@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [Fact]
         public void KnownInstalledFamily_ReturnsThatFamily()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
 
             var result = parser.GetFontFamilyByName(DefaultFontResolver.DefaultFont);
 
@@ -24,7 +25,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [Fact]
         public void NoCandidateInstalled_ReturnsNull_NotTheLiteralInheritString()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
 
             var result = parser.GetFontFamilyByName("__DefinitelyNotARealFontFamily__");
 

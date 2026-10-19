@@ -1,9 +1,10 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -319,7 +320,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = ppp };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(renderContext);
             // SetHtml runs CascadeApplyPageStyles: base @page margins land on the container
             // (already PixelsPerPoint-scaled) and PageRules are captured for per-page selection.

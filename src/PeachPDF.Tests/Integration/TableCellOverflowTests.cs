@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.Integration
                 + "<td id='c' style='width:40pt'>WIDECONTENTHERE</td><td style='width:150pt'>next</td>"
                 + "</tr></table>"));
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, FindById(root, "c")!, recording);
 
             Assert.Empty(recording.PushedClips);
@@ -55,7 +56,7 @@ namespace PeachPDF.Tests.Integration
                 + "<td id='c' style='width:40pt; overflow:hidden'>WIDECONTENTHERE</td><td style='width:150pt'>next</td>"
                 + "</tr></table>"));
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, FindById(root, "c")!, recording);
 
             Assert.NotEmpty(recording.PushedClips);

@@ -1,12 +1,13 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -157,7 +158,7 @@ public class LangPseudoClassSelectorTests
                   + "</svg>";
 
         var root = XDocument.Parse(svg).Root!;
-        var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+        var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
         var rect = root.Descendants().Single(e => e.Name.LocalName == "rect");
         var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rect, root), cssData, "print");
 
@@ -169,7 +170,7 @@ public class LangPseudoClassSelectorTests
     /// <summary>The box tree as the cascade left it, without a layout pass.</summary>
     private static async Task<CssBox> BuildDom(string html)
     {
-        var renderContext = new PdfRenderContext();
+        var renderContext = new HtmlRenderContext();
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml(html, null);
 
@@ -179,7 +180,7 @@ public class LangPseudoClassSelectorTests
 
     private static bool Matches(ICssDomNode node, string selector)
     {
-        var cssData = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
+        var cssData = new CssData(new PeachPDF.Rendering.HtmlRenderContext());
         cssData.Stylesheets.Add(CssParser.ParseStyleSheet($"{selector} {{ color: red; }}"));
         return cssData.GetAuthorStyleRules(MediaQueryContext.TypeOnly("print"), node).Any();
     }
@@ -197,7 +198,7 @@ public class LangPseudoClassSelectorTests
 
     private static async Task<CssBox> BuildRoot(string html)
     {
-        var renderContext = new PdfRenderContext();
+        var renderContext = new HtmlRenderContext();
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml(html, null);
 

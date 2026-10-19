@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing;
 using System.Numerics;
@@ -44,7 +45,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void RasterGraphics_AccumulatesPushedTransformsAndRestoresThemOnPop()
         {
-            var g = new RasterCanvas(new PdfRenderContext(), new RasterSurface(10, 10, 0, 0, 1, 1), 1);
+            var g = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(10, 10, 0, 0, 1, 1), 1);
             var first = new Matrix3x2(2, 0, 0, 2, 0, 0);
             var second = new Matrix3x2(1, 0, 0, 1, 5, 0);
 
@@ -62,7 +63,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void ARasterRegion_StartsFromItsRequestersTransform()
         {
-            var g = new RasterCanvas(new PdfRenderContext(), new RasterSurface(20, 20, 0, 0, 1, 1), 1);
+            var g = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(20, 20, 0, 0, 1, 1), 1);
             var move = new Matrix3x2(1, 0, 0, 1, 3, 4);
             g.PushTransform(move);
 

@@ -1,8 +1,9 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Threading.Tasks;
 
@@ -166,7 +167,7 @@ namespace PeachPDF.Tests.Integration
             // UA-default) margin in place, not silently resolved to zero. This is the base-rule analog of
             // FirstPageViewportUnitMargin_FallsBackToBaseMargin's per-page assertion. ch is NOT one of
             // these units — see BaseRule_ChUnitMargin_ResolvesAsHalfEm below.
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(SheetW, SheetH),
@@ -204,7 +205,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Regression guard for the #154 fix: a resolvable base margin still overrides the
             // configured value (the null-aware routing must not drop valid declarations).
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(SheetW, SheetH),
@@ -290,7 +291,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<HtmlContainerInt> BuildAsync(string html, double ppp = 1.0)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = ppp };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(SheetW * ppp, SheetH * ppp)
@@ -306,7 +307,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = ppp };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(renderContext)
             {
                 PageSize = new Size(SheetW * ppp, SheetH * ppp)

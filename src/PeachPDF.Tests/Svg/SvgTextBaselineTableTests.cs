@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -23,7 +24,7 @@ namespace PeachPDF.Tests.Svg
 
         private static async Task<TestRecordingGraphics> RenderAsync(string family, string svgBody, string textAttrs = "", string content = "H")
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Sans);
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Cjk, Cjk);
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Arabic, NoBase);

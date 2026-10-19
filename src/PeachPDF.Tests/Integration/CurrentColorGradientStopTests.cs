@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using GradientStop = PeachDrawing.Core.GradientStop;
 using PeachPDF.Html.Core;
@@ -5,8 +6,8 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PdfBackend;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class CurrentColorGradientStopTests
     {
-        private static readonly CssValueParser Parser = new(new PdfRenderContext());
+        private static readonly CssValueParser Parser = new(new HtmlRenderContext());
 
         // ─── Parsing ─────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildAsync(string html, double? progress = null)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext) { AnimationProgress = progress };
             await container.SetHtml(html, null);
 
@@ -95,7 +96,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>The stops of the first background layer's brush, as the painter builds it for <paramref name="box"/>.</summary>
         private static IReadOnlyList<GradientStop> BackgroundBrushStops(CssBox box)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
             using var g = new PdfCanvas(renderContext, measure, 1.0);
             var rect = new Rect(0, 0, 200, 100);
@@ -138,7 +139,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Through CssImagePainter.Paint, the entry every background layer goes through, not the brush builders alone.
             var box = await BuildAsync($@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background-image: {gradient}"">x</div>");
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             using var g = new PdfCanvas(renderContext, PdfGraphics.CreateMeasureContext(new Size(595, 842)), 1.0);
             var rect = new Rect(0, 0, 200, 100);
             Brush? painted = null;
@@ -193,7 +194,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ConicGradient_WithoutABox_ResolvesToBlack()
         {
             var box = await BuildAsync(@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background-image: conic-gradient(currentcolor, rgb(255, 0, 0))"">x</div>");
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             using var g = new PdfCanvas(renderContext, PdfGraphics.CreateMeasureContext(new Size(595, 842)), 1.0);
             var cg = Assert.IsType<CssImage.ConicGradient>(box.BackgroundImages![0]);
 

@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfBackend;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -228,7 +229,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildAsync(string html, double progress)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext) { AnimationProgress = progress };
             await container.SetHtml(html, null);
 

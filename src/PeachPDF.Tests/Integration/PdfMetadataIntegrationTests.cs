@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 
 namespace PeachPDF.Tests.Integration
 {

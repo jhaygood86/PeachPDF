@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 
@@ -104,7 +105,7 @@ public class CssDataSelectorMatchAllocationTests
 
     private static async Task<CssBox> BuildDivFixture()
     {
-        var renderContext = new PdfRenderContext();
+        var renderContext = new HtmlRenderContext();
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml("<!DOCTYPE html><html><body><div class='a b c'>text</div></body></html>", null);
 

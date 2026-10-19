@@ -1,8 +1,9 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -165,7 +166,7 @@ namespace PeachPDF.Tests.Integration
                 </style></head><body><p>content</p></body></html>
                 """);
 
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var measure = PdfGraphics.CreateMeasureContext(
                 new Size(container.PageSize.Width, container.PageSize.Height));
             using var graphics = new PdfCanvas(renderContext, measure, 1.0);
@@ -348,7 +349,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = ppp };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = ppp };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

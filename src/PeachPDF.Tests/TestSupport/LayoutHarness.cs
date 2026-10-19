@@ -1,8 +1,9 @@
-﻿using PeachPDF.PdfBackend;
+﻿using PeachDrawing.PDF;
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,7 +13,7 @@ namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
     /// The shared lightweight layout harness: builds an <see cref="HtmlContainerInt"/> over a real
-    /// <see cref="PdfRenderContext"/>, runs layout, and hands back the laid-out box tree plus the
+    /// <see cref="HtmlRenderContext"/>, runs layout, and hands back the laid-out box tree plus the
     /// container (whose <c>FragmentTree</c> is layout's real output). Prefer this over hand-rolling
     /// another per-file <c>BuildAndLayout</c> copy.
     /// </summary>
@@ -51,9 +52,9 @@ namespace PeachPDF.Tests.TestSupport
             Action<CssBox>? prepare = null,
             Func<CssBox, HtmlContainerInt, Canvas, Task>? after = null,
             double pixelsPerPoint = 1.0,
-            Func<PdfRenderContext, Task>? configureRenderContext = null)
+            Func<HtmlRenderContext, Task>? configureRenderContext = null)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = pixelsPerPoint };
             if (configureRenderContext is not null)
             {
                 await configureRenderContext(renderContext);
@@ -119,7 +120,7 @@ namespace PeachPDF.Tests.TestSupport
             double pageHeight = 842,
             double margin = 20)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext)
             {
                 MarginTop = margin,

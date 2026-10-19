@@ -4,12 +4,12 @@ using System.Globalization;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Annotations;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using System;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
-using PeachPDF.PDF.AcroForms;
-using PeachPDF.PDF.Annotations;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.AcroForms;
+using PeachDrawing.PDF.Engine.Annotations;
 
 namespace PeachPDF.PdfFeatures
 {
@@ -297,11 +297,11 @@ namespace PeachPDF.PdfFeatures
         }
 
         /// <summary>
-        /// Makes an appearance stream (a <see cref="PeachPDF.PDF.Advanced.PdfFormXObject"/>) by painting onto a fresh <see cref="PdfForm"/>
+        /// Makes an appearance stream (a <see cref="PeachDrawing.PDF.Engine.Advanced.PdfFormXObject"/>) by painting onto a fresh <see cref="PdfForm"/>
         /// through a <see cref="PdfCanvas"/> - the recipe <c>PdfCanvas.CreateTile</c> already uses for SVG mask and pattern tiles - at the
         /// pixels-per-point the control was laid out with, so its real CSS border, padding and font stay consistently sized.
         /// </summary>
-        PeachPDF.PDF.Advanced.PdfFormXObject CreateForm(FormFieldAppearance look, Size sizePt, Action<Canvas> draw)
+        PeachDrawing.PDF.Engine.Advanced.PdfFormXObject CreateForm(FormFieldAppearance look, Size sizePt, Action<Canvas> draw)
         {
             var form = new PdfForm(Document, sizePt);
             var formGraphics = PdfGraphics.FromForm(form);
@@ -342,14 +342,14 @@ namespace PeachPDF.PdfFeatures
         /// written only when it does something the fit cannot: turn or skew the appearance (an off-diagonal term), or mirror it (a
         /// diagonal that is not positive).
         /// </summary>
-        static void ApplyMatrix(PeachPDF.PDF.Advanced.PdfFormXObject appearance, Matrix3x2? matrix)
+        static void ApplyMatrix(PeachDrawing.PDF.Engine.Advanced.PdfFormXObject appearance, Matrix3x2? matrix)
         {
             // The tolerance absorbs the rounding the divided and converted corner coordinates leave in a plain move or scale.
             if (matrix is { } m && (System.Math.Abs(m.M12) > 1e-6 || System.Math.Abs(m.M21) > 1e-6 || m.M11 <= 1e-6 || m.M22 <= 1e-6))
-                appearance.Elements.SetMatrix(PeachPDF.PDF.Advanced.PdfFormXObject.Keys.Matrix, m);
+                appearance.Elements.SetMatrix(PeachDrawing.PDF.Engine.Advanced.PdfFormXObject.Keys.Matrix, m);
         }
 
-        static void SetNormalAppearance(PdfAnnotation annotation, PeachPDF.PDF.Advanced.PdfFormXObject appearance, Matrix3x2? matrix = null)
+        static void SetNormalAppearance(PdfAnnotation annotation, PeachDrawing.PDF.Engine.Advanced.PdfFormXObject appearance, Matrix3x2? matrix = null)
         {
             ApplyMatrix(appearance, matrix);
             var ap = new PdfDictionary(annotation.Owner);
@@ -358,7 +358,7 @@ namespace PeachPDF.PdfFeatures
         }
 
         static void SetTwoStateAppearance(PdfAnnotation annotation, string onValue,
-            PeachPDF.PDF.Advanced.PdfFormXObject onAppearance, PeachPDF.PDF.Advanced.PdfFormXObject offAppearance,
+            PeachDrawing.PDF.Engine.Advanced.PdfFormXObject onAppearance, PeachDrawing.PDF.Engine.Advanced.PdfFormXObject offAppearance,
             Matrix3x2? matrix = null)
         {
             ApplyMatrix(onAppearance, matrix);

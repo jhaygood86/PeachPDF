@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -10,13 +11,13 @@ namespace PeachPDF.Tests.Svg
     /// <summary>SVG-only properties written in a stylesheet rule or a <c>@keyframes</c> block are kept, and the SVG builder reads them from there.</summary>
     public class SvgOnlyStylesheetPropertyTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgDocument Build(string rule, string content)
         {
             var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"100\"><style>{rule}</style>{content}</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
         }
 

@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -16,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgDisplayTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static readonly PaintColor Red = PaintColor.FromArgb(255, 0, 0);
         private static readonly PaintColor Green = PaintColor.FromArgb(0, 128, 0);

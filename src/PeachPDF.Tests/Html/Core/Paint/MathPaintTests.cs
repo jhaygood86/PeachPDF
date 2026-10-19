@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -17,7 +18,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         static string Wrap(string mathHtml) =>
             $"<html><head><style>math {{ font-family: TestMath; }}</style></head><body style='margin:0'>{mathHtml}</body></html>";
 
-        static Task RegisterMathFont(PdfRenderContext renderContext) =>
+        static Task RegisterMathFont(HtmlRenderContext renderContext) =>
             BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "TestMath");
 
         [Fact]
@@ -28,7 +29,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -55,7 +56,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -72,7 +73,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 

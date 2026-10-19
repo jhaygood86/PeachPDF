@@ -1,6 +1,7 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;
@@ -16,9 +17,9 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterSvgTestFace";
 
-        private static async Task<(RasterCanvas Graphics, Font Font, PdfRenderContext RenderContext)> NewFixture(int width = 160, int height = 120)
+        private static async Task<(RasterCanvas Graphics, Font Font, HtmlRenderContext RenderContext)> NewFixture(int width = 160, int height = 120)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             await BundledFonts.RegisterFont(renderContext, BundledFonts.SvgTest, Family);
             var graphics = new RasterCanvas(renderContext, new RasterSurface(width, height, 0, 0, 1, 1), 1);
             return (graphics, renderContext.GetFont(Family, 60, PaintFontStyle.Regular)!, renderContext);

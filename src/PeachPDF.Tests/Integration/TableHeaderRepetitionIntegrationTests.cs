@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.CSS;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -465,7 +466,7 @@ Assert.True(tableBox.ActualBottom > pageHeight);
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(
             string html, double pageHeight = 842)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             await container.SetHtml(html, null);

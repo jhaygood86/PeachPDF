@@ -1,13 +1,14 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Layout;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -518,7 +519,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task CssData_ParseReadOnlyMemory_ProducesEquivalentDataToStringOverload()
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             const string css = ".y { color: red; }";
 
             var fromString = await CssData.Parse(renderContext, css);
@@ -638,7 +639,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Html_Bytes_And_Stream_OverloadsProduceTheSameStructureAsString()
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(renderContext);
             const string html = "<div>x</div>";
 
@@ -654,7 +655,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Html_IsTerminal_SecondCallThrows()
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(renderContext);
 
             DocumentBuilder.BuildPage(page =>
@@ -860,14 +861,14 @@ namespace PeachPDF.Tests.Integration
                 MarginLeft = 20,
                 MarginRight = 20
             };
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(renderContext);
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
             PdfGenerator.ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize)
+                    ? PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize))
                     : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             using var container = new HtmlContainer(renderContext)

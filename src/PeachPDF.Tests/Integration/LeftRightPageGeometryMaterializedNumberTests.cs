@@ -1,6 +1,6 @@
 using PeachPDF;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;

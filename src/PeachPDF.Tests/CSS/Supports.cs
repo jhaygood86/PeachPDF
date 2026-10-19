@@ -1,3 +1,5 @@
+using PeachPDF.Rendering;
+
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
@@ -28,7 +30,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal(String.Empty, supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -40,7 +42,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(background-color: red)", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -52,7 +54,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("((background-color: red) and (color: blue))", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -63,7 +65,7 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -74,7 +76,7 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -86,7 +88,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(not (background-transparency: half))", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -98,7 +100,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("((background-transparency: zero))", supports.ConditionText);
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -114,7 +116,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(background: red !important)", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -125,7 +127,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (background: inherit) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // The old oracle (Property.TrySetValue) is a proven mismatch in both directions:
@@ -138,7 +140,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (transition-duration: 1s) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -147,7 +149,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (animation-name: spin) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -156,7 +158,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (fill: red) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Theory]
@@ -173,7 +175,7 @@ namespace PeachPDF.Tests.CSS
             var source = $@"@supports (color: {keyword}) {{ }}";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -185,7 +187,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (background-transparency: inherit) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // transform's cssDataType is 'cssom' (permissive - matches real dispatch, which still applies a
@@ -199,7 +201,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (transform: rotate(10deg)) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -209,7 +211,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (transform: perspective(300px)) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // break-before's cssDataType includes region/avoid-region (real dispatch stores any css-break-4
@@ -221,7 +223,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (break-before: region) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -230,7 +232,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (break-before: page) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // column-span: all breaks the column flow (CssLayoutEngineColumns.cs reads ColumnSpan and drives
@@ -242,7 +244,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (column-span: all) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -251,7 +253,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (column-span: none) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // word-break: keep-all is implemented by the Unicode line breaking algorithm's keep-all tailoring
@@ -262,7 +264,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (word-break: keep-all) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -270,7 +272,7 @@ namespace PeachPDF.Tests.CSS
         {
             var sheet = ParseStyleSheet(@"@supports (line-break: anywhere) { }");
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // CssBox.cs's ApplyTextTransform implements 'full-width' (converts characters to their Unicode
@@ -281,7 +283,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (text-transform: full-width) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -290,7 +292,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (word-break: break-all) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Theory]
@@ -302,7 +304,7 @@ namespace PeachPDF.Tests.CSS
         {
             var sheet = ParseStyleSheet($"@supports ({property}: {value}) {{ }}");
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // direction's enum-keyword validator now checks Map.DirectionModes' own keys instead of
@@ -313,7 +315,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (direction: rtl) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -322,7 +324,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (direction: sideways) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // display's cssDataType is a real keyword list (not 'cssom') - a syntactically-plausible but
@@ -333,7 +335,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (display: contents) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -342,7 +344,7 @@ namespace PeachPDF.Tests.CSS
             var source = @"@supports (display: ruby) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -354,7 +356,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("((padding-top: 0) or (padding-left: 0))", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -366,7 +368,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(((padding-top: 0) or (padding-left: 0)) and ((padding-bottom: 0) or (padding-right: 0)))", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -378,7 +380,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(display: flex !important)", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -398,7 +400,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("((display: flex))", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // PeachPDF's CSS-OM parses transition-property/transition-delay fine (it understands the
@@ -418,7 +420,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("((transition-property: color) or (transition-delay: 1s)) and (transform: rotate(10deg))", supports.ConditionText);
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -432,7 +434,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(transition-property: color) or ((transition-delay: 1s) and (transform: rotate(10deg)))", supports.ConditionText);
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -448,7 +450,7 @@ namespace PeachPDF.Tests.CSS
             var supports = (SupportsRule)sheet.Rules[0];
             // -moz-/-webkit- box-shadow resolve to box-shadow; -o- was never aliased and stays as written.
             Assert.Equal("(box-shadow: 0 0 2px black) or (box-shadow: 0 0 2px black) or (box-shadow: 0 0 2px black) or (-o-box-shadow: 0 0 2px black)", supports.ConditionText);
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
@@ -465,7 +467,7 @@ namespace PeachPDF.Tests.CSS
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal(3, supports.Rules.Length);
             Assert.Equal("not (display: flex)", supports.ConditionText);
-            Assert.False(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
     }
 }

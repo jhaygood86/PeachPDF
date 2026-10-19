@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -880,7 +881,7 @@ namespace PeachPDF.Tests.Integration
         {
             public int DrawLineCallCount { get; private set; }
 
-            public DrawLineSpyGraphics() : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public DrawLineSpyGraphics() : base(new HtmlRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) => DrawLineCallCount++;
 
@@ -1006,7 +1007,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html, double pageHeight)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             container.MarginTop = 0;

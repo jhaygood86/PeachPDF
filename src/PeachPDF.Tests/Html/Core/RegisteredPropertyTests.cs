@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
@@ -12,7 +13,7 @@ namespace PeachPDF.Tests.Html.Core
     /// </summary>
     public class RegisteredPropertyTests
     {
-        private static readonly CssValueParser ValueParser = new(new PdfRenderContext());
+        private static readonly CssValueParser ValueParser = new(new HtmlRenderContext());
 
         private static RegisteredProperty? Register(string body)
         {
@@ -331,7 +332,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static CssData StyleData(string css)
         {
-            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
+            var data = new CssData(new PeachPDF.Rendering.HtmlRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(css));
             return data;
         }

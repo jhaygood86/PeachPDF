@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -81,7 +82,7 @@ public class PlaceholderSelectorTests
 
     private static async Task<CssBox> Box(string html)
     {
-        var container = new HtmlContainerInt(new PdfRenderContext());
+        var container = new HtmlContainerInt(new HtmlRenderContext());
         await container.SetHtml(html, null);
 
         var box = DomUtils.GetBoxById(container.Root!, "field");

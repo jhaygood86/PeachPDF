@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using System.Text.RegularExpressions;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Fragmentation;
 
 namespace PeachPDF.Tests.TestSupport;
@@ -29,7 +30,7 @@ internal static partial class PaintedWords
 
         for (var page = 0; page < pages; page++)
         {
-            using var graphics = new RecordingGraphics(new PdfRenderContext());
+            using var graphics = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, graphics, page);
             painted.AddRange(graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString).Select(op => op.Text!));
         }
@@ -44,7 +45,7 @@ internal static partial class PaintedWords
     /// on the paint log alone calls it drawn: that is how the #1531 and #1532 reductions passed a recording-only test.
     /// </summary>
     public static async Task<(IReadOnlyList<string> Visible, int Pages)> LayOutAndCollectVisibleAsync(
-        string html, Func<PdfRenderContext, Task>? extraFonts = null)
+        string html, Func<HtmlRenderContext, Task>? extraFonts = null)
     {
         var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
             html, new PdfGenerateConfig(), async renderContext =>

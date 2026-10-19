@@ -1,7 +1,8 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
@@ -158,9 +159,9 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
 
         // ---- drawing -------------------------------------------------------------------------------------
 
-        private static async Task<(PdfRenderContext RenderContext, string Family, byte[] Font)> Register(string family, Func<byte[], byte[]> addTables)
+        private static async Task<(HtmlRenderContext RenderContext, string Family, byte[] Font)> Register(string family, Func<byte[], byte[]> addTables)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var bytes = addTables(BaseFont());
             using var stream = new MemoryStream(bytes);
             await renderContext.AddFont(stream, family);

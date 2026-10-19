@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -293,7 +294,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private HtmlContainerInt CreateContainer()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             return new HtmlContainerInt(renderContext);
         }
     }

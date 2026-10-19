@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -9,13 +10,13 @@ namespace PeachPDF.Tests.Svg
     /// <summary>How the inline style, the matching rules and the presentation attribute settle one property (against Chrome 155).</summary>
     public class SvgStyleCascadeTierTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgGradientStop[] Stops(string rule, string gradientAttributes, string stops, string wrapStart = "", string wrapEnd = "")
         {
             var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"100\"><style>{rule}</style>{wrapStart}<defs><linearGradient id=\"g\" {gradientAttributes}>{stops}</linearGradient></defs>{wrapEnd}</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
             return document.Gradients["g"].Stops.ToArray();
         }

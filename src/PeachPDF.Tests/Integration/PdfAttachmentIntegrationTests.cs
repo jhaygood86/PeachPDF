@@ -319,7 +319,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithTheSameAttachments_EmbedsThemOnlyOnce()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
 
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
@@ -334,7 +334,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithADifferentSet_IsRejected()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
 
             var different = Csv();
@@ -349,7 +349,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_WithNoAttachments_AfterAnEarlierCallHadSome_IsRejected()
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
 
             await Assert.ThrowsAsync<InvalidOperationException>(
@@ -366,7 +366,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SecondCall_DifferingInAnyField_IsRejected(string field)
         {
             var generator = new PdfGenerator();
-            var document = new PeachPdfDocument(new PeachPDF.PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
             await generator.AddPdfPages(document, SimpleHtml, A3Config(Csv()));
 
             var config = A3Config(Csv());

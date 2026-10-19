@@ -1,5 +1,5 @@
-using PeachPDF.PDF;
-using PeachPDF.PDF.Internal;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Internal;
 
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 {

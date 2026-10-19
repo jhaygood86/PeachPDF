@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.TestSupport
@@ -53,9 +54,9 @@ namespace PeachPDF.Tests.TestSupport
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
-            string html, PdfGenerateConfig config, Func<PdfRenderContext, Task>? configureRenderContext = null)
+            string html, PdfGenerateConfig config, Func<HtmlRenderContext, Task>? configureRenderContext = null)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             if (configureRenderContext is not null)
             {
@@ -63,7 +64,7 @@ namespace PeachPDF.Tests.TestSupport
             }
 
             var orgPageSize = config.PageSize != PageSize.Undefined
-                ? PageSizeConverter.ToSize(config.PageSize)
+                ? PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize))
                 : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
@@ -99,10 +100,10 @@ namespace PeachPDF.Tests.TestSupport
         internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
             string html, PdfGenerateConfig config)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             var orgPageSize = config.PageSize != PageSize.Undefined
-                ? PageSizeConverter.ToSize(config.PageSize)
+                ? PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize))
                 : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)

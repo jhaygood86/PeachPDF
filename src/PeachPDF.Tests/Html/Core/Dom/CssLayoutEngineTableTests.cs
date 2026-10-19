@@ -1,10 +1,11 @@
-﻿using PeachPDF.PdfBackend;
+﻿using PeachDrawing.PDF;
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Diagnostics;
 using System.Globalization;
@@ -1843,7 +1844,7 @@ Assert.NotNull(tbody);
                 if (pass > 0)
                 {
                     var measure = PdfGraphics.CreateMeasureContext(new Size(595, 842));
-                    using var graphics = new PdfCanvas((PdfRenderContext)container.RenderContext, measure, 1.0);
+                    using var graphics = new PdfCanvas((HtmlRenderContext)container.RenderContext, measure, 1.0);
                     await container.PerformLayout(graphics);
                 }
 
@@ -3182,7 +3183,7 @@ Assert.NotNull(tbody);
     string html, 
  double pageHeight = 842) // A4 height by default
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
        var container = new HtmlContainerInt(renderContext);
 
           await container.SetHtml(html, null);

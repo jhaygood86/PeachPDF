@@ -1,0 +1,681 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+using PeachDrawing.PDF.Engine.Rendering;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Internal;
+using PeachDrawing.PDF.Engine.IO;
+using PeachDrawing.PDF.Engine.Security;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+
+// ReSharper disable ConvertPropertyToExpressionBody
+
+namespace PeachDrawing.PDF.Engine;
+
+/// <summary>
+/// Represents a PDF document.
+/// </summary>
+[DebuggerDisplay("(Name={Name})")] // A name makes debugging easier
+internal sealed class PdfDocument : PdfObject, IDisposable
+{
+    internal DocumentState _state;
+    internal PdfDocumentOpenMode _openMode;
+
+    /// <summary>
+    /// Creates a new PDF document in memory.
+    /// To open an existing PDF file, use the PdfReader class.
+    /// </summary>
+    public PdfDocument()
+    {
+        //PdfDocument.Gob.AttatchDocument(Handle);
+
+        _creation = DateTime.Now;
+        _state = DocumentState.Created;
+        _version = 14;
+        Initialize();
+        Info.CreationDate = _creation;
+    }
+
+/// <summary>
+    /// Creates a new PDF document using the specified stream.
+    /// The stream won't be used until the document is closed, at that time the document is saved automatically.
+    /// Do not call Save() for documents created with this constructor, just call Close().
+    /// To open an existing PDF file, use the PdfReader class.
+    /// </summary>
+    public PdfDocument(Stream outputStream)
+    {
+        //PdfDocument.Gob.AttatchDocument(Handle);
+
+        _creation = DateTime.Now;
+        _state = DocumentState.Created;
+        Initialize();
+        Info.CreationDate = _creation;
+
+        _outStream = outputStream;
+    }
+
+    void Initialize()
+    {
+        //_info = new PdfInfo(this);
+        _fontTable = new PdfFontTable(this);
+        _imageTable = new PdfImageTable(this);
+        _trailer = new PdfTrailer(this);
+        _irefTable = new PdfCrossReferenceTable(this);
+        _trailer.CreateNewDocumentIds();
+    }
+
+    /// <summary>
+    /// Disposes all references to this document stored in other documents. This function should be called
+    /// for documents you finished importing pages from. Calling Dispose is technically not necessary but
+    /// useful for earlier reclaiming memory of documents you do not need anymore.
+    /// </summary>
+    public void Dispose()
+    {
+        _state = DocumentState.Disposed;
+    }
+
+    /// <summary>
+    /// Gets or sets a user defined object that contains arbitrary information associated with this document.
+    /// The tag is not used by PeachDrawing.PDF.Engine.
+    /// </summary>
+    public object Tag
+    {
+        get => _tag;
+        set => _tag = value;
+    }
+    object _tag = null!;
+
+    /// <summary>
+    /// Gets or sets a value used to distinguish PdfDocument objects.
+    /// The name is not used by PeachDrawing.PDF.Engine.
+    /// </summary>
+    string Name
+    {
+        get => _name;
+        set => _name = value;
+    }
+    string _name = NewName();
+
+    /// <summary>
+    /// Get a new default name for a new document.
+    /// </summary>
+    static string NewName()
+    {
+        return "Document " + _nameCount++;
+    }
+    static int _nameCount;
+
+    internal bool CanModify
+    {
+        //get {return _state == DocumentState.Created || _state == DocumentState.Modifyable;}
+        get => true;
+    }
+
+    /// <summary>
+    /// Closes this instance.
+    /// </summary>
+    public void Close()
+    {
+        if (!CanModify)
+            throw new InvalidOperationException("The document cannot be modified.");
+
+        if (_outStream is not null)
+        {
+            PdfWriter writer = new PdfWriter(_outStream);
+            try
+            {
+                DoSave(writer);
+            }
+            finally
+            {
+                writer.Close();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Saves the document to the specified path. If a file already exists, it will be overwritten.
+    /// </summary>
+    public void Save(string path)
+    {
+        if (!CanModify)
+            throw new InvalidOperationException("The document cannot be modified.");
+
+        using (Stream stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            Save(stream);
+        }
+    }
+
+    /// <summary>
+    /// Saves the document to the specified stream.
+    /// </summary>
+    public void Save(Stream stream, bool closeStream)
+    {
+        if (!CanModify)
+            throw new InvalidOperationException("The document cannot be modified.");
+
+        // TODO: more diagnostic checks
+        string message = "";
+        if (!CanSave(ref message))
+            throw new InvalidOperationException(message);
+
+        PdfWriter? writer = null;
+        try
+        {
+            writer = new PdfWriter(stream);
+            DoSave(writer);
+        }
+        finally
+        {
+            if (stream is not null)
+            {
+                if (closeStream)
+                    stream.Dispose();
+                else
+                    stream.Position = 0; // Reset the stream position if the stream is kept open.
+            }
+            if (writer is not null)
+                writer.Close(closeStream);
+        }
+    }
+
+    /// <summary>
+    /// Saves the document to the specified stream.
+    /// The stream is not closed by this function.
+    /// (Older versions of PDFsharp closes the stream. That was not very useful.)
+    /// </summary>
+    public void Save(Stream stream)
+    {
+        Save(stream, false);
+    }
+
+    /// <summary>
+    /// Implements saving a PDF file.
+    /// </summary>
+    void DoSave(PdfWriter writer)
+    {
+        if (_pages is null || _pages.Count == 0)
+        {
+            if (_outStream is not null)
+            {
+                // Give feedback if the wrong constructor was used.
+                throw new InvalidOperationException("Cannot save a PDF document with no pages. Do not use \"public PdfDocument(Stream outputStream)\" if you want to open an existing PDF document from a file or stream; use PdfReader.Open() for that purpose.");
+            }
+            throw new InvalidOperationException("Cannot save a PDF document with no pages.");
+        }
+
+        try
+        {
+            _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
+
+            // A fresh handler per save: its file key and salts are drawn anew, so two saves never share a key.
+            PdfAes256SecurityHandler? security = Options.Encryption is { } encryptionOptions
+                ? new PdfAes256SecurityHandler(encryptionOptions)
+                : null;
+            if (security is not null)
+            {
+                _trailer.Elements[PdfTrailer.Keys.Encrypt] = security.CreateEncryptDictionary(this);
+                writer.Encryption = security;
+                if (_version < 20)
+                {
+                    // AES-256 revision 6 is defined by ISO 32000-2; a PDF 1.7 file announces it the way Acrobat does,
+                    // as the Adobe extension level 8.
+                    var adbe = new PdfDictionary(this);
+                    adbe.Elements.SetName("/BaseVersion", "/1.7");
+                    adbe.Elements.SetInteger("/ExtensionLevel", 8);
+                    var extensions = Catalog.Elements["/Extensions"] as PdfDictionary ?? new PdfDictionary(this);
+                    extensions.Elements["/ADBE"] = adbe;
+                    Catalog.Elements["/Extensions"] = extensions;
+                }
+            }
+
+            // ISO 19005-4 (6.1.3) allows an Info dictionary only as a lone /ModDate and deprecates it: PDF/A-4 carries
+            // its metadata in the XMP stream (already built from Info's values), so the trailer drops /Info altogether.
+            if (Options.IsPdfA4 && _trailer.Elements.GetReference(PdfTrailer.Keys.Info) is { } infoReference)
+            {
+                _trailer.Elements.Remove(PdfTrailer.Keys.Info);
+                _irefTable.Remove(infoReference);
+            }
+
+            PrepareForSave();
+
+            writer.WriteFileHeader(this);
+            PdfReference[] irefs = _irefTable.AllReferences;
+            int count = irefs.Length;
+            for (int idx = 0; idx < count; idx++)
+            {
+                PdfReference iref = irefs[idx];
+                iref.Position = writer.Position;
+                iref.Value.WriteObject(writer);
+            }
+            var startxref = writer.Position;
+            _irefTable.WriteObject(writer);
+            writer.WriteRaw("trailer\n");
+            _trailer.Elements.SetInteger("/Size", count + 1);
+            _trailer.WriteObject(writer);
+            writer.WriteEof(this, startxref);
+
+        }
+        finally
+        {
+            if (writer is not null)
+            {
+                writer.Stream.Flush();
+                // DO NOT CLOSE WRITER HERE
+                //writer.Close();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Dispatches PrepareForSave to the objects that need it.
+    /// </summary>
+    internal override void PrepareForSave()
+    {
+        PdfDocumentInformation info = Info;
+
+        string pdfSharpProducer = PdfProductInfo.Producer;
+
+        // Set Creator if value is undefined.
+        if (info.Elements[PdfDocumentInformation.Keys.Creator] is null)
+            info.Creator = pdfSharpProducer;
+
+        string producer = info.Producer;
+        if (producer.Length == 0)
+            producer = pdfSharpProducer;
+        info.Elements.SetString(PdfDocumentInformation.Keys.Producer, producer);
+
+        // Prepare used fonts.
+        if (_fontTable is not null)
+            _fontTable.PrepareForSave();
+
+        // Let catalog do the rest.
+        Catalog.PrepareForSave();
+
+        // Remove all unreachable objects (e.g. from deleted pages)
+        int removed = _irefTable.Compact();
+        if (removed != 0)
+            Debug.WriteLine("PrepareForSave: Number of deleted unreachable objects: " + removed);
+        _irefTable.Renumber();
+    }
+
+    /// <summary>
+    /// Determines whether the document can be saved.
+    /// </summary>
+    public bool CanSave(ref string message)
+    {
+        return true;
+    }
+
+    internal bool HasVersion(string version)
+    {
+        return string.Compare(Catalog.Version, version) >= 0;
+    }
+
+    /// <summary>
+    /// Gets the document options used for saving the document.
+    /// </summary>
+    public PdfDocumentOptions Options
+    {
+        get
+        {
+            if (_options is null)
+                _options = new PdfDocumentOptions(this);
+            return _options;
+        }
+    }
+    PdfDocumentOptions _options = null!;
+
+    /// <summary>
+    /// Gets or sets the PDF version number. Return value 14 e.g. means PDF 1.4 / Acrobat 5 etc.
+    /// PDF has no 1.8/1.9 - the only value above 17 this accepts is 20, meaning PDF 2.0
+    /// (ISO 32000-2); see <c>PdfVersion</c>/<c>PdfGenerateConfig.PdfVersion</c>
+    /// for the public API that sets this.
+    /// </summary>
+    public int Version
+    {
+        get => _version;
+        set
+        {
+            if (!CanModify)
+                throw new InvalidOperationException("The document cannot be modified.");
+            if (value < 12 || (value > 17 && value != 20))
+                throw new ArgumentException("Invalid version number. Valid values are 12, 13, and 14.", "value");
+            _version = value;
+        }
+    }
+    internal int _version;
+
+    /// <summary>
+    /// Gets the number of pages in the document.
+    /// </summary>
+    public int PageCount
+    {
+        get
+        {
+            if (CanModify)
+                return Pages.Count;
+            // PdfOpenMode is InformationOnly
+            PdfDictionary pageTreeRoot = (PdfDictionary)Catalog.Elements.GetObject(PdfCatalog.Keys.Pages)!;
+            return pageTreeRoot.Elements.GetInteger(PdfPages.Keys.Count);
+        }
+    }
+
+// TODO: make private
+
+    /// <summary>
+    /// Gets the full qualified file name if the document was read form a file, or an empty string otherwise.
+    /// </summary>
+    public string FullPath => _fullPath;
+    internal string _fullPath = string.Empty; // TODO: make private
+
+    /// <summary>
+    /// Gets a Guid that uniquely identifies this instance of PdfDocument.
+    /// </summary>
+    public Guid Guid => _guid;
+    Guid _guid = Guid.NewGuid();
+
+    /// <summary>
+    /// Returns a value indicating whether the document was newly created or opened from an existing document.
+    /// Returns true if the document was opened with the PdfReader.Open function, false otherwise.
+    /// </summary>
+    public bool IsImported => (_state & DocumentState.Imported) != 0;
+
+    /// <summary>
+    /// Returns a value indicating whether the document is read only or can be modified.
+    /// </summary>
+    public bool IsReadOnly => (_openMode != PdfDocumentOpenMode.Modify);
+
+    /// <summary>
+    /// Gets information about the document.
+    /// </summary>
+    public PdfDocumentInformation Info
+    {
+        get
+        {
+            if (_info is null)
+                _info = _trailer.Info;
+            return _info;
+        }
+    }
+    PdfDocumentInformation _info = null!;  // never changes if once created
+
+    /// <summary>
+    /// Get the pages dictionary.
+    /// </summary>
+    public PdfPages Pages
+    {
+        get
+        {
+            if (_pages is null)
+                _pages = Catalog.Pages;
+            return _pages;
+        }
+    }
+    PdfPages _pages = null!;  // never changes if once created
+
+    /// <summary>
+    /// Gets or sets a value specifying the page layout to be used when the document is opened.
+    /// </summary>
+    public PdfPageLayout PageLayout
+    {
+        get => Catalog.PageLayout;
+        set
+        {
+            if (!CanModify)
+                throw new InvalidOperationException("The document cannot be modified.");
+            Catalog.PageLayout = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value specifying how the document should be displayed when opened.
+    /// </summary>
+    public PdfPageMode PageMode
+    {
+        get => Catalog.PageMode;
+        set
+        {
+            if (!CanModify)
+                throw new InvalidOperationException("The document cannot be modified.");
+            Catalog.PageMode = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the viewer preferences of this document.
+    /// </summary>
+    public PdfViewerPreferences ViewerPreferences => Catalog.ViewerPreferences;
+
+    /// <summary>
+    /// Gets the root of the outline (or bookmark) tree.
+    /// </summary>
+    public PdfOutlineCollection Outlines => Catalog.Outlines;
+
+    /// <summary>
+    /// Gets or sets the default language of the document.
+    /// </summary>
+    public string Language
+    {
+        get => Catalog.Language;
+        set => Catalog.Language = value;
+        //get { return Catalog.Elements.GetString(PdfCatalog.Keys.Lang); }
+        //set { Catalog.Elements.SetString(PdfCatalog.Keys.Lang, value); }
+    }
+
+    /// <summary>
+    /// Gets the document font table that holds all fonts used in the current document.
+    /// </summary>
+    internal PdfFontTable FontTable => _fontTable ?? (_fontTable = new PdfFontTable(this));
+    PdfFontTable _fontTable = null!;
+
+    /// <summary>
+    /// Gets the document image table that holds all images used in the current document.
+    /// </summary>
+    internal PdfImageTable ImageTable
+    {
+        get
+        {
+            if (_imageTable is null)
+                _imageTable = new PdfImageTable(this);
+            return _imageTable;
+        }
+    }
+    PdfImageTable _imageTable = null!;
+
+    /// <summary>
+    /// Gets the document form table that holds all form external objects used in the current document.
+    /// </summary>
+    internal PdfFormXObjectTable FormTable  // TODO: Rename to ExternalDocumentTable.
+    {
+        get => _formTable ?? (_formTable = new PdfFormXObjectTable(this));
+    }
+    PdfFormXObjectTable _formTable = null!;
+
+    /// <summary>
+    /// Gets the document color-glyph table that holds the Form XObject rendered for each distinct
+    /// COLR/CPAL glyph used in the current document, so a repeated color glyph is drawn once and
+    /// referenced thereafter.
+    /// </summary>
+    internal ColorGlyphFormCache ColorGlyphTable => _colorGlyphTable ?? (_colorGlyphTable = new ColorGlyphFormCache());
+    ColorGlyphFormCache _colorGlyphTable = null!;
+
+    /// <summary>
+    /// Gets the document ExtGState table that holds all form state objects used in the current document.
+    /// </summary>
+    internal PdfExtGStateTable ExtGStateTable => _extGStateTable ?? (_extGStateTable = new PdfExtGStateTable(this));
+    PdfExtGStateTable _extGStateTable = null!;
+
+    /// <summary>
+    /// Gets the PdfCatalog of the current document.
+    /// </summary>
+    internal PdfCatalog Catalog => _catalog ?? (_catalog = _trailer.Root);
+    PdfCatalog _catalog = null!;  // never changes if once created
+
+    /// <summary>
+    /// Gets the PdfInternals object of this document, that grants access to some internal structures
+    /// which are not part of the public interface of PdfDocument.
+    /// </summary>
+    public new PdfInternals Internals => _internals ?? (_internals = new PdfInternals(this));
+    PdfInternals _internals = null!;
+
+    /// <summary>
+    /// Creates a new page and adds it to this document.
+    /// Depending of the IsMetric property of the current region the page size is set to 
+    /// A4 or Letter respectively. If this size is not appropriate it should be changed before
+    /// any drawing operations are performed on the page.
+    /// </summary>
+    public PdfPage AddPage()
+    {
+        if (!CanModify)
+            throw new InvalidOperationException("The document cannot be modified.");
+        return Catalog.Pages.Add();
+    }
+
+    public void AddNamedDestination(string destinationName, int destinationPage, PdfNamedDestinationParameters parameters)
+        => Internals.Catalog.Names.AddNamedDestination(destinationName, destinationPage, parameters);
+
+    public void ConsolidateImages()
+    {
+        var images = ImageInfo.FindAll(this);
+
+        var mapHashcodeToMd5 = new Dictionary<int, string>();
+        var mapMd5ToPdfItem = new Dictionary<string, PdfItem>();
+
+        // Calculate MD5 for each image XObject and build lookups for all images.
+        foreach (ImageInfo img in images)
+        {
+            mapHashcodeToMd5[img.XObject.GetHashCode()] = img.XObjectMD5;
+            mapMd5ToPdfItem[img.XObjectMD5] = img.Item.Value;
+        }
+
+        // Set the PdfItem for each image to the one chosen for the MD5.
+        foreach (ImageInfo img in images)
+        {
+            string md5 = mapHashcodeToMd5[img.XObject.GetHashCode()];
+            img.XObjects.Elements[img.Item.Key] = mapMd5ToPdfItem[md5];
+        }
+    }
+
+    internal class ImageInfo
+    {
+        public PdfDictionary XObjects { get; }
+        public KeyValuePair<string, PdfItem> Item { get; }
+        public PdfDictionary XObject { get; }
+        public string XObjectMD5 { get; }
+
+        private static readonly MD5 Hasher = MD5.Create();
+
+        public ImageInfo(PdfDictionary xObjects, KeyValuePair<string, PdfItem> item, PdfDictionary xObject)
+        {
+            XObjects = xObjects;
+            Item = item;
+            XObject = xObject;
+            XObjectMD5 = ComputeIdentity(xObject);
+        }
+
+        /// <summary>
+        /// Computes an identity signature for an image XObject covering everything that affects how it
+        /// actually renders: the content-stream bytes plus the dictionary attributes that give those
+        /// bytes meaning (/ColorSpace, /Width, /Height, /BitsPerComponent, /Decode, /Interpolate - the
+        /// same attribute <see cref="Advanced.PdfImageTable"/>'s own embed-time selector already
+        /// treats as part of an image's identity) and any /SMask (recursively, since the mask is itself
+        /// an image XObject that can differ the same way). Two images are safe to consolidate only when
+        /// this whole signature matches - matching content stream bytes alone is not enough, since e.g.
+        /// the same base color stream with and without an /SMask must not be merged, or one page
+        /// silently loses (or gains) transparency.
+        /// </summary>
+        private static string ComputeIdentity(PdfDictionary xObject)
+        {
+            var sb = new StringBuilder();
+            sb.Append(ComputeMD5(xObject.Stream?.Value ?? []));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/ColorSpace"]));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Width"]));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Height"]));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/BitsPerComponent"]));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Decode"]));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Interpolate"]));
+
+            var softMask = xObject.Elements.GetDictionary("/SMask");
+            sb.Append('|').Append(softMask is not null ? ComputeIdentity(softMask) : "«none»");
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Renders an arbitrary dictionary-value PdfItem (a /ColorSpace name, an /Indexed or /ICCBased
+        /// array, a plain scalar, or an indirect reference to any of these) into a string that differs
+        /// whenever the referenced content differs. Dereferences through PdfReference and recurses into
+        /// array elements and referenced streams so two distinct objects that describe the same content
+        /// (e.g. two indirect but byte-identical ICC profiles) still compare equal, rather than being
+        /// compared by object identity.
+        /// </summary>
+        private static string DescribeItem(PdfItem? item)
+        {
+            switch (item)
+            {
+                case null:
+                    return "«null»";
+                case PdfReference reference:
+                    return DescribeItem(reference.Value);
+                case PdfArray array:
+                    return "[" + string.Join(",", array.Select(DescribeItem)) + "]";
+                case PdfDictionary dict:
+                    // A referenced stream object (e.g. an /ICCBased profile) - its bytes are what
+                    // matters for identity, not which object number holds them.
+                    return dict.Stream is not null ? ComputeMD5(dict.Stream.Value) : "«dict»";
+                default:
+                    return item.ToString() ?? "«null»";
+            }
+        }
+
+        /// <summary>
+        /// Get info for each image in the document.
+        /// </summary>
+        internal static List<ImageInfo> FindAll(PdfDocument doc) =>
+            doc.Pages.Cast<PdfPage>()
+                .Select(page => page.Elements.GetDictionary("/Resources"))
+                .Select(resources => resources?.Elements?.GetDictionary("/XObject"))
+                .Where(xObjects => xObjects?.Elements is not null)
+                .SelectMany(xObjects =>
+                    from item in xObjects!.Elements
+                    let xObject = (item.Value as PdfReference)?.Value as PdfDictionary
+                    where xObject?.Elements?.GetString("/Subtype") == "/Image"
+                    select new ImageInfo(xObjects, item, xObject)
+                )
+                .ToList();
+
+        /// <summary>
+        /// Compute and return the MD5 hash of the input data.
+        /// </summary>
+        internal static string ComputeMD5(byte[] input)
+        {
+            byte[] hashBytes;
+            lock (Hasher)
+            {
+                hashBytes = Hasher.ComputeHash(input);
+                Hasher.Initialize();
+            }
+
+            var sb = new StringBuilder();
+            foreach (var x in hashBytes)
+            {
+                sb.Append(x.ToString("x2"));
+            }
+
+            return sb.ToString();
+        }
+    }
+
+    internal PdfTrailer _trailer = null!;
+    internal PdfCrossReferenceTable _irefTable = null!;
+    internal Stream _outStream = null!;
+
+    internal DateTime _creation;
+}

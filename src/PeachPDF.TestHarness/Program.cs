@@ -1,8 +1,9 @@
 ﻿using PeachDrawing.Text.Outlines;
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using ScottPlot;
 using System.Diagnostics;
 using System.Globalization;
@@ -790,7 +791,7 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
 
 // Renders the exact same document as the border_radius showcase above, but at a non-default
 // PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
-// overflow-clip curve above is built from a PdfRenderContext.PixelsPerPoint-inflated layout-space
+// overflow-clip curve above is built from a HtmlRenderContext.PixelsPerPoint-inflated layout-space
 // rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler's rounded contour builders must divide
 // by PixelsPerPoint before building their paths, or the rounded geometry above renders too large
 // and mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here

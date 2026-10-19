@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Entities;
 
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void HtmlContainer_InitialState_HasEmptyNamedStrings()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             Assert.Empty(container.NamedStrings);
@@ -22,7 +23,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_SingleString_AddsToCollection()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             var namedString = new NamedString("chapter", "Introduction");
 
@@ -36,7 +37,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_MultipleStrings_MaintainsDocumentOrder()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             var first = new NamedString("chapter", "Chapter 1");
@@ -56,7 +57,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_SameNameMultipleTimes_AllowsDuplicates()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             var first = new NamedString("chapter", "First");
@@ -74,7 +75,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void ClearNamedStrings_RemovesAllStrings()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             container.RegisterNamedString(new NamedString("chapter", "Chapter 1"));
@@ -90,7 +91,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public async Task Clear_ClearsNamedStrings()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             // SetHtml with empty HTML initializes Root
@@ -110,7 +111,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void NamedStrings_ReturnsReadOnlyCollection()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             var namedStrings = container.NamedStrings;
@@ -121,7 +122,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_PreservesNameAndValue()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             var originalString = new NamedString("my-custom-string", "Custom Value");
 
@@ -135,7 +136,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_WithEmptyValue_AllowsEmptyString()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             var namedString = new NamedString("empty", "");
 
@@ -148,7 +149,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_MultipleWithDifferentNames_AllStored()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             container.RegisterNamedString(new NamedString("chapter", "Ch 1"));
@@ -167,7 +168,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void RegisterNamedString_DocumentOrderPreserved_FirstLastRetrieval()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
 
             // Simulate document order: first chapter, then second chapter

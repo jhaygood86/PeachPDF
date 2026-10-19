@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -41,7 +41,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(3, doc.PageCount);
 
-            var a4 = PageSizeConverter.ToSize(PageSize.A4);
+            var a4 = PageSizeConverter.ToSize(PeachDrawing.PDF.Engine.PageSize.A4);
 
             // Page 0: base A4 portrait, unaffected by the later named-page override.
             Assert.Equal(a4.Width, doc.PdfDocument.Pages[0].Width, 1);
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(2, doc.PageCount);
 
-            var a4 = PageSizeConverter.ToSize(PageSize.A4);
+            var a4 = PageSizeConverter.ToSize(PeachDrawing.PDF.Engine.PageSize.A4);
 
             // Page 0: the `:first` rule's own explicit size - genuinely different physical dimensions.
             Assert.Equal(800, doc.PdfDocument.Pages[0].Width, 1);
@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(2, doc.PageCount);
 
-            var a4 = PageSizeConverter.ToSize(PageSize.A4);
+            var a4 = PageSizeConverter.ToSize(PeachDrawing.PDF.Engine.PageSize.A4);
             Assert.Equal(a4.Width, doc.PdfDocument.Pages[0].Width, 1);
             Assert.Equal(a4.Height, doc.PdfDocument.Pages[0].Height, 1);
             Assert.Equal(doc.PdfDocument.Pages[0].Width, doc.PdfDocument.Pages[1].Width, 1);

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using System.Linq;
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterTreeBuilderTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgDocument BuildFrom(string filterMarkup)
         {

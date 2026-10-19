@@ -1,4 +1,4 @@
-using PeachPDF.PDF.Internal;
+using PeachDrawing.PDF.Engine.Internal;
 
 namespace PeachPDF.Tests.PdfEngineTests.Advanced;
 

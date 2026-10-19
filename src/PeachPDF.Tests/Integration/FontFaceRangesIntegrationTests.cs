@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.CSS;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
@@ -32,7 +33,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildBoxTree(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

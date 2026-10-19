@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -31,14 +32,14 @@ namespace PeachPDF.Tests.Html.Core
             return null;
         }
 
-        private sealed record Layout(PdfRenderContext RenderContext, CssBox Root)
+        private sealed record Layout(HtmlRenderContext RenderContext, CssBox Root)
         {
             public CssBox Box(string id) => Find(Root, id) ?? throw new InvalidOperationException($"no box #{id}");
         }
 
         private static async Task<Layout> LayoutAsync(string css, string body)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "AdjustFam");
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, "OtherFam");
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, "NoSupsFam");

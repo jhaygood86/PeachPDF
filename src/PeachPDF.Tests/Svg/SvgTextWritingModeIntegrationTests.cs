@@ -1,7 +1,8 @@
+using PeachPDF.Rendering;
 using System.Linq;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
@@ -17,7 +18,7 @@ namespace PeachPDF.Tests.Svg
     /// <c>TextOrientationIntegrationTests</c> (HTML). Renders through <see cref="SvgRenderer.RenderInto"/>
     /// into a <see cref="TestRecordingGraphics"/> and asserts the actual painted <c>DrawString</c>
     /// sequence and rotation transforms - not just that the properties parse. Uses the real
-    /// <c>PdfRenderContext</c> (matching <c>SvgTextBidiTests</c>'s own established pattern), so - unlike
+    /// <c>HtmlRenderContext</c> (matching <c>SvgTextBidiTests</c>'s own established pattern), so - unlike
     /// the HTML pipeline's <c>TextOrientationIntegrationTests</c>, which can use a deterministic
     /// <c>TestFont</c> - a resolved glyph's exact width/height/ascent are whatever font this environment
     /// actually resolves and are deliberately not asserted on; a rotated glyph's own <c>Px</c> (the pen's
@@ -26,7 +27,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextWritingModeIntegrationTests
     {
-        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
+        private static readonly HtmlRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         // U+30C6 "テ" (katakana TE, Vertical_Orientation=U) + "AB" (both R) - the same choice
         // TextOrientationIntegrationTests (HTML) uses and for the same reason: a CJK Unified Ideograph

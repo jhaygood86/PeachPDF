@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
@@ -28,7 +29,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
             Assert.Single(recording.DrawnPaths);
@@ -53,7 +54,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
             Assert.Single(recording.DrawnPaths);
@@ -79,7 +80,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
             Assert.Single(recording.DrawnPaths);
@@ -105,7 +106,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
             // box.IsRounded is still true (its own declared border-radius is nonzero), so a rounded
@@ -128,7 +129,7 @@ namespace PeachPDF.Tests.Integration
             var fillBox = LayoutHarness.FindById(root, "fill");
             Assert.NotNull(fillBox);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, fillBox!, recording);
 
             Assert.Single(recording.PushedClipPaths);
@@ -159,13 +160,13 @@ namespace PeachPDF.Tests.Integration
             var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
             var fillDefault = LayoutHarness.FindById(rootDefault, "fill");
             Assert.NotNull(fillDefault);
-            var recordingDefault = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 1.0 };
+            var recordingDefault = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(containerDefault, fillDefault!, recordingDefault);
 
             var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
             var fillScaled = LayoutHarness.FindById(rootScaled, "fill");
             Assert.NotNull(fillScaled);
-            var recordingScaled = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var recordingScaled = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, fillScaled!, recordingScaled);
 
             Assert.Single(recordingDefault.PushedClipPaths);
@@ -198,7 +199,7 @@ namespace PeachPDF.Tests.Integration
             var fill = LayoutHarness.FindById(root, "fill");
             Assert.NotNull(fill);
 
-            var recording = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var recording = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(container, fill!, recording);
 
             Assert.Single(recording.PushedClipPaths);

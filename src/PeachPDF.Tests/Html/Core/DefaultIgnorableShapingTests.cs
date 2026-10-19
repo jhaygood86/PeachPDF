@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;

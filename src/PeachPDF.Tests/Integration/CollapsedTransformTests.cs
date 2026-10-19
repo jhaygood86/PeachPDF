@@ -1,12 +1,13 @@
+using PeachPDF.Rendering;
 using System.Numerics;
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.AcroForms;
+using PeachDrawing.PDF.Engine.AcroForms;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -200,7 +201,7 @@ namespace PeachPDF.Tests.Integration
             var count = 0;
             foreach (var item in doc.PdfDocument.Catalog.AcroForm.Fields)
             {
-                if ((item is PeachPDF.PDF.Advanced.PdfReference reference ? reference.Value : item) is PdfAcroField)
+                if ((item is PeachDrawing.PDF.Engine.Advanced.PdfReference reference ? reference.Value : item) is PdfAcroField)
                     count++;
             }
 
@@ -295,7 +296,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await Layout("<div id='t' style='transform:scaleZ(0);width:50pt;height:50pt;background:#c33'><p style='background:#33c'>x</p></div>");
 
-            var canvas = new RasterCanvas(new PdfRenderContext(), new RasterSurface(120, 120, 0, 0, 1, 1), 1);
+            var canvas = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(120, 120, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "t")!, canvas);
 
             Assert.Equal(0, Covered(canvas));
@@ -306,7 +307,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await Layout("<div id='t' style='transform:translateZ(5pt);width:50pt;height:50pt;background:#c33'></div>");
 
-            var canvas = new RasterCanvas(new PdfRenderContext(), new RasterSurface(120, 120, 0, 0, 1, 1), 1);
+            var canvas = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(120, 120, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "t")!, canvas);
 
             Assert.True(Covered(canvas) > 0);
@@ -323,7 +324,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (_, container) = await Layout(string.Format(CollapsedContext, transform));
 
-            var canvas = new RasterCanvas(new PdfRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
+            var canvas = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, canvas);
 
             Assert.Equal(0, Covered(canvas));
@@ -354,7 +355,7 @@ namespace PeachPDF.Tests.Integration
                 "</div></div>";
             var (_, container) = await Layout(html);
 
-            var canvas = new RasterCanvas(new PdfRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
+            var canvas = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, canvas);
 
             // The blue plane is the nearer one (z = 60pt against 30pt) but its matrix is singular: only the red plane is there.
@@ -370,7 +371,7 @@ namespace PeachPDF.Tests.Integration
             var (_, container) = await Layout(
                 "<div style='perspective:200pt;margin:20pt 0 0 50pt;width:100pt;height:100pt'><div style='transform:rotateY(60deg);width:100pt;height:100pt;background:#c33'></div></div>");
 
-            var canvas = new RasterCanvas(new PdfRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
+            var canvas = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, canvas);
 
             Assert.True(Covered(canvas) > 1000);

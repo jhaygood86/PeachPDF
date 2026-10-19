@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -16,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextStrokeRenderingLanguageTests
     {
-        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
+        private static readonly HtmlRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static (SvgDocument Document, TestRecordingGraphics Graphics) Render(string textAttrs, string content = "Hi", string svgAttrs = "")
         {

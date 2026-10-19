@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using Xunit;
 
 namespace PeachPDF.Tests.Html.Core.Parse
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
     /// </summary>
     public class CssValueParserOklabTests
     {
-        private static bool TryGet(string text, out double[] oklab) => new CssValueParser(new PdfRenderContext()).TryGetOklab(text, out oklab);
+        private static bool TryGet(string text, out double[] oklab) => new CssValueParser(new HtmlRenderContext()).TryGetOklab(text, out oklab);
 
         [Fact]
         public void Oklab_IsReadAsWritten_EvenOutsideTheGamut()
@@ -49,7 +50,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         public void Lab_OutsideTheGamut_KeepsMoreChromaThanItsClippedColour()
         {
             Assert.True(TryGet("lab(60 90 60)", out var wide));
-            Assert.True(new CssValueParser(new PdfRenderContext()).TryGetColor("lab(60 90 60)", 0, 13, out var clipped));
+            Assert.True(new CssValueParser(new HtmlRenderContext()).TryGetColor("lab(60 90 60)", 0, 13, out var clipped));
 
             var clippedOklab = ColorSpaceMath.ToSpace(clipped.R / 255d, clipped.G / 255d, clipped.B / 255d, ColorSpaceMath.Space.Oklab);
             Assert.True(System.Math.Sqrt(wide[1] * wide[1] + wide[2] * wide[2]) > System.Math.Sqrt(clippedOklab[1] * clippedOklab[1] + clippedOklab[2] * clippedOklab[2]) + 0.02);
@@ -124,7 +125,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
             var text = "blue";
             for (var i = 0; i < 26; i++) text = $"color-mix(in oklab, {text}, red)";
 
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var read = System.Threading.Tasks.Task.Run(() =>
             {
                 Assert.True(parser.TryGetColor(text, 0, text.Length, out _));
@@ -145,7 +146,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         public void InGamutColours_AgreeWithTheirSrgbValue_WhateverTheirSyntax(string text)
         {
             // Percentages, none, angle units and alpha go through the same component readers as the colour parse, so the two agree to a byte's rounding.
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             Assert.True(parser.TryGetOklab(text, out var wide));
             Assert.True(parser.TryGetColor(text, 0, text.Length, out var color));
 
@@ -192,7 +193,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         public void AColorMix_WithAnOperandOutsideTheGamut_IsMixedBeforeTheClip(string text, int r, int g, int b)
         {
             // Chrome's values (canvas readback). The operand that is outside sRGB is mixed from the coordinates it was written with, not clipped first.
-            Assert.True(new CssValueParser(new PdfRenderContext()).TryGetColor(text, 0, text.Length, out var color));
+            Assert.True(new CssValueParser(new HtmlRenderContext()).TryGetColor(text, 0, text.Length, out var color));
             Assert.InRange(color.R, r - 2, r + 2);
             Assert.InRange(color.G, g - 2, g + 2);
             Assert.InRange(color.B, b - 2, b + 2);
@@ -252,7 +253,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [InlineData("color-mix(in srgb, red 0%, blue 0%)")]
         public void AMalformedColorMix_IsNotAColourEither(string text)
         {
-            Assert.False(new CssValueParser(new PdfRenderContext()).TryGetColor(text, 0, text.Length, out _));
+            Assert.False(new CssValueParser(new HtmlRenderContext()).TryGetColor(text, 0, text.Length, out _));
         }
 
         [Fact]

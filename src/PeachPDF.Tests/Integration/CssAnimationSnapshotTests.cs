@@ -1,12 +1,13 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.CSS;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Animation;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -296,7 +297,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Interpolation ───────────────────────────────────────────────────────
 
         private static string Mix(string property, string from, string to, double t) =>
-            CssValueInterpolator.Interpolate(new CssValueParser(new PdfRenderContext()), property, from, to, t);
+            CssValueInterpolator.Interpolate(new CssValueParser(new HtmlRenderContext()), property, from, to, t);
 
         [Theory]
         [InlineData("opacity", "0", "1", 0.25, "0.25")]
@@ -964,7 +965,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task KeyframeSet_UsesRevertOnlyForADeclarationThatSurvives()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var overridden = RegisteredKeyframes.BuildRegistry(await CssData.Parse(renderContext, "@keyframes k { to { opacity: revert; opacity: 1 } }"));
             var used = RegisteredKeyframes.BuildRegistry(await CssData.Parse(renderContext, "@keyframes k { to { opacity: revert } }"));
 
@@ -1182,7 +1183,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>The widths of every <c>re</c> rectangle in a page's content stream, read from the live object graph.</summary>
-        private static IEnumerable<double> RectangleWidths(PeachPDF.PDF.PdfDocument document, int page)
+        private static IEnumerable<double> RectangleWidths(PeachDrawing.PDF.Engine.PdfDocument document, int page)
         {
             using var bytes = new System.IO.MemoryStream();
 
@@ -1547,7 +1548,7 @@ namespace PeachPDF.Tests.Integration
             // color: currentcolor is inherit, never the box's own color; the direct call has to flip rather than mix.
             var root = await BuildAsync("""<div id="a" style="color: rgb(0, 0, 255)">x</div>""", null);
 
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             Assert.Equal("currentcolor", CssValueInterpolator.Interpolate(parser, "color", "currentcolor", "#ff0000", 0.4, Find(root, "a")));
         }
 
@@ -1726,7 +1727,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildAsync(string html, double? progress)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext) { AnimationProgress = progress };
             await container.SetHtml(html, null);
 

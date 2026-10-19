@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachPDF.MathML;
 using Xunit;
 
@@ -146,7 +147,7 @@ namespace PeachPDF.Tests.MathML
         [Fact]
         public void TryParseColor_None_ReturnsNull()
         {
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             Assert.Null(MathAttributeParser.TryParseColor(null, renderContext));
             Assert.Null(MathAttributeParser.TryParseColor("", renderContext));
             Assert.Null(MathAttributeParser.TryParseColor("none", renderContext));
@@ -156,7 +157,7 @@ namespace PeachPDF.Tests.MathML
         [Fact]
         public void TryParseColor_ValidCssColor_ResolvesRealColor()
         {
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var color = MathAttributeParser.TryParseColor("red", renderContext);
             Assert.NotNull(color);
             Assert.Equal(255, color!.Value.R);

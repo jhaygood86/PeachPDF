@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -372,8 +373,8 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static PdfRenderContext RenderContext(PeachPDF.Html.Core.HtmlContainerInt container) =>
-            (PdfRenderContext)container.RenderContext;
+        private static HtmlRenderContext RenderContext(PeachPDF.Html.Core.HtmlContainerInt container) =>
+            (HtmlRenderContext)container.RenderContext;
 
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
             g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();

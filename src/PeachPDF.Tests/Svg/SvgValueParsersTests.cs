@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 
@@ -6,7 +7,7 @@ namespace PeachPDF.Tests.Svg
 {
     public class SvgValueParsersTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         [Fact]
         public void ParseViewBox_FourNumbers_ReturnsRect()

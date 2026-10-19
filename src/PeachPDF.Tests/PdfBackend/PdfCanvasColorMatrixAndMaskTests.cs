@@ -1,7 +1,8 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using System.IO;
 using System.Numerics;
 using System.Text;
@@ -18,13 +19,13 @@ namespace PeachPDF.Tests.PdfBackendTests
     /// </summary>
     public class PdfCanvasColorMatrixAndMaskTests
     {
-        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext RenderContext) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, HtmlRenderContext RenderContext) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var graphics = new PdfCanvas(renderContext, pageGfx, 1.0);
             return (document, pageGfx, graphics, renderContext);
         }

@@ -1,4 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.CSS;
@@ -1007,7 +1008,7 @@ namespace PeachPDF.Html.Core.Dom
                 fontStyle |= PaintFontStyle.Italic;
 
             // MarginBoxRenderer paints in raw, unshrunk PDF-point space (margin-box rects are computed
-            // directly from orgPageSize/margins), but RenderContext.GetFont -> PdfRenderContext.CreateFontInt
+            // directly from orgPageSize/margins), but RenderContext.GetFont -> HtmlRenderContext.CreateFontInt
             // divides its `size` argument by PixelsPerPoint (matching in-flow content, whose entire
             // coordinate system - including font size - is uniformly in "pixel" space and shrunk together
             // by that same later division). Since margin-box rect positions never go through that
@@ -1141,7 +1142,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="pageStyle">the page context's declarations, as a <c>direction</c> fallback</param>
         /// <param name="logicalText">
         /// <paramref name="text"/>'s true logical-order source, positionally aligned with the returned
-        /// visual string (see <c>PeachPDF.PDF.Advanced.CharacterMapInfo.AddShapedText</c>'s own remarks on that
+        /// visual string (see <c>PeachDrawing.PDF.Engine.Advanced.CharacterMapInfo.AddShapedText</c>'s own remarks on that
         /// contract) - populated via <c>Bidi.Reverse</c> (position only, no
         /// mirroring - mirroring only changes a character's value, reversal alone already recovers its
         /// position) when the returned visual string is a single run's whole-string reversal+mirror

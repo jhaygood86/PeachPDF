@@ -1,10 +1,10 @@
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using System.IO;
 using System.Text;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 using PeachDrawing.Text;

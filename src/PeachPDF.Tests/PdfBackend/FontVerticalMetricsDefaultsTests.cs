@@ -6,7 +6,7 @@ namespace PeachPDF.Tests.PdfBackendTests
     /// <summary>
     /// <see cref="PeachDrawing.Core.Font"/>'s vertical-metrics query surface (issues #770/#775) is
     /// virtual with defaults that reproduce the pre-#770 approximation exactly, so any <see cref="PeachDrawing.Core.Font"/>
-    /// that doesn't override them (only <see cref="PeachPDF.PdfBackend.PdfCanvasFont"/>, the product's one
+    /// that doesn't override them (only <see cref="PeachDrawing.PDF.PdfCanvasFont"/>, the product's one
     /// concrete implementation, does) stays behaviorally unchanged. <see cref="TestFont"/> is exactly
     /// such a font - this exercises the base defaults directly, mirroring the CPAL palette section's own
     /// "every non-color font reports no palettes" defaults immediately above them in <c>Font</c>.
@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.PdfBackendTests
         /// <summary>
         /// <see cref="PeachDrawing.Core.Font.NormalLineHeight"/> (issue #956) follows the identical
         /// pattern: virtual, with a default that reproduces the pre-#956 flat 1.2x-font-size approximation
-        /// exactly, so only <see cref="PeachPDF.PdfBackend.PdfCanvasFont"/> resolves it from real font metrics.
+        /// exactly, so only <see cref="PeachDrawing.PDF.PdfCanvasFont"/> resolves it from real font metrics.
         /// </summary>
         [Fact]
         public void NormalLineHeightDefault_ReproducesThePreExistingApproximation()

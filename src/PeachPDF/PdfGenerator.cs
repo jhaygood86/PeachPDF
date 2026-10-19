@@ -10,8 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Rendering;
 using PeachDrawing.Text;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -29,10 +30,10 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Layout;
 using PeachPDF.Network;
 using PeachPDF.Utilities;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF.Advanced;
-using PeachPDF.PDF.Annotations;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Annotations;
 using System.Collections.Generic;
 using System.Numerics;
 using System.IO;
@@ -67,7 +68,7 @@ namespace PeachPDF
     /// </remarks>
     public class PdfGenerator
     {
-        private readonly PdfRenderContext _renderContext = new();
+        private readonly HtmlRenderContext _renderContext = new();
 
         /// <summary>
         /// Adds a font mapping from <paramref name="fromFamily"/> to <paramref name="toFamily"/> iff the <paramref name="fromFamily"/> is not found.<br/>
@@ -252,7 +253,7 @@ namespace PeachPDF
             ValidateAnimationProgress(config);
 
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new Size(config.ManualPageWidth, config.ManualPageHeight);
+            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize.ToEngine()) : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
@@ -356,9 +357,9 @@ namespace PeachPDF
         /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>)
         /// and the declarative document-building path (<see cref="AddPages"/>) - <see cref="RenderPagesCore"/> reads <paramref name="config"/>
         /// directly for its own validation/XMP/OutputIntent writing, but the paint-time *enforcement* of
-        /// PDF/A/PDF/X construct restrictions (<see cref="PDF.Rendering.PdfGraphicsState"/>'s
-        /// color-mode resolution, <see cref="PDF.Advanced.PdfXColorSpaceGuard"/>,
-        /// <see cref="PDF.Advanced.PdfColorConversionGuard"/>, <see cref="PDF.Advanced.PdfATransparencyGuard"/>)
+        /// PDF/A/PDF/X construct restrictions (<c>PDF.Rendering.PdfGraphicsState</c>'s
+        /// color-mode resolution, <c>PDF.Advanced.PdfXColorSpaceGuard</c>,
+        /// <c>PDF.Advanced.PdfColorConversionGuard</c>, <c>PDF.Advanced.PdfATransparencyGuard</c>)
         /// all read <c>document.PdfDocument.Options.*</c> instead, so a caller that skipped this method
         /// would get a document whose <c>/OutputIntents</c>/XMP conformance claim is real but whose actual
         /// content is completely unenforced against it - exactly the bug this method's extraction fixes.
@@ -380,7 +381,7 @@ namespace PeachPDF
             document.PdfDocument.Options.PortableColorFilters = config.PortableColorFilters;
             document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
             document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
-            document.PdfDocument.Options.ImageCompression = config.ImageCompression;
+            document.PdfDocument.Options.ImageCompression = config.ImageCompression.ToEngine();
             // PDF/A conformance is a whole-document property, but AddPdfPages/AddPages are repeatable
             // public APIs (a caller can append more pages to an existing PeachPdfDocument) - a second call
             // requesting a different level than the first would otherwise silently leave the document's
@@ -389,7 +390,7 @@ namespace PeachPDF
             // regime than the level the file now claims). Reject that outright rather than produce a
             // self-contradictory document; the same level requested again across multiple calls is fine.
             if (document.PdfDocument.Options.PdfAConformanceEstablished
-                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance)
+                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance.ToEngine())
             {
                 throw new InvalidOperationException(
                     $"PdfGenerateConfig.PdfAConformance must be the same on every AddPdfPages/AddPages call " +
@@ -398,7 +399,7 @@ namespace PeachPDF
                     "document can only claim one PDF/A conformance level (or none) as a whole.");
             }
 
-            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance;
+            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance.ToEngine();
             document.PdfDocument.Options.PdfAConformanceEstablished = true;
 
             // ISO 19005-2/3 (PDF/A-2/3) are defined in terms of PDF 1.7/ISO 32000-1. ISO 19005-1
@@ -455,7 +456,7 @@ namespace PeachPDF
             // PdfVersion than the first would leave the file's already-written header disagreeing with
             // how some of its pages/structure elements were painted.
             if (document.PdfDocument.Options.PdfVersionEstablished
-                && document.PdfDocument.Options.PdfVersion != requestedVersion)
+                && document.PdfDocument.Options.PdfVersion != requestedVersion.ToEngine())
             {
                 throw new InvalidOperationException(
                     $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages/AddPages call for " +
@@ -464,7 +465,7 @@ namespace PeachPDF
                     "can only have one header version.");
             }
 
-            document.PdfDocument.Options.PdfVersion = requestedVersion;
+            document.PdfDocument.Options.PdfVersion = requestedVersion.ToEngine();
             document.PdfDocument.Options.PdfVersionEstablished = true;
 
             if (requestedVersion == PdfVersion.Pdf20)
@@ -486,7 +487,7 @@ namespace PeachPDF
             // Same "whole-document property, first AddPdfPages/AddPages call wins" reasoning as
             // PdfAConformance above.
             if (document.PdfDocument.Options.PdfXConformanceEstablished
-                && document.PdfDocument.Options.PdfXConformance != config.PdfXConformance)
+                && document.PdfDocument.Options.PdfXConformance != config.PdfXConformance.ToEngine())
             {
                 throw new InvalidOperationException(
                     $"PdfGenerateConfig.PdfXConformance must be the same on every AddPdfPages/AddPages call " +
@@ -495,16 +496,16 @@ namespace PeachPDF
                     "document can only claim one PDF/X conformance level (or none) as a whole.");
             }
 
-            document.PdfDocument.Options.PdfXConformance = config.PdfXConformance;
+            document.PdfDocument.Options.PdfXConformance = config.PdfXConformance.ToEngine();
             document.PdfDocument.Options.PdfXConformanceEstablished = true;
-            document.PdfDocument.Options.ColorOptions = config.ColorOptions;
+            document.PdfDocument.Options.ColorOptions = config.ColorOptions.ToEngine();
 
             // Embedded files are a whole-document property too - and validated here, ahead of any layout or
             // painting, so a document that is about to be rejected wastes no work. A declarative document
             // re-enters the render core once per Page(...), so a later call must ask for the same files
             // (they are embedded once, in RenderPagesCore), exactly like PdfAConformance above.
             var embeddingPlan = PdfEmbeddingPlan.Create(config);
-            if (document.PdfDocument.Options.EmbeddingPlan is { } establishedPlan && !establishedPlan.SameAs(embeddingPlan))
+            if (document.PdfDocument.Options.EmbeddingPlan is PdfEmbeddingPlan establishedPlan && !establishedPlan.SameAs(embeddingPlan))
             {
                 throw new InvalidOperationException(
                     "PdfGenerateConfig.Attachments must be the same on every AddPdfPages/AddPages call for a given " +
@@ -544,14 +545,14 @@ namespace PeachPDF
             }
 
             if (document.PdfDocument.Options.EncryptionEstablished
-                && !(document.PdfDocument.Options.Encryption is null ? encryption is null : document.PdfDocument.Options.Encryption.SameAs(encryption)))
+                && !(document.PdfDocument.Options.Encryption is null ? encryption is null : document.PdfDocument.Options.Encryption.SameAs(encryption.ToEngine())))
             {
                 throw new InvalidOperationException(
                     "PdfGenerateConfig.Encryption must be the same on every AddPdfPages/AddPages call for a given " +
                     "document - a PDF file is encrypted as a whole, with one set of passwords and permissions.");
             }
 
-            document.PdfDocument.Options.Encryption = encryption;
+            document.PdfDocument.Options.Encryption = encryption.ToEngine();
             document.PdfDocument.Options.EncryptionEstablished = true;
 
             // AES-256 (revision 6) is a PDF 2.0 feature that PDF 1.7 readers also accept (Adobe extension level 8); a
@@ -649,7 +650,7 @@ namespace PeachPDF
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize)
+                    ? PageSizeConverter.ToSize(config.PageSize.ToEngine())
                     : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             if ((pageDescriptor.OrientationOverride ?? config.PageOrientation) == PageOrientation.Landscape)
@@ -907,10 +908,10 @@ namespace PeachPDF
                     document.PdfDocument,
                     document.PdfDocument.Info,
                     resolvedCreationDate!.Value,
-                    config.PdfAConformance,
-                    config.PdfXConformance,
+                    config.PdfAConformance.ToEngine(),
+                    config.PdfXConformance.ToEngine(),
                     config.Metadata?.CustomXmpProperties ?? [],
-                    document.PdfDocument.Options.EmbeddingPlan?.FacturX is { } facturX
+                    (document.PdfDocument.Options.EmbeddingPlan as PdfEmbeddingPlan)?.FacturX is { } facturX
                         ? (facturX.FileName, facturX.ConformanceLevel)
                         : null);
                 document.PdfDocument.Catalog.SetMetadata(metadataStream);
@@ -944,7 +945,7 @@ namespace PeachPDF
                 // PDF/X-6 identifies itself in XMP only (pdfxid), like PDF 2.0's own deprecation of the Info dictionary.
                 if (config.PdfXConformance != PdfXConformance.X6)
                 {
-                    var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance);
+                    var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance.ToEngine());
                     document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.LatinOneByteEncoding);
                     if (gtsConformance is not null)
                     {
@@ -957,7 +958,7 @@ namespace PeachPDF
             // tagging attaches while painting in /AF. The plan was established (and checked against any
             // earlier call) in EstablishDocumentOptions; writing it once per document, not once per call, is
             // what the Applied flag is for.
-            if (document.PdfDocument.Options.EmbeddingPlan is { Files.Count: > 0 } embeddingPlan
+            if (document.PdfDocument.Options.EmbeddingPlan is PdfEmbeddingPlan { Files.Count: > 0 } embeddingPlan
                 && !document.PdfDocument.Options.EmbeddingApplied)
             {
                 embeddingPlan.Apply(document.PdfDocument, resolvedCreationDate);
@@ -1356,7 +1357,7 @@ namespace PeachPDF
         /// <summary>
         /// Whether a <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> render needs its font-cache clear,
         /// full HTML/CSS re-parse, and second layout pass, or whether the measurement pass already
-        /// used the correct <see cref="PdfRenderContext.PixelsPerPoint"/> (the common case: ordinary
+        /// used the correct <c>HtmlRenderContext.PixelsPerPoint</c> (the common case: ordinary
         /// non-overflowing content already fits the page, so no rescale is needed). The comparison
         /// is exact rather than epsilon-based - <paramref name="effectivePixelsPerPoint"/> is either
         /// <paramref name="currentPixelsPerPoint"/> read back unchanged (no rescale needed) or a

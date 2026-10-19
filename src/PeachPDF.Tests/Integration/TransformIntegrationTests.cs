@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Numerics;
 using PeachPDF.Tests.TestSupport;
 
@@ -924,7 +925,7 @@ namespace PeachPDF.Tests.Integration
             public int FilledRectangles { get; private set; }
             public int StringsDrawn { get; private set; }
 
-            public SpyGraphics() : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public SpyGraphics() : base(new HtmlRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void PushTransform(Matrix3x2 matrix) => LastPushedTransform = matrix;
             public override void PopTransform() => PopTransformCount++;
@@ -995,7 +996,7 @@ div {{ width: 200pt; height: 100pt; {css} }}
 
         private async Task<HtmlContainerInt> LayoutHtml(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

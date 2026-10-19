@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 {
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var doc = new PdfDocument();
             var page = doc.AddPage();
 
-            Assert.Equal(PageOrientation.Portrait, page.Orientation);
+            Assert.Equal(PeachDrawing.PDF.Engine.PageOrientation.Portrait, page.Orientation);
         }
 
         [Fact]
@@ -20,9 +20,9 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var doc = new PdfDocument();
             var page = doc.AddPage();
 
-            page.Orientation = PageOrientation.Landscape;
+            page.Orientation = PeachDrawing.PDF.Engine.PageOrientation.Landscape;
 
-            Assert.Equal(PageOrientation.Landscape, page.Orientation);
+            Assert.Equal(PeachDrawing.PDF.Engine.PageOrientation.Landscape, page.Orientation);
         }
 
         [Fact]
@@ -31,9 +31,9 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var doc = new PdfDocument();
             var page = doc.AddPage();
 
-            page.Size = PageSize.A5;
+            page.Size = PeachDrawing.PDF.Engine.PageSize.A5;
 
-            Assert.Equal(PageSize.A5, page.Size);
+            Assert.Equal(PeachDrawing.PDF.Engine.PageSize.A5, page.Size);
             Assert.True(page.MediaBox.Width > 0);
             Assert.True(page.MediaBox.Height > 0);
         }
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var doc = new PdfDocument();
             var page = doc.AddPage();
 
-            Assert.Throws<System.ComponentModel.InvalidEnumArgumentException>(() => page.Size = (PageSize)9999);
+            Assert.Throws<System.ComponentModel.InvalidEnumArgumentException>(() => page.Size = (PeachDrawing.PDF.Engine.PageSize)9999);
         }
 
         [Fact]
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             page.Height = 500;
 
             Assert.Equal(500, page.Height, 3);
-            Assert.Equal(PageSize.Undefined, page.Size);
+            Assert.Equal(PeachDrawing.PDF.Engine.PageSize.Undefined, page.Size);
         }
 
         [Fact]
@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             page.Width = 400;
 
             Assert.Equal(400, page.Width, 3);
-            Assert.Equal(PageSize.Undefined, page.Size);
+            Assert.Equal(PeachDrawing.PDF.Engine.PageSize.Undefined, page.Size);
         }
 
         [Fact]
@@ -96,7 +96,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         {
             var doc = new PdfDocument();
             var page = doc.AddPage();
-            page.Orientation = PageOrientation.Landscape;
+            page.Orientation = PeachDrawing.PDF.Engine.PageOrientation.Landscape;
 
             page.Height = 500;
 
@@ -108,7 +108,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         {
             var doc = new PdfDocument();
             var page = doc.AddPage();
-            page.Orientation = PageOrientation.Landscape;
+            page.Orientation = PeachDrawing.PDF.Engine.PageOrientation.Landscape;
 
             page.Width = 400;
 

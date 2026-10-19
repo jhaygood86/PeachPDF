@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -10,7 +11,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void GetRoundRect_ClosesTheReturnedPath()
         {
-            var g = new RecordingGraphics(new PdfRenderContext());
+            var g = new RecordingGraphics(new HtmlRenderContext());
 
             using var path = (RecordingGraphicsPath)RenderUtils.GetRoundRect(g, new Rect(0, 0, 100, 40),
                 10, 10, 10, 10, 10, 10, 10, 10);
@@ -30,7 +31,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void GetRoundRect_DividesRectAndRadiiByPixelsPerPoint()
         {
-            var g = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var g = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
 
             using var path = (RecordingGraphicsPath)RenderUtils.GetRoundRect(g, new Rect(0, 0, 200, 80),
                 20, 20, 20, 20, 20, 20, 20, 20);
@@ -57,13 +58,13 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void GetRoundRect_IsInvariantUnderPixelsPerPoint()
         {
-            var gDefault = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 1.0 };
+            var gDefault = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 1.0 };
             using var pathDefault = (RecordingGraphicsPath)RenderUtils.GetRoundRect(gDefault,
                 new Rect(10, 20, 100, 40), 10, 10, 10, 10, 10, 10, 10, 10);
 
             // Simulates the real internal-space inflation a box would have at PixelsPerInch=144
             // (PixelsPerPoint=2.0): every coordinate pre-multiplied by 2 before reaching GetRoundRect.
-            var gScaled = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var gScaled = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
             using var pathScaled = (RecordingGraphicsPath)RenderUtils.GetRoundRect(gScaled,
                 new Rect(20, 40, 200, 80), 20, 20, 20, 20, 20, 20, 20, 20);
 
